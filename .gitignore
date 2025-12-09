@@ -108,3 +108,22 @@ published-models/test_*.bngl
 *.graphml
 *.species
 *.tx
+
+# One-off browser test files
+test_browser.html
+
+# Debug .mjs files
+debug_*.mjs
+
+# Profile scripts
+profile_*.ts
+
+# Temporary JS files
+tmp.js
+
+# Generated report/comparison JSON files
+bng2_comparison_results.json
+bng2_test_report.json
+gdat_comparison_report.json
+metadata.json
+scripts/comparison_report.json

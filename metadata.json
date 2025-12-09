@@ -1,5 +1,0 @@
-{
-  "name": "BioNetGen Web Simulator",
-  "description": "An interactive web-based interface for writing BioNetGen Language (BNGL) models, generating reaction networks, running simulations (ODE & SSA), and visualizing the results.",
-  "requestFramePermissions": []
-}
