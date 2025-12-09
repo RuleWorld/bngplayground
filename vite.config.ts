@@ -43,6 +43,10 @@ export default defineConfig(() => {
         // This prevents a brittle catch-all `vendor_misc` that can mix UMD wrappers
         // with ESM bundles and produce runtime `exports`/`n` undefined errors.
       },
+      worker: {
+        // Use ES module format for workers to support code-splitting
+        format: 'es' as const
+      },
       test: {
         environment: 'node',
         include: ['tests/**/*.spec.ts', 'tests/**/*.test.ts']
