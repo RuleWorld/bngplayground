@@ -235,7 +235,7 @@ export class GraphMatcher {
     if (!this.canPossiblyMatch(pattern, target)) {
       return [];
     }
-    
+
     // Check cache - use toString() as key since graphs are immutable during generation
     // Note: caching is only valid within a single network generation run
     const cacheKey = pattern.toString() + '|' + target.toString();
@@ -247,7 +247,7 @@ export class GraphMatcher {
         componentMap: new Map(m.componentMap)
       }));
     }
-    
+
     const matches: MatchMap[] = [];
     const ordering = this.computeNodeOrdering(pattern, target);
     const state = new VF2State(pattern, target, ordering);
@@ -277,20 +277,20 @@ export class GraphMatcher {
     for (const mol of pattern.molecules) {
       patternCounts.set(mol.name, (patternCounts.get(mol.name) || 0) + 1);
     }
-    
+
     // Build molecule type count for target
     const targetCounts = new Map<string, number>();
     for (const mol of target.molecules) {
       targetCounts.set(mol.name, (targetCounts.get(mol.name) || 0) + 1);
     }
-    
+
     // Check that target has enough of each type
     for (const [molType, count] of patternCounts) {
       if ((targetCounts.get(molType) || 0) < count) {
         return false;
       }
     }
-    
+
     return true;
   }
 

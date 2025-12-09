@@ -1,0 +1,13 @@
+src/wasm/nauty/nauty_wrapper.o
+src/wasm/nauty/nauty.o
+src/wasm/nauty/nautil.o
+src/wasm/nauty/naugraph.o
+-o
+src/wasm/nauty/nauty.js
+-sWASM=1
+-sALLOW_MEMORY_GROWTH=1
+-O3
+-sEXPORTED_FUNCTIONS=['_getCanonicalOrbits','_getCanonicalLabeling','_malloc','_free']
+-sEXPORTED_RUNTIME_METHODS=['ccall','cwrap','getValue','setValue']
+-sMODULARIZE=1
+-sEXPORT_ES6=1

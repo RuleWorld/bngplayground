@@ -37,7 +37,7 @@ export class SpeciesGraph {
     // Update adjacency map (both directions) - supports multi-site bonding
     const key1 = `${mol1}.${comp1}`;
     const key2 = `${mol2}.${comp2}`;
-    
+
     // Add key2 to key1's partner list (avoid duplicates)
     if (!this.adjacency.has(key1)) {
       this.adjacency.set(key1, []);
@@ -46,7 +46,7 @@ export class SpeciesGraph {
     if (!partners1.includes(key2)) {
       partners1.push(key2);
     }
-    
+
     // Add key1 to key2's partner list (avoid duplicates)
     if (!this.adjacency.has(key2)) {
       this.adjacency.set(key2, []);
@@ -176,6 +176,18 @@ export class SpeciesGraph {
       this.molecules.push(mol.clone());
     }
 
+    // Calculate max bond label in current graph to apply offset
+    let maxBond = 0;
+    for (const mol of this.molecules) {
+      if (mol === undefined) continue; // Safety check
+      for (const comp of mol.components) {
+        for (const label of comp.edges.keys()) {
+          if (label > maxBond) maxBond = label;
+        }
+      }
+    }
+    const bondOffset = maxBond + 1;
+
     // Rebuild adjacency for the new molecules based on the cloned components
     // Support multi-site bonding where one component can have multiple partners
     for (let i = 0; i < other.molecules.length; i++) {
@@ -187,7 +199,13 @@ export class SpeciesGraph {
         const newEdges = new Map<number, number>();
         const oldKey = `${i}.${c}`;
         const oldPartners = other.adjacency.get(oldKey);
-        
+
+        // Update edges with offset
+        for (const [label, targetCompIdx] of comp.edges.entries()) {
+          newEdges.set(label + bondOffset, targetCompIdx);
+        }
+        comp.edges = newEdges;
+
         if (oldPartners) {
           for (const oldPartner of oldPartners) {
             const [oldPartnerMol, oldPartnerComp] = oldPartner.split('.').map(Number);
@@ -207,12 +225,6 @@ export class SpeciesGraph {
             }
           }
         }
-        
-        // Keep original edges (bond labels -> target component indices)
-        for (const [label, targetCompIdx] of comp.edges.entries()) {
-          newEdges.set(label, targetCompIdx);
-        }
-        comp.edges = newEdges;
       }
     }
 
@@ -280,7 +292,7 @@ export class SpeciesGraph {
               const bondKey = oldMolIdx < pMolIdx || (oldMolIdx === pMolIdx && compIdx < pCompIdx)
                 ? `${oldMolIdx}.${compIdx}-${pMolIdx}.${pCompIdx}`
                 : `${pMolIdx}.${pCompIdx}-${oldMolIdx}.${compIdx}`;
-              
+
               if (!addedBonds.has(bondKey)) {
                 addedBonds.add(bondKey);
                 // Find bond label
@@ -347,7 +359,7 @@ export class SpeciesGraph {
       const [molAStr, compAStr] = key.split('.');
       const molA = Number(molAStr);
       const compA = Number(compAStr);
-      
+
       for (const partnerKey of partnerKeys) {
         const [molBStr, compBStr] = partnerKey.split('.');
         const molB = Number(molBStr);

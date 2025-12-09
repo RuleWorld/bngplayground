@@ -145,25 +145,12 @@ export const INITIAL_BNGL_CODE = simple;
 // 2. Use deprecated/non-standard syntax
 // 3. Have missing dependencies or other BNG2.pl errors
 const BNG2_COMPATIBLE_MODELS = new Set([
-  // Published models that work with BNG2.pl
+  // Published models that work with BNG2.pl and have simulation capability
   'Barua_2013',
-  'Barua_2007',
-  'Barua_2009',
   'Blinov_2006',
   'Lang_2024',
   'An_2009',
   'innate_immunity',
-  'Korwek_2023',
-  'Model_ZAP',
-  // Parse-only models (no simulate command, but valid BNGL)
-  'Hat_2016',
-  'Pekalski_2013',
-  'Dushek_2011',
-  'Zhang_2021',
-  'Rule_based_egfr_tutorial',
-  'BaruaBCR_2012',
-  'Jaruszewicz-Blonska_2023',
-  'Mukhopadhyay_2013',
   // All test/example models (generated to be BNG2.pl compatible)
   'akt-signaling',
   'allosteric-activation',
@@ -239,8 +226,9 @@ const NFSIM_MODELS = new Set([
 ]);
 
 // Helper to filter models to only BNG2.pl compatible ones
+// Excludes models using simulate_nf (network-free simulation) which is not supported
 const filterCompatibleModels = (models: Example[]): Example[] => 
-  models.filter(m => BNG2_COMPATIBLE_MODELS.has(m.id));
+  models.filter(m => BNG2_COMPATIBLE_MODELS.has(m.id) && !m.code.includes('simulate_nf'));
 
 const CELL_REGULATION: Example[] = [
   {

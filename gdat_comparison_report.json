@@ -1,1251 +1,356 @@
 {
   "summary": {
     "total": 69,
-    "withGdat": 69,
-    "passedBng2": 69,
+    "withGdat": 0,
+    "passedBng2": 0,
     "relativeTolerance": 0.05,
     "absoluteTolerance": 1e-10
   },
   "models": [
     {
       "model": "Barua_2013",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\cell-regulation\\Barua_2013.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "bcat_tot",
-        "bCat_pS45",
-        "bCat_pS33S37",
-        "APC_p20a",
-        "BCat_Axin"
-      ],
-      "observableCount": 5,
-      "timepoints": 2501,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Barua_2013_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 250000,
-      "nSteps": 2500
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Barua_2013.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "Barua_2007",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\complex-models\\Barua_2007.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "pYR"
-      ],
-      "observableCount": 1,
-      "timepoints": 12,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Barua_2007_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 110,
-      "nSteps": 11
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Barua_2007.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "Barua_2009",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\complex-models\\Barua_2009.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "J_mono",
-        "JS",
-        "JSS",
-        "JSSJ",
-        "J_active",
-        "J_inactive"
-      ],
-      "observableCount": 6,
-      "timepoints": 10001,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Barua_2009_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 10000,
-      "nSteps": 10000
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Barua_2009.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "Blinov_2006",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\complex-models\\Blinov_2006.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Dimers",
-        "Sos_act",
-        "RP",
-        "Shc_Grb",
-        "Shc_Grb_Sos",
-        "R_Grb2",
-        "R_Shc",
-        "R_ShcP",
-        "ShcP",
-        "R_G_S",
-        "R_S_G_S",
-        "Efgr_total",
-        "Shc_total",
-        "Sos_total",
-        "Grb2_total"
-      ],
-      "observableCount": 15,
-      "timepoints": 121,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Blinov_2006_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 120
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Blinov_2006.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "Lang_2024",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\growth-factor-signaling\\Lang_2024.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "tCCNE",
-        "tCCNA",
-        "tCCNB",
-        "tCDKN1A"
-      ],
-      "observableCount": 4,
-      "timepoints": 5001,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Lang_2024_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 400000,
-      "nSteps": 5000
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Lang_2024.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "An_2009",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\immune-signaling\\An_2009.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "TNF",
-        "Activated_TAK1",
-        "Activated_Ikk_complex",
-        "A20",
-        "NFkB_Active_Cyto",
-        "NFkB_Active_Nucleus",
-        "IkB_Degraded",
-        "IkB_active",
-        "NFkB_Inactive",
-        "NonBoundNonPhos_IkB",
-        "IkBmRNA_Off",
-        "NFkB_DNA_IkB",
-        "Phos_IkB_NFkB",
-        "IkB_Prot26s",
-        "Unbound_Cyto_NFkB",
-        "Inactive_Cyto_NFkB",
-        "TNFmRNA_Off",
-        "TNF_NFkB_DNA",
-        "A20_NFkB_DNA"
-      ],
-      "observableCount": 19,
-      "timepoints": 501,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\An_2009_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100000,
-      "nSteps": 500
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\An_2009.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "innate_immunity",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\immune-signaling\\innate_immunity.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "RIG_I_total",
-        "PKR_total",
-        "OAS3_total",
-        "RNaseL_total",
-        "RNaseL_a",
-        "eIF2a_total",
-        "eIF2a_p",
-        "RIGI_mRNA",
-        "PKR_mRNA",
-        "OAS3_mRNA",
-        "RNaseL_mRNA",
-        "TAK1_a",
-        "NFkB_nuc_free",
-        "NFkB_nuc_total",
-        "NFkB_total",
-        "IkBa_total",
-        "IkBa_nuc_total",
-        "IkBa_cyt_total",
-        "IkBa_cyt_free",
-        "IkBa_p_cyt",
-        "IkBa_nuc_free",
-        "A20",
-        "IKK_a",
-        "IkBa_mRNA",
-        "A20_mRNA",
-        "IRF3_total",
-        "IRF3_p",
-        "IFNAR_total",
-        "IFNAR_a",
-        "IFNb_ext",
-        "IFNb_cyt",
-        "IFNAR_mRNA",
-        "IFNb_mRNA",
-        "STAT1_total",
-        "STAT2_total",
-        "STAT1_p",
-        "STAT2_p",
-        "STAT1_u",
-        "STAT2_u",
-        "STAT12_dimer",
-        "STAT1_mRNA",
-        "STAT2_mRNA"
-      ],
-      "observableCount": 42,
-      "timepoints": 4321,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\innate_immunity_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 136000,
-      "nSteps": 4320
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\innate_immunity.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "Korwek_2023",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\immune-signaling\\Korwek_2023.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "RIG_I_total",
-        "PKR_total",
-        "OAS3_total",
-        "RNaseL_total",
-        "RNaseL_a",
-        "eIF2a_total",
-        "eIF2a_p",
-        "RIGI_mRNA",
-        "PKR_mRNA",
-        "OAS3_mRNA",
-        "RNaseL_mRNA",
-        "TAK1_a",
-        "NFkB_nuc_free",
-        "NFkB_nuc_total",
-        "NFkB_total",
-        "IkBa_total",
-        "IkBa_nuc_total",
-        "IkBa_cyt_total",
-        "IkBa_cyt_free",
-        "IkBa_p_cyt",
-        "IkBa_nuc_free",
-        "A20",
-        "IKK_a",
-        "IkBa_mRNA",
-        "A20_mRNA",
-        "IRF3_total",
-        "IRF3_p",
-        "IFNAR_total",
-        "IFNAR_a",
-        "IFNb_ext",
-        "IFNb_cyt",
-        "IFNAR_mRNA",
-        "IFNb_mRNA",
-        "STAT1_total",
-        "STAT2_total",
-        "STAT1_p",
-        "STAT2_p",
-        "STAT1_u",
-        "STAT2_u",
-        "STAT12_dimer",
-        "STAT1_mRNA",
-        "STAT2_mRNA"
-      ],
-      "observableCount": 42,
-      "timepoints": 4321,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Korwek_2023_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 136000,
-      "nSteps": 4320
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Korwek_2023.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "Model_ZAP",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\published-models\\immune-signaling\\Model_ZAP.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "pSYK_total",
-        "pSYK_free",
-        "pSYK_bound",
-        "PZAP_total",
-        "PZAP_free",
-        "PZAP_bound",
-        "tot_bound_ZAP",
-        "tot_bound_SYK",
-        "bound_phosph_zeta",
-        "open_U_zeta",
-        "bound_U_zeta",
-        "total_phosph_zeta",
-        "tot_bound_SHP",
-        "lig_receptor_complex",
-        "Receptor",
-        "zeta",
-        "Lig"
-      ],
-      "observableCount": 17,
-      "timepoints": 1001,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Model_ZAP_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 241,
-      "nSteps": 1000
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\Model_ZAP.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "akt-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\akt-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_RTK",
-        "Active_PI3K",
-        "Phospho_AKT"
-      ],
-      "observableCount": 3,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\akt-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\akt-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "allosteric-activation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\allosteric-activation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_enzyme",
-        "Inactive_enzyme",
-        "Product"
-      ],
-      "observableCount": 3,
-      "timepoints": 151,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\allosteric-activation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 150,
-      "nSteps": 150
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\allosteric-activation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "apoptosis-cascade",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\apoptosis-cascade.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_initiator",
-        "Active_effector"
-      ],
-      "observableCount": 2,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\apoptosis-cascade_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\apoptosis-cascade.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "auto-activation-loop",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\auto-activation-loop.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Promoter_on",
-        "Promoter_off",
-        "Effector"
-      ],
-      "observableCount": 3,
-      "timepoints": 151,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\auto-activation-loop_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 150,
-      "nSteps": 150
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\auto-activation-loop.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "beta-adrenergic-response",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\beta-adrenergic-response.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_BetaR",
-        "GTP_Gs",
-        "High_cAMP"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\beta-adrenergic-response_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\beta-adrenergic-response.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "bistable-toggle-switch",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\bistable-toggle-switch.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Protein_L",
-        "Protein_R",
-        "GeneL_bound",
-        "GeneR_bound"
-      ],
-      "observableCount": 4,
-      "timepoints": 251,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\bistable-toggle-switch_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 250,
-      "nSteps": 250
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\bistable-toggle-switch.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "blood-coagulation-thrombin",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\blood-coagulation-thrombin.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_FactorXa",
-        "Thrombin_Activity",
-        "Fibrin"
-      ],
-      "observableCount": 3,
-      "timepoints": 151,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\blood-coagulation-thrombin_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 60,
-      "nSteps": 150
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\blood-coagulation-thrombin.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "brusselator-oscillator",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\brusselator-oscillator.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Species_X",
-        "Species_Y"
-      ],
-      "observableCount": 2,
-      "timepoints": 401,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\brusselator-oscillator_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 40,
-      "nSteps": 400
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\brusselator-oscillator.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "calcium-spike-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\calcium-spike-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Cytosolic",
-        "Stored",
-        "Extracellular"
-      ],
-      "observableCount": 3,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\calcium-spike-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\calcium-spike-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "cell-cycle-checkpoint",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\cell-cycle-checkpoint.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Cyclin_High",
-        "Active_CDK",
-        "Checkpoint_On"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cell-cycle-checkpoint_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cell-cycle-checkpoint.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "chemotaxis-signal-transduction",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\chemotaxis-signal-transduction.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_MCP",
-        "Phospho_CheA",
-        "Phospho_CheY"
-      ],
-      "observableCount": 3,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\chemotaxis-signal-transduction_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\chemotaxis-signal-transduction.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "circadian-oscillator",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\circadian-oscillator.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Transcript",
-        "Protein_total"
-      ],
-      "observableCount": 2,
-      "timepoints": 481,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\circadian-oscillator_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 240,
-      "nSteps": 480
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\circadian-oscillator.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "competitive-enzyme-inhibition",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\competitive-enzyme-inhibition.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Free_enzyme",
-        "Complex",
-        "Inhibited",
-        "Product"
-      ],
-      "observableCount": 4,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\competitive-enzyme-inhibition_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 180,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\competitive-enzyme-inhibition.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "complement-activation-cascade",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\complement-activation-cascade.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "C3_active",
-        "C5_active",
-        "MAC_pool"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\complement-activation-cascade_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\complement-activation-cascade.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "cooperative-binding",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\cooperative-binding.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Unbound",
-        "Single_bound_site1",
-        "Single_bound_site2",
-        "Double_bound"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cooperative-binding_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cooperative-binding.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "dna-damage-repair",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\dna-damage-repair.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Damaged_DNA",
-        "Active_ATM",
-        "Elevated_P53",
-        "Repair_Engaged"
-      ],
-      "observableCount": 4,
-      "timepoints": 301,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dna-damage-repair_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 150,
-      "nSteps": 300
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dna-damage-repair.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "dual-site-phosphorylation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\dual-site-phosphorylation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Unphosphorylated",
-        "SingleP_y1",
-        "SingleP_y2",
-        "DoubleP"
-      ],
-      "observableCount": 4,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dual-site-phosphorylation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dual-site-phosphorylation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "egfr-signaling-pathway",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\egfr-signaling-pathway.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "EGF_free",
-        "EGFR_free",
-        "Bound_EGFR",
-        "Phospho_EGFR"
-      ],
-      "observableCount": 4,
-      "timepoints": 101,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\egfr-signaling-pathway_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 50,
-      "nSteps": 100
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\egfr-signaling-pathway.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "er-stress-response",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\er-stress-response.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_PERK",
-        "Phospho_EIF2A",
-        "Induced_Chaperone"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\er-stress-response_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\er-stress-response.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "gene-expression-toggle",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\gene-expression-toggle.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Promoter_on",
-        "Promoter_off",
-        "Transcripts",
-        "Protein"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gene-expression-toggle_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 200,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gene-expression-toggle.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "glycolysis-branch-point",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\glycolysis-branch-point.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Glucose_pool",
-        "ATP_pool",
-        "Biomass"
-      ],
-      "observableCount": 3,
-      "timepoints": 121,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\glycolysis-branch-point_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 60,
-      "nSteps": 120
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\glycolysis-branch-point.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "hematopoietic-growth-factor",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\hematopoietic-growth-factor.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_EPOR",
-        "Active_JAK2",
-        "Nuclear_STAT5"
-      ],
-      "observableCount": 3,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hematopoietic-growth-factor_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 90,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hematopoietic-growth-factor.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "hypoxia-response-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\hypoxia-response-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Hypoxic_sensor",
-        "Stable_HIF1",
-        "VEGF_pool"
-      ],
-      "observableCount": 3,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hypoxia-response-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 180,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hypoxia-response-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "immune-synapse-formation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\immune-synapse-formation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Bound_TCR",
-        "Active_TCR",
-        "Phospho_ZAP70"
-      ],
-      "observableCount": 3,
-      "timepoints": 151,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\immune-synapse-formation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 60,
-      "nSteps": 150
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\immune-synapse-formation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "inflammasome-activation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\inflammasome-activation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Primed_Sensor",
-        "Active_Caspase1",
-        "Mature_IL1B"
-      ],
-      "observableCount": 3,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\inflammasome-activation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\inflammasome-activation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "insulin-glucose-homeostasis",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\insulin-glucose-homeostasis.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Blood_glucose",
-        "Cellular_glucose",
-        "Insulin_pool",
-        "Active_pancreas"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\insulin-glucose-homeostasis_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 200,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\insulin-glucose-homeostasis.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "interferon-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\interferon-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_IFNAR",
-        "Active_TYK2",
-        "Nuclear_STAT1"
-      ],
-      "observableCount": 3,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\interferon-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\interferon-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "jak-stat-cytokine-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\jak-stat-cytokine-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Cytokine_pool",
-        "Active_receptor",
-        "Nuclear_STAT"
-      ],
-      "observableCount": 3,
-      "timepoints": 321,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\jak-stat-cytokine-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 160,
-      "nSteps": 320
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\jak-stat-cytokine-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "lac-operon-regulation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\lac-operon-regulation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Promoter_active",
-        "Beta_gal",
-        "Lactose_internal",
-        "Allolactose_pool"
-      ],
-      "observableCount": 4,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\lac-operon-regulation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 180,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\lac-operon-regulation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "lipid-mediated-pip3-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\lipid-mediated-pip3-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_PI3K",
-        "PIP3_High",
-        "Active_PDK1"
-      ],
-      "observableCount": 3,
-      "timepoints": 141,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\lipid-mediated-pip3-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 70,
-      "nSteps": 140
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\lipid-mediated-pip3-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "mapk-signaling-cascade",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\mapk-signaling-cascade.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_Receptor",
-        "MAPKKK_P",
-        "MAPKK_P",
-        "MAPK_P"
-      ],
-      "observableCount": 4,
-      "timepoints": 121,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mapk-signaling-cascade_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 60,
-      "nSteps": 120
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mapk-signaling-cascade.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "michaelis-menten-kinetics",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\michaelis-menten-kinetics.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "obs_Product",
-        "obs_ES_Complex"
-      ],
-      "observableCount": 2,
-      "timepoints": 51,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\michaelis-menten-kinetics_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 50,
-      "nSteps": 50
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\michaelis-menten-kinetics.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "mtor-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\mtor-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_Rheb",
-        "Active_MTORC1",
-        "Phospho_S6K",
-        "Active_AMPK"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mtor-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mtor-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "myogenic-differentiation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\myogenic-differentiation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "High_MYOD",
-        "MYOG_On",
-        "MEF2_On"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\myogenic-differentiation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\myogenic-differentiation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "negative-feedback-loop",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\negative-feedback-loop.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Free_gene",
-        "Bound_gene",
-        "Transcript",
-        "Protein"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\negative-feedback-loop_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 200,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\negative-feedback-loop.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "neurotransmitter-release",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\neurotransmitter-release.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "High_Calcium",
-        "Open_SNARE",
-        "Fused_Vesicle",
-        "Postsynaptic_Response"
-      ],
-      "observableCount": 4,
-      "timepoints": 121,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\neurotransmitter-release_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 40,
-      "nSteps": 120
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\neurotransmitter-release.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "nfkb-feedback",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\nfkb-feedback.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Nuclear",
-        "Inhibitor"
-      ],
-      "observableCount": 2,
-      "timepoints": 301,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfkb-feedback_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 150,
-      "nSteps": 300
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfkb-feedback.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "notch-delta-lateral-inhibition",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\notch-delta-lateral-inhibition.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_notch",
-        "High_delta"
-      ],
-      "observableCount": 2,
-      "timepoints": 301,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\notch-delta-lateral-inhibition_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 150,
-      "nSteps": 300
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\notch-delta-lateral-inhibition.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "oxidative-stress-response",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\oxidative-stress-response.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Elevated_ROS",
-        "Released_KEAP1",
-        "Nuclear_NRF2",
-        "High_Antioxidant"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\oxidative-stress-response_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\oxidative-stress-response.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "p53-mdm2-oscillator",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\p53-mdm2-oscillator.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "p53_total",
-        "MDM2_total"
-      ],
-      "observableCount": 2,
-      "timepoints": 321,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\p53-mdm2-oscillator_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 160,
-      "nSteps": 320
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\p53-mdm2-oscillator.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "phosphorelay-chain",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\phosphorelay-chain.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Sensor_P",
-        "Relay_P",
-        "Output_P"
-      ],
-      "observableCount": 3,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\phosphorelay-chain_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\phosphorelay-chain.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "platelet-activation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\platelet-activation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "High_ADP",
-        "Active_P2Y12",
-        "Open_Integrin",
-        "Elevated_Thromboxane"
-      ],
-      "observableCount": 4,
-      "timepoints": 141,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\platelet-activation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 70,
-      "nSteps": 140
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\platelet-activation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "predator-prey-dynamics",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\predator-prey-dynamics.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Prey_count",
-        "Predator_count"
-      ],
-      "observableCount": 2,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\predator-prey-dynamics_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\predator-prey-dynamics.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "quorum-sensing-circuit",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\quorum-sensing-circuit.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Autoinducer_pool",
-        "Gene_on",
-        "Protein",
-        "Autoinducer_env_pool"
-      ],
-      "observableCount": 4,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\quorum-sensing-circuit_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\quorum-sensing-circuit.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "rab-gtpase-cycle",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\rab-gtpase-cycle.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "RAB_GTP",
-        "Active_GEF",
-        "Active_GAP",
-        "Effector_On"
-      ],
-      "observableCount": 4,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\rab-gtpase-cycle_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\rab-gtpase-cycle.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "repressilator-oscillator",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\repressilator-oscillator.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Protein_A",
-        "Protein_B",
-        "Protein_C",
-        "GeneA_bound"
-      ],
-      "observableCount": 4,
-      "timepoints": 301,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\repressilator-oscillator_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 300,
-      "nSteps": 300
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\repressilator-oscillator.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "retinoic-acid-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\retinoic-acid-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_RARRXR",
-        "Released_Corepressor",
-        "Gene_On"
-      ],
-      "observableCount": 3,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\retinoic-acid-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\retinoic-acid-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "signal-amplification-cascade",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\signal-amplification-cascade.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_receptor",
-        "Active_effector",
-        "Messenger"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\signal-amplification-cascade_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\signal-amplification-cascade.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "simple-dimerization",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\simple-dimerization.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "A_free",
-        "B_free",
-        "AB"
-      ],
-      "observableCount": 3,
-      "timepoints": 101,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\simple-dimerization_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 100
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\simple-dimerization.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "sir-epidemic-model",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\sir-epidemic-model.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Susceptible",
-        "Infected",
-        "Recovered"
-      ],
-      "observableCount": 3,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sir-epidemic-model_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 160,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sir-epidemic-model.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "smad-tgf-beta-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\smad-tgf-beta-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_TGFBR",
-        "Phospho_SMAD2",
-        "SMAD_Complex"
-      ],
-      "observableCount": 3,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\smad-tgf-beta-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 90,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\smad-tgf-beta-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "stress-response-adaptation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\stress-response-adaptation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_sensor",
-        "Adapter",
-        "Enzyme"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\stress-response-adaptation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\stress-response-adaptation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "synaptic-plasticity-ltp",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\synaptic-plasticity-ltp.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Open_NMDA",
-        "Active_CaMKII",
-        "Synaptic_AMPAR",
-        "Active_PKA"
-      ],
-      "observableCount": 4,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synaptic-plasticity-ltp_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 60,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synaptic-plasticity-ltp.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "t-cell-activation",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\t-cell-activation.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_tcr",
-        "Cytokine_pool"
-      ],
-      "observableCount": 2,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\t-cell-activation_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\t-cell-activation.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "tnf-induced-apoptosis",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\tnf-induced-apoptosis.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_TNFR",
-        "Active_Caspase8",
-        "Truncated_BID",
-        "Active_Caspase3"
-      ],
-      "observableCount": 4,
-      "timepoints": 161,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\tnf-induced-apoptosis_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 80,
-      "nSteps": 160
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\tnf-induced-apoptosis.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "two-component-system",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\two-component-system.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Kinase_P",
-        "Reg_P",
-        "Target"
-      ],
-      "observableCount": 3,
-      "timepoints": 241,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\two-component-system_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 120,
-      "nSteps": 240
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\two-component-system.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "vegf-angiogenesis",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\vegf-angiogenesis.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_VEGFR",
-        "Phospho_ERK",
-        "Migratory_Endothelial"
-      ],
-      "observableCount": 3,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\vegf-angiogenesis_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 90,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\vegf-angiogenesis.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "viral-sensing-innate-immunity",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\viral-sensing-innate-immunity.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_RIGI",
-        "Active_MAVS",
-        "Phospho_IRF3",
-        "IFNB_On"
-      ],
-      "observableCount": 4,
-      "timepoints": 201,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\viral-sensing-innate-immunity_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 100,
-      "nSteps": 200
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\viral-sensing-innate-immunity.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "wnt-beta-catenin-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\wnt-beta-catenin-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_wnt",
-        "Nuclear_beta",
-        "Target"
-      ],
-      "observableCount": 3,
-      "timepoints": 321,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wnt-beta-catenin-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 160,
-      "nSteps": 320
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wnt-beta-catenin-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     },
     {
       "model": "wound-healing-pdgf-signaling",
-      "path": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\example-models\\wound-healing-pdgf-signaling.bngl",
-      "status": "bng2_ok",
-      "observables": [
-        "Active_PDGFR",
-        "Phospho_STAT3",
-        "Migratory_Fibroblast"
-      ],
-      "observableCount": 3,
-      "timepoints": 181,
-      "gdatFile": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wound-healing-pdgf-signaling_bng2.gdat",
-      "tStart": 0,
-      "tEnd": 90,
-      "nSteps": 180
+      "status": "bng2_failed",
+      "error": "Command failed: perl \"c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl\" \"C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wound-healing-pdgf-signaling.bngl\"\nCan't locate BNGUtils.pm in @INC (you may need to install the BNGUtils module) (@INC entries checked: /c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/gdat_comparison_output/Perl2 /usr/lib/perl5/site_perl /usr/share/perl5/site_perl /usr/lib/perl5/vendor_perl /usr/share/perl5/vendor_perl /usr/lib/perl5/core_perl /usr/share/perl5/core_perl) at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\nBEGIN failed--compilation aborted at c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl line 50.\n"
     }
   ]
 }

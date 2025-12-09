@@ -1,0 +1,110 @@
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-ssr
+*.local
+
+# Editor directories and files
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Documentation (if generated)
+docs/
+
+# Compiled WASM artifacts and C build files
+*.o
+*.out
+# Note: public/cvode.js and public/cvode.wasm are needed for ODE solver - don't ignore them
+wasm-sundials/
+
+# Benchmark results and outputs
+*_benchmark_results*.json
+benchmark_results.json
+gdat_comparison_summary.json
+
+# Temporary directories
+temp*/
+temp_bng_output/
+species_comparison_output/
+testegfr/
+
+# BNG2 output files
+bng_test_output/
+bng_compare_output/
+gdat_comparison_output/
+
+# BNGL simulation outputs
+*.cdat
+*.gdat
+*.net
+*.m
+*.xml
+
+# Debug and trace output files (txt)
+*.txt
+
+# Test BNGL files (not model library)
+test.bngl
+test_simple.bngl
+testegfr.bngl
+temp_*.bngl
+
+# Scratch/temp C files
+check_emcc.c
+
+# PDFs
+*.pdf
+
+# JSON output files (but keep config files)
+test_output.json
+
+# Debug TypeScript files (one-off scripts)
+src/debug_*.ts
+scripts/debug_*.ts
+debug_*.ts
+
+# Test files that were one-off debugging
+src/repros_*.test.ts
+src/simple.test.ts
+src/species_comparison.test.ts
+src/symmetry_reduction.test.ts
+src/debug_*.test.ts
+tests/debug-*.spec.ts
+tests/isolated-*.spec.ts
+tests/minimal-*.spec.ts
+tests/multiple-*.spec.ts
+tests/sequential-*.spec.ts
+tests/spawnsync-*.spec.ts
+tests/compareParsers.test.ts
+
+# One-off test scripts
+scripts/test_*.ts
+scripts/test-*.ts
+test_*.mjs
+test_*.ts
+
+# Published model test files (one-off)
+published-models/test_*.bngl
+
+# Temp output files
+*.graphml
+*.species
+*.tx

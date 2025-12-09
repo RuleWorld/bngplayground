@@ -20,7 +20,7 @@ type PendingRequest = {
   description?: string;
 };
 
-const DEFAULT_TIMEOUT_MS = 30_000;
+const DEFAULT_TIMEOUT_MS = 60_000;
 
 const extractErrorMessage = (payload: SerializedWorkerError | unknown): string => {
   if (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message?: unknown }).message === 'string') {
@@ -96,9 +96,9 @@ class BnglService {
     this.worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
       const { id, type, payload } = event.data ?? {};
 
-  // Handle progress/warning notifications separately and do not resolve/reject any pending promise
-  const respType = type as unknown as string;
-  if (respType === 'progress' || respType === 'generate_network_progress') {
+      // Handle progress/warning notifications separately and do not resolve/reject any pending promise
+      const respType = type as unknown as string;
+      if (respType === 'progress' || respType === 'generate_network_progress') {
         for (const cb of this.progressListeners) {
           try {
             cb(payload);
@@ -109,7 +109,7 @@ class BnglService {
         return;
       }
 
-  if (respType === 'warning') {
+      if (respType === 'warning') {
         for (const cb of this.warningListeners) {
           try {
             cb(payload);

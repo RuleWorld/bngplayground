@@ -62,6 +62,16 @@ export interface BNGLReaction {
   products: string[];
   rate: string;
   rateConstant: number;
+  // For functional rates (containing observables or function calls)
+  rateExpression?: string;  // Original expression string for dynamic evaluation
+  isFunctionalRate?: boolean;  // True if rate depends on observables/functions
+}
+
+// BNG function definition (e.g., gene_Wip1_activity())
+export interface BNGLFunction {
+  name: string;
+  args: string[];  // Function argument names
+  expression: string;  // Function body expression
 }
 
 export interface ReactionRule {
@@ -85,6 +95,8 @@ export interface BNGLModel {
   reactions: BNGLReaction[];
   reactionRules: ReactionRule[];
   compartments?: BNGLCompartment[];
+  // User-defined functions (e.g., gene_Wip1_activity())
+  functions?: BNGLFunction[];
   // Options provided to generate_network() in the BNGL script.
   // These should be parsed from the BNGL file and respected during network generation.
   networkOptions?: {
@@ -93,6 +105,7 @@ export interface BNGLModel {
     maxStoich?: Record<string, number>;
     overwrite?: boolean;
   };
+  simulationOptions?: Partial<SimulationOptions> & { sparse?: boolean };
 }
 
 export interface SimulationResults {
@@ -104,10 +117,17 @@ export interface SimulationOptions {
   method: 'ode' | 'ssa';
   t_end: number;
   n_steps: number;
+  // ODE solver options
+  atol?: number;           // Absolute tolerance (default: 1e-6)
+  rtol?: number;           // Relative tolerance (default: 1e-3)
+  solver?: 'auto' | 'cvode' | 'rosenbrock23' | 'rk45' | 'rk4';  // Solver selection (default: 'auto')
+  maxSteps?: number;       // Max internal steps per output interval (default: 100000)
+  // Steady state options
   steadyState?: boolean;
   steadyStateTolerance?: number;
   steadyStateWindow?: number;
 }
+
 
 export interface SerializedWorkerError {
   name?: string;
@@ -143,7 +163,7 @@ export interface NetworkGeneratorOptions {
   maxSpecies?: number;
   maxReactions?: number;
   maxAgg?: number;
-  maxStoich?: number | Record<string, number>;
+  maxStoich?: number | Map<string, number> | Record<string, number>;
   checkInterval?: number;
   memoryLimit?: number;
   timeLimit?: number;

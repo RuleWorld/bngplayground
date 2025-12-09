@@ -445,6 +445,31 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
     }
   }
 
+  // Parse functions block
+  // Function syntax: function_name(args) expression
+  // Example: gene_Wip1_activity() (q0_wip1 + q1_wip1*p53_arr^h)/(q2 + q0_wip1 + q1_wip1*p53_arr^h)
+  const functionsContent = getBlockContent('functions', code);
+  if (functionsContent) {
+    model.functions = [];
+    for (const line of functionsContent.split(/\r?\n/)) {
+      maybeCancel();
+      const cleaned = cleanLine(line);
+      if (!cleaned) continue;
+      
+      // Match: function_name(arg1, arg2, ...) expression
+      // Args can be empty (zero-argument function)
+      const funcMatch = cleaned.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*\(([^)]*)\)\s*(.+)$/);
+      if (funcMatch) {
+        const name = funcMatch[1];
+        const argsStr = funcMatch[2].trim();
+        const args = argsStr ? argsStr.split(',').map(a => a.trim()).filter(Boolean) : [];
+        const expression = funcMatch[3].trim();
+        model.functions.push({ name, args, expression });
+        logDebug('[parseBNGL] function', name, 'args:', args, 'expr:', expression);
+      }
+    }
+  }
+
   let rulesContent = getBlockContent('reaction rules', code);
   if (!rulesContent) {
     rulesContent = getBlockContent('reactions', code);
@@ -611,39 +636,73 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
 
   const parametersMap = new Map(Object.entries(model.parameters));
 
-  // Create a set of observable names for use in rate expression evaluation
+  // Create sets for detecting functional rates (observables and functions)
   const observableNames = new Set(model.observables.map(o => o.name));
+  const functionNames = new Set((model.functions || []).map(f => f.name));
+
+  // Helper to check if a rate expression contains observable or function references
+  const isFunctionalRateExpr = (rateExpr: string): boolean => {
+    for (const obsName of observableNames) {
+      if (new RegExp(`\\b${obsName}\\b`).test(rateExpr)) return true;
+    }
+    for (const funcName of functionNames) {
+      if (new RegExp(`\\b${funcName}\\s*\\(`).test(rateExpr)) return true;
+    }
+    return false;
+  };
 
   model.reactionRules.forEach((rule) => {
     maybeCancel();
-    // FIX: Use evaluateExpression to handle math in rates (e.g. "2.0 * 602.0")
-    // Pass observable names so expressions with observables can validate syntactically
-    const forwardRate = BNGLParser.evaluateExpression(rule.rate, parametersMap, observableNames);
+    
+    // Check if this is a functional rate
+    const isFunctionalForward = isFunctionalRateExpr(rule.rate);
+    
+    // For non-functional rates, evaluate statically
+    // For functional rates, store 0 as placeholder (will be evaluated dynamically)
+    let forwardRate: number;
+    if (isFunctionalForward) {
+      forwardRate = 0; // Placeholder - will be evaluated dynamically at simulation time
+    } else {
+      forwardRate = BNGLParser.evaluateExpression(rule.rate, parametersMap, observableNames);
+    }
 
-    if (!Number.isNaN(forwardRate)) {
+    // Always add the reaction (functional rates use 0 as placeholder)
+    if (!Number.isNaN(forwardRate) || isFunctionalForward) {
       model.reactions.push({
         reactants: rule.reactants,
         products: rule.products,
         rate: rule.rate,
-        rateConstant: forwardRate,
+        rateConstant: Number.isNaN(forwardRate) ? 0 : forwardRate,
+        rateExpression: isFunctionalForward ? rule.rate : undefined,
+        isFunctionalRate: isFunctionalForward,
       });
     }
 
     if (rule.isBidirectional && rule.reverseRate) {
-      const reverseRate = BNGLParser.evaluateExpression(rule.reverseRate, parametersMap, observableNames);
-      if (!Number.isNaN(reverseRate)) {
+      const isFunctionalReverse = isFunctionalRateExpr(rule.reverseRate);
+      
+      let reverseRate: number;
+      if (isFunctionalReverse) {
+        reverseRate = 0; // Placeholder
+      } else {
+        reverseRate = BNGLParser.evaluateExpression(rule.reverseRate, parametersMap, observableNames);
+      }
+      
+      if (!Number.isNaN(reverseRate) || isFunctionalReverse) {
         model.reactions.push({
           reactants: rule.products,
           products: rule.reactants,
           rate: rule.reverseRate,
-          rateConstant: reverseRate,
+          rateConstant: Number.isNaN(reverseRate) ? 0 : reverseRate,
+          rateExpression: isFunctionalReverse ? rule.reverseRate : undefined,
+          isFunctionalRate: isFunctionalReverse,
         });
       }
     }
   });
 
-  // Parse actions like generate_network
-  const actionKeywords = ['generate_network', 'simulate'];
+  // Parse actions like generate_network, simulate, simulate_ode
+  const actionKeywords = ['generate_network', 'simulate', 'simulate_ode'];
 
   for (const keyword of actionKeywords) {
     const regex = new RegExp(`${keyword}\\s*\\(`, 'g');
@@ -693,7 +752,7 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
             // Extract max_iter
             const maxIterMatch = argsStr.match(/max_iter\s*=>\s*(\d+)/);
             if (maxIterMatch) {
-              options.maxIterations = parseInt(maxIterMatch[1], 10);
+              options.maxIter = parseInt(maxIterMatch[1], 10);
             }
 
             // Extract overwrite
@@ -707,6 +766,40 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
 
           } catch (e) {
             console.warn('[parseBNGL] Failed to parse generate_network options', e);
+          }
+        } else if (keyword === 'simulate' || keyword === 'simulate_ode') {
+          try {
+            // Initialize if not exists
+            if (!model.simulationOptions) model.simulationOptions = {};
+
+            const parseNum = (str: string, key: string) => {
+              const regex = new RegExp(`${key}\\s*=>\\s*([0-9.eE+-]+)`);
+              const match = str.match(regex);
+              return match ? parseFloat(match[1]) : undefined;
+            };
+
+            const t_end = parseNum(argsStr, 't_end');
+            if (t_end !== undefined) model.simulationOptions.t_end = t_end;
+
+            const n_steps = parseNum(argsStr, 'n_steps');
+            if (n_steps !== undefined) model.simulationOptions.n_steps = n_steps;
+            
+            // Handle both atol and atoll (legacy typo support)
+            const atol = parseNum(argsStr, 'atol') ?? parseNum(argsStr, 'atoll');
+            if (atol !== undefined) model.simulationOptions.atol = atol;
+
+            const rtol = parseNum(argsStr, 'rtol');
+            if (rtol !== undefined) model.simulationOptions.rtol = rtol;
+            
+            const sparseMatch = argsStr.match(/sparse\s*=>\s*(\d+)/);
+            if (sparseMatch) {
+               model.simulationOptions.sparse = parseInt(sparseMatch[1], 10) === 1;
+            }
+
+            logDebug('[parseBNGL] Parsed simulation options:', model.simulationOptions);
+
+          } catch (e) {
+            console.warn('[parseBNGL] Failed to parse simulate options', e);
           }
         }
       }

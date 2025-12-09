@@ -18,5 +18,10 @@ export default defineConfig({
     fakeTimers: {
       toFake: [],
     },
+    
+    // Handle CJS/ESM interop for cvode_loader
+    deps: {
+      interopDefault: true,
+    },
   },
 });

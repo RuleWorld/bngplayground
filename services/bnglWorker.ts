@@ -20,6 +20,9 @@ import { parseBNGL as parseBNGLModel } from './parseBNGL';
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
+// Version marker to verify updated code is loaded
+console.log('[Worker] bnglWorker v2.1.0 - products fix applied 2024-12-07');
+
 type JobState = {
   cancelled: boolean;
   controller?: AbortController;
@@ -146,136 +149,192 @@ ctx.addEventListener('unhandledrejection', (event) => {
 
 // --- Helper: Compartment Utilities ---
 const getCompartment = (s: string) => {
-    const prefix = s.match(/^@([A-Za-z0-9_]+):/);
-    if (prefix) return prefix[1];
-    const suffix = s.match(/@([A-Za-z0-9_]+)$/);
-    if (suffix) return suffix[1];
-    return null;
+  const prefix = s.match(/^@([A-Za-z0-9_]+):/);
+  if (prefix) return prefix[1];
+  const suffix = s.match(/@([A-Za-z0-9_]+)$/);
+  if (suffix) return suffix[1];
+  return null;
 };
 
 const removeCompartment = (s: string) => {
-    return s.replace(/^@[A-Za-z0-9_]+:/, '').replace(/@[A-Za-z0-9_]+$/, '');
+  return s.replace(/^@[A-Za-z0-9_]+:/, '').replace(/@[A-Za-z0-9_]+$/, '');
 };
 
 // --- Helper: Match Single Molecule Pattern ---
 function matchMolecule(patMol: string, specMol: string): boolean {
-    // patMol and specMol are "Name(components)" strings, no compartments.
-    
-    const patMatch = patMol.match(/^([A-Za-z0-9_]+)(?:\(([^)]*)\))?$/);
-    const specMatch = specMol.match(/^([A-Za-z0-9_]+)(?:\(([^)]*)\))?$/);
+  // patMol and specMol are "Name(components)" strings, no compartments.
 
-    if (!patMatch || !specMatch) return false;
+  const patMatch = patMol.match(/^([A-Za-z0-9_]+)(?:\(([^)]*)\))?$/);
+  const specMatch = specMol.match(/^([A-Za-z0-9_]+)(?:\(([^)]*)\))?$/);
 
-    const patName = patMatch[1];
-    const specName = specMatch[1];
+  if (!patMatch || !specMatch) return false;
 
-    if (patName !== specName) return false;
+  const patName = patMatch[1];
+  const specName = specMatch[1];
 
-    // If pattern has no component list (e.g. "A"), it matches any A.
-    if (patMatch[2] === undefined) return true;
+  if (patName !== specName) return false;
 
-    const patCompsStr = patMatch[2];
-    const specCompsStr = specMatch[2] || "";
+  // If pattern has no component list (e.g. "A"), it matches any A.
+  if (patMatch[2] === undefined) return true;
 
-    const patComps = patCompsStr.split(',').map(s => s.trim()).filter(Boolean);
-    const specComps = specCompsStr.split(',').map(s => s.trim()).filter(Boolean);
+  const patCompsStr = patMatch[2];
+  const specCompsStr = specMatch[2] || "";
 
-    // Every component in pattern must be satisfied by species
-    return patComps.every(pCompStr => {
-        const pM = pCompStr.match(/^([A-Za-z0-9_]+)(?:~([A-Za-z0-9_]+))?(?:!([0-9]+|\+|\?))?$/);
-        if (!pM) return false;
-        const [_, pName, pState, pBond] = pM;
+  const patComps = patCompsStr.split(',').map(s => s.trim()).filter(Boolean);
+  const specComps = specCompsStr.split(',').map(s => s.trim()).filter(Boolean);
 
-        const sCompStr = specComps.find(s => {
-            const sName = s.split(/[~!]/)[0];
-            return sName === pName;
-        });
+  // Every component in pattern must be satisfied by species
+  return patComps.every(pCompStr => {
+    const pM = pCompStr.match(/^([A-Za-z0-9_]+)(?:~([A-Za-z0-9_]+))?(?:!([0-9]+|\+|\?))?$/);
+    if (!pM) return false;
+    const [_, pName, pState, pBond] = pM;
 
-        if (!sCompStr) return false;
-
-        const sM = sCompStr.match(/^([A-Za-z0-9_]+)(?:~([A-Za-z0-9_]+))?(?:!([0-9]+))?$/);
-        if (!sM) return false;
-        const [__, sName, sState, sBond] = sM;
-
-        if (pState && pState !== sState) return false;
-
-        if (pBond) {
-            if (pBond === '?') {
-                // !? matches anything
-            } else if (pBond === '+') {
-                if (!sBond) return false;
-            } else {
-                // Specific bond ID (e.g. !1) - treat as "must be bound" for simple matching
-                if (!sBond) return false;
-            }
-        } else {
-            // No bond specified in pattern means "must be unbound"
-            if (sBond) return false;
-        }
-
-        return true;
+    const sCompStr = specComps.find(s => {
+      const sName = s.split(/[~!]/)[0];
+      return sName === pName;
     });
+
+    if (!sCompStr) return false;
+
+    const sM = sCompStr.match(/^([A-Za-z0-9_]+)(?:~([A-Za-z0-9_]+))?(?:!([0-9]+))?$/);
+    if (!sM) return false;
+    const [__, sName, sState, sBond] = sM;
+
+    if (pState && pState !== sState) return false;
+
+    if (pBond) {
+      if (pBond === '?') {
+        // !? matches anything
+      } else if (pBond === '+') {
+        if (!sBond) return false;
+      } else {
+        // Specific bond ID (e.g. !1) - treat as "must be bound" for simple matching
+        if (!sBond) return false;
+      }
+    } else {
+      // No bond specified in pattern means "must be unbound"
+      if (sBond) return false;
+    }
+
+    return true;
+  });
 }
 
 // --- Helper: Check if Species Matches Pattern (Boolean) ---
 function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
-    const patComp = getCompartment(pattern);
-    const specComp = getCompartment(speciesStr);
+  const patComp = getCompartment(pattern);
+  const specComp = getCompartment(speciesStr);
 
-    if (patComp && patComp !== specComp) return false;
+  if (patComp && patComp !== specComp) return false;
 
-    const cleanPat = removeCompartment(pattern);
-    const cleanSpec = removeCompartment(speciesStr);
+  const cleanPat = removeCompartment(pattern);
+  const cleanSpec = removeCompartment(speciesStr);
 
-    if (cleanPat.includes('.')) {
-         const patternMolecules = cleanPat.split('.').map(s => s.trim());
-         const speciesMolecules = cleanSpec.split('.').map(s => s.trim());
-         
-         // Sort both to handle order independence for complexes
-         patternMolecules.sort();
-         speciesMolecules.sort();
+  if (cleanPat.includes('.')) {
+    const patternMolecules = cleanPat.split('.').map(s => s.trim());
+    const speciesMolecules = cleanSpec.split('.').map(s => s.trim());
 
-         if (patternMolecules.length !== speciesMolecules.length) return false;
-         
-         return patternMolecules.every((patMol, idx) => {
-             return matchMolecule(patMol, speciesMolecules[idx]);
-         });
-    } else {
-        // Single molecule pattern matching against potentially complex species
-        // If pattern is "A", it matches "A.B"
-        // If pattern is "A.B", it matches "A.B"
-        
-        // If pattern is single molecule, check if ANY molecule in species matches
-        const specMols = cleanSpec.split('.');
-        return specMols.some(sMol => matchMolecule(cleanPat, sMol));
-    }
+    // Sort both to handle order independence for complexes
+    patternMolecules.sort();
+    speciesMolecules.sort();
+
+    if (patternMolecules.length !== speciesMolecules.length) return false;
+
+    return patternMolecules.every((patMol, idx) => {
+      return matchMolecule(patMol, speciesMolecules[idx]);
+    });
+  } else {
+    // Single molecule pattern matching against potentially complex species
+    // If pattern is "A", it matches "A.B"
+    // If pattern is "A.B", it matches "A.B"
+
+    // If pattern is single molecule, check if ANY molecule in species matches
+    const specMols = cleanSpec.split('.');
+    return specMols.some(sMol => matchMolecule(cleanPat, sMol));
+  }
 }
 
 // --- Helper: Count Matches for Molecules Observable ---
 function countPatternMatches(speciesStr: string, patternStr: string): number {
-    const patComp = getCompartment(patternStr);
-    const specComp = getCompartment(speciesStr);
+  const patComp = getCompartment(patternStr);
+  const specComp = getCompartment(speciesStr);
 
-    if (patComp && patComp !== specComp) return 0;
+  if (patComp && patComp !== specComp) return 0;
 
-    const cleanPat = removeCompartment(patternStr);
-    const cleanSpec = removeCompartment(speciesStr);
+  const cleanPat = removeCompartment(patternStr);
+  const cleanSpec = removeCompartment(speciesStr);
 
-    if (cleanPat.includes('.')) {
-        // Complex pattern: fallback to boolean match (1 or 0)
-        // Exact counting of subgraph isomorphisms is expensive here
-        return isSpeciesMatch(speciesStr, patternStr) ? 1 : 0;
-    } else {
-        // Single molecule pattern: count occurrences in species string
-        const specMols = cleanSpec.split('.');
-        let count = 0;
-        for (const sMol of specMols) {
-            if (matchMolecule(cleanPat, sMol)) {
-                count++;
-            }
-        }
-        return count;
+  if (cleanPat.includes('.')) {
+    // Complex pattern: fallback to boolean match (1 or 0)
+    // Exact counting of subgraph isomorphisms is expensive here
+    return isSpeciesMatch(speciesStr, patternStr) ? 1 : 0;
+  } else {
+    // Single molecule pattern: count occurrences in species string
+    const specMols = cleanSpec.split('.');
+    let count = 0;
+    for (const sMol of specMols) {
+      if (matchMolecule(cleanPat, sMol)) {
+        count++;
+      }
     }
+    return count;
+  }
+}
+
+// --- Helper: Evaluate Functional Rate Expression ---
+// Evaluates a rate expression that may contain observable names and function calls
+// at runtime using current observable values
+function evaluateFunctionalRate(
+  expression: string,
+  parameters: Record<string, number>,
+  observableValues: Record<string, number>,
+  functions?: { name: string; args: string[]; expression: string }[]
+): number {
+  // Build context with parameters and observable values
+  const context: Record<string, number> = { ...parameters, ...observableValues };
+
+  // First, replace function calls with their expanded expressions
+  let expandedExpr = expression;
+  if (functions && functions.length > 0) {
+    // Repeatedly expand function calls (handles nested calls)
+    for (let pass = 0; pass < 5; pass++) { // Max 5 passes for nested functions
+      let foundFunction = false;
+      for (const func of functions) {
+        // Match function_name() - zero-argument functions
+        const funcCallPattern = new RegExp(`\\b${func.name}\\s*\\(\\s*\\)`, 'g');
+        if (funcCallPattern.test(expandedExpr)) {
+          foundFunction = true;
+          expandedExpr = expandedExpr.replace(funcCallPattern, `(${func.expression})`);
+        }
+      }
+      if (!foundFunction) break;
+    }
+  }
+
+  // Now substitute all variable names with their values
+  // Sort by length (longest first) to avoid partial replacements
+  const sortedNames = Object.entries(context).sort((a, b) => b[0].length - a[0].length);
+  let evalExpr = expandedExpr;
+  for (const [name, value] of sortedNames) {
+    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    evalExpr = evalExpr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), value.toString());
+  }
+
+  // Replace ^ with ** for JavaScript exponentiation
+  evalExpr = evalExpr.replace(/\^/g, '**');
+
+  try {
+    // Use new Function for safe(ish) evaluation
+    const fn = new Function(`return ${evalExpr};`);
+    const result = fn();
+    if (typeof result !== 'number' || !isFinite(result)) {
+      return 0;
+    }
+    return result;
+  } catch (e) {
+    // Failed to evaluate - return 0
+    return 0;
+  }
 }
 
 function parseBNGL(jobId: number, bnglCode: string): BNGLModel {
@@ -284,9 +343,7 @@ function parseBNGL(jobId: number, bnglCode: string): BNGLModel {
   });
 }
 
-function generateNetwork(jobId: number, inputModel: BNGLModel): BNGLModel {
-  return inputModel; 
-}
+
 
 async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Promise<BNGLModel> {
   console.log('[Worker] Starting network generation for model with', inputModel.species.length, 'species and', inputModel.reactionRules.length, 'rules');
@@ -300,21 +357,77 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
   // FIX: Create a map of CANONICAL seed species names to concentrations
   const seedConcentrationMap = new Map<string, number>();
   inputModel.species.forEach(s => {
-      const g = BNGLParser.parseSpeciesGraph(s.name);
-      const canonicalName = GraphCanonicalizer.canonicalize(g);
-      seedConcentrationMap.set(canonicalName, s.initialConcentration);
+    const g = BNGLParser.parseSpeciesGraph(s.name);
+    const canonicalName = GraphCanonicalizer.canonicalize(g);
+    seedConcentrationMap.set(canonicalName, s.initialConcentration);
   });
 
   const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
 
+  // Create sets for detecting functional rates (observables and functions)
+  const observableNames = new Set(inputModel.observables.map(o => o.name));
+  const functionNames = new Set((inputModel.functions || []).map(f => f.name));
+
+  // Helper to check if a rate expression contains observable or function references
+  const isFunctionalRateExpr = (rateExpr: string): boolean => {
+    if (!rateExpr) return false;
+    for (const obsName of observableNames) {
+      if (new RegExp(`\\b${obsName}\\b`).test(rateExpr)) return true;
+    }
+    for (const funcName of functionNames) {
+      if (new RegExp(`\\b${funcName}\\s*\\(`).test(rateExpr)) return true;
+    }
+    return false;
+  };
+
   const rules = inputModel.reactionRules.flatMap(r => {
     const parametersMap = new Map(Object.entries(inputModel.parameters));
-    const rate = BNGLParser.evaluateExpression(r.rate, parametersMap);
-    const reverseRate = r.reverseRate ? BNGLParser.evaluateExpression(r.reverseRate, parametersMap) : rate;
-    
+
+    // Check if this is a functional rate (depends on observables or functions)
+    const isForwardFunctional = isFunctionalRateExpr(r.rate);
+    const isReverseFunctional = r.reverseRate ? isFunctionalRateExpr(r.reverseRate) : false;
+
+    // For functional rates, use 0 as placeholder (will be evaluated dynamically at simulation time)
+    // For static rates, try to evaluate
+    let rate: number;
+    if (isForwardFunctional) {
+      rate = 0; // Placeholder for functional rate
+    } else {
+      try {
+        rate = BNGLParser.evaluateExpression(r.rate, parametersMap);
+        if (isNaN(rate)) rate = 0;
+      } catch (e) {
+        // Only warn if this is not expected to fail (shouldn't happen if not functional)
+        console.warn('[Worker] Could not evaluate rate expression:', r.rate, '- using 0');
+        rate = 0;
+      }
+    }
+
+    let reverseRate: number;
+    if (r.reverseRate) {
+      if (isReverseFunctional) {
+        reverseRate = 0; // Placeholder for functional rate
+      } else {
+        try {
+          reverseRate = BNGLParser.evaluateExpression(r.reverseRate, parametersMap);
+          if (isNaN(reverseRate)) reverseRate = 0;
+        } catch (e) {
+          console.warn('[Worker] Could not evaluate reverse rate expression:', r.reverseRate, '- using 0');
+          reverseRate = 0;
+        }
+      }
+    } else {
+      reverseRate = rate;
+    }
+
     const ruleStr = `${formatSpeciesList(r.reactants)} -> ${formatSpeciesList(r.products)}`;
     const forwardRule = BNGLParser.parseRxnRule(ruleStr, rate);
     forwardRule.name = r.reactants.join('+') + '->' + r.products.join('+');
+    // Store rate expression for functional rates (will be passed through to simulation)
+    if (isForwardFunctional) {
+      (forwardRule as any).rateExpression = r.rate;
+      (forwardRule as any).isFunctionalRate = true;
+    }
 
     if (r.constraints && r.constraints.length > 0) {
       forwardRule.applyConstraints(r.constraints, (s) => BNGLParser.parseSpeciesGraph(s));
@@ -324,6 +437,10 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
       const reverseRuleStr = `${formatSpeciesList(r.products)} -> ${formatSpeciesList(r.reactants)}`;
       const reverseRule = BNGLParser.parseRxnRule(reverseRuleStr, reverseRate);
       reverseRule.name = r.products.join('+') + '->' + r.reactants.join('+');
+      if (isReverseFunctional) {
+        (reverseRule as any).rateExpression = r.reverseRate;
+        (reverseRule as any).isFunctionalRate = true;
+      }
       return [forwardRule, reverseRule];
     } else {
       return [forwardRule];
@@ -333,56 +450,96 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
   // Use network options from BNGL file if available, with reasonable defaults
   const networkOpts = inputModel.networkOptions || {};
   // Convert Record<string, number> to Map for maxStoich if provided
-  const maxStoich = networkOpts.maxStoich 
+  const maxStoich = networkOpts.maxStoich
     ? new Map(Object.entries(networkOpts.maxStoich))
     : 500;  // Default limit per molecule type
-  
-  const generator = new NetworkGenerator({ 
-    maxSpecies: 20000, 
+
+  const generator = new NetworkGenerator({
+    maxSpecies: 20000,
     maxIterations: networkOpts.maxIter ?? 5000,
     maxAgg: networkOpts.maxAgg ?? 500,
-    maxStoich 
+    maxStoich
   });
-  const result = await generator.generate(seedSpecies, rules);
 
-  console.log('[Worker] Network generation complete. Generated', result.species.length, 'species and', result.reactions.length, 'reactions');
+  // Set up progress callback to emit progress to main thread during simulation
+  let lastProgressTime = 0;
+  const progressCallback = (progress: GeneratorProgress) => {
+    const now = Date.now();
+    if (now - lastProgressTime >= 250) { // Throttle to 4Hz (250ms)
+      lastProgressTime = now;
+      ctx.postMessage({ id: jobId, type: 'generate_network_progress', payload: progress });
+    }
+  };
+
+  console.log('[Worker DEBUG] About to call generator.generate() with', seedSpecies.length, 'seeds and', rules.length, 'rules');
+
+  let result: { species: Species[]; reactions: Rxn[] };
+  try {
+    result = await generator.generate(seedSpecies, rules, progressCallback);
+  } catch (e: any) {
+    console.error('[Worker DEBUG] generator.generate() FAILED with error:', e.message);
+    console.error('[Worker DEBUG] Full stack trace:', e.stack);
+    throw e;
+  }
+
+  console.log('[Worker DEBUG] generator.generate() completed. Generated', result.species.length, 'species and', result.reactions.length, 'reactions');
+
+  console.log('[Worker DEBUG] Building generatedModel - mapping species...');
+  const generatedSpecies = result.species.map((s: Species) => {
+    const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
+    const concentration = seedConcentrationMap.get(canonicalName) || (s.concentration || 0);
+    return { name: canonicalName, initialConcentration: concentration };
+  });
+  console.log('[Worker DEBUG] Species mapped:', generatedSpecies.length);
+
+  console.log('[Worker DEBUG] Mapping reactions...');
+  const generatedReactions = result.reactions.map((r: Rxn, idx: number) => {
+    try {
+      const reaction = {
+        reactants: r.reactants.map((ridx: number) => GraphCanonicalizer.canonicalize(result.species[ridx].graph)),
+        products: r.products.map((pidx: number) => GraphCanonicalizer.canonicalize(result.species[pidx].graph)),
+        rate: String(r.rate),
+        rateConstant: typeof r.rate === 'number' ? r.rate : 0
+      };
+      return reaction;
+    } catch (e: any) {
+      console.error(`[Worker DEBUG] Error mapping reaction ${idx}:`, e.message);
+      throw e;
+    }
+  });
+  console.log('[Worker DEBUG] Reactions mapped:', generatedReactions.length);
 
   const generatedModel: BNGLModel = {
     ...inputModel,
-    species: result.species.map((s: Species) => {
-      // Use canonical string for the generated species name
-      const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
-      // Look up concentration using canonical name
-      const concentration = seedConcentrationMap.get(canonicalName) || (s.concentration || 0);
-      return { name: canonicalName, initialConcentration: concentration };
-    }),
-    reactions: result.reactions.map((r: Rxn) => {
-      const reaction = {
-        reactants: r.reactants.map((idx: number) => GraphCanonicalizer.canonicalize(result.species[idx].graph)),
-        products: r.products.map((idx: number) => GraphCanonicalizer.canonicalize(result.species[idx].graph)),
-        rate: r.rate.toString(),
-        rateConstant: r.rate
-      };
-      return reaction;
-    }),
+    species: generatedSpecies,
+    reactions: generatedReactions,
   };
 
+  console.log('[Worker DEBUG] generatedModel built successfully');
   return generatedModel;
 }
 
 async function simulate(jobId: number, inputModel: BNGLModel, options: SimulationOptions): Promise<SimulationResults> {
+  const simulationStartTime = performance.now();
   ensureNotCancelled(jobId);
-  console.log('[Worker] Starting simulation with', inputModel.species.length, 'species and', inputModel.reactions.length, 'reactions');
+  console.log('[Worker] ⏱️ TIMING: Starting simulation');
+  console.log('[Worker] Starting simulation with', inputModel.species.length, 'species and', inputModel.reactionRules?.length ?? 0, 'rules');
 
+  const networkGenStart = performance.now();
   const expandedModel = await generateExpandedNetwork(jobId, inputModel);
+  const networkGenTime = performance.now() - networkGenStart;
+  console.log('[Worker] ⏱️ TIMING: Network generation took', networkGenTime.toFixed(0), 'ms');
   console.log('[Worker] After network expansion:', expandedModel.species.length, 'species and', expandedModel.reactions.length, 'reactions');
 
   const model: BNGLModel = JSON.parse(JSON.stringify(expandedModel));
-  const { t_end, n_steps, method } = options;
+  // Prioritize model.simulationOptions (from BNGL file) over UI options
+  const t_end = inputModel.simulationOptions?.t_end ?? options.t_end;
+  const n_steps = inputModel.simulationOptions?.n_steps ?? options.n_steps;
+  const method = options.method;
   const headers = ['time', ...model.observables.map((observable) => observable.name)];
 
   // --- OPTIMIZATION: Pre-process Network for Fast Simulation ---
-  
+
   // 1. Map Species Names to Indices
   const speciesMap = new Map<string, number>();
   model.species.forEach((s, i) => speciesMap.set(s.name, i));
@@ -393,20 +550,73 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
   model.species.slice(0, 5).forEach((s, i) => console.log(`[Worker] Species ${i}: ${s.name} (conc=${s.initialConcentration})`));
 
   // 2. Pre-process Reactions into Concrete Indices
-  const concreteReactions = model.reactions.map(r => {
-      const reactantIndices = r.reactants.map(name => speciesMap.get(name));
-      const productIndices = r.products.map(name => speciesMap.get(name));
-      
-      if (reactantIndices.some(i => i === undefined) || productIndices.some(i => i === undefined)) {
-          return null;
-      }
+  // Detect functional rates (containing observables or function calls) that need dynamic evaluation
+  const observableNames = new Set(model.observables.map(o => o.name));
+  const functionNames = new Set((model.functions || []).map(f => f.name));
 
-      return {
-          reactants: new Int32Array(reactantIndices as number[]),
-          products: new Int32Array(productIndices as number[]),
-          rateConstant: r.rateConstant
-      };
-  }).filter(r => r !== null) as { reactants: Int32Array, products: Int32Array, rateConstant: number }[];
+  const concreteReactions = model.reactions.map(r => {
+    const reactantIndices = r.reactants.map(name => speciesMap.get(name));
+    const productIndices = r.products.map(name => speciesMap.get(name));
+
+    if (reactantIndices.some(i => i === undefined) || productIndices.some(i => i === undefined)) {
+      return null;
+    }
+
+    // Check if the rate expression contains observable or function references
+    // (indicating it's a functional rate that needs dynamic evaluation)
+    const rateExpr = r.rate || '';
+    let isFunctionalRate = false;
+
+    // Check for observable names in the rate expression
+    for (const obsName of observableNames) {
+      // Use word boundary to avoid partial matches
+      if (new RegExp(`\\b${obsName}\\b`).test(rateExpr)) {
+        isFunctionalRate = true;
+        break;
+      }
+    }
+
+    // Check for function calls in the rate expression
+    if (!isFunctionalRate) {
+      for (const funcName of functionNames) {
+        if (new RegExp(`\\b${funcName}\\s*\\(`).test(rateExpr)) {
+          isFunctionalRate = true;
+          break;
+        }
+      }
+    }
+
+    // For non-functional rates, use the pre-computed rateConstant
+    // For functional rates, store the expression for runtime evaluation
+    let rate = typeof r.rateConstant === 'number' ? r.rateConstant : parseFloat(String(r.rateConstant));
+    if (isNaN(rate) || !isFinite(rate)) {
+      // If rate couldn't be parsed and it's not a functional rate, warn
+      if (!isFunctionalRate) {
+        console.warn('[Worker] Invalid rate constant for reaction:', r.rate, '- using 0');
+      }
+      rate = 0; // Will be recalculated if functional
+    }
+
+    return {
+      reactants: new Int32Array(reactantIndices as number[]),
+      products: new Int32Array(productIndices as number[]),
+      rateConstant: rate,
+      rateExpression: isFunctionalRate ? rateExpr : null,
+      isFunctionalRate
+    };
+  }).filter(r => r !== null) as {
+    reactants: Int32Array;
+    products: Int32Array;
+    rateConstant: number;
+    rateExpression: string | null;
+    isFunctionalRate: boolean;
+  }[];
+
+  // Count functional rates for logging
+  const functionalRateCount = concreteReactions.filter(r => r.isFunctionalRate).length;
+  if (functionalRateCount > 0) {
+    console.log(`[Worker] ${functionalRateCount} of ${concreteReactions.length} reactions have functional rates (require dynamic evaluation)`);
+  }
 
   // DEBUG: Log reactions
   console.log('[Worker] Total reactions:', concreteReactions.length);
@@ -414,41 +624,41 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
   // 3. Pre-process Observables (Cache matching species indices and coefficients)
   const concreteObservables = model.observables.map(obs => {
-      // Split pattern by whitespace to handle multiple patterns (e.g. "A B")
-      const patterns = obs.pattern.split(/\s+/).filter(p => p.length > 0);
-      const matchingIndices: number[] = [];
-      const coefficients: number[] = [];
-      
-      model.species.forEach((s, i) => {
-          let count = 0;
-          for (const pat of patterns) {
-              if (obs.type === 'species') {
-                  if (isSpeciesMatch(s.name, pat)) {
-                      count = 1;
-                      break; // Species matches once
-                  }
-              } else {
-                  // Molecules observable: count occurrences
-                  count += countPatternMatches(s.name, pat);
-              }
+    // Split pattern by whitespace to handle multiple patterns (e.g. "A B")
+    const patterns = obs.pattern.split(/\s+/).filter(p => p.length > 0);
+    const matchingIndices: number[] = [];
+    const coefficients: number[] = [];
+
+    model.species.forEach((s, i) => {
+      let count = 0;
+      for (const pat of patterns) {
+        if (obs.type === 'species') {
+          if (isSpeciesMatch(s.name, pat)) {
+            count = 1;
+            break; // Species matches once
           }
-          
-          if (count > 0) {
-              matchingIndices.push(i);
-              coefficients.push(count);
-          }
-      });
-      return {
-          name: obs.name,
-          indices: new Int32Array(matchingIndices),
-          coefficients: new Float64Array(coefficients)
-      };
+        } else {
+          // Molecules observable: count occurrences
+          count += countPatternMatches(s.name, pat);
+        }
+      }
+
+      if (count > 0) {
+        matchingIndices.push(i);
+        coefficients.push(count);
+      }
+    });
+    return {
+      name: obs.name,
+      indices: new Int32Array(matchingIndices),
+      coefficients: new Float64Array(coefficients)
+    };
   });
 
   // DEBUG: Log observables
   concreteObservables.forEach(obs => {
-      console.log(`[Worker] Observable ${obs.name} matches ${obs.indices.length} species`);
-      if (obs.indices.length === 0) console.warn(`[Worker] WARNING: Observable ${obs.name} matches NO species`);
+    console.log(`[Worker] Observable ${obs.name} matches ${obs.indices.length} species`);
+    if (obs.indices.length === 0) console.warn(`[Worker] WARNING: Observable ${obs.name} matches NO species`);
   });
 
   // 4. Initialize State Vector (Float64Array for speed)
@@ -457,23 +667,23 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
   // DEBUG: Check initial state
   let totalConc = 0;
-  for(let i=0; i<numSpecies; i++) totalConc += state[i];
+  for (let i = 0; i < numSpecies; i++) totalConc += state[i];
   console.log('[Worker] Total initial concentration:', totalConc);
 
   const data: Record<string, number>[] = [];
 
   // --- Fast Observable Evaluator ---
   const evaluateObservablesFast = (currentState: Float64Array) => {
-      const obsValues: Record<string, number> = {};
-      for (let i = 0; i < concreteObservables.length; i++) {
-          const obs = concreteObservables[i];
-          let sum = 0;
-          for (let j = 0; j < obs.indices.length; j++) {
-              sum += currentState[obs.indices[j]] * obs.coefficients[j];
-          }
-          obsValues[obs.name] = sum;
+    const obsValues: Record<string, number> = {};
+    for (let i = 0; i < concreteObservables.length; i++) {
+      const obs = concreteObservables[i];
+      let sum = 0;
+      for (let j = 0; j < obs.indices.length; j++) {
+        sum += currentState[obs.indices[j]] * obs.coefficients[j];
       }
-      return obsValues;
+      obsValues[obs.name] = sum;
+    }
+    return obsValues;
   };
 
   // Define checkCancelled helper
@@ -482,8 +692,8 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
   if (method === 'ssa') {
     // SSA Implementation using Typed Arrays
     // Round initial state for SSA
-    for(let i=0; i<numSpecies; i++) state[i] = Math.round(state[i]);
-    
+    for (let i = 0; i < numSpecies; i++) state[i] = Math.round(state[i]);
+
     const dtOut = t_end / n_steps;
     let t = 0;
     let nextTOut = 0;
@@ -492,19 +702,19 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
     while (t < t_end) {
       checkCancelled();
-      
+
       // Calculate propensities
       let aTotal = 0;
       const propensities = new Float64Array(concreteReactions.length);
-      
+
       for (let i = 0; i < concreteReactions.length; i++) {
-          const rxn = concreteReactions[i];
-          let a = rxn.rateConstant;
-          for (let j = 0; j < rxn.reactants.length; j++) {
-              a *= state[rxn.reactants[j]];
-          }
-          propensities[i] = a;
-          aTotal += a;
+        const rxn = concreteReactions[i];
+        let a = rxn.rateConstant;
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          a *= state[rxn.reactants[j]];
+        }
+        propensities[i] = a;
+        aTotal += a;
       }
 
       if (aTotal === 0) break;
@@ -516,13 +726,13 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       const r2 = Math.random() * aTotal;
       let sumA = 0;
       let reactionIndex = propensities.length - 1;
-      
+
       for (let i = 0; i < propensities.length; i++) {
-          sumA += propensities[i];
-          if (r2 <= sumA) {
-              reactionIndex = i;
-              break;
-          }
+        sumA += propensities[i];
+        if (r2 <= sumA) {
+          reactionIndex = i;
+          break;
+        }
       }
 
       const firedRxn = concreteReactions[reactionIndex];
@@ -535,201 +745,251 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
         nextTOut += dtOut;
       }
     }
-    
+
     // Fill remaining steps
     while (nextTOut <= t_end) {
-        data.push({ time: Math.round(nextTOut * 1e10) / 1e10, ...evaluateObservablesFast(state) });
-        nextTOut += dtOut;
+      data.push({ time: Math.round(nextTOut * 1e10) / 1e10, ...evaluateObservablesFast(state) });
+      nextTOut += dtOut;
     }
 
     return { headers, data } satisfies SimulationResults;
   }
 
   if (method === 'ode') {
+    // Import ODESolver dynamically to avoid circular dependency
+    const { createSolver } = await import('./ODESolver');
+
     // OPTIMIZATION: JIT Compile Derivative Function
     // This avoids array iteration overhead in the hot loop
     const buildDerivativesFunction = () => {
-        const lines: string[] = [];
-        lines.push('var v;');
-        
-        for (let i = 0; i < concreteReactions.length; i++) {
-            const rxn = concreteReactions[i];
-            let term = `${rxn.rateConstant}`;
-            for (let j = 0; j < rxn.reactants.length; j++) {
-                term += ` * y[${rxn.reactants[j]}]`;
-            }
-            lines.push(`v = ${term};`);
-            
-            for (let j = 0; j < rxn.reactants.length; j++) {
-                lines.push(`dydt[${rxn.reactants[j]}] -= v;`);
-            }
-            for (let j = 0; j < rxn.products.length; j++) {
-                lines.push(`dydt[${rxn.products[j]}] += v;`);
-            }
+      const lines: string[] = [];
+      lines.push('dydt.fill(0);');  // Must reset dydt at start
+      lines.push('var v;');
+
+      for (let i = 0; i < concreteReactions.length; i++) {
+        const rxn = concreteReactions[i];
+        let term = `${rxn.rateConstant}`;
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          term += ` * y[${rxn.reactants[j]}]`;
         }
-        
-        return new Function('y', 'dydt', lines.join('\n'));
+        lines.push(`v = ${term};`);
+
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          lines.push(`dydt[${rxn.reactants[j]}] -= v;`);
+        }
+        for (let j = 0; j < rxn.products.length; j++) {
+          lines.push(`dydt[${rxn.products[j]}] += v;`);
+        }
+      }
+
+      return new Function('y', 'dydt', lines.join('\n'));
     };
 
     // Fallback to loop if too many reactions (to avoid stack overflow or huge function size)
     let derivatives: (y: Float64Array, dydt: Float64Array) => void;
     if (concreteReactions.length < 2000) {
-        try {
-            // @ts-ignore
-            derivatives = buildDerivativesFunction();
-        } catch (e) {
-            console.warn('[Worker] JIT compilation failed, falling back to loop', e);
-            derivatives = (yIn: Float64Array, dydt: Float64Array) => {
-                dydt.fill(0);
-                for (let i = 0; i < concreteReactions.length; i++) {
-                    const rxn = concreteReactions[i];
-                    let velocity = rxn.rateConstant;
-                    for (let j = 0; j < rxn.reactants.length; j++) {
-                        velocity *= yIn[rxn.reactants[j]];
-                    }
-                    for (let j = 0; j < rxn.reactants.length; j++) dydt[rxn.reactants[j]] -= velocity;
-                    for (let j = 0; j < rxn.products.length; j++) dydt[rxn.products[j]] += velocity;
-                }
-            };
-        }
-    } else {
+      try {
+        // @ts-ignore - JIT compiled function
+        derivatives = buildDerivativesFunction();
+      } catch (e) {
+        console.warn('[Worker] JIT compilation failed, falling back to loop', e);
         derivatives = (yIn: Float64Array, dydt: Float64Array) => {
-            dydt.fill(0);
-            for (let i = 0; i < concreteReactions.length; i++) {
-                const rxn = concreteReactions[i];
-                let velocity = rxn.rateConstant;
-                for (let j = 0; j < rxn.reactants.length; j++) {
-                    velocity *= yIn[rxn.reactants[j]];
-                }
-                for (let j = 0; j < rxn.reactants.length; j++) dydt[rxn.reactants[j]] -= velocity;
-                for (let j = 0; j < rxn.products.length; j++) dydt[rxn.products[j]] += velocity;
+          dydt.fill(0);
+          for (let i = 0; i < concreteReactions.length; i++) {
+            const rxn = concreteReactions[i];
+            let velocity = rxn.rateConstant;
+            for (let j = 0; j < rxn.reactants.length; j++) {
+              velocity *= yIn[rxn.reactants[j]];
             }
+            for (let j = 0; j < rxn.reactants.length; j++) dydt[rxn.reactants[j]] -= velocity;
+            for (let j = 0; j < rxn.products.length; j++) dydt[rxn.products[j]] += velocity;
+          }
         };
+      }
+    } else if (functionalRateCount === 0) {
+      // Large number of reactions but no functional rates - use loop
+      derivatives = (yIn: Float64Array, dydt: Float64Array) => {
+        dydt.fill(0);
+        for (let i = 0; i < concreteReactions.length; i++) {
+          const rxn = concreteReactions[i];
+          let velocity = rxn.rateConstant;
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            velocity *= yIn[rxn.reactants[j]];
+          }
+          for (let j = 0; j < rxn.reactants.length; j++) dydt[rxn.reactants[j]] -= velocity;
+          for (let j = 0; j < rxn.products.length; j++) dydt[rxn.products[j]] += velocity;
+        }
+      };
+    } else {
+      // No JIT compilation possible due to large number, but handled below
+      derivatives = null as any;
     }
 
-    const rk4Step = (yCurr: Float64Array, h: number, yNext: Float64Array) => {
-        const n = yCurr.length;
-        // Allocate temp arrays once outside if possible, but here inside is safer for now
-        // Optimization: reuse buffers passed in context if we refactor
-        const k1 = new Float64Array(n);
-        const k2 = new Float64Array(n);
-        const k3 = new Float64Array(n);
-        const k4 = new Float64Array(n);
-        const temp = new Float64Array(n);
+    // If there are functional rates, we need a special derivative function
+    // that evaluates rates dynamically at each timestep
+    if (functionalRateCount > 0) {
+      console.log('[Worker] Using dynamic derivative function for functional rates');
 
-        // k1
-        dydt.fill(0); // Reset global dydt buffer if used, but here we use local k1
-        derivatives(yCurr, k1);
-        
-        // k2
-        for(let i=0; i<n; i++) temp[i] = yCurr[i] + 0.5 * h * k1[i];
-        derivatives(temp, k2);
-
-        // k3
-        for(let i=0; i<n; i++) temp[i] = yCurr[i] + 0.5 * h * k2[i];
-        derivatives(temp, k3);
-
-        // k4
-        for(let i=0; i<n; i++) temp[i] = yCurr[i] + h * k3[i];
-        derivatives(temp, k4);
-
-        for(let i=0; i<n; i++) {
-            yNext[i] = yCurr[i] + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
-            if (yNext[i] < 0) yNext[i] = 0; // Clamp to 0
+      // Helper to compute observable values from current state
+      const computeObservableValues = (yIn: Float64Array): Record<string, number> => {
+        const obsValues: Record<string, number> = {};
+        for (let i = 0; i < concreteObservables.length; i++) {
+          const obs = concreteObservables[i];
+          let sum = 0;
+          for (let j = 0; j < obs.indices.length; j++) {
+            sum += yIn[obs.indices[j]] * obs.coefficients[j];
+          }
+          obsValues[obs.name] = sum;
         }
+        return obsValues;
+      };
+
+      derivatives = (yIn: Float64Array, dydt: Float64Array) => {
+        dydt.fill(0);
+
+        // Compute observable values for functional rate evaluation
+        const obsValues = computeObservableValues(yIn);
+
+        for (let i = 0; i < concreteReactions.length; i++) {
+          const rxn = concreteReactions[i];
+
+          // Get rate constant (evaluate dynamically if functional)
+          let k: number;
+          if (rxn.isFunctionalRate && rxn.rateExpression) {
+            k = evaluateFunctionalRate(
+              rxn.rateExpression,
+              model.parameters,
+              obsValues,
+              model.functions
+            );
+          } else {
+            k = rxn.rateConstant;
+          }
+
+          // Compute velocity = k * [R1] * [R2] * ...
+          let velocity = k;
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            velocity *= yIn[rxn.reactants[j]];
+          }
+
+          // Update dydt
+          for (let j = 0; j < rxn.reactants.length; j++) dydt[rxn.reactants[j]] -= velocity;
+          for (let j = 0; j < rxn.products.length; j++) dydt[rxn.products[j]] += velocity;
+        }
+      };
+    }
+
+    // Create solver with user-specified or default options (matching BNG2.pl defaults)
+    // Create solver with user-specified or default options (matching BNG2.pl defaults)
+    let solverType = options.solver ?? 'auto';
+
+    // NOTE: BioNetGen's sparse=>1 option refers to NETWORK GENERATION method, NOT the ODE solver.
+    // The SPGMR (matrix-free Krylov) solver requires a preconditioner to work on stiff systems.
+    // Without preconditioning, SPGMR fails on stiff models like Barua_2013.
+    // For now, always use the dense CVODE solver which works reliably for moderate-sized models.
+    // The dense solver can handle up to ~1000-2000 species; larger models would need SPGMR + preconditioner.
+    if (solverType === 'auto') {
+      solverType = 'cvode';
+      console.log(`[Worker] Using CVODE dense solver for ${numSpecies} species`);
+    }
+
+    // Log max initial concentration for debugging
+    const maxInitConc = Math.max(...state);
+    console.log(`[Worker] Max initial concentration: ${maxInitConc}`);
+    
+    // Use exactly what user/model specifies (matching native BNG behavior)
+    // BNG defaults: atol=1e-8, rtol=1e-8, maxStep=0 (unlimited)
+    const userAtol = model.simulationOptions?.atol ?? options.atol ?? 1e-8;
+    const userRtol = model.simulationOptions?.rtol ?? options.rtol ?? 1e-8;
+
+    const solverOptions = {
+      atol: userAtol,
+      rtol: userRtol,
+      maxSteps: options.maxSteps ?? 1000000,
+      minStep: 1e-15,
+      maxStep: 0,  // 0 = unlimited, matching native BNG which uses CVodeSetMaxStep(cvode_mem, 0.0)
+      solver: solverType as 'auto' | 'cvode' | 'rosenbrock23' | 'rk45' | 'rk4',
     };
+
+    console.log('[Worker] ODE solver options (native BNG compatible):', solverOptions);
+
+    const odeStart = performance.now();
+    const solver = await createSolver(numSpecies, derivatives, solverOptions);
 
     const dtOut = t_end / n_steps;
     let t = 0;
-    
+
     data.push({ time: t, ...evaluateObservablesFast(state) });
 
+    // State vector for simulation
+    let y = new Float64Array(state);
+
+    // Steady state detection
     const tolerance = options.steadyStateTolerance ?? 1e-6;
     const window = options.steadyStateWindow ?? 5;
     const enforceSteadyState = !!options.steadyState;
     let consecutiveStable = 0;
     let shouldStop = false;
-
-    // Reusable arrays for RK4
-    let y = new Float64Array(state);
-    let nextY = new Float64Array(numSpecies);
-    // Dummy dydt for JIT function if it expects a second arg (it does)
-    let dydt = new Float64Array(numSpecies); 
+    let prevY = new Float64Array(numSpecies);
 
     // DEBUG: Check derivatives at t=0
+    const dydt = new Float64Array(numSpecies);
     derivatives(y, dydt);
     let maxDeriv = 0;
-    for(let i=0; i<numSpecies; i++) maxDeriv = Math.max(maxDeriv, Math.abs(dydt[i]));
+    for (let i = 0; i < numSpecies; i++) maxDeriv = Math.max(maxDeriv, Math.abs(dydt[i]));
     console.log('[Worker] Max derivative at t=0:', maxDeriv);
 
-    // OPTIMIZATION: Relative Change Limiter for Step Size
-    // Instead of complex adaptive schemes, we limit step size so no species changes by >20%
-    
+    // Integration loop - use new adaptive solver for each output interval
     for (let i = 1; i <= n_steps && !shouldStop; i += 1) {
       checkCancelled();
       const tTarget = i * dtOut;
-      
-      while (t < tTarget - 1e-12) {
-          // Calculate derivatives at current state to estimate step size
-          derivatives(y, dydt); // dydt is reused buffer
 
-          // Relative Change Limiter
-          let h = tTarget - t; // Default to finishing the step
-          const maxChange = 0.2; // 20%
-          const minConc = 1e-9; // Threshold below which we allow faster relative changes
-          const minStep = 1e-12;
+      // Save previous state for steady-state check
+      prevY.set(y);
 
-          for (let k = 0; k < numSpecies; k++) {
-              const deriv = Math.abs(dydt[k]);
-              if (deriv > 1e-12) { // Ignore negligible rates
-                  const conc = y[k];
-                  // If concentration is significant, limit relative change
-                  // If concentration is tiny, limit absolute change (e.g. don't jump from 0 to 100 in one step)
-                  const limit = Math.max(conc, minConc) * maxChange;
-                  const maxStep = limit / deriv;
-                  if (maxStep < h) h = maxStep;
-              }
+      // Integrate from current t to tTarget using adaptive solver
+      const result = solver.integrate(y, t, tTarget, checkCancelled);
+
+      if (!result.success) {
+        // Solver failed - throw descriptive error
+        throw new Error(`ODE solver failed: ${result.errorMessage || 'Unknown error'}`);
+      }
+
+      // Update state
+      y.set(result.y);
+      t = result.t;
+
+      // Check steady state
+      if (enforceSteadyState) {
+        let maxDelta = 0;
+        for (let k = 0; k < numSpecies; k++) {
+          const d = Math.abs(y[k] - prevY[k]);
+          if (d > maxDelta) maxDelta = d;
+        }
+        if (maxDelta <= tolerance) {
+          consecutiveStable++;
+          if (consecutiveStable >= window) {
+            shouldStop = true;
           }
-
-          // Clamp step size
-          if (h < minStep) h = minStep;
-          
-          // Don't overshoot
-          if (t + h > tTarget) h = tTarget - t;
-
-          // Perform step
-          rk4Step(y, h, nextY);
-          
-          // Update
-          y.set(nextY);
-          t += h;
-          
-          // Check steady state
-          if (enforceSteadyState) {
-              let maxDelta = 0;
-              for(let k=0; k<numSpecies; k++) {
-                  const d = Math.abs(nextY[k] - y[k]);
-                  if (d > maxDelta) maxDelta = d;
-              }
-              if (maxDelta <= tolerance) {
-                  consecutiveStable++;
-                  if (consecutiveStable >= window) {
-                      shouldStop = true;
-                      break;
-                  }
-              } else {
-                  consecutiveStable = 0;
-              }
-          }
+        } else {
+          consecutiveStable = 0;
+        }
       }
 
       data.push({ time: Math.round(t * 1e10) / 1e10, ...evaluateObservablesFast(y) });
-      
+
       if (shouldStop) break;
     }
 
+    const odeTime = performance.now() - odeStart;
+    const totalTime = performance.now() - simulationStartTime;
+    console.log('[Worker] ⏱️ TIMING: ODE integration took', odeTime.toFixed(0), 'ms');
+    console.log('[Worker] ⏱️ TIMING: Total simulation time', totalTime.toFixed(0), 'ms');
+    console.log('[Worker] ⏱️ SUMMARY: Parse=N/A, Network=' + networkGenTime.toFixed(0) + 'ms, ODE=' + odeTime.toFixed(0) + 'ms, Total=' + totalTime.toFixed(0) + 'ms');
+
     return { headers, data } satisfies SimulationResults;
   }
+
 
   throw new Error(`Unsupported simulation method: ${method}`);
 }
@@ -923,7 +1183,11 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
         const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
 
         const rules = model.reactionRules.map(r => {
-          const rate = model.parameters[r.rate] ?? parseFloat(r.rate);
+          let rate = model.parameters[r.rate];
+          if (rate === undefined) {
+            const parsed = parseFloat(r.rate);
+            rate = isNaN(parsed) ? 0 : parsed;
+          }
           const ruleStr = `${formatSpeciesList(r.reactants)} ${r.isBidirectional ? '<->' : '->'} ${formatSpeciesList(r.products)}`;
           return BNGLParser.parseRxnRule(ruleStr, rate);
         });
@@ -943,12 +1207,26 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
         };
 
         // Instantiate NetworkGenerator with options
+        // Convert maxStoich Record to Map if necessary
+        let maxStoichValue: number | Map<string, number> = 500;
+        const rawMaxStoich = options?.maxStoich;
+        if (rawMaxStoich !== undefined) {
+          if (typeof rawMaxStoich === 'number') {
+            maxStoichValue = rawMaxStoich;
+          } else {
+            // Convert Record<string, number> or Map to Map
+            maxStoichValue = rawMaxStoich instanceof Map
+              ? rawMaxStoich
+              : new Map(Object.entries(rawMaxStoich));
+          }
+        }
+
         const generatorOptions = {
           maxSpecies: options?.maxSpecies ?? 10000,
           maxReactions: options?.maxReactions ?? 100000,
           maxIterations: options?.maxIterations ?? 100,
           maxAgg: options?.maxAgg ?? 500,
-          maxStoich: options?.maxStoich ?? 500,
+          maxStoich: maxStoichValue,
           checkInterval: options?.checkInterval ?? 500,
           memoryLimit: options?.memoryLimit ?? 1e9,
         } satisfies NetworkGeneratorOptions;
@@ -987,4 +1265,4 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   console.warn('[Worker] Unknown message type received:', type);
 });
 
-export {};
+export { };
