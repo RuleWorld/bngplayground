@@ -324,11 +324,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             {isSimulating && <LoadingSpinner className="w-4 h-4 mr-2" />}
             {isSimulating ? 'Simulating...' : 'Run Simulation'}
           </Button>
-          {isSimulating && (
-            <Button variant="danger" onClick={onCancelSimulation}>
-              Cancel
-            </Button>
-          )}
+
         </div>
         {/* Row 2: Simulation options */}
         <div className="flex flex-wrap items-center gap-3 text-xs">

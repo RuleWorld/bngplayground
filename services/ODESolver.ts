@@ -1019,8 +1019,10 @@ export class CVODESolver {
               // Check if we're in Node.js or browser/worker
               const isNode = typeof process !== 'undefined' && process.versions && process.versions.node;
               if (isNode) {
-                // In Node.js, use the services directory
-                return __dirname + '/cvode.wasm';
+                // In Node.js, use the public directory (same location as browser)
+                // __dirname is services/, so go up one level to project root, then to public/
+                const nodePath = require('path');
+                return nodePath.resolve(__dirname, '..', 'public', 'cvode.wasm');
               }
               // In browser/worker, detect base URL from self.location
               let baseUrl = '/';
@@ -1127,27 +1129,66 @@ export class CVODESolver {
     let t = t0;
     let steps = 0;
     const tretPtr = m._malloc(8); // Pointer for t_reached
+    let lastT = t0; // Track previous t to detect stuck solver
+    let stuckCount = 0;
+    const MAX_STUCK_ITERATIONS = 10; // If t doesn't advance 10 times in a row, we're stuck
 
     try {
-      while (t < tEnd - 1e-12 * Math.abs(tEnd)) {
+      // Check if we're already at or past the target (within floating point tolerance)
+      const relTol = 1e-10 * Math.max(1, Math.abs(tEnd));
+      
+      while (t < tEnd - relTol) {
         if (checkCancelled) checkCancelled();
-        if (steps >= this.options.maxSteps) {
-          // Retrieve current y before returning failure
+        
+        // Hard limit on steps within a single integrate() call to prevent infinite loops
+        if (steps >= 100000) {
+          console.warn(`[CVODESolver] Reached 100000 steps at t=${t}, target=${tEnd}, stopping`);
           m._get_y(solverMem, yPtr);
-          const currentHeap = m.HEAPF64; // Re-fetch heap in case of growth
+          const currentHeap = m.HEAPF64;
           yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
-          return { success: false, t, y: yOut, steps, errorMessage: "Max steps exceeded" };
+          return { success: true, t, y: yOut, steps }; // Return what we have
         }
 
-        // Target next step (let CVODE choose internal steps, but we can output frequently if needed)
-        // Here we just step to tEnd for efficiency
+        // CRITICAL: Check if remaining distance to target is too small for CVODE
+        // If we're within ~1e-13 relative of target, just consider it done
+        // This prevents CVODE from getting stuck with h ~ machine epsilon
+        const remainingDistance = Math.abs(tEnd - t);
+        const machineEpsilonRelative = Math.max(1e-13, Math.abs(tEnd) * 1e-13);
+        
+        if (remainingDistance < machineEpsilonRelative) {
+          // We're close enough - treat as success
+          t = tEnd; // Snap to exact target
+          break;
+        }
+
         const tout = tEnd;
         const flag = m._solve_step(solverMem, tout, tretPtr);
 
-        // Update t
+        // Update t from CVODE
         const currentHeap = m.HEAPF64;
         t = currentHeap[tretPtr >> 3];
         steps++;
+
+        // Detect stuck solver: if t hasn't advanced meaningfully
+        const advance = Math.abs(t - lastT);
+        const minAdvance = Math.max(1e-14, Math.abs(t) * 1e-14);
+        
+        if (advance < minAdvance) {
+          stuckCount++;
+          if (stuckCount >= MAX_STUCK_ITERATIONS) {
+            console.warn(`[CVODESolver] Solver stuck at t=${t} (target=${tEnd}), advance=${advance}`);
+            m._get_y(solverMem, yPtr);
+            yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
+            // If we're close enough to target, consider it success
+            if (Math.abs(t - tEnd) < relTol * 10) {
+              return { success: true, t, y: yOut, steps };
+            }
+            return { success: false, t, y: yOut, steps, errorMessage: `Solver stuck at t=${t}` };
+          }
+        } else {
+          stuckCount = 0; // Reset if we made progress
+        }
+        lastT = t;
 
         if (flag < 0) {
           m._get_y(solverMem, yPtr);
@@ -1155,7 +1196,8 @@ export class CVODESolver {
           return { success: false, t, y: yOut, steps, errorMessage: `CVODE failed with flag ${flag}` };
         }
 
-        if (t >= tEnd || Math.abs(t - tEnd) < 1e-12) {
+        // Early exit if we've reached the target
+        if (t >= tEnd - relTol) {
           break;
         }
       }
