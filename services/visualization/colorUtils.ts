@@ -46,5 +46,6 @@ export function luminance(hex: string): number {
 
 export function foregroundForBackground(hex: string): string {
   // If luminance is bright, return dark text; otherwise return white
-  return luminance(hex) > 0.4 ? '#0f172a' : '#ffffff';
+  // Lowered threshold (0.35 instead of 0.4) for better contrast on darker colors
+  return luminance(hex) > 0.35 ? '#0f172a' : '#ffffff';
 }

@@ -18,7 +18,7 @@ export interface SolverOptions {
   minStep: number;        // Minimum step size before failure
   maxStep: number;        // Maximum step size
   initialStep?: number;   // Initial step size (if not provided, computed automatically)
-  solver: 'auto' | 'cvode' | 'cvode_sparse' | 'rosenbrock23' | 'rk45' | 'rk4';
+  solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4';
 }
 
 export interface SolverResult {
@@ -242,12 +242,12 @@ export class Rosenbrock23Solver {
     for (let j = 0; j < n; j++) {
       const yj = y[j];
       const h = sqrtEps * Math.max(Math.abs(yj), 1);
-      
+
       yTemp.set(y);
       yTemp[j] = yj + h;
-      
+
       this.f(yTemp, fTemp);
-      
+
       const invH = 1 / h;
       for (let i = 0; i < n; i++) {
         J[i * n + j] = (fTemp[i] - f0[i]) * invH;
@@ -280,11 +280,11 @@ export class Rosenbrock23Solver {
    * Take a single Rosenbrock step
    * Returns { accepted, hNew, yNew, err }
    */
-  step(y: Float64Array, _t: number, h: number): { 
-    accepted: boolean; 
-    hNew: number; 
-    yNew: Float64Array; 
-    errNorm: number 
+  step(y: Float64Array, _t: number, h: number): {
+    accepted: boolean;
+    hNew: number;
+    yNew: Float64Array;
+    errNorm: number
   } {
     const n = this.n;
     const f0 = this.f0;
@@ -366,7 +366,7 @@ export class Rosenbrock23Solver {
     scale = Math.max(minScale, Math.min(maxScale, scale));
 
     const accepted = errNormVal <= 1;
-    
+
     // Save rejection state before updating
     const wasRejected = this.lastStepRejected;
 
@@ -390,16 +390,16 @@ export class Rosenbrock23Solver {
    * Integrate from t to tEnd
    */
   integrate(
-    y0: Float64Array, 
-    t0: number, 
-    tEnd: number, 
+    y0: Float64Array,
+    t0: number,
+    tEnd: number,
     checkCancelled?: () => void
   ): SolverResult {
     const { maxSteps, minStep, maxStep } = this.options;
-    
+
     let t = t0;
     const y = new Float64Array(y0);
-    
+
     // Initial step size estimate
     this.f(y, this.f0);
     let h = this.options.initialStep ?? this.estimateInitialStep(y, this.f0, tEnd - t0);
@@ -446,7 +446,7 @@ export class Rosenbrock23Solver {
       }
 
       h = Math.max(result.hNew, minStep);
-      
+
       if (h < minStep && t < tEnd - minStep) {
         return {
           success: false,
@@ -523,37 +523,37 @@ export class RK45Solver {
   // private readonly c6 = 1;
   // private readonly c7 = 1;
 
-  private readonly a21 = 1/5;
-  private readonly a31 = 3/40;
-  private readonly a32 = 9/40;
-  private readonly a41 = 44/45;
-  private readonly a42 = -56/15;
-  private readonly a43 = 32/9;
-  private readonly a51 = 19372/6561;
-  private readonly a52 = -25360/2187;
-  private readonly a53 = 64448/6561;
-  private readonly a54 = -212/729;
-  private readonly a61 = 9017/3168;
-  private readonly a62 = -355/33;
-  private readonly a63 = 46732/5247;
-  private readonly a64 = 49/176;
-  private readonly a65 = -5103/18656;
+  private readonly a21 = 1 / 5;
+  private readonly a31 = 3 / 40;
+  private readonly a32 = 9 / 40;
+  private readonly a41 = 44 / 45;
+  private readonly a42 = -56 / 15;
+  private readonly a43 = 32 / 9;
+  private readonly a51 = 19372 / 6561;
+  private readonly a52 = -25360 / 2187;
+  private readonly a53 = 64448 / 6561;
+  private readonly a54 = -212 / 729;
+  private readonly a61 = 9017 / 3168;
+  private readonly a62 = -355 / 33;
+  private readonly a63 = 46732 / 5247;
+  private readonly a64 = 49 / 176;
+  private readonly a65 = -5103 / 18656;
   // Stage 7 coefficients (a71, a73-a76 are same as b coefficients for FSAL)
 
   // 5th order solution coefficients
-  private readonly b1 = 35/384;
-  private readonly b3 = 500/1113;
-  private readonly b4 = 125/192;
-  private readonly b5 = -2187/6784;
-  private readonly b6 = 11/84;
+  private readonly b1 = 35 / 384;
+  private readonly b3 = 500 / 1113;
+  private readonly b4 = 125 / 192;
+  private readonly b5 = -2187 / 6784;
+  private readonly b6 = 11 / 84;
 
   // Error coefficients (difference between 5th and 4th order)
-  private readonly e1 = 71/57600;
-  private readonly e3 = -71/16695;
-  private readonly e4 = 71/1920;
-  private readonly e5 = -17253/339200;
-  private readonly e6 = 22/525;
-  private readonly e7 = -1/40;
+  private readonly e1 = 71 / 57600;
+  private readonly e3 = -71 / 16695;
+  private readonly e4 = 71 / 1920;
+  private readonly e5 = -17253 / 339200;
+  private readonly e6 = 22 / 525;
+  private readonly e7 = -1 / 40;
 
   constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}) {
     this.n = n;
@@ -612,24 +612,24 @@ export class RK45Solver {
 
     // Stage 5
     for (let i = 0; i < n; i++) {
-      yTemp[i] = y[i] + h * (this.a51 * this.k1[i] + this.a52 * this.k2[i] + 
-                            this.a53 * this.k3[i] + this.a54 * this.k4[i]);
+      yTemp[i] = y[i] + h * (this.a51 * this.k1[i] + this.a52 * this.k2[i] +
+        this.a53 * this.k3[i] + this.a54 * this.k4[i]);
     }
     this.f(yTemp, this.k5);
 
     // Stage 6
     for (let i = 0; i < n; i++) {
-      yTemp[i] = y[i] + h * (this.a61 * this.k1[i] + this.a62 * this.k2[i] + 
-                            this.a63 * this.k3[i] + this.a64 * this.k4[i] + 
-                            this.a65 * this.k5[i]);
+      yTemp[i] = y[i] + h * (this.a61 * this.k1[i] + this.a62 * this.k2[i] +
+        this.a63 * this.k3[i] + this.a64 * this.k4[i] +
+        this.a65 * this.k5[i]);
     }
     this.f(yTemp, this.k6);
 
     // 5th order solution
     for (let i = 0; i < n; i++) {
-      yNew[i] = y[i] + h * (this.b1 * this.k1[i] + this.b3 * this.k3[i] + 
-                           this.b4 * this.k4[i] + this.b5 * this.k5[i] + 
-                           this.b6 * this.k6[i]);
+      yNew[i] = y[i] + h * (this.b1 * this.k1[i] + this.b3 * this.k3[i] +
+        this.b4 * this.k4[i] + this.b5 * this.k5[i] +
+        this.b6 * this.k6[i]);
       // Clamp to non-negative
       if (yNew[i] < 0) yNew[i] = 0;
     }
@@ -639,9 +639,9 @@ export class RK45Solver {
 
     // Error estimate
     for (let i = 0; i < n; i++) {
-      yErr[i] = h * (this.e1 * this.k1[i] + this.e3 * this.k3[i] + 
-                    this.e4 * this.k4[i] + this.e5 * this.k5[i] + 
-                    this.e6 * this.k6[i] + this.e7 * this.k7[i]);
+      yErr[i] = h * (this.e1 * this.k1[i] + this.e3 * this.k3[i] +
+        this.e4 * this.k4[i] + this.e5 * this.k5[i] +
+        this.e6 * this.k6[i] + this.e7 * this.k7[i]);
     }
 
     const errNormVal = errorNorm(yErr, y, yNew, atol, rtol);
@@ -797,7 +797,7 @@ export class FastRK4Solver {
   private n: number;
   private f: DerivativeFunction;
   private options: SolverOptions;
-  
+
   // Reusable buffers
   private k1: Float64Array;
   private k2: Float64Array;
@@ -811,7 +811,7 @@ export class FastRK4Solver {
     this.n = n;
     this.f = f;
     this.options = { ...DEFAULT_OPTIONS, ...options };
-    
+
     // Allocate buffers
     this.k1 = new Float64Array(n);
     this.k2 = new Float64Array(n);
@@ -900,7 +900,7 @@ export class FastRK4Solver {
     checkCancelled?: () => void
   ): SolverResult {
     const { maxSteps, maxStep } = this.options;
-    
+
     let t = t0;
     const y = new Float64Array(y0);
     let steps = 0;
@@ -983,21 +983,28 @@ interface CVodeModule {
   ccall: any;
   cwrap: any;
   derivativeCallback: (t: number, y: number, ydot: number) => void;
+  jacobianCallback?: (t: number, y: number, fy: number, J: number, neq: number) => void;
+  _init_solver_jac?: (neq: number, t0: number, y0: number, rtol: number, atol: number, maxSteps: number) => number;
 }
+
+// Type for Jacobian function: fills column-major matrix J[i + j*neq] = df_i/dy_j
+export type JacobianFunction = (y: Float64Array, J: Float64Array) => void;
 
 export class CVODESolver {
   private n: number;
   private f: DerivativeFunction;
   private options: SolverOptions;
   private useSparse: boolean;
+  private jacobian?: JacobianFunction;
   static module: CVodeModule | null = null;
   static initPromise: Promise<void> | null = null;
-  
-  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false) {
+
+  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false, jacobian?: JacobianFunction) {
     this.n = n;
     this.f = f;
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.useSparse = useSparse;
+    this.jacobian = jacobian;
   }
 
   static async init() {
@@ -1051,7 +1058,7 @@ export class CVODESolver {
 
     const neq = this.n;
     const { atol, rtol } = this.options;
-    
+
     // Set callback (reusing module buffers)
     m.derivativeCallback = (_t: number, yPtr: number, ydotPtr: number) => {
       // Create views on the heap. Note: HEAPF64.buffer might change if memory grows,
@@ -1064,7 +1071,7 @@ export class CVODESolver {
     // Allocate memory for state
     const yPtr = m._malloc(neq * 8);
     const yOut = new Float64Array(y0);
-    
+
     // Copy initial state
     // Use HEAPF64 directly. Pointer is byte offset, need index for Float64Array (bytes/8)
     const heap = m.HEAPF64;
@@ -1072,50 +1079,84 @@ export class CVODESolver {
 
     // Initialize solver
     let solverMem: number;
-    if (this.useSparse) {
+    if (this.jacobian && m._init_solver_jac) {
+      // Set Jacobian callback (column-major dense matrix)
+      m.jacobianCallback = (_t: number, yPtr: number, _fyPtr: number, JPtr: number, neqVal: number) => {
+        const yView = new Float64Array(m.HEAPF64.buffer, yPtr, neqVal);
+        const JView = new Float64Array(m.HEAPF64.buffer, JPtr, neqVal * neqVal);
+        this.jacobian!(yView, JView);
+      };
+      solverMem = m._init_solver_jac(neq, t0, yPtr, rtol, atol, this.options.maxSteps);
+    } else if (this.useSparse) {
       solverMem = m._init_solver_sparse(neq, t0, yPtr, rtol, atol, this.options.maxSteps);
     } else {
       solverMem = m._init_solver(neq, t0, yPtr, rtol, atol, this.options.maxSteps);
     }
-    
+
     if (!solverMem) {
       m._free(yPtr);
       return { success: false, t: t0, y: y0, steps: 0, errorMessage: "CVODE initialization failed" };
     }
 
+
+
+    // Set Initial Step Size if provided
+    if (this.options.initialStep && this.options.initialStep > 0) {
+      // @ts-ignore
+      if (typeof m._CVodeSetInitStep === 'function') {
+        // @ts-ignore
+        m._CVodeSetInitStep(solverMem, this.options.initialStep);
+        console.log(`[CVODESolver] Set initial step size to ${this.options.initialStep}`);
+      } else {
+        console.warn('[CVODESolver] CVodeSetInitStep not available in WASM binding');
+      }
+    }
+
+    // Attempt to set max step size if the binding exposes it
+    if (this.options.maxStep > 0 && this.options.maxStep < Infinity) {
+      // @ts-ignore
+      if (typeof m._CVodeSetMaxStep === 'function') {
+        // @ts-ignore
+        m._CVodeSetMaxStep(solverMem, this.options.maxStep);
+      } else {
+        // Try checking if it's exported without underscore (unlikely for Emscripten but possible) or via ccall
+        // console.warn('CVodeSetMaxStep not available in WASM binding');
+      }
+    }
+
     let t = t0;
     let steps = 0;
     const tretPtr = m._malloc(8); // Pointer for t_reached
-    
+
     try {
       while (t < tEnd - 1e-12 * Math.abs(tEnd)) {
         if (checkCancelled) checkCancelled();
         if (steps >= this.options.maxSteps) {
-            // Retrieve current y before returning failure
-            m._get_y(solverMem, yPtr);
-            const currentHeap = m.HEAPF64; // Re-fetch heap in case of growth
-            yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
-            return { success: false, t, y: yOut, steps, errorMessage: "Max steps exceeded" };
+          // Retrieve current y before returning failure
+          m._get_y(solverMem, yPtr);
+          const currentHeap = m.HEAPF64; // Re-fetch heap in case of growth
+          yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
+          return { success: false, t, y: yOut, steps, errorMessage: "Max steps exceeded" };
         }
 
         // Target next step (let CVODE choose internal steps, but we can output frequently if needed)
         // Here we just step to tEnd for efficiency
         const tout = tEnd;
         const flag = m._solve_step(solverMem, tout, tretPtr);
-        
+
         // Update t
         const currentHeap = m.HEAPF64;
         t = currentHeap[tretPtr >> 3];
         steps++;
 
         if (flag < 0) {
-             m._get_y(solverMem, yPtr);
-             yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
-             return { success: false, t, y: yOut, steps, errorMessage: `CVODE failed with flag ${flag}` };
+          m._get_y(solverMem, yPtr);
+          yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
+          return { success: false, t, y: yOut, steps, errorMessage: `CVODE failed with flag ${flag}` };
         }
-        
+
         if (t >= tEnd || Math.abs(t - tEnd) < 1e-12) {
-             break;
+          break;
         }
       }
 
@@ -1123,7 +1164,7 @@ export class CVODESolver {
       m._get_y(solverMem, yPtr);
       const currentHeap = m.HEAPF64;
       yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
-      
+
       return { success: true, t, y: yOut, steps };
 
     } catch (e) {
@@ -1153,18 +1194,24 @@ export async function createSolver(
       return new CVODESolver(n, f, opts, false);
     case 'cvode_sparse':
       await CVODESolver.init();
-      // @ts-ignore - allowing dynamic string for now
       return new CVODESolver(n, f, opts, true);
+    case 'cvode_jac':
+      // CVODE with analytical Jacobian - requires jacobian function in options
+      await CVODESolver.init();
+      return new CVODESolver(n, f, opts, false, (options as any).jacobian);
     case 'rosenbrock23':
       return new Rosenbrock23Solver(n, f, opts);
     case 'rk45':
       return new RK45Solver(n, f, opts);
     case 'rk4':
       return new FastRK4Solver(n, f, opts);
+    case 'cvode_auto':
+      // Try CVODE first, fallback to Rosenbrock23 on failure
+      await CVODESolver.init();
+      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false));
     case 'auto':
     default:
       // Auto could also use CVODE if verified stable, for now keep SmartAutoSolver
-      // Or we can enhance SmartAuto to use CVODE
       return new SmartAutoSolver(n, f, opts);
   }
 }
@@ -1191,7 +1238,7 @@ export class SmartAutoSolver {
     if (this.useImplicit) {
       return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
     }
-    
+
     // Try fast RK4 first
     const result = this.rk4.integrate(y0, t0, tEnd, checkCancelled);
 
@@ -1210,3 +1257,52 @@ export class SmartAutoSolver {
     return result;
   }
 }
+
+/**
+ * CVODE Auto-switching solver: tries CVODE first (fast for most models),
+ * automatically falls back to Rosenbrock23 on convergence failure.
+ * Similar to Julia's AutoTsit5(Rosenbrock23())
+ */
+export class CVODEAutoSolver {
+  private cvode: CVODESolver | null = null;
+  private rosenbrock: Rosenbrock23Solver;
+  private useFallback: boolean = false;
+
+  constructor(_n: number, f: DerivativeFunction, options: SolverOptions, cvode: CVODESolver) {
+    this.cvode = cvode;
+    this.rosenbrock = new Rosenbrock23Solver(_n, f, options);
+  }
+
+  integrate(
+    y0: Float64Array,
+    t0: number,
+    tEnd: number,
+    checkCancelled?: () => void
+  ): SolverResult {
+    // If already detected CVODE failure, use Rosenbrock
+    if (this.useFallback || !this.cvode) {
+      return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
+    }
+
+    // Try CVODE first
+    const result = this.cvode.integrate(y0, t0, tEnd, checkCancelled);
+
+    if (result.success) {
+      return result;
+    }
+
+    // Check if this is a convergence failure (flag -4) or error test failure (flag -3)
+    if (result.errorMessage?.includes('flag -4') || 
+        result.errorMessage?.includes('flag -3') ||
+        result.errorMessage?.includes('convergence')) {
+      console.log('[CVODEAutoSolver] CVODE failed, switching to Rosenbrock23');
+      this.useFallback = true;
+      // Retry from beginning with Rosenbrock
+      return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
+    }
+
+    // Other failure - return as is
+    return result;
+  }
+}
+

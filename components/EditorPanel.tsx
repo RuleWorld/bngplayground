@@ -176,7 +176,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   const [simulationMethod, setSimulationMethod] = useState<'ode' | 'ssa'>('ode');
   const [customAtol, setCustomAtol] = useState<string>('');
   const [customRtol, setCustomRtol] = useState<string>('');
-  const [odeSolver, setOdeSolver] = useState<'auto' | 'cvode' | 'rosenbrock23' | 'rk45' | 'rk4'>('auto');
+  const [odeSolver, setOdeSolver] = useState<'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4'>('auto');
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -285,17 +285,16 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
           </div>
         )}
       </div>
-      <div className="mt-4 flex flex-wrap items-center justify-between gap-2 shrink-0 border-t border-slate-200 pt-3 dark:border-slate-700">
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={() => setIsGalleryOpen(true)}>
-            Models
-          </Button>
+      <div className="mt-4 flex flex-col gap-2 shrink-0 border-t border-slate-200 pt-3 dark:border-slate-700">
+        {/* Row 1: All action buttons */}
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button onClick={() => setIsGalleryOpen(true)}>Models</Button>
           <Button variant="subtle" onClick={() => fileInputRef.current?.click()}>
-            <UploadIcon className="w-4 h-4 mr-2" />
-            Load BNGL
+            <UploadIcon className="w-4 h-4 mr-1" />
+            Load
           </Button>
           <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))}>
-            Format / Tidy BNGL
+            Format
           </Button>
           <input
             type="file"
@@ -304,76 +303,80 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             className="hidden"
             accept=".bngl"
           />
+          <div className="border-l border-slate-300 dark:border-slate-600 h-6 mx-1" />
+          <Button onClick={onParse}>Parse Model</Button>
+          <Button
+            onClick={() => {
+              const parsed = extractSimulateOptions(code, simulationMethod);
+              const defaults = DEFAULT_SIMULATION[simulationMethod];
+              const atolValue = customAtol ? Number(customAtol) : (parsed.atol ?? 1e-6);
+              const rtolValue = customRtol ? Number(customRtol) : (parsed.rtol ?? 1e-3);
+              onSimulate({
+                method: simulationMethod,
+                t_end: parsed.t_end ?? defaults.t_end,
+                n_steps: parsed.n_steps ?? defaults.n_steps,
+                ...(simulationMethod === 'ode' ? { atol: atolValue, rtol: rtolValue, solver: odeSolver } : {}),
+              });
+            }}
+            disabled={isSimulating || !modelExists}
+            variant="primary"
+          >
+            {isSimulating && <LoadingSpinner className="w-4 h-4 mr-2" />}
+            {isSimulating ? 'Simulating...' : 'Run Simulation'}
+          </Button>
+          {isSimulating && (
+            <Button variant="danger" onClick={onCancelSimulation}>
+              Cancel
+            </Button>
+          )}
         </div>
-          <div className="flex flex-wrap gap-2 items-center">
-            <Button onClick={onParse}>Parse Model</Button>
-            <div className="flex items-center gap-3 pl-2 border-l border-stone-300 dark:border-slate-600">
-              <RadioGroup
-                name="simulationMethod"
-                value={simulationMethod}
-                onChange={(val) => setSimulationMethod(val as 'ode' | 'ssa')}
-                options={[
-                  { label: 'ODE', value: 'ode' },
-                  { label: 'SSA', value: 'ssa' },
-                ]}
-              />
-              {simulationMethod === 'ode' && (
-                <div className="flex items-center gap-2 text-xs">
-                  <label className="text-slate-600 dark:text-slate-400">Solver:</label>
-                  <select
-                    value={odeSolver}
-                    onChange={(e) => setOdeSolver(e.target.value as any)}
-                    className="rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                  >
-                    <option value="auto">Auto</option>
-                    <option value="cvode">CVODE (WASM)</option>
-                    <option value="rosenbrock23">Rosenbrock23</option>
-                    <option value="rk45">RK45</option>
-                    <option value="rk4">RK4</option>
-                  </select>
-                  <label className="text-slate-600 dark:text-slate-400">atol:</label>
-                  <input
-                    type="text"
-                    value={customAtol}
-                    onChange={(e) => setCustomAtol(e.target.value)}
-                    placeholder="auto"
-                    className="w-16 rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                  />
-                  <label className="text-slate-600 dark:text-slate-400">rtol:</label>
-                  <input
-                    type="text"
-                    value={customRtol}
-                    onChange={(e) => setCustomRtol(e.target.value)}
-                    placeholder="auto"
-                    className="w-16 rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-                  />
-                </div>
-              )}
-              <Button
-                onClick={() => {
-                  const parsed = extractSimulateOptions(code, simulationMethod);
-                  const defaults = DEFAULT_SIMULATION[simulationMethod];
-                  const atolValue = customAtol ? Number(customAtol) : (parsed.atol ?? 1e-6);
-                  const rtolValue = customRtol ? Number(customRtol) : (parsed.rtol ?? 1e-3);
-                  onSimulate({
-                    method: simulationMethod,
-                    t_end: parsed.t_end ?? defaults.t_end,
-                    n_steps: parsed.n_steps ?? defaults.n_steps,
-                    ...(simulationMethod === 'ode' ? { atol: atolValue, rtol: rtolValue, solver: odeSolver } : {}),
-                  });
-                }}
-                disabled={isSimulating || !modelExists}
-                variant="primary"
+        {/* Row 2: Simulation options */}
+        <div className="flex flex-wrap items-center gap-3 text-xs">
+          <RadioGroup
+            name="simulationMethod"
+            value={simulationMethod}
+            onChange={(val) => setSimulationMethod(val as 'ode' | 'ssa')}
+            options={[
+              { label: 'ODE', value: 'ode' },
+              { label: 'SSA', value: 'ssa' },
+            ]}
+          />
+          {simulationMethod === 'ode' && (
+            <>
+              <div className="border-l border-slate-300 dark:border-slate-600 h-4" />
+              <label className="text-slate-600 dark:text-slate-400">Solver:</label>
+              <select
+                value={odeSolver}
+                onChange={(e) => setOdeSolver(e.target.value as any)}
+                className="rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
               >
-                {isSimulating && <LoadingSpinner className="w-4 h-4 mr-2" />}
-                {isSimulating ? 'Simulating...' : 'Run Simulation'}
-              </Button>
-            {isSimulating && (
-              <Button variant="danger" onClick={onCancelSimulation}>
-                Cancel
-              </Button>
-            )}
-          </div>
+                <option value="auto">Auto</option>
+                <option value="cvode">CVODE</option>
+                <option value="cvode_auto">CVODE + Fallback</option>
+                <option value="cvode_sparse">CVODE Sparse</option>
+                <option value="cvode_jac">CVODE + Jac</option>
+                <option value="rosenbrock23">Rosenbrock23</option>
+                <option value="rk45">RK45</option>
+                <option value="rk4">RK4</option>
+              </select>
+              <label className="text-slate-600 dark:text-slate-400">atol:</label>
+              <input
+                type="text"
+                value={customAtol}
+                onChange={(e) => setCustomAtol(e.target.value)}
+                placeholder="auto"
+                className="w-12 rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+              />
+              <label className="text-slate-600 dark:text-slate-400">rtol:</label>
+              <input
+                type="text"
+                value={customRtol}
+                onChange={(e) => setCustomRtol(e.target.value)}
+                placeholder="auto"
+                className="w-12 rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+              />
+            </>
+          )}
         </div>
       </div>
       <ExampleGalleryModal

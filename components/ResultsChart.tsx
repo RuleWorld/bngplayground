@@ -27,8 +27,9 @@ const ExternalLegend: React.FC<{
   series: string[];
   visibleSpecies: Set<string>;
   onToggle: (name: string) => void;
+  onHighlight: (name: string) => void;
   highlightedSeries: Set<string>;
-}> = ({ series, visibleSpecies, onToggle, highlightedSeries }) => {
+}> = ({ series, visibleSpecies, onToggle, onHighlight, highlightedSeries }) => {
   return (
     <div className="mt-4 max-h-48 overflow-y-auto border-t border-slate-200 dark:border-slate-700 pt-4">
       <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 px-4">
@@ -39,7 +40,12 @@ const ExternalLegend: React.FC<{
             <div
               key={name}
               onClick={() => onToggle(name)}
-              className={`flex items-center cursor-pointer transition-opacity ${!isVisible ? 'opacity-40' : isHighlighted ? 'opacity-100' : 'opacity-60'}`}
+              onDoubleClick={(e) => {
+                e.preventDefault();
+                onHighlight(name);
+              }}
+              title="Double-click to isolate"
+              className={`flex items-center cursor-pointer transition-opacity ${!isVisible ? 'opacity-40' : isHighlighted ? 'opacity-100' : 'opacity-60'} hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -ml-1`}
             >
               <div 
                 style={{ 
@@ -60,7 +66,7 @@ const ExternalLegend: React.FC<{
 };
 
 const CustomLegend = (props: any) => {
-  const { payload, onClick } = props;
+  const { payload, onClick, onHighlight } = props;
 
   return (
     <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 mt-4 px-4">
@@ -68,7 +74,12 @@ const CustomLegend = (props: any) => {
         <div
           key={`item-${index}`}
           onClick={() => onClick(entry)}
-          className={`flex items-center cursor-pointer transition-opacity ${entry.inactive ? 'opacity-50' : 'opacity-100'}`}
+          onDoubleClick={(e) => {
+            e.preventDefault();
+            if (onHighlight) onHighlight(entry.value);
+          }}
+          title="Double-click to isolate"
+          className={`flex items-center cursor-pointer transition-opacity ${entry.inactive ? 'opacity-50' : 'opacity-100'} hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -ml-1`}
         >
           <div style={{ width: 12, height: 12, backgroundColor: entry.color, marginRight: 6, borderRadius: '2px' }} />
           <span className="text-xs text-slate-700 dark:text-slate-300">{entry.value}</span>
@@ -167,6 +178,17 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, visibleSpec
     onVisibleSpeciesChange(newVisibleSpecies);
   };
 
+  const handleLegendHighlight = (name: string) => {
+    // If only this one is currently visible, toggle back to showing all
+    if (visibleSpecies.size === 1 && visibleSpecies.has(name)) {
+      // Restore all from the current filtered list (or all available headers)
+      onVisibleSpeciesChange(new Set(speciesToPlot));
+    } else {
+      // Isolate just this one
+      onVisibleSpeciesChange(new Set([name]));
+    }
+  };
+
   return (
     <Card className="max-w-full overflow-hidden">
       <ResponsiveContainer width="100%" height={400}>
@@ -200,7 +222,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, visibleSpec
             labelFormatter={(label) => `Time: ${typeof label === 'number' ? label.toFixed(2) : label}`}
           />
           {/* Only show in-chart legend when there are few series */}
-          {!useExternalLegend && <Legend onClick={handleLegendClick} content={<CustomLegend />} />}
+          {!useExternalLegend && <Legend onClick={handleLegendClick} content={<CustomLegend onHighlight={handleLegendHighlight} />} />}
           {speciesToPlot.filter(filterVisibleSpecies).map((speciesName, i) => (
             <Line
               key={speciesName}
@@ -231,6 +253,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, visibleSpec
           series={speciesToPlot.filter(filterVisibleSpecies)}
           visibleSpecies={visibleSpecies}
           onToggle={handleToggleSeries}
+          onHighlight={handleLegendHighlight}
           highlightedSeries={highlightSet}
         />
       )}
@@ -250,7 +273,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, visibleSpec
         </div>
       </div>
       <div className="text-center text-xs text-slate-500 mt-2">
-        Click and drag to zoom, double-click to reset.
+        Click to toggle series. Double-click legend to isolate/restore. Drag chart to zoom. Double-click chart to reset view.
       </div>
     </Card>
   );

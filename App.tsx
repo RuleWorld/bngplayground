@@ -5,14 +5,11 @@ import { Header } from './components/Header';
 import { exportToSBML } from './services/exportSBML';
 import { StatusMessage } from './components/ui/StatusMessage';
 import { AboutModal } from './components/AboutModal';
-import { VisualizationConventionsModal } from './components/VisualizationConventionsModal';
 import { bnglService } from './services/bnglService';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
 import { INITIAL_BNGL_CODE } from './constants';
 import SimulationModal from './components/SimulationModal';
 import { validateBNGLModel, validationWarningsToMarkers } from './services/modelValidation';
-import { TutorialModal } from './components/modals/TutorialModal';
-import { TUTORIALS, type TutorialProgressState } from './src/data/tutorials';
 
 function App() {
   const PANEL_MAX_HEIGHT = 'calc(100vh - 220px)';
@@ -26,11 +23,7 @@ function App() {
   const [progressStats, setProgressStats] = useState<{ species: number; reactions: number; iteration: number }>({ species: 0, reactions: 0, iteration: 0 });
   const [isAboutModalOpen, setIsAboutModalOpen] = useState(false);
   const [aboutFocus, setAboutFocus] = useState<string | null>(null);
-  const [isVizModalOpen, setIsVizModalOpen] = useState(false);
-  const [isTutorialModalOpen, setIsTutorialModalOpen] = useState(false);
   const [activeVizTab, setActiveVizTab] = useState<number>(0);
-  const [activeTutorialId, setActiveTutorialId] = useState<string | null>(null);
-  const [tutorialProgress, setTutorialProgress] = useState<Record<string, TutorialProgressState>>({});
   const [validationWarnings, setValidationWarnings] = useState<ValidationWarning[]>([]);
   const [editorMarkers, setEditorMarkers] = useState<EditorMarker[]>([]);
   const [loadedModelName, setLoadedModelName] = useState<string | null>(null);
@@ -52,56 +45,6 @@ function App() {
       }
     };
   }, []);
-
-  const findRuleLine = useCallback((code: string, ruleIndex: number, rule: any): number => {
-    const lines = code.split('\n');
-    let rulesBlockStart = -1;
-
-    // Find begin reaction rules
-    for (let i = 0; i < lines.length; i++) {
-      if (lines[i].trim().startsWith('begin reaction rules')) {
-        rulesBlockStart = i;
-        break;
-      }
-    }
-
-    if (rulesBlockStart === -1) return -1;
-
-    // Simple heuristic: assume rules are in order after the block start
-    // Skip comments and empty lines
-    let currentRuleIndex = 0;
-    for (let i = rulesBlockStart + 1; i < lines.length; i++) {
-      const line = lines[i].trim();
-      if (line.startsWith('end reaction rules')) break;
-      if (!line || line.startsWith('#')) continue;
-
-      if (currentRuleIndex === ruleIndex) {
-        return i + 1; // 1-based line number
-      }
-      currentRuleIndex++;
-    }
-
-    return -1;
-  }, []);
-
-  const handleSelectRule = useCallback((ruleId: string) => {
-    if (!model) return;
-
-    // Extract index from "rule_N"
-    const match = ruleId.match(/rule_(\d+)/);
-    if (match) {
-      const index = parseInt(match[1], 10);
-      if (!isNaN(index) && index >= 0 && index < model.reactions.length) {
-        const line = findRuleLine(code, index, model.reactions[index]);
-        if (line !== -1) {
-          setEditorSelection({
-            startLineNumber: line,
-            endLineNumber: line,
-          });
-        }
-      }
-    }
-  }, [code, model, findRuleLine]);
 
   const handleParse = useCallback(async () => {
     setResults(null);
@@ -216,68 +159,6 @@ function App() {
     setStatus({ type: 'info', message: 'Simulation cancelled.' });
   }, []);
 
-  const ensureTutorialEntry = useCallback((tutorialId: string, prev: Record<string, TutorialProgressState>): TutorialProgressState => {
-    return prev[tutorialId] ?? { currentStepIndex: 0, completedSteps: [] };
-  }, []);
-
-  const handleSelectTutorial = useCallback((tutorialId: string) => {
-    setActiveTutorialId(tutorialId);
-    setTutorialProgress((prev) => {
-      if (prev[tutorialId]) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [tutorialId]: { currentStepIndex: 0, completedSteps: [] },
-      };
-    });
-  }, []);
-
-  const handleSetTutorialStep = useCallback((tutorialId: string, stepIndex: number) => {
-    setTutorialProgress((prev) => {
-      const entry = ensureTutorialEntry(tutorialId, prev);
-      const sanitizedIndex = Math.max(0, stepIndex);
-      return {
-        ...prev,
-        [tutorialId]: {
-          ...entry,
-          currentStepIndex: sanitizedIndex,
-        },
-      };
-    });
-  }, [ensureTutorialEntry]);
-
-  const handleCompleteTutorialStep = useCallback((tutorialId: string, stepNumber: number) => {
-    setTutorialProgress((prev) => {
-      const entry = ensureTutorialEntry(tutorialId, prev);
-      if (entry.completedSteps.includes(stepNumber)) {
-        return prev;
-      }
-      return {
-        ...prev,
-        [tutorialId]: {
-          ...entry,
-          completedSteps: [...entry.completedSteps, stepNumber],
-        },
-      };
-    });
-  }, [ensureTutorialEntry]);
-
-  const handleResetTutorial = useCallback((tutorialId: string) => {
-    setTutorialProgress((prev) => ({
-      ...prev,
-      [tutorialId]: { currentStepIndex: 0, completedSteps: [] },
-    }));
-  }, []);
-
-  useEffect(() => {
-    if (!isTutorialModalOpen) return;
-    if (!activeTutorialId && TUTORIALS.length > 0) {
-      setActiveTutorialId(TUTORIALS[0].id);
-    }
-  }, [isTutorialModalOpen, activeTutorialId]);
-
-  // Subscribe to worker progress/warning notifications while simulating
   useEffect(() => {
     if (!isSimulating) {
       // Reset progress stats when not simulating
@@ -324,19 +205,9 @@ function App() {
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       <Header
         onAboutClick={(focus?: string) => {
-          if (focus === 'viz') {
-            setIsVizModalOpen(true);
-            return;
-          }
           setAboutFocus(focus ?? null);
           setIsAboutModalOpen(true);
         }}
-        onTutorialsClick={() => setIsTutorialModalOpen(true)}
-        tutorialPill={
-          activeTutorialId
-            ? `Tutorial: ${TUTORIALS.find((t) => t.id === activeTutorialId)?.title ?? ''} ${((tutorialProgress[activeTutorialId]?.currentStepIndex ?? 0) + 1)}/${TUTORIALS.find((t) => t.id === activeTutorialId)?.steps.length ?? 0}`
-            : null
-        }
         onExportSBML={() => {
           if (!model) {
             setStatus({ type: 'warning', message: 'No model to export. Parse or load a model first.' });
@@ -391,7 +262,6 @@ function App() {
                 onCancelSimulation={handleCancelSimulation}
                 activeTabIndex={activeVizTab}
                 onActiveTabIndexChange={setActiveVizTab}
-                onSelectRule={handleSelectRule}
               />
             </div>
           </div>
@@ -402,26 +272,10 @@ function App() {
             speciesCount={progressStats.species}
             reactionCount={progressStats.reactions}
             iteration={progressStats.iteration}
-            maxSpecies={10000}
-            maxReactions={100000}
-          />
-          <TutorialModal
-            isOpen={isTutorialModalOpen}
-            onClose={() => setIsTutorialModalOpen(false)}
-            activeTutorialId={activeTutorialId}
-            onSelectTutorial={handleSelectTutorial}
-            progressMap={tutorialProgress}
-            onSetStep={handleSetTutorialStep}
-            onCompleteStep={handleCompleteTutorialStep}
-            onResetTutorial={handleResetTutorial}
-            model={model}
-            onCodeChange={handleCodeChange}
-            onParse={handleParse}
           />
         </div>
       </main>
       <AboutModal isOpen={isAboutModalOpen} onClose={() => setIsAboutModalOpen(false)} focus={aboutFocus} />
-      <VisualizationConventionsModal isOpen={isVizModalOpen} onClose={() => setIsVizModalOpen(false)} />
     </div>
   );
 }

@@ -1010,12 +1010,22 @@ class VF2State {
     }
 
     if (hasSpecificBond) {
-      if (!targetBound && shouldLogGraphMatcher) console.log(`[GraphMatcher] Specific bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects bond`);
-      return targetBound;
+      if (!targetBound) {
+        if (shouldLogGraphMatcher) console.log(`[GraphMatcher] Specific bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects bond`);
+        return false;
+      }
+      return true; 
+    } else {
+        // Pattern specifies NO edges and NO wildcard.
+        // This implies the component must be explicitly UNBOUND.
+        // STRICT CHECK:
+        if (targetBound) {
+            if (shouldLogGraphMatcher) console.log(`[GraphMatcher] Strict unbound check failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects unbound`);
+            return false;
+        }
+        return true;
     }
 
-    if (targetBound && shouldLogGraphMatcher) console.log(`[GraphMatcher] Implicit unbound failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects unbound`);
-    return !targetBound;
   }
 
   private componentBondConsistencySatisfied(

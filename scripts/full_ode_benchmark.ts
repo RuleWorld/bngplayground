@@ -42,7 +42,7 @@ const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-pa
 const BNG2_DIR = path.dirname(BNG2_PATH);
 
 // Timeout for ODE simulation (60 seconds)
-const ODE_TIMEOUT_MS = 60000;
+const ODE_TIMEOUT_MS = 300000; // 5 minutes (for JS solver)
 
 interface BNG2Model {
   model: string;
@@ -111,7 +111,7 @@ function runBNG2ForTiming(modelPath: string, modelName: string, tempDir: string)
   }
 }
 
-async function runFullSimulation(modelPath: string, bng2Species: number): Promise<{
+async function runFullSimulation(modelName: string, modelPath: string, bng2Species: number): Promise<{
   parseTime: number;
   networkGenTime: number;
   odeTime: number;
@@ -135,7 +135,7 @@ async function runFullSimulation(modelPath: string, bng2Species: number): Promis
 
     const seedSpecies = model.species.map(s => BNGLParser.parseSpeciesGraph(s.name));
     const parametersMap = new Map(Object.entries(model.parameters).map(([k, v]) => [k, Number(v as number)]));
-    
+
     // Create a set of observable names for rate expression evaluation
     const observablesSet = new Set<string>(
       (model.observables || []).map(o => o.name)
@@ -198,7 +198,21 @@ async function runFullSimulation(modelPath: string, bng2Species: number): Promis
     });
 
     const network = await generator.generate(seedSpecies, rules, () => { });
-    
+
+    // Save species list for debugging
+    if (modelName === 'Barua_2007' || network.species.length < 20) {
+      const fs = require('fs');
+      const speciesOutput = network.species.map(s => `${s.index + 1} ${s.canonicalString}`).join('\n');
+      console.log('--- Generated Species ---');
+      console.log(speciesOutput);
+      console.log('-------------------------');
+
+      if (modelName === 'Barua_2007') {
+        fs.writeFileSync('web_species.txt', speciesOutput);
+        console.log('Dumped species to web_species.txt');
+      }
+    }
+
     const networkGenTime = performance.now() - netGenStart;
 
     const numSpecies = network.species.length;
@@ -275,17 +289,107 @@ async function runFullSimulation(modelPath: string, bng2Species: number): Promis
       }
     };
 
+    // Jacobian generator (analytical, like Julia's ModelingToolkit)
+    // For mass-action kinetics: J[i][j] = ∂(dy_i/dt)/∂y_j
+    // = Σ_r stoich[i][r] * rate_constant[r] * ∂(∏_k y[k]^order[k][r])/∂y_j
+    const jacobian = (y: Float64Array, J: Float64Array) => {
+      // J is column-major: J[i + j*neq] = ∂f_i/∂y_j
+      const neq = numSpecies;
+      J.fill(0);
+
+      for (const rxn of concreteReactions) {
+        const k = rxn.rate;
+        const reactants = rxn.reactants;
+
+        // Count reactant multiplicities for this reaction
+        const reactantCounts = new Map<number, number>();
+        for (const idx of reactants) {
+          reactantCounts.set(idx, (reactantCounts.get(idx) || 0) + 1);
+        }
+
+        // For each unique reactant j in this reaction, compute ∂(velocity)/∂y_j
+        for (const [j, orderJ] of reactantCounts) {
+          // ∂velocity/∂y_j = k * order_j * y_j^(order_j - 1) * ∏_{i≠j} y_i^order_i
+          //                = k * order_j / y_j * ∏_i y_i^order_i  (if y_j > 0)
+          //                = order_j * velocity / y_j
+          let dVelocity_dyj: number;
+          if (y[j] > 1e-100) {
+            // Compute base velocity
+            let velocity = k;
+            for (const idx of reactants) {
+              velocity *= y[idx];
+            }
+            dVelocity_dyj = orderJ * velocity / y[j];
+          } else {
+            // y[j] ≈ 0: Compute derivative directly to avoid division by zero
+            // ∂velocity/∂y_j = k * order_j * y_j^(order_j-1) * ∏_{i≠j} y_i^order_i
+            if (orderJ === 1) {
+              // Common case: first-order in y_j
+              let partialProduct = k;
+              for (const idx of reactants) {
+                if (idx !== j) partialProduct *= y[idx];
+              }
+              // Handle multiplicity > 1: need to also multiply by remaining y[j] terms
+              for (let m = 1; m < orderJ; m++) {
+                partialProduct *= y[j];
+              }
+              dVelocity_dyj = partialProduct;
+            } else {
+              // Higher order and y[j] ≈ 0: derivative is 0 unless order_j = 1
+              dVelocity_dyj = 0;
+            }
+          }
+
+          // Update Jacobian: J[i][j] += stoich[i] * dVelocity_dyj
+          // Reactants have stoich = -1, products have stoich = +1
+          for (const idx of reactants) {
+            J[idx + j * neq] -= dVelocity_dyj;
+          }
+          for (const idx of rxn.products) {
+            J[idx + j * neq] += dVelocity_dyj;
+          }
+        }
+      }
+    };
+
     // Get simulation parameters
     const t_end = model.simulationOptions?.t_end ?? 100;
     const n_steps = model.simulationOptions?.n_steps ?? 100;
 
-    // Create solver and run (now using CVODE with require polyfill)
+    // Check for NaN/Inf in reaction rates
+    let hasBadRates = false;
+    concreteReactions.forEach((r, i) => {
+      if (!Number.isFinite(r.rate)) {
+        console.error(`Reaction ${i} has invalid rate: ${r.rate}`);
+        hasBadRates = true;
+      }
+    });
+
+    const rates = concreteReactions.map(r => r.rate);
+    const minRate = Math.min(...rates);
+    const maxRate = Math.max(...rates);
+    const zeroRates = rates.filter(r => r === 0).length;
+    console.log(`[Diagnostics] Rates: min=${minRate}, max=${maxRate}, zeros=${zeroRates}/${rates.length}`);
+
+    if (hasBadRates) {
+      return {
+        parseTime,
+        networkGenTime,
+        odeTime: 0,
+        totalTime: performance.now() - totalStart,
+        species: numSpecies,
+        reactions: numReactions,
+        status: 'failed',
+        error: 'Invalid reaction rates'
+      };
+    }
+
     const solver = await createSolver(numSpecies, derivatives, {
       atol: 1e-8,
       rtol: 1e-8,
-      maxSteps: 1000000,
-      maxStep: 0,
-      solver: 'cvode'  // Use CVODE (require polyfill injected at top of file)
+      maxSteps: 100000000,
+      maxStep: Infinity,
+      solver: 'cvode'  // Dense CVODE for benchmark
     });
 
     const dtOut = t_end / n_steps;
@@ -372,7 +476,7 @@ async function runBenchmark() {
     const target = process.argv[2];
     // process.env.DEBUG_CONSTRAINTS = 'true'; // Removed
     // console.log(`Force-enabling DEBUG_CONSTRAINTS for single model run: ${target}`);
-    
+
     // Simple recursive finder
     const fs = await import('fs');
     const path = await import('path');
@@ -439,7 +543,7 @@ async function runBenchmark() {
     };
 
     // Run full simulation
-    const webResult = await runFullSimulation(model.path, model.speciesCount);
+    const webResult = await runFullSimulation(model.model, model.path, model.speciesCount);
     result.webParseTime = webResult.parseTime;
     result.webNetworkGenTime = webResult.networkGenTime;
     result.webODETime = webResult.odeTime;
@@ -468,6 +572,9 @@ async function runBenchmark() {
     const ode = result.webODETime.toFixed(0).padEnd(12);
     const total = result.webTotalTime.toFixed(0).padEnd(12);
     const sp = result.webSpecies.toString().padEnd(6);
+
+    // Save species list for debugging - MOVED TO ABOVE
+
 
     console.log(`${statusIcon} ${model.model.substring(0, 28).padEnd(28)} ${netGen} ${ode} ${total} ${sp} ${result.webStatus}`);
 

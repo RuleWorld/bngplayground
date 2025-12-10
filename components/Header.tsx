@@ -7,12 +7,10 @@ import { Button } from './ui/Button';
 
 interface HeaderProps {
   onAboutClick: (focus?: string) => void;
-  onTutorialsClick: () => void;
-  tutorialPill?: string | null;
   onExportSBML?: () => void;
 }
 
-export const Header: React.FC<HeaderProps> = ({ onAboutClick, onTutorialsClick, tutorialPill = null, onExportSBML }) => {
+export const Header: React.FC<HeaderProps> = ({ onAboutClick, onExportSBML }) => {
   const [theme, toggleTheme] = useTheme();
 
   return (
@@ -33,35 +31,29 @@ export const Header: React.FC<HeaderProps> = ({ onAboutClick, onTutorialsClick, 
               <p className="text-sm text-slate-500 dark:text-slate-300 sm:text-base">Write BNGL, parse models, simulate ODE/SSA, and visualize the results.</p>
             </div>
           </div>
-          <div className="flex items-center gap-4">
-            <Button onClick={onTutorialsClick} variant="ghost">Tutorials</Button>
-            {tutorialPill && (
-              <span className="ml-2 text-xs inline-flex items-center rounded bg-primary-100 dark:bg-primary-900/30 px-2 py-0.5 text-primary-800 dark:text-primary-200">{tutorialPill}</span>
-            )}
+          <div className="flex items-center gap-3">
             <Button onClick={() => onAboutClick('bngl')} variant="ghost">
               What is BNGL?
             </Button>
-            <Button onClick={() => onAboutClick('viz')} variant="ghost">Viz conventions</Button>
+            <Button onClick={() => onAboutClick('viz')} variant="ghost">Viz Conventions</Button>
             <Button onClick={() => onAboutClick()} variant="ghost">About</Button>
-            <div className="text-xs text-slate-500 dark:text-slate-300 leading-tight">
-              New here? Start with <strong>Simple Dimerization</strong> → Simulate
-            </div>
+            <div className="border-l border-slate-300 dark:border-slate-600 h-6" />
             <a
               href="mailto:bionetgen.main@gmail.com?subject=BNG%20Playground%20Question"
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 hover:text-teal-600 dark:hover:text-teal-400 transition-colors"
               aria-label="Email us with questions"
               title="Questions? Email bionetgen.main@gmail.com"
             >
-              <EmailIcon className="w-6 h-6" />
+              <EmailIcon className="w-5 h-5" />
             </a>
             <button
               onClick={toggleTheme}
               className="p-2 rounded-full text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700"
               aria-label="Toggle theme"
             >
-              {theme === 'light' ? <MoonIcon className="w-6 h-6" /> : <SunIcon className="w-6 h-6" />}
+              {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}
             </button>
-            <Button onClick={onExportSBML} variant="ghost">Export SBML</Button>
+            <Button onClick={onExportSBML} variant="subtle" className="text-xs">Export SBML</Button>
           </div>
         </div>
       </div>

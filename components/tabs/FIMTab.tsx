@@ -353,15 +353,15 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               {isComputing && <Button variant="danger" onClick={handleCancel}>Cancel</Button>}
             </div>
             {isComputing && (
-              <div className="flex items-center gap-3 p-4 bg-blue-50 rounded-lg mb-4">
-                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
+              <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
+                <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 dark:border-blue-400"></div>
                 <div className="flex-1">
-                  <p className="text-sm font-medium text-blue-800">
+                  <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
                     Computing FIM... {progress.current} / {progress.total} simulations
                   </p>
-                  <div className="w-full bg-blue-200 rounded-full h-2 mt-2">
+                  <div className="w-full bg-blue-200 dark:bg-blue-900/40 rounded-full h-2 mt-2">
                     <div 
-                      className="bg-blue-600 h-2 rounded-full transition-all"
+                      className="bg-blue-600 dark:bg-blue-400 h-2 rounded-full transition-all"
                       style={{ width: `${progress.total > 0 ? (progress.current / progress.total) * 100 : 0}%` }}
                     />
                   </div>
@@ -416,30 +416,30 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             Computation time: {result.benchmark?.totalMs ? Math.round(result.benchmark.totalMs) : 'N/A'} ms
           </div>
           {/* Model Diagnostics Summary */}
-          <div className="bg-yellow-50 border-l-4 border-yellow-500 p-4 mb-6">
-            <h3 className="font-semibold text-yellow-800">Model Identifiability Summary</h3>
-            <div className="grid grid-cols-2 gap-4 mt-2 text-sm">
+          <div className="bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-500 dark:border-yellow-600 p-4 mb-6">
+            <h3 className="font-semibold text-yellow-800 dark:text-yellow-200">Model Identifiability Summary</h3>
+            <div className="grid grid-cols-2 gap-4 mt-2 text-sm text-yellow-900 dark:text-yellow-100">
               <div>
                 <span className="font-medium">Condition Number:</span>{' '}
-                <span className={result.conditionNumber > 1000 ? 'text-red-600' : 'text-green-600'}>
+                <span className={result.conditionNumber > 1000 ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}>
                   {result.conditionNumber.toExponential(2)}
                 </span>
                 {result.conditionNumber > 1000 && ' (⚠️ Ill-conditioned)'}
               </div>
               <div>
                 <span className="font-medium">Identifiable Params:</span>{' '}
-                <span className="text-green-600">{result.identifiableParams?.length || 0}</span>
+                <span className="text-green-600 dark:text-green-400">{result.identifiableParams?.length || 0}</span>
                 {' / '}
                 {result.paramNames.length}
               </div>
               <div>
                 <span className="font-medium">High VIF Count:</span>{' '}
-                <span className="text-red-600">{result.highVIFParams?.length || 0}</span>
+                <span className="text-red-600 dark:text-red-400">{result.highVIFParams?.length || 0}</span>
                 {result.highVIFParams && result.highVIFParams.length > 0 && ' (⚠️ Collinear)'}
               </div>
               <div>
                 <span className="font-medium">Max Correlation:</span>{' '}
-                <span className="text-red-600">
+                <span className="text-red-600 dark:text-red-400">
                   {result.topCorrelatedPairs && result.topCorrelatedPairs.length > 0 ? Math.max(...result.topCorrelatedPairs.map(p => Math.abs(p.corr))).toFixed(3) : 'N/A'}
                 </span>
               </div>
@@ -463,15 +463,15 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                   const isExpanded = expandedEigen === idx;
                   return (
                     <React.Fragment key={idx}>
-                      <tr className="border-t cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800" onClick={() => setExpandedEigen(isExpanded ? null : idx)}>
-                        <td className="px-2 py-1 align-top">{idx + 1}</td>
-                        <td className="px-2 py-1 align-top">{val.toExponential(3)}</td>
+                      <tr className="border-t border-slate-200 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/50" onClick={() => setExpandedEigen(isExpanded ? null : idx)}>
+                        <td className="px-2 py-1 align-top text-slate-700 dark:text-slate-300">{idx + 1}</td>
+                        <td className="px-2 py-1 align-top text-slate-700 dark:text-slate-300">{val.toExponential(3)}</td>
                         <td className="px-2 py-1">
                           <div className="flex flex-wrap gap-2">
                             {top.map((p) => (
                               <div key={p.name} className="flex items-center gap-3">
-                                <div className="w-40 truncate text-xs text-slate-600">{p.name}</div>
-                                <div className="text-xs">{p.signed.toFixed(4)}</div>
+                                <div className="w-40 truncate text-xs text-slate-600 dark:text-slate-400">{p.name}</div>
+                                <div className="text-xs text-slate-600 dark:text-slate-400">{p.signed.toFixed(4)}</div>
                               </div>
                             ))}
                           </div>
@@ -526,21 +526,21 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
           {/* Identifiability summary badges */}
           <div className="mt-2 flex gap-3 items-center">
             <div>
-              <div className="text-xs text-slate-500">Identifiable</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Identifiable</div>
               <div className="flex flex-wrap gap-2 mt-1">
                 {result.identifiableParams?.slice(0, 50).map((p) => (
-                  <div key={p} className="px-2 py-1 rounded bg-green-100 text-green-800 text-xs font-medium">{p}</div>
+                  <div key={p} className="px-2 py-1 rounded bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300 text-xs font-medium">{p}</div>
                 ))}
-                {result.identifiableParams && result.identifiableParams.length > 50 && <div className="text-xs text-slate-500">+{result.identifiableParams.length - 50} more</div>}
+                {result.identifiableParams && result.identifiableParams.length > 50 && <div className="text-xs text-slate-500 dark:text-slate-400">+{result.identifiableParams.length - 50} more</div>}
               </div>
             </div>
             <div>
-              <div className="text-xs text-slate-500">Unidentifiable</div>
+              <div className="text-xs text-slate-500 dark:text-slate-400">Unidentifiable</div>
               <div className="flex flex-wrap gap-2 mt-1">
                 {result.unidentifiableParams?.slice(0, 50).map((p) => (
-                  <div key={p} className="px-2 py-1 rounded bg-red-100 text-red-800 text-xs font-medium">{p}</div>
+                  <div key={p} className="px-2 py-1 rounded bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300 text-xs font-medium">{p}</div>
                 ))}
-                {result.unidentifiableParams && result.unidentifiableParams.length > 50 && <div className="text-xs text-slate-500">+{result.unidentifiableParams.length - 50} more</div>}
+                {result.unidentifiableParams && result.unidentifiableParams.length > 50 && <div className="text-xs text-slate-500 dark:text-slate-400">+{result.unidentifiableParams.length - 50} more</div>}
               </div>
             </div>
           </div>
@@ -551,17 +551,17 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {result?.vif && (
         <Card className="space-y-3">
           {result.highVIFParams && result.highVIFParams.length > 0 && (
-            <div className="bg-red-50 border-l-4 border-red-500 p-4 mb-4">
-              <p className="text-red-700 font-semibold">⚠️ Severe Multicollinearity Detected</p>
-              <p className="text-red-600 text-sm mb-3">
+            <div className="bg-red-50 dark:bg-red-900/20 border-l-4 border-red-500 dark:border-red-600 p-4 mb-4">
+              <p className="text-red-700 dark:text-red-200 font-semibold">⚠️ Severe Multicollinearity Detected</p>
+              <p className="text-red-600 dark:text-red-300 text-sm mb-3">
                 VIF values above 100 indicate parameters are nearly perfectly correlated.
                 This means individual parameter values cannot be uniquely determined, though
                 model predictions remain reliable.
               </p>
 
-              <div className="bg-white border border-red-200 rounded p-3">
-                <p className="text-sm text-red-700 font-semibold mb-2">General Recommendations:</p>
-                <ul className="text-sm text-red-600 space-y-1.5 list-disc list-inside">
+              <div className="bg-white dark:bg-slate-800 border border-red-200 dark:border-red-800 rounded p-3">
+                <p className="text-sm text-red-700 dark:text-red-300 font-semibold mb-2">General Recommendations:</p>
+                <ul className="text-sm text-red-600 dark:text-red-400 space-y-1.5 list-disc list-inside">
                   <li>Use <strong>parameter ratios</strong> instead of individual values where mechanistically appropriate</li>
                   <li>Apply <strong>Bayesian priors</strong> from literature if available</li>
                   <li>Design <strong>new experiments</strong> that independently perturb each pathway</li>
@@ -597,8 +597,8 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                   const v = result.vif?.[i] ?? 0;
                   const high = Number.isFinite(v) && v > 10;
                   return (
-                    <tr key={name} className={`border-t ${high ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
-                      <td className="px-2 py-1 font-mono text-xs">{name}</td>
+                    <tr key={name} className={`border-t border-slate-200 dark:border-slate-700 ${high ? 'bg-amber-50 dark:bg-amber-900/20' : ''}`}>
+                      <td className="px-2 py-1 font-mono text-xs text-slate-700 dark:text-slate-300">{name}</td>
                       <td className="px-2 py-1">
                         <div className="flex items-center justify-end gap-2">
                           <span>{Number.isFinite(v) ? v.toFixed(3) : '∞'}</span>
@@ -619,46 +619,46 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {result && (
         <Card className="space-y-4">
           {/* Summary Statistics Card */}
-          <div className="bg-gradient-to-r from-teal-50 to-blue-50 border border-teal-200 rounded-lg p-6 mb-6 shadow-sm">
-            <h3 className="text-xl font-bold text-teal-800 mb-4">Identifiability Summary</h3>
+          <div className="bg-gradient-to-r from-teal-50 to-blue-50 dark:from-teal-900/20 dark:to-blue-900/20 border border-teal-200 dark:border-teal-800 rounded-lg p-6 mb-6 shadow-sm">
+            <h3 className="text-xl font-bold text-teal-800 dark:text-teal-200 mb-4">Identifiability Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-              <div className="bg-white rounded p-3 shadow-sm">
-                <div className="text-2xl font-bold text-red-600">
+              <div className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm">
+                <div className="text-2xl font-bold text-red-600 dark:text-red-400">
                   {result.unidentifiableParams?.length || 0}
                 </div>
-                <div className="text-xs text-gray-600 uppercase">Unidentifiable</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 uppercase">Unidentifiable</div>
               </div>
-              <div className="bg-white rounded p-3 shadow-sm">
-                <div className="text-2xl font-bold text-green-600">
+              <div className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm">
+                <div className="text-2xl font-bold text-green-600 dark:text-green-400">
                   {result.identifiableParams?.length || 0}
                 </div>
-                <div className="text-xs text-gray-600 uppercase">Identifiable</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 uppercase">Identifiable</div>
               </div>
-              <div className="bg-white rounded p-3 shadow-sm">
-                <div className="text-2xl font-bold text-orange-600">
+              <div className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm">
+                <div className="text-2xl font-bold text-orange-600 dark:text-orange-400">
                   {result.conditionNumber.toExponential(0)}
                 </div>
-                <div className="text-xs text-gray-600 uppercase">Condition Number</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 uppercase">Condition Number</div>
                 <div className="text-xs mt-1">
                   {result.conditionNumber < 100 ? (
-                    <span className="text-green-600 font-medium">Well-conditioned</span>
+                    <span className="text-green-600 dark:text-green-400 font-medium">Well-conditioned</span>
                   ) : result.conditionNumber < 10000 ? (
-                    <span className="text-yellow-600 font-medium">Moderately ill-conditioned</span>
+                    <span className="text-yellow-600 dark:text-yellow-400 font-medium">Moderately ill-conditioned</span>
                   ) : (
-                    <span className="text-red-600 font-medium">Severely ill-conditioned</span>
+                    <span className="text-red-600 dark:text-red-400 font-medium">Severely ill-conditioned</span>
                   )}
                 </div>
               </div>
-              <div className="bg-white rounded p-3 shadow-sm">
-                <div className="text-2xl font-bold text-purple-600">
+              <div className="bg-white dark:bg-slate-800 rounded p-3 shadow-sm">
+                <div className="text-2xl font-bold text-purple-600 dark:text-purple-400">
                   {result.nullspaceCombinations?.length || 0}
                 </div>
-                <div className="text-xs text-gray-600 uppercase">Problem Combos</div>
+                <div className="text-xs text-gray-600 dark:text-gray-400 uppercase">Problem Combos</div>
               </div>
             </div>
 
-            <div className="mt-4 p-3 bg-white rounded border border-teal-200">
-              <p className="text-sm text-gray-700">
+            <div className="mt-4 p-3 bg-white dark:bg-slate-800 rounded border border-teal-200 dark:border-teal-800">
+              <p className="text-sm text-gray-700 dark:text-gray-300">
                 <strong>Overall Assessment:</strong>{' '}
                 <span className="text-red-600 font-semibold">
                   {result.unidentifiableParams?.length === result.paramNames.length
@@ -876,22 +876,22 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
           </div>
           <div className="space-y-6">
             {result.nullspaceCombinations.map((comb, idx) => (
-              <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                <h4 className="font-medium text-gray-800 mb-3">
+              <div key={idx} className="border border-gray-200 dark:border-slate-700 rounded-lg p-4 bg-gray-50 dark:bg-slate-800">
+                <h4 className="font-medium text-gray-800 dark:text-gray-200 mb-3">
                   Combination {idx + 1} — eigenvalue: {comb.eigenvalue.toExponential(2)}
                 </h4>
 
                 <div className="grid grid-cols-2 gap-6">
                   {/* Parameter loadings table */}
                   <div>
-                    <p className="text-xs font-semibold text-gray-600 mb-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
                       Parameter loadings
                     </p>
                     <div className="space-y-1">
                       {comb.components.map((comp, i) => (
                         <div key={i} className="flex justify-between items-center text-sm">
-                          <span className="font-mono">{comp.name}</span>
-                          <span className="font-mono text-gray-700">
+                          <span className="font-mono text-slate-700 dark:text-slate-300">{comp.name}</span>
+                          <span className="font-mono text-gray-700 dark:text-gray-300">
                             {comp.loading.toFixed(6)}
                           </span>
                         </div>
@@ -901,7 +901,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
 
                   {/* Loading magnitudes bar chart */}
                   <div>
-                    <p className="text-xs font-semibold text-gray-600 mb-2">
+                    <p className="text-xs font-semibold text-gray-600 dark:text-gray-400 mb-2">
                       Loading magnitudes
                     </p>
                     <div className="space-y-2">
@@ -910,17 +910,17 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                         const widthPct = (Math.abs(comp.loading) / maxAbs) * 100;
                         return (
                           <div key={i} className="flex items-center gap-2">
-                            <span className="text-xs font-mono w-20 text-right truncate">
+                            <span className="text-xs font-mono w-20 text-right truncate text-slate-600 dark:text-slate-400">
                               {comp.name}
                             </span>
-                            <div className="flex-1 bg-gray-200 rounded h-5 relative">
+                            <div className="flex-1 bg-gray-200 dark:bg-slate-700 rounded h-5 relative">
                               <div
                                 className={`h-full rounded ${
                                   comp.loading > 0 ? 'bg-teal-500' : 'bg-orange-500'
                                 }`}
                                 style={{ width: `${widthPct}%` }}
                               />
-                              <span className="absolute right-2 top-0.5 text-xs font-mono text-gray-700">
+                              <span className="absolute right-2 top-0.5 text-xs font-mono text-gray-700 dark:text-gray-300 mix-blend-difference">
                                 {Math.abs(comp.loading).toFixed(3)}
                               </span>
                             </div>
@@ -932,15 +932,15 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                 </div>
 
                 {/* Interpretation */}
-                <div className="mt-3 p-3 bg-yellow-50 border-l-4 border-yellow-400 text-sm">
-                  <p className="text-yellow-800 mb-2">
+                <div className="mt-3 p-3 bg-yellow-50 dark:bg-yellow-900/20 border-l-4 border-yellow-400 dark:border-yellow-600 text-sm">
+                  <p className="text-yellow-800 dark:text-yellow-200 mb-2">
                     <strong>What this means:</strong> These {comb.components.length} parameters appear
                     in a linear combination that the data cannot resolve.
                   </p>
-                  <p className="text-yellow-700">
+                  <p className="text-yellow-700 dark:text-yellow-300">
                     <strong>Options:</strong>
                   </p>
-                  <ul className="text-xs text-yellow-700 mt-1 space-y-0.5 list-disc list-inside ml-2">
+                  <ul className="text-xs text-yellow-700 dark:text-yellow-300 mt-1 space-y-0.5 list-disc list-inside ml-2">
                     <li>Fix one parameter using external data (literature, independent experiments)</li>
                     <li>Reformulate as a ratio if mechanistically justified</li>
                     <li>Accept uncertainty and report parameter ranges instead of point estimates</li>
@@ -1043,10 +1043,10 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {/* FIM heatmap */}
       {result?.fimMatrix && (
         <Card className="space-y-3">
-          <div className="border border-gray-200 rounded-lg">
+          <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button 
               onClick={() => setShowFIMHeatmap(!showFIMHeatmap)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100"
+              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold">Fisher Information Matrix (heatmap)</h3>
@@ -1055,7 +1055,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                     e.stopPropagation();
                     downloadFIMMatrix();
                   }}
-                  className="text-sm text-teal-600 hover:text-teal-700 underline"
+                  className="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline"
                 >
                   Export CSV ↓
                 </button>
@@ -1063,7 +1063,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               <span className="text-xl">{showFIMHeatmap ? '▼' : '▶'}</span>
             </button>
             {showFIMHeatmap && (
-              <div className="p-4">
+              <div className="p-4 bg-white text-slate-900 border-t border-gray-200 dark:border-slate-700 overflow-hidden">
                 <div className="text-sm text-slate-600">Raw Fisher Information Matrix (rows/cols = parameters). Colors indicate magnitude.</div>
                 <div className="overflow-auto mt-2">
                   <div className="inline-block align-top">
@@ -1111,10 +1111,10 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {/* Correlation heatmap */}
       {result?.correlations && (
         <Card className="space-y-3">
-          <div className="border border-gray-200 rounded-lg">
+          <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button 
               onClick={() => setShowCorrelationHeatmap(!showCorrelationHeatmap)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100"
+              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               <div className="flex items-center gap-2">
                 <h3 className="font-semibold">Parameter correlations (heatmap)</h3>
@@ -1123,7 +1123,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                     e.stopPropagation();
                     downloadCorrelations();
                   }}
-                  className="text-sm text-teal-600 hover:text-teal-700 underline"
+                  className="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline"
                 >
                   Export CSV ↓
                 </button>
@@ -1131,7 +1131,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               <span className="text-xl">{showCorrelationHeatmap ? '▼' : '▶'}</span>
             </button>
             {showCorrelationHeatmap && (
-              <div className="p-4">
+              <div className="p-4 bg-white text-slate-900 border-t border-gray-200 dark:border-slate-700 overflow-hidden">
                 <div className="text-sm text-slate-600">Pearson correlations between parameter estimates. Red indicates strong correlations (potential identifiability issues).</div>
                 <div className="overflow-auto mt-2">
                   <div className="inline-block align-top">
@@ -1147,16 +1147,16 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {/* Jacobian heatmap (truncated if large) */}
       {result?.jacobian && (
         <Card className="space-y-3">
-          <div className="border border-gray-200 rounded-lg">
+          <div className="border border-gray-200 dark:border-slate-700 rounded-lg overflow-hidden">
             <button 
               onClick={() => setShowJacobianHeatmap(!showJacobianHeatmap)}
-              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100"
+              className="w-full flex items-center justify-between p-4 bg-gray-50 hover:bg-gray-100 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               <h3 className="font-semibold">Jacobian (sensitivity) heatmap</h3>
               <span className="text-xl">{showJacobianHeatmap ? '▼' : '▶'}</span>
             </button>
             {showJacobianHeatmap && (
-              <div className="p-4">
+              <div className="p-4 bg-white text-slate-900 border-t border-gray-200 dark:border-slate-700 overflow-hidden">
                 <div className="text-sm text-slate-600">Rows: observables×time, Columns: parameters. Showing first 20 rows for readability.</div>
                 <div className="overflow-auto mt-2">
                   <table className="border-collapse" style={{ borderSpacing: 0 }}>

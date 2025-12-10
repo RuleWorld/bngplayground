@@ -243,7 +243,6 @@ export async function computeFIM(
   const J: number[][] = Array.from({ length: m }, () => new Array(p).fill(0));
 
   // central finite-difference for each parameter
-  let completed = 0;
   const totalRuns = 1 + p * 2; // baseline + 2 per parameter
   let totalSimMs = 0;
 
@@ -258,74 +257,94 @@ export async function computeFIM(
   // progress: baseline already run once
   progress?.(0, totalRuns);
 
+
+  // Build all perturbation jobs upfront for parallel execution
+  interface PerturbJob {
+    paramIdx: number;
+    param: string;
+    sign: 'plus' | 'minus';
+    val: number;
+    isLog: boolean;
+  }
+  const perturbJobs: PerturbJob[] = [];
+  const perturbMeta: { eps: number; rel: number }[] = []; // per-parameter metadata
+
   for (let j = 0; j < p; j++) {
-    if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
     const param = parameterNames[j];
     const baseVal = model.parameters[param];
 
-    // If requested, compute sensitivities w.r.t ln(p) using multiplicative perturbations when possible.
     if (useLogParameters && baseVal > 0) {
       const rel = Math.max(1e-8, 1e-4);
       const plus = baseVal * (1 + rel);
       const minus = baseVal * Math.max(0, 1 - rel);
-
-      const plusRes = await recordSim(() => bnglService.simulateCached(modelId, { [param]: plus }, simulationOptions, { signal }));
-      completed += 1;
-      progress?.(completed, totalRuns);
-      const minusRes = await recordSim(() => bnglService.simulateCached(modelId, { [param]: minus }, simulationOptions, { signal }));
-      completed += 1;
-      progress?.(completed, totalRuns);
-
-      const plusData = plusRes.data;
-      const minusData = minusRes.data;
-      const relDenom = 2 * rel;
-
-      for (let ti = 0; ti < timeCount; ti++) {
-        const timeIndex = includeAllTimepoints ? ti : plusData.length - 1;
-        const plusRow = plusData[timeIndex] ?? {};
-        const minusRow = minusData[timeIndex] ?? {};
-        for (let oi = 0; oi < numObs; oi++) {
-          const key = observableKeys[oi];
-          const vplus = typeof plusRow[key] === 'number' ? (plusRow[key] as number) : Number(plusRow[key] ?? 0);
-          const vminus = typeof minusRow[key] === 'number' ? (minusRow[key] as number) : Number(minusRow[key] ?? 0);
-          // derivative w.r.t ln p approximated by (f(plus)-f(minus)) / (2 * rel)
-          const deriv = (vplus - vminus) / relDenom;
-          const rowIndex = ti * numObs + oi;
-          J[rowIndex][j] = Number.isFinite(deriv) ? deriv : 0;
-        }
-      }
-      continue;
+      perturbJobs.push({ paramIdx: j, param, sign: 'plus', val: plus, isLog: true });
+      perturbJobs.push({ paramIdx: j, param, sign: 'minus', val: minus, isLog: true });
+      perturbMeta[j] = { eps: 0, rel };
+    } else {
+      const eps = Math.max(1e-8, Math.abs(baseVal) * 1e-4, 1e-8);
+      const plus = baseVal + eps;
+      const minus = Math.max(0, baseVal - eps);
+      perturbJobs.push({ paramIdx: j, param, sign: 'plus', val: plus, isLog: false });
+      perturbJobs.push({ paramIdx: j, param, sign: 'minus', val: minus, isLog: false });
+      perturbMeta[j] = { eps, rel: 0 };
     }
+  }
 
-    // fallback to additive central difference
-    const eps = Math.max(1e-8, Math.abs(baseVal) * 1e-4, 1e-8);
-    const plus = baseVal + eps;
-    const minus = Math.max(0, baseVal - eps);
+  // Execute all perturbation simulations in parallel (limited by worker pool)
+  const simStartTime = performance.now();
+  const perturbResults = await Promise.all(
+    perturbJobs.map(job => 
+      bnglService.simulateCached(modelId, { [job.param]: job.val }, simulationOptions, { signal })
+    )
+  );
+  totalSimMs = performance.now() - simStartTime;
 
-    const plusRes = await recordSim(() => bnglService.simulateCached(modelId, { [param]: plus }, simulationOptions, { signal }));
-    completed += 1;
-    progress?.(completed, totalRuns);
-    const minusRes = await recordSim(() => bnglService.simulateCached(modelId, { [param]: minus }, simulationOptions, { signal }));
-    completed += 1;
-    progress?.(completed, totalRuns);
+  // Build results map: paramIdx -> { plus, minus }
+  const resultsMap = new Map<number, { plus: any; minus: any }>();
+  for (let i = 0; i < perturbJobs.length; i++) {
+    const job = perturbJobs[i];
+    if (!resultsMap.has(job.paramIdx)) {
+      resultsMap.set(job.paramIdx, { plus: null, minus: null });
+    }
+    resultsMap.get(job.paramIdx)![job.sign] = perturbResults[i];
+  }
 
-    const plusData = plusRes.data;
-    const minusData = minusRes.data;
+  // Compute Jacobian from results
+  for (let j = 0; j < p; j++) {
+    const results = resultsMap.get(j)!;
+    const plusData = results.plus.data;
+    const minusData = results.minus.data;
+    const meta = perturbMeta[j];
+    const baseVal = model.parameters[parameterNames[j]];
 
     for (let ti = 0; ti < timeCount; ti++) {
       const timeIndex = includeAllTimepoints ? ti : plusData.length - 1;
       const plusRow = plusData[timeIndex] ?? {};
       const minusRow = minusData[timeIndex] ?? {};
+      
       for (let oi = 0; oi < numObs; oi++) {
         const key = observableKeys[oi];
         const vplus = typeof plusRow[key] === 'number' ? (plusRow[key] as number) : Number(plusRow[key] ?? 0);
         const vminus = typeof minusRow[key] === 'number' ? (minusRow[key] as number) : Number(minusRow[key] ?? 0);
-        const deriv = (vplus - vminus) / (plus - minus || eps);
+        
+        let deriv: number;
+        if (meta.rel > 0) {
+          // Log-parameter mode
+          deriv = (vplus - vminus) / (2 * meta.rel);
+        } else {
+          // Additive mode
+          const plus = baseVal + meta.eps;
+          const minus = Math.max(0, baseVal - meta.eps);
+          deriv = (vplus - vminus) / (plus - minus || meta.eps);
+        }
+        
         const rowIndex = ti * numObs + oi;
         J[rowIndex][j] = Number.isFinite(deriv) ? deriv : 0;
       }
     }
   }
+  
+  progress?.(p * 2, totalRuns);
 
   // Compute FIM = J^T * J (p x p)
   const F: number[][] = Array.from({ length: p }, () => new Array(p).fill(0));

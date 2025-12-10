@@ -400,12 +400,19 @@ export class NetworkGenerator {
     return { species: speciesList, reactions: reactionsList };
   }
 
+  // Flag to enable constraint debugging
+  private static DEBUG_CONSTRAINTS = false;  // TEMP: Disable for cleaner output
+  private static CONSTRAINT_DEBUG_LIMIT = 20; // Limit debug output
+  private static constraintDebugCount = 0;
+
   /**
    * CHECK: Verify if species satisfy rule constraints
    */
   private checkConstraints(rule: RxnRule, reactant1: Species, reactant2?: Species): boolean {
-    if ((!rule.excludeReactants || rule.excludeReactants.length === 0) &&
-      (!rule.includeReactants || rule.includeReactants.length === 0)) {
+    const hasConstraints = (rule.excludeReactants && rule.excludeReactants.length > 0) ||
+      (rule.includeReactants && rule.includeReactants.length > 0);
+    
+    if (!hasConstraints) {
       return true;
     }
 
@@ -432,6 +439,27 @@ export class NetworkGenerator {
 
         if (target) {
           const isMatch = matchesPattern(target, constraint.pattern);
+
+          // Debug: Log interesting cases where pattern doesn't match but target contains the molecule type
+          if (NetworkGenerator.DEBUG_CONSTRAINTS && 
+              NetworkGenerator.constraintDebugCount < NetworkGenerator.CONSTRAINT_DEBUG_LIMIT) {
+            const patternMolNames = constraint.pattern.molecules.map(m => m.name);
+            const targetMolNames = target.graph.molecules.map(m => m.name);
+            const targetContainsPatternMol = patternMolNames.some(pn => targetMolNames.includes(pn));
+            
+            // Only log if pattern molecule IS in target but matching failed (potential bug)
+            // Or log first few for context
+            if ((targetContainsPatternMol && !isMatch) || NetworkGenerator.constraintDebugCount < 5) {
+              NetworkGenerator.constraintDebugCount++;
+              console.log(`\n[CONSTRAINT #${NetworkGenerator.constraintDebugCount}] Rule "${rule.name}"`);
+              console.log(`  exclude_reactants(${constraint.reactantIndex + 1}, ${constraint.pattern.toString()})`);
+              console.log(`  Target species: ${target.graph.toString().slice(0, 100)}...`);
+              console.log(`  Pattern molecules: [${patternMolNames.join(', ')}]`);
+              console.log(`  Target molecules: [${targetMolNames.join(', ')}]`);
+              console.log(`  Target contains pattern molecule: ${targetContainsPatternMol}`);
+              console.log(`  Pattern MATCH result: ${isMatch} ${isMatch ? '-> EXCLUDE' : '-> allow (UNEXPECTED if target contains molecule!)'}`);
+            }
+          }
 
           if (isMatch) return false;
         }
@@ -950,7 +978,13 @@ export class NetworkGenerator {
         return null;
       }
 
-      productGraphs.push(productGraph);
+      // FIX: Split the product graph into connected components.
+      // When bonds are broken during transformation, molecules may become disconnected
+      // and should be treated as separate species.
+      const splitProducts = productGraph.split();
+      for (const subgraph of splitProducts) {
+        productGraphs.push(subgraph);
+      }
     }
 
     if (shouldLogNetworkGenerator) {
@@ -1422,6 +1456,18 @@ export class NetworkGenerator {
           const mol1Key = `${r}:${molIdx}`;
           const mol2Key = `${r}:${partnerMolIdx}`;
           if (!includedMols.has(mol1Key) || !includedMols.has(mol2Key)) continue;
+
+          // FIX: Check if this bond is BROKEN by the rule transformation
+          // A bond is broken if either endpoint is in the brokenBonds set
+          const bondEndpoint1 = `${r}:${molIdx}.${compIdx}`;
+          const bondEndpoint2 = `${r}:${partnerMolIdx}.${partnerCompIdx}`;
+          if (brokenBonds.has(bondEndpoint1) || brokenBonds.has(bondEndpoint2)) {
+            // This bond should NOT be recreated - it's being broken by the rule
+            if (shouldLogNetworkGenerator) {
+              debugNetworkLog(`[buildProductGraph] SKIPPING broken bond ${bondEndpoint1} - ${bondEndpoint2}`);
+            }
+            continue;
+          }
 
           // Avoid adding same bond twice
           const bondKey = molIdx < partnerMolIdx || (molIdx === partnerMolIdx && compIdx < partnerCompIdx)

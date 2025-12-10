@@ -54,7 +54,7 @@ export interface CompactRule {
 export interface ContactEdge {
   from: string;
   to: string;
-  interactionType: 'binding' | 'state_change';
+  interactionType: 'binding' | 'unbinding' | 'state_change';
   componentPair?: [string, string];
   ruleIds: string[];
   ruleLabels: string[];
@@ -63,8 +63,9 @@ export interface ContactEdge {
 export interface ContactNode {
   id: string;
   label: string;
-  type: 'molecule' | 'component' | 'compartment';
+  type: 'molecule' | 'component' | 'state' | 'compartment';
   parent?: string; // parent is molecule id for compound nodes or compartment id when molecule belongs to a compartment
+  isGroup?: boolean; // true if this node contains children (for compound node layouts)
 }
 
 export interface ContactMap {

@@ -60,7 +60,9 @@ export class GraphCanonicalizer {
     const nauty = NautyService.getInstance();
     let finalOrder: number[] = [];
 
-    if (nauty.isInitialized) {
+    // NAUTY DISABLED: Found to be non-deterministic for symmetric S-R-R-S isomers in Barua model.
+    // BFS with MinNeighborRank fix is robust and correct (149 species).
+    if (false && nauty.isInitialized) {
       try {
         const n = graph.molecules.length;
         const flatAdj = new Int32Array(n * n);
@@ -99,9 +101,8 @@ export class GraphCanonicalizer {
 
     // 3. Fallback: Manual BFS-based canonicalization (if Nauty failed or not ready)
     if (finalOrder.length === 0) {
-      // Sort molecules by (colorClass, localSignature) for grouping
-      // Note: This modifies moleculeInfos in place!
-      moleculeInfos.sort((a, b) => {
+      // Sort a COPY of moleculeInfos for grouping
+      const sortedInfos = [...moleculeInfos].sort((a, b) => {
         if (a.colorClass !== b.colorClass) return a.colorClass - b.colorClass;
         if (a.localSignature < b.localSignature) return -1;
         if (a.localSignature > b.localSignature) return 1;
@@ -110,13 +111,14 @@ export class GraphCanonicalizer {
 
       // Map original index -> sorted index
       const originalToSortedTmp = new Map<number, number>();
-      moleculeInfos.forEach((info, index) => {
+      sortedInfos.forEach((info, index) => {
         originalToSortedTmp.set(info.originalIndex, index);
       });
 
       // Build adjacency list for BFS traversal
+      // Nodes are SORTED INDICES
       const adjList: Map<number, Array<{ neighbor: number, myComp: string, neighborComp: string, myCompIdx: number, neighborCompIdx: number }>> = new Map();
-      for (let i = 0; i < moleculeInfos.length; i++) {
+      for (let i = 0; i < sortedInfos.length; i++) {
         adjList.set(i, []);
       }
 
@@ -138,8 +140,8 @@ export class GraphCanonicalizer {
       // Sort each adjacency list using deterministic criteria
       for (const [_node, neighbors] of adjList) {
         neighbors.sort((a, b) => {
-          const sigA = moleculeInfos[a.neighbor].localSignature;
-          const sigB = moleculeInfos[b.neighbor].localSignature;
+          const sigA = sortedInfos[a.neighbor].localSignature;
+          const sigB = sortedInfos[b.neighbor].localSignature;
           if (sigA !== sigB) return sigA < sigB ? -1 : 1;
           if (a.myComp !== b.myComp) return a.myComp < b.myComp ? -1 : 1;
           if (a.neighborComp !== b.neighborComp) return a.neighborComp < b.neighborComp ? -1 : 1;
@@ -150,45 +152,131 @@ export class GraphCanonicalizer {
 
       // BFS from lexicographically smallest molecule
       const placed = new Set<number>();
-      const startIdx = 0; // moleculeInfos is already sorted
+      const startIdx = 0; // sortedInfos is already sorted
       const queue: number[] = [startIdx];
       placed.add(startIdx);
-      finalOrder.push(startIdx);
+      const sortedOrderVertices: number[] = [startIdx];
 
       while (queue.length > 0) {
         const current = queue.shift()!;
         for (const edge of adjList.get(current)!) {
           if (!placed.has(edge.neighbor)) {
             placed.add(edge.neighbor);
-            finalOrder.push(edge.neighbor);
+            sortedOrderVertices.push(edge.neighbor);
             queue.push(edge.neighbor);
           }
         }
       }
 
       // Add disconnected components
-      for (let i = 0; i < moleculeInfos.length; i++) {
-        if (!placed.has(i)) finalOrder.push(i);
+      for (let i = 0; i < sortedInfos.length; i++) {
+        if (!placed.has(i)) sortedOrderVertices.push(i);
       }
+
+      // CONVERT SORTED INDICES BACK TO ORIGINAL INDICES
+      finalOrder = sortedOrderVertices.map(si => sortedInfos[si].originalIndex);
     }
 
     // FORCE ALPHABETIC SORT (BNG2 Convention)
     // This reorders canonical indices to prioritize Molecule Name
-    // Applied globally to handle both Nauty and Fallback paths
-    
-    // DEBUG: Log before sort
-    const beforeNames = finalOrder.map(idx => graph.molecules[idx]?.name).join(',');
-    
+    // ONLY if Nauty didn't already enforce a stronger order?
+    // Nauty returns canonical order based on graph structure.
+    // If we re-sort by name, we might break the canonical property for identical names?
+    // But BNG requires names to be sorted.
+    // Nauty doesn't know about names (only colors).
+    // If colors encode names, Nauty respects names.
+    // Colors DO encode names (via localSignature).
+    // So Nauty result IS sorted by name (because name correlates with color rank).
+    // So this sort should be redundant/stable.
+
+
+
+    // Capture the initial canonical rank (from Nauty or deterministic BFS)
+    // This is crucial for symmetry breaking. If we use original index as tie-breaker, 
+    // we re-introduce input order dependency for symmetric nodes.
+    const canonicalRank = new Map<number, number>();
+    finalOrder.forEach((nodeIdx, rank) => {
+      canonicalRank.set(nodeIdx, rank);
+    });
+
     finalOrder.sort((a, b) => {
+      // Primary Sort: Molecule Name
       const nameA = graph.molecules[a].name;
       const nameB = graph.molecules[b].name;
       if (nameA < nameB) return -1;
       if (nameA > nameB) return 1;
-      return 0; // Stable order for identical names
+      // Secondary Sort: Bond-Aware Signature (Name + States + Bond Status)
+      const sigA = GraphCanonicalizer.getBondAwareSignature(graph.molecules[a], a, graph);
+      const sigB = GraphCanonicalizer.getBondAwareSignature(graph.molecules[b], b, graph);
+      if (sigA < sigB) return -1;
+      if (sigA > sigB) return 1;
+
+      // Tertiary Sort: Bonded Partners' Signatures
+      const getBondedPartnersSig = (molIdx: number): string => {
+        const mol = graph.molecules[molIdx];
+        const partnerSigs: string[] = [];
+        for (let compIdx = 0; compIdx < mol.components.length; compIdx++) {
+          const adjKey = `${molIdx}.${compIdx}`;
+          const partners = graph.adjacency.get(adjKey);
+          if (partners && partners.length > 0) {
+            for (const pKey of partners) {
+              const [pMolStr] = pKey.split('.');
+              const pMolIdx = Number(pMolStr);
+              const pMol = graph.molecules[pMolIdx];
+              if (pMol.name !== mol.name) {
+                partnerSigs.push(GraphCanonicalizer.getLocalSignature(pMol));
+              }
+            }
+          }
+        }
+        partnerSigs.sort();
+        return partnerSigs.join('|');
+      };
+      const bondedSigA = getBondedPartnersSig(a);
+      const bondedSigB = getBondedPartnersSig(b);
+      if (bondedSigA < bondedSigB) return -1;
+      if (bondedSigA > bondedSigB) return 1;
+
+      // Quaternary Sort: Min Neighbor Canonical Rank
+      // This enforces a BFS-like ordering: if two molecules are identical branches,
+      // the one attached to the "earlier" (lower rank) parent comes first.
+      const getMinNeighborRank = (molIdx: number): number => {
+        let minRank = Number.MAX_SAFE_INTEGER;
+        for (let compIdx = 0; compIdx < graph.molecules[molIdx].components.length; compIdx++) {
+          const adjKey = `${molIdx}.${compIdx}`;
+          const partners = graph.adjacency.get(adjKey);
+          if (partners) {
+            for (const pKey of partners) {
+              const [pMolStr] = pKey.split('.');
+              const pMolIdx = Number(pMolStr);
+              // Ignore self-loops or same-molecule bonds if any (unlikely here)
+              if (pMolIdx !== molIdx) {
+                const rank = canonicalRank.get(pMolIdx) ?? Number.MAX_SAFE_INTEGER;
+                if (rank < minRank) minRank = rank;
+              }
+            }
+          }
+        }
+        return minRank;
+      };
+
+      const minNeighborRankA = getMinNeighborRank(a);
+      const minNeighborRankB = getMinNeighborRank(b);
+
+
+
+      if (minNeighborRankA !== minNeighborRankB) return minNeighborRankA - minNeighborRankB;
+
+      // Quinary Sort: WL Color Class (Structural / Topological Equivalence)
+      const rankA = moleculeInfos[a].colorClass;
+      const rankB = moleculeInfos[b].colorClass;
+      if (rankA !== rankB) return rankA - rankB;
+
+      // Senary Sort: Canonical Rank (from Nauty/BFS) -> Breaking Symmetry Deterministically
+      return (canonicalRank.get(a) || 0) - (canonicalRank.get(b) || 0);
     });
-    
-    // DEBUG: Log after sort
-    const afterNames = finalOrder.map(idx => graph.molecules[idx]?.name).join(',');
+
+
 
     // 4. Construct Mapping Maps
     const originalToSortedVector = new Map<number, number>();
@@ -204,13 +292,9 @@ export class GraphCanonicalizer {
 
       // FORCE ALPHABETIC SORT (BNG2 Convention)
       // This reorders canonical indices to prioritize Molecule Name
-      finalOrder.sort((a, b) => {
-        const nameA = graph.molecules[a].name;
-        const nameB = graph.molecules[b].name;
-        if (nameA < nameB) return -1;
-        if (nameA > nameB) return 1;
-        return 0;
-      });
+
+
+      // Removed redundant sort that was here
 
       moleculeInfos.forEach(info => {
         originalToSortedVector.set(info.originalIndex, info.originalIndex);
@@ -275,8 +359,10 @@ export class GraphCanonicalizer {
     allBonds.sort((a, b) => {
       if (a.canIdx1 !== b.canIdx1) return a.canIdx1 - b.canIdx1;
       if (a.compName1 !== b.compName1) return a.compName1 < b.compName1 ? -1 : 1;
+      if (a.ci1 !== b.ci1) return a.ci1 - b.ci1; // Component index tie-breaker
       if (a.canIdx2 !== b.canIdx2) return a.canIdx2 - b.canIdx2;
       if (a.compName2 !== b.compName2) return a.compName2 < b.compName2 ? -1 : 1;
+      if (a.ci2 !== b.ci2) return a.ci2 - b.ci2; // Component index tie-breaker
       return 0;
     });
 
@@ -330,6 +416,29 @@ export class GraphCanonicalizer {
   }
 
   /**
+   * Get bond-aware signature for sorting purposes.
+   * Includes bond status (!+ for bound, nothing for unbound) to ensure
+   * deterministic ordering of molecules with same name and state but different connectivity.
+   * BNG2 places bound components before unbound components.
+   */
+  private static getBondAwareSignature(mol: any, molIdx: number, graph: SpeciesGraph): string {
+    const compSigs = mol.components.map((comp: any, compIdx: number) => {
+      let sig = comp.name;
+      if (comp.state && comp.state !== '?') sig += `~${comp.state}`;
+      // Check if this component has any bonds
+      const adjacencyKey = `${molIdx}.${compIdx}`;
+      const hasBond = graph.adjacency.has(adjacencyKey) && graph.adjacency.get(adjacencyKey)!.length > 0;
+      // Add !+ for bound components (makes them sort BEFORE unbound in string comparison)
+      if (hasBond) sig += `!+`;
+      return { sig, compIdx };
+    });
+    // Sort components alphabetically by their string representation
+    compSigs.sort((a: any, b: any) => a.sig < b.sig ? -1 : a.sig > b.sig ? 1 : 0);
+    const compartmentStr = mol.compartment ? `@${mol.compartment}` : '';
+    return `${mol.name}${compartmentStr}(${compSigs.map((c: any) => c.sig).join(',')})`;
+  }
+
+  /**
    * Convert a molecule to string with canonical bond IDs (single molecule case)
    */
   private static moleculeToString(
@@ -351,12 +460,20 @@ export class GraphCanonicalizer {
     });
 
     // Sort components alphabetically
+    /*console.log('[Canonical Debug] Before Sort:', componentData.map(c => c.str));*/
     componentData.sort((a: any, b: any) => {
       // Compare the base string (without bonds)
       const baseA = a.str.split('!')[0];
       const baseB = b.str.split('!')[0];
       return baseA < baseB ? -1 : baseA > baseB ? 1 : 0;
     });
+    /*console.log('[Canonical Debug] After Sort:', componentData.map(c => c.str));*/
+
+    // DEBUG: Force Log if unsorted
+    const sortedStrs = componentData.map(c => c.str);
+    if (sortedStrs.length > 1 && sortedStrs[0] > sortedStrs[1]) {
+      console.log('[Canonical Debug] FAILED SORT DETECTED:', sortedStrs);
+    }
 
     const compartmentSuffix = mol.compartment ? `@${mol.compartment}` : '';
     return `${mol.name}(${componentData.map((c: any) => c.str).join(',')})${compartmentSuffix}`;
@@ -510,6 +627,7 @@ export class GraphCanonicalizer {
 
     // 2. Iterative refinement: update color classes based on neighbor colors
     // Use hash-based colors to avoid exponential string growth
+
     for (let iter = 0; iter < graph.molecules.length; iter++) {
       const prevColors = moleculeInfos.map(m => m.colorClass);
       let changed = false;
@@ -526,13 +644,10 @@ export class GraphCanonicalizer {
             for (const partnerKey of partnerKeys) {
               const [pMolIdxStr, pCompIdxStr] = partnerKey.split('.');
               const pMolIdx = Number(pMolIdxStr);
-              // const pCompIdx = Number(pCompIdxStr); // Unused in hash but conceptually part of edge
               const pCompIdx = Number(pCompIdxStr);
               const pMol = graph.molecules[pMolIdx];
               if (pMol) {
                 // Include component info and partner's color
-                // We must include WHICH component of the neighbor we are connected to 
-                // to distinguish connections to different sites.
                 const edgeHash = simpleHash(
                   `${mol.components[compIdx].name}->${pMol.components[pCompIdx]?.name}:${prevColors[pMolIdx]}`
                 );

@@ -43,22 +43,25 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
             'text-valign': 'center',
             'text-max-width': '70px',
             'font-size': '12px',
+            // Default text color based on theme
+            color: theme === 'dark' ? '#FFFFFF' : '#000000',
           },
         },
         {
           selector: 'node[type = "molecule"]',
           style: {
-            'background-color': '#D2D2D2', // Match BNG2 molecule color
-            'border-color': '#000000',
-            'border-width': 1,
+            'background-color': 'data(color)',
+            'border-color': theme === 'dark' ? '#FFFFFF' : '#000000',
+            'border-width': 2,
             'text-valign': 'top',
             'text-halign': 'center',
             label: 'data(label)',
             shape: 'round-rectangle',
             padding: '10px',
-            'font-size': 12,
-            'font-weight': 600,
-            color: '#000000',
+            'font-size': 14,
+            'font-weight': 700,
+            // Simple black/white text based on theme
+            color: theme === 'dark' ? '#FFFFFF' : '#000000',
           },
         },
         {
@@ -74,16 +77,19 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
             padding: '12px',
             'font-size': 13,
             'font-weight': 700,
+            color: theme === 'dark' ? '#FFFFFF' : '#000000',
           },
         },
         {
           selector: 'node[type = "component"]',
           style: {
-            'background-color': '#E8E8E8', // Light grey instead of white to be visible
-            'border-color': '#000000',
+            'background-color': '#EFEFEF', // Light grey (BNG style)
+            'border-color': '#999999',
             'border-width': 1,
-            width: 24,
-            height: 24,
+            // Auto-size to fit label
+            width: 'label',
+            height: 'label',
+            'padding': '4px',
             label: 'data(label)',
             'font-size': 10,
             shape: 'round-rectangle',
@@ -91,10 +97,19 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
           },
         },
         {
-          selector: 'node[color]',
+          selector: 'node[type = "state"]',
           style: {
-            'background-color': 'data(color)',
-            color: 'data(fgColor)',
+            'background-color': '#FFF0A7', // Yellow (BNG InternalState color)
+            'border-color': '#999999',
+            'border-width': 1,
+            // Auto-size to fit label
+            width: 'label',
+            height: 'label',
+            'padding': '3px',
+            label: 'data(label)',
+            'font-size': 9,
+            shape: 'round-rectangle',
+            color: '#000000',
           },
         },
         {
@@ -114,6 +129,10 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
             label: 'data(label)',
             'text-rotation': 'autorotate',
             'font-size': '10px',
+            color: theme === 'dark' ? '#E2E8F0' : '#1E293B',
+            'text-background-color': theme === 'dark' ? '#1E293B' : '#FFFFFF',
+            'text-background-opacity': 0.8,
+            'text-background-padding': '2px',
           },
         },
         {
@@ -129,6 +148,14 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
             'line-color': '#0EA5E9',
             'target-arrow-color': '#0EA5E9',
             'line-style': 'dashed',
+          },
+        },
+        {
+          selector: 'edge[type = "unbinding"]',
+          style: {
+            'line-color': '#EF4444', // Red for unbinding
+            'target-arrow-color': '#EF4444',
+            'line-style': 'dotted',
           },
         },
         {
@@ -175,18 +202,24 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     if (!cy) {
       return;
     }
-
     const elements = [
-      ...contactMap.nodes.map((node) => ({
-        data: {
-          id: node.id,
-          label: node.label,
-          parent: node.parent,
-          type: node.type,
-          color: node.type === 'molecule' ? colorFromName(node.label) : '#fbbf24',
-          fgColor: node.type === 'molecule' ? foregroundForBackground(colorFromName(node.label)) : '#0f172a',
-        },
-      })),
+      ...contactMap.nodes.map((node) => {
+        const bgColor = node.type === 'molecule' ? colorFromName(node.label) :
+          node.type === 'component' ? '#EFEFEF' :
+            node.type === 'state' ? '#FFF0A7' : '#fbbf24';
+        const fgColor = foregroundForBackground(bgColor);
+
+        return {
+          data: {
+            id: node.id,
+            label: node.label,
+            parent: node.parent,
+            type: node.type,
+            color: bgColor,
+            fgColor: fgColor,
+          },
+        };
+      }),
       ...contactMap.edges.map((edge, index) => ({
         data: {
           id: `edge-${index}`,
@@ -215,9 +248,9 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     setIsLayoutRunning(true);
     let useFcose = false;
     try {
-    // Try dynamic import of cytoscape-fcose (optional); if present, register it
-    // @ts-ignore - optional dependency, types may not exist
-    const fcose = await import('cytoscape-fcose');
+      // Try dynamic import of cytoscape-fcose (optional); if present, register it
+      // @ts-ignore - optional dependency, types may not exist
+      const fcose = await import('cytoscape-fcose');
       const plugin = (fcose as any).default ?? fcose;
       if (plugin) cytoscape.use(plugin);
       useFcose = true;
@@ -237,6 +270,10 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
         padding: 30,
         nodeDimensionsIncludeLabels: true,
         tile: true,
+        // These settings help keep compound nodes together
+        idealEdgeLength: 50,
+        nodeRepulsion: 4500,
+        nestingFactor: 5, // Higher = children stay closer to parents
       } as any);
       layout.run();
       layout.on('layoutstop', () => setIsLayoutRunning(false));
@@ -348,18 +385,26 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       {/* Legend Box */}
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700">
         <h4 className="text-xs font-semibold text-slate-500 uppercase">Legend</h4>
-        <div className="flex items-center gap-4 text-xs">
+        <div className="flex items-center gap-4 text-xs flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-3 h-3 rounded bg-slate-200 border border-slate-400" />
             <span className="text-slate-700 dark:text-slate-300">Molecule</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-amber-400 border border-amber-600" />
-            <span className="text-slate-700 dark:text-slate-300">Component / Site</span>
+            <div className="w-3 h-3 rounded-full bg-gray-200 border border-gray-400" />
+            <span className="text-slate-700 dark:text-slate-300">Component</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-0 border-t-2 border-slate-400" />
+            <div className="w-3 h-3 rounded-full bg-yellow-200 border border-yellow-400" />
+            <span className="text-slate-700 dark:text-slate-300">State</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-0 border-t-2 border-orange-400" />
             <span className="text-slate-700 dark:text-slate-300">Binding</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <div className="w-6 h-0 border-t-2 border-red-400 border-dotted" />
+            <span className="text-slate-700 dark:text-slate-300">Unbinding</span>
           </div>
           <div className="flex items-center gap-2">
             <div className="w-6 h-0 border-t-2 border-blue-400 border-dashed" />

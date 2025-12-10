@@ -22,7 +22,8 @@ export const FIMHeatmap: React.FC<FIMHeatmapProps> = ({ correlations, paramNames
 
   return (
     <svg width={width} height={height}>
-      <g transform="translate(90, 10)">
+      {/* Increased top margin to 120 to accommodate rotated labels */}
+      <g transform="translate(100, 120)">
         {correlations.map((row, i) =>
           row.map((val, j) => (
             <g key={`${i}-${j}`}>
@@ -40,12 +41,30 @@ export const FIMHeatmap: React.FC<FIMHeatmapProps> = ({ correlations, paramNames
         )}
         {/* Axis labels */}
         {paramNames.map((p, j) => (
-          <text key={`x-${j}`} x={j * cellSize + cellSize / 2} y={-4} fontSize={10} textAnchor="middle">
+          <text 
+            key={`x-${j}`} 
+            x={0} 
+            y={0} 
+            transform={`translate(${j * cellSize + cellSize / 2}, -10) rotate(-90)`}
+            fontSize={10} 
+            textAnchor="start"
+            fill="currentColor"
+            className="text-slate-700 dark:text-slate-300"
+          >
             {p}
           </text>
         ))}
         {paramNames.map((p, i) => (
-          <text key={`y-${i}`} x={-8} y={i * cellSize + cellSize / 2} fontSize={10} textAnchor="end" dominantBaseline="middle">
+          <text 
+            key={`y-${i}`} 
+            x={-8} 
+            y={i * cellSize + cellSize / 2} 
+            fontSize={10} 
+            textAnchor="end" 
+            dominantBaseline="middle"
+            fill="currentColor"
+            className="text-slate-700 dark:text-slate-300"
+          >
             {p}
           </text>
         ))}

@@ -120,7 +120,7 @@ export interface SimulationOptions {
   // ODE solver options
   atol?: number;           // Absolute tolerance (default: 1e-6)
   rtol?: number;           // Relative tolerance (default: 1e-3)
-  solver?: 'auto' | 'cvode' | 'rosenbrock23' | 'rk45' | 'rk4';  // Solver selection (default: 'auto')
+  solver?: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4';  // Solver selection (default: 'auto')
   maxSteps?: number;       // Max internal steps per output interval (default: 100000)
   // Steady state options
   steadyState?: boolean;
