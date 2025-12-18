@@ -940,7 +940,13 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     // Build analytical Jacobian for mass-action kinetics
     // J[i][k] = ∂(dSᵢ/dt)/∂Sₖ = Σ_r stoich[i][r] * k_r * ∂(∏ⱼ Sⱼ^nⱼ)/∂Sₖ
     // For mass-action: ∂velocity/∂Sₖ = velocity * reactant_order[k] / Sₖ
-    let jacobian: ((y: Float64Array, J: Float64Array) => void) | undefined;
+    // 
+    // Storage formats:
+    //   Column-major (CVODE):     J[i + k*n] = ∂f_i/∂y_k
+    //   Row-major (Rosenbrock23): J[i*n + k] = ∂f_i/∂y_k
+    
+    let jacobianColMajor: ((y: Float64Array, J: Float64Array) => void) | undefined;
+    let jacobianRowMajor: ((y: Float64Array, J: Float64Array) => void) | undefined;
 
     if (allMassAction) {
       // Precompute reactant counts for each reaction (for higher-order terms like A + A -> ...)
@@ -953,58 +959,74 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
         return counts;
       });
 
-      jacobian = (y: Float64Array, J: Float64Array) => {
-        // J is column-major: J[i + k*numSpecies] = ∂f_i/∂y_k
-        J.fill(0);
+      // Factory function to build Jacobian with specified storage format
+      const buildJacobian = (columnMajor: boolean) => {
+        return (y: Float64Array, J: Float64Array) => {
+          J.fill(0);
 
-        for (let r = 0; r < concreteReactions.length; r++) {
-          const rxn = concreteReactions[r];
-          const k = rxn.rateConstant;
-          const reactants = rxn.reactants;
-          const reactantCounts = reactantCountMaps[r];
+          for (let r = 0; r < concreteReactions.length; r++) {
+            const rxn = concreteReactions[r];
+            const k = rxn.rateConstant;
+            const reactants = rxn.reactants;
+            const reactantCounts = reactantCountMaps[r];
 
-          // For each unique reactant k in this reaction, compute ∂(velocity)/∂y_k
-          for (const [speciesK, orderK] of reactantCounts) {
-            let dVelocity_dyk: number;
+            // For each unique reactant k in this reaction, compute ∂(velocity)/∂y_k
+            for (const [speciesK, orderK] of reactantCounts) {
+              let dVelocity_dyk: number;
 
-            if (y[speciesK] > 1e-100) {
-              // Compute base velocity
-              let velocity = k;
-              for (let j = 0; j < reactants.length; j++) {
-                velocity *= y[reactants[j]];
-              }
-              // ∂velocity/∂y_k = orderK * velocity / y_k
-              dVelocity_dyk = orderK * velocity / y[speciesK];
-            } else {
-              // y_k ≈ 0: Compute derivative directly to avoid division by zero
-              if (orderK === 1) {
-                // Common case: first-order in y_k
-                let partialProduct = k;
+              if (y[speciesK] > 1e-100) {
+                // Compute base velocity
+                let velocity = k;
                 for (let j = 0; j < reactants.length; j++) {
-                  if (reactants[j] !== speciesK) {
-                    partialProduct *= y[reactants[j]];
-                  }
+                  velocity *= y[reactants[j]];
                 }
-                dVelocity_dyk = partialProduct;
+                // ∂velocity/∂y_k = orderK * velocity / y_k
+                dVelocity_dyk = orderK * velocity / y[speciesK];
               } else {
-                // Higher order and y_k ≈ 0: derivative is 0
-                dVelocity_dyk = 0;
+                // y_k ≈ 0: Compute derivative directly to avoid division by zero
+                if (orderK === 1) {
+                  // Common case: first-order in y_k
+                  let partialProduct = k;
+                  for (let j = 0; j < reactants.length; j++) {
+                    if (reactants[j] !== speciesK) {
+                      partialProduct *= y[reactants[j]];
+                    }
+                  }
+                  dVelocity_dyk = partialProduct;
+                } else {
+                  // Higher order and y_k ≈ 0: derivative is 0
+                  dVelocity_dyk = 0;
+                }
               }
-            }
 
-            // Update Jacobian: J[i][k] += stoich[i] * dVelocity_dyk
-            // Reactants have stoich = -1, products have stoich = +1
-            for (let j = 0; j < reactants.length; j++) {
-              J[reactants[j] + speciesK * numSpecies] -= dVelocity_dyk;
-            }
-            for (let j = 0; j < rxn.products.length; j++) {
-              J[rxn.products[j] + speciesK * numSpecies] += dVelocity_dyk;
+              // Update Jacobian: J[i][k] += stoich[i] * dVelocity_dyk
+              // Reactants have stoich = -1, products have stoich = +1
+              // Column-major: J[i + k*n], Row-major: J[i*n + k]
+              if (columnMajor) {
+                for (let j = 0; j < reactants.length; j++) {
+                  J[reactants[j] + speciesK * numSpecies] -= dVelocity_dyk;
+                }
+                for (let j = 0; j < rxn.products.length; j++) {
+                  J[rxn.products[j] + speciesK * numSpecies] += dVelocity_dyk;
+                }
+              } else {
+                // Row-major
+                for (let j = 0; j < reactants.length; j++) {
+                  J[reactants[j] * numSpecies + speciesK] -= dVelocity_dyk;
+                }
+                for (let j = 0; j < rxn.products.length; j++) {
+                  J[rxn.products[j] * numSpecies + speciesK] += dVelocity_dyk;
+                }
+              }
             }
           }
-        }
+        };
       };
 
-      console.log(`[Worker] Built analytical Jacobian for ${concreteReactions.length} mass-action reactions`);
+      jacobianColMajor = buildJacobian(true);
+      jacobianRowMajor = buildJacobian(false);
+
+      console.log(`[Worker] Built analytical Jacobians (col-major + row-major) for ${concreteReactions.length} mass-action reactions`);
     }
 
     // Log max initial concentration for debugging
@@ -1025,9 +1047,12 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       solver: solverType as 'auto' | 'cvode' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4',
     };
 
-    // Pass analytical Jacobian if available
-    if (jacobian && solverType === 'cvode_jac') {
-      solverOptions.jacobian = jacobian;
+    // Pass analytical Jacobian if available (correct format for each solver)
+    if (jacobianColMajor && solverType === 'cvode_jac') {
+      solverOptions.jacobian = jacobianColMajor;
+    }
+    if (jacobianRowMajor && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) {
+      solverOptions.jacobianRowMajor = jacobianRowMajor;
     }
 
     console.log('[Worker] ODE solver options (native BNG compatible):', solverOptions);

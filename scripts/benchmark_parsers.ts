@@ -63,7 +63,6 @@ for (const filePath of files) {
   // Measure New
   let newTime = 0;
   let newSuccess = false;
-  let errorMsg = '';
   try {
     const start = performance.now();
     parseNew(content);
@@ -71,7 +70,6 @@ for (const filePath of files) {
     newTime = end - start;
     newSuccess = true;
   } catch (e: any) {
-    errorMsg = e.message;
     // console.log(`New parser failed on ${filename}: ${e.message}`);
   }
   

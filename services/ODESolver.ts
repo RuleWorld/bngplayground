@@ -19,6 +19,7 @@ export interface SolverOptions {
   maxStep: number;        // Maximum step size
   initialStep?: number;   // Initial step size (if not provided, computed automatically)
   solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4';
+  jacobianRowMajor?: (y: Float64Array, J: Float64Array) => void;  // Row-major Jacobian for Rosenbrock
 }
 
 export interface SolverResult {
@@ -187,6 +188,7 @@ export class Rosenbrock23Solver {
   private n: number;
   private f: DerivativeFunction;
   private options: SolverOptions;
+  private externalJacobian?: (y: Float64Array, J: Float64Array) => void;  // Row-major external Jacobian
 
   // Reusable buffers
   private f0: Float64Array;
@@ -214,6 +216,7 @@ export class Rosenbrock23Solver {
     this.n = n;
     this.f = f;
     this.options = { ...DEFAULT_OPTIONS, ...options };
+    this.externalJacobian = options.jacobianRowMajor;  // Store external Jacobian if provided
 
     // Allocate buffers
     this.f0 = new Float64Array(n);
@@ -227,12 +230,24 @@ export class Rosenbrock23Solver {
     this.jacobian = new Float64Array(n * n);
     this.matrix = new Float64Array(n * n);
     this.luSolver = new LUSolver(n);
+    
+    if (this.externalJacobian) {
+      console.log('[Rosenbrock23] Using analytic Jacobian (row-major)');
+    }
   }
 
   /**
-   * Compute numerical Jacobian using finite differences
+   * Compute Jacobian - use external analytic Jacobian if provided, else finite differences
    */
   private computeJacobian(y: Float64Array, f0: Float64Array): void {
+    // Use analytic Jacobian if provided (much faster for large systems)
+    if (this.externalJacobian) {
+      this.externalJacobian(y, this.jacobian);
+      this.jacobianAge = 0;
+      return;
+    }
+    
+    // Fallback: numerical Jacobian using finite differences
     const n = this.n;
     const J = this.jacobian;
     const yTemp = this.yTemp;
