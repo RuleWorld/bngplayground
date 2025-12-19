@@ -109,69 +109,8 @@ export const buildContactMap = (
       }
     });
 
-    // Detect unbinding: bonds present in reactants but absent in products
-    reactantBonds.forEach((bondInfo, key) => {
-      if (productBonds.has(key)) {
-        return;
-      }
-
-      // This bond was broken by the rule
-      const sourceId = `${bondInfo.mol1}_${bondInfo.comp1}`;
-      const targetId = `${bondInfo.mol2}_${bondInfo.comp2}`;
-      const edgeKey = `unbind:${sourceId}->>${targetId}`;
-      if (!edgeMap.has(edgeKey)) {
-        edgeMap.set(edgeKey, {
-          from: sourceId,
-          to: targetId,
-          interactionType: 'unbinding',
-          componentPair: [bondInfo.comp1, bondInfo.comp2],
-          ruleIds: [],
-          ruleLabels: [],
-        });
-      }
-      const edge = edgeMap.get(edgeKey)!;
-      if (!edge.ruleIds.includes(ruleId)) {
-        edge.ruleIds.push(ruleId);
-        edge.ruleLabels.push(ruleLabel);
-      }
-    });
-
-    // Detect molecule conversions/transport (e.g. A -> B or A@cyto -> A@store)
-    // This is common in compartmental models where no binding occurs but species change type or location.
-    if (reactantGraphs.length === 1 && productGraphs.length === 1) {
-      const rMol = reactantGraphs[0].molecules[0];
-      const pMol = productGraphs[0].molecules[0];
-
-      // If we have single molecules on both sides
-      if (rMol && pMol) {
-        // Check if they are different molecules OR same molecule in different compartments
-        // Check if they are different molecules OR same molecule in different compartments
-        const differentName = rMol.name !== pMol.name;
-        const differentComp = rMol.compartment !== pMol.compartment;
-
-        if (differentName || differentComp) {
-          // Create an edge between the MOLECULES directly
-          const sourceId = rMol.name;
-          const targetId = pMol.name;
-          const edgeKey = `${sourceId}->${targetId}`;
-
-          if (!edgeMap.has(edgeKey)) {
-            edgeMap.set(edgeKey, {
-              from: sourceId,
-              to: targetId,
-              interactionType: 'state_change', // Re-using state_change style for conversions
-              ruleIds: [],
-              ruleLabels: [],
-            });
-          }
-          const edge = edgeMap.get(edgeKey)!;
-          if (!edge.ruleIds.includes(ruleId)) {
-            edge.ruleIds.push(ruleId);
-            edge.ruleLabels.push(ruleLabel);
-          }
-        }
-      }
-    }
+    // Note: BioNetGen contact maps only show BINDING edges
+    // They do NOT show unbinding, state changes, or molecule conversions
   });
 
   // Create compound nodes for molecules and component child nodes (BNG-style hierarchy)
@@ -248,7 +187,7 @@ export const buildContactMap = (
           const stateId = `${molIndex}.${compIndex}.${stateIndex}`;
           nodes.push({
             id: stateId,
-            label: stateName,
+            label: stateName, // Use state value (U, P, etc.) to match BioNetGen yED format
             parent: compId,
             type: 'state'
           });
@@ -282,8 +221,20 @@ export const buildContactMap = (
     // Filter out edges that reference non-existent nodes (e.g., Trash, 0)
     .filter(edge => nodeIdSet.has(edge.from) && nodeIdSet.has(edge.to));
 
+  // Deduplicate edges: ensure at most one edge between any pair of nodes
+  const seenEdgePairs = new Set<string>();
+  const deduplicatedEdges = remappedEdges.filter(edge => {
+    // Create a canonical key for the edge pair (order-independent)
+    const key = [edge.from, edge.to].sort().join('--');
+    if (seenEdgePairs.has(key)) {
+      return false;
+    }
+    seenEdgePairs.add(key);
+    return true;
+  });
+
   return {
     nodes,
-    edges: remappedEdges,
+    edges: deduplicatedEdges,
   };
 };

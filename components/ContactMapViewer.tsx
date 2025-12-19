@@ -1,10 +1,13 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useTheme } from '../hooks/useTheme';
 import cytoscape from 'cytoscape';
+import dagre from 'cytoscape-dagre';
 import type { ContactMap } from '../types/visualization';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
-import { colorFromName, foregroundForBackground } from '../services/visualization/colorUtils';
+
+// Register dagre layout for hierarchical display
+cytoscape.use(dagre);
 
 interface ContactMapViewerProps {
   contactMap: ContactMap;
@@ -12,18 +15,99 @@ interface ContactMapViewerProps {
   onSelectRule?: (ruleId: string) => void;
 }
 
-const BASE_LAYOUT = {
-  name: 'cose',
-  animate: false,
-  padding: 40,
-  componentSpacing: 80,
-  nodeRepulsion: 200000,
-  nestingFactor: 5,
-} as const;
+// Layout type options - all built-in Cytoscape layouts plus dagre
+type LayoutType = 'hierarchical' | 'cose' | 'grid' | 'concentric' | 'breadthfirst' | 'circle';
+
+// Layout configurations for different algorithms
+const LAYOUT_CONFIGS: Record<LayoutType, any> = {
+  hierarchical: {
+    name: 'dagre',
+    rankDir: 'TB', // Top-to-bottom hierarchy
+    nodeSep: 80,
+    rankSep: 120,
+    edgeSep: 20,
+    animate: true,
+    animationDuration: 400,
+    padding: 50,
+    fit: true,
+    spacingFactor: 1.5,
+  },
+  cose: {
+    name: 'cose',
+    animate: true,
+    animationDuration: 500,
+    padding: 50,
+    fit: true,
+    nodeRepulsion: 100000,
+    nodeOverlap: 20,
+    idealEdgeLength: 60,
+    nestingFactor: 1.2,
+    gravity: 80,
+    numIter: 1000,
+    nodeDimensionsIncludeLabels: true,
+    randomize: false,
+  },
+  grid: {
+    name: 'grid',
+    animate: true,
+    animationDuration: 300,
+    padding: 50,
+    fit: true,
+    avoidOverlap: true,
+    avoidOverlapPadding: 15,
+    condense: false,
+    nodeDimensionsIncludeLabels: true,
+  },
+  concentric: {
+    name: 'concentric',
+    animate: true,
+    animationDuration: 300,
+    padding: 50,
+    fit: true,
+    avoidOverlap: true,
+    minNodeSpacing: 50,
+    spacingFactor: 1.5,
+    nodeDimensionsIncludeLabels: true,
+    // Organize by node type (molecules outer, states inner)
+    concentric: (node: any) => {
+      const type = node.data('type');
+      if (type === 'molecule') return 3;
+      if (type === 'component') return 2;
+      return 1; // state
+    },
+    levelWidth: () => 1,
+  },
+  breadthfirst: {
+    name: 'breadthfirst',
+    directed: true,
+    animate: true,
+    animationDuration: 300,
+    padding: 50,
+    fit: true,
+    avoidOverlap: true,
+    spacingFactor: 1.5,
+    circle: false,
+    nodeDimensionsIncludeLabels: true,
+  },
+  circle: {
+    name: 'circle',
+    animate: true,
+    animationDuration: 300,
+    padding: 40,
+    fit: true,
+    avoidOverlap: true,
+    spacingFactor: 1.5,
+    nodeDimensionsIncludeLabels: true,
+  },
+};
+
+// Hierarchical layout configuration (yED-like) - used as default
+const BASE_LAYOUT = LAYOUT_CONFIGS.hierarchical;
 
 export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, selectedRuleId, onSelectRule }) => {
   const [theme] = useTheme();
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
+  const [activeLayout, setActiveLayout] = useState<LayoutType>('hierarchical');
   const containerRef = useRef<HTMLDivElement | null>(null);
   const cyRef = useRef<cytoscape.Core | null>(null);
 
@@ -53,15 +137,15 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
         {
           selector: 'node[type = "molecule"]',
           style: {
-            'background-color': '#EFEFEF', // BNG yEd standard
-            'border-color': '#999999',
+            'background-color': '#D2D2D2', // BNG yEd exact gray
+            'border-color': '#000000', // Black border
             'border-width': 1,
             'text-valign': 'top',
             'text-halign': 'center',
             label: 'data(label)',
-            shape: 'ellipse', // BNG yEd uses ellipse
+            shape: 'round-rectangle', // BNG yEd uses roundrectangle
             padding: '12px',
-            'font-size': 14,
+            'font-size': 12,
             'font-weight': 700, // bold
             color: '#000000',
           },
@@ -72,7 +156,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
             'background-color': '#eef2ff',
             'border-color': '#6366f1',
             'border-width': 2,
-            'border-style': 'dashed', // yEd group style often dashed
+            'border-style': 'dashed',
             'text-valign': 'top',
             'text-halign': 'center',
             label: 'data(label)',
@@ -84,65 +168,59 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
           },
         },
         {
-          selector: 'node[type = "component"]',
+          // Non-compound component nodes (leaf components without states)
+          selector: 'node[type = "component"][!isGroup]',
           style: {
-            'background-color': '#EFEFEF', // BNG yEd standard
-            'border-color': '#999999',
+            'background-color': '#FFFFFF', // BNG yEd exact white
+            'border-color': '#000000', // Black border
             'border-width': 1,
             width: 'label',
             height: 'label',
             padding: '6px',
             label: 'data(label)',
-            'font-size': 14, // BNG yEd standard
-            shape: 'ellipse', // BNG yEd uses ellipse
+            'font-size': 12, // BNG yEd standard
+            shape: 'round-rectangle', // BNG yEd uses roundrectangle
+            color: '#000000',
+          },
+        },
+        {
+          // Compound component nodes (components with child states)
+          selector: 'node[type = "component"][?isGroup]',
+          style: {
+            'background-color': '#FFFFFF', // BNG yEd exact white
+            'border-color': '#000000', // Black border
+            'border-width': 1,
+            'text-valign': 'top',
+            'text-halign': 'center',
+            label: 'data(label)',
+            'font-size': 12,
+            shape: 'round-rectangle',
+            padding: '10px',
             color: '#000000',
           },
         },
         {
           selector: 'node[type = "state"]',
           style: {
-            'background-color': '#FFF0A7', // BNG yEd standard yellow
-            'border-color': '#999999',
+            'background-color': '#FFCC00', // BNG yEd exact yellow
+            'border-color': '#000000', // Black border
             'border-width': 1,
             width: 'label',
             height: 'label',
             padding: '4px',
             label: 'data(label)',
-            'font-size': 14, // BNG yEd standard
-            shape: 'ellipse', // BNG yEd uses ellipse
+            'font-size': 12, // BNG yEd standard
+            shape: 'round-rectangle', // BNG yEd uses roundrectangle
             color: '#000000',
           },
         },
         {
           selector: 'edge',
           style: {
-            width: 2,
-            'curve-style': 'bezier',
-            'line-color': theme === 'dark' ? '#94A3B8' : '#64748B',
-            'target-arrow-shape': 'none', // Contact maps are undirected graphs
-          },
-        },
-        {
-          selector: 'edge[type = "binding"]',
-          style: {
-            'line-color': '#999999', // BNG yEd uses #999999 for bonds
             width: 1,
-          },
-        },
-        {
-          selector: 'edge[type = "state_change"]',
-          style: {
-            'line-color': '#0EA5E9',
-            'line-style': 'dashed',
-            width: 2,
-          },
-        },
-        {
-          selector: 'edge[type = "unbinding"]',
-          style: {
-            'line-color': '#EF4444',
-            'line-style': 'dotted',
-            width: 2,
+            'curve-style': 'bezier',
+            'line-color': '#000000', // BNG yEd uses black edges
+            'target-arrow-shape': 'none', // Contact maps are undirected graphs
           },
         },
         {
@@ -190,23 +268,15 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       return;
     }
     const elements = [
-      ...contactMap.nodes.map((node) => {
-        const bgColor = node.type === 'molecule' ? colorFromName(node.label) :
-          node.type === 'component' ? '#EFEFEF' :
-            node.type === 'state' ? '#FFF0A7' : '#fbbf24';
-        const fgColor = foregroundForBackground(bgColor);
-
-        return {
-          data: {
-            id: node.id,
-            label: node.label,
-            parent: node.parent,
-            type: node.type,
-            color: bgColor,
-            fgColor: fgColor,
-          },
-        };
-      }),
+      ...contactMap.nodes.map((node) => ({
+        data: {
+          id: node.id,
+          label: node.label,
+          parent: node.parent,
+          type: node.type,
+          isGroup: node.isGroup,
+        },
+      })),
       ...contactMap.edges.map((edge, index) => ({
         data: {
           id: `edge-${index}`,
@@ -228,40 +298,15 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     cy.layout({ ...BASE_LAYOUT }).run();
   }, [contactMap]);
 
-  const runLayout = async () => {
+  const runLayout = (layoutType: LayoutType = activeLayout) => {
     const cy = cyRef.current;
     if (!cy) return;
 
     setIsLayoutRunning(true);
-    let useFcose = false;
+    setActiveLayout(layoutType);
     try {
-      // Try dynamic import of cytoscape-fcose (optional); if present, register it
-      // @ts-ignore - optional dependency, types may not exist
-      const fcose = await import('cytoscape-fcose');
-      const plugin = (fcose as any).default ?? fcose;
-      if (plugin) cytoscape.use(plugin);
-      useFcose = true;
-    } catch (e) {
-      // ignore if fcose is not installed
-      // eslint-disable-next-line no-console
-      console.debug('fcose not found; falling back to cose layout');
-      useFcose = false;
-    }
-
-    try {
-      const layout = cy.layout({
-        name: useFcose ? 'fcose' : 'cose',
-        animate: true,
-        randomize: false,
-        fit: true,
-        padding: 30,
-        nodeDimensionsIncludeLabels: true,
-        tile: true,
-        // These settings help keep compound nodes together
-        idealEdgeLength: 50,
-        nodeRepulsion: 4500,
-        nestingFactor: 5, // Higher = children stay closer to parents
-      } as any);
+      const layoutConfig = LAYOUT_CONFIGS[layoutType];
+      const layout = cy.layout(layoutConfig);
       layout.run();
       layout.on('layoutstop', () => setIsLayoutRunning(false));
     } catch (err) {
@@ -294,6 +339,146 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     }
   };
 
+  // Generate yED-compatible GraphML export (matching BioNetGen format exactly)
+  const handleExportGraphML = () => {
+    const cy = cyRef.current;
+    if (!cy) return;
+
+    // BioNetGen yED colors
+    const nodeColors: Record<string, string> = {
+      molecule: '#D2D2D2',
+      component: '#FFFFFF',
+      state: '#FFCC00',
+      compartment: '#EEF2FF',
+    };
+
+    // Build node hierarchy map (parent -> children) and assign sequential IDs
+    const childrenMap = new Map<string, string[]>();
+    const nodeIdMap = new Map<string, string>(); // Map original ID to BNG-style ID (n0, n0::n0, etc.)
+    let rootIndex = 0;
+
+    // First pass: collect children
+    cy.nodes().forEach(node => {
+      const parentId = node.data('parent');
+      if (parentId) {
+        if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+        childrenMap.get(parentId)!.push(node.id());
+      }
+    });
+
+    // Assign BNG-style IDs (n0, n0::n0, n0::n0::n0)
+    const assignIds = (nodeId: string, parentBngId: string | null, childIdx: number) => {
+      const bngId = parentBngId ? `${parentBngId}::n${childIdx}` : `n${childIdx}`;
+      nodeIdMap.set(nodeId, bngId);
+      const children = childrenMap.get(nodeId) || [];
+      children.forEach((childId, idx) => assignIds(childId, bngId, idx));
+    };
+    cy.nodes().filter(n => !n.data('parent')).forEach(node => {
+      assignIds(node.id(), null, rootIndex++);
+    });
+
+    // Helper to escape XML special characters
+    const escapeXml = (str: string): string => {
+      return str
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&apos;');
+    };
+
+    // Generate GraphML content (matching BioNetGen format)
+    let graphml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:java="http://www.yworks.com/xml/yfiles-common/1.0/java" xmlns:sys="http://www.yworks.com/xml/yfiles-common/markup/primitives/2.0" xmlns:x="http://www.yworks.com/xml/yfiles-common/markup/2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml" xmlns:yed="http://www.yworks.com/xml/yed/3" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd">
+<key id="d0" for="node" yfiles.type="nodegraphics"/>
+<key id="d1" for="edge" yfiles.type="edgegraphics"/>
+  <graph edgedefault="directed" id="G">
+`;
+
+    // Helper to generate node XML
+    const generateNodeXML = (nodeId: string, indent: string = '    '): string => {
+      const node = cy.getElementById(nodeId);
+      const label = node.data('label') || nodeId;
+      const type = node.data('type') || 'molecule';
+      const color = nodeColors[type] || '#CCCCCC';
+      const hasChildren = childrenMap.has(nodeId);
+      const bngId = nodeIdMap.get(nodeId) || nodeId;
+      const isBold = type === 'molecule' || hasChildren;
+
+      if (hasChildren) {
+        // GroupNode for nodes with children (matches BioNetGen format)
+        let xml = `${indent}<node id="${bngId}" yfiles.foldertype="group">
+${indent}  <data key="d0">
+${indent}    <y:ProxyAutoBoundsNode>
+${indent}      <y:Realizers active="0">
+${indent}        <y:GroupNode>
+${indent}          <y:Fill color="${color}"/>
+${indent}          <y:BorderStyle color="#000000" type="" width="1"/>
+${indent}          <y:Shape type="roundrectangle"/>
+${indent}          <y:NodeLabel alignment="t" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="${isBold ? 'bold' : ''}" hasBackgroundColor="false" hasLineColor="false" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true">${escapeXml(label)}</y:NodeLabel>
+${indent}        </y:GroupNode>
+${indent}      </y:Realizers>
+${indent}    </y:ProxyAutoBoundsNode>
+${indent}  </data>
+${indent}  <graph id="${bngId}:" edgedefault="directed">
+`;
+        // Add children
+        for (const childId of childrenMap.get(nodeId)!) {
+          xml += generateNodeXML(childId, indent + '    ');
+        }
+        xml += `${indent}  </graph>
+${indent}</node>
+`;
+        return xml;
+      } else {
+        // ShapeNode for leaf nodes (matches BioNetGen format)
+        return `${indent}<node id="${bngId}">
+${indent}  <data key="d0">
+${indent}    <y:ShapeNode>
+${indent}      <y:Fill color="${color}"/>
+${indent}      <y:BorderStyle color="#000000" type="" width="1"/>
+${indent}      <y:Shape type="roundrectangle"/>
+${indent}      <y:NodeLabel alignment="c" autoSizePolicy="content" fontFamily="Dialog" fontSize="12" fontStyle="" hasBackgroundColor="false" hasLineColor="false" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true">${escapeXml(label)}</y:NodeLabel>
+${indent}    </y:ShapeNode>
+${indent}  </data>
+${indent}</node>
+`;
+      }
+    };
+
+    // Add root-level nodes (no parent)
+    cy.nodes().filter(n => !n.data('parent')).forEach(node => {
+      graphml += generateNodeXML(node.id());
+    });
+
+    // Add edges (using BNG-style node IDs)
+    cy.edges().forEach((edge, idx) => {
+      const sourceId = nodeIdMap.get(edge.source().id()) || edge.source().id();
+      const targetId = nodeIdMap.get(edge.target().id()) || edge.target().id();
+      graphml += `    <edge id="e${idx}" source="${sourceId}" target="${targetId}">
+      <data key="d1">
+        <y:PolyLineEdge>
+          <y:LineStyle color="#000000" type="line" width="1.0"/>
+          <y:Arrows source="none" target="none"/>
+        </y:PolyLineEdge>
+      </data>
+    </edge>
+`;
+    });
+
+    graphml += `  </graph>
+</graphml>`;
+
+    // Download the GraphML file
+    const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'contact_map.graphml';
+    a.click();
+    URL.revokeObjectURL(url);
+  };
+
   useEffect(() => {
     const cy = cyRef.current;
     if (!cy) {
@@ -318,50 +503,72 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
   return (
     <div className="flex flex-col h-full gap-2">
       {/* Toolbar */}
-      <div className="flex justify-end gap-2 bg-white dark:bg-slate-900 p-1 rounded-md border border-slate-200 dark:border-slate-700">
-        <Button variant="subtle" onClick={handleFit} className="text-xs h-8 px-3">Fit View</Button>
-        <Button variant="subtle" onClick={() => runLayout()} disabled={isLayoutRunning} className="text-xs h-8 px-3">
-          {isLayoutRunning ? <LoadingSpinner className="w-4 h-4" /> : 'Re-Layout'}
-        </Button>
-        <Button variant="primary" onClick={handleExportPNG} className="text-xs h-8 px-3">Export PNG</Button>
-        <Button variant="subtle" onClick={async () => {
-          // Try to export SVG; fall back to PNG if unsupported
-          const cy = cyRef.current;
-          if (!cy) return;
+      <div className="flex flex-wrap justify-between gap-2 bg-white dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700">
+        {/* Layout Buttons */}
+        <div className="flex items-center gap-1 flex-wrap">
+          <span className="text-xs text-slate-500 dark:text-slate-400">Layout:</span>
+          <Button variant={activeLayout === 'hierarchical' ? 'primary' : 'subtle'} onClick={() => runLayout('hierarchical')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Hierarchical (yED-like)">
+            {isLayoutRunning && activeLayout === 'hierarchical' ? <LoadingSpinner className="w-3 h-3" /> : '↓ Hierarchy'}
+          </Button>
+          <Button variant={activeLayout === 'cose' ? 'primary' : 'subtle'} onClick={() => runLayout('cose')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Force-Directed (avoids overlaps)">
+            {isLayoutRunning && activeLayout === 'cose' ? <LoadingSpinner className="w-3 h-3" /> : '⚡ Cose'}
+          </Button>
+          <Button variant={activeLayout === 'grid' ? 'primary' : 'subtle'} onClick={() => runLayout('grid')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Grid Layout">
+            {isLayoutRunning && activeLayout === 'grid' ? <LoadingSpinner className="w-3 h-3" /> : '▦ Grid'}
+          </Button>
+          <Button variant={activeLayout === 'concentric' ? 'primary' : 'subtle'} onClick={() => runLayout('concentric')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Concentric Rings">
+            {isLayoutRunning && activeLayout === 'concentric' ? <LoadingSpinner className="w-3 h-3" /> : '◎ Rings'}
+          </Button>
+          <Button variant={activeLayout === 'breadthfirst' ? 'primary' : 'subtle'} onClick={() => runLayout('breadthfirst')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Breadth-first Tree">
+            {isLayoutRunning && activeLayout === 'breadthfirst' ? <LoadingSpinner className="w-3 h-3" /> : '⊢ Tree'}
+          </Button>
+          <Button variant={activeLayout === 'circle' ? 'primary' : 'subtle'} onClick={() => runLayout('circle')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Circle Layout">
+            {isLayoutRunning && activeLayout === 'circle' ? <LoadingSpinner className="w-3 h-3" /> : '○ Circle'}
+          </Button>
+        </div>
+        <div className="flex items-center gap-1">
+          <Button variant="subtle" onClick={handleFit} className="text-xs h-7 px-2">Fit</Button>
+          <Button variant="subtle" onClick={handleExportPNG} className="text-xs h-7 px-2">PNG</Button>
+          <Button variant="subtle" onClick={handleExportGraphML} className="text-xs h-7 px-2" title="Export for yED Graph Editor">yED</Button>
+          <Button variant="subtle" onClick={async () => {
+            // Try to export SVG; fall back to PNG if unsupported
+            const cy = cyRef.current;
+            if (!cy) return;
 
-          try {
-            // eslint-disable-next-line @typescript-eslint/no-var-requires
-            // @ts-ignore optional dependency
-            const cySvg = await import('cytoscape-svg');
-            const plugin = (cySvg as any).default ?? cySvg;
-            if (plugin) cytoscape.use(plugin);
-            // @ts-ignore - extension introduces svg() method
-            const svgContent: string = cy.svg({ scale: 1, full: true });
-            const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a');
-            a.href = url;
-            a.download = 'contact_map.svg';
-            a.click();
-            URL.revokeObjectURL(url);
-            return;
-          } catch (svgErr) {
-            // fallback to PNG
             try {
-              const blob = cy.png({ output: 'blob', scale: 2, full: true }) as Blob;
+              // eslint-disable-next-line @typescript-eslint/no-var-requires
+              // @ts-ignore optional dependency
+              const cySvg = await import('cytoscape-svg');
+              const plugin = (cySvg as any).default ?? cySvg;
+              if (plugin) cytoscape.use(plugin);
+              // @ts-ignore - extension introduces svg() method
+              const svgContent: string = cy.svg({ scale: 1, full: true });
+              const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = 'contact_map.png';
+              a.download = 'contact_map.svg';
               a.click();
               URL.revokeObjectURL(url);
               return;
-            } catch (pngErr) {
-              // eslint-disable-next-line no-console
-              console.error('Export failed:', svgErr, pngErr);
+            } catch (svgErr) {
+              // fallback to PNG
+              try {
+                const blob = cy.png({ output: 'blob', scale: 2, full: true }) as Blob;
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'contact_map.png';
+                a.click();
+                URL.revokeObjectURL(url);
+                return;
+              } catch (pngErr) {
+                // eslint-disable-next-line no-console
+                console.error('Export failed:', svgErr, pngErr);
+              }
             }
-          }
-        }} className="text-xs h-8 px-3">Export SVG</Button>
+          }} className="text-xs h-7 px-3">Export SVG</Button>
+        </div>
       </div>
 
       {/* Graph Container */}
@@ -374,28 +581,20 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
         <h4 className="text-xs font-semibold text-slate-500 uppercase">Legend</h4>
         <div className="flex items-center gap-4 text-xs flex-wrap">
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#EFEFEF] border border-[#999999]" />
+            <div className="w-3 h-3 rounded bg-[#D2D2D2] border border-black" />
             <span className="text-slate-700 dark:text-slate-300">Molecule</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#EFEFEF] border border-[#999999]" />
+            <div className="w-3 h-3 rounded bg-white border border-black" />
             <span className="text-slate-700 dark:text-slate-300">Component</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-3 h-3 rounded-full bg-[#FFF0A7] border border-[#999999]" />
+            <div className="w-3 h-3 rounded bg-[#FFCC00] border border-black" />
             <span className="text-slate-700 dark:text-slate-300">State</span>
           </div>
           <div className="flex items-center gap-2">
-            <div className="w-6 h-0 border-t border-[#999999]" />
+            <div className="w-6 h-0 border-t border-black" />
             <span className="text-slate-700 dark:text-slate-300">Bond</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-0 border-t-2 border-red-400 border-dotted" />
-            <span className="text-slate-700 dark:text-slate-300">Unbinding</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-6 h-0 border-t-2 border-blue-400 border-dashed" />
-            <span className="text-slate-700 dark:text-slate-300">State Change</span>
           </div>
         </div>
       </div>

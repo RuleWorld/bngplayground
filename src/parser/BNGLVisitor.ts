@@ -195,9 +195,12 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         const compName = compNameNode.text;
         const stateList = compDef.state_list();
         if (stateList) {
-          // state_list.STRING() returns array (overloaded method)
-          const stateNodes = stateList.STRING() as any[];
-          const states = stateNodes.map(s => s.text);
+          // state_list can contain both STRING and INT tokens (e.g., Y~0~P where 0 is INT and P is STRING)
+          const stringNodes = stateList.STRING() as any[] || [];
+          const intNodes = stateList.INT() as any[] || [];
+          // Merge both arrays and extract text
+          const allStateNodes = [...stringNodes, ...intNodes];
+          const states = allStateNodes.map(s => s.text);
           components.push(`${compName}~${states.join('~')}`);
         } else {
           components.push(compName);
