@@ -18,16 +18,14 @@ import { Rxn } from '../src/services/graph/core/Rxn';
 import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
 // Using official ANTLR parser for bng2.pl parity (util polyfill added in vite.config.ts)
 import { parseBNGLStrict as parseBNGLModel } from '../src/parser/BNGLParserWrapper';
+// Conservation law detection for ODE system reduction (Catalyst.jl-inspired)
+import { findConservationLaws, createReducedSystem, type ConservationAnalysis } from '../src/services/ConservationLaws';
+import { createSolver } from './ODESolver';
 
 const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
-// Debug flag - set to false in production to suppress debug logs
-const DEBUG_WORKER = false;
-
-// Version marker (only log in debug mode)
-if (DEBUG_WORKER) {
-  console.log('[Worker] bnglWorker v2.1.1 - debug logging disabled by default');
-}
+// Version marker to verify updated code is loaded
+console.log('[Worker] bnglWorker v2.1.0 - products fix applied 2024-12-07');
 
 type JobState = {
   cancelled: boolean;
@@ -204,40 +202,13 @@ function matchMolecule(patMol: string, specMol: string): boolean {
   const patComps = patCompsStr.split(',').map(s => s.trim()).filter(Boolean);
   const specComps = specCompsStr.split(',').map(s => s.trim()).filter(Boolean);
 
-<<<<<<< Updated upstream
-  const parseComponent = (compStr: string): { name: string; state?: string; bonds: string[] } | null => {
-    // Examples:
-    //   Activation~No!0!1
-    //   Activation!+
-    //   p65!0
-    //   Location~Cytoplasm
-    const [nameAndState, ...bondParts] = compStr.split('!');
-    const [name, state] = nameAndState.split('~');
-    if (!name) return null;
-    const bonds = bondParts.filter(Boolean);
-    return { name, state: state || undefined, bonds };
-  };
-
-  if (DEBUG_MATCH) {
-    console.log(`[DEBUG matchMolecule] patComps=[${patComps.join(', ')}], specComps=[${specComps.join(', ')}]`);
-  }
-
-  // Every component in pattern must be satisfied by species
-  return patComps.every(pCompStr => {
-    const p = parseComponent(pCompStr);
-    if (!p) {
-      if (DEBUG_MATCH) console.log(`[DEBUG matchMolecule] Pattern component parse failed: "${pCompStr}"`);
-=======
   // Every component in pattern must be satisfied by species
   return patComps.every(pCompStr => {
     const pM = pCompStr.match(/^([A-Za-z0-9_]+)(?:~([A-Za-z0-9_?]+))?(?:!([0-9]+|\+|\?))?$/);
     if (!pM) {
->>>>>>> Stashed changes
       return false;
     }
-    const pName = p.name;
-    const pState = p.state;
-    const pBonds = p.bonds;
+    const [_, pName, pState, pBond] = pM;
 
     const sCompStr = specComps.find(s => {
       const sName = s.split(/[~!]/)[0];
@@ -248,11 +219,6 @@ function matchMolecule(patMol: string, specMol: string): boolean {
       return false;
     }
 
-<<<<<<< Updated upstream
-    const s = parseComponent(sCompStr);
-    if (!s) {
-      if (DEBUG_MATCH) console.log(`[DEBUG matchMolecule] Species component parse failed: "${sCompStr}"`);
-=======
     // BUG FIX: Handle !+ and !? wildcards in species string too
     const sM = sCompStr.match(/^([A-Za-z0-9_]+)(?:~([A-Za-z0-9_]+))?(?:!([0-9]+|\+|\?))?$/);
     if (!sM) {
@@ -261,32 +227,21 @@ function matchMolecule(patMol: string, specMol: string): boolean {
     const [__, _sName, sState, sBond] = sM;
 
     if (pState && pState !== sState) {
->>>>>>> Stashed changes
       return false;
     }
 
-    if (pState && pState !== s.state) {
-      if (DEBUG_MATCH) console.log(`[DEBUG matchMolecule] State mismatch: pattern="${pState}", species="${s.state}"`);
-      return false;
-    }
-
-    // Bond matching logic (BNGL semantics):
-    // - Numeric bond labels in patterns (e.g. !0, !1) are placeholders for connectivity
-    //   within the pattern; they do not need to equal the species bond IDs.
-    // - Therefore at molecule-level we enforce only bound/unbound/cardinality,
-    //   and defer connectivity checks to complex-level matching.
-    const hasAnyBondConstraint = pBonds.length > 0;
-    const wantsAny = pBonds.includes('?');
-    const wantsBound = pBonds.includes('+') || pBonds.some(b => /^\d+$/.test(b));
-    const numericCount = pBonds.filter(b => /^\d+$/.test(b)).length;
-
-    if (!hasAnyBondConstraint) {
-      if (s.bonds.length > 0) return false;
-    } else if (wantsAny) {
-      // matches anything
+    if (pBond) {
+      if (pBond === '?') {
+        // !? matches anything
+      } else if (pBond === '+') {
+        if (!sBond) return false;
+      } else {
+        // Specific bond ID (e.g. !1) - treat as "must be bound" for simple matching
+        if (!sBond) return false;
+      }
     } else {
-      if (wantsBound && s.bonds.length === 0) return false;
-      if (numericCount > 0 && s.bonds.length < numericCount) return false;
+      // No bond specified in pattern means "must be unbound"
+      if (sBond) return false;
     }
 
     return true;
@@ -316,41 +271,44 @@ function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
 
   if (patternMolecules.length > speciesMolecules.length) return false;
 
-  const parseComponents = (mol: string): Array<{ compName: string; state?: string; bonds: string[] }> => {
-    const compMatch = mol.match(/\(([^)]*)\)/);
-    if (!compMatch) return [];
-    const rawComps = compMatch[1].split(',').map(s => s.trim()).filter(Boolean);
-    const comps: Array<{ compName: string; state?: string; bonds: string[] }> = [];
-    for (const compStr of rawComps) {
-      const [nameAndState, ...bondParts] = compStr.split('!');
-      const [compName, state] = nameAndState.split('~');
-      if (!compName) continue;
-      const bonds = bondParts.filter(Boolean);
-      comps.push({ compName, state: state || undefined, bonds });
-    }
-    return comps;
-  };
+  // Parse bonds from pattern molecules: bondId -> [(molIdx, componentName)]
+  const patternBonds = new Map<string, Array<{ molIdx: number, compName: string }>>();
 
-  // patternBondLabel -> endpoints [(patMolIdx, compName)]
-  const patternBonds = new Map<string, Array<{ molIdx: number; compName: string }>>();
   for (let molIdx = 0; molIdx < patternMolecules.length; molIdx++) {
-    for (const comp of parseComponents(patternMolecules[molIdx])) {
-      for (const bond of comp.bonds) {
-        if (!/^\d+$/.test(bond)) continue;
-        if (!patternBonds.has(bond)) patternBonds.set(bond, []);
-        patternBonds.get(bond)!.push({ molIdx, compName: comp.compName });
+    const mol = patternMolecules[molIdx];
+    const compMatch = mol.match(/\(([^)]*)\)/);
+    if (!compMatch) continue;
+
+    const comps = compMatch[1].split(',');
+    for (const comp of comps) {
+      const bondMatch = comp.match(/([A-Za-z0-9_]+)(?:~[A-Za-z0-9_?]+)?!(\d+)/);
+      if (bondMatch) {
+        const [, compName, bondId] = bondMatch;
+        if (!patternBonds.has(bondId)) {
+          patternBonds.set(bondId, []);
+        }
+        patternBonds.get(bondId)!.push({ molIdx, compName });
       }
     }
   }
 
-  // speciesBondId -> endpoints [(specMolIdx, compName)]
-  const speciesBonds = new Map<string, Array<{ molIdx: number; compName: string }>>();
+  // Parse bonds from species molecules: bondId -> [(molIdx, componentName)]
+  const speciesBonds = new Map<string, Array<{ molIdx: number, compName: string }>>();
+
   for (let molIdx = 0; molIdx < speciesMolecules.length; molIdx++) {
-    for (const comp of parseComponents(speciesMolecules[molIdx])) {
-      for (const bond of comp.bonds) {
-        if (!/^\d+$/.test(bond)) continue;
-        if (!speciesBonds.has(bond)) speciesBonds.set(bond, []);
-        speciesBonds.get(bond)!.push({ molIdx, compName: comp.compName });
+    const mol = speciesMolecules[molIdx];
+    const compMatch = mol.match(/\(([^)]*)\)/);
+    if (!compMatch) continue;
+
+    const comps = compMatch[1].split(',');
+    for (const comp of comps) {
+      const bondMatch = comp.match(/([A-Za-z0-9_]+)(?:~[A-Za-z0-9_]+)?!(\d+)/);
+      if (bondMatch) {
+        const [, compName, bondId] = bondMatch;
+        if (!speciesBonds.has(bondId)) {
+          speciesBonds.set(bondId, []);
+        }
+        speciesBonds.get(bondId)!.push({ molIdx, compName });
       }
     }
   }
@@ -360,44 +318,39 @@ function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
 
   const findMatch = (patIdx: number, patToSpecMap: Map<number, number>): boolean => {
     if (patIdx >= patternMolecules.length) {
-      // All pattern molecules assigned - now verify bond connectivity with bond-ID remapping.
-      const patBondKeys = Array.from(patternBonds.keys()).filter(k => (patternBonds.get(k)?.length ?? 0) === 2);
-      const candidates = new Map<string, string[]>();
+      // All pattern molecules assigned - now verify bond connectivity
+      for (const [bondId, patEndpoints] of patternBonds) {
+        if (patEndpoints.length !== 2) continue; // Skip malformed bonds
 
-      for (const patBondId of patBondKeys) {
-        const [ep1, ep2] = patternBonds.get(patBondId)!;
+        const [ep1, ep2] = patEndpoints;
         const specMolIdx1 = patToSpecMap.get(ep1.molIdx);
         const specMolIdx2 = patToSpecMap.get(ep2.molIdx);
-        if (specMolIdx1 === undefined || specMolIdx2 === undefined) return false;
 
-        const cand: string[] = [];
-        for (const [specBondId, specEndpoints] of speciesBonds) {
+        if (specMolIdx1 === undefined || specMolIdx2 === undefined) {
+          return false; // Pattern bond endpoints not mapped
+        }
+
+        // Find a species bond that connects these two species molecules at the same component names
+        let foundMatchingBond = false;
+        for (const [, specEndpoints] of speciesBonds) {
           if (specEndpoints.length !== 2) continue;
+
           const [se1, se2] = specEndpoints;
-          const ok =
-            (se1.molIdx === specMolIdx1 && se1.compName === ep1.compName && se2.molIdx === specMolIdx2 && se2.compName === ep2.compName) ||
-            (se1.molIdx === specMolIdx2 && se1.compName === ep2.compName && se2.molIdx === specMolIdx1 && se2.compName === ep1.compName);
-          if (ok) cand.push(specBondId);
+          // Check if species bond matches pattern bond (in either order)
+          if ((se1.molIdx === specMolIdx1 && se1.compName === ep1.compName &&
+            se2.molIdx === specMolIdx2 && se2.compName === ep2.compName) ||
+            (se1.molIdx === specMolIdx2 && se1.compName === ep2.compName &&
+              se2.molIdx === specMolIdx1 && se2.compName === ep1.compName)) {
+            foundMatchingBond = true;
+            break;
+          }
         }
-        if (cand.length === 0) return false;
-        candidates.set(patBondId, cand);
+
+        if (!foundMatchingBond) {
+          return false; // Pattern bond not matched by any species bond
+        }
       }
-
-      const usedSpecBondIds = new Set<string>();
-      const bondIds = Array.from(candidates.keys()).sort((a, b) => (candidates.get(a)!.length - candidates.get(b)!.length));
-      const assign = (i: number): boolean => {
-        if (i >= bondIds.length) return true;
-        const patBondId = bondIds[i];
-        for (const specBondId of candidates.get(patBondId)!) {
-          if (usedSpecBondIds.has(specBondId)) continue;
-          usedSpecBondIds.add(specBondId);
-          if (assign(i + 1)) return true;
-          usedSpecBondIds.delete(specBondId);
-        }
-        return false;
-      };
-
-      return assign(0);
+      return true; // All pattern bonds verified
     }
 
     const patMol = patternMolecules[patIdx];
@@ -458,23 +411,30 @@ function countPatternMatches(speciesStr: string, patternStr: string): number {
 // Evaluates a rate expression that may contain observable names and function calls
 // at runtime using current observable values
 
-// Rate evaluation (inline expansion in evaluateFunctionalRate)
+// PERFORMANCE OPTIMIZATION: Cache for pre-expanded expressions (function calls replaced)
+const expandedExpressionCache: Map<string, string> = new Map();
 
-function evaluateFunctionalRate(
+// PERFORMANCE OPTIMIZATION: Pre-compile expressions into functions
+// These functions take context as argument and return the rate
+const compiledRateFunctions: Map<string, (context: Record<string, number>) => number> = new Map();
+
+function preExpandExpression(
   expression: string,
-  parameters: Record<string, number>,
-  observableValues: Record<string, number>,
   functions?: { name: string; args: string[]; expression: string }[]
-): number {
-  // Build context with parameters and observable values
-  const context: Record<string, number> = { ...parameters, ...observableValues };
+): string {
+  // Check cache first
+  const cacheKey = expression;
+  const cached = expandedExpressionCache.get(cacheKey);
+  if (cached !== undefined) return cached;
 
-  // Pre-expand function calls in the expression
+  // First, replace function calls with their expanded expressions
   let expandedExpr = expression;
   if (functions && functions.length > 0) {
+    // Repeatedly expand function calls (handles nested calls)
     for (let pass = 0; pass < 10; pass++) {
       let foundFunction = false;
       for (const func of functions) {
+        // Match function_name() - zero-argument functions
         const funcCallPattern = new RegExp(`\\b${func.name}\\s*\\(\\s*\\)`, 'g');
         if (funcCallPattern.test(expandedExpr)) {
           foundFunction = true;
@@ -488,25 +448,78 @@ function evaluateFunctionalRate(
   // Replace ^ with ** for JavaScript exponentiation
   expandedExpr = expandedExpr.replace(/\^/g, '**');
 
-  // Sort variable names by length (longest first) to avoid partial replacements
-  const varNames = Object.keys(context).sort((a, b) => b.length - a.length);
+  expandedExpressionCache.set(cacheKey, expandedExpr);
+  return expandedExpr;
+}
 
-  // Build JavaScript expression with context lookups
+function getCompiledRateFunction(
+  expandedExpr: string,
+  varNames: string[]
+): (context: Record<string, number>) => number {
+  // Check cache first
+  const cached = compiledRateFunctions.get(expandedExpr);
+  if (cached !== undefined) return cached;
+
+  // Build a function that evaluates the expression using context lookup
+  // Sort by length (longest first) to avoid partial replacements
+  const sortedNames = [...varNames].sort((a, b) => b.length - a.length);
+
+  // Build expression that uses context lookups instead of direct variable values
   let jsExpr = expandedExpr;
-  for (const name of varNames) {
+  for (const name of sortedNames) {
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     jsExpr = jsExpr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), `ctx["${name}"]`);
   }
 
   try {
-    const fn = new Function('ctx', `return ${jsExpr};`) as (ctx: Record<string, number>) => number;
+    // Compile once and cache - this is the critical optimization
+    const fn = new Function('ctx', `return ${jsExpr};`) as (context: Record<string, number>) => number;
+    compiledRateFunctions.set(expandedExpr, fn);
+    return fn;
+  } catch (e: any) {
+    console.warn(`[getCompiledRateFunction] Failed to compile '${expandedExpr}': ${e.message}`);
+    // Return a function that always returns 0
+    const zeroFn = () => 0;
+    compiledRateFunctions.set(expandedExpr, zeroFn);
+    return zeroFn;
+  }
+}
+
+function evaluateFunctionalRate(
+  expression: string,
+  parameters: Record<string, number>,
+  observableValues: Record<string, number>,
+  functions?: { name: string; args: string[]; expression: string }[]
+): number {
+  // Build context with parameters and observable values
+  const context: Record<string, number> = { ...parameters, ...observableValues };
+
+  // Get pre-expanded expression (cached)
+  const expandedExpr = preExpandExpression(expression, functions);
+
+  // Get compiled function (cached)
+  const varNames = Object.keys(context);
+  const fn = getCompiledRateFunction(expandedExpr, varNames);
+
+  try {
     const result = fn(context);
-    return typeof result === 'number' && !isNaN(result) ? result : 0;
+    if (typeof result !== 'number' || !isFinite(result)) {
+      console.warn(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
+      return 0;
+    }
+    return result;
   } catch (e: any) {
     console.warn(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e.message}`);
     return 0;
   }
 }
+
+function parseBNGL(jobId: number, bnglCode: string): BNGLModel {
+  ensureNotCancelled(jobId);
+  return parseBNGLModel(bnglCode);
+}
+
+
 
 async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Promise<BNGLModel> {
   console.log('[Worker] Starting network generation for model with', inputModel.species.length, 'species and', inputModel.reactionRules.length, 'rules');
@@ -525,20 +538,6 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     seedConcentrationMap.set(canonicalName, s.initialConcentration);
   });
 
-<<<<<<< Updated upstream
-  // Debug logging gated by DEBUG_WORKER flag
-  if (DEBUG_WORKER) {
-    const hasp53 = Array.from(seedConcentrationMap.keys()).some(k => k.toLowerCase().includes('p53'));
-    if (!hasp53) {
-      console.log('[Worker DEBUG] NO p53 in seeds! Showing all seed species:');
-      seedConcentrationMap.forEach((conc, name) => {
-        console.log(`[Worker DEBUG]   "${name}" -> conc=${conc}`);
-      });
-    }
-  }
-
-=======
->>>>>>> Stashed changes
   const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
 
   // Create sets for detecting functional rates (observables and functions)
@@ -642,8 +641,7 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     compartments: inputModel.compartments?.map(c => ({
       name: c.name,
       dimension: c.dimension,
-      size: c.size,
-      parent: c.parent
+      size: c.size
     }))
   });
 
@@ -657,31 +655,14 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     }
   };
 
-<<<<<<< Updated upstream
-  if (DEBUG_WORKER) console.log('[Worker DEBUG] About to call generator.generate() with', seedSpecies.length, 'seeds and', rules.length, 'rules');
-
-=======
->>>>>>> Stashed changes
   let result: { species: Species[]; reactions: Rxn[] };
   try {
     result = await generator.generate(seedSpecies, rules, progressCallback);
   } catch (e: any) {
-<<<<<<< Updated upstream
-    if (DEBUG_WORKER) {
-      console.error('[Worker DEBUG] generator.generate() FAILED with error:', e.message);
-      console.error('[Worker DEBUG] Full stack trace:', e.stack);
-    }
-    throw e;
-  }
-
-  if (DEBUG_WORKER) console.log('[Worker DEBUG] generator.generate() completed. Generated', result.species.length, 'species and', result.reactions.length, 'reactions');
-
-=======
     console.error('[Worker] generator.generate() FAILED:', e.message);
     throw e;
   }
 
->>>>>>> Stashed changes
   const generatedSpecies = result.species.map((s: Species) => {
     const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
     const concentration = seedConcentrationMap.get(canonicalName) || (s.concentration || 0);
@@ -701,11 +682,7 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
       };
       return reaction;
     } catch (e: any) {
-<<<<<<< Updated upstream
-      if (DEBUG_WORKER) console.error(`[Worker DEBUG] Error mapping reaction ${idx}:`, e.message);
-=======
       console.error(`[Worker] Error mapping reaction ${idx}:`, e.message);
->>>>>>> Stashed changes
       throw e;
     }
   });
@@ -716,10 +693,6 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     reactions: generatedReactions,
   };
 
-<<<<<<< Updated upstream
-  if (DEBUG_WORKER) console.log('[Worker DEBUG] generatedModel built successfully');
-=======
->>>>>>> Stashed changes
   return generatedModel;
 }
 
@@ -769,23 +742,6 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
   model.species.forEach((s, i) => speciesMap.set(s.name, i));
   const numSpecies = model.species.length;
 
-<<<<<<< Updated upstream
-  // DEBUG: Log initial species (gated)
-  if (DEBUG_WORKER) {
-    console.log('[Worker] Total species:', numSpecies);
-    model.species.slice(0, 5).forEach((s, idx) => console.log(`[Worker] Species ${idx}: ${s.name} (conc=${s.initialConcentration})`));
-
-    // DEBUG: Show all p53-related species vs p53 observable patterns
-    const p53Species = model.species.filter(s => s.name.toLowerCase().includes('p53'));
-    const p53Observables = model.observables.filter(o => o.name.toLowerCase().includes('p53'));
-    console.log(`[Worker DEBUG] === p53 SPECIES (${p53Species.length} found) ===`);
-    p53Species.forEach(s => console.log(`[Worker DEBUG]   Species: "${s.name}"`));
-    console.log(`[Worker DEBUG] === p53 OBSERVABLES (${p53Observables.length} found) ===`);
-    p53Observables.forEach(o => console.log(`[Worker DEBUG]   Observable "${o.name}": pattern="${o.pattern}"`));
-  }
-
-=======
->>>>>>> Stashed changes
   // 2. Pre-process Reactions into Concrete Indices
   // Detect functional rates (containing observables or function calls) that need dynamic evaluation
   const observableNames = new Set(model.observables.map(o => o.name));
@@ -859,58 +815,9 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
   // Count functional rates for logging
   const functionalRateCount = concreteReactions.filter(r => r.isFunctionalRate).length;
   if (functionalRateCount > 0) {
-<<<<<<< Updated upstream
-    console.log(`[Worker] ${functionalRateCount} of ${concreteReactions.length} reactions have functional rates (require dynamic evaluation)`);
-    // Debug: show first few functional rates
-    concreteReactions.filter(r => r.isFunctionalRate).slice(0, 3).forEach((r, i) => {
-      console.log(`[Worker] Functional rate ${i}: expr="${r.rateExpression}"`);
-    });
-  } else {
-    console.log('[Worker] WARNING: No functional rates detected. Checking raw rate expressions...');
-    // Log first few rate expressions to debug
-    model.reactions.slice(0, 10).forEach((r, idx) => {
-      console.log(`[Worker] Reaction ${idx} raw rate="${r.rate}" rateConstant=${r.rateConstant}`);
-    });
-  }
-
-  // DEBUG: Log reactions (gated)
-  if (DEBUG_WORKER) {
-    console.log('[Worker] Total reactions:', concreteReactions.length);
-    concreteReactions.slice(0, 5).forEach((r, idx) => console.log(`[Worker] Rxn ${idx}: k=${r.rateConstant} reactants=[${r.reactants}] products=[${r.products}]`));
-
-    // DEBUG: Log ALL p53-related reactions (synthesis, degradation, modification)
-    // p53 species indices are [19, 45, 46, 50] based on earlier debug
-    const p53Indices = new Set([19, 45, 46, 50]);
-    console.log('[Worker DEBUG] === ALL P53-RELATED REACTIONS ===');
-    concreteReactions.forEach((r, idx) => {
-      const involvesP53 = [...r.reactants].some(i => p53Indices.has(i)) ||
-        [...r.products].some(i => p53Indices.has(i));
-      if (involvesP53) {
-        const reactantNames = [...r.reactants].map(i => model.species[i]?.name || `?${i}`).join(' + ') || '0';
-        const productNames = [...r.products].map(i => model.species[i]?.name || `?${i}`).join(' + ') || '0';
-        const rateInfo = r.isFunctionalRate ? `FUNC:"${r.rateExpression}"` : `k=${r.rateConstant}`;
-        console.log(`[Worker DEBUG] Rxn ${idx}: ${reactantNames} -> ${productNames}  ${rateInfo}`);
-      }
-    });
-
-    // DEBUG: Log reactions that produce RAS-GTP (Species[2]) for GEF mechanism analysis
-    console.log('[Worker DEBUG] === REACTIONS PRODUCING/CONSUMING SPECIES[2] (RAS-GTP) ===');
-    concreteReactions.forEach((r, idx) => {
-      const involvesRasGTP = [...r.reactants].includes(2) || [...r.products].includes(2);
-      if (involvesRasGTP) {
-        const reactantNames = [...r.reactants].map(i => model.species[i]?.name || `?${i}`).join(' + ') || '0';
-        const productNames = [...r.products].map(i => model.species[i]?.name || `?${i}`).join(' + ') || '0';
-        const roleInfo = r.products.includes(2) ? 'PRODUCES[2]' : 'CONSUMES[2]';
-        console.log(`[Worker DEBUG] Rxn ${idx}: ${reactantNames} -> ${productNames}  k=${r.rateConstant} ${roleInfo}`);
-      }
-    });
-  }
-
-=======
     console.log(`[Worker] ${functionalRateCount} of ${concreteReactions.length} reactions have functional rates`);
   }
 
->>>>>>> Stashed changes
   // 3. Pre-process Observables (Cache matching species indices and coefficients)
   const concreteObservables = model.observables.map(obs => {
     // Split pattern by comma to handle multiple patterns (e.g. "A,B" or "pattern1, pattern2")
@@ -962,60 +869,10 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     };
   });
 
-<<<<<<< Updated upstream
-  // DEBUG: Log observables
-  concreteObservables.forEach(obs => {
-    console.log(`[Worker] Observable ${obs.name} matches ${obs.indices.length} species`);
-    // Debug logging for specific observables (gated)
-    if (DEBUG_WORKER) {
-      if (obs.name === 'p53_tot') {
-        console.log(`[Worker DEBUG p53_tot] Indices: [${Array.from(obs.indices).join(', ')}]`);
-        console.log(`[Worker DEBUG p53_tot] Coefficients: [${Array.from(obs.coefficients).join(', ')}]`);
-        Array.from(obs.indices).forEach((idx, j) => {
-          const species = model.species[idx];
-          console.log(`[Worker DEBUG p53_tot]   Species ${idx}: "${species.name}" conc=${species.initialConcentration} coeff=${obs.coefficients[j]}`);
-        });
-      }
-
-      if (obs.name.startsWith('Species')) {
-        const obsInfo = model.observables.find(o => o.name === obs.name);
-        console.log(`[Worker DEBUG] Observable ${obs.name} pattern="${obsInfo?.pattern}" matches ${obs.indices.length} species:`);
-        Array.from(obs.indices).forEach((idx, j) => {
-          const species = model.species[idx];
-          console.log(`[Worker DEBUG]   -> Species[${idx}]: "${species.name}" initialConc=${species.initialConcentration} coeff=${obs.coefficients[j]}`);
-        });
-      }
-
-      if (obs.indices.length === 0) {
-        console.warn(`[Worker] WARNING: Observable ${obs.name} matches NO species`);
-        const obsInfo = model.observables.find(o => o.name === obs.name);
-        if (obsInfo) {
-          console.log(`[Worker DEBUG] Observable ${obs.name} pattern: "${obsInfo.pattern}"`);
-          console.log(`[Worker DEBUG] Species samples (first 5):`);
-          model.species.slice(0, 5).forEach((s, idx) => {
-            console.log(`[Worker DEBUG]   Species ${idx}: "${s.name}"`);
-          });
-        }
-      }
-    }
-  });
-
-=======
->>>>>>> Stashed changes
   // 4. Initialize State Vector (Float64Array for speed)
   const state = new Float64Array(numSpecies);
-  model.species.forEach((s, idx) => state[idx] = s.initialConcentration);
+  model.species.forEach((s, i) => state[i] = s.initialConcentration);
 
-<<<<<<< Updated upstream
-  // DEBUG: Check initial state (gated)
-  if (DEBUG_WORKER) {
-    let totalConc = 0;
-    for (let idx = 0; idx < numSpecies; idx++) totalConc += state[idx];
-    console.log('[Worker] Total initial concentration:', totalConc);
-  }
-
-=======
->>>>>>> Stashed changes
   const data: Record<string, number>[] = [];
   const speciesData: Record<string, number>[] = [];
 
@@ -1710,7 +1567,7 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
     registerJob(id);
     try {
       const code = typeof payload === 'string' ? payload : '';
-      const model = parseBNGLModel(code);
+      const model = parseBNGL(id, code);
       const response: WorkerResponse = { id, type: 'parse_success', payload: model };
       ctx.postMessage(response);
     } catch (error) {

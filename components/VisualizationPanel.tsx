@@ -106,11 +106,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <Tab>Identifiability</Tab>
             <Tab>Steady State</Tab>
             <Tab>Parameter Scan</Tab>
-<<<<<<< Updated upstream
             <Tab>Parameter Estimation</Tab>
-=======
-            <Tab>Param Estimation</Tab>
->>>>>>> Stashed changes
             <Tab>Flux Analysis</Tab>
             <Tab>Verification</Tab>
             {/* <Tab>Robustness</Tab> */}
@@ -161,11 +157,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               <ParameterScanTab model={model} />
             </TabPanel>
             <TabPanel>
-<<<<<<< Updated upstream
-              <div className="mb-3 text-sm text-slate-600 dark:text-slate-400">Parameter Estimation – Bayesian inference of model parameters from experimental data</div>
-=======
               <div className="mb-3 text-sm text-slate-600 dark:text-slate-400">Parameter Estimation – fit parameters to experimental data using variational inference</div>
->>>>>>> Stashed changes
               <ParameterEstimationTab model={model} />
             </TabPanel>
             <TabPanel>
