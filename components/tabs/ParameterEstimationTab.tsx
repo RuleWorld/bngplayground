@@ -1,11 +1,13 @@
-// components/tabs/ParameterEstimationTab.tsx
-// Parameter Estimation Tab using Variational Inference
-
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Cell } from 'recharts';
 import { BNGLModel } from '../../types';
-import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
+import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { Card } from '../ui/Card';
+import { DataTable } from '../ui/DataTable';
+import { CHART_COLORS } from '../../constants';
 
 interface ParameterEstimationTabProps {
   model: BNGLModel | null;
@@ -71,148 +73,174 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
   const [nSamples, setNSamples] = useState('5');
   
   // Results
+  const [result, setResult] = useState<EstimationResult | null>(null);
   const [isRunning, setIsRunning] = useState(false);
-  const [results, setResults] = useState<EstimationResult | null>(null);
+  const [progress, setProgress] = useState({ current: 0, total: 0, elbo: 0 });
   const [error, setError] = useState<string | null>(null);
-
-  // Get parameter names from model
-  const parameterNames = useMemo(() => {
-    if (!model?.parameters) return [];
-    return Object.keys(model.parameters);
-  }, [model]);
-
-  // Get observable names from model
-  const observableNames = useMemo(() => {
-    if (!model?.observables) return [];
-    return model.observables.map(o => o.name);
-  }, [model]);
-
-  // Update priors when selected params change
+  
+  // Refs
+  const isMountedRef = useRef(true);
+  const abortControllerRef = useRef<AbortController | null>(null);
+  
+  const parameterNames = useMemo(() => (model ? Object.keys(model.parameters) : []), [model]);
+  const observableNames = useMemo(() => (model ? model.observables.map(o => o.name) : []), [model]);
+  
+  // Initialize selected parameters when model changes
   useEffect(() => {
-    const newPriors: ParameterPrior[] = selectedParams.map(name => {
-      const existing = priors.find(p => p.name === name);
-      if (existing) return existing;
-      
-      const currentValue = model?.parameters[name] ?? 1;
+    if (!model) {
+      setSelectedParams([]);
+      setPriors([]);
+      setResult(null);
+      return;
+    }
+    
+    // Select first few parameters by default
+    const defaultSelected = parameterNames.slice(0, Math.min(3, parameterNames.length));
+    setSelectedParams(defaultSelected);
+    
+    // Initialize priors from model values
+    const initialPriors: ParameterPrior[] = defaultSelected.map(name => {
+      const value = model.parameters[name] ?? 1;
       return {
         name,
-        mean: currentValue,
-        std: Math.abs(currentValue) * 0.5 || 0.5,
-        min: 0,
-        max: currentValue * 10 || 10
+        mean: value,
+        std: Math.abs(value) * 0.5 || 0.1,
+        min: Math.max(0, value * 0.1),
+        max: value * 10
       };
     });
-    setPriors(newPriors);
-  }, [selectedParams, model]);
-
-  // Parse experimental data
+    setPriors(initialPriors);
+  }, [model, parameterNames]);
+  
+  // Update priors when selected parameters change
   useEffect(() => {
-    if (!dataInput.trim()) {
+    if (!model) return;
+    
+    setPriors(prev => {
+      const newPriors: ParameterPrior[] = selectedParams.map(name => {
+        const existing = prev.find(p => p.name === name);
+        if (existing) return existing;
+        
+        const value = model.parameters[name] ?? 1;
+        return {
+          name,
+          mean: value,
+          std: Math.abs(value) * 0.5 || 0.1,
+          min: Math.max(0, value * 0.1),
+          max: value * 10
+        };
+      });
+      return newPriors;
+    });
+  }, [selectedParams, model]);
+  
+  // Parse experimental data
+  const parseData = useCallback((input: string) => {
+    if (!input.trim()) {
       setParsedData([]);
       setDataError(null);
       return;
     }
-
+    
     try {
-      const lines = dataInput.split('\n')
-        .map(l => l.trim())
-        .filter(l => l && !l.startsWith('#'));
-      
+      const lines = input.split('\n').filter(line => line.trim() && !line.trim().startsWith('#'));
       if (lines.length === 0) {
         setParsedData([]);
         setDataError(null);
         return;
       }
-
-      // Parse header (first line with column names)
-      const firstLine = lines[0];
-      const headerMatch = firstLine.match(/^[a-zA-Z]/);
       
-      let headers: string[];
-      let dataLines: string[];
+      const data: ExperimentalDataPoint[] = [];
+      const headers: string[] = [];
       
-      if (headerMatch) {
-        headers = firstLine.split(',').map(h => h.trim());
-        dataLines = lines.slice(1);
-      } else {
-        // No header, use generic names
-        const numCols = firstLine.split(',').length;
-        headers = ['time', ...Array(numCols - 1).fill(0).map((_, i) => `Observable${i + 1}`)];
-        dataLines = lines;
+      for (let i = 0; i < lines.length; i++) {
+        const parts = lines[i].split(',').map(s => s.trim());
+        
+        if (i === 0 && isNaN(parseFloat(parts[0]))) {
+          // Header row
+          headers.push(...parts.slice(1));
+          continue;
+        }
+        
+        const time = parseFloat(parts[0]);
+        if (isNaN(time)) {
+          throw new Error(`Invalid time value on line ${i + 1}`);
+        }
+        
+        const values: Record<string, number> = {};
+        for (let j = 1; j < parts.length; j++) {
+          const value = parseFloat(parts[j]);
+          if (isNaN(value)) {
+            throw new Error(`Invalid value on line ${i + 1}, column ${j + 1}`);
+          }
+          const key = headers[j - 1] || `Observable${j}`;
+          values[key] = value;
+        }
+        
+        data.push({ time, values });
       }
-
-      const parsed: ExperimentalDataPoint[] = dataLines.map((line, idx) => {
-        const values = line.split(',').map(v => parseFloat(v.trim()));
-        if (values.some(isNaN)) {
-          throw new Error(`Invalid number on line ${idx + 1}`);
-        }
-        
-        const dataPoint: ExperimentalDataPoint = {
-          time: values[0],
-          values: {}
-        };
-        
-        for (let i = 1; i < values.length && i < headers.length; i++) {
-          dataPoint.values[headers[i]] = values[i];
-        }
-        
-        return dataPoint;
-      });
-
-      setParsedData(parsed);
+      
+      setParsedData(data);
       setDataError(null);
-    } catch (e: any) {
-      setDataError(e.message);
+    } catch (err) {
+      setDataError(err instanceof Error ? err.message : 'Failed to parse data');
       setParsedData([]);
     }
-  }, [dataInput]);
-
-  const handleParamToggle = (name: string) => {
-    setSelectedParams(prev => 
-      prev.includes(name) 
-        ? prev.filter(p => p !== name)
-        : [...prev, name]
-    );
+  }, []);
+  
+  useEffect(() => {
+    parseData(dataInput);
+  }, [dataInput, parseData]);
+  
+  const handleParamToggle = (paramName: string) => {
+    setSelectedParams(prev => {
+      if (prev.includes(paramName)) {
+        return prev.filter(p => p !== paramName);
+      }
+      return [...prev, paramName];
+    });
   };
-
+  
   const updatePrior = (name: string, field: keyof ParameterPrior, value: number) => {
     setPriors(prev => prev.map(p => 
       p.name === name ? { ...p, [field]: value } : p
     ));
   };
-
-  const runEstimation = async () => {
-    if (selectedParams.length === 0) {
-      setError('Please select at least one parameter to estimate');
-      return;
-    }
+  
+  const canRun = selectedParams.length > 0 && parsedData.length > 0 && !isRunning;
+  
+  const handleRunEstimation = async () => {
+    if (!canRun || !model) return;
     
-    if (parsedData.length === 0) {
-      setError('Please provide experimental data');
-      return;
-    }
-
-    setIsRunning(true);
     setError(null);
-    setResults(null);
-
+    setResult(null);
+    setIsRunning(true);
+    setProgress({ current: 0, total: parseInt(nIterations), elbo: 0 });
+    
+    const controller = new AbortController();
+    abortControllerRef.current = controller;
+    
     try {
-      // Import TensorFlow.js and the estimator dynamically
-      const tf = await import('@tensorflow/tfjs');
-      const { VariationalParameterEstimator } = await import('../../src/services/ParameterEstimation');
-
-      // Prepare data for estimator
+      // Dynamically import TensorFlow.js and estimation module
+      const [tf, { VariationalParameterEstimator }] = await Promise.all([
+        import('@tensorflow/tfjs'),
+        import('../../src/services/ParameterEstimation')
+      ]);
+      
+      // Prepare data
       const timePoints = parsedData.map(d => d.time);
       const observables = new Map<string, number[]>();
       
-      // Collect all observable names from data
+      // Get observable names from data
       const obsNames = Object.keys(parsedData[0]?.values || {});
       for (const obsName of obsNames) {
         observables.set(obsName, parsedData.map(d => d.values[obsName] || 0));
       }
-
-      // Prepare priors map
-      const priorsMap = new Map<string, { mean: number; std: number; min: number; max: number }>();
+      
+      const simulationData = { timePoints, observables };
+      
+      // Prepare priors
+      const priorsMap = new Map<string, { mean: number; std: number; min?: number; max?: number }>();
       for (const prior of priors) {
         priorsMap.set(prior.name, {
           mean: prior.mean,
@@ -221,85 +249,94 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
           max: prior.max
         });
       }
-
-      // Create and run estimator
+      
+      // Create estimator
       const estimator = new VariationalParameterEstimator(
-        model!,
-        { timePoints, observables },
+        model,
+        simulationData,
         selectedParams,
         priorsMap
       );
-
+      
+      // Run estimation with progress updates
+      const iterations = parseInt(nIterations);
+      const lr = parseFloat(learningRate);
+      
       const result = await estimator.fit({
-        nIterations: parseInt(nIterations) || 500,
-        learningRate: parseFloat(learningRate) || 0.01,
-        verbose: true
+        nIterations: iterations,
+        learningRate: lr,
+        verbose: false
       });
-
-      // Compute credible intervals (95%)
-      const credibleIntervals = result.posteriorMean.map((mean, i) => {
-        const std = result.posteriorStd[i];
+      
+      // Compute credible intervals from posterior
+      const posteriorSamples = await estimator.samplePosterior(1000);
+      const credibleIntervals = selectedParams.map((_, i) => {
+        const values = posteriorSamples.map(s => s[i]).sort((a, b) => a - b);
         return {
-          lower: mean - 1.96 * std,
-          upper: mean + 1.96 * std
+          lower: values[Math.floor(0.025 * values.length)],
+          upper: values[Math.floor(0.975 * values.length)]
         };
       });
-
-      setResults({
-        ...result,
-        credibleIntervals
-      });
-
-    } catch (e: any) {
-      console.error('Estimation failed:', e);
-      setError(`Estimation failed: ${e.message}`);
+      
+      if (isMountedRef.current) {
+        setResult({
+          ...result,
+          credibleIntervals
+        });
+      }
+      
+      // Cleanup
+      estimator.dispose();
+      
+    } catch (err) {
+      if (err instanceof DOMException && err.name === 'AbortError') {
+        if (isMountedRef.current) setError('Estimation cancelled');
+      } else {
+        const message = err instanceof Error ? err.message : String(err);
+        if (isMountedRef.current) setError(`Estimation failed: ${message}`);
+      }
     } finally {
-      setIsRunning(false);
+      if (isMountedRef.current) setIsRunning(false);
+      if (abortControllerRef.current === controller) {
+        abortControllerRef.current = null;
+      }
     }
   };
-
-  const exportResults = (format: 'csv' | 'json') => {
-    if (!results) return;
-
-    if (format === 'csv') {
-      let csv = 'Parameter,Posterior Mean,Posterior Std,95% CI Lower,95% CI Upper\n';
-      selectedParams.forEach((name, i) => {
-        csv += `${name},${results.posteriorMean[i]},${results.posteriorStd[i]},${results.credibleIntervals[i].lower},${results.credibleIntervals[i].upper}\n`;
-      });
-      
-      const blob = new Blob([csv], { type: 'text/csv' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'parameter_estimation_results.csv';
-      a.click();
-      URL.revokeObjectURL(url);
-    } else {
-      const data = {
-        parameters: selectedParams.map((name, i) => ({
-          name,
-          posteriorMean: results.posteriorMean[i],
-          posteriorStd: results.posteriorStd[i],
-          credibleInterval: results.credibleIntervals[i]
-        })),
-        elbo: results.elbo,
-        convergence: results.convergence,
-        iterations: results.iterations
-      };
-      
-      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'parameter_estimation_results.json';
-      a.click();
-      URL.revokeObjectURL(url);
-    }
+  
+  const handleCancel = () => {
+    abortControllerRef.current?.abort();
   };
-
-  // Guard: Show message if no model
+  
+  // Cleanup on unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+      abortControllerRef.current?.abort();
+    };
+  }, []);
+  
+  // Format results for chart
+  const posteriorChartData = useMemo(() => {
+    if (!result) return [];
+    
+    return selectedParams.map((name, i) => ({
+      name,
+      mean: result.posteriorMean[i],
+      std: result.posteriorStd[i],
+      lower: result.credibleIntervals[i]?.lower ?? result.posteriorMean[i] - 2 * result.posteriorStd[i],
+      upper: result.credibleIntervals[i]?.upper ?? result.posteriorMean[i] + 2 * result.posteriorStd[i],
+      prior: priors.find(p => p.name === name)?.mean ?? 0
+    }));
+  }, [result, selectedParams, priors]);
+  
+  const elboChartData = useMemo(() => {
+    if (!result?.elbo) return [];
+    return result.elbo.map((value, i) => ({ iteration: i, elbo: value }));
+  }, [result]);
+  
   const guardMessage = !model
-    ? 'Please parse a BNGL model first to use parameter estimation.'
+    ? 'Parse a model to set up parameter estimation.'
     : parameterNames.length === 0
       ? 'The current model does not declare any parameters to estimate.'
       : null;
@@ -356,7 +393,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 
                 {priors.map(prior => (
                   <div key={prior.name} className="grid grid-cols-5 gap-2 items-center">
-                    <span className="text-sm truncate" title={prior.name}>{prior.name}</span>
+                    <span className="text-sm font-medium truncate" title={prior.name}>{prior.name}</span>
                     <Input
                       type="number"
                       step="any"
@@ -367,6 +404,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                     <Input
                       type="number"
                       step="any"
+                      min={0}
                       value={prior.std}
                       onChange={e => updatePrior(prior.name, 'std', parseFloat(e.target.value) || 0.1)}
                       className="text-sm"
@@ -452,126 +490,220 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
             
             <div className="grid grid-cols-3 gap-4">
               <div className="space-y-1">
-                <label className="text-sm text-slate-600 dark:text-slate-400">Iterations</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Iterations
+                </label>
                 <Input
                   type="number"
+                  min={100}
+                  max={10000}
                   value={nIterations}
                   onChange={e => setNIterations(e.target.value)}
-                  min="100"
-                  max="10000"
                 />
               </div>
+              
               <div className="space-y-1">
-                <label className="text-sm text-slate-600 dark:text-slate-400">Learning Rate</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  Learning Rate
+                </label>
                 <Input
                   type="number"
+                  step="0.001"
+                  min={0.0001}
+                  max={1}
                   value={learningRate}
                   onChange={e => setLearningRate(e.target.value)}
-                  step="0.001"
-                  min="0.0001"
-                  max="0.1"
                 />
               </div>
+              
               <div className="space-y-1">
-                <label className="text-sm text-slate-600 dark:text-slate-400">MC Samples</label>
+                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+                  MC Samples
+                </label>
                 <Input
                   type="number"
+                  min={1}
+                  max={20}
                   value={nSamples}
                   onChange={e => setNSamples(e.target.value)}
-                  min="1"
-                  max="20"
                 />
               </div>
             </div>
             
-            <div className="flex gap-2">
-              <Button 
-                onClick={runEstimation}
-                disabled={isRunning || selectedParams.length === 0 || parsedData.length === 0}
-              >
-                {isRunning ? 'Running...' : 'Run Estimation'}
+            <div className="flex gap-3 justify-end">
+              {isRunning && (
+                <Button variant="danger" onClick={handleCancel}>
+                  Cancel
+                </Button>
+              )}
+              <Button onClick={handleRunEstimation} disabled={!canRun}>
+                {isRunning ? 'Estimating...' : 'Run Estimation'}
               </Button>
             </div>
           </Card>
           
-          {/* Error Display */}
-          {error && (
-            <Card className="bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800">
-              <div className="text-red-600 dark:text-red-400">{error}</div>
-            </Card>
+          {/* Progress */}
+          {isRunning && (
+            <div className="w-full">
+              <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
+                <LoadingSpinner className="w-5 h-5" />
+                <span>Running variational inference... {progress.current} / {progress.total}</span>
+              </div>
+              <div className="w-full bg-slate-200 rounded-full h-2.5 dark:bg-slate-700 mt-3">
+                <div
+                  className="bg-primary h-2.5 rounded-full transition-all duration-300"
+                  style={{ width: `${(progress.current / Math.max(1, progress.total)) * 100}%` }}
+                />
+              </div>
+            </div>
           )}
           
-          {/* Results Card */}
-          {results && (
-            <Card className="space-y-4">
-              <div className="flex items-center justify-between">
+          {/* Error Display */}
+          {error && (
+            <div className="border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30 text-red-700 dark:text-red-200 px-4 py-3 rounded-md">
+              {error}
+            </div>
+          )}
+          
+          {/* Results */}
+          {result && (
+            <>
+              {/* Summary Card */}
+              <Card className="space-y-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                    Estimation Results
+                  </h3>
+                  <span className={`px-2 py-1 rounded text-xs font-medium ${
+                    result.convergence 
+                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                  }`}>
+                    {result.convergence ? '✓ Converged' : '⚠ May not have converged'}
+                  </span>
+                </div>
+                
+                <div className="text-sm text-slate-600 dark:text-slate-400">
+                  Completed {result.iterations} iterations
+                </div>
+                
+                <DataTable
+                  headers={['Parameter', 'Posterior Mean', 'Posterior Std', '95% CI Lower', '95% CI Upper', 'Prior Mean']}
+                  rows={selectedParams.map((name, i) => [
+                    name,
+                    result.posteriorMean[i].toExponential(4),
+                    result.posteriorStd[i].toExponential(4),
+                    result.credibleIntervals[i].lower.toExponential(4),
+                    result.credibleIntervals[i].upper.toExponential(4),
+                    (priors.find(p => p.name === name)?.mean ?? 0).toExponential(4)
+                  ])}
+                />
+              </Card>
+              
+              {/* Posterior Visualization */}
+              <Card className="space-y-4">
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                  Estimation Results
+                  Posterior Estimates with 95% Credible Intervals
                 </h3>
-                <div className="flex gap-2">
-                  <Button variant="subtle" onClick={() => exportResults('csv')}>
-                    Export CSV
-                  </Button>
-                  <Button variant="subtle" onClick={() => exportResults('json')}>
-                    Export JSON
-                  </Button>
-                </div>
-              </div>
-              
-              <div className="text-sm text-slate-600 dark:text-slate-400">
-                {results.convergence ? '✓ Converged' : '⚠ May not have converged'} after {results.iterations} iterations
-              </div>
-              
-              {/* Results Table */}
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-slate-200 dark:border-slate-700">
-                      <th className="text-left py-2 px-2">Parameter</th>
-                      <th className="text-right py-2 px-2">Posterior Mean</th>
-                      <th className="text-right py-2 px-2">Posterior Std</th>
-                      <th className="text-right py-2 px-2">95% CI</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {selectedParams.map((name, i) => (
-                      <tr key={name} className="border-b border-slate-100 dark:border-slate-800">
-                        <td className="py-2 px-2 font-mono">{name}</td>
-                        <td className="text-right py-2 px-2">{results.posteriorMean[i].toExponential(4)}</td>
-                        <td className="text-right py-2 px-2">{results.posteriorStd[i].toExponential(4)}</td>
-                        <td className="text-right py-2 px-2">
-                          [{results.credibleIntervals[i].lower.toExponential(2)}, {results.credibleIntervals[i].upper.toExponential(2)}]
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-              
-              {/* ELBO Plot */}
-              <div className="mt-4">
-                <h4 className="text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">ELBO Convergence</h4>
-                <div className="h-32 bg-slate-50 dark:bg-slate-800 rounded flex items-end gap-px p-2">
-                  {results.elbo.slice(-100).map((val, i) => {
-                    const minElbo = Math.min(...results.elbo.slice(-100));
-                    const maxElbo = Math.max(...results.elbo.slice(-100));
-                    const range = maxElbo - minElbo || 1;
-                    const height = ((val - minElbo) / range) * 100;
-                    return (
-                      <div
-                        key={i}
-                        className="flex-1 bg-primary rounded-t"
-                        style={{ height: `${Math.max(1, height)}%` }}
+                
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={posteriorChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
+                    <XAxis 
+                      dataKey="name" 
+                      angle={-45} 
+                      textAnchor="end" 
+                      height={80}
+                      tick={{ fontSize: 11 }}
+                    />
+                    <YAxis 
+                      scale="log" 
+                      domain={['auto', 'auto']}
+                      tickFormatter={(v) => v.toExponential(1)}
+                    />
+                    <Tooltip 
+                      formatter={(value: number) => value.toExponential(4)}
+                      labelFormatter={(label) => `Parameter: ${label}`}
+                    />
+                    <Bar dataKey="mean" fill={CHART_COLORS[0]} name="Posterior Mean">
+                      <ErrorBar 
+                        dataKey="std" 
+                        width={4} 
+                        strokeWidth={2}
+                        stroke={CHART_COLORS[1]}
                       />
-                    );
-                  })}
-                </div>
-                <div className="flex justify-between text-xs text-slate-500 mt-1">
-                  <span>Iteration {Math.max(0, results.iterations - 100)}</span>
-                  <span>Iteration {results.iterations}</span>
-                </div>
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              </Card>
+              
+              {/* ELBO Convergence Plot */}
+              {elboChartData.length > 0 && (
+                <Card className="space-y-4">
+                  <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                    ELBO Convergence
+                  </h3>
+                  
+                  <ResponsiveContainer width="100%" height={200}>
+                    <LineChart data={elboChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
+                      <XAxis dataKey="iteration" label={{ value: 'Iteration', position: 'insideBottom', offset: -5 }} />
+                      <YAxis label={{ value: 'ELBO', angle: -90, position: 'insideLeft' }} />
+                      <Tooltip />
+                      <Line type="monotone" dataKey="elbo" stroke={CHART_COLORS[2]} strokeWidth={1.5} dot={false} />
+                    </LineChart>
+                  </ResponsiveContainer>
+                </Card>
+              )}
+              
+              {/* Export Buttons */}
+              <div className="flex gap-2 justify-end">
+                <Button 
+                  variant="subtle" 
+                  onClick={() => {
+                    const csv = [
+                      ['Parameter', 'Posterior Mean', 'Posterior Std', '95% CI Lower', '95% CI Upper'].join(','),
+                      ...selectedParams.map((name, i) => 
+                        [name, result.posteriorMean[i], result.posteriorStd[i], result.credibleIntervals[i].lower, result.credibleIntervals[i].upper].join(',')
+                      )
+                    ].join('\n');
+                    const blob = new Blob([csv], { type: 'text/csv' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'parameter_estimation_results.csv';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Export CSV
+                </Button>
+                <Button 
+                  variant="subtle" 
+                  onClick={() => {
+                    const exportData = {
+                      parameters: selectedParams,
+                      posteriorMean: result.posteriorMean,
+                      posteriorStd: result.posteriorStd,
+                      credibleIntervals: result.credibleIntervals,
+                      elbo: result.elbo,
+                      convergence: result.convergence,
+                      iterations: result.iterations,
+                      priors: priors
+                    };
+                    const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = 'parameter_estimation_results.json';
+                    a.click();
+                    URL.revokeObjectURL(url);
+                  }}
+                >
+                  Export JSON
+                </Button>
               </div>
-            </Card>
+            </>
           )}
         </>
       )}
