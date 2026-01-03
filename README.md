@@ -1,166 +1,112 @@
-<div align="center">
-
 # BioNetGen Web Simulator
 
-An interactive workspace that lets you explore BioNetGen (BNGL) models, watch molecular networks unfold, and simulate system behavior directly in your browser.
+An interactive, browser-based workspace for exploring BioNetGen (BNGL) models: edit BNGL, parse, generate networks, run simulations, and analyze results through multiple visualization and analysis tabs.
 
-[![Deploy](https://github.com/akutuva21/bngplayground/actions/workflows/deploy.yml/badge.svg)](https://github.com/akutuva21/bngplayground/actions/workflows/deploy.yml)
-
-**[Live Demo](https://akutuva21.github.io/bngplayground/)**
-
-</div>
+**Live demo:** https://akutuva21.github.io/bngplayground
 
 ## Features
 
-- **60+ curated BNGL models** covering signaling cascades, gene regulation, and immune responses
-- **Monaco-powered editor** with syntax highlighting and error detection
-- **Rule-based network generation** that expands BNGL rules into concrete species and reactions
-- **ODE & SSA simulations** running entirely client-side via WebAssembly (CVODE solver)
-- **Interactive visualizations**: time-course plots, network graphs, rule cartoons, contact maps
-- **Fisher Information Matrix (FIM)** identifiability analysis for parameter sensitivity
-- **Dark/light themes** with responsive UI
+- BNGL editor + parser (client-side)
+- Network generation and simulation in the browser (Web Worker + WASM)
+- Example gallery with keyword + semantic search
+- Interactive charts (series toggle / isolate, zoom, export)
+- Analysis tabs: parameter scan, identifiability (FIM), steady state, parameter estimation, flux analysis, verification, and more
 
 ## Quick Start
 
 ```bash
-# Install dependencies
 npm install
-
-# Start development server
 npm run dev
 ```
 
-Open `http://localhost:3000/bngplayground/` in your browser.
-
-## Architecture
-
-```
-├── App.tsx                    # Main application entry
-├── components/                # React UI components
-│   ├── EditorPanel.tsx        # Monaco editor wrapper
-│   ├── tabs/                  # Visualization tabs (Charts, Graphs, FIM, etc.)
-│   └── ui/                    # Reusable UI primitives
-├── services/                  # Core logic
-│   ├── bnglWorker.ts          # Web Worker for background processing
-│   ├── ODESolver.ts           # ODE solvers (RK4, RK45, CVODE via WASM)
-│   ├── parseBNGL.ts           # BNGL parsing utilities
-│   └── fim.ts                 # Fisher Information Matrix analysis
-├── src/
-│   └── services/graph/        # Network generation engine
-│       ├── NetworkGenerator.ts # Rule application & species expansion
-│       ├── core/              # Graph representation (Species, Molecules, Bonds)
-│       │   ├── Canonical.ts   # Canonical form generation
-│       │   ├── Matcher.ts     # VF2 subgraph matching
-│       │   └── NautyService.ts # WASM-based graph automorphism
-│       └── ...
-├── src/wasm/nauty/            # Nauty library (graph canonicalization)
-├── public/
-│   ├── cvode.wasm             # SUNDIALS CVODE compiled to WebAssembly
-│   └── cvode.js               # CVODE JavaScript loader
-├── example-models/            # 60 curated toy BNGL models
-├── published-models/          # Real published models from literature
-├── scripts/                   # Utility scripts
-│   ├── full_ode_benchmark.ts  # Benchmark suite (69 models)
-│   ├── generateGdat.mjs       # Generate reference GDAT files
-│   └── ...
-└── tests/                     # Vitest test suite
-```
-
-## Available Scripts
+## Scripts
 
 | Command | Description |
-|---------|-------------|
-| `npm run dev` | Start Vite development server |
-| `npm run build` | Production build to `dist/` |
-| `npm run preview` | Serve production build locally |
-| `npm run test` | Run Vitest test suite |
-| `npm run test:watch` | Run tests in watch mode |
-| `npm run generate:gdat` | Regenerate BNG2.pl reference fixtures |
+|---|---|
+| `npm run dev` | Start the Vite dev server |
+| `npm run build` | Production build (also generates semantic-search embeddings) |
+| `npm run build:quick` | Production build without embeddings generation |
+| `npm run preview` | Preview the production build |
+| `npm run test` | Run Vitest once |
+| `npm run test:watch` | Run Vitest in watch mode |
+| `npm run generate:gdat` | Regenerate GDAT reference fixtures |
+| `npm run generate:embeddings` | Generate `public/model-embeddings.json` for semantic search |
 
-## How It Works
+## Workflow
 
-### Network Generation
+1. Pick a model from the Example Gallery (or paste your own BNGL).
+2. Edit BNGL in the editor.
+3. Click **Parse** to (re)parse the model.
+4. Run a simulation (ODE or SSA) and explore results in the tabs.
 
-The simulator implements a rule-based modeling engine that:
+## Example Gallery + Semantic Search
 
-1. **Parses BNGL** into structured AST (molecules, rules, observables, parameters)
-2. **Applies rules iteratively** using VF2 subgraph isomorphism matching
-3. **Generates canonical forms** via Nauty WASM for efficient deduplication
-4. **Expands to concrete network** of species and reactions
+The Example Gallery supports:
 
-### ODE Solving
+- **Keyword search** (fast text match)
+- **Semantic search** (natural-language queries like “MAPK pathway with feedback”)
 
-Multiple solvers are available:
+Semantic search uses a precomputed embeddings index at `public/model-embeddings.json`.
 
-- **RK4** – Fixed-step 4th order Runge-Kutta
-- **RK45** – Adaptive Dormand-Prince with error control
-- **Rosenbrock23** – Implicit solver for stiff systems
-- **CVODE** – SUNDIALS library compiled to WebAssembly (recommended for stiff ODEs)
+- `npm run build` regenerates embeddings automatically.
+- If you’re iterating quickly, use `npm run build:quick` to skip that step.
 
-All simulations run in a Web Worker to keep the UI responsive.
+## Tabs
 
-### Benchmark Results
+The UI exposes a small set of core tabs by default, with additional analysis tabs behind **More →**.
 
-The network generation engine has been validated against BNG2.pl on 69 models:
+### Core tabs (always visible)
 
-- **66 models** pass completely (species count + ODE trajectory match)
-- **2 models** hit size limits (expected for large networks like `Barua_2013`, `Model_ZAP`)
-- **1 model** has known discrepancy under investigation (`Barua_2007`)
+- **Time Courses**
+  - Plots observables vs time.
+  - Interactive legend: click to toggle series, double-click to isolate/restore.
+  - Drag-to-zoom and double-click to reset view.
+  - Optional custom expressions (derived observables) via the Expression panel.
 
-## Testing
+- **Parameter Scan**
+  - **1D scan**: sweep a parameter range and plot an observable vs parameter value (drag-to-zoom supported).
+  - **2D scan**: heatmap of an observable across two parameters (hover tooltip, click-to-pin, and it scales to fill the panel).
+  - Optional surrogate training for fast sweeps on large parameter spaces.
 
-```bash
-# Run full test suite
-npm run test
+- **Regulatory Graph**
+  - Graph view of how rules influence molecular states.
+  - Supports time-course overlay for selected influences.
 
-# Run benchmark against BNG2.pl (requires Perl + BNG2.pl installation)
-npx tsx scripts/full_ode_benchmark.ts
-```
+### Advanced tabs (shown via **More →**)
 
-Set `BNG2_PATH` and `PERL_CMD` environment variables to point to your BNG2 installation, or edit `scripts/bngDefaults.js`.
+- **What-If Compare**: run a baseline vs modified-parameter simulation and compare trajectories (interactive legend).
+- **Contact Map**: molecule-type interaction map; click edges to jump to representative rules.
+- **Rule Cartoons**: compact visualizations of reaction rules (cartoon + compact view).
+- **Identifiability (FIM)**: Fisher Information Matrix analysis, eigen/sensitivity views, and heatmaps.
+- **Steady State**: run an extended ODE sweep and detect steady state (result appears as the final point in Time Courses).
+- **Parameter Estimation**: fit parameters to experimental time-series data (includes priors and convergence diagnostics).
+- **Flux Analysis**: compute and visualize reaction flux contributions from the expanded reaction network.
+- **Verification**: define constraints over observables (inequalities, equality, conservation) and check against simulation results.
 
-## Deployment
+### Additional tabs in the codebase
 
-The app is a static Vite build deployed to GitHub Pages:
+The repository also contains additional tab implementations that may not be currently wired into the main tab strip:
 
-```bash
-npm run build
-# Deploy dist/ to any static host
-```
+- **Debugger**: developer tooling to trace rule firing and network generation.
+- **Robustness Analysis**: Monte Carlo parameter-noise sensitivity with a confidence “cloud” chart.
+- **Structure Analysis**: connectivity + conservation-law style summaries based on the expanded reaction network.
+- **Expression Evaluator**: define custom expressions over observables and plot expression results.
+- **Parameters**: edit parameter values in a table and apply them back to the model.
 
-GitHub Actions automatically deploys on push to `main`.
+## Architecture (high-level)
 
-## Identifiability Analysis (FIM)
+- React + TypeScript + Vite + Tailwind UI
+- Web Worker for parsing / simulation so the UI stays responsive
+- WASM-backed solvers (including CVODE) and network-generation utilities
 
-Built-in Fisher Information Matrix analysis for parameter identifiability:
+Useful entry points:
 
-```typescript
-import { computeFIM, exportFIM } from './services/fim';
-
-const result = await computeFIM(
-  model,
-  selectedParams,
-  { method: 'ode', t_end: 50, n_steps: 100 }
-);
-
-console.log('Identifiable:', result.identifiableParams);
-console.log('Unidentifiable:', result.unidentifiableParams);
-```
-
-**Interpretation:**
-- Condition number > 10⁴ indicates ill-conditioned FIM
-- VIF > 10 indicates strong parameter correlation
-- Profile plots show approximate 95% confidence intervals
-
-## Acknowledgements
-
-- Built on the [BioNetGen](https://bionetgen.org/) rule-based modeling paradigm
-- Uses [SUNDIALS CVODE](https://computing.llnl.gov/projects/sundials) for stiff ODE solving
-- Uses [Nauty](https://pallini.di.uniroma1.it/) for graph automorphism
-- UI powered by React, Monaco Editor, Cytoscape, Recharts, and Vite
+- `App.tsx` (app shell)
+- `components/EditorPanel.tsx` (editor + run controls)
+- `components/VisualizationPanel.tsx` (tabs)
+- `services/bnglService.ts` and worker code (parse/simulate)
+- `scripts/generateEmbeddings.mjs` (build-time embeddings)
 
 ## License
 
 MIT
-</CodeContent>
-<parameter name="EmptyFile">false
