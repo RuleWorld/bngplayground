@@ -171,12 +171,17 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
 }) => {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   // removed first-time-open example gallery state
-  const [showIntroBanner, setShowIntroBanner] = useState(true);
+  const [showIntroBanner, setShowIntroBanner] = useState(
+    () => localStorage.getItem('bng-banner-dismissed') !== 'true'
+  );
   // Auto-open on first visit removed so the page isn't blocked by a modal on first load.
   const [simulationMethod, setSimulationMethod] = useState<'ode' | 'ssa'>('ode');
   const [customAtol, setCustomAtol] = useState<string>('');
   const [customRtol, setCustomRtol] = useState<string>('');
   const [odeSolver, setOdeSolver] = useState<'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'webgpu_rk4'>('auto');
+  const [showAllSolvers, setShowAllSolvers] = useState(
+    () => localStorage.getItem('bng-show-all-solvers') === 'true'
+  );
   const [isParamsOpen, setIsParamsOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
@@ -203,19 +208,19 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
     <Card className="flex h-full min-h-0 flex-col overflow-hidden">
       <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-1">
         <h2 className="text-xl font-bold text-slate-800 dark:text-slate-100">BNGL Model Editor</h2>
-        {/* Intro banner for first-time users (dismissible) */}
+        {/* Compact intro banner (dismissible, persisted) */}
         {showIntroBanner && (
-          <div className="rounded-lg border border-slate-200 bg-white p-3 text-sm text-slate-700 dark:border-slate-700 dark:bg-slate-900/40 relative">
-            <strong>Welcome!</strong>
-            <ul className="list-disc pl-5 mt-2">
-              <li>Write or load a BNGL model in the editor.</li>
-              <li>Click <strong>Models</strong> to load a starter model, then click <strong>Run Simulation</strong>.</li>
-              <li>Explore the Regulatory Graph and Identifiability tabs to analyze your model.</li>
-            </ul>
+          <div className="flex items-center justify-between gap-2 rounded-md border border-blue-200 bg-blue-50 dark:bg-blue-900/20 dark:border-blue-800 px-3 py-2 text-sm">
+            <span className="text-blue-800 dark:text-blue-200">
+              🧬 Welcome! Click <strong>Models</strong> to browse examples, then <strong>Run Simulation</strong>.
+            </span>
             <button
-              aria-label="Dismiss intro"
-              onClick={() => setShowIntroBanner(false)}
-              className="absolute top-2 right-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+              aria-label="Dismiss"
+              onClick={() => {
+                setShowIntroBanner(false);
+                localStorage.setItem('bng-banner-dismissed', 'true');
+              }}
+              className="p-1 text-blue-400 hover:text-blue-600 dark:hover:text-blue-200 rounded hover:bg-blue-100 dark:hover:bg-blue-800/50 transition-colors flex-shrink-0"
             >
               <XIcon className="w-4 h-4" />
             </button>
@@ -342,21 +347,39 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             <>
               <div className="border-l border-slate-300 dark:border-slate-600 h-4" />
               <label className="text-slate-600 dark:text-slate-400">Solver:</label>
-              <select
-                value={odeSolver}
-                onChange={(e) => setOdeSolver(e.target.value as any)}
-                className="rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
-              >
-                <option value="auto">Auto</option>
-                <option value="cvode">CVODE</option>
-                <option value="cvode_auto">CVODE + Fallback</option>
-                <option value="cvode_sparse">CVODE Sparse</option>
-                <option value="cvode_jac">CVODE + Jac</option>
-                <option value="rosenbrock23">Rosenbrock23</option>
-                <option value="rk45">RK45</option>
-                <option value="rk4">RK4</option>
-                <option value="webgpu_rk4">WebGPU RK4 (Exp)</option>
-              </select>
+              <div className="flex items-center gap-1">
+                <select
+                  value={odeSolver}
+                  onChange={(e) => setOdeSolver(e.target.value as typeof odeSolver)}
+                  className="rounded border border-slate-300 px-1 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800 dark:text-slate-200"
+                >
+                  <option value="auto">Auto (Recommended)</option>
+                  <option value="cvode">CVODE</option>
+                  {showAllSolvers && (
+                    <>
+                      <option value="cvode_auto">CVODE + Fallback</option>
+                      <option value="cvode_sparse">CVODE Sparse</option>
+                      <option value="cvode_jac">CVODE + Jacobian</option>
+                      <option value="rosenbrock23">Rosenbrock23</option>
+                      <option value="rk45">RK45</option>
+                      <option value="rk4">RK4</option>
+                      <option value="webgpu_rk4">WebGPU RK4 (Exp)</option>
+                    </>
+                  )}
+                </select>
+                {!showAllSolvers && (
+                  <button
+                    onClick={() => {
+                      setShowAllSolvers(true);
+                      localStorage.setItem('bng-show-all-solvers', 'true');
+                    }}
+                    className="text-xs text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 underline"
+                    title="Show all available ODE solvers"
+                  >
+                    more
+                  </button>
+                )}
+              </div>
               <label className="text-slate-600 dark:text-slate-400">atol:</label>
               <input
                 type="text"

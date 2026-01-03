@@ -1,10 +1,17 @@
-import React, { useState, useMemo, useCallback } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { SimulationResults } from '../../types';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { CHART_COLORS } from '../../constants';
+import {
+  ExternalLegend,
+  InlineLegend,
+  LEGEND_THRESHOLD,
+  formatTooltipNumber,
+  formatYAxisTick,
+} from '../charts/InteractiveLegend';
 
 interface ExpressionEvaluatorTabProps {
   results: SimulationResults | null;
@@ -61,6 +68,7 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
   const [newExprName, setNewExprName] = useState('');
   const [newExpr, setNewExpr] = useState('');
   const [error, setError] = useState<string | null>(null);
+  const [visibleExpressions, setVisibleExpressions] = useState<Set<string>>(new Set());
 
   const addExpression = useCallback(() => {
     if (!newExprName.trim() || !newExpr.trim()) {
@@ -122,6 +130,29 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
       return row;
     });
   }, [results, observableNames, expressions]);
+
+  useEffect(() => {
+    // Reset visibility whenever expression list changes
+    setVisibleExpressions(new Set(expressions.map((e) => e.name)));
+  }, [expressions.map((e) => e.name).join('|')]);
+
+  const useExternalLegend = expressions.length > LEGEND_THRESHOLD;
+
+  const handleToggleExpression = (name: string) => {
+    setVisibleExpressions((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+
+  const handleIsolateExpression = (name: string) => {
+    setVisibleExpressions((prev) => {
+      if (prev.size === 1 && prev.has(name)) return new Set(expressions.map((e) => e.name));
+      return new Set([name]);
+    });
+  };
 
   if (!results || !results.data || results.data.length === 0) {
     return (
@@ -220,21 +251,22 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
                 label={{ value: 'Value', angle: -90, position: 'insideLeft' }}
                 domain={['auto', 'auto']}
                 allowDataOverflow={true}
-                tickFormatter={(value) => {
-                  if (typeof value !== 'number') return value;
-                  const abs = Math.abs(value);
-                  if (abs >= 1e9) return (value / 1e9).toFixed(1) + 'B';
-                  if (abs >= 1e6) return (value / 1e6).toFixed(1) + 'M';
-                  if (abs >= 1e3) return (value / 1e3).toFixed(1) + 'K';
-                  if (abs < 0.01 && abs !== 0) return value.toExponential(1);
-                  return value.toFixed(0);
-                }}
+                tickFormatter={formatYAxisTick}
               />
               <Tooltip
-                formatter={(value: number) => typeof value === 'number' ? value.toFixed(4) : value}
+                formatter={(value: any) => formatTooltipNumber(value, 4)}
                 labelFormatter={(label) => `Time: ${typeof label === 'number' ? label.toFixed(2) : label}`}
               />
-              <Legend />
+              {!useExternalLegend && (
+                <Legend
+                  content={
+                    <InlineLegend
+                      onToggle={handleToggleExpression}
+                      onIsolate={handleIsolateExpression}
+                    />
+                  }
+                />
+              )}
               {expressions.map((expr) => (
                 <Line
                   key={expr.id}
@@ -243,10 +275,24 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
                   stroke={expr.color}
                   strokeWidth={1.5}
                   dot={false}
+                  hide={!visibleExpressions.has(expr.name)}
                 />
               ))}
             </LineChart>
           </ResponsiveContainer>
+
+          {useExternalLegend && (
+            <ExternalLegend
+              entries={expressions.map((e) => ({ name: e.name, color: e.color }))}
+              visible={visibleExpressions}
+              onToggle={handleToggleExpression}
+              onIsolate={handleIsolateExpression}
+            />
+          )}
+
+          <div className="text-center text-xs text-slate-500">
+            Click legend to toggle series. Double-click legend to isolate/restore.
+          </div>
         </Card>
       )}
     </div>

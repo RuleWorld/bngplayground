@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceArea } from 'recharts';
 import { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -10,6 +10,7 @@ import { DataTable } from '../ui/DataTable';
 import { bnglService } from '../../services/bnglService';
 import { CHART_COLORS } from '../../constants';
 import HeatmapChart from '../HeatmapChart';
+import { formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
 
 interface ParameterScanTabProps {
   model: BNGLModel | null;
@@ -104,6 +105,11 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
   const [isLogScale, setIsLogScale] = useState(false);
+
+  // 1D chart interaction (drag to zoom, double-click to reset)
+  const [oneDSelection, setOneDSelection] = useState<{ x1: number; x2: number } | null>(null);
+  const [oneDZoomHistory, setOneDZoomHistory] = useState<Array<{ x1: number | 'dataMin'; x2: number | 'dataMax' }>>([]);
+  const currentOneDDomain = oneDZoomHistory.length > 0 ? oneDZoomHistory[oneDZoomHistory.length - 1] : undefined;
 
   // Neural ODE Surrogate state
   const [useSurrogate, setUseSurrogate] = useState(false);
@@ -1146,37 +1152,54 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">1D Scan Results</h3>
           {selectedObservable && oneDChartData.length > 0 ? (
             <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={oneDChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
+              <LineChart
+                data={oneDChartData}
+                margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
+                onMouseDown={(e: any) => {
+                  const x = typeof e?.activeLabel === 'number' ? e.activeLabel : undefined;
+                  if (x === undefined) return;
+                  setOneDSelection({ x1: x, x2: x });
+                }}
+                onMouseMove={(e: any) => {
+                  if (!oneDSelection) return;
+                  const x = typeof e?.activeLabel === 'number' ? e.activeLabel : undefined;
+                  if (x === undefined) return;
+                  setOneDSelection((prev) => (prev ? { ...prev, x2: x } : prev));
+                }}
+                onMouseUp={() => {
+                  if (!oneDSelection) return;
+                  const { x1, x2 } = oneDSelection;
+                  if (x1 === x2) {
+                    setOneDSelection(null);
+                    return;
+                  }
+                  const left = Math.min(x1, x2);
+                  const right = Math.max(x1, x2);
+                  setOneDZoomHistory((prev) => [...prev, { x1: left, x2: right }]);
+                  setOneDSelection(null);
+                }}
+                onDoubleClick={() => {
+                  setOneDZoomHistory([]);
+                  setOneDSelection(null);
+                }}
+              >
                 <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
                 <XAxis
                   dataKey="parameterValue"
                   label={{ value: oneDResult.parameterName, position: 'insideBottom', offset: -5 }}
                   type="number"
-                  domain={['dataMin', 'dataMax']}
+                  domain={currentOneDDomain ? [currentOneDDomain.x1, currentOneDDomain.x2] : ['dataMin', 'dataMax']}
                   scale={isLogScale ? 'log' : 'linear'}
                 />
                 <YAxis
                   label={{ value: selectedObservable, angle: -90, position: 'insideLeft' }}
                   domain={['auto', 'auto']}
                   allowDataOverflow={true}
-                  tickFormatter={(value) => {
-                    if (typeof value !== 'number') return value;
-                    const abs = Math.abs(value);
-                    if (abs >= 1e9) return (value / 1e9).toFixed(1) + 'B';
-                    if (abs >= 1e6) return (value / 1e6).toFixed(1) + 'M';
-                    if (abs >= 1e3) return (value / 1e3).toFixed(1) + 'K';
-                    if (abs < 0.01 && abs !== 0) return value.toExponential(1);
-                    return value.toFixed(0);
-                  }}
+                  tickFormatter={formatYAxisTick}
                 />
                 <Tooltip
-                  formatter={(value: number) => typeof value === 'number' ? value.toFixed(2) : value}
-                  labelFormatter={(label) => `${oneDResult.parameterName}: ${typeof label === 'number' ? label : label}`}
-                />
-                <Legend
-                  verticalAlign="bottom"
-                  align="center"
-                  wrapperStyle={{ paddingTop: 16 }}
+                  formatter={(value: any) => formatTooltipNumber(value, 4)}
+                  labelFormatter={(label) => `${oneDResult.parameterName}: ${typeof label === 'number' ? label.toPrecision(6) : label}`}
                 />
                 <Line
                   type="monotone"
@@ -1186,11 +1209,25 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
                   strokeWidth={1.5}
                   dot={false}
                 />
+
+                {oneDSelection && (
+                  <ReferenceArea
+                    x1={oneDSelection.x1}
+                    x2={oneDSelection.x2}
+                    strokeOpacity={0.3}
+                    fill="#8884d8"
+                    fillOpacity={0.2}
+                  />
+                )}
               </LineChart>
             </ResponsiveContainer>
           ) : (
             <p className="text-sm text-slate-500">Select an observable to visualize the scan.</p>
           )}
+
+          <div className="text-center text-xs text-slate-500">
+            Drag on the chart to zoom. Double-click to reset view.
+          </div>
 
           <DataTable
             headers={[oneDResult.parameterName, ...observableNames]}
@@ -1202,6 +1239,15 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
           <div className="flex gap-2 justify-end">
             <Button variant="subtle" onClick={handleExportCSV}>Export CSV</Button>
             <Button variant="subtle" onClick={handleExportJSON}>Export JSON</Button>
+            <Button
+              variant="subtle"
+              onClick={() => {
+                setOneDZoomHistory([]);
+                setOneDSelection(null);
+              }}
+            >
+              Reset view
+            </Button>
           </div>
         </Card>
       )}
@@ -1211,14 +1257,14 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">2D Scan Heatmap</h3>
           <div>
             <div className="mb-3 text-sm text-slate-500">Heatmap of {selectedObservable} across {twoDResult.parameterNames[0]} and {twoDResult.parameterNames[1]}</div>
-            <HeatmapChart
-              data={heatmapPoints}
-              xAxisLabel={twoDResult.parameterNames[0]}
-              yAxisLabel={twoDResult.parameterNames[1]}
-              zAxisLabel={selectedObservable}
-              width={Math.min(800, Math.max(300, twoDResult.xValues.length * 28))}
-              height={Math.min(550, Math.max(240, twoDResult.yValues.length * 28))}
-            />
+            <div className="w-full h-[520px]">
+              <HeatmapChart
+                data={heatmapPoints}
+                xAxisLabel={twoDResult.parameterNames[0]}
+                yAxisLabel={twoDResult.parameterNames[1]}
+                zAxisLabel={selectedObservable}
+              />
+            </div>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-400">
             Range: {formatNumber(heatmapData.min)} – {formatNumber(heatmapData.max)} ({selectedObservable})

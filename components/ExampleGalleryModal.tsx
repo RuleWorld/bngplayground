@@ -4,6 +4,7 @@ import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { SearchIcon } from './icons/SearchIcon';
 import { MODEL_CATEGORIES } from '../constants';
+import { SemanticSearchInput, SearchResult } from './SemanticSearchInput';
 
 // Helper to convert model names to Title Case
 // Handles special acronyms like MAPK, EGFR, etc.
@@ -32,15 +33,36 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>(MODEL_CATEGORIES[0]?.id || '');
   const [focusedExample, setFocusedExample] = useState<string | null>(null);
+  const [semanticResults, setSemanticResults] = useState<SearchResult[] | null>(null);
+  const [isSemanticSearching, setIsSemanticSearching] = useState(false);
 
   const currentCategory = useMemo(() => {
     return MODEL_CATEGORIES.find(cat => cat.id === selectedCategory) || MODEL_CATEGORIES[0];
   }, [selectedCategory]);
 
+  // Get all models flat for semantic search mapping
+  const allModels = useMemo(() => MODEL_CATEGORIES.flatMap(cat => cat.models), []);
+
   const filteredExamples = useMemo(() => {
+    // If semantic search returned results, use those
+    if (semanticResults && semanticResults.length > 0) {
+      // Map semantic results to model objects
+      return semanticResults
+        .map(result => {
+          // Match by id or by filename (without .bngl extension)
+          const modelId = result.id.split('/').pop() || result.id;
+          return allModels.find(m => 
+            m.id === modelId || 
+            m.id === result.filename.replace('.bngl', '') ||
+            m.name.toLowerCase().replace(/\s+/g, '-') === modelId.toLowerCase() ||
+            m.name.toLowerCase().replace(/\s+/g, '_') === modelId.toLowerCase()
+          );
+        })
+        .filter((m): m is NonNullable<typeof m> => m !== undefined);
+    }
+
+    // Use keyword search if there's a search term
     if (searchTerm) {
-      // Global search across all categories
-      const allModels = MODEL_CATEGORIES.flatMap(cat => cat.models);
       return allModels.filter(example => {
         const term = searchTerm.toLowerCase();
         return (
@@ -55,14 +77,26 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
     // Category-scoped list when not searching
     if (!currentCategory) return [];
     return currentCategory.models;
-  }, [searchTerm, currentCategory]);
+  }, [searchTerm, semanticResults, currentCategory, allModels]);
+
+  // Handle semantic search results
+  const handleSemanticResults = (results: SearchResult[]) => {
+    if (results.length > 0) {
+      setSemanticResults(results);
+      setSearchTerm(''); // Clear keyword search when semantic search has results
+    } else {
+      setSemanticResults(null);
+    }
+  };
 
   React.useEffect(() => {
     if (!isOpen) {
       setFocusedExample(null);
+      setSemanticResults(null);
       return;
     }
     setSearchTerm('');
+    setSemanticResults(null);
     setSelectedCategory(MODEL_CATEGORIES[0]?.id || '');
   }, [isOpen]);
 
@@ -73,37 +107,65 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
           Browse {MODEL_CATEGORIES.reduce((sum, cat) => sum + cat.models.length, 0)} models compatible with BNG2.pl (ODE/SSA simulation).
         </p>
         
-        {/* Search */}
-        <div className="relative mb-4">
-          <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-          <Input 
-            type="text" 
-            placeholder="Search models..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="pl-10"
+        {/* Semantic Search */}
+        <div className="mb-4">
+          <SemanticSearchInput
+            onResults={handleSemanticResults}
+            onSearchStart={() => setIsSemanticSearching(true)}
+            onSearchEnd={() => setIsSemanticSearching(false)}
           />
         </div>
 
-        {/* Category Tabs */}
-        <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200 dark:border-slate-700 pb-4">
-          {MODEL_CATEGORIES.map(category => (
-            <button 
-              key={category.id}
-              onClick={() => setSelectedCategory(category.id)}
-              className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-                selectedCategory === category.id
-                  ? 'bg-primary text-white' 
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
-              }`}
+        {/* Semantic search results indicator */}
+        {semanticResults && (
+          <div className="mb-4 flex items-center justify-between">
+            <span className="text-sm text-slate-600 dark:text-slate-300">
+              Found {filteredExamples.length} semantically similar models
+            </span>
+            <button
+              onClick={() => setSemanticResults(null)}
+              className="text-xs text-primary hover:underline"
             >
-              {category.name} ({category.models.length})
+              Clear &amp; browse categories
             </button>
-          ))}
-        </div>
+          </div>
+        )}
 
-        {/* Category Description */}
-        {currentCategory && (
+        {/* Fallback keyword search (shows when no semantic results) */}
+        {!semanticResults && (
+          <div className="relative mb-4">
+            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+            <Input 
+              type="text" 
+              placeholder="Or filter by keyword..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-10"
+            />
+          </div>
+        )}
+
+        {/* Category Tabs - hide when semantic results are shown */}
+        {!semanticResults && !searchTerm && (
+          <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200 dark:border-slate-700 pb-4">
+            {MODEL_CATEGORIES.map(category => (
+              <button 
+                key={category.id}
+                onClick={() => setSelectedCategory(category.id)}
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
+                  selectedCategory === category.id
+                    ? 'bg-primary text-white' 
+                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
+                }`}
+              >
+                {category.name} ({category.models.length})
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Category Description - hide when semantic results are shown */}
+        {!semanticResults && !searchTerm && currentCategory && (
           <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 italic">
             {currentCategory.description}
           </p>

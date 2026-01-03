@@ -67,6 +67,53 @@ function App() {
     });
   }, []);
 
+  // Auto-run simulation on first visit for immediate value demonstration
+  useEffect(() => {
+    const hasVisited = localStorage.getItem('bng-has-visited');
+    const urlModel = getModelFromUrl();
+    
+    // Only auto-run if: first visit, no URL model, and code matches default
+    if (!hasVisited && !urlModel && code === INITIAL_BNGL_CODE) {
+      localStorage.setItem('bng-has-visited', 'true');
+      
+      // Delay slightly to let UI render first
+      const timer = setTimeout(async () => {
+        try {
+          // Parse the default model
+          const parsedModel = await bnglService.parse(code, {
+            description: 'Auto-parse default model on first visit'
+          });
+          setModel(parsedModel);
+          
+          // Validate
+          const warnings = validateBNGLModel(parsedModel);
+          setValidationWarnings(warnings);
+          setEditorMarkers(validationWarningsToMarkers(code, warnings));
+          
+          // Run simulation with sensible defaults
+          const simResults = await bnglService.simulate(parsedModel, {
+            method: 'ode',
+            t_end: 100,
+            n_steps: 100,
+            solver: 'auto'
+          }, { description: 'Auto-simulation on first visit' });
+          
+          setResults(simResults);
+          setStatus({ 
+            type: 'success', 
+            message: '🎉 Welcome! The default model has been simulated. Try editing parameters and clicking Run!' 
+          });
+          
+        } catch (err) {
+          // Silent fail - don't disrupt first-time experience
+          console.warn('Auto-run on first visit failed:', err);
+        }
+      }, 800);
+      
+      return () => clearTimeout(timer);
+    }
+  }, []); // Empty deps - run once on mount
+
   const handleParse = useCallback(async () => {
     setResults(null);
     if (parseAbortRef.current) {
@@ -144,9 +191,7 @@ function App() {
           <span>
             Simulation ({options.method}) completed.&nbsp;
             Explore: <button className="underline" onClick={() => setActiveVizTab(0)}>Time Courses</button>,{' '}
-            <button className="underline" onClick={() => setActiveVizTab(1)}>Regulatory</button>,{' '}
-            <button className="underline" onClick={() => setActiveVizTab(4)}>FIM</button>,{' '}
-            <button className="underline" onClick={() => setActiveVizTab(5)}>Steady State</button>
+            <button className="underline" onClick={() => setActiveVizTab(2)}>Regulatory Graph</button>
           </span>
         )
       });

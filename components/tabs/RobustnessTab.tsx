@@ -1,5 +1,5 @@
 
-import React, { useState, useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { BNGLModel } from '../../types';
 import { useRobustness } from '../../src/hooks/useRobustness';
 import { ComposedChart, Line, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -7,6 +7,7 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { SettingsIcon } from '../icons/SettingsIcon';
 import { CHART_COLORS } from '../../constants';
+import { ExternalLegend, formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
 
 interface RobustnessTabProps {
     model: BNGLModel | null;
@@ -19,15 +20,46 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
     const [variation, setVariation] = useState(10);
     const [isConfigOpen, setIsConfigOpen] = useState(true);
     const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
+    const [lastMultiSelection, setLastMultiSelection] = useState<Set<string>>(new Set());
+
+    const allSpecies = useMemo(() => {
+        if (!result) return [] as string[];
+        return Object.keys(result.speciesData);
+    }, [result]);
 
     // Initialize visible species when results arrive
     React.useEffect(() => {
         if (result && visibleSpecies.size === 0) {
             // Default to first 5
-            const all = Object.keys(result.speciesData);
-            setVisibleSpecies(new Set(all.slice(0, 5)));
+            setVisibleSpecies(new Set(allSpecies.slice(0, 5)));
         }
-    }, [result]);
+    }, [result, allSpecies.join('|')]);
+
+    React.useEffect(() => {
+        if (visibleSpecies.size > 1) {
+            setLastMultiSelection(new Set(visibleSpecies));
+        }
+    }, [Array.from(visibleSpecies).sort().join('|')]);
+
+    const handleToggleSpecies = (name: string) => {
+        setVisibleSpecies((prev) => {
+            const next = new Set(prev);
+            if (next.has(name)) next.delete(name);
+            else next.add(name);
+            return next;
+        });
+    };
+
+    const handleIsolateSpecies = (name: string) => {
+        setVisibleSpecies((prev) => {
+            // If already isolated, restore last multi-selection (or default)
+            if (prev.size === 1 && prev.has(name)) {
+                if (lastMultiSelection.size > 0) return new Set(lastMultiSelection);
+                return new Set(allSpecies.slice(0, 5));
+            }
+            return new Set([name]);
+        });
+    };
 
     const handleRun = () => {
         if (!model) return;
@@ -141,27 +173,6 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
                     <Card className="flex-1 min-h-0 flex flex-col p-4">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="text-sm font-semibold text-slate-700">Sensitivity Cloud</h3>
-                            {/* Legend Toggles */}
-                            <div className="flex flex-wrap gap-2">
-                                {Object.keys(result.speciesData).map((sp, i) => (
-                                    <button
-                                        key={sp}
-                                        onClick={() => {
-                                            const next = new Set(visibleSpecies);
-                                            if (next.has(sp)) next.delete(sp);
-                                            else next.add(sp);
-                                            setVisibleSpecies(next);
-                                        }}
-                                        className={`text-xs px-2 py-0.5 rounded border ${visibleSpecies.has(sp)
-                                            ? 'bg-slate-200 dark:bg-slate-600'
-                                            : 'opacity-50'
-                                            }`}
-                                        style={{ borderColor: CHART_COLORS[i % CHART_COLORS.length] }}
-                                    >
-                                        {sp}
-                                    </button>
-                                ))}
-                            </div>
                         </div>
 
                         <div className="flex-1 min-h-[450px]">
@@ -169,12 +180,23 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
                                 <ComposedChart data={chartData} margin={{ top: 10, right: 30, left: 0, bottom: 0 }}>
                                     <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
                                     <XAxis dataKey="time" type="number" label={{ value: 'Time', position: 'insideBottomRight', offset: -5 }} />
-                                    <YAxis />
-                                    <Tooltip labelFormatter={v => `Time: ${Number(v).toFixed(2)}`} />
+                                    <YAxis tickFormatter={formatYAxisTick} />
+                                    <Tooltip
+                                        labelFormatter={(v) => `Time: ${Number(v).toFixed(2)}`}
+                                        formatter={(value: any, name: any) => {
+                                            const rawName = String(name);
+                                            const cleaned = rawName.replace(/_mean$/, ' (mean)').replace(/_range$/, ' (range)');
+                                            if (Array.isArray(value) && value.length === 2) {
+                                                return [`${formatTooltipNumber(value[0], 2)} – ${formatTooltipNumber(value[1], 2)}`, cleaned];
+                                            }
+                                            return [formatTooltipNumber(value, 2), cleaned];
+                                        }}
+                                    />
                                     {/* <Legend /> */}
 
-                                    {Array.from(visibleSpecies).map((sp, i) => {
-                                        const color = CHART_COLORS[i % CHART_COLORS.length];
+                                    {Array.from(visibleSpecies).map((sp) => {
+                                        const index = Math.max(0, allSpecies.indexOf(sp));
+                                        const color = CHART_COLORS[index % CHART_COLORS.length];
                                         return (
                                             <React.Fragment key={sp}>
                                                 {/* Confidence Cloud (Area) */}
@@ -200,6 +222,19 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
                                     })}
                                 </ComposedChart>
                             </ResponsiveContainer>
+                        </div>
+
+                        {allSpecies.length > 0 && (
+                            <ExternalLegend
+                                entries={allSpecies.map((sp, i) => ({ name: sp, color: CHART_COLORS[i % CHART_COLORS.length] }))}
+                                visible={visibleSpecies}
+                                onToggle={handleToggleSpecies}
+                                onIsolate={handleIsolateSpecies}
+                            />
+                        )}
+
+                        <div className="text-center text-xs text-slate-500 mt-2">
+                            Click legend to toggle series. Double-click legend to isolate/restore.
                         </div>
                     </Card>
                 ) : (

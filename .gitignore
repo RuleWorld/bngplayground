@@ -141,4 +141,16 @@ web_output/
 
 artifacts/
 
+# Debug and benchmark output (generated files)
+bng2_comparison.json
+bng2_reference_report.json
+comparison_results.json
+reaction_comparison_results.json
+ode_published_models.json
+*_comparison*.json
+*_report.json
+
+# Embedding cache (regenerated on build)
+.embedding-cache/
+
 # End of .gitignore
