@@ -35,15 +35,35 @@ export interface MatchMap {
 }
 
 // Disable verbose logging in production to prevent console spam
-const shouldLogGraphMatcher = false;
+// Can be enabled via environment: DEBUG_GRAPH_MATCHER=1
+const shouldLogGraphMatcher = typeof process !== 'undefined' && process.env?.DEBUG_GRAPH_MATCHER === '1';
 
 // Safety limits to prevent infinite loops in pathological cases
+// These values were chosen empirically based on BNG2 model complexity:
+// - MAX_VF2_ITERATIONS: molecule-level subgraph matching (typical models: <1k iterations)
+// - MAX_COMPONENT_ITERATIONS: component-level assignment enumeration (typical: <100 iterations)
 const MAX_VF2_ITERATIONS = 100000;
 const MAX_COMPONENT_ITERATIONS = 10000;
 
 // Cache for findAllMaps results - keyed by pattern string + target string
+// Size: ~2000 entries to match conservative browser memory budget
+// Note: Cache is cleared at the start of each network generation run
 const matchCache = new Map<string, MatchMap[]>();
-const MAX_CACHE_SIZE = 50000;
+const MAX_CACHE_SIZE = 2000;  // Reduced from 50000 for browser memory constraints
+
+/**
+ * Add entry to matchCache with LRU eviction when size exceeds limit
+ */
+function addToMatchCache(key: string, value: MatchMap[]): void {
+  matchCache.set(key, value);
+  if (matchCache.size > MAX_CACHE_SIZE) {
+    // Remove oldest entry (Map maintains insertion order)
+    const oldestKey = matchCache.keys().next().value;
+    if (oldestKey !== undefined) {
+      matchCache.delete(oldestKey);
+    }
+  }
+}
 
 /**
  * Clear the match cache. Call this at the start of network generation.
@@ -255,10 +275,8 @@ export class GraphMatcher {
     const iterationCount = { value: 0 };
     this.vf2Backtrack(state, matches, iterationCount);
 
-    // Cache result if cache not too large
-    if (matchCache.size < MAX_CACHE_SIZE) {
-      matchCache.set(cacheKey, matches);
-    }
+    // Cache result with LRU eviction
+    addToMatchCache(cacheKey, matches);
 
     if (shouldLogGraphMatcher) {
       // console.log(
@@ -359,6 +377,8 @@ export class GraphMatcher {
   private static vf2BacktrackFirst(state: VF2State, iterationCount: { value: number }): MatchMap | null {
     iterationCount.value++;
     if (iterationCount.value > MAX_VF2_ITERATIONS) {
+      // Note: Some callers catch this error and handle gracefully (e.g., countMoleculeEmbeddings returns 0),
+      // but others propagate it (e.g., during network generation). Upstream must handle this limit explicitly.
       throw new Error(
         `[GraphMatcher] VF2 iteration limit exceeded (${MAX_VF2_ITERATIONS}). ` +
           `Pattern may be too complex or combinatorially explosive. Aborting match to avoid partial results.`

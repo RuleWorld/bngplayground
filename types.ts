@@ -44,7 +44,7 @@ export interface BNGLSpecies {
 }
 
 export interface BNGLObservable {
-  type: 'molecules' | 'species';
+  type: 'molecules' | 'species' | string;
   name: string;
   pattern: string;
   comment?: string;
@@ -65,6 +65,7 @@ export interface BNGLReaction {
   // For functional rates (containing observables or function calls)
   rateExpression?: string;  // Original expression string for dynamic evaluation
   isFunctionalRate?: boolean;  // True if rate depends on observables/functions
+  propensityFactor?: number;  // Statistical factor for degeneracy
 }
 
 // BNG function definition (e.g., gene_Wip1_activity())
@@ -85,6 +86,8 @@ export interface ReactionRule {
   constraints?: string[];
   deleteMolecules?: boolean;
   allowsIntramolecular?: boolean;
+  isFunctionalRate?: boolean;  // True if rate contains observables/functions
+  propensityFactor?: number;  // Statistical factor for degeneracy
   comment?: string;
 }
 
@@ -184,6 +187,11 @@ export interface SerializedWorkerError {
   message: string;
   stack?: string;
   details?: Record<string, unknown>;
+}
+
+export interface ExtendedError extends Error {
+  stack?: string;
+  cause?: unknown;
 }
 
 export type WorkerRequest =

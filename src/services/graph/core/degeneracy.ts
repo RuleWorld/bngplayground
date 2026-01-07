@@ -28,7 +28,9 @@ function componentMatches(pComp: Component, tComp: Component): boolean {
     return targetBondCount === 0;
   }
   if (pComp.wildcard === '?') {
-    return targetBondCount <= 1;
+    // BNG2 semantics: bond wildcard '?' means the bond state is unconstrained.
+    // (See bng2/Perl2/SpeciesGraph.pm: wildcard logic accepts '?' when edge-count differs.)
+    return true;
   }
 
   // Specific bond patterns: if pattern has explicit bonds, target must be bound.
@@ -167,6 +169,6 @@ export const countEmbeddingDegeneracy = (
   };
 
   backtrack(0);
-  return count || 1;
+  return count;
 };
 

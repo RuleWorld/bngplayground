@@ -128,9 +128,6 @@ gdat_comparison_report.json
 metadata.json
 scripts/comparison_report.json
 
-
-.agent
-
 bionetgen_python/*
 bionetgen_repo/*
 

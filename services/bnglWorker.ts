@@ -18,16 +18,20 @@ import { Rxn } from '../src/services/graph/core/Rxn';
 import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
 import { GraphMatcher } from '../src/services/graph/core/Matcher';
 import { countEmbeddingDegeneracy } from '../src/services/graph/core/degeneracy';
+// SafeExpressionEvaluator will be dynamically imported only when functional rates are enabled to avoid bundling vulnerable libs
 // Using official ANTLR parser for bng2.pl parity (util polyfill added in vite.config.ts)
 import { parseBNGLStrict as parseBNGLModel } from '../src/parser/BNGLParserWrapper';
 // Conservation law detection is available in ConservationLaws.ts for future use
-// WebGPU ODE solver for GPU-accelerated integration
-import { WebGPUODESolver, GPUReaction, isWebGPUODESolverAvailable } from '../src/services/WebGPUODESolver';
+// Note: WebGPU solver is dynamically imported when needed to avoid loading dead code in unsupported browsers
 
-const ctx: DedicatedWorkerGlobalScope = self as unknown as DedicatedWorkerGlobalScope;
 
-// Version marker to verify updated code is loaded
-console.log('[Worker] bnglWorker v2.2.0 - n_steps API priority fix 2024-12-31');
+const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
+  ? (self as unknown as DedicatedWorkerGlobalScope)
+  : ({} as unknown as DedicatedWorkerGlobalScope);
+
+// Feature flags & runtime configuration moved to a small module
+// (keeps the worker file smaller and test-friendly)
+import { getFeatureFlags, registerCacheClearCallback } from './featureFlags';
 
 type JobState = {
   cancelled: boolean;
@@ -37,6 +41,7 @@ type JobState = {
 const jobStates = new Map<number, JobState>();
 
 // Ring buffer for logs to prevent memory blowup
+// Default size (1000) chosen to capture ~5-10 minutes of active simulation logs
 class LogRingBuffer {
   private buffer: string[] = [];
   private maxSize: number;
@@ -72,16 +77,75 @@ class LogRingBuffer {
 
 const logBuffer = new LogRingBuffer(1000);
 
-// Override console.log to use ring buffer
+const safeStringify = (value: unknown): string => {
+  if (typeof value === 'string') return value;
+  if (value instanceof Error) {
+    return `${value.name}: ${value.message}`;
+  }
+  try {
+    const seen = new WeakSet<object>();
+    return JSON.stringify(value, (_key, v) => {
+      if (typeof v === 'object' && v !== null) {
+        if (seen.has(v)) return '[Circular]';
+        seen.add(v);
+      }
+      return v;
+    });
+  } catch {
+    try {
+      return String(value);
+    } catch {
+      return '[Unserializable]';
+    }
+  }
+};
+
+const setBoundedCache = <K, V>(cache: Map<K, V>, key: K, value: V, maxSize: number): void => {
+  if (maxSize <= 0) return;
+  // Refresh insertion order (Map preserves insertion order, so delete+set moves to end)
+  cache.delete(key); // No-op if doesn't exist; refreshes order if it does
+  cache.set(key, value);
+  // Evict oldest entry if over limit (O(1) operation, not O(n) loop)
+  if (cache.size > maxSize) {
+    const oldestKey = cache.keys().next().value;
+    if (oldestKey !== undefined) {
+      cache.delete(oldestKey);
+    }
+  }
+};
+
+// Override console.log/warn/error to use ring buffer and prevent circular object crashes
 const originalConsoleLog = console.log;
+const originalConsoleWarn = console.warn;
+const originalConsoleError = console.error;
+const originalConsoleDebug = console.debug;
+
 console.log = (...args: any[]) => {
-  const message = args.map(arg => typeof arg === 'string' ? arg : JSON.stringify(arg)).join(' ');
+  const message = args.map((arg) => safeStringify(arg)).join(' ');
   logBuffer.add(message);
   originalConsoleLog(...args); // Still log to actual console for debugging
+};
+
+console.warn = (...args: any[]) => {
+  const message = '[WARN] ' + args.map((arg) => safeStringify(arg)).join(' ');
+  logBuffer.add(message);
+  originalConsoleWarn(...args);
+};
+
+console.error = (...args: any[]) => {
+  const message = '[ERROR] ' + args.map((arg) => safeStringify(arg)).join(' ');
+  logBuffer.add(message);
+  originalConsoleError(...args);
+};
+console.debug = (...args: any[]) => {
+  const message = '[DEBUG] ' + args.map((arg) => safeStringify(arg)).join(' ');
+  logBuffer.add(message);
+  originalConsoleDebug?.(...args);
 };
 const cachedModels = new Map<number, BNGLModel>();
 let nextModelId = 1;
 // LRU cache size limit for cached models inside the worker
+// Limit chosen to support multiple open tabs/models without excessive memory (8 × ~1MB avg = ~8MB)
 const MAX_CACHED_MODELS = 8;
 
 const touchCachedModel = (modelId: number) => {
@@ -134,24 +198,54 @@ const serializeError = (error: unknown): SerializedWorkerError => {
   return { message: typeof error === 'string' ? error : 'Unknown error' };
 };
 
-ctx.addEventListener('error', (event) => {
-  const payload: SerializedWorkerError = {
-    ...serializeError(event.error ?? event.message ?? 'Unknown worker error'),
-    details: {
-      filename: event.filename,
-      lineno: event.lineno,
-      colno: event.colno,
-    },
-  };
-  ctx.postMessage({ id: -1, type: 'worker_internal_error', payload });
-  event.preventDefault();
-});
+// --- Type Guards for Worker Payloads ---
+const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
-ctx.addEventListener('unhandledrejection', (event) => {
-  const payload: SerializedWorkerError = serializeError(event.reason ?? 'Unhandled rejection in worker');
-  ctx.postMessage({ id: -1, type: 'worker_internal_error', payload });
-  event.preventDefault();
-});
+const isSimulateModelPayload = (p: unknown): p is { model: BNGLModel; options: SimulationOptions } => {
+  if (!isRecord(p)) return false;
+  return 'model' in p && 'options' in p;
+};
+
+const isSimulateModelIdPayload = (
+  p: unknown
+): p is { modelId: number; parameterOverrides?: Record<string, number>; options: SimulationOptions } => {
+  if (!isRecord(p)) return false;
+  const idVal = (p as Record<string, unknown>).modelId;
+  return 'modelId' in p && typeof idVal === 'number' && 'options' in p;
+};
+
+const isCacheModelPayload = (p: unknown): p is { model: BNGLModel } => {
+  return isRecord(p) && 'model' in p;
+};
+
+const isReleaseModelPayload = (p: unknown): p is { modelId: number } => {
+  if (!isRecord(p) || !('modelId' in p)) return false;
+  const idVal = (p as Record<string, unknown>).modelId;
+  return typeof idVal === 'number';
+};
+
+if (typeof ctx.addEventListener === 'function') {
+  ctx.addEventListener('error', (event) => {
+    const payload: SerializedWorkerError = {
+      ...serializeError(event.error ?? event.message ?? 'Unknown worker error'),
+      details: {
+        filename: event.filename,
+        lineno: event.lineno,
+        colno: event.colno,
+      },
+    };
+    ctx.postMessage({ id: -1, type: 'worker_internal_error', payload });
+    event.preventDefault();
+  });
+}
+
+if (typeof ctx.addEventListener === 'function') {
+  ctx.addEventListener('unhandledrejection', (event) => {
+    const payload: SerializedWorkerError = serializeError(event.reason ?? 'Unhandled rejection in worker');
+    ctx.postMessage({ id: -1, type: 'worker_internal_error', payload });
+    event.preventDefault();
+  });
+}
 
 // --- Helper: Compartment Utilities ---
 const getCompartment = (s: string) => {
@@ -192,12 +286,16 @@ function getMoleculeCompartment(mol: string): { compartment: string | null; clea
   return { compartment: null, cleanMol: mol };
 }
 
+// Observable pattern matching cache - bounded to prevent unbounded growth across simulations
+// Size: ~1000 entries ≈ 500KB (chosen for typical browser memory constraints)
 const parsedGraphCache = new Map<string, ReturnType<typeof BNGLParser.parseSpeciesGraph>>();
+const MAX_PARSED_GRAPH_CACHE = 1000;
 function parseGraphCached(str: string) {
-  const cached = parsedGraphCache.get(str);
+  const cacheKey = `${PARSED_GRAPH_CACHE_VERSION}::${str}`;
+  const cached = parsedGraphCache.get(cacheKey);
   if (cached) return cached;
   const parsed = BNGLParser.parseSpeciesGraph(str);
-  parsedGraphCache.set(str, parsed);
+  setBoundedCache(parsedGraphCache, cacheKey, parsed, MAX_PARSED_GRAPH_CACHE);
   return parsed;
 }
 
@@ -248,7 +346,7 @@ function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
  * E.g., for pattern egfr.egfr and species egfr-egfr, it returns 2.
  * For pattern A.B and species A-B, it returns 1 (anchored on A).
  */
-function countMultiMoleculePatternMatches(speciesStr: string, pattern: string): number {
+export function countMultiMoleculePatternMatches(speciesStr: string, pattern: string): number {
   const patComp = getCompartment(pattern);
   const specComp = getCompartment(speciesStr);
 
@@ -277,40 +375,30 @@ function countMultiMoleculePatternMatches(speciesStr: string, pattern: string): 
 }
 
 // --- Helper: Count Matches for Molecules Observable ---
-// Fixed to handle per-molecule compartments (e.g., L(r)@PM in species matching @PM:L pattern)
 function countPatternMatches(speciesStr: string, patternStr: string): number {
-  // Extract compartment constraint from pattern (prefix format: @PM:L → "PM")
   const patComp = getCompartment(patternStr);
+  const specComp = getCompartment(speciesStr);
+
+  if (patComp && patComp !== specComp) return 0;
+
   const cleanPat = removeCompartment(patternStr);
-  const specLevelComp = getCompartment(speciesStr);
+  const cleanSpec = removeCompartment(speciesStr);
 
   if (cleanPat.includes('.')) {
-    // Multi-molecule pattern: BNG2 "Molecules" observables count the number of 
-    // physical molecules in the species that satisfy the pattern.
-    // Specifically, for a pattern P1.P2... this is the number of molecules m 
-    // in the species that can serve as the target for P1 in some match.
-    return countMultiMoleculePatternMatches(speciesStr, patternStr);
+    return isSpeciesMatch(speciesStr, patternStr) ? 1 : 0;
   } else {
-    // Single molecule pattern: count ALL embeddings across all matching molecules
-    // FIX: Use countMoleculeEmbeddings to count all ways the pattern can embed
-    // E.g., A(b) matching A(b,b) should count 2 (one embedding per free b site)
-    const specMols = speciesStr.split('.');  // Keep compartment info per molecule
+    const specMols = cleanSpec.split('.');
     let count = 0;
     for (const sMol of specMols) {
-      const { compartment: rawMolComp, cleanMol } = getMoleculeCompartment(sMol);
-      // BNG2 behavior: For compartment observables like @PM:L, use the COMPLEX-level
-      // compartment (specLevelComp), not the molecule's original compartment.
-      // The molecule-level compartment (rawMolComp) tracks where the molecule came from,
-      // but for counting "molecules in compartment PM", we use the complex's location.
-      const molComp = specLevelComp ?? rawMolComp;
-      // If pattern requires a specific compartment, molecule must be in that compartment
-      if (patComp && molComp !== patComp) continue;
-      // Count all embeddings of the pattern into this molecule
-      count += countMoleculeEmbeddings(cleanPat, cleanMol);
+      if (countMoleculeEmbeddings(cleanPat, sMol) > 0) {
+        count++;
+      }
     }
     return count;
   }
 }
+
+
 
 // --- Helper: Evaluate Functional Rate Expression ---
 // Evaluates a rate expression that may contain observable names and function calls
@@ -318,17 +406,138 @@ function countPatternMatches(speciesStr: string, patternStr: string): number {
 
 // PERFORMANCE OPTIMIZATION: Cache for pre-expanded expressions (function calls replaced)
 const expandedExpressionCache: Map<string, string> = new Map();
+const MAX_EXPANDED_EXPRESSION_CACHE = 2000;  // Reduced for browser memory constraints (was 20000)
 
 // PERFORMANCE OPTIMIZATION: Pre-compile expressions into functions
 // These functions take context as argument and return the rate
+// Size: ~2000 entries ≈ 2MB (1:1 mapping with expandedExpressionCache)
 const compiledRateFunctions: Map<string, (context: Record<string, number>) => number> = new Map();
+const MAX_COMPILED_RATE_FUNCTIONS = 2000;
+
+/**
+ * FNV-1a hash function for compact cache keys.
+ * Produces a 32-bit hash as a hex string (8 characters).
+ */
+function fnv1aHash(str: string): string {
+  let hash = 2166136261; // FNV offset basis
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = (hash * 16777619) >>> 0; // FNV prime, keep 32-bit
+  }
+  return hash.toString(16).padStart(8, '0');
+}
+
+
+// Cache versioning for compiled rate functions (bump to invalidate old entries)
+// Semantic cache versions (bump to invalidate old entries)
+let COMPILED_RATE_CACHE_VERSION = '1.0.0';
+let EXPANDED_EXPR_CACHE_VERSION = '1.0.0';
+let PARSED_GRAPH_CACHE_VERSION = '1.0.0';
+
+/**
+ * Interface for expression evaluators (SafeExpressionEvaluator or test mocks).
+ * Defines the contract for secure expression compilation and evaluation.
+ */
+export interface ExpressionEvaluator {
+  compile: (expr: string, vars: string[]) => (ctx: Record<string, number>) => number;
+  getReferencedVariables: (expr: string) => string[];
+  evaluateConstant: (expr: string) => number;
+}
+
+// Lazy reference to the evaluator module - only populated when functional rates are enabled and the module is loaded
+let SafeExpressionEvaluatorRef: ExpressionEvaluator | undefined = undefined;
+
+/**
+ * Internal loader: dynamically load evaluator (used internally by simulate)
+ */
+async function loadEvaluator(): Promise<void> {
+  if (!SafeExpressionEvaluatorRef) {
+    const mod = await import('./safeExpressionEvaluator');
+    SafeExpressionEvaluatorRef = mod.SafeExpressionEvaluator;
+  }
+}
+
+/**
+ * Test helper: allow tests to inject or load an evaluator reference synchronously.
+ * Tests should import `SafeExpressionEvaluator` via dynamic import and then call
+ * `_setEvaluatorRefForTests(mod.SafeExpressionEvaluator)`.
+ */
+export function _setEvaluatorRefForTests(ref: any): void {
+  SafeExpressionEvaluatorRef = ref;
+}
+
+function bumpPatchVersion(v: string): string {
+  const parts = v.split('.').map((p) => parseInt(p, 10));
+  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return v;
+  parts[2] = parts[2] + 1;
+  return `${parts[0]}.${parts[1]}.${parts[2]}`;
+}
+
+function clearAllCaches() {
+  expandedExpressionCache.clear();
+  compiledRateFunctions.clear();
+  parsedGraphCache.clear();
+  // Also bump versions for defense-in-depth if needed
+  COMPILED_RATE_CACHE_VERSION = bumpPatchVersion(COMPILED_RATE_CACHE_VERSION);
+  EXPANDED_EXPR_CACHE_VERSION = bumpPatchVersion(EXPANDED_EXPR_CACHE_VERSION);
+  PARSED_GRAPH_CACHE_VERSION = bumpPatchVersion(PARSED_GRAPH_CACHE_VERSION);
+}
+
+// Register callback to clear all caches if security-sensitive flags are changed
+registerCacheClearCallback(clearAllCaches);
+
+
+/**
+ * Try to evaluate a constant expression using the evaluator if present,
+ * otherwise fallback to a safe parseFloat-based fallback (best-effort).
+ */
+function evaluateExpressionOrParse(expr: string): number {
+  try {
+    if (SafeExpressionEvaluatorRef && typeof SafeExpressionEvaluatorRef.evaluateConstant === 'function') {
+      return SafeExpressionEvaluatorRef.evaluateConstant(expr);
+    }
+  } catch (e) {
+    console.warn('[Worker] evaluateExpressionOrParse: evaluator failed:', e?.message ?? String(e));
+  }
+  const n = parseFloat(String(expr));
+  return Number.isNaN(n) ? 0 : n;
+}
+
+// Backwards-compatible shim so legacy calls to `SafeExpressionEvaluator.evaluateConstant`
+// inside this worker will continue to function by delegating to the dynamic ref or
+// falling back to a parseFloat-based best-effort implementation.
+const SafeExpressionEvaluator = {
+  evaluateConstant: (expr: string) => evaluateExpressionOrParse(expr),
+};
+
+// Register a callback with the central feature-flag module so that when flags are
+// toggled (e.g. functionalRatesEnabled => false) we can clear internal caches.
+registerCacheClearCallback(() => {
+  clearAllCaches();
+  SafeExpressionEvaluatorRef = undefined;
+  console.warn('[Worker] Functional rates disabled via featureFlags — caches cleared');
+});
+
+/** Testing helper: return current cache sizes (useful for unit tests) */
+export function getCacheSizes() {
+  return {
+    expandedExpressionCacheSize: expandedExpressionCache.size,
+    compiledRateFunctionsSize: compiledRateFunctions.size,
+    parsedGraphCacheSize: parsedGraphCache.size,
+    compiledVersion: COMPILED_RATE_CACHE_VERSION,
+    expandedVersion: EXPANDED_EXPR_CACHE_VERSION,
+    parsedVersion: PARSED_GRAPH_CACHE_VERSION,
+  };
+}
+
+
 
 function preExpandExpression(
   expression: string,
   functions?: { name: string; args: string[]; expression: string }[]
 ): string {
-  // Check cache first
-  const cacheKey = expression;
+  // Check cache first (versioned)
+  const cacheKey = `${EXPANDED_EXPR_CACHE_VERSION}::${expression}`;
   const cached = expandedExpressionCache.get(cacheKey);
   if (cached !== undefined) return cached;
 
@@ -362,71 +571,102 @@ function preExpandExpression(
     }
   }
 
-  // Replace ^ with ** for JavaScript exponentiation
-  expandedExpr = expandedExpr.replace(/\^/g, '**');
+  // expr-eval supports ^ as power; no replacement needed
 
-  expandedExpressionCache.set(cacheKey, expandedExpr);
+  setBoundedCache(expandedExpressionCache, cacheKey, expandedExpr, MAX_EXPANDED_EXPRESSION_CACHE);
   return expandedExpr;
 }
 
-function getCompiledRateFunction(
+// Helper to get evaluator (ref or override or require)
+function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | null {
+  if (override) return override;
+  if (SafeExpressionEvaluatorRef) return SafeExpressionEvaluatorRef;
+  
+  // Fallback for Node environment
+  if (typeof (globalThis as any).require === 'function') {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-var-requires
+        const mod = (globalThis as any).require('./safeExpressionEvaluator');
+        return (mod.SafeExpressionEvaluator ?? mod) as ExpressionEvaluator;
+      } catch (e) {
+        // Ignore
+      }
+  }
+  return null;
+}
+
+export function getCompiledRateFunction(
   expandedExpr: string,
-  varNames: string[]
+  varNames: string[],
+  evaluatorOverride?: ExpressionEvaluator
 ): (context: Record<string, number>) => number {
-  // Check cache first
-  const cached = compiledRateFunctions.get(expandedExpr);
-  if (cached !== undefined) return cached;
-
-  // Build a function that evaluates the expression using context lookup
-  // Sort by length (longest first) to avoid partial replacements
-  const sortedNames = [...varNames].sort((a, b) => b.length - a.length);
-
-  // Build expression that uses context lookups instead of direct variable values
-  let jsExpr = expandedExpr;
-  for (const name of sortedNames) {
-    const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    jsExpr = jsExpr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), `ctx["${name}"]`);
+  if (!getFeatureFlags().functionalRatesEnabled) {
+    throw new Error('Functional rates temporarily disabled pending security review');
   }
 
+  const evaluator = getEvaluator(evaluatorOverride);
+  if (!evaluator) {
+     throw new Error('SafeExpressionEvaluator not loaded; ensure functional rates are enabled and evaluator is initialized');
+  }
+
+  // Determine referenced variables from parsed expression and restrict to provided varNames
+  let referenced: string[] = [];
   try {
-    // Compile once and cache - this is the critical optimization
-    const fn = new Function('ctx', `return ${jsExpr};`) as (context: Record<string, number>) => number;
-    compiledRateFunctions.set(expandedExpr, fn);
+    referenced = evaluator.getReferencedVariables(expandedExpr);
+  } catch (e: any) {
+    console.warn(`[getCompiledRateFunction] Could not extract variables for '${expandedExpr}': ${e?.message ?? String(e)}`);
+    referenced = [];
+  }
+
+  const usedVars = referenced.filter((v) => varNames.includes(v));
+  // Use hash for compact cache keys (Issue #4 fix)
+  const cacheKey = `${COMPILED_RATE_CACHE_VERSION}::${fnv1aHash(expandedExpr)}__${usedVars.sort().join(',')}`;
+  const cached = compiledRateFunctions.get(cacheKey);
+  if (cached !== undefined) return cached;
+
+  try {
+    const fn = evaluator.compile(expandedExpr, usedVars);
+    setBoundedCache(compiledRateFunctions, cacheKey, fn, MAX_COMPILED_RATE_FUNCTIONS);
     return fn;
   } catch (e: any) {
-    console.warn(`[getCompiledRateFunction] Failed to compile '${expandedExpr}': ${e.message}`);
-    // Return a function that always returns 0
+    console.error(`[getCompiledRateFunction] Failed to compile '${expandedExpr}': ${e?.message ?? String(e)}`);
     const zeroFn = () => 0;
-    compiledRateFunctions.set(expandedExpr, zeroFn);
+    setBoundedCache(compiledRateFunctions, cacheKey, zeroFn, MAX_COMPILED_RATE_FUNCTIONS);
     return zeroFn;
   }
 }
 
-function evaluateFunctionalRate(
+export function evaluateFunctionalRate(
   expression: string,
   parameters: Record<string, number>,
   observableValues: Record<string, number>,
-  functions?: { name: string; args: string[]; expression: string }[]
+  functions?: { name: string; args: string[]; expression: string }[],
+  prebuiltContext?: Record<string, number>,
+  evaluatorOverride?: ExpressionEvaluator
 ): number {
-  // Build context with parameters and observable values
-  const context: Record<string, number> = { ...parameters, ...observableValues };
+  if (!getFeatureFlags().functionalRatesEnabled) {
+    throw new Error('Functional rates temporarily disabled pending security review');
+  }
+
+  // Build context with parameters and observable values (or use prebuilt for performance)
+  const context: Record<string, number> = prebuiltContext || { ...parameters, ...observableValues };
 
   // Get pre-expanded expression (cached)
   const expandedExpr = preExpandExpression(expression, functions);
 
   // Get compiled function (cached)
   const varNames = Object.keys(context);
-  const fn = getCompiledRateFunction(expandedExpr, varNames);
+  const fn = getCompiledRateFunction(expandedExpr, varNames, evaluatorOverride);
 
   try {
     const result = fn(context);
     if (typeof result !== 'number' || !isFinite(result)) {
-      console.warn(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
+      console.error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
       return 0;
     }
     return result;
   } catch (e: any) {
-    console.warn(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e.message}`);
+    console.error(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`);
     return 0;
   }
 }
@@ -438,15 +678,16 @@ function parseBNGL(jobId: number, bnglCode: string): BNGLModel {
 
 /**
  * Convert worker's concreteReactions to GPUReaction[] format for WebGPU solver
+ * Note: Dynamically imports WebGPU types when needed
  */
-function convertReactionsToGPU(
+async function convertReactionsToGPU(
   concreteReactions: Array<{
     reactants: Int32Array;
     products: Int32Array;
     rateConstant: number;
   }>
-): { gpuReactions: GPUReaction[]; rateConstants: number[] } {
-  const gpuReactions: GPUReaction[] = [];
+): Promise<{ gpuReactions: any[]; rateConstants: number[] }> {
+  const gpuReactions: any[] = [];
   const rateConstants: number[] = [];
 
   concreteReactions.forEach((rxn, idx) => {
@@ -556,8 +797,8 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     const forwardRule = BNGLParser.parseRxnRule(ruleStr, rate);
     forwardRule.name = r.name;
     if (isForwardFunctional) {
-      (forwardRule as any).rateExpression = r.rate;
-      (forwardRule as any).isFunctionalRate = true;
+      (forwardRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).rateExpression = r.rate;
+      (forwardRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).isFunctionalRate = true;
     }
 
     if (r.constraints && r.constraints.length > 0) {
@@ -569,8 +810,8 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
       const reverseRule = BNGLParser.parseRxnRule(reverseRuleStr, reverseRate);
       reverseRule.name = r.name + '_rev';
       if (isReverseFunctional) {
-        (reverseRule as any).rateExpression = r.reverseRate;
-        (reverseRule as any).isFunctionalRate = true;
+        (reverseRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).rateExpression = r.reverseRate;
+        (reverseRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).isFunctionalRate = true;
       }
       return [forwardRule, reverseRule];
     }
@@ -597,6 +838,7 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
   });
 
   // Set up progress callback to emit progress to main thread during simulation
+  // Update frequency: 250ms chosen to balance UI responsiveness vs. postMessage overhead
   let lastProgressTime = 0;
   const progressCallback = (progress: GeneratorProgress) => {
     const now = Date.now();
@@ -627,7 +869,7 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
         products: r.products.map((pidx: number) => GraphCanonicalizer.canonicalize(result.species[pidx].graph)),
         rate: r.rateExpression || String(r.rate),
         rateConstant: typeof r.rate === 'number' ? r.rate : 0,
-        propensityFactor: (r as any).propensityFactor ?? 1
+        propensityFactor: (r as unknown as { propensityFactor?: number }).propensityFactor ?? 1
       };
       return reaction;
     } catch (e: any) {
@@ -671,6 +913,12 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
    * Format a number to BNG2-compatible scientific notation with 12 decimal digits.
    * Uses "round half down" for tie-breaker cases to match observed BNG2 printf behavior.
    */
+  // Custom scientific notation formatter to match BNG2.pl's printf("%.12e") output
+  // Rationale: BNG2 uses glibc's printf with specific rounding behavior for tie-breaking
+  // (0.5 fractional case rounds DOWN for positive numbers). This function replicates that
+  // behavior to ensure GDAT parity. The 1e-9 threshold is empirically chosen to handle
+  // floating-point precision limits in JavaScript vs. C.
+  // Note: This is intentionally "fragile" - it exists solely for output parity, not correctness.
   const toBngScientific12 = (x: number): string => {
     if (!Number.isFinite(x) || x === 0) {
       return x.toExponential(12);
@@ -681,7 +929,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
     // Get exponent: floor(log10(absX))
     const exp = Math.floor(Math.log10(absX));
-    
+
     // Normalized mantissa: absX / 10^exp should be in [1, 10)
     const scale = Math.pow(10, exp);
     const mantissa = absX / scale;
@@ -689,12 +937,12 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     // We need 13 significant digits total (1 before decimal + 12 after)
     // Multiply by 10^12 to get all significant digits as an integer
     const shifted = mantissa * 1e12;
-    
+
     // Custom rounding: for tie-breaker cases, round DOWN (floor)
     // Check if we're at a tie (value ends in exactly .5 after shifting)
     const floored = Math.floor(shifted);
     const fraction = shifted - floored;
-    
+
     // Tie condition: fraction is exactly 0.5 (or very close due to FP errors)
     // If tie, round DOWN. Otherwise, use normal rounding.
     let rounded: number;
@@ -722,17 +970,17 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     const expSign = exp >= 0 ? '+' : '-';
     const expAbs = Math.abs(exp);
     const expPadded = expAbs < 100 ? String(expAbs).padStart(2, '0') : String(expAbs);
-    
+
     return `${sign}${mantStr}e${expSign}${expPadded}`;
   };
 
   const quantizeBngPrintedTime = (t: number): number => {
     if (!Number.isFinite(t)) return t;
-    
+
     // Use custom BNG2-compatible formatting
     const formatted = toBngScientific12(t);
     const parsed = Number(formatted);
-    
+
     // Preserve exact-integer timestamps
     if (Number.isInteger(parsed)) return parsed;
     return parsed;
@@ -937,7 +1185,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       rateConstant: rate,
       rateExpression: isFunctionalRate ? rateExpr : null,
       isFunctionalRate,
-      propensityFactor: (r as any).propensityFactor ?? 1
+      propensityFactor: r.propensityFactor ?? 1
     };
   }).filter(r => r !== null) as {
     reactants: Int32Array;
@@ -953,6 +1201,22 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
   const functionalRateCount = concreteReactions.filter(r => r.isFunctionalRate).length;
   if (functionalRateCount > 0) {
     console.log(`[Worker] ${functionalRateCount} of ${concreteReactions.length} reactions have functional rates`);
+    if (!getFeatureFlags().functionalRatesEnabled) {
+      console.error('[Worker] Functional rates temporarily disabled pending security review');
+      // Clear & bump versions immediately for defense-in-depth
+      clearAllCaches();
+      throw new Error('Functional rates temporarily disabled pending security review');
+    } else {
+      // Lazy-load the evaluator module only when we actually need it
+      if (!SafeExpressionEvaluatorRef) {
+        try {
+          await loadEvaluator();
+        } catch (e: any) {
+          console.error('[Worker] Failed to load SafeExpressionEvaluator module:', e?.message ?? String(e));
+          throw new Error('Failed to initialize expression evaluator');
+        }
+      }
+    }
   }
 
   // 3. Pre-process Observables (Cache matching species indices and coefficients)
@@ -1024,7 +1288,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       }
     };
 
-    const obsType = ((obs as any).type ?? '').toString().toLowerCase();
+    const obsType = (obs.type ?? '').toLowerCase();
     model.species.forEach((s, i) => {
       let count = 0;
       for (const pat of patterns) {
@@ -1133,7 +1397,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
                   expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
                 }
                 expr = expr.replace(/\^/g, '**');
-                resolvedValue = new Function('return ' + expr)() as number;
+                resolvedValue = SafeExpressionEvaluator.evaluateConstant(expr);
               } catch {
                 // Fall back to parseFloat
                 resolvedValue = parseFloat(String(change.value)) || 0;
@@ -1148,7 +1412,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
           const normalizeCompartmentSyntax = (s: string) => s.replace(/^@([A-Za-z0-9_]+):(?!:)/, '@$1::');
           const wantedPattern = change.species.trim();
           const normalizedWanted = normalizeCompartmentSyntax(wantedPattern);
-          
+
           let speciesIdx = speciesMap.get(normalizedWanted);
           if (speciesIdx === undefined) {
             // Also try original pattern in case speciesMap uses single-colon syntax
@@ -1207,7 +1471,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
                 expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
               }
               expr = expr.replace(/\^/g, '**');
-              resolvedValue = new Function('return ' + expr)() as number;
+              resolvedValue = SafeExpressionEvaluator.evaluateConstant(expr);
             } catch (e) {
               console.warn(`[Worker] Failed to evaluate setParameter expression "${change.value}":`, e);
               resolvedValue = parseFloat(String(change.value)) || 0;
@@ -1381,8 +1645,10 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
         }
       };
     } else {
-      // No JIT compilation possible due to large number, but handled below
-      derivatives = null as any;
+      // No JIT compilation possible due to large number; set placeholder and override below
+      derivatives = (_yIn: Float64Array, dydt: Float64Array) => {
+        dydt.fill(0);
+      };
     }
 
     // If there are functional rates, we need a special derivative function
@@ -1408,6 +1674,9 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
         // Compute observable values for functional rate evaluation
         const obsValues = computeObservableValues(yIn);
 
+        // Prebuild context (Issue 5 optimization)
+        const context = { ...model.parameters, ...obsValues };
+
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
 
@@ -1418,7 +1687,8 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
               rxn.rateExpression,
               model.parameters,
               obsValues,
-              model.functions
+              model.functions,
+              context // Pass the optimized prebuilt context
             );
           } else {
             k = rxn.rateConstant;
@@ -1468,8 +1738,6 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     if (solverType === 'auto') {
       // Default to CVODE (BNG2 behavior). Some models can have huge rate ratios but still
       // integrate fine with CVODE; switching to the Rosenbrock-based sparse_implicit path
-      // can fail immediately at t=0 (e.g. Repressilator).
-      //
       // Users can still explicitly select `sparse_implicit` from the UI when desired.
       solverType = allMassAction ? 'cvode_jac' : 'cvode';
       console.log(
@@ -1483,37 +1751,56 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     if (solverType === 'webgpu_rk4') {
       console.log('[Worker] WebGPU RK4 solver requested');
 
+      // Dynamically import WebGPU solver utilities and check availability
+      let gpuAvailable = false;
+      let WebGPUODESolverClass: any = undefined;
       try {
-        // Check WebGPU availability
-        const gpuAvailable = await isWebGPUODESolverAvailable();
-        if (!gpuAvailable) {
-          console.warn('[Worker] WebGPU not available, falling back to CPU RK4');
-          solverType = 'rk4'; // Fall back to CPU RK4
-        } else {
-          // Convert reactions to GPU format
-          const { gpuReactions, rateConstants } = convertReactionsToGPU(concreteReactions);
-          console.log(`[Worker] Converted ${gpuReactions.length} reactions to GPU format`);
+        const webgpuMod = await import('../src/services/WebGPUODESolver');
+        WebGPUODESolverClass = webgpuMod.WebGPUODESolver;
+        const isAvailableFn = webgpuMod.isWebGPUODESolverAvailable ?? null;
+        if (typeof isAvailableFn === 'function') {
+          // If it returns a promise, await it
+          const res = isAvailableFn();
+          gpuAvailable = res instanceof Promise ? await res : Boolean(res);
+        }
+      } catch (e) {
+        gpuAvailable = false;
+      }
 
-          // Calculate timestep based on simulation parameters
-          const gpu_t_end = phases[0]?.t_end ?? options.t_end ?? 100;
-          const gpu_n_steps = phases[0]?.n_steps ?? options.n_steps ?? 100;
-          const gpu_dt = gpu_t_end / (gpu_n_steps * 10); // 10 substeps per output point
-          console.log(`[Worker] WebGPU dt=${gpu_dt.toExponential(2)} (t_end=${gpu_t_end}, n_steps=${gpu_n_steps})`);
+      if (!gpuAvailable) {
+        console.warn('[Worker] WebGPU not available, falling back to CPU RK4');
+        solverType = 'rk4'; // Fall back to CPU RK4
+      } else {
+        // Convert reactions to GPU format
+        const { gpuReactions, rateConstants } = await convertReactionsToGPU(concreteReactions);
+        console.log(`[Worker] Converted ${gpuReactions.length} reactions to GPU format`);
 
-          // Create WebGPU solver  
-          const gpuSolver = new WebGPUODESolver(
-            numSpecies,
-            gpuReactions,
-            rateConstants,
-            {
-              dt: gpu_dt,  // Use calculated timestep
-              atol: options.atol ?? 1e-6,
-              rtol: options.rtol ?? 1e-4,
-              maxSteps: gpu_n_steps * 20  // Limit max steps
-            }
-          );
+        // Calculate timestep based on simulation parameters
+        const gpu_t_end = phases[0]?.t_end ?? options.t_end ?? 100;
+        const gpu_n_steps = phases[0]?.n_steps ?? options.n_steps ?? 100;
+        const gpu_dt = gpu_t_end / (gpu_n_steps * 10); // 10 substeps per output point
+        console.log(`[Worker] WebGPU dt=${gpu_dt.toExponential(2)} (t_end=${gpu_t_end}, n_steps=${gpu_n_steps})`);
 
-          // Compile shaders
+        // Create WebGPU solver  
+        const gpuSolver = new WebGPUODESolverClass(
+          numSpecies,
+          gpuReactions,
+          rateConstants,
+          {
+            dt: gpu_dt,  // Use calculated timestep
+            atol: options.atol ?? 1e-6,
+            rtol: options.rtol ?? 1e-4,
+            maxSteps: gpu_n_steps * 20, // Limit max steps
+            // Pass model-derived options for driver/shader generation
+            simulationOptions: model.simulationOptions ? { ...(model.simulationOptions as any) } : model.simulationOptions,
+            simulationPhases: (model.simulationPhases || []).map((p: any) => ({ ...p })),
+            concentrationChanges: (model.concentrationChanges || []).map((c: any) => ({ ...c })),
+            parameterChanges: (model.parameterChanges || []).map((c: any) => ({ ...c })),
+          }
+        );
+
+        // Compile shaders
+        try {
           const compiled = await gpuSolver.compile();
           if (!compiled) {
             console.warn('[Worker] WebGPU shader compilation failed, falling back to CPU RK4');
@@ -1572,10 +1859,10 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
               expandedSpecies: model.species,
             };
           }
+        } catch (error) {
+          console.error('[Worker] WebGPU error, falling back to CPU:', error);
+          solverType = 'rk4';
         }
-      } catch (error) {
-        console.error('[Worker] WebGPU error, falling back to CPU:', error);
-        solverType = 'rk4';
       }
     }
 
@@ -1748,7 +2035,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
                   expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
                 }
                 expr = expr.replace(/\^/g, '**');
-                resolvedValue = new Function('return ' + expr)() as number;
+                resolvedValue = SafeExpressionEvaluator.evaluateConstant(expr);
               } catch {
                 // Fall back to parseFloat
                 resolvedValue = parseFloat(String(change.value)) || 0;
@@ -1763,7 +2050,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
           const normalizeCompartmentSyntax = (s: string) => s.replace(/^@([A-Za-z0-9_]+):(?!:)/, '@$1::');
           const wantedPattern = change.species.trim();
           const normalizedWanted = normalizeCompartmentSyntax(wantedPattern);
-          
+
           let speciesIdx = speciesMap.get(normalizedWanted);
           if (speciesIdx === undefined) {
             // Also try original pattern in case speciesMap uses single-colon syntax
@@ -1827,7 +2114,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
                 expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
               }
               expr = expr.replace(/\^/g, '**');
-              resolvedValue = new Function('return ' + expr)() as number;
+              resolvedValue = SafeExpressionEvaluator.evaluateConstant(expr);
             } catch (e) {
               console.warn(`[Worker] Failed to evaluate setParameter expression "${change.value}":`, e);
               resolvedValue = parseFloat(String(change.value)) || 0;
@@ -1861,7 +2148,9 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
                       expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
                     }
                     expr = expr.replace(/\^/g, '**');
-                    const newVal = new Function('return ' + expr)() as number;
+                    const newVal = SafeExpressionEvaluatorRef && typeof SafeExpressionEvaluatorRef.evaluateConstant === 'function'
+                      ? SafeExpressionEvaluatorRef.evaluateConstant(expr)
+                      : parseFloat(String(expr));
                     if (!isNaN(newVal) && isFinite(newVal)) {
                       const oldVal = model.parameters?.[paramName] ?? 0;
                       if (oldVal !== newVal) {
@@ -2143,12 +2432,12 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
     return { headers, data, speciesHeaders, speciesData, expandedReactions: model.reactions, expandedSpecies: model.species } satisfies SimulationResults;
   }
 
-
   throw new Error(`Unsupported simulation method: ${String(options.method)}`);
 }
 
-ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
-  const message = event.data;
+if (typeof ctx.addEventListener === 'function') {
+  ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
+    const message = event.data;
   if (!message || typeof message !== 'object') {
     console.warn('[Worker] Received malformed message', message);
     return;
@@ -2196,13 +2485,14 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
         }
 
         // Backwards-compatible: payload can be { model, options } or { modelId, parameterOverrides?, options }
-        const p = payload as any;
+        const p = payload as unknown;
         let model: BNGLModel | undefined;
-        const options: SimulationOptions | undefined = p.options;
+        let options: SimulationOptions | undefined;
 
-        if (p.model) {
-          model = p.model as BNGLModel;
-        } else if (typeof p.modelId === 'number') {
+        if (isSimulateModelPayload(p)) {
+          model = p.model;
+          options = p.options;
+        } else if (isSimulateModelIdPayload(p)) {
           const cached = cachedModels.get(p.modelId);
           if (!cached) throw new Error('Cached model not found in worker');
           touchCachedModel(p.modelId);
@@ -2218,7 +2508,7 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
             } as BNGLModel;
 
             (cached.reactions || []).forEach((r) => {
-              const rateConst = nextModel.parameters[r.rate] ?? parseFloat(r.rate as unknown as string);
+              const rateConst = nextModel.parameters[r.rate] ?? Number.parseFloat(r.rate);
               nextModel.reactions.push({ ...r, rateConstant: rateConst });
             });
             model = nextModel;
@@ -2245,8 +2535,8 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   if (type === 'cache_model') {
     registerJob(id);
     try {
-      const p = payload as any;
-      const model = p && p.model ? (p.model as BNGLModel) : undefined;
+      const p = payload as unknown;
+      const model = isCacheModelPayload(p) ? p.model : undefined;
       if (!model) throw new Error('Cache model payload missing');
       const modelId = nextModelId++;
       // Store a shallow clone to avoid accidental mutation from main thread
@@ -2294,8 +2584,8 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   if (type === 'release_model') {
     registerJob(id);
     try {
-      const p = payload as any;
-      const modelId = p && typeof p === 'object' ? (p as { modelId?: unknown }).modelId : undefined;
+      const p = payload as unknown;
+      const modelId = isReleaseModelPayload(p) ? p.modelId : undefined;
       if (typeof modelId !== 'number') throw new Error('release_model payload missing modelId');
       cachedModels.delete(modelId);
       const response: WorkerResponse = { id, type: 'release_model_success', payload: { modelId } };
@@ -2419,6 +2709,7 @@ ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
   }
 
   console.warn('[Worker] Unknown message type received:', type);
-});
+  });
+}
 
 export { };

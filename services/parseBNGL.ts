@@ -8,6 +8,7 @@
 
 import type { BNGLModel } from '../types.ts';
 import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
+import { SafeExpressionEvaluator } from './safeExpressionEvaluator';
 import { parseBNGLWithANTLR } from '../src/parser/BNGLParserWrapper.ts';
 
 const speciesPattern = /^[A-Za-z0-9_]+(?:\([^)]*\))?(?:\.[A-Za-z0-9_]+(?:\([^)]*\))?)*$/;
@@ -354,7 +355,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
         evalExpr = evalExpr.replace(/\b_e\b/g, String(Math.E));
         
         try {
-          const value = new Function(`return ${evalExpr}`)();
+          const value = SafeExpressionEvaluator.evaluateConstant(evalExpr);
           if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
             resolvedParams[name] = value;
             logDebug('[parseBNGL] parameter', name, value);
