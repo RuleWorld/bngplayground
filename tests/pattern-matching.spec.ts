@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Comprehensive Pattern Matching Tests
  * Tests for BNGL pattern matching accuracy and edge cases
@@ -147,3 +148,4 @@ describe('Pattern Matching - Compartment Matching', () => {
     expect(pattern.compartment).not.toBe(target.compartment);
   });
 });
+

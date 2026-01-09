@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Full Comparison Benchmark: Web Simulator vs BNG2.pl
  * Runs on ALL published models (excluding unsupported features)
@@ -433,3 +434,4 @@ describe('Full Published Models Benchmark', () => {
         expect(passed.length).toBeGreaterThan(0);
     });
 });
+

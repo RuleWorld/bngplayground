@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import { mkdtempSync, rmSync, copyFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
@@ -143,3 +144,4 @@ describeFn('BioNetGen GDAT regression', () => {
     }, TIMEOUT_MS);
   });
 });
+

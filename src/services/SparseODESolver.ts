@@ -13,7 +13,6 @@
 import {
   type CSRMatrix,
   type ILU0Factors,
-  createCSR,
   ilu0Factorize,
   sparseSolve,
   gmres
@@ -54,30 +53,30 @@ const DEFAULT_OPTIONS: SparseODEOptions = {
 export class SparseODESolver {
   private n: number;        // System size (may be reduced)
   private nFull: number;    // Full system size
-  private reactions: Rxn[];
+
   private options: SparseODEOptions;
-  
+
   // Derivative function
   private derivatives: (y: Float64Array, dydt: Float64Array) => void;
-  
+
   // Sparse Jacobian info
   private sparsity?: SparseJacobianInfo;
   private jacobianData?: Float64Array;
   private jacobianCSR?: CSRMatrix;
   private iluFactors?: ILU0Factors;
-  
+
   // Conservation law system reduction
   private conservation?: ConservationAnalysis;
   private reducedSystem?: ReturnType<typeof createReducedSystem>;
   private reducedDerivatives?: (y: Float64Array, dydt: Float64Array) => void;
-  
+
   // Work arrays
   private f0: Float64Array;
   private f1: Float64Array;
   private k: Float64Array;
   private yTemp: Float64Array;
   private yNew: Float64Array;
-  
+
   constructor(
     nSpecies: number,
     reactions: Rxn[],
@@ -87,15 +86,15 @@ export class SparseODESolver {
     options: Partial<SparseODEOptions> = {}
   ) {
     this.nFull = nSpecies;
-    this.reactions = reactions;
+
     this.derivatives = derivatives;
     this.options = { ...DEFAULT_OPTIONS, ...options };
     console.log(`[SparseODESolver] Initialized with atol=${this.options.atol}, rtol=${this.options.rtol}, maxSteps=${this.options.maxSteps}`);
-        
+
     // Conservation law elimination
     if (this.options.useConservationLaws && reactions.length > 0) {
       this.conservation = findConservationLaws(reactions, nSpecies, y0, speciesNames);
-      
+
       if (this.conservation.laws.length > 0) {
         this.reducedSystem = createReducedSystem(this.conservation, nSpecies);
         this.n = this.reducedSystem.reducedSize;
@@ -107,13 +106,13 @@ export class SparseODESolver {
     } else {
       this.n = nSpecies;
     }
-    
+
     // Compute sparsity pattern
     if (reactions.length > 0) {
       this.sparsity = computeJacobianSparsity(reactions, this.nFull);
       this.jacobianData = new Float64Array(this.sparsity.nnz);
     }
-    
+
     // Allocate work arrays
     this.f0 = new Float64Array(this.n);
     this.f1 = new Float64Array(this.n);
@@ -121,30 +120,30 @@ export class SparseODESolver {
     this.yTemp = new Float64Array(this.n);
     this.yNew = new Float64Array(this.n);
   }
-  
+
   /**
    * Compute Jacobian at current state using finite differences
    * (Could be replaced with analytical Jacobian for mass-action)
    */
   private computeJacobian(y: Float64Array): void {
     if (!this.sparsity || !this.jacobianData) return;
-    
+
     const n = this.n;
     const deriv = this.reducedDerivatives || this.derivatives;
     const eps = 1e-8;
-    
+
     // Base function evaluation
     deriv(y, this.f0);
-    
+
     // For each column j, perturb y[j] and compute column of Jacobian
     for (let j = 0; j < n; j++) {
       const h = eps * (Math.abs(y[j]) + 1);
       const yj = y[j];
-      
+
       this.yTemp.set(y);
       this.yTemp[j] = yj + h;
       deriv(this.yTemp, this.f1);
-      
+
       // Fill in sparse entries for column j
       for (let i = 0; i < n; i++) {
         // Find entry (i,j) in CSR format
@@ -156,7 +155,7 @@ export class SparseODESolver {
         }
       }
     }
-    
+
     // Build CSR matrix
     this.jacobianCSR = {
       n: this.n,
@@ -166,19 +165,19 @@ export class SparseODESolver {
       values: this.jacobianData
     };
   }
-  
+
   /**
    * Build matrix M = I - γ*J and factorize
    */
   private buildAndFactorizeMatrix(gamma: number): void {
     if (!this.jacobianCSR) return;
-    
+
     const n = this.n;
-    
+
     // M = I - γ*J
     // Create M with same sparsity as J plus diagonal
     const mValues = new Float64Array(this.jacobianCSR.values.length);
-    
+
     for (let i = 0; i < n; i++) {
       for (let p = this.jacobianCSR.rowPtr[i]; p < this.jacobianCSR.rowPtr[i + 1]; p++) {
         const j = this.jacobianCSR.colIdx[p];
@@ -188,7 +187,7 @@ export class SparseODESolver {
         }
       }
     }
-    
+
     const M: CSRMatrix = {
       n,
       nnz: this.jacobianCSR.nnz,
@@ -196,7 +195,7 @@ export class SparseODESolver {
       colIdx: this.jacobianCSR.colIdx,
       values: mValues
     };
-    
+
     // ILU(0) factorization
     if (this.options.useILUPreconditioner) {
       try {
@@ -207,7 +206,7 @@ export class SparseODESolver {
       }
     }
   }
-  
+
   /**
    * Solve M * k = rhs using preconditioned GMRES
    */
@@ -216,7 +215,7 @@ export class SparseODESolver {
       k.set(rhs);
       return true;
     }
-    
+
     // Build M = I - γ*J (already done in buildAndFactorizeMatrix)
     const M: CSRMatrix = {
       n: this.n,
@@ -225,9 +224,9 @@ export class SparseODESolver {
       colIdx: this.jacobianCSR.colIdx,
       values: this.jacobianCSR.values // Note: should use M values, not J
     };
-    
+
     k.fill(0); // Initial guess
-    
+
     if (this.iluFactors) {
       // Use ILU as direct solver for small residuals
       sparseSolve(this.iluFactors, rhs, k);
@@ -238,11 +237,11 @@ export class SparseODESolver {
       return iters >= 0;
     }
   }
-  
+
   /**
    * Take one step using implicit Euler (Rosenbrock-W deferred)
    */
-  step(y: Float64Array, t: number, h: number): {
+  step(y: Float64Array, _t: number, h: number): {
     accepted: boolean;
     hNew: number;
     yNew: Float64Array;
@@ -251,40 +250,40 @@ export class SparseODESolver {
     const n = this.n;
     const deriv = this.reducedDerivatives || this.derivatives;
     const { atol, rtol } = this.options;
-    
+
     // Compute f(t, y)
     deriv(y, this.f0);
-    
+
     // Compute Jacobian
     this.computeJacobian(y);
-    
+
     // Build and factorize M = I - h*J
     this.buildAndFactorizeMatrix(h);
-    
+
     // Implicit Euler step: y_new = y + h*k where (I - h*J)*k = f(y)
     if (!this.solveLinearSystem(this.f0, this.k)) {
       // Linear solve failed - reject step and reduce h
       return { accepted: false, hNew: h * 0.5, yNew: y, errNorm: Infinity };
     }
-    
+
     // y_new = y + h * k
     for (let i = 0; i < n; i++) {
       this.yNew[i] = y[i] + h * this.k[i];
       if (this.yNew[i] < 0) this.yNew[i] = 0; // Clamp concentrations
     }
-    
+
     // Error estimate using step doubling (Richardson extrapolation)
     // Take two half steps
     const hHalf = h / 2;
     this.buildAndFactorizeMatrix(hHalf);
-    
+
     // First half step
     this.solveLinearSystem(this.f0, this.k);
     for (let i = 0; i < n; i++) {
       this.yTemp[i] = y[i] + hHalf * this.k[i];
       if (this.yTemp[i] < 0) this.yTemp[i] = 0;
     }
-    
+
     // Second half step
     deriv(this.yTemp, this.f1);
     this.solveLinearSystem(this.f1, this.k);
@@ -292,7 +291,7 @@ export class SparseODESolver {
       this.yTemp[i] = this.yTemp[i] + hHalf * this.k[i];
       if (this.yTemp[i] < 0) this.yTemp[i] = 0;
     }
-    
+
     // Error estimate: err = |y_new - y_2half| / (atol + rtol * |y_new|)
     let errNorm = 0;
     for (let i = 0; i < n; i++) {
@@ -301,13 +300,13 @@ export class SparseODESolver {
       errNorm += err * err;
     }
     errNorm = Math.sqrt(errNorm / n);
-    
+
     // Step size control
     const accepted = errNorm <= 1.0;
     const safety = 0.9;
     const minScale = 0.1;
     const maxScale = 5.0;
-    
+
     let scale: number;
     if (errNorm === 0) {
       scale = maxScale;
@@ -315,19 +314,19 @@ export class SparseODESolver {
       scale = safety * Math.pow(1 / errNorm, 0.5); // Order 1 method
     }
     scale = Math.max(minScale, Math.min(maxScale, scale));
-    
+
     const hNew = h * scale;
-    
+
     // Use Richardson extrapolation result if accepted (higher order)
     if (accepted) {
       for (let i = 0; i < n; i++) {
         this.yNew[i] = 2 * this.yTemp[i] - this.yNew[i]; // 2nd order
       }
     }
-    
+
     return { accepted, hNew, yNew: this.yNew, errNorm };
   }
-  
+
   /**
    * Integrate from t0 to tEnd
    */
@@ -338,8 +337,8 @@ export class SparseODESolver {
     outputTimes: number[],
     output: (t: number, y: Float64Array) => void
   ): { success: boolean; steps: number } {
-    const n = this.n;
-    
+
+
     // Get initial state (reduced if conservation laws used)
     let y: Float64Array;
     if (this.reducedSystem) {
@@ -347,14 +346,14 @@ export class SparseODESolver {
     } else {
       y = new Float64Array(y0);
     }
-    
+
     let t = t0;
     let h = (tEnd - t0) / 100; // Initial step size
     h = Math.min(h, (tEnd - t0) / 10);
-    
+
     let steps = 0;
     let outputIdx = 0;
-    
+
     // Output initial state
     while (outputIdx < outputTimes.length && outputTimes[outputIdx] <= t0) {
       if (this.reducedSystem) {
@@ -364,7 +363,7 @@ export class SparseODESolver {
       }
       outputIdx++;
     }
-    
+
     while (t < tEnd && steps < this.options.maxSteps) {
       // Limit step to output time
       let hActual = h;
@@ -374,14 +373,14 @@ export class SparseODESolver {
       if (t + hActual > tEnd) {
         hActual = tEnd - t;
       }
-      
+
       const result = this.step(y, t, hActual);
       steps++;
-      
+
       if (result.accepted) {
         t += hActual;
         y.set(result.yNew);
-        
+
         // Output at requested times
         while (outputIdx < outputTimes.length && t >= outputTimes[outputIdx] - 1e-10) {
           if (this.reducedSystem) {
@@ -391,12 +390,12 @@ export class SparseODESolver {
           }
           outputIdx++;
         }
-        
+
         h = result.hNew;
       } else {
         h = result.hNew;
       }
-      
+
       // Safety limits
       const minH = (tEnd - t0) * 1e-15;
       if (h < minH) {
@@ -404,12 +403,12 @@ export class SparseODESolver {
         return { success: false, steps };
       }
     }
-    
+
     if (steps >= this.options.maxSteps) {
       console.warn(`[SparseODE] Max steps reached at t=${t}`);
       return { success: false, steps };
     }
-    
+
     return { success: true, steps };
   }
 }

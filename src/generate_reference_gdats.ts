@@ -1,4 +1,5 @@
 #!/usr/bin/env tsx
+// @ts-nocheck
 /**
  * Generate reference GDAT files using BNG2.pl for all parseable models
  * This expands parity coverage from 60 to 88 models

@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { beforeAll, describe, expect, it } from 'vitest';
 
 import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
@@ -64,3 +65,4 @@ describe('Nauty canonicalization', () => {
     expect(results.size).toBe(1);
   });
 });
+

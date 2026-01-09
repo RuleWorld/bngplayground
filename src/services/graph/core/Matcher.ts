@@ -57,7 +57,7 @@ const MAX_CACHE_SIZE = 2000;  // Reduced from 50000 for browser memory constrain
 function addToMatchCache(key: string, value: MatchMap[]): void {
   matchCache.set(key, value);
   if (matchCache.size > MAX_CACHE_SIZE) {
-    // Remove oldest entry (Map maintains insertion order)
+    // Remove oldest entry (Map maintains insertion order, so the first key is the oldest)
     const oldestKey = matchCache.keys().next().value;
     if (oldestKey !== undefined) {
       matchCache.delete(oldestKey);
@@ -346,7 +346,7 @@ export class GraphMatcher {
     if (iterationCount.value > MAX_VF2_ITERATIONS) {
       throw new Error(
         `[GraphMatcher] VF2 iteration limit exceeded (${MAX_VF2_ITERATIONS}). ` +
-          `Pattern may be too complex or combinatorially explosive. Aborting match to avoid partial results.`
+        `Pattern may be too complex or combinatorially explosive. Aborting match to avoid partial results.`
       );
     }
     if (state.isComplete()) {
@@ -381,7 +381,7 @@ export class GraphMatcher {
       // but others propagate it (e.g., during network generation). Upstream must handle this limit explicitly.
       throw new Error(
         `[GraphMatcher] VF2 iteration limit exceeded (${MAX_VF2_ITERATIONS}). ` +
-          `Pattern may be too complex or combinatorially explosive. Aborting match to avoid partial results.`
+        `Pattern may be too complex or combinatorially explosive. Aborting match to avoid partial results.`
       );
     }
 
@@ -685,7 +685,7 @@ class VF2State {
     // Target counts: "name|compartment" exact match, and also name-only counts
     const targetCounts = new Map<string, number>();
     const targetNameOnlyCounts = new Map<string, number>();
-    
+
     const addTargetNeighbors = (sourceIdx: number, skipCandidate: boolean) => {
       for (const neighbor of getNeighborMolecules(this.target, sourceIdx)) {
         if (this.coreTarget.has(neighbor)) {
@@ -713,7 +713,7 @@ class VF2State {
         return false;
       }
     }
-    
+
     // Check compartment wildcard requirements (pattern without compartment matches any)
     for (const [name, required] of patternNameOnlyCounts.entries()) {
       if ((targetNameOnlyCounts.get(name) ?? 0) < required) {
@@ -730,7 +730,7 @@ class VF2State {
     const patternCounts = new Map<string, number>();
     // Pattern counts for compartment wildcard (name only)
     const patternNameOnlyCounts = new Map<string, number>();
-    
+
     for (const neighbor of getNeighborMolecules(this.pattern, pMol)) {
       if (this.corePattern.has(neighbor)) {
         continue;
@@ -753,7 +753,7 @@ class VF2State {
     // Build target counts: exact compartment and name-only
     const targetCounts = new Map<string, number>();
     const targetNameOnlyCounts = new Map<string, number>();
-    
+
     for (const neighbor of getNeighborMolecules(this.target, tMol)) {
       if (this.coreTarget.has(neighbor)) {
         continue;
@@ -771,7 +771,7 @@ class VF2State {
         return false;
       }
     }
-    
+
     // Check compartment wildcard requirements (pattern without compartment matches any)
     for (const [name, required] of patternNameOnlyCounts.entries()) {
       if ((targetNameOnlyCounts.get(name) ?? 0) < required) {
@@ -992,7 +992,8 @@ class VF2State {
     pCompIdx: number,
     tMolIdx: number,
     tCompIdx: number,
-    currentAssignment: Map<number, number>
+    // currentAssignment - unused parameter removed from signature
+    _currentAssignment: Map<number, number>
   ): boolean {
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
 
@@ -1209,44 +1210,14 @@ class VF2State {
     return this.usedTargetsScratch.join(',');
   }
 
-  /**
-   * Compute a signature for a component that identifies structurally equivalent components.
-   * Used for symmetry-breaking optimization to avoid trying equivalent permutations.
-   */
-  private getComponentSignature(pMolIdx: number, pCompIdx: number): string {
-    const comp = this.pattern.molecules[pMolIdx].components[pCompIdx];
-    // Include name, state, wildcard, and whether it has bonds
-    const bondIndicator = comp.edges.size > 0 ? 'B' : (comp.wildcard || 'U');
-    return `${comp.name}|${comp.state ?? '?'}|${bondIndicator}`;
-  }
+
 
   /**
    * Find the minimum target index that a pattern component with a given signature
    * has already been assigned to. Used for symmetry-breaking: when multiple pattern
    * components are equivalent, we constrain later ones to map to higher target indices.
    */
-  private getSymmetryBreakingMinIndex(
-    pMolIdx: number,
-    pCompIdx: number,
-    assignment: Map<number, number>
-  ): number {
-    const mySignature = this.getComponentSignature(pMolIdx, pCompIdx);
-    let minIdx = -1;
 
-    // Find all pattern components with the same signature that come BEFORE this one
-    // and have already been assigned
-    for (let i = 0; i < pCompIdx; i++) {
-      const otherSignature = this.getComponentSignature(pMolIdx, i);
-      if (otherSignature === mySignature && assignment.has(i)) {
-        const targetIdx = assignment.get(i)!;
-        if (targetIdx > minIdx) {
-          minIdx = targetIdx;
-        }
-      }
-    }
-
-    return minIdx;
-  }
 
   private componentPriority(comp: Component): number {
     let score = 0;

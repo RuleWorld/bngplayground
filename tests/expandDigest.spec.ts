@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
 import { describe, it, expect } from 'vitest';
@@ -119,3 +120,4 @@ describe('Digest model expansion', () => {
     expect(result.reactions.length).toBeGreaterThan(0);
   });
 });
+

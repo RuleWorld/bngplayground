@@ -1,28 +1,34 @@
 // graph/core/Canonical.ts
 import { SpeciesGraph } from './SpeciesGraph.ts';
 import { NautyService } from './NautyService.ts';
+import { Molecule } from './Molecule.ts';
 
 interface MoleculeInfo {
   originalIndex: number;
   localSignature: string;
   colorClass: number;  // Color class from WL refinement
-  molecule: any;
+  molecule: Molecule;
   initialRank: number;
 }
 
 /**
  * FNV-1a hash function for strings (better collision resistance than djb2)
  */
-function simpleHash(str: string): number {
-  // FNV-1a parameters for 32-bit
-  let hash = 0x811c9dc5;
-  const fnvPrime = 0x01000193;
 
-  for (let i = 0; i < str.length; i++) {
-    hash ^= str.charCodeAt(i);
-    hash = Math.imul(hash, fnvPrime);
+/**
+ * cyrb53 hash function (better collision resistance and mixing than FNV-1a)
+ * Returns a 53-bit unsigned integer.
+ */
+function simpleHash(str: string, seed = 0): number {
+  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
+  for (let i = 0, ch; i < str.length; i++) {
+    ch = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ ch, 2654435761);
+    h2 = Math.imul(h2 ^ ch, 1597334677);
   }
-  return hash >>> 0; // Convert to unsigned 32-bit integer
+  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
+  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
+  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
 }
 
 /**
@@ -114,14 +120,14 @@ export class GraphCanonicalizer {
         const bondEndpoints: Array<{ bondV: number; v1: number; v2: number }> = [];
 
         for (const [key, partnerKeys] of graph.adjacency) {
-          const [m1Str, c1Str] = key.split('.');
-          const m1 = Number(m1Str);
-          const c1 = Number(c1Str);
+          const dot1 = key.indexOf('.');
+          const m1 = parseInt(key.substring(0, dot1), 10);
+          const c1 = parseInt(key.substring(dot1 + 1), 10);
 
           for (const partnerKey of partnerKeys) {
-            const [m2Str, c2Str] = partnerKey.split('.');
-            const m2 = Number(m2Str);
-            const c2 = Number(c2Str);
+            const dot2 = partnerKey.indexOf('.');
+            const m2 = parseInt(partnerKey.substring(0, dot2), 10);
+            const c2 = parseInt(partnerKey.substring(dot2 + 1), 10);
 
             const aKey = `${m1}.${c1}`;
             const bKey = `${m2}.${c2}`;
@@ -221,9 +227,13 @@ export class GraphCanonicalizer {
       }
 
       for (const [key, partnerKeys] of graph.adjacency) {
-        const [m1, c1] = key.split('.').map(Number);
+        const dot1 = key.indexOf('.');
+        const m1 = parseInt(key.substring(0, dot1), 10);
+        const c1 = parseInt(key.substring(dot1 + 1), 10);
         for (const partnerKey of partnerKeys) {
-          const [m2, c2] = partnerKey.split('.').map(Number);
+          const dot2 = partnerKey.indexOf('.');
+          const m2 = parseInt(partnerKey.substring(0, dot2), 10);
+          const c2 = parseInt(partnerKey.substring(dot2 + 1), 10);
           const si1 = originalToSortedTmp.get(m1)!;
           const si2 = originalToSortedTmp.get(m2)!;
           const mol1 = graph.molecules[m1];
@@ -318,8 +328,8 @@ export class GraphCanonicalizer {
           const partners = graph.adjacency.get(adjKey);
           if (partners && partners.length > 0) {
             for (const pKey of partners) {
-              const [pMolStr] = pKey.split('.');
-              const pMolIdx = Number(pMolStr);
+              const dotP = pKey.indexOf('.');
+              const pMolIdx = parseInt(pKey.substring(0, dotP), 10);
               const pMol = graph.molecules[pMolIdx];
               if (pMol.name !== mol.name) {
                 partnerSigs.push(GraphCanonicalizer.getLocalSignature(pMol));
@@ -345,8 +355,8 @@ export class GraphCanonicalizer {
           const partners = graph.adjacency.get(adjKey);
           if (partners) {
             for (const pKey of partners) {
-              const [pMolStr] = pKey.split('.');
-              const pMolIdx = Number(pMolStr);
+              const dotP = pKey.indexOf('.');
+              const pMolIdx = parseInt(pKey.substring(0, dotP), 10);
               // Ignore self-loops or same-molecule bonds if any (unlikely here)
               if (pMolIdx !== molIdx) {
                 const rank = canonicalRank.get(pMolIdx) ?? Number.MAX_SAFE_INTEGER;
@@ -423,9 +433,13 @@ export class GraphCanonicalizer {
     const addedBondKeys = new Set<string>();
 
     for (const [key, partnerKeys] of graph.adjacency) {
-      const [m1, c1] = key.split('.').map(Number);
+      const dot1 = key.indexOf('.');
+      const m1 = parseInt(key.substring(0, dot1), 10);
+      const c1 = parseInt(key.substring(dot1 + 1), 10);
       for (const partnerKey of partnerKeys) {
-        const [m2, c2] = partnerKey.split('.').map(Number);
+        const dot2 = partnerKey.indexOf('.');
+        const m2 = parseInt(partnerKey.substring(0, dot2), 10);
+        const c2 = parseInt(partnerKey.substring(dot2 + 1), 10);
 
         // Get Canonical Indices
         const si1 = originalToSortedVector.get(m1)!;
@@ -477,7 +491,7 @@ export class GraphCanonicalizer {
       // sourceIdx is Original Index (Nauty) or Sorted Index (Fallback)
       // For Nauty: graph.molecules[sourceIdx] is the correct molecule
       const mol = graph.molecules[sourceIdx];
-      const info = moleculeInfos[sourceIdx];
+
 
       // Debug: Log the molecule being used at each position
       // if (graph.molecules[0]?.name === 'APC') console.log(`[Canonical Debug] canIdx=${_canIdx} sourceIdx=${sourceIdx} molecule=${mol.name}`);
@@ -505,7 +519,7 @@ export class GraphCanonicalizer {
    * Get local signature for a molecule (excluding connectivity to other molecules)
    * Components are sorted alphabetically to match BNG2 canonical form
    */
-  private static getLocalSignature(mol: any): string {
+  private static getLocalSignature(mol: Molecule): string {
     const compSigs = mol.components.map((comp: any, idx: number) => {
       let sig = comp.name;
       if (comp.state && comp.state !== '?') sig += `~${comp.state}`;
@@ -523,7 +537,7 @@ export class GraphCanonicalizer {
    * deterministic ordering of molecules with same name and state but different connectivity.
    * BNG2 places bound components before unbound components.
    */
-  private static getBondAwareSignature(mol: any, molIdx: number, graph: SpeciesGraph): string {
+  private static getBondAwareSignature(mol: Molecule, molIdx: number, graph: SpeciesGraph): string {
     const compSigs = mol.components.map((comp: any, compIdx: number) => {
       let sig = comp.name;
       if (comp.state && comp.state !== '?') sig += `~${comp.state}`;
@@ -545,7 +559,7 @@ export class GraphCanonicalizer {
    * BNG2 convention: Only include molecule compartment when it differs from graph compartment
    */
   private static moleculeToString(
-    mol: any,
+    mol: Molecule,
     _bondMapping: Map<string, number>,
     graph: SpeciesGraph,
     _molOrigIdx: number
@@ -584,7 +598,7 @@ export class GraphCanonicalizer {
    * BNG2 convention: Only include molecule compartment when it differs from graph compartment
    */
   private static moleculeToStringNew(
-    mol: any,
+    mol: Molecule,
     bondMapping: Map<string, number>,
     graph: SpeciesGraph,
     molOrigIdx: number,
@@ -606,7 +620,9 @@ export class GraphCanonicalizer {
       const bondIds: number[] = [];
       if (partnerKeys && partnerKeys.length > 0) {
         for (const partnerKey of partnerKeys) {
-          const [pMolOrigIdx, pCompIdx] = partnerKey.split('.').map(Number);
+          const dot = partnerKey.indexOf('.');
+          const pMolOrigIdx = parseInt(partnerKey.substring(0, dot), 10);
+          const pCompIdx = parseInt(partnerKey.substring(dot + 1), 10);
           const pSortedIdx = originalToSorted.get(pMolOrigIdx)!;
           const pCanIdx = sortedToCanonical.get(pSortedIdx)!;
 
@@ -691,12 +707,12 @@ export class GraphCanonicalizer {
 
         // Build adjacency matrix from graph.adjacency
         for (const [key, partnerKeys] of graph.adjacency) {
-          const [m1Str, _] = key.split('.');
-          const m1 = parseInt(m1Str, 10);
+          const dot1 = key.indexOf('.');
+          const m1 = parseInt(key.substring(0, dot1), 10);
 
           for (const partnerKey of partnerKeys) {
-            const [m2Str, __] = partnerKey.split('.');
-            const m2 = parseInt(m2Str, 10);
+            const dot2 = partnerKey.indexOf('.');
+            const m2 = parseInt(partnerKey.substring(0, dot2), 10);
 
             if (m1 !== m2) {
               flatAdj[m1 * n + m2] = 1;
@@ -769,9 +785,9 @@ export class GraphCanonicalizer {
           const partnerKeys = graph.adjacency.get(adjacencyKey);
           if (partnerKeys) {
             for (const partnerKey of partnerKeys) {
-              const [pMolIdxStr, pCompIdxStr] = partnerKey.split('.');
-              const pMolIdx = Number(pMolIdxStr);
-              const pCompIdx = Number(pCompIdxStr);
+              const dot = partnerKey.indexOf('.');
+              const pMolIdx = parseInt(partnerKey.substring(0, dot), 10);
+              const pCompIdx = parseInt(partnerKey.substring(dot + 1), 10);
               const pMol = graph.molecules[pMolIdx];
               if (pMol) {
                 // Include component info and partner's color

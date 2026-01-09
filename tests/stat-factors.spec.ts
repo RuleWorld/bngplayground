@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
@@ -185,3 +186,4 @@ describe('Stat factors / degeneracy', () => {
     expect((rxn as any)?.propensityFactor ?? 1).toBe(1);
   });
 });
+

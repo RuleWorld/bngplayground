@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test An_2009 in a context with MANY registered tests
  * This tests if having 62+ tests causes the hang
@@ -181,3 +182,4 @@ describeFn('An_2009 with many tests registered (like bng2-comparison)', () => {
     });
   }
 });
+

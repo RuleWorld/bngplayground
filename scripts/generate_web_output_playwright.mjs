@@ -213,6 +213,14 @@ function destroyChildStreams(child) {
 
 async function main() {
   ensureDir(WEB_OUTPUT_DIR);
+  
+  // Parse CLI args for --models
+  const args = process.argv.slice(2);
+  const modelsIdx = args.indexOf('--models');
+  if (modelsIdx !== -1 && args[modelsIdx + 1]) {
+    process.env.WEB_OUTPUT_MODELS = args[modelsIdx + 1];
+  }
+
   const modelListRaw = String(process.env.WEB_OUTPUT_MODELS || '').trim();
   if (modelListRaw) {
     console.log(`[generate:web-output] WEB_OUTPUT_MODELS is set; preserving existing CSVs in ${WEB_OUTPUT_DIR}`);

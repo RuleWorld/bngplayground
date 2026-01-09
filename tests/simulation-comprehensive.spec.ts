@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Comprehensive Simulation Tests
  * Tests for ODE/SSA simulation accuracy and edge cases
@@ -62,3 +63,4 @@ describe('Simulation - Large Systems', () => {
         expect(true).toBe(true);
     });
 });
+

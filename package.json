@@ -12,7 +12,9 @@
     "test:watch": "vitest",
     "generate:gdat": "node scripts/generateGdat.mjs",
     "generate:embeddings": "node scripts/generateEmbeddings.mjs",
-    "generate:web-output": "node scripts/generate_web_output_playwright.mjs"
+    "generate:web-output": "node scripts/generate_web_output_playwright.mjs",
+    "type-check": "tsc --noEmit",
+    "lint": "eslint . --ext .ts,.tsx"
   },
   "dependencies": {
     "@tensorflow/tfjs": "^4.22.0",

@@ -198,6 +198,8 @@ export class NetworkGenerator {
   private options: GeneratorOptions;
   // NEW: map Molecule name -> set of species indices that contain that molecule
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
+  // NEW: map Compartment name -> Size (for volume scaling)
+  private compartmentVolumes: Map<string, number> = new Map();
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
   private aggLimitWarnings = 0;
@@ -215,8 +217,31 @@ export class NetworkGenerator {
       memoryLimit: 1e9,
       ...options
     };
+    if (this.options.compartments) {
+      for (const c of this.options.compartments) {
+        this.compartmentVolumes.set(c.name, c.size);
+      }
+    }
     this.currentRuleName = null;
   }
+
+  /**
+   * Calculate volume scaling factor for transport reactions (Unimolecular).
+   * Scaling = V_source / V_dest.
+   */
+  private getTransportVolumeScale(source: SpeciesGraph, dest: SpeciesGraph): number {
+    if (this.compartmentVolumes.size === 0) return 1;
+
+    const vSource = source.compartment ? this.compartmentVolumes.get(source.compartment) : undefined;
+    const vDest = dest.compartment ? this.compartmentVolumes.get(dest.compartment) : undefined;
+
+    if (vSource !== undefined && vDest !== undefined && vDest > 0) {
+      return vSource / vDest; // Restore BNG2 parity scaling
+    }
+    return 1;
+  }
+
+
 
   private computeCollapsedRuleStatFactor(rule: RxnRule): number {
     // Recover BioNetGen's stat_factor for symmetric repeated sites when the matcher returns
@@ -358,11 +383,14 @@ export class NetworkGenerator {
     let scalingCompartment: { name: string; dimension: number; size: number } | null = null;
 
     if (comp1 && comp2) {
-      // Bimolecular: pick the higher-dimensional compartment (3D over 2D)
+      // Bimolecular: 
+      // HYPOTHESIS: For heterogeneous (3D+2D) reactions, BNG2 uses the Surface compartment's 
+      // effective volume (Size) for scaling, effectively treating the reaction as occurring 
+      // in the membrane boundary layer.
       if (comp1.dimension >= 3 && comp2.dimension < 3) {
-        scalingCompartment = comp1;  // Use 3D volume
+        scalingCompartment = comp2;  // Use 2D volume (effective layer)
       } else if (comp2.dimension >= 3 && comp1.dimension < 3) {
-        scalingCompartment = comp2;  // Use 3D volume
+        scalingCompartment = comp1;  // Use 2D volume (effective layer)
       } else if (comp1.dimension >= 3 && comp2.dimension >= 3) {
         // Both 3D: use first (should be same compartment typically)
         scalingCompartment = comp1;
@@ -1170,12 +1198,19 @@ export class NetworkGenerator {
       // The solver/evaluator layer is responsible for multiplying: effectiveRate * eval(rateExpression).
       const rateExpression = rule.rateExpression ? `(${rule.rateExpression})` : undefined;
 
+
+
+      // Calculate volume scaling for each product (e.g. CP -> NU transport needs scaling by V_CP/V_NU)
+      const productStoichiometries = products.map(product => {
+        return this.getTransportVolumeScale(reactantSpecies.graph, product);
+      });
+
       const rxn = new Rxn(
         [reactantSpecies.index],
         productSpeciesIndices,
         effectiveRate,
         rule.name,
-        { degeneracy, rateExpression, propensityFactor }
+        { degeneracy, rateExpression, propensityFactor, productStoichiometries }
       );
 
       // Fast O(1) duplicate detection using Set
@@ -2714,9 +2749,9 @@ export class NetworkGenerator {
               //   @PM:R(tf~pY!?) -> @EM:R(tf~pY)
               // where the tf component may be bound to TF or P in CP.
               // Only enforce "explicitly unbound" if reactant pattern also expected unbound.
-              const reactantAllowedBond = reactantPatternComp.wildcard === '?' || 
-                                          reactantPatternComp.wildcard === '+' ||
-                                          reactantPatternComp.edges.size > 0;
+              const reactantAllowedBond = reactantPatternComp.wildcard === '?' ||
+                reactantPatternComp.wildcard === '+' ||
+                reactantPatternComp.edges.size > 0;
               if (!reactantAllowedBond) {
                 // Reactant pattern expected unbound, product should be unbound
                 if (bound) continue;

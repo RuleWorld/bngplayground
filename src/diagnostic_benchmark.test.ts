@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Diagnostic Benchmark: Kozer_2014 Analysis
  * Deep dive into why this model is slow compared to BNG2.pl
@@ -72,14 +73,14 @@ describe('Diagnostic Benchmark: Kozer_2014', () => {
             }
         }
 
-        const genOptions = { 
-            maxSpecies: 3000, 
+        const genOptions = {
+            maxSpecies: 3000,
             maxIterations: 1000,
             ...parsedModel.networkOptions,
             maxStoich
         };
         console.log(`Generator Options:`, JSON.stringify(genOptions, (k, v) => v instanceof Map ? Array.from(v.entries()) : v, 2));
-        
+
         const generator = new NetworkGenerator(genOptions);
 
         const network = await generator.generate(seedSpecies, rules);

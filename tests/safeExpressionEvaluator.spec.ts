@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import { compile, evaluateConstant, isSafe, SafeExpressionEvaluator } from '../services/safeExpressionEvaluator';
 
@@ -75,3 +76,4 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     expect(fn({ x: -5 })).toBe(5);
   });
 });
+

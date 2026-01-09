@@ -1,3 +1,4 @@
+// @ts-nocheck
 // Generated from src/parser/grammar/BNGLexer.g4 by ANTLR 4.9.0-SNAPSHOT
 
 

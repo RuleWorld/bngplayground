@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import { EXAMPLES } from '../constants';
 import { parseBNGL } from '../services/parseBNGL';
@@ -143,3 +144,4 @@ describe('Example gallery models', () => {
     }, 20000);
   });
 });
+

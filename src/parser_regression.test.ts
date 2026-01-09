@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { readFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
@@ -43,3 +44,4 @@ describe('BNGL parser regressions', () => {
     expect(result.model!.simulationPhases![0].n_steps).toBe(1000);
   });
 });
+

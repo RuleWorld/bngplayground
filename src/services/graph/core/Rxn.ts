@@ -13,7 +13,7 @@ export class Rxn {
     products: number[],
     rate: number,
     name?: string,
-    options: { degeneracy?: number; propensityFactor?: number; rateExpression?: string } = {}
+    options: { degeneracy?: number; propensityFactor?: number; rateExpression?: string; productStoichiometries?: number[] } = {}
   ) {
     this.reactants = reactants;
     this.products = products;
@@ -22,9 +22,11 @@ export class Rxn {
     this.degeneracy = options.degeneracy ?? 1;
     this.propensityFactor = options.propensityFactor;
     this.rateExpression = options.rateExpression;
+    this.productStoichiometries = options.productStoichiometries;
   }
 
   rateExpression?: string;
+  productStoichiometries?: number[];
 
   /**
    * BioNetGen: Rxn::toString()

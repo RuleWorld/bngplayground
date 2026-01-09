@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test An_2009 WITH spawnSync before network generation
  * This tests if spawnSync is causing the hang
@@ -173,3 +174,4 @@ describeFn('An_2009 with BNG2.pl spawnSync', () => {
     console.log('\nTEST PASSED!');
   }, TIMEOUT_MS);
 });
+

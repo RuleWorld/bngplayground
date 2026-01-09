@@ -40,7 +40,7 @@ export function denseToCSR(dense: Float64Array, n: number): CSRMatrix {
   const rowPtr = new Int32Array(n + 1);
   const colIndices: number[] = [];
   const vals: number[] = [];
-  
+
   for (let i = 0; i < n; i++) {
     rowPtr[i] = colIndices.length;
     for (let j = 0; j < n; j++) {
@@ -52,7 +52,7 @@ export function denseToCSR(dense: Float64Array, n: number): CSRMatrix {
     }
   }
   rowPtr[n] = colIndices.length;
-  
+
   return {
     n,
     nnz: colIndices.length,
@@ -88,14 +88,14 @@ export function createCSR(
  */
 export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
   const n = A.n;
-  
+
   // Work arrays
   const rowStart = A.rowPtr;
   const colIdx = A.colIdx;
-  
+
   // Copy values (will be modified in-place to contain L\U)
   const LU = new Float64Array(A.values);
-  
+
   // Create diagonal index lookup for O(1) diagonal access
   const diagIdx = new Int32Array(n);
   for (let i = 0; i < n; i++) {
@@ -111,7 +111,7 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
       console.warn(`[SparseLU] Row ${i} has no diagonal element`);
     }
   }
-  
+
   // Create column position lookup for each row
   // colPos[i] maps column j -> position in row i (or -1 if not present)
   const colPos = new Map<number, Map<number, number>>();
@@ -122,29 +122,31 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
     }
     colPos.set(i, rowMap);
   }
-  
+
   // IKJ variant of ILU(0)
   for (let i = 1; i < n; i++) {
     const rowI = colPos.get(i)!;
-    
+
     // For each k < i where A[i,k] != 0
     for (let pk = rowStart[i]; pk < rowStart[i + 1]; pk++) {
       const k = colIdx[pk];
       if (k >= i) break; // Only process lower triangle
-      
+
       const diagK = diagIdx[k];
       if (diagK === -1 || Math.abs(LU[diagK]) < 1e-15) continue;
-      
+
       // LU[i,k] = LU[i,k] / LU[k,k]
       LU[pk] /= LU[diagK];
       const lik = LU[pk];
-      
+
       // For each j > k where A[k,j] != 0
-      const rowK = colPos.get(k)!;
+      const rowK = colPos.get(k);
+      if (!rowK) continue;
+
       for (let pj = rowStart[k]; pj < rowStart[k + 1]; pj++) {
         const j = colIdx[pj];
         if (j <= k) continue; // Only process upper triangle of row k
-        
+
         // If A[i,j] != 0, update: LU[i,j] -= LU[i,k] * LU[k,j]
         const posIJ = rowI.get(j);
         if (posIJ !== undefined) {
@@ -154,7 +156,7 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
       }
     }
   }
-  
+
   // Extract L and U from combined LU array
   // L: lower triangular with unit diagonal
   // U: upper triangular including diagonal
@@ -164,15 +166,15 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
   const lVals: number[] = [];
   const uCols: number[] = [];
   const uVals: number[] = [];
-  
+
   for (let i = 0; i < n; i++) {
     lRowPtr[i] = lCols.length;
     uRowPtr[i] = uCols.length;
-    
+
     for (let p = rowStart[i]; p < rowStart[i + 1]; p++) {
       const j = colIdx[p];
       const val = LU[p];
-      
+
       if (j < i) {
         // Lower triangular
         lCols.push(j);
@@ -183,14 +185,14 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
         uVals.push(val);
       }
     }
-    
+
     // L has implicit unit diagonal
     lCols.push(i);
     lVals.push(1.0);
   }
   lRowPtr[n] = lCols.length;
   uRowPtr[n] = uCols.length;
-  
+
   // Identity permutation (no pivoting in basic ILU(0))
   const perm = new Int32Array(n);
   const invPerm = new Int32Array(n);
@@ -198,7 +200,7 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
     perm[i] = i;
     invPerm[i] = i;
   }
-  
+
   return {
     L: {
       n,
@@ -225,7 +227,7 @@ export function ilu0Factorize(A: CSRMatrix): ILU0Factors {
 export function forwardSolve(L: CSRMatrix, b: Float64Array, y: Float64Array): void {
   const n = L.n;
   y.set(b);
-  
+
   for (let i = 0; i < n; i++) {
     // y[i] -= sum(L[i,j] * y[j]) for j < i
     for (let p = L.rowPtr[i]; p < L.rowPtr[i + 1]; p++) {
@@ -247,7 +249,7 @@ export function forwardSolve(L: CSRMatrix, b: Float64Array, y: Float64Array): vo
 export function backwardSolve(U: CSRMatrix, y: Float64Array, x: Float64Array): void {
   const n = U.n;
   x.set(y);
-  
+
   for (let i = n - 1; i >= 0; i--) {
     // Find diagonal and compute x[i]
     let diag = 1.0;
@@ -269,20 +271,20 @@ export function backwardSolve(U: CSRMatrix, y: Float64Array, x: Float64Array): v
 export function sparseSolve(factors: ILU0Factors, b: Float64Array, x: Float64Array): void {
   const n = factors.L.n;
   const y = new Float64Array(n);
-  
+
   // Apply permutation: b_perm = P * b
   const bPerm = new Float64Array(n);
   for (let i = 0; i < n; i++) {
     bPerm[i] = b[factors.perm[i]];
   }
-  
+
   // Solve L * y = b_perm
   forwardSolve(factors.L, bPerm, y);
-  
+
   // Solve U * x_perm = y
   const xPerm = new Float64Array(n);
   backwardSolve(factors.U, y, xPerm);
-  
+
   // Apply inverse permutation: x = P^T * x_perm
   for (let i = 0; i < n; i++) {
     x[factors.invPerm[i]] = xPerm[i];
@@ -295,7 +297,7 @@ export function sparseSolve(factors: ILU0Factors, b: Float64Array, x: Float64Arr
 export function csrMatVec(A: CSRMatrix, x: Float64Array, y: Float64Array): void {
   const n = A.n;
   y.fill(0);
-  
+
   for (let i = 0; i < n; i++) {
     let sum = 0;
     for (let p = A.rowPtr[i]; p < A.rowPtr[i + 1]; p++) {
@@ -327,14 +329,14 @@ export function gmres(
 ): number {
   const n = A.n;
   const restart = Math.min(maxIter, 50); // Restart parameter
-  
+
   const r = new Float64Array(n);
   const Ax = new Float64Array(n);
-  
+
   // Compute initial residual: r = b - A*x
   csrMatVec(A, x, Ax);
   for (let i = 0; i < n; i++) r[i] = b[i] - Ax[i];
-  
+
   // Apply preconditioner to residual
   const z = new Float64Array(n);
   if (precond) {
@@ -342,46 +344,46 @@ export function gmres(
   } else {
     z.set(r);
   }
-  
+
   let rnorm = 0;
   for (let i = 0; i < n; i++) rnorm += z[i] * z[i];
   rnorm = Math.sqrt(rnorm);
-  
+
   const bnorm = Math.sqrt(b.reduce((s, v) => s + v * v, 0)) || 1;
-  
+
   if (rnorm / bnorm < tol) return 0;
-  
+
   // Arnoldi vectors
   const V: Float64Array[] = [];
   const H: Float64Array[] = []; // Hessenberg matrix
   const s = new Float64Array(restart + 1);
   const cs = new Float64Array(restart);
   const sn = new Float64Array(restart);
-  
+
   for (let iter = 0; iter < maxIter; iter += restart) {
     // Initialize
     V.length = 0;
     H.length = 0;
     s.fill(0);
     s[0] = rnorm;
-    
+
     // v1 = z / ||z||
     const v0 = new Float64Array(n);
     for (let i = 0; i < n; i++) v0[i] = z[i] / rnorm;
     V.push(v0);
-    
+
     let j: number;
     for (j = 0; j < restart && iter + j < maxIter; j++) {
       // w = A * M^{-1} * v[j]
       const w = new Float64Array(n);
       csrMatVec(A, V[j], w);
-      
+
       if (precond) {
         const wPrec = new Float64Array(n);
         sparseSolve(precond, w, wPrec);
         w.set(wPrec);
       }
-      
+
       // Arnoldi: orthogonalize against previous vectors
       const hCol = new Float64Array(j + 2);
       for (let i = 0; i <= j; i++) {
@@ -390,45 +392,45 @@ export function gmres(
         hCol[i] = dot;
         for (let k = 0; k < n; k++) w[k] -= dot * V[i][k];
       }
-      
+
       let wnorm = 0;
       for (let k = 0; k < n; k++) wnorm += w[k] * w[k];
       wnorm = Math.sqrt(wnorm);
       hCol[j + 1] = wnorm;
       H.push(hCol);
-      
+
       // Add new basis vector
       const vNew = new Float64Array(n);
       if (wnorm > 1e-14) {
         for (let k = 0; k < n; k++) vNew[k] = w[k] / wnorm;
       }
       V.push(vNew);
-      
+
       // Apply Givens rotations
       for (let i = 0; i < j; i++) {
         const temp = cs[i] * hCol[i] + sn[i] * hCol[i + 1];
         hCol[i + 1] = -sn[i] * hCol[i] + cs[i] * hCol[i + 1];
         hCol[i] = temp;
       }
-      
+
       // New Givens rotation
       const delta = Math.sqrt(hCol[j] * hCol[j] + hCol[j + 1] * hCol[j + 1]);
       cs[j] = hCol[j] / delta;
       sn[j] = hCol[j + 1] / delta;
       hCol[j] = delta;
       hCol[j + 1] = 0;
-      
+
       // Update residual
       s[j + 1] = -sn[j] * s[j];
       s[j] = cs[j] * s[j];
-      
+
       rnorm = Math.abs(s[j + 1]);
       if (rnorm / bnorm < tol) {
         j++;
         break;
       }
     }
-    
+
     // Back substitution
     const y = new Float64Array(j);
     for (let i = j - 1; i >= 0; i--) {
@@ -438,19 +440,19 @@ export function gmres(
       }
       y[i] /= H[i][i];
     }
-    
+
     // Update solution: x = x + V * y
     for (let i = 0; i < j; i++) {
       for (let k = 0; k < n; k++) {
         x[k] += y[i] * V[i][k];
       }
     }
-    
+
     if (rnorm / bnorm < tol) {
       console.log(`[GMRES] Converged in ${iter + j} iterations, residual=${rnorm / bnorm}`);
       return iter + j;
     }
-    
+
     // Compute new residual for restart
     csrMatVec(A, x, Ax);
     for (let i = 0; i < n; i++) r[i] = b[i] - Ax[i];
@@ -463,7 +465,7 @@ export function gmres(
     for (let i = 0; i < n; i++) rnorm += z[i] * z[i];
     rnorm = Math.sqrt(rnorm);
   }
-  
+
   console.warn(`[GMRES] Did not converge in ${maxIter} iterations, residual=${rnorm / bnorm}`);
   return -maxIter;
 }

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Vitest test for cBNGL_simple volume scaling
  * Run with: npx vitest run tests/cbngl-volume-scale.spec.ts

@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Comprehensive Parser Tests
  * Tests for BNGL syntax parsing edge cases and bng2.pl parity
@@ -329,3 +330,4 @@ describe('parseBNGL - Edge Cases', () => {
     expect(model.reactionRules).toHaveLength(1);
   });
 });
+

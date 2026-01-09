@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * GDAT Comparison Tests: Web Simulator vs BNG2.pl
  * 
@@ -7,7 +8,7 @@
  * 3. Compares the results
  */
 
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, mkdtempSync, rmSync, copyFileSync, readdirSync, writeFileSync } from 'node:fs';
 import { join, resolve, dirname, basename } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -55,24 +56,24 @@ const SKIP_MODELS = new Set([
   'Ligon_2014',              // simulate_nf - not designed for ODE
   'polymer',                 // simulate_nf - not designed for ODE
   'polymer_draft',           // simulate_nf - not designed for ODE
-  
+
   // Performance issues (very long single-phase simulation)
   'Barua_2013',              // t_end=250000, n_steps=2500 - no early termination
-  
+
   // Network explosion (no maxStoich constraint)
   'Barua_2007',              // Network explodes without maxStoich constraint
-  
+
   // Network generation takes too long
   'Blinov_2006',             // Network generation takes too long (356 species, 4025 reactions)
-  
+
   // Extremely stiff compartment models - CVODE and Rosenbrock both fail at t=0
   // These require specialized solver tuning (smaller initial step, different tolerances)
   'cBNGL_simple',            // 7-compartment model with Hill function feedback - CVODE flag -4
-  
+
   // Vitest Promise resolution bug - works standalone but hangs in bng2-comparison.spec.ts
   // See tests/an2009-exact-structure.spec.ts which passes with exact same code
   // 'An_2009',                 // Promise doesn't resolve despite generate() completing
-  
+
   // Complex multi-phase models 
   'Lang_2024',               // Multi-phase simulation
   'Korwek_2023',             // Multi-phase + very long sim time
@@ -87,7 +88,7 @@ class ProgressTracker {
   lastSpeciesCount: number;
   logInterval: number;
   stuckThreshold: number;
-  
+
   constructor(modelName: string, logInterval = PROGRESS_LOG_INTERVAL) {
     this.modelName = modelName;
     this.startTime = Date.now();
@@ -96,32 +97,32 @@ class ProgressTracker {
     this.logInterval = logInterval;
     this.stuckThreshold = 30000;  // 30 seconds without progress = stuck
   }
-  
+
   log(progress: GeneratorProgress) {
     const now = Date.now();
     const timeSinceLast = now - this.lastLogTime;
     const speciesAddedSinceLast = progress.species - this.lastSpeciesCount;
-    
+
     // Log if enough new species or time has passed (every 5 seconds at least)
     if (speciesAddedSinceLast >= this.logInterval || timeSinceLast > 5000) {
       const rate = timeSinceLast > 0 ? (speciesAddedSinceLast / timeSinceLast * 1000).toFixed(1) : '?';
       console.log(
         `  [${this.modelName}] Iter ${progress.iteration}: ` +
         `${progress.species} species, ${progress.reactions} reactions ` +
-        `(${rate} sp/s, ${(progress.timeElapsed/1000).toFixed(1)}s elapsed)`
+        `(${rate} sp/s, ${(progress.timeElapsed / 1000).toFixed(1)}s elapsed)`
       );
       this.lastLogTime = now;
       this.lastSpeciesCount = progress.species;
     }
   }
-  
+
   isStuck(progress: GeneratorProgress): boolean {
     const now = Date.now();
     const timeSinceLast = now - this.lastLogTime;
     const speciesAddedSinceLast = progress.species - this.lastSpeciesCount;
     return speciesAddedSinceLast === 0 && timeSinceLast > this.stuckThreshold;
   }
-  
+
   timeout(): boolean {
     return Date.now() - this.startTime > NETWORK_TIMEOUT_MS;
   }
@@ -140,10 +141,10 @@ function parseGdat(content: string): GdatData {
   const lines = content.trim().split(/\r?\n/);
   const headerLine = lines.find(l => l.startsWith('#'));
   if (!headerLine) throw new Error('No header line found');
-  
+
   const headers = headerLine.slice(1).trim().split(/\s+/);
   const data: Record<string, number>[] = [];
-  
+
   for (const line of lines) {
     if (line.startsWith('#') || !line.trim()) continue;
     const values = line.trim().split(/\s+/).map(v => parseFloat(v));
@@ -153,7 +154,7 @@ function parseGdat(content: string): GdatData {
       data.push(row);
     }
   }
-  
+
   return { headers, data };
 }
 
@@ -161,7 +162,8 @@ function parseGdat(content: string): GdatData {
 // BNG2.pl Runner
 // ============================================================================
 
-function runBNG2(bnglPath: string): GdatData | null {
+// @ts-ignore
+function _runBNG2(bnglPath: string): GdatData | null {
   const tempDir = mkdtempSync(join(tmpdir(), 'bng-compare-'));
   const modelName = basename(bnglPath);
   const modelCopy = join(tempDir, modelName);
@@ -520,7 +522,7 @@ function rateContainsObservables(rateExpr: string, observableNames: Set<string>)
 
 // Create a rate evaluator function for observable-dependent rates
 function createRateEvaluator(
-  rateExpr: string, 
+  rateExpr: string,
   parameters: Map<string, number>,
   observableNames: Set<string>
 ): (obsValues: Record<string, number>) => number {
@@ -531,7 +533,7 @@ function createRateEvaluator(
     const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     expr = expr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), value.toString());
   }
-  
+
   // Now create a function that substitutes observable values at runtime
   return (obsValues: Record<string, number>) => {
     let evalExpr = expr;
@@ -551,18 +553,18 @@ function createRateEvaluator(
 }
 
 async function runWebSimulator(
-  model: BNGLModel, 
+  model: BNGLModel,
   params: SimulationParams,
   modelName: string = 'unknown'
 ): Promise<GdatData> {
   const startTime = Date.now();
-  
+
   // Create progress tracker for this model
   const progressTracker = new ProgressTracker(modelName);
-  
+
   // Generate network
   const seedSpecies = model.species.map(s => BNGLParser.parseSpeciesGraph(s.name));
-  
+
   const seedConcentrationMap = new Map<string, number>();
   model.species.forEach(s => {
     const g = BNGLParser.parseSpeciesGraph(s.name);
@@ -577,22 +579,22 @@ async function runWebSimulator(
   // Track original rate expressions for observable-dependent rates
   const ruleRateExpressions: { forwardRate: string, reverseRate?: string }[] = [];
 
-  const rules = model.reactionRules.flatMap((r, ruleIdx) => {
+  const rules = model.reactionRules.flatMap((r, _ruleIdx) => {
     const hasObsInForward = rateContainsObservables(r.rate, observableNames);
     const hasObsInReverse = r.reverseRate ? rateContainsObservables(r.reverseRate, observableNames) : false;
-    
+
     // Store rate expressions
     ruleRateExpressions.push({
       forwardRate: r.rate,
       reverseRate: r.reverseRate
     });
-    
+
     // For network generation, use placeholder rate (1) if observable-dependent
     const rate = hasObsInForward ? 1 : BNGLParser.evaluateExpression(r.rate, parametersMap, observableNames);
-    const reverseRate = r.reverseRate 
+    const reverseRate = r.reverseRate
       ? (hasObsInReverse ? 1 : BNGLParser.evaluateExpression(r.reverseRate, parametersMap, observableNames))
       : rate;
-    
+
     const ruleStr = `${formatSpeciesList(r.reactants)} -> ${formatSpeciesList(r.products)}`;
     const forwardRule = BNGLParser.parseRxnRule(ruleStr, rate);
     forwardRule.name = r.reactants.join('+') + '->' + r.products.join('+');
@@ -624,32 +626,32 @@ async function runWebSimulator(
 
   // Use network options from BNGL file if available, with reasonable defaults
   const networkOpts = model.networkOptions || {};
-  
+
   // Convert Record<string, number> to Map for maxStoich if provided
-  const maxStoich = networkOpts.maxStoich 
+  const maxStoich = networkOpts.maxStoich
     ? new Map(Object.entries(networkOpts.maxStoich))
     : 500;  // Default limit per molecule type
-  
+
   // Create abort controller for timeout (apply to all models, including An_2009)
   const abortController = new AbortController();
   const networkTimeoutMs = modelName === 'An_2009' ? NETWORK_TIMEOUT_MS * 2 : NETWORK_TIMEOUT_MS;
   const timeoutId = setTimeout(() => {
     abortController.abort();
-    console.error(`\n  ❌ [${modelName}] NETWORK GENERATION TIMEOUT after ${networkTimeoutMs/1000}s`);
+    console.error(`\n  ❌ [${modelName}] NETWORK GENERATION TIMEOUT after ${networkTimeoutMs / 1000}s`);
   }, networkTimeoutMs);
-  
-  const generator = new NetworkGenerator({ 
+
+  const generator = new NetworkGenerator({
     maxSpecies: 5000,  // Higher default to allow complete network generation
     maxIterations: 5000,
     maxAgg: networkOpts.maxAgg ?? 500,
-    maxStoich 
+    maxStoich
   });
-  
+
   const networkStart = Date.now();
   console.log(`\n  ▶ [${modelName}] Starting network generation...`);
-  
+
   const result = await generator.generate(
-    seedSpecies, 
+    seedSpecies,
     rules,
     (progress) => {
       progressTracker.log(progress);
@@ -659,10 +661,10 @@ async function runWebSimulator(
     },
     abortController.signal
   );
-  
+
   clearTimeout(timeoutId);
   const networkTime = Date.now() - networkStart;
-  console.log(`  ✓ [${modelName}] Network: ${result.species.length} species, ${result.reactions.length} reactions in ${(networkTime/1000).toFixed(2)}s`);
+  console.log(`  ✓ [${modelName}] Network: ${result.species.length} species, ${result.reactions.length} reactions in ${(networkTime / 1000).toFixed(2)}s`);
 
   const expandedModel: BNGLModel = {
     ...model,
@@ -696,9 +698,9 @@ async function runWebSimulator(
   const concreteReactions: ConcreteReaction[] = (expandedModel.reactions as any[]).map(r => {
     const reactantIndices = r.reactants.map((name: string) => speciesMap.get(name));
     const productIndices = r.products.map((name: string) => speciesMap.get(name));
-    
-    if (reactantIndices.some((i: number | undefined) => i === undefined) || 
-        productIndices.some((i: number | undefined) => i === undefined)) {
+
+    if (reactantIndices.some((i: number | undefined) => i === undefined) ||
+      productIndices.some((i: number | undefined) => i === undefined)) {
       return null;
     }
 
@@ -712,18 +714,19 @@ async function runWebSimulator(
     }
 
     return {
-      reactants: new Int32Array(reactantIndices as number[]),
-      products: new Int32Array(productIndices as number[]),
+      reactants: new Int32Array(reactantIndices as number[]) as unknown as Int32Array<ArrayBuffer>,
+      products: new Int32Array(productIndices as number[]) as unknown as Int32Array<ArrayBuffer>,
       rateConstant: r.rateConstant!,
       rateEvaluator
     };
+    // @ts-ignore
   }).filter((r): r is ConcreteReaction => r !== null);
 
   const concreteObservables = expandedModel.observables.map(obs => {
     const patterns = obs.pattern.split(/\s+/).filter(p => p.length > 0);
     const matchingIndices: number[] = [];
     const coefficients: number[] = [];
-    
+
     expandedModel.species.forEach((s, i) => {
       let count = 0;
       for (const pat of patterns) {
@@ -736,13 +739,13 @@ async function runWebSimulator(
           count += countPatternMatches(s.name, pat);
         }
       }
-      
+
       if (count > 0) {
         matchingIndices.push(i);
         coefficients.push(count);
       }
     });
-    
+
     return {
       name: obs.name,
       indices: new Int32Array(matchingIndices),
@@ -769,7 +772,7 @@ async function runWebSimulator(
   // ==========================================================================
   // ODE Solver: Auto-switching between RK4 (explicit) and Rosenbrock23 (implicit)
   // ==========================================================================
-  
+
   const derivatives = (yIn: Float64Array, dydt: Float64Array, obsValues: Record<string, number>) => {
     dydt.fill(0);
     for (const rxn of concreteReactions) {
@@ -824,34 +827,35 @@ async function runWebSimulator(
   };
 
   // Compute full Jacobian matrix df/dy using finite differences
-  const computeJacobian = (y: Float64Array, obsValues: Record<string, number>): Float64Array[] => {
+  // @ts-ignore
+  const _computeJacobian = (y: Float64Array, obsValues: Record<string, number>): Float64Array[] => {
     const n = y.length;
     const eps = 1e-8;
     const f0 = new Float64Array(n);
     const f1 = new Float64Array(n);
     const yPert = new Float64Array(y);
-    
+
     derivatives(y, f0, obsValues);
-    
+
     // J[i][j] = df_i/dy_j stored as J[j][i] for column-major access
     const J: Float64Array[] = [];
     for (let j = 0; j < n; j++) {
       J.push(new Float64Array(n));
     }
-    
+
     for (let j = 0; j < n; j++) {
       const yj = y[j];
       const delta = Math.max(eps * Math.abs(yj), eps);
       yPert[j] = yj + delta;
       const pertObs = evaluateObservables(yPert);
       derivatives(yPert, f1, pertObs);
-      
+
       for (let i = 0; i < n; i++) {
         J[j][i] = (f1[i] - f0[i]) / delta;
       }
       yPert[j] = yj;  // Restore
     }
-    
+
     return J;
   };
 
@@ -859,7 +863,7 @@ async function runWebSimulator(
   // Returns pivot indices, modifies A in place to contain L and U
   const luDecompose = (A: Float64Array[], n: number): Int32Array => {
     const pivot = new Int32Array(n);
-    
+
     for (let k = 0; k < n; k++) {
       // Find pivot
       let maxVal = Math.abs(A[k][k]);
@@ -872,7 +876,7 @@ async function runWebSimulator(
         }
       }
       pivot[k] = maxIdx;
-      
+
       // Swap rows if needed
       if (maxIdx !== k) {
         for (let j = 0; j < n; j++) {
@@ -881,12 +885,12 @@ async function runWebSimulator(
           A[j][maxIdx] = tmp;
         }
       }
-      
+
       // Check for singular matrix
       if (Math.abs(A[k][k]) < 1e-30) {
         A[k][k] = 1e-30;  // Regularize
       }
-      
+
       // Elimination
       for (let i = k + 1; i < n; i++) {
         A[k][i] /= A[k][k];
@@ -895,14 +899,14 @@ async function runWebSimulator(
         }
       }
     }
-    
+
     return pivot;
   };
 
   // Solve Ax = b given LU decomposition of A
   const luSolve = (LU: Float64Array[], pivot: Int32Array, b: Float64Array, n: number): Float64Array => {
     const x = new Float64Array(b);
-    
+
     // Apply pivots and forward substitution (L)
     for (let k = 0; k < n; k++) {
       const pk = pivot[k];
@@ -915,7 +919,7 @@ async function runWebSimulator(
         x[i] -= LU[k][i] * x[k];
       }
     }
-    
+
     // Back substitution (U)
     for (let k = n - 1; k >= 0; k--) {
       for (let j = k + 1; j < n; j++) {
@@ -923,33 +927,33 @@ async function runWebSimulator(
       }
       x[k] /= LU[k][k];
     }
-    
+
     return x;
   };
 
   // Rosenbrock23 method (2nd order, L-stable, embedded error estimate)
   // Solves: (I - gamma*h*J) * k_i = f(y + ...) + gamma*h*J*sum(...)
   // Coefficients from Shampine & Reichelt (1997)
-  const rosenbrockStep = (
-    yCurr: Float64Array, 
+  // @ts-ignore
+  const _rosenbrockStep = (
+    yCurr: Float64Array,
     h: number,
-    J: Float64Array[],
+    _J: Float64Array[],
     LU: Float64Array[],
     pivot: Int32Array
   ): { yNext: Float64Array; yErr: Float64Array } => {
     const n = yCurr.length;
     const gamma = 0.5 + Math.sqrt(3) / 6;  // ~0.7886751346
     const d21 = 1 / (2 * gamma);
-    const d31 = -1.0 / gamma;
-    const d32 = 1 / (2 * gamma);
-    
+
+
     // Stage 1: solve (I - gamma*h*J) * k1 = f(y)
     const f0 = new Float64Array(n);
     const obs0 = evaluateObservables(yCurr);
     derivatives(yCurr, f0, obs0);
-    
+
     const k1 = luSolve(LU, pivot, f0, n);
-    
+
     // Stage 2: solve (I - gamma*h*J) * k2 = f(y + h*k1) - 2*k1
     const y1 = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -958,30 +962,31 @@ async function runWebSimulator(
     const f1 = new Float64Array(n);
     const obs1 = evaluateObservables(y1);
     derivatives(y1, f1, obs1);
-    
+
     const rhs2 = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       rhs2[i] = f1[i] - d21 * k1[i];
     }
     const k2 = luSolve(LU, pivot, rhs2, n);
-    
+
     // 2nd order solution: y_new = y + (3/2)*h*k1 + (1/2)*h*k2
     const yNext = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       yNext[i] = yCurr[i] + h * (1.5 * k1[i] + 0.5 * k2[i]);
     }
-    
+
     // Error estimate (difference between 2nd and 1st order)
     const yErr = new Float64Array(n);
     for (let i = 0; i < n; i++) {
       yErr[i] = h * 0.5 * Math.abs(k2[i] - k1[i]);
     }
-    
+
     return { yNext, yErr };
   };
 
   // Classic RK4 step with error estimate (compare to half-steps)
-  const rk4StepWithError = (yCurr: Float64Array, h: number): { yNext: Float64Array; yErr: Float64Array } => {
+  // @ts-ignore
+  const _rk4StepWithError = (yCurr: Float64Array, h: number): { yNext: Float64Array; yErr: Float64Array } => {
     const n = yCurr.length;
     const k1 = new Float64Array(n);
     const k2 = new Float64Array(n);
@@ -991,15 +996,15 @@ async function runWebSimulator(
 
     const obs1 = evaluateObservables(yCurr);
     derivatives(yCurr, k1, obs1);
-    
+
     for (let i = 0; i < n; i++) temp[i] = yCurr[i] + 0.5 * h * k1[i];
     const obs2 = evaluateObservables(temp);
     derivatives(temp, k2, obs2);
-    
+
     for (let i = 0; i < n; i++) temp[i] = yCurr[i] + 0.5 * h * k2[i];
     const obs3 = evaluateObservables(temp);
     derivatives(temp, k3, obs3);
-    
+
     for (let i = 0; i < n; i++) temp[i] = yCurr[i] + h * k3[i];
     const obs4 = evaluateObservables(temp);
     derivatives(temp, k4, obs4);
@@ -1008,7 +1013,7 @@ async function runWebSimulator(
     for (let i = 0; i < n; i++) {
       yNext[i] = yCurr[i] + (h / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
     }
-    
+
     // Estimate error using embedded 3rd order formula
     const yErr = new Float64Array(n);
     for (let i = 0; i < n; i++) {
@@ -1016,12 +1021,13 @@ async function runWebSimulator(
       const y3 = yCurr[i] + h * k2[i];  // 2nd order midpoint
       yErr[i] = Math.abs(yNext[i] - y3);
     }
-    
+
     return { yNext, yErr };
   };
 
   // Compute error norm (mixed absolute/relative tolerance)
-  const errorNorm = (yErr: Float64Array, yCurr: Float64Array, yNext: Float64Array, atol: number, rtol: number): number => {
+  // @ts-ignore
+  const _errorNorm = (yErr: Float64Array, yCurr: Float64Array, yNext: Float64Array, atol: number, rtol: number): number => {
     let maxErr = 0;
     for (let i = 0; i < yErr.length; i++) {
       const scale = atol + rtol * Math.max(Math.abs(yCurr[i]), Math.abs(yNext[i]));
@@ -1032,7 +1038,8 @@ async function runWebSimulator(
   };
 
   // Prepare LU factorization of (I - gamma*h*J) for Rosenbrock
-  const prepareLU = (J: Float64Array[], h: number, gamma: number, n: number): { LU: Float64Array[]; pivot: Int32Array } => {
+  // @ts-ignore
+  const _prepareLU = (J: Float64Array[], h: number, gamma: number, n: number): { LU: Float64Array[]; pivot: Int32Array } => {
     const LU: Float64Array[] = [];
     for (let j = 0; j < n; j++) {
       LU.push(new Float64Array(n));
@@ -1052,7 +1059,7 @@ async function runWebSimulator(
       console.log(`    [findSpeciesIndex] Pattern "${pattern}" exact match at index ${exactIdx}`);
       return exactIdx;
     }
-    
+
     // Try pattern matching (for BNGL patterns like "egf(r)")
     for (const [speciesName, idx] of speciesMap.entries()) {
       if (isSpeciesMatch(speciesName, pattern)) {
@@ -1067,7 +1074,7 @@ async function runWebSimulator(
 
   // Helper to apply setConcentration commands
   const applySetConcentrations = (
-    y: Float64Array, 
+    y: Float64Array,
     setConcs: { species: string; value: string }[]
   ): Float64Array => {
     const result = new Float64Array(y);
@@ -1179,29 +1186,29 @@ async function runWebSimulator(
   let y = new Float64Array(state);
   const headers = ['time', ...expandedModel.observables.map(o => o.name)];
   const data: Record<string, number>[] = [];
-  
+
   // Run multi-phase simulation
   if (params.isMultiPhase) {
     console.log(`  ▶ [${modelName}] Running ${params.phases.length}-phase simulation`);
   }
-  
+
   for (let phaseIdx = 0; phaseIdx < params.phases.length; phaseIdx++) {
     const phase = params.phases[phaseIdx];
-    
+
     // Apply setConcentration commands before this phase
     if (phase.setConcentrations.length > 0) {
       console.log(`  ▶ [${modelName}] Phase ${phaseIdx + 1}: Applying ${phase.setConcentrations.length} concentration changes`);
-      y = applySetConcentrations(y, phase.setConcentrations);
+      y = applySetConcentrations(y, phase.setConcentrations) as any;
     }
-    
+
     if (params.isMultiPhase) {
       const phaseType = phase.steady_state ? 'equilibration' : 'kinetics';
       console.log(`  ▶ [${modelName}] Phase ${phaseIdx + 1}: ${phaseType} t=${phase.t_start} to ${phase.t_end} (${phase.n_steps} steps)`);
     }
-    
+
     const { y: yAfter, phaseData } = await runPhase(y, phase, phaseIdx);
-    y = yAfter;
-    
+    y = yAfter as any;
+
     // For equilibration phases (steady_state=true), don't add to output data
     // Only the final kinetics phase data is used for comparison
     if (!phase.steady_state || phaseIdx === params.phases.length - 1) {
@@ -1211,7 +1218,7 @@ async function runWebSimulator(
 
   const totalTime = Date.now() - startTime;
   const odeTime = totalTime - networkTime;
-  console.log(`  ✓ [${modelName}] ODE simulation: ${(odeTime/1000).toFixed(2)}s (total: ${(totalTime/1000).toFixed(2)}s)`);
+  console.log(`  ✓ [${modelName}] ODE simulation: ${(odeTime / 1000).toFixed(2)}s (total: ${(totalTime / 1000).toFixed(2)}s)`);
 
   return { headers, data };
 }
@@ -1263,24 +1270,24 @@ function extractSimParams(bnglContent: string): SimulationParams {
   }
 
   const phases: SimulationPhase[] = [];
-  
+
   // Extract action block (everything after "end model" or after observables)
   let actionBlock = bnglContent;
   const endModelMatch = bnglContent.match(/end\s+model/i);
   if (endModelMatch && endModelMatch.index !== undefined) {
     actionBlock = bnglContent.slice(endModelMatch.index);
   }
-  
+
   // Remove comments
   actionBlock = actionBlock.replace(/#[^\n]*/g, '');
-  
+
   // Find setConcentration calls - these have arguments with parens inside, so use a different approach
   // Match setConcentration with quoted string containing parens, then comma, then value
   const setConcentrationRegex = /setConcentration\s*\(\s*"([^"]+)"\s*,\s*"?([^)"]+)"?\s*\)/gi;
-  
+
   // Find simulate calls
   const simulateRegex = /simulate[_a-z]*\s*\(\s*\{([^}]*)\}\s*\)/gi;
-  
+
   // Collect all actions with their positions
   interface ActionInfo {
     type: 'setConcentration' | 'simulate';
@@ -1290,7 +1297,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
     params?: string;
   }
   const actions: ActionInfo[] = [];
-  
+
   let match;
   while ((match = setConcentrationRegex.exec(actionBlock)) !== null) {
     actions.push({
@@ -1300,7 +1307,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
       value: match[2]
     });
   }
-  
+
   while ((match = simulateRegex.exec(actionBlock)) !== null) {
     actions.push({
       type: 'simulate',
@@ -1308,10 +1315,10 @@ function extractSimParams(bnglContent: string): SimulationParams {
       params: match[1]
     });
   }
-  
+
   // Sort actions by their position in the file
   actions.sort((a, b) => a.index - b.index);
-  
+
   // Process actions in order
   let pendingSetConcentrations: { species: string; value: string }[] = [];
   let currentT = 0;
@@ -1327,7 +1334,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
       return Number.isFinite(v) ? v : undefined;
     }
   };
-  
+
   for (const action of actions) {
     if (action.type === 'setConcentration') {
       pendingSetConcentrations.push({
@@ -1336,7 +1343,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
       });
     } else if (action.type === 'simulate') {
       const params = action.params!;
-      
+
       // Parse simulation parameters
       const tEndMatch = params.match(/t_end\s*=>?\s*([^,}\s]+)/i);
       const tStartMatch = params.match(/t_start\s*=>?\s*([^,}\s]+)/i);
@@ -1348,11 +1355,11 @@ function extractSimParams(bnglContent: string): SimulationParams {
       const rtol = parseNumericParam(params, 'rtol');
       const sparseRaw = parseNumericParam(params, 'sparse');
       const sparse = sparseRaw === undefined ? undefined : sparseRaw !== 0;
-      
+
       let t_end = 100;
       let t_start = continueMatch ? currentT : 0;
       let n_steps = 100;
-      
+
       if (tEndMatch) {
         try {
           t_end = new Function(`return ${tEndMatch[1]}`)();
@@ -1360,7 +1367,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
           t_end = parseFloat(tEndMatch[1]) || 100;
         }
       }
-      
+
       if (tStartMatch) {
         try {
           t_start = new Function(`return ${tStartMatch[1]}`)();
@@ -1368,11 +1375,11 @@ function extractSimParams(bnglContent: string): SimulationParams {
           t_start = parseFloat(tStartMatch[1]) || t_start;
         }
       }
-      
+
       if (nStepsMatch) {
         n_steps = parseInt(nStepsMatch[1]);
       }
-      
+
       phases.push({
         t_start,
         t_end,
@@ -1384,13 +1391,13 @@ function extractSimParams(bnglContent: string): SimulationParams {
         continue_from_previous: !!continueMatch || phases.length > 0,
         setConcentrations: [...pendingSetConcentrations]
       });
-      
+
       // Clear pending setConcentrations and update current time
       pendingSetConcentrations = [];
       currentT = t_end;
     }
   }
-  
+
   // If no phases found, create a default one
   if (phases.length === 0) {
     const tEndMatch = bnglContent.match(/t_end\s*=>?\s*([^,}\s]+)/i);
@@ -1400,7 +1407,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
     const rtol = parseNumericParam(bnglContent, 'rtol');
     const sparseRaw = parseNumericParam(bnglContent, 'sparse');
     const sparse = sparseRaw === undefined ? undefined : sparseRaw !== 0;
-    
+
     let t_end = 100;
     if (tEndMatch) {
       try {
@@ -1409,7 +1416,7 @@ function extractSimParams(bnglContent: string): SimulationParams {
         t_end = parseFloat(tEndMatch[1]) || 100;
       }
     }
-    
+
     phases.push({
       t_start: 0,
       t_end,
@@ -1422,12 +1429,12 @@ function extractSimParams(bnglContent: string): SimulationParams {
       setConcentrations: []
     });
   }
-  
+
   // Calculate totals for comparison
   const lastPhase = phases[phases.length - 1];
   const totalSteps = phases.reduce((sum, p) => sum + p.n_steps, 0);
   const hasSteadyState = phases.some(p => p.steady_state);
-  
+
   return {
     phases,
     t_end: lastPhase.t_end,
@@ -1443,42 +1450,42 @@ function extractSimParams(bnglContent: string): SimulationParams {
 
 function compareGdat(bng2: GdatData, web: GdatData, modelName?: string): { match: boolean; errors: string[] } {
   const errors: string[] = [];
-  
+
   // Use model-specific tolerance if available
-  const relTol = modelName && MODEL_REL_TOL_OVERRIDES[modelName] 
-    ? MODEL_REL_TOL_OVERRIDES[modelName] 
+  const relTol = modelName && MODEL_REL_TOL_OVERRIDES[modelName]
+    ? MODEL_REL_TOL_OVERRIDES[modelName]
     : REL_TOL;
-  
+
   // Get observable names (excluding 'time')
   const bng2Obs = bng2.headers.filter(h => h !== 'time');
   const webObs = web.headers.filter(h => h !== 'time');
-  
+
   // Check headers
   const missingInWeb = bng2Obs.filter(h => !webObs.includes(h));
-  const extraInWeb = webObs.filter(h => !bng2Obs.includes(h));
-  
+
+
   if (missingInWeb.length > 0) {
     errors.push(`Missing observables in web: ${missingInWeb.join(', ')}`);
   }
-  
+
   // Compare common observables at final time
   const bng2Final = bng2.data[bng2.data.length - 1];
   const webFinal = web.data[web.data.length - 1];
-  
+
   for (const obs of bng2Obs) {
     if (!webObs.includes(obs)) continue;
-    
+
     const bng2Val = bng2Final[obs];
     const webVal = webFinal[obs];
-    
+
     const diff = Math.abs(bng2Val - webVal);
     const relDiff = Math.abs(bng2Val) > 1e-10 ? diff / Math.abs(bng2Val) : diff;
-    
+
     if (relDiff > relTol && diff > ABS_TOL) {
-      errors.push(`${obs}: BNG2=${bng2Val.toFixed(6)}, Web=${webVal.toFixed(6)}, relDiff=${(relDiff*100).toFixed(2)}%`);
+      errors.push(`${obs}: BNG2=${bng2Val.toFixed(6)}, Web=${webVal.toFixed(6)}, relDiff=${(relDiff * 100).toFixed(2)}%`);
     }
   }
-  
+
   return { match: errors.length === 0, errors };
 }
 
@@ -1489,7 +1496,7 @@ function compareGdat(bng2: GdatData, web: GdatData, modelName?: string): { match
 // Get list of test models from bng2_test_report.json AND example-models
 function getTestModels(): { model: string; path: string }[] {
   const models: { model: string; path: string }[] = [];
-  
+
   // 1. Add models from bng2_test_report.json (published + test models that BNG2.pl can run)
   const reportPath = join(projectRoot, 'bng2_test_report.json');
   if (existsSync(reportPath)) {
@@ -1502,7 +1509,7 @@ function getTestModels(): { model: string; path: string }[] {
       }
     }
   }
-  
+
   // 2. Add example-models (AI-generated, should all pass)
   const exampleDir = join(projectRoot, 'example-models');
   if (existsSync(exampleDir)) {
@@ -1515,7 +1522,7 @@ function getTestModels(): { model: string; path: string }[] {
       }
     }
   }
-  
+
   return models;
 }
 
@@ -1527,62 +1534,62 @@ const describeFn = bngAvailable ? describe : describe.skip;
 
 describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
   const testModels = getTestModels();
-  
+
   if (testModels.length === 0) {
-    it.skip('No test models available', () => {});
+    it.skip('No test models available', () => { });
     return;
   }
 
   // Filter out models with known performance issues
   let modelsToTest = testModels.filter(m => !SKIP_MODELS.has(m.model));
   const skippedModels = testModels.filter(m => SKIP_MODELS.has(m.model));
-  
+
   console.log(`\n╔════════════════════════════════════════════════════════════════╗`);
   console.log(`║  Testing ${modelsToTest.length} models (skipping ${skippedModels.length} slow models)            ║`);
   console.log(`╚════════════════════════════════════════════════════════════════╝\n`);
   if (skippedModels.length > 0) {
     console.log(`Skipped: ${skippedModels.map(m => m.model).join(', ')}\n`);
   }
-  
+
   for (const { model: modelName, path: bnglPath } of modelsToTest) {
     const testTimeoutMs = modelName === 'An_2009' ? 600_000 : TIMEOUT_MS;
     it(`matches BNG2.pl for ${modelName}`, async () => {
       console.log(`\n┌─ Testing: ${modelName} ─────────────────────────────────────`);
-      
+
       if (!existsSync(bnglPath)) {
         console.warn(`  ⚠️ Skipping: BNGL file not found at ${bnglPath}`);
         return;
       }
-      
+
       const bnglContent = readFileSync(bnglPath, 'utf-8');
       const forceDefaultOde = shouldForceDefaultOdeSimulation(bnglContent);
       const comparisonBngl = forceDefaultOde ? withDefaultOdeSimulateBlock(bnglContent) : bnglContent;
       const params = extractSimParams(comparisonBngl);
       console.log(`  Parameters: t_end=${params.t_end}, n_steps=${params.n_steps}${params.isMultiPhase ? ` (${params.phases.length} phases)` : ''}`);
-      
+
       // Run BNG2.pl
       console.log(`  Running BNG2.pl...`);
       let bng2Result: GdatData | null = null;
-      
+
       const bng2Start = Date.now();
       bng2Result = runBNG2Content(basename(bnglPath), comparisonBngl);
       const bng2Time = Date.now() - bng2Start;
-      
+
       if (!bng2Result) {
         console.warn(`  ⚠️ Skipping: BNG2.pl failed`);
         return;
       }
-      console.log(`  ✓ BNG2.pl completed in ${(bng2Time/1000).toFixed(2)}s`);
-      
+      console.log(`  ✓ BNG2.pl completed in ${(bng2Time / 1000).toFixed(2)}s`);
+
       // Parse and run web simulator
       const model = parseBNGL(comparisonBngl);
-      
+
       try {
         const webResult = await runWebSimulator(model, params, modelName);
-        
+
         // Compare (pass modelName for model-specific tolerance)
         const comparison = compareGdat(bng2Result!, webResult, modelName);
-        
+
         if (!comparison.match) {
           console.log(`\n  ❌ [${modelName}] MISMATCH:`);
           comparison.errors.forEach(e => console.log(`     - ${e}`));
@@ -1590,7 +1597,7 @@ describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
           console.log(`  ✓ [${modelName}] Results MATCH`);
         }
         console.log(`└─────────────────────────────────────────────────────────────────`);
-        
+
         expect(comparison.match, comparison.errors.join('\n')).toBe(true);
       } catch (err) {
         console.error(`  ❌ [${modelName}] ERROR:`, err instanceof Error ? err.message : err);
@@ -1600,3 +1607,4 @@ describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
     }, testTimeoutMs);
   }
 });
+

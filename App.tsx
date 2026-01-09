@@ -330,6 +330,12 @@ function App() {
                   onTextChange={setDesignerText}
                   onCodeChange={handleCodeChange}
                   onParse={handleParse}
+                  onSimulate={() => handleSimulate({
+                    method: 'ode',
+                    t_end: 100,
+                    n_steps: 100,
+                    solver: 'auto'
+                  })}
                 />
               )}
             </div>

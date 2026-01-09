@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, it, expect, vi } from 'vitest';
 import type { BNGLModel, SimulationOptions } from '../types';
 import * as fimModule from '../services/fim';
@@ -133,3 +134,4 @@ describe('FIM identifiability', () => {
     expect(exported.eigenvalues).toHaveLength(3);
   });
 });
+

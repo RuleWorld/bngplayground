@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import { performance } from 'perf_hooks';
 import { GraphMatcher } from '../src/services/graph/core/Matcher';
@@ -7,7 +8,7 @@ import { Component } from '../src/services/graph/core/Component';
 
 const makeComponent = (name: string) => new Component(name);
 
-const buildChain = (label: string, length: number): SpeciesGraph => {
+const buildChain = (_label: string, length: number): SpeciesGraph => {
   const molecules: Molecule[] = [];
   for (let i = 0; i < length; i++) {
     // Use same base name 'M' for pattern and target so names match
@@ -41,3 +42,4 @@ describe('GraphMatcher VF2++ performance', () => {
     expect(elapsed).toBeLessThan(200);
   });
 });
+

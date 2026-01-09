@@ -16,7 +16,7 @@
 /**
  * Message types for worker communication
  */
-export type WorkerMessageType = 
+export type WorkerMessageType =
   | 'COMPUTE_JACOBIAN_COLUMNS'
   | 'RUN_SIMULATION'
   | 'COMPUTE_RHS'
@@ -46,7 +46,7 @@ export interface WorkerResult<T = unknown> {
 /**
  * Task callback
  */
-type TaskCallback<R> = (result: R | null, error?: Error) => void;
+
 
 /**
  * Pending task entry
@@ -123,7 +123,7 @@ export class WorkerPool {
           }
         };
         worker.addEventListener('message', checkReady);
-        
+
         // Timeout fallback
         setTimeout(() => resolve(), 2000);
       }));
@@ -142,11 +142,11 @@ export class WorkerPool {
 
     const taskId = instance.currentTask;
     const pendingIndex = this.pendingTasks.findIndex(p => p.task.id === taskId);
-    
+
     if (pendingIndex >= 0) {
       const pending = this.pendingTasks[pendingIndex];
       this.pendingTasks.splice(pendingIndex, 1);
-      
+
       if (result.type === 'ERROR') {
         pending.reject(new Error(result.error || 'Unknown worker error'));
       } else {
@@ -156,7 +156,7 @@ export class WorkerPool {
 
     instance.busy = false;
     instance.currentTask = null;
-    
+
     // Process next task in queue
     this.processQueue();
   }
@@ -168,7 +168,7 @@ export class WorkerPool {
     if (instance.currentTask) {
       const taskId = instance.currentTask;
       const pendingIndex = this.pendingTasks.findIndex(p => p.task.id === taskId);
-      
+
       if (pendingIndex >= 0) {
         const pending = this.pendingTasks[pendingIndex];
         this.pendingTasks.splice(pendingIndex, 1);
@@ -236,13 +236,13 @@ export class WorkerPool {
   ): Promise<R[]> {
     const size = chunkSize ?? this.poolSize * 2;
     const results: R[] = [];
-    
+
     for (let i = 0; i < dataArray.length; i += size) {
       const chunk = dataArray.slice(i, i + size);
       const chunkResults = await this.batch<T, R>(type, chunk);
       results.push(...chunkResults);
     }
-    
+
     return results;
   }
 

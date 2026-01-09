@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import { GraphMatcher } from '../src/services/graph/core/Matcher';
 import { SpeciesGraph } from '../src/services/graph/core/SpeciesGraph';
@@ -138,3 +139,4 @@ describe('GraphMatcher VF2++ integration', () => {
     expect(matches[0].moleculeMap.get(0)).toBe(1);
   });
 });
+

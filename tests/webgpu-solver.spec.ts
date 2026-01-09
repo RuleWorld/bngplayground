@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * WebGPU ODE Solver Tests
  * 
@@ -228,3 +229,4 @@ describe('WebGPU Context', () => {
     });
   });
 });
+

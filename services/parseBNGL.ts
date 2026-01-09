@@ -11,7 +11,14 @@ import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
 import { SafeExpressionEvaluator } from './safeExpressionEvaluator';
 import { parseBNGLWithANTLR } from '../src/parser/BNGLParserWrapper.ts';
 
-const speciesPattern = /^[A-Za-z0-9_]+(?:\([^)]*\))?(?:\.[A-Za-z0-9_]+(?:\([^)]*\))?)*$/;
+interface NetworkGenerationOptions {
+  maxStoich?: Record<string, number>;
+  maxAgg?: number;
+  maxIter?: number;
+  overwrite?: boolean;
+}
+
+// (Removed unused vulnerable regex)
 
 const escapeRegex = (value: string) => {
   const ESCAPE_CODES: Record<number, true> = {
@@ -60,7 +67,10 @@ const parseEntityList = (segment: string) => {
   let depth = 0;
   for (let i = 0; i < segment.length; i++) {
     const ch = segment[i];
-    if (ch === '(') depth++;
+    if (ch === '(') {
+      depth++;
+      if (depth > 100) throw new Error('Parsing error: Maximum parenthesis depth exceeded');
+    }
     else if (ch === ')') depth--;
     else if (ch === '+' && depth === 0) {
       if (current.trim()) parts.push(current.trim());
@@ -763,7 +773,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
 
         if (keyword === 'generate_network') {
           try {
-            const options: any = {};
+            const options: NetworkGenerationOptions = {};
 
             // Extract max_stoich
             const maxStoichMatch = argsStr.match(/max_stoich\s*=>\s*({[^}]+})/);

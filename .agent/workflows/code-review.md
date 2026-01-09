@@ -1,179 +1,129 @@
 ---
-description: Run a senior dev code review cycle - generates critical feedback and addresses issues
+description: Run a senior dev code review cycle (v2.0) - TDD, Parity Checks, and Strict Rubric
 ---
 
-# Senior Dev Code Review Workflow
+# Senior Dev Code Review Workflow v2.0
 
-This workflow simulates a senior developer code review process. It runs in two phases:
+This workflow performs a rigorous, senior-level code review. It emphasizes TDD, strict type safety, and parity with official BioNetGen implementations.
 
-1. **Review Phase**: Generate a harsh, critical review artifact with 25+ issues
-2. **Fix Phase**: Systematically address each issue from the review
+## Phase 1: Context & Analysis
 
-## How to Invoke
+Before generating the review, gather facts.
 
-Use the slash command: `/code-review`
+### 1.1 Automated Health Check
 
-Or say: "Run the code review workflow" or "Do a senior dev review"
-
----
-
-## Phase 1: Generate Review Artifact
-
-### Step 1.1: Identify Scope
-
-First, determine what files to review. Ask the user or use recent git changes:
+Run the following to understand the current state of the codebase:
 
 ```bash
-git diff HEAD --name-only | grep -E '\.(ts|tsx|js|jsx)$'
+npm run type-check   # or tsc --noEmit
+npm run lint         # check for style/quality issues
 ```
 
-Or review specific directories the user mentions.
+*Note: If the codebase is already broken, acknowledge existing errors so you don't report them as "new" issues unless they are critical blockers.*
 
-### Step 1.2: Create the Review Artifact
+### 1.2 Identify Scope
 
-Create a new markdown artifact at the artifacts directory with name `code_review_round_N.md` where N is the next round number.
+Determine what files to review.
 
-### Step 1.3: Review Mindset
+- User specified files?
+- Recent git changes? (`git diff HEAD --name-only`)
 
-When generating the review, adopt this persona:
+### 1.3 Reference Check (Parity)
 
-> You are a senior software engineer with 15+ years of experience. You are doing a code review for a junior developer. You are HARSH but FAIR. You do NOT like this implementation and will find every possible issue. Your job is to make the code production-ready.
+**CRITICAL:** This project mimics BioNetGen. You **MUST** consult the reference implementations to ensure logic parity if you are reviewing core logic (parsing, simulation, graph theory).
 
-Focus areas:
+- **Python Reference:** `bionetgen_python/` (PyBioNetGen)
+- **Perl/Source Reference:** `bionetgen_repo/` (BioNetGen source)
 
-- **Security vulnerabilities** (injection, XSS, DoS, privilege escalation)
-- **Performance bottlenecks** (O(n²) loops, excessive allocations, missing caches)
-- **Error handling gaps** (missing try/catch, unhandled promises, silent failures)
-- **Type safety issues** (`any` abuse, missing null checks, unsafe casts)
-- **Edge cases** (empty inputs, NaN, Infinity, negative values, unicode)
-- **API design flaws** (inconsistent naming, poor ergonomics, tight coupling)
-- **Test coverage gaps** (missing unit tests, no integration tests, no fuzz tests)
-- **Documentation** (missing JSDoc, unclear comments, outdated README)
-- **Maintainability** (dead code, duplicated logic, magic numbers)
-- **Concurrency** (race conditions, deadlocks, stale closures)
-- anything else that generally goes against user experience
+*If logic seems weird, check these folders before marking it as "wrong". It might be weird because it's matching the reference behavior.*
 
-### Step 1.4: Review Artifact Format
+### 1.4 Lens Selection (Optional)
 
-Structure the artifact like this:
+Pick a specific "Lens" for this review if requested:
+
+- **Security:** Injection, ReDoS, XSS, DoS, Safe Evaluation.
+- **Performance:** Allocations (GC), Big-O complexity, React renders, Hash collisions.
+- **Maintainability:** DRY, SOLID, naming, directory structure.
+
+---
+
+## Phase 2: Review Generation
+
+Create a markdown artifact: `code_review_round_N.md`.
+
+### 2.1 Persona & Rubric
+
+Adopt the persona of a **Principal Software Engineer (15+ YOE)**. You are strict but constructive.
+
+**Severity Rubric:**
+
+| Level | Criteria | Example |
+| :--- | :--- | :--- |
+| 🔴 **Critical** | Security vuln, Data loss, Crash, Build Break, Logic Error (bad math/physics). | SQL injection, `any` abuse in core types, wrong ODE formula. |
+| 🟠 **High** | Broken feature, Memory Leak, significant Performance Regression, Race Condition. | O(N^2) in hot loop, unhandled Promise rejection, incorrect test. |
+| 🟡 **Medium** | Edge case bug, "Code Smell", Hard to maintain, Poor Error Message. | Duplicated logic, magic numbers, confusing variable names. |
+| 🟢 **Low** | Style, Comment, Refactor suggestion, naming convention. | Typo in comment, unused import. |
+
+### 2.2 Artifact Format
 
 ```markdown
 # Senior Dev Code Review: Round N
 
-**Date:** [current date]
-**Files Reviewed:** [list of files]
-**Verdict:** ❌ NOT READY / ⚠️ NEEDS WORK / ✅ APPROVED
+**Date:** [Date]
+**Focus:** [Lens, e.g. Performance/Security]
+**Reference Check:** [Checked bionetgen_python? Yes/No]
 
----
+## Critical Issues (Must Fix with TDD)
 
-## Critical Issues (Must Fix)
+### 1. [Title]
+**File:** `path/to/file.ts:L10-20`
+**Severity:** 🔴 Critical
+**Problem:** Description...
+**Evidence:** Code snippet...
+**Recommendation:** Fix...
 
-### 1. [Issue Title]
-
-**File:** `path/to/file.ts`
-**Line:** 123-145
-**Severity:** 🔴 Critical / 🟠 High / 🟡 Medium / 🟢 Low
-
-**Problem:**
-[Description of the issue]
-
-**Evidence:**
-```typescript
-// code snippet showing the problem
-```
-
-**Recommendation:**
-[How to fix it]
-
----
-
-[Repeat for all 25+ issues]
-
----
+...
 
 ## Summary
-
-| Severity | Count |
-| --- | --- |
-| 🔴 Critical | X |
-| 🟠 High | X |
-| 🟡 Medium | X |
-| 🟢 Low | X |
-
-**Next Steps:**
-
-1. Fix all Critical issues before proceeding
-2. Address High issues in this sprint
-3. Medium/Low issues can be tracked as tech debt
-
+[Table of Counts]
 ```
 
 ---
 
-## Phase 2: Fix Issues
+## Phase 3: TDD & Fix (The "Fix Phase")
 
-### Step 2.1: Prioritize by Severity
+For each issue (Critical -> High -> Medium -> Low):
 
-Process issues in order:
+### 3.1 Create Reproduction (TDD)
 
-1. 🔴 Critical (blocks deployment)
-2. 🟠 High (should fix before merge)
-3. 🟡 Medium (nice to have)
-4. 🟢 Low (tech debt)
+**MANDATORY for Critical/High issues involves logic:**
 
-### Step 2.2: For Each Issue
+1. Create a minimal test case (e.g., in `tests/fixtures/` or a new `.spec.ts`) that **reproduces the bug**.
+2. Run the test to confirm it **FAILS**.
 
-1. Read the issue description and recommendation
-2. View the relevant file and line range
-3. Implement the fix
-4. Update the review artifact to mark the issue as resolved:
-   - Change `### 1. [Issue Title]` to `### ~~1. [Issue Title]~~ ✅ FIXED`
-   - Add a note: `**Resolution:** [brief description of fix]`
+### 3.2 Implement Fix
 
-### Step 2.3: Verify Fixes
+1. Modify the code to address the issue.
+2. Ensure you handle edge cases.
 
-After addressing issues:
+### 3.3 Verify Fix
 
-// turbo
+1. Run the reproduction test again.
+2. Confirm it **PASSES**.
+3. Run related regression tests, including running /parity-check to ensure none of the models regressed.
 
-```bash
-npm run test
-```
+### 3.4 Update Artifact
 
-// turbo
+Update the review artifact to mark the issue as resolved.
 
-```bash
-npm run build
-```
-
-### Step 2.4: Create Summary
-
-Update the review artifact's Summary section to show:
-
-- How many issues were fixed
-- Any issues deferred (and why)
-- Recommendation for next round
+- Change header to: `### ~~1. [Issue Title]~~ ✅ FIXED`
+- Add: `**Resolution:** Fixed XYZ. Verified with test 'tests/repro_issue_1.spec.ts'.`
 
 ---
 
-## Automation Notes
+## Phase 4: Final Verification
 
-- The reviewer phase should NOT auto-proceed (user should approve the artifact)
-- The fix phase CAN auto-proceed for routine changes
-- Always run tests after fixes
-- Create a new round number for each invocation
-
----
-
-## Example Invocation
-
-User: "/code-review on services/safeExpressionEvaluator.ts"
-
-1. Agent reads the file
-2. Agent creates `code_review_round_N.md` with 25+ issues
-3. Agent notifies user to review the artifact
-4. User approves
-5. Agent fixes issues one by one
-6. Agent runs tests
-7. Agent updates artifact with resolutions
-8. Agent notifies user of completion
+1. Run full test suite: `npm run test`
+2. Run build check: `npm run build`
+3. Update artifact summary with final stats.
+4. Notify user.

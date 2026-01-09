@@ -359,16 +359,13 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
     const patGraph = parseGraphCached(cleanPat);
     const specGraph = parseGraphCached(cleanSpec);
 
-    // BNG2 semantics for Molecules observables (multi-molecule patterns): count the
-    // number of distinct target molecules that can serve as the image of the first
-    // pattern molecule in at least one valid embedding.
+    // BNG2 semantics for Molecules observables (multi-molecule patterns):
+    // Count ALL embeddings of the pattern into the species.
+    // For homodimers like egfr.egfr matching egfr-egfr, this returns 2
+    // (one embedding with egfr1→pattern-mol0, egfr2→pattern-mol1, and vice versa).
+    // This is consistent with BNG2's counting behavior for symmetric patterns.
     const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
-    const anchors = new Set<number>();
-    for (const m of maps) {
-      const t0 = m.moleculeMap.get(0);
-      if (t0 !== undefined) anchors.add(t0);
-    }
-    return anchors.size;
+    return maps.length;
   } catch {
     return 0;
   }
@@ -385,14 +382,17 @@ function countPatternMatches(speciesStr: string, patternStr: string): number {
   const cleanSpec = removeCompartment(speciesStr);
 
   if (cleanPat.includes('.')) {
-    return isSpeciesMatch(speciesStr, patternStr) ? 1 : 0;
+    // Multi-molecule pattern: count anchor molecules (BNG2 Molecules observable semantics)
+    // For homodimers like R.R matching R-R, this returns 2 (either R can be anchor)
+    return countMultiMoleculePatternMatches(speciesStr, patternStr);
   } else {
+    // Single-molecule pattern: sum up all embeddings across all molecules
+    // E.g., A(b) matching species with A(b,b) should count 2 (one for each free b site)
     const specMols = cleanSpec.split('.');
     let count = 0;
     for (const sMol of specMols) {
-      if (countMoleculeEmbeddings(cleanPat, sMol) > 0) {
-        count++;
-      }
+      // Add the actual number of embeddings, not just 1 if matches
+      count += countMoleculeEmbeddings(cleanPat, sMol);
     }
     return count;
   }
@@ -581,16 +581,16 @@ function preExpandExpression(
 function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | null {
   if (override) return override;
   if (SafeExpressionEvaluatorRef) return SafeExpressionEvaluatorRef;
-  
+
   // Fallback for Node environment
   if (typeof (globalThis as any).require === 'function') {
-      try {
-        // eslint-disable-next-line @typescript-eslint/no-var-requires
-        const mod = (globalThis as any).require('./safeExpressionEvaluator');
-        return (mod.SafeExpressionEvaluator ?? mod) as ExpressionEvaluator;
-      } catch (e) {
-        // Ignore
-      }
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-var-requires
+      const mod = (globalThis as any).require('./safeExpressionEvaluator');
+      return (mod.SafeExpressionEvaluator ?? mod) as ExpressionEvaluator;
+    } catch (e) {
+      // Ignore
+    }
   }
   return null;
 }
@@ -606,7 +606,7 @@ export function getCompiledRateFunction(
 
   const evaluator = getEvaluator(evaluatorOverride);
   if (!evaluator) {
-     throw new Error('SafeExpressionEvaluator not loaded; ensure functional rates are enabled and evaluator is initialized');
+    throw new Error('SafeExpressionEvaluator not loaded; ensure functional rates are enabled and evaluator is initialized');
   }
 
   // Determine referenced variables from parsed expression and restrict to provided varNames
@@ -660,6 +660,12 @@ export function evaluateFunctionalRate(
 
   try {
     const result = fn(context);
+    if (expression.includes('rate_transcribe')) {
+      //console.log(`[Debug] Evaluating rate_transcribe: ${expression}`);
+      //console.log(`[Debug] Context keys: ${Object.keys(context).join(', ')}`);
+      const tfNuc = context['TF_nuc'] ?? context['@NU:TF()'] ?? context['TF_nuc()'];
+      if (Math.random() < 0.01) console.log(`[Debug] rate_transcribe result: ${result} (TF_nuc value: ${tfNuc})`);
+    }
     if (typeof result !== 'number' || !isFinite(result)) {
       console.error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
       return 0;
@@ -739,7 +745,11 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
   const observableNames = new Set(inputModel.observables.map((o) => o.name));
   const functionNames = new Set((inputModel.functions || []).map((f) => f.name));
 
-  // Helper to check if a rate expression contains observable or function references
+  // Set of parameter names that may be changed via setParameter commands
+  // (detect during rate expression checking to preserve as functional)
+  const changingParams = new Set((inputModel.parameterChanges || []).map(c => c.parameter));
+
+  // Helper to check if a rate expression contains observable, function, OR changing parameter references
   const isFunctionalRateExpr = (rateExpr: string): boolean => {
     if (!rateExpr) return false;
     for (const obsName of observableNames) {
@@ -751,6 +761,10 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     for (const funcName of functionNames) {
       if (new RegExp(`\\b${funcName}\\b`).test(rateExpr)) return true;
     }
+    // Check for changing parameter references (for setParameter parity)
+    for (const paramName of changingParams) {
+      if (new RegExp(`\\b${paramName}\\b`).test(rateExpr)) return true;
+    }
     return false;
   };
 
@@ -760,6 +774,12 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
     // Check if this is a functional rate (depends on observables or functions)
     const isForwardFunctional = isFunctionalRateExpr(r.rate);
     const isReverseFunctional = r.reverseRate ? isFunctionalRateExpr(r.reverseRate) : false;
+
+    if (r.rate.includes('rate_transcribe')) {
+      console.log(`[Debug] Checking rate_transcribe functional: ${r.rate} -> ${isForwardFunctional}`);
+      console.log(`[Debug] Function names: ${Array.from(functionNames).join(', ')}`);
+      console.log(`[Debug] Observable names: ${Array.from(observableNames).join(', ')}`);
+    }
 
     // For functional rates, use 0 as placeholder (will be evaluated dynamically at simulation time)
     // For static rates, try to evaluate
@@ -887,7 +907,7 @@ async function generateExpandedNetwork(jobId: number, inputModel: BNGLModel): Pr
   return generatedModel;
 }
 
-async function simulate(jobId: number, inputModel: BNGLModel, options: SimulationOptions): Promise<SimulationResults> {
+export async function simulate(jobId: number, inputModel: BNGLModel, options: SimulationOptions): Promise<SimulationResults> {
   const simulationStartTime = performance.now();
   ensureNotCancelled(jobId);
   console.log('[Worker] ⏱️ TIMING: Starting simulation');
@@ -1114,7 +1134,11 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
   // Also treat rates as functional if they reference parameters that are changed via setParameter().
   // This is required for parity with BNGL multi-phase scripts where parameters (e.g., stimulus) are
   // modified between phases and those parameters appear in reaction rate expressions.
+  // const parameterChanges = inputModel.parameterChanges || []; // Already declared above
+  console.log('[Worker] inputModel.parameterChanges:', JSON.stringify(parameterChanges));
   const changingParameterNames = new Set(parameterChanges.map(c => c.parameter));
+  console.log('[Worker] Parameter changes:', parameterChanges);
+  console.log('[Worker] Changing parameter names:', Array.from(changingParameterNames));
 
   const concreteReactions = model.reactions.map(r => {
     const reactantIndices = r.reactants.map(name => speciesMap.get(name));
@@ -1184,16 +1208,20 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       products: new Int32Array(productIndices as number[]),
       rateConstant: rate,
       rateExpression: isFunctionalRate ? rateExpr : null,
+      rate: rateExpr, // Preserve original rate string for recalculation
       isFunctionalRate,
-      propensityFactor: r.propensityFactor ?? 1
+      propensityFactor: r.propensityFactor ?? 1,
+      productStoichiometries: r.productStoichiometries
     };
   }).filter(r => r !== null) as {
     reactants: Int32Array;
     products: Int32Array;
     rateConstant: number;
     rateExpression: string | null;
+    rate: string;
     isFunctionalRate: boolean;
     propensityFactor: number;
+    productStoichiometries?: number[];
   }[];
 
 
@@ -1376,6 +1404,37 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       const phase = phases[phaseIdx];
       const recordThisPhase = phaseIdx >= recordFromPhaseIdx;
       const shouldEmitPhaseStart = recordThisPhase && (phaseIdx === recordFromPhaseIdx || !(phase.continue_from_previous ?? false));
+
+      // Apply parameter changes BEFORE this phase
+      for (const change of parameterChanges) {
+        if (change.afterPhaseIndex === phaseIdx - 1) {
+          if (model.parameters) {
+            let newValue: number;
+            
+            if (typeof change.value === 'number') {
+              newValue = change.value;
+            } else {
+               // Try to evaluate as expression (matches concentration logic)
+               try {
+                  let expr = change.value;
+                  for (const [pName, pVal] of Object.entries(model.parameters || {})) {
+                    expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
+                  }
+                  expr = expr.replace(/\^/g, '**');
+                  newValue = SafeExpressionEvaluator.evaluateConstant(expr);
+               } catch {
+                  newValue = parseFloat(String(change.value)) || 0;
+               }
+            }
+            
+            model.parameters[change.parameter] = newValue;
+            console.log(`[Worker] Phase ${phaseIdx}: setParameter("${change.parameter}") = ${newValue}`);
+            
+            // Re-evaluate rate constants for reactions that depend on this parameter
+            // (Note: functional rates re-evaluate automatically at each step)
+          }
+        }
+      }
 
       // Apply concentration changes BEFORE this phase
       for (const change of concentrationChanges) {
@@ -1702,7 +1761,10 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
           // Update dydt
           for (let j = 0; j < rxn.reactants.length; j++) dydt[rxn.reactants[j]] -= velocity;
-          for (let j = 0; j < rxn.products.length; j++) dydt[rxn.products[j]] += velocity;
+          for (let j = 0; j < rxn.products.length; j++) {
+            const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+            dydt[rxn.products[j]] += velocity * stoich;
+          }
         }
       };
     }
@@ -1967,15 +2029,15 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
     // Use exactly what user/model specifies (matching native BNG behavior)
     // BNG defaults: atol=1e-8, rtol=1e-8, maxStep=0 (unlimited)
-    const userAtol = model.simulationOptions?.atol ?? options.atol ?? 1e-8;
-    const userRtol = model.simulationOptions?.rtol ?? options.rtol ?? 1e-8;
+    const userAtol = options.atol ?? model.simulationOptions?.atol ?? 1e-8;
+    const userRtol = options.rtol ?? model.simulationOptions?.rtol ?? 1e-8;
 
     const solverOptions: any = {
       atol: userAtol,
       rtol: userRtol,
       maxSteps: options.maxSteps ?? 1000000,
       minStep: 1e-15,
-      maxStep: 0,  // 0 = unlimited, matching native BNG which uses CVodeSetMaxStep(cvode_mem, 0.0)
+      maxStep: options.maxStep ?? 0,  // 0 = unlimited, matching native BNG which uses CVodeSetMaxStep(cvode_mem, 0.0)
       solver: solverType as 'auto' | 'cvode' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse_implicit' | 'webgpu_rk4',
     };
 
@@ -2008,6 +2070,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
       // Reset per-phase early-stop state
       shouldStop = false;
+      let solverError = false;
 
       if (hasMultiPhase) {
         console.log(`[Worker] Starting phase ${phaseIdx + 1}/${phases.length}: t_end=${phase.t_end}, n_steps=${phase.n_steps}`);
@@ -2099,73 +2162,119 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
       // Apply parameter changes that should happen BEFORE this phase
       // (afterPhaseIndex === phaseIdx - 1 means "after previous phase" = "before this phase")
+      
+      // Track valid parameter updates for re-evaluation trigger
+      let parametersUpdated = false;
+
       for (const change of parameterChanges) {
         if (change.afterPhaseIndex === phaseIdx - 1) {
-          // Resolve the new parameter value
-          let resolvedValue: number;
+          let newVal: number;
           if (typeof change.value === 'number') {
-            resolvedValue = change.value;
+            newVal = change.value;
           } else {
-            // Try to evaluate expression (may reference other params)
+             // Try number parsing first
+             const num = parseFloat(change.value);
+             if (!isNaN(num) && String(num).trim() === String(change.value).trim()) {
+                newVal = num;
+             } else {
+                 if (SafeExpressionEvaluatorRef) {
+                   // Use compile for parameterized expressions
+                   try {
+                       const pKeys = Object.keys(model.parameters);
+                       const compiled = SafeExpressionEvaluatorRef.compile(change.value, pKeys);
+                       newVal = compiled(model.parameters);
+                   } catch (e) {
+                       console.warn('[Worker] Failed to evaluate param expr:', change.value, e);
+                       newVal = 0;
+                   }
+                 } else {
+                   console.warn('[Worker] Evaluator not available for parameter expression:', change.value);
+                   newVal = 0;
+                 }
+             }
+          }
+          
+          if (model.parameters && model.parameters[change.parameter] !== newVal) {
+              console.log(`[Worker] Phase ${phaseIdx}: Applying parameter change: ${change.parameter} = ${newVal}`);
+              model.parameters[change.parameter] = newVal;
+              if (inputModel.parameters) inputModel.parameters[change.parameter] = newVal;
+              parametersUpdated = true;
+          }
+        }
+      }
+
+      // Re-evaluate dependent parameters if any changes occurred
+      if (parametersUpdated && model.paramExpressions && Object.keys(model.paramExpressions).length > 0) {
+           console.log('[Worker] Re-evaluating dependent parameters...');
+           if (SafeExpressionEvaluatorRef) {
+               const overriddenParams = new Set<string>();
+               parameterChanges.forEach(c => {
+                   if (c.afterPhaseIndex < phaseIdx) {
+                       overriddenParams.add(c.parameter);
+                   }
+               });
+
+               for (let pass = 0; pass < 10; pass++) {
+                   let anyChanged = false;
+                   for (const [name, expr] of Object.entries(model.paramExpressions)) {
+                       if (overriddenParams.has(name)) continue;
+
+                       try {
+                           const pKeys = Object.keys(model.parameters);
+                           const compiled = SafeExpressionEvaluatorRef.compile(expr, pKeys);
+                           const val = compiled(model.parameters);
+                           
+                           if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
+                               model.parameters[name] = val;
+                               if (inputModel.parameters) inputModel.parameters[name] = val;
+                               anyChanged = true;
+                           }
+                       } catch (e) {
+                           // Ignore transient errors
+                       }
+                   }
+                   if (!anyChanged) break;
+               }
+           } else {
+              console.warn('[Worker] Cannot re-evaluate dependent parameters - Evaluator not loaded.');
+           }
+      }
+
+
+      // Recalculate rate constants for mass-action reactions if parameters changed
+      // This ensures that setParameter("k", 0) actually updates the reaction rate k used by the solver
+      if (parameterChanges.some(c => c.afterPhaseIndex === phaseIdx - 1)) {
+        console.log(`[Worker] Phase ${phaseIdx}: Recalculating mass-action rate constants...`);
+
+        // Ensure evaluator module is loaded (needed for compile even if no functional rates initially)
+        if (!SafeExpressionEvaluatorRef) {
+          await loadEvaluator();
+        }
+
+        const paramNames = Object.keys(model.parameters || {});
+        const context = model.parameters || {};
+
+        for (const rxn of concreteReactions) {
+          // Only update if it's NOT a functional rate (functional rates are dynamic anyway)
+          // AND it has a rate string that might be an expression of parameters
+          if (!rxn.isFunctionalRate && rxn.rate && typeof rxn.rate === 'string') {
             try {
-              // Simple expression evaluation with parameter substitution
-              let expr = change.value;
-              for (const [pName, pVal] of Object.entries(model.parameters || {})) {
-                expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
-              }
-              expr = expr.replace(/\^/g, '**');
-              resolvedValue = SafeExpressionEvaluator.evaluateConstant(expr);
-            } catch (e) {
-              console.warn(`[Worker] Failed to evaluate setParameter expression "${change.value}":`, e);
-              resolvedValue = parseFloat(String(change.value)) || 0;
-            }
-          }
-
-          console.log(`[Worker] Phase ${phaseIdx}: setParameter("${change.parameter}") = ${resolvedValue}`);
-
-          // Update the parameter in BOTH inputModel and model (model is used for functional rate evaluation)
-          if (inputModel.parameters) {
-            inputModel.parameters[change.parameter] = resolvedValue;
-          }
-          if (model.parameters) {
-            model.parameters[change.parameter] = resolvedValue;
-          }
-
-          // Recalculate derived parameters that depend on the changed parameter
-          if (inputModel.paramExpressions) {
-            const recalculated = new Set<string>();
-            let changed = true;
-            while (changed) {
-              changed = false;
-              for (const [paramName, paramExpr] of Object.entries(inputModel.paramExpressions)) {
-                if (recalculated.has(paramName)) continue;
-                // Check if this expression uses any parameter we've changed
-                if (new RegExp(`\\b${change.parameter}\\b`).test(paramExpr) ||
-                  [...recalculated].some(p => new RegExp(`\\b${p}\\b`).test(paramExpr))) {
-                  try {
-                    let expr = paramExpr;
-                    for (const [pName, pVal] of Object.entries(model.parameters || {})) {
-                      expr = expr.replace(new RegExp(`\\b${pName}\\b`, 'g'), String(pVal));
-                    }
-                    expr = expr.replace(/\^/g, '**');
-                    const newVal = SafeExpressionEvaluatorRef && typeof SafeExpressionEvaluatorRef.evaluateConstant === 'function'
-                      ? SafeExpressionEvaluatorRef.evaluateConstant(expr)
-                      : parseFloat(String(expr));
-                    if (!isNaN(newVal) && isFinite(newVal)) {
-                      const oldVal = model.parameters?.[paramName] ?? 0;
-                      if (oldVal !== newVal) {
-                        if (inputModel.parameters) inputModel.parameters[paramName] = newVal;
-                        if (model.parameters) model.parameters[paramName] = newVal;
-                        recalculated.add(paramName);
-                        changed = true;
-                        console.log(`[Worker] Phase ${phaseIdx}: Recalculated ${paramName} = ${oldVal} -> ${newVal}`);
-                      }
-                    }
-                  } catch (e) {
-                    // Ignore evaluation errors for complex expressions
-                  }
+              // Compile and evaluate the rate constant expression
+              // We use SafeExpressionEvaluatorRef!.compile because evaluateConstant doesn't support context
+              // (loadEvaluator ensures SafeExpressionEvaluatorRef is populated)
+              const compiled = SafeExpressionEvaluatorRef!.compile(rxn.rate, paramNames);
+              const newK = compiled(context);
+              console.log(`[Worker] Recalculating rate for rxn ${rxn.rate}: ${rxn.rateConstant} -> ${newK}`);
+              if (!isNaN(newK) && isFinite(newK)) {
+                // Only update if changed
+                if (Math.abs(rxn.rateConstant - newK) > 1e-12) {
+                  console.log(`[Worker] UPDATING rxn rate!`);
+                  rxn.rateConstant = newK;
                 }
               }
+            } catch (e) {
+              console.warn(`[Worker] Failed to recalc rate for ${rxn.rate}:`, e);
+              // Ignore compilation/evaluation errors (e.g. if rate is not a valid expression of params)
             }
           }
         }
@@ -2338,12 +2447,13 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 
             if (data.length > 1 || recordThisPhase) {
               console.warn(`[Worker] Returning ${data.length} partial time points up to t=${phaseStart + t}`);
-              postMessage({
+              ctx.postMessage({
                 type: 'progress',
                 message: `Simulation stopped at t=${(phaseStart + t).toFixed(2)} (phase ${phaseIdx + 1}, ${data.length} time points)`,
                 warning: userFriendlyMessage
               });
               shouldStop = true;
+              solverError = true;
               break;
             } else {
               throw new Error(`${userFriendlyMessage}${suggestion ? '\n\nSuggestion: ' + suggestion : ''}`);
@@ -2387,7 +2497,7 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
             const overallProgress = hasMultiPhase
               ? ((phaseIdx + phaseProgress / 100) / phases.length) * 100
               : phaseProgress;
-            postMessage({
+            ctx.postMessage({
               type: 'progress',
               message: hasMultiPhase
                 ? `Phase ${phaseIdx + 1}/${phases.length}: ${phaseProgress.toFixed(0)}%`
@@ -2412,9 +2522,9 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
       // Steady state in equilibration phases is expected and should proceed to next phase.
       if (shouldStop && !isLastPhase) {
         // Check if it was an error or just steady state
-        if (data.length === 0 && phaseIdx === 0) {
-          // If phase 0 (equilibration) reached steady state, that's fine - continue to next phase
-          console.log(`[Worker] Phase ${phaseIdx}: Equilibration complete, proceeding to next phase`);
+        if (!solverError) {
+          // If steady state reached, that's fine - continue to next phase
+          console.log(`[Worker] Phase ${phaseIdx}: Steady state reached, proceeding to next phase`);
           shouldStop = false; // Reset flag so next phase can run
         } else {
           console.warn(`[Worker] Stopping early at phase ${phaseIdx} due to error`);
@@ -2438,277 +2548,290 @@ async function simulate(jobId: number, inputModel: BNGLModel, options: Simulatio
 if (typeof ctx.addEventListener === 'function') {
   ctx.addEventListener('message', (event: MessageEvent<WorkerRequest>) => {
     const message = event.data;
-  if (!message || typeof message !== 'object') {
-    console.warn('[Worker] Received malformed message', message);
-    return;
-  }
-
-  const { id, type, payload } = message;
-
-  if (typeof id !== 'number' || typeof type !== 'string') {
-    console.warn('[Worker] Missing id or type on message', message);
-    return;
-  }
-
-  if (type === 'cancel') {
-    const targetId = payload && typeof payload === 'object' ? (payload as { targetId?: unknown }).targetId : undefined;
-    if (typeof targetId === 'number') {
-      cancelJob(targetId);
+    if (!message || typeof message !== 'object') {
+      console.warn('[Worker] Received malformed message', message);
+      return;
     }
-    return;
-  }
 
-  if (type === 'parse') {
-    registerJob(id);
-    try {
-      const code = typeof payload === 'string' ? payload : '';
-      const model = parseBNGL(id, code);
-      const response: WorkerResponse = { id, type: 'parse_success', payload: model };
-      ctx.postMessage(response);
-    } catch (error) {
-      const response: WorkerResponse = { id, type: 'parse_error', payload: serializeError(error) };
-      ctx.postMessage(response);
-    } finally {
-      markJobComplete(id);
+    const { id, type, payload } = message;
+
+    if (typeof id !== 'number' || typeof type !== 'string') {
+      console.warn('[Worker] Missing id or type on message', message);
+      return;
     }
-    return;
-  }
 
-  if (type === 'simulate') {
-    registerJob(id);
-    const jobEntry = jobStates.get(id);
-    if (!jobEntry) return; // Should not happen
-    (async () => {
+    if (type === 'cancel') {
+      const targetId = payload && typeof payload === 'object' ? (payload as { targetId?: unknown }).targetId : undefined;
+      if (typeof targetId === 'number') {
+        cancelJob(targetId);
+      }
+      return;
+    }
+
+    if (type === 'parse') {
+      registerJob(id);
       try {
-        if (!payload || typeof payload !== 'object') {
-          throw new Error('Simulation payload missing');
-        }
+        const code = typeof payload === 'string' ? payload : '';
+        const model = parseBNGL(id, code);
+        const response: WorkerResponse = { id, type: 'parse_success', payload: model };
+        ctx.postMessage(response);
+      } catch (error) {
+        const response: WorkerResponse = { id, type: 'parse_error', payload: serializeError(error) };
+        ctx.postMessage(response);
+      } finally {
+        markJobComplete(id);
+      }
+      return;
+    }
 
-        // Backwards-compatible: payload can be { model, options } or { modelId, parameterOverrides?, options }
+    if (type === 'simulate') {
+      registerJob(id);
+      const jobEntry = jobStates.get(id);
+      if (!jobEntry) return; // Should not happen
+      (async () => {
+        try {
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Simulation payload missing');
+          }
+
+          // Backwards-compatible: payload can be { model, options } or { modelId, parameterOverrides?, options }
+          const p = payload as unknown;
+          let model: BNGLModel | undefined;
+          let options: SimulationOptions | undefined;
+
+          if (isSimulateModelPayload(p)) {
+            model = p.model;
+            options = p.options;
+          } else if (isSimulateModelIdPayload(p)) {
+            const cached = cachedModels.get(p.modelId);
+            if (!cached) throw new Error('Cached model not found in worker');
+            touchCachedModel(p.modelId);
+            options = p.options;
+
+            if (!p.parameterOverrides || Object.keys(p.parameterOverrides).length === 0) {
+              model = cached;
+            } else {
+              const overrides: Record<string, number> = p.parameterOverrides;
+              const nextModel: BNGLModel = {
+                ...cached,
+                parameters: { ...(cached.parameters || {}), ...overrides },
+                reactions: [],
+              } as BNGLModel;
+
+              (cached.reactions || []).forEach((r) => {
+                const rateConst = nextModel.parameters[r.rate] ?? Number.parseFloat(r.rate);
+                nextModel.reactions.push({ ...r, rateConstant: rateConst });
+              });
+              model = nextModel;
+            }
+          }
+
+          if (!model || !options) {
+            throw new Error('Simulation payload incomplete');
+          }
+
+          const results = await simulate(id, model, options);
+          const response: WorkerResponse = { id, type: 'simulate_success', payload: results };
+          ctx.postMessage(response);
+        } catch (error) {
+          const response: WorkerResponse = { id, type: 'simulate_error', payload: serializeError(error) };
+          ctx.postMessage(response);
+        } finally {
+          markJobComplete(id);
+        }
+      })();
+      return;
+    }
+
+    if (type === 'cache_model') {
+      registerJob(id);
+      try {
         const p = payload as unknown;
-        let model: BNGLModel | undefined;
-        let options: SimulationOptions | undefined;
-
-        if (isSimulateModelPayload(p)) {
-          model = p.model;
-          options = p.options;
-        } else if (isSimulateModelIdPayload(p)) {
-          const cached = cachedModels.get(p.modelId);
-          if (!cached) throw new Error('Cached model not found in worker');
-          touchCachedModel(p.modelId);
-
-          if (!p.parameterOverrides || Object.keys(p.parameterOverrides).length === 0) {
-            model = cached;
-          } else {
-            const overrides: Record<string, number> = p.parameterOverrides;
-            const nextModel: BNGLModel = {
-              ...cached,
-              parameters: { ...(cached.parameters || {}), ...overrides },
-              reactions: [],
-            } as BNGLModel;
-
-            (cached.reactions || []).forEach((r) => {
-              const rateConst = nextModel.parameters[r.rate] ?? Number.parseFloat(r.rate);
-              nextModel.reactions.push({ ...r, rateConstant: rateConst });
-            });
-            model = nextModel;
-          }
-        }
-
-        if (!model || !options) {
-          throw new Error('Simulation payload incomplete');
-        }
-
-        const results = await simulate(id, model, options);
-        const response: WorkerResponse = { id, type: 'simulate_success', payload: results };
-        ctx.postMessage(response);
-      } catch (error) {
-        const response: WorkerResponse = { id, type: 'simulate_error', payload: serializeError(error) };
-        ctx.postMessage(response);
-      } finally {
-        markJobComplete(id);
-      }
-    })();
-    return;
-  }
-
-  if (type === 'cache_model') {
-    registerJob(id);
-    try {
-      const p = payload as unknown;
-      const model = isCacheModelPayload(p) ? p.model : undefined;
-      if (!model) throw new Error('Cache model payload missing');
-      const modelId = nextModelId++;
-      // Store a shallow clone to avoid accidental mutation from main thread
-      const stored: BNGLModel = {
-        ...model,
-        parameters: { ...(model.parameters || {}) },
-        moleculeTypes: (model.moleculeTypes || []).map((m) => ({ ...m })),
-        species: (model.species || []).map((s) => ({ ...s })),
-        observables: (model.observables || []).map((o) => ({ ...o })),
-        reactions: (model.reactions || []).map((r) => ({ ...r })),
-        reactionRules: (model.reactionRules || []).map((r) => ({ ...r })),
-        // Preserve action-derived simulation metadata for parity and for simulateCached callers
-        simulationOptions: model.simulationOptions ? { ...(model.simulationOptions as any) } : model.simulationOptions,
-        simulationPhases: (model.simulationPhases || []).map((p: any) => ({ ...p })),
-        concentrationChanges: (model.concentrationChanges || []).map((c: any) => ({ ...c })),
-        parameterChanges: (model.parameterChanges || []).map((c: any) => ({ ...c })),
-      };
-      cachedModels.set(modelId, stored);
-      // Enforce LRU eviction if we exceed the cache size
-      try {
-        if (cachedModels.size > MAX_CACHED_MODELS) {
-          const it = cachedModels.keys();
-          const oldest = it.next().value as number | undefined;
-          if (typeof oldest === 'number') {
-            cachedModels.delete(oldest);
-            // best-effort notification
-            // eslint-disable-next-line no-console
-            console.warn('[Worker] Evicted cached model (LRU) id=', oldest);
-          }
-        }
-      } catch (e) {
-        // ignore eviction errors
-      }
-      const response: WorkerResponse = { id, type: 'cache_model_success', payload: { modelId } };
-      ctx.postMessage(response);
-    } catch (error) {
-      const response: WorkerResponse = { id, type: 'cache_model_error', payload: serializeError(error) };
-      ctx.postMessage(response);
-    } finally {
-      markJobComplete(id);
-    }
-    return;
-  }
-
-  if (type === 'release_model') {
-    registerJob(id);
-    try {
-      const p = payload as unknown;
-      const modelId = isReleaseModelPayload(p) ? p.modelId : undefined;
-      if (typeof modelId !== 'number') throw new Error('release_model payload missing modelId');
-      cachedModels.delete(modelId);
-      const response: WorkerResponse = { id, type: 'release_model_success', payload: { modelId } };
-      ctx.postMessage(response);
-    } catch (error) {
-      const response: WorkerResponse = { id, type: 'release_model_error', payload: serializeError(error) };
-      ctx.postMessage(response);
-    } finally {
-      markJobComplete(id);
-    }
-    return;
-  }
-
-  if (type === 'generate_network') {
-    registerJob(id);
-    const jobEntry = jobStates.get(id);
-    if (!jobEntry) return; // Should not happen
-    (async () => {
-      try {
-        if (!payload || typeof payload !== 'object') {
-          throw new Error('Generate network payload missing');
-        }
-
-        const p = payload as { model: BNGLModel; options?: NetworkGeneratorOptions };
-        const { model, options } = p;
-
-        if (!model) {
-          throw new Error('Model missing in generate_network payload');
-        }
-
-        // Convert BNGLModel to graph structures (instrumented)
-        console.log('[generate_network handler] seed species raw:', model.species.map(s => s.name));
-        const seedSpecies = model.species.map(s => {
-          console.log('[generate_network handler] parsing seed:', s.name);
-          const graph = BNGLParser.parseSpeciesGraph(s.name);
-          console.log('[generate_network handler] parsed graph =>', BNGLParser.speciesGraphToString(graph));
-          return graph;
-        });
-        ensureNotCancelled(id);
-
-        const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
-
-        const rules = model.reactionRules.map(r => {
-          let rate = model.parameters[r.rate];
-          if (rate === undefined) {
-            const parsed = parseFloat(r.rate);
-            rate = isNaN(parsed) ? 0 : parsed;
-          }
-          const ruleStr = `${formatSpeciesList(r.reactants)} ${r.isBidirectional ? '<->' : '->'} ${formatSpeciesList(r.products)}`;
-          return BNGLParser.parseRxnRule(ruleStr, rate);
-        });
-        ensureNotCancelled(id);
-
-        // Use the controller from jobStates
-        const controller = jobEntry.controller!;
-
-        // Set up progress callback to stream to main thread (throttled to 4Hz)
-        let lastProgressTime = 0;
-        const progressCallback = (progress: GeneratorProgress) => {
-          const now = Date.now();
-          if (now - lastProgressTime >= 250) { // 250ms = 4Hz
-            lastProgressTime = now;
-            ctx.postMessage({ id, type: 'generate_network_progress', payload: progress });
-          }
-        };
-
-        // Instantiate NetworkGenerator with options
-        // Convert maxStoich Record to Map if necessary
-        let maxStoichValue: number | Map<string, number> = 500;
-        const rawMaxStoich = options?.maxStoich;
-        if (rawMaxStoich !== undefined) {
-          if (typeof rawMaxStoich === 'number') {
-            maxStoichValue = rawMaxStoich;
-          } else {
-            // Convert Record<string, number> or Map to Map
-            maxStoichValue = rawMaxStoich instanceof Map
-              ? rawMaxStoich
-              : new Map(Object.entries(rawMaxStoich));
-          }
-        }
-
-        const generatorOptions = {
-          maxSpecies: options?.maxSpecies ?? 10000,
-          maxReactions: options?.maxReactions ?? 100000,
-          maxIterations: options?.maxIterations ?? 100,
-          maxAgg: options?.maxAgg ?? 500,
-          maxStoich: maxStoichValue,
-          checkInterval: options?.checkInterval ?? 500,
-          memoryLimit: options?.memoryLimit ?? 1e9,
-        } satisfies NetworkGeneratorOptions;
-
-        const generator = new NetworkGenerator(generatorOptions);
-
-        // Generate network
-        const result = await generator.generate(seedSpecies, rules, progressCallback, controller.signal);
-        ensureNotCancelled(id);
-
-        // Convert result back to BNGLModel
-        const generatedModel: BNGLModel = {
+        const model = isCacheModelPayload(p) ? p.model : undefined;
+        if (!model) throw new Error('Cache model payload missing');
+        const modelId = nextModelId++;
+        // Store a shallow clone to avoid accidental mutation from main thread
+        const stored: BNGLModel = {
           ...model,
-          species: result.species.map(s => ({ name: BNGLParser.speciesGraphToString(s.graph), initialConcentration: s.concentration || 0 })),
-          reactions: result.reactions.map(r => ({
-            reactants: r.reactants.map(idx => BNGLParser.speciesGraphToString(result.species[idx].graph)),
-            products: r.products.map(idx => BNGLParser.speciesGraphToString(result.species[idx].graph)),
-            rate: r.rate.toString(),
-            rateConstant: r.rate
-          })),
+          parameters: { ...(model.parameters || {}) },
+          moleculeTypes: (model.moleculeTypes || []).map((m) => ({ ...m })),
+          species: (model.species || []).map((s) => ({ ...s })),
+          observables: (model.observables || []).map((o) => ({ ...o })),
+          reactions: (model.reactions || []).map((r) => ({ ...r })),
+          reactionRules: (model.reactionRules || []).map((r) => ({ ...r })),
+          // Preserve action-derived simulation metadata for parity and for simulateCached callers
+          simulationOptions: model.simulationOptions ? { ...(model.simulationOptions as any) } : model.simulationOptions,
+          simulationPhases: (model.simulationPhases || []).map((p: any) => ({ ...p })),
+          concentrationChanges: (model.concentrationChanges || []).map((c: any) => ({ ...c })),
+          parameterChanges: (model.parameterChanges || []).map((c: any) => ({ ...c })),
         };
-        ensureNotCancelled(id);
-
-        const response: WorkerResponse = { id, type: 'generate_network_success', payload: generatedModel };
+        cachedModels.set(modelId, stored);
+        // Enforce LRU eviction if we exceed the cache size
+        try {
+          if (cachedModels.size > MAX_CACHED_MODELS) {
+            const it = cachedModels.keys();
+            const oldest = it.next().value as number | undefined;
+            if (typeof oldest === 'number') {
+              cachedModels.delete(oldest);
+              // best-effort notification
+              // eslint-disable-next-line no-console
+              console.warn('[Worker] Evicted cached model (LRU) id=', oldest);
+            }
+          }
+        } catch (e) {
+          // ignore eviction errors
+        }
+        const response: WorkerResponse = { id, type: 'cache_model_success', payload: { modelId } };
         ctx.postMessage(response);
       } catch (error) {
-        const response: WorkerResponse = { id, type: 'generate_network_error', payload: serializeError(error) };
+        const response: WorkerResponse = { id, type: 'cache_model_error', payload: serializeError(error) };
         ctx.postMessage(response);
       } finally {
         markJobComplete(id);
       }
-    })();
-    return;
-  }
+      return;
+    }
 
-  console.warn('[Worker] Unknown message type received:', type);
+    if (type === 'release_model') {
+      registerJob(id);
+      try {
+        const p = payload as unknown;
+        const modelId = isReleaseModelPayload(p) ? p.modelId : undefined;
+        if (typeof modelId !== 'number') throw new Error('release_model payload missing modelId');
+        cachedModels.delete(modelId);
+        const response: WorkerResponse = { id, type: 'release_model_success', payload: { modelId } };
+        ctx.postMessage(response);
+      } catch (error) {
+        const response: WorkerResponse = { id, type: 'release_model_error', payload: serializeError(error) };
+        ctx.postMessage(response);
+      } finally {
+        markJobComplete(id);
+      }
+      return;
+    }
+
+    if (type === 'generate_network') {
+      registerJob(id);
+      const jobEntry = jobStates.get(id);
+      if (!jobEntry) return; // Should not happen
+      (async () => {
+        try {
+          if (!payload || typeof payload !== 'object') {
+            throw new Error('Generate network payload missing');
+          }
+
+          const p = payload as { model: BNGLModel; options?: NetworkGeneratorOptions };
+          const { model, options } = p;
+
+          if (!model) {
+            throw new Error('Model missing in generate_network payload');
+          }
+
+          // Convert BNGLModel to graph structures (instrumented)
+          console.log('[generate_network handler] seed species raw:', model.species.map(s => s.name));
+          const seedSpecies = model.species.map(s => {
+            console.log('[generate_network handler] parsing seed:', s.name);
+            const graph = BNGLParser.parseSpeciesGraph(s.name);
+            console.log('[generate_network handler] parsed graph =>', BNGLParser.speciesGraphToString(graph));
+            return graph;
+          });
+          ensureNotCancelled(id);
+
+          const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
+
+          const rules = model.reactionRules.map(r => {
+            let rate = model.parameters[r.rate];
+            let rateExpr: string | undefined;
+
+            if (rate === undefined) {
+              const parsed = parseFloat(r.rate);
+              rate = isNaN(parsed) ? 0 : parsed;
+            } else {
+              // It was a parameter lookup. r.rate is the parameter name.
+              rateExpr = r.rate;
+            }
+            const ruleStr = `${formatSpeciesList(r.reactants)} ${r.isBidirectional ? '<->' : '->'} ${formatSpeciesList(r.products)}`;
+            const rxnRule = BNGLParser.parseRxnRule(ruleStr, rate);
+            if (rateExpr) {
+              rxnRule.rateExpression = rateExpr;
+              console.log(`[generate_network] Preserved rate expression '${rateExpr}' for rule (calculated k=${rate})`);
+            }
+            return rxnRule;
+          });
+          ensureNotCancelled(id);
+
+          // Use the controller from jobStates
+          const controller = jobEntry.controller!;
+
+          // Set up progress callback to stream to main thread (throttled to 4Hz)
+          let lastProgressTime = 0;
+          const progressCallback = (progress: GeneratorProgress) => {
+            const now = Date.now();
+            if (now - lastProgressTime >= 250) { // 250ms = 4Hz
+              lastProgressTime = now;
+              ctx.postMessage({ id, type: 'generate_network_progress', payload: progress });
+            }
+          };
+
+          // Instantiate NetworkGenerator with options
+          // Convert maxStoich Record to Map if necessary
+          let maxStoichValue: number | Map<string, number> = 500;
+          const rawMaxStoich = options?.maxStoich;
+          if (rawMaxStoich !== undefined) {
+            if (typeof rawMaxStoich === 'number') {
+              maxStoichValue = rawMaxStoich;
+            } else {
+              // Convert Record<string, number> or Map to Map
+              maxStoichValue = rawMaxStoich instanceof Map
+                ? rawMaxStoich
+                : new Map(Object.entries(rawMaxStoich));
+            }
+          }
+
+          const generatorOptions = {
+            maxSpecies: options?.maxSpecies ?? 10000,
+            maxReactions: options?.maxReactions ?? 100000,
+            maxIterations: options?.maxIterations ?? 100,
+            maxAgg: options?.maxAgg ?? 500,
+            maxStoich: maxStoichValue,
+            checkInterval: options?.checkInterval ?? 500,
+            memoryLimit: options?.memoryLimit ?? 1e9,
+            compartments: model.compartments
+          } satisfies NetworkGeneratorOptions;
+
+          const generator = new NetworkGenerator(generatorOptions);
+
+          // Generate network
+          const result = await generator.generate(seedSpecies, rules, progressCallback, controller.signal);
+          ensureNotCancelled(id);
+
+          // Convert result back to BNGLModel
+          const generatedModel: BNGLModel = {
+            ...model,
+            species: result.species.map(s => ({ name: BNGLParser.speciesGraphToString(s.graph), initialConcentration: s.concentration || 0 })),
+            reactions: result.reactions.map(r => ({
+              reactants: r.reactants.map(idx => BNGLParser.speciesGraphToString(result.species[idx].graph)),
+              products: r.products.map(idx => BNGLParser.speciesGraphToString(result.species[idx].graph)),
+              rate: r.rateExpression || r.rate.toString(),
+              rateConstant: r.rate,
+              productStoichiometries: r.productStoichiometries
+            })),
+          };
+          ensureNotCancelled(id);
+
+          const response: WorkerResponse = { id, type: 'generate_network_success', payload: generatedModel };
+          ctx.postMessage(response);
+        } catch (error) {
+          const response: WorkerResponse = { id, type: 'generate_network_error', payload: serializeError(error) };
+          ctx.postMessage(response);
+        } finally {
+          markJobComplete(id);
+        }
+      })();
+      return;
+    }
+
+    console.warn('[Worker] Unknown message type received:', type);
   });
 }
 

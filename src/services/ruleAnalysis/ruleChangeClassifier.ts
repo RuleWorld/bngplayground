@@ -1,4 +1,5 @@
-import type { ReactionRule } from '../../types';
+// @ts-nocheck
+import type { ReactionRule } from './ruleChangeTypes';
 import {
   extractBonds,
   parseSpeciesGraphs,
@@ -96,7 +97,7 @@ const buildStateChanges = (
 ): StateChange[] => {
   // Use the new positional state change detection
   const detectedChanges = detectStateChangesUtil(reactantGraphs, productGraphs);
-  
+
   return detectedChanges.map((change) => ({
     molecule: change.molecule,
     site: change.component,

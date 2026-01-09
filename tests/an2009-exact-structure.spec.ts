@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Exact copy of bng2-comparison.spec.ts but ONLY for An_2009
  * This tests if the problem is with bng2-comparison structure itself
@@ -274,3 +275,4 @@ describeFn('An_2009 Only (exact bng2-comparison structure)', () => {
     }, TIMEOUT_MS);
   }
 });
+

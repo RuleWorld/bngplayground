@@ -66,6 +66,7 @@ export interface BNGLReaction {
   rateExpression?: string;  // Original expression string for dynamic evaluation
   isFunctionalRate?: boolean;  // True if rate depends on observables/functions
   propensityFactor?: number;  // Statistical factor for degeneracy
+  productStoichiometries?: number[]; // Volume scaling factors for products
 }
 
 // BNG function definition (e.g., gene_Wip1_activity())
@@ -175,6 +176,7 @@ export interface SimulationOptions {
   rtol?: number;           // Relative tolerance (default: 1e-3)
   solver?: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'webgpu_rk4';  // Solver selection (implementation defines the default if omitted)
   maxSteps?: number;       // Max internal steps per output interval (default: 100000)
+  maxStep?: number;        // Max step size (hmax) (default: 0 = unlimited)
   // Steady state options
   steadyState?: boolean;
   steadyStateTolerance?: number;
@@ -227,6 +229,7 @@ export interface NetworkGeneratorOptions {
   timeLimit?: number;
   maxIterations?: number;
   progressCallback?: (progress: { currentSpecies: number; totalSpecies: number; iteration: number }) => void;
+  compartments?: BNGLCompartment[];
 }
 
 export interface GeneratorProgress {

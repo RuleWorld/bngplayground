@@ -8,7 +8,6 @@
  * - Auto-switching between methods based on stiffness detection
  */
 
-// @ts-ignore
 import createCVodeModule from './cvode_loader';
 
 export interface SolverOptions {
@@ -40,6 +39,9 @@ const DEFAULT_OPTIONS: SolverOptions = {
   maxStep: Infinity,
   solver: 'auto',
 };
+
+
+export const SOLVER_ERROR_STIFF_DETECTED = 'STIFF_DETECTED';
 
 /**
  * Compute weighted error norm for step size control
@@ -742,7 +744,7 @@ export class RK45Solver {
             t,
             y,
             steps,
-            errorMessage: 'STIFF_DETECTED'  // Special marker for auto-switching
+            errorMessage: SOLVER_ERROR_STIFF_DETECTED  // Special marker for auto-switching
           };
         }
       }
@@ -796,7 +798,7 @@ export class AutoSolver {
     }
 
     // Check if stiffness was detected
-    if (result.errorMessage === 'STIFF_DETECTED') {
+    if (result.errorMessage === SOLVER_ERROR_STIFF_DETECTED) {
       this.useImplicit = true;
       // Continue from where RK45 left off using Rosenbrock
       return this.rosenbrock.integrate(result.y, result.t, tEnd, checkCancelled);

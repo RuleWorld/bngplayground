@@ -4,7 +4,7 @@
 
 import { BNGLParser } from '../services/graph/core/BNGLParser';
 import { GraphMatcher } from '../services/graph/core/Matcher';
-import { validateObservablePattern, parseObservablePattern, computeObservableValue } from './dynamicObservable';
+import { validateObservablePattern, parseObservablePattern } from './dynamicObservable';
 
 // Test cases for pattern parsing
 const testPatterns = [

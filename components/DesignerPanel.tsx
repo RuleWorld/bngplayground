@@ -9,7 +9,8 @@ interface DesignerPanelProps {
   text: string;
   onTextChange: (text: string) => void;
   onCodeChange: (code: string) => void;
-  onParse: () => void;
+  onParse: () => Promise<void>;
+  onSimulate: () => void;
 }
 
 const DEFAULT_TEXT = `# Welcome to Bio-Designer
@@ -38,7 +39,7 @@ Start with 20 of SHP1
 Simulate for 100s with 200 steps
 `;
 
-export const DesignerPanel: React.FC<DesignerPanelProps> = ({ text, onTextChange, onCodeChange, onParse }) => {
+export const DesignerPanel: React.FC<DesignerPanelProps> = ({ text, onTextChange, onCodeChange, onParse, onSimulate }) => {
   // Use DEFAULT_TEXT if no text provided (first time opening designer)
   const displayText = text || DEFAULT_TEXT;
   const [sentences, setSentences] = useState<BioSentence[]>([]);
@@ -74,11 +75,12 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({ text, onTextChange
     }
   }, [sentences, onCodeChange, lastGeneratedCode]);
 
-  // Manual Sync function to force visualization update
-  const handleSync = () => {
+  // Manual Sync function to force visualization update and run simulation
+  const handleSync = async () => {
     if (lastGeneratedCode) {
       onCodeChange(lastGeneratedCode); // Ensure parent has latest
-      onParse(); // Trigger parse/refresh in App
+      await onParse(); // Trigger parse/refresh in App
+      onSimulate(); // Auto-run simulation after parsing
     }
   };
 

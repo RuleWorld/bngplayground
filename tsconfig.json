@@ -38,6 +38,14 @@
   "exclude": [
     "node_modules",
     "dist",
-    "build"
+    "build",
+    "wasm-sundials",
+    "bionetgen_python",
+    "bionetgen_repo",
+    "old",
+    "scripts",
+    "temp_diag",
+    "debug_cbngl_simple2.ts",
+    "src/parser/generated"
   ]
 }

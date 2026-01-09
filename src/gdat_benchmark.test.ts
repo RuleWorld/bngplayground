@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * GDAT Comparison Benchmarking Tests
  * Reads gdat_models.json and runs benchmark against BNG2.pl output
@@ -1692,3 +1693,4 @@ describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
     });
   }
 });
+

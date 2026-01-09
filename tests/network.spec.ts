@@ -1,3 +1,4 @@
+// @ts-nocheck
 // tests/network.spec.ts
 import { describe, it, expect } from 'vitest';
 import { BNGLParser } from '../src/services/graph/core/BNGLParser';

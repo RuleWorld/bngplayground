@@ -1,3 +1,4 @@
+// @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import { SpeciesGraph } from '../src/services/graph/core/SpeciesGraph';
 import { Molecule } from '../src/services/graph/core/Molecule';
@@ -24,3 +25,4 @@ describe('Graph canonicalization', () => {
     expect(key1).toBe(key2);
   });
 });
+

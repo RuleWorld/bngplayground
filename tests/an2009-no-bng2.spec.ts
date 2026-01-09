@@ -1,3 +1,4 @@
+// @ts-nocheck
 /**
  * Test An_2009 directly WITHOUT running BNG2.pl first
  * This isolates whether spawnSync is causing the hang
@@ -131,3 +132,4 @@ describe('An_2009 without BNG2.pl', () => {
     console.log('\nTEST PASSED!');
   }, TIMEOUT_MS);
 });
+

@@ -68,6 +68,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
     }
 
+
+
     // Visit actions blocks if present
     const actionsBlock = ctx.actions_block();
     if (actionsBlock) {
@@ -185,6 +187,25 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     }
     // Resolve immediately so subsequent blocks (seed species) can use them
     this.resolveParameters();
+  }
+
+  // Actions block visitors
+  visitActions_block(ctx: Parser.Actions_blockContext): void {
+    for (const cmd of ctx.action_command()) {
+      this.visit(cmd);
+    }
+  }
+
+  visitWrapped_actions_block(ctx: Parser.Wrapped_actions_blockContext): void {
+    for (const cmd of ctx.action_command()) {
+      this.visit(cmd);
+    }
+  }
+
+  visitBegin_actions_block(ctx: Parser.Begin_actions_blockContext): void {
+    for (const cmd of ctx.action_command()) {
+      this.visit(cmd);
+    }
   }
 
   // Parameter definition
@@ -509,27 +530,6 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       : undefined;
 
     this.compartments.push({ name, dimension, size, parent });
-  }
-
-  // Actions block
-  visitActions_block(ctx: Parser.Actions_blockContext): void {
-    for (const cmd of ctx.action_command()) {
-      this.visit(cmd);
-    }
-  }
-
-  // Wrapped actions block (BEGIN ACTIONS ... END ACTIONS)
-  visitWrapped_actions_block(ctx: Parser.Wrapped_actions_blockContext): void {
-    for (const cmd of ctx.action_command()) {
-      this.visit(cmd);
-    }
-  }
-
-  // Alias for wrapped actions block in some grammar variants
-  visitBegin_actions_block(ctx: Parser.Begin_actions_blockContext): void {
-    for (const cmd of ctx.action_command()) {
-      this.visit(cmd);
-    }
   }
 
   visitGenerate_network_cmd(ctx: Parser.Generate_network_cmdContext): void {
