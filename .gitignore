@@ -33,7 +33,15 @@ docs/
 *.o
 *.out
 # Note: public/cvode.js and public/cvode.wasm are needed for ODE solver - don't ignore them
-wasm-sundials/
+
+# Ignore everything under wasm-sundials (SUNDIALS source tree and build intermediates),
+# but keep the small set of build infrastructure and wrapper files that should be tracked.
+wasm-sundials/**
+!wasm-sundials/build_wasm.bat
+!wasm-sundials/build_wasm.sh
+!wasm-sundials/build_wasm_simd.bat
+!wasm-sundials/cvode_wrapper.c
+!wasm-sundials/library_cvode.js
 
 # Benchmark results and outputs
 *_benchmark_results*.json

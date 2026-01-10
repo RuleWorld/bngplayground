@@ -311,7 +311,11 @@ function parseGraphCached(str: string) {
 // E.g., pattern A(b) matching A(b,b) = 2 embeddings (one for each free b site)
 function countMoleculeEmbeddings(patMol: string, specMol: string): number {
   try {
-    const patGraph = parseGraphCached(patMol);
+    // FIX: BNG2 treats "mRNA" and "mRNA()" as equivalent for matching.
+    // Normalize bare molecule names by adding empty parentheses.
+    const normalizedPat = /^[A-Za-z0-9_]+$/.test(patMol) ? patMol + '()' : patMol;
+
+    const patGraph = parseGraphCached(normalizedPat);
     const specGraph = parseGraphCached(specMol);
 
     if (!GraphMatcher.matchesPattern(patGraph, specGraph)) {
@@ -398,8 +402,10 @@ function countPatternMatches(speciesStr: string, patternStr: string): number {
     const specMols = cleanSpec.split('.');
     let count = 0;
     for (const sMol of specMols) {
+      // FIX: Strip molecule-level compartment suffix (e.g., "L(r!1)@EC" -> "L(r!1)")
+      const cleanMol = sMol.replace(/@[A-Za-z0-9_]+$/, '');
       // Add the actual number of embeddings, not just 1 if matches
-      count += countMoleculeEmbeddings(cleanPat, sMol);
+      count += countMoleculeEmbeddings(cleanPat, cleanMol);
     }
     return count;
   }
@@ -1235,6 +1241,24 @@ export async function simulate(jobId: number, inputModel: BNGLModel, options: Si
     productStoichiometries?: number[];
   }[];
 
+  // DEBUG: Log reactions involving mRNA
+  console.log('[DEBUG] Reactions involving mRNA:');
+  concreteReactions.forEach((rxn, idx) => {
+    const rxnStr = model.reactions[idx];
+    if (rxnStr && (rxnStr.products?.some(p => p.includes('mRNA')) || rxnStr.reactants?.some(r => r.includes('mRNA')))) {
+      console.log(`  Reaction ${idx}: ${JSON.stringify(rxnStr)}`);
+      console.log(`    Reactant indices: [${Array.from(rxn.reactants)}]`);
+      console.log(`    Product indices: [${Array.from(rxn.products)}]`);
+    }
+  });
+
+  // Also log the species map entries for mRNA
+  console.log('[DEBUG] Species map entries for mRNA:');
+  for (const [name, idx] of speciesMap.entries()) {
+    if (name.toLowerCase().includes('mrna')) {
+      console.log(`  "${name}" -> index ${idx}`);
+    }
+  }
 
   // Count functional rates for logging
   const functionalRateCount = concreteReactions.filter(r => r.isFunctionalRate).length;
@@ -1260,6 +1284,21 @@ export async function simulate(jobId: number, inputModel: BNGLModel, options: Si
 
   // 3. Pre-process Observables (Cache matching species indices and coefficients)
   const concreteObservables = model.observables.map(obs => {
+    // DEBUG: Log observable processing for mRNA
+    try {
+      if (obs.name === 'Tot_mRNA' || (typeof obs.pattern === 'string' && obs.pattern.toLowerCase().includes('mrna'))) {
+        console.log(`[DEBUG Tot_mRNA] Processing observable: name="${obs.name}", pattern="${obs.pattern}"`);
+        console.log('[DEBUG Tot_mRNA] Model species containing "mRNA":');
+        model.species.forEach((s, i) => {
+          if (s.name.toLowerCase().includes('mrna')) {
+            console.log(`  [${i}] "${s.name}" (conc=${s.initialConcentration})`);
+          }
+        });
+      }
+    } catch (e) {
+      console.warn('[DEBUG Tot_mRNA] Error while logging observable info:', e?.message ?? e);
+    }
+
     // Split pattern by comma to handle multiple patterns (e.g. "A,B" or "pattern1, pattern2")
     // BUT only split on commas OUTSIDE parentheses to avoid breaking patterns like "p53(S15_S20~0,S46~0)"
     const splitPatternsSafe = (patternStr: string): string[] => {
@@ -1293,22 +1332,10 @@ export async function simulate(jobId: number, inputModel: BNGLModel, options: Si
       }
       return patterns;
     };
+
     const patterns = splitPatternsSafe(obs.pattern);
     const matchingIndices: number[] = [];
     const coefficients: number[] = [];
-
-    const countMoleculeInSpecies = (speciesStr: string, molName: string): number => {
-      const cleanSpec = removeCompartment(speciesStr);
-      const parts = cleanSpec.split('.');
-      let count = 0;
-      for (const part of parts) {
-        const { cleanMol } = getMoleculeCompartment(part.trim());
-        const nameMatch = cleanMol.match(/^([A-Za-z0-9_]+)/);
-        const name = nameMatch?.[1];
-        if (name === molName) count++;
-      }
-      return count;
-    };
 
     const matchesCountConstraint = (speciesStr: string, constraint: string): boolean | null => {
       const m = constraint.trim().match(/^([A-Za-z0-9_]+)\s*(==|<=|>=|<|>)\s*(\d+)$/);
@@ -1316,7 +1343,8 @@ export async function simulate(jobId: number, inputModel: BNGLModel, options: Si
       const mol = m[1];
       const op = m[2];
       const n = Number.parseInt(m[3], 10);
-      const c = countMoleculeInSpecies(speciesStr, mol);
+      // For count constraints, count the molecule occurrences using full pattern matching (ignores molecule-level compartments)
+      const c = countPatternMatches(speciesStr, mol);
       switch (op) {
         case '==': return c === n;
         case '<=': return c <= n;
@@ -1331,22 +1359,42 @@ export async function simulate(jobId: number, inputModel: BNGLModel, options: Si
     model.species.forEach((s, i) => {
       let count = 0;
       for (const pat of patterns) {
+        // DEBUG: Log mRNA matching attempts
+        try {
+          if ((obs.name === 'Tot_mRNA' || (typeof pat === 'string' && pat.toLowerCase().includes('mrna'))) && s.name.toLowerCase().includes('mrna')) {
+            console.log(`[DEBUG Tot_mRNA] Matching species "${s.name}" against pattern "${pat}"`);
+          }
+        } catch (e) {
+          // ignore logging errors
+        }
+
         if (obsType === 'species') {
           const constraintMatch = matchesCountConstraint(s.name, pat);
           if (constraintMatch === true) {
             count = 1;
-            break; // Species matches once
+            break;
           }
           if (constraintMatch === false) {
             continue;
           }
           if (isSpeciesMatch(s.name, pat)) {
             count = 1;
-            break; // Species matches once
+            break;
           }
         } else {
-          // Molecules observable: count occurrences
-          count += countPatternMatches(s.name, pat);
+          // Molecules observable: count occurrences using graph-based matching (handles components, bonds, and compartments)
+          const matchCount = countPatternMatches(s.name, pat);
+
+          // DEBUG: Log result
+          try {
+            if (obs.name === 'Tot_mRNA' && s.name.toLowerCase().includes('mrna')) {
+              console.log(`[DEBUG Tot_mRNA] countPatternMatches("${s.name}", "${pat}") = ${matchCount}`);
+            }
+          } catch (e) {
+            // ignore logging errors
+          }
+
+          count += matchCount;
         }
       }
 
@@ -1355,6 +1403,7 @@ export async function simulate(jobId: number, inputModel: BNGLModel, options: Si
         coefficients.push(count);
       }
     });
+
     return {
       name: obs.name,
       indices: new Int32Array(matchingIndices),
