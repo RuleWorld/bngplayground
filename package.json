@@ -26,6 +26,7 @@
     "cytoscape-svg": "^0.4.0",
     "d3": "^7.9.0",
     "decimal.js": "^10.6.0",
+    "es-toolkit": "^1.43.0",
     "html2canvas": "^1.4.1",
     "jsep": "^1.4.0",
     "jspdf": "4.0.0",
@@ -37,6 +38,7 @@
     "remark-gfm": "^4.0.1"
   },
   "devDependencies": {
+    "sucrase": "^3.35.1",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@types/decimal.js": "^0.0.32",

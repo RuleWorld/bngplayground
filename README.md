@@ -41,15 +41,27 @@ npm run dev
 
 ## Example Gallery + Semantic Search
 
-The Example Gallery supports:
+The Example Gallery features a curated library of 212 BioNetGen models, organized into functional biological categories:
 
-- **Keyword search** (fast text match)
-- **Semantic search** (natural-language queries like “MAPK pathway with feedback”)
+- **Cancer Biology**: Oncogenic signaling, tumor suppression, and DNA repair.
+- **Immunology**: TCR/BCR signaling, FcεRI, innate immunity, and cytokine pathways.
+- **Neuroscience**: Synaptic plasticity, ion channels, and neuronal signaling.
+- **Cell Cycle & Death**: Mitosis, apoptosis, and cell cycle checkpoints.
+- **Metabolism**: Metabolic pathways, enzyme kinetics, and glucose homeostasis.
+- **Developmental Biology**: Morphogens, differentiation, and tissue patterning.
+- **Multistage**: Models with protocol-based simulation phases (e.g., equilibration).
+- **RuleWorld Tutorials**: Official BioNetGen tutorials and comprehensive grammar examples.
+- **Example Models**: A complete set of 100 baseline models generated for demonstration.
+
+Search capabilities include:
+
+- **Keyword search**: Fast text matching across model names and descriptions.
+- **Semantic search**: Natural-language queries (e.g., "MAPK pathway with feedback") using Vector embeddings.
 
 Semantic search uses a precomputed embeddings index at `public/model-embeddings.json`.
 
 - `npm run build` regenerates embeddings automatically.
-- If you’re iterating quickly, use `npm run build:quick` to skip that step.
+- Use `npm run build:quick` to skip embedding generation during rapid iteration.
 
 ## Tabs
 
