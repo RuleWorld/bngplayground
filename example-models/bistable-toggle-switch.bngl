@@ -93,16 +93,16 @@ begin actions
     simulate({method=>"ode",t_end=>100,n_steps=>100})
     # Phase 2: Pulse L begins (100-120)
     setParameter("k_ind_L_synth",200)
-    simulate({method=>"ode",t_end=>120,n_steps=>20,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>120,n_steps=>20,continue=>1})
     # Phase 3: Intermediate (120-160) - Truncated at Steady State
     setParameter("k_ind_L_synth",0.1)
-    simulate({method=>"ode",t_end=>160,n_steps=>40,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>160,n_steps=>40,continue=>1})
     # Phase 4: Pulse R begins (160-180)
     setParameter("k_ind_R_synth",200)
-    simulate({method=>"ode",t_end=>180,n_steps=>20,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>180,n_steps=>20,continue=>1})
     # Phase 5: Final Recovery (180-260) - Truncated at Steady State
     setParameter("k_ind_R_synth",0.1)
-    simulate({method=>"ode",t_end=>260,n_steps=>80,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>260,n_steps=>80,continue=>1})
 end actions
 end model
 

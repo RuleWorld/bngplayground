@@ -116,9 +116,9 @@ begin actions
     simulate({method=>"ode",t_end=>20,n_steps=>40})
     # Phase 2: Stimulus (20-120)
     setParameter("v_stim_current",5.0)
-    simulate({method=>"ode",t_end=>100,n_steps=>200,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,continue=>1})
     # Phase 3: Recovery (120-200)
     setParameter("v_stim_current",0.2)
-    simulate({method=>"ode",t_end=>80,n_steps=>160,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>80,n_steps=>160,continue=>1})
 end actions
 end model

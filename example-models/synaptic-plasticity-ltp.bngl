@@ -87,21 +87,21 @@ begin actions
     # Phase 2: HFS Protocol (3 Pulses of Glutamate)
     # Pulse 1
     setParameter("Glu_input", 20)
-    simulate({method=>"ode",t_end=>22,n_steps=>20,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>22,n_steps=>20,continue=>1})
     setParameter("Glu_input", 0)
-    simulate({method=>"ode",t_end=>30,n_steps=>50,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>30,n_steps=>50,continue=>1})
     
     # Pulse 2
     setParameter("Glu_input", 20)
-    simulate({method=>"ode",t_end=>32,n_steps=>20,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>32,n_steps=>20,continue=>1})
     setParameter("Glu_input", 0)
-    simulate({method=>"ode",t_end=>40,n_steps=>50,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>40,n_steps=>50,continue=>1})
     
     # Pulse 3 (LTP Induction/Maintenance)
     setParameter("Glu_input", 20)
-    simulate({method=>"ode",t_end=>42,n_steps=>20,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>42,n_steps=>20,continue=>1})
     setParameter("Glu_input", 0)
-    simulate({method=>"ode",t_end=>100,n_steps=>300,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>300,continue=>1})
 end actions
 end model
 

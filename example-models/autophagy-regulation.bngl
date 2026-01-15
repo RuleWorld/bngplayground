@@ -93,7 +93,7 @@ begin actions
     simulate({method=>"ode",t_end=>50,n_steps=>100})
     # Phase 2: Stress / Starvation begins (50-150)
     setParameter("k_stress_multiplier",2.0)
-    simulate({method=>"ode",t_end=>100,n_steps=>200,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,continue=>1})
 end actions
 end model
 

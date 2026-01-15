@@ -10,13 +10,11 @@ const createRule = (
     products: string[],
     isBidirectional = false
 ): ReactionRule => ({
-    id: name,
     name,
     reactants,
     products,
     isBidirectional,
-    rateConstants: [],
-    operations: []
+    rate: 'k1'
 });
 
 describe('ContactMap Builder', () => {

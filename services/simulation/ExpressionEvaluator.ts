@@ -278,6 +278,7 @@ export function getCompiledRateFunction(
       return Number.isNaN(n) ? 0 : n;
     };
 
+    const cacheKey = `${COMPILED_RATE_CACHE_VERSION}::FALLBACK::${fnv1aHash(expandedExpr)}`;
     setBoundedCache(compiledRateFunctions, cacheKey, fallbackFn, MAX_COMPILED_RATE_FUNCTIONS);
     return fallbackFn;
   }

@@ -101,7 +101,7 @@ begin actions
     simulate({method=>"ode",t_end=>30,n_steps=>60})
     # Phase 2: High Density Stimulus (30-150)
     setParameter("k_contact_pulse",1.0)
-    simulate({method=>"ode",t_end=>120,n_steps=>240,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>120,n_steps=>240,continue=>1})
 end actions
 end model
 

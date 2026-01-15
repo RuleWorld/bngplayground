@@ -128,7 +128,7 @@ export const ExperimentalDataPanel: React.FC<ExperimentalDataPanelProps> = ({
             <span className="text-sm text-slate-600 dark:text-slate-300">
               📄 {experimentalData.fileName}
             </span>
-            <Button variant="secondary" size="sm" onClick={handleClear}>
+            <Button variant="secondary" onClick={handleClear}>
               Remove
             </Button>
           </div>

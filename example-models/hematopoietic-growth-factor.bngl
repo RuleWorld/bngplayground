@@ -62,12 +62,12 @@ begin actions
     # Simulates a bolus of Erythropoietin
     setConcentration("EPO(r)", 100)
     saveConcentrations()
-    simulate({method=>"ode",t_end=>100,n_steps=>200,suffix=>"stim"})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,suffix=>"stim"})
     
     # 3. Washout / Recovery
     # Simulates clearance of the growth factor
     setConcentration("EPO(r)", 0)
-    simulate({method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
 end actions
 end model
 

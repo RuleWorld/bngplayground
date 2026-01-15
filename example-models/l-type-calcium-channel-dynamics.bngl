@@ -101,14 +101,14 @@ begin actions
     simulate({method=>"ode",t_end=>30,n_steps=>60})
     # Phase 2: Pulse begins (30-50)
     setParameter("V_Clamp",10.0)
-    simulate({method=>"ode",t_end=>20,n_steps=>40,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>20,n_steps=>40,continue=>1})
     # Phase 3: PKA activation (50-80)
     setParameter("k_pka_current",2.0)
-    simulate({method=>"ode",t_end=>30,n_steps=>60,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>30,n_steps=>60,continue=>1})
     # Phase 4: Recovery (80-150)
     setParameter("V_Clamp",-30.0)
     setParameter("k_pka_current",0)
-    simulate({method=>"ode",t_end=>70,n_steps=>140,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>70,n_steps=>140,continue=>1})
 end actions
 end model
 

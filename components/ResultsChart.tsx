@@ -340,11 +340,12 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, visibleSpec
             allowDataOverflow={true}
             tickFormatter={(value) => {
               if (typeof value !== 'number') return value;
+              if (value === 0) return '0';
               const abs = Math.abs(value);
               if (abs >= 1e9) return (value / 1e9).toFixed(1) + 'B';
               if (abs >= 1e6) return (value / 1e6).toFixed(1) + 'M';
               if (abs >= 1e3) return (value / 1e3).toFixed(1) + 'K';
-              if (abs < 0.01 && abs !== 0) return value.toExponential(1);
+              if (abs < 0.01) return value.toExponential(1);
               if (abs < 10) return value.toFixed(2);  // Show 2 decimals for small values
               return value.toFixed(0);
             }}

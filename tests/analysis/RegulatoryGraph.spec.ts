@@ -10,13 +10,11 @@ const createRule = (
   products: string[],
   isBidirectional = false
 ): ReactionRule => ({
-  id: name,
   name,
   reactants: reactants.map(s => s), // Simple strings for graph builder
   products: products.map(s => s),
   isBidirectional,
-  rateConstants: [],
-  operations: [] 
+  rate: 'k1', 
 });
 
 describe('RegulatoryGraph Builder', () => {

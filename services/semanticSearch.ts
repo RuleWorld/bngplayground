@@ -70,7 +70,6 @@ async function getEmbedder(): Promise<Pipeline> {
   try {
     console.log('[SemanticSearch] Loading embedding model...');
     // Dynamic import to handle the case when package is not yet installed
-    // @ts-expect-error - Module will be available after npm install
     const { pipeline } = await import('@xenova/transformers');
     embedder = await pipeline('feature-extraction', 'Xenova/all-MiniLM-L6-v2');
     console.log('[SemanticSearch] Model loaded.');

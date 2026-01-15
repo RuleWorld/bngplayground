@@ -44,7 +44,7 @@ const describeOperation = (operation: RuleOperation): string => {
   }
 };
 
-const renderComponent = (component: VisualizationComponent): JSX.Element => {
+const renderComponent = (component: VisualizationComponent): React.JSX.Element => {
   const state = component.state ? `~${component.state}` : '';
   const bond = component.bondLabel ? component.bondLabel : '';
   const reqGlyph = component.bondRequirement === 'bound' ? '🔗' : component.bondRequirement === 'free' ? '–' : component.bondRequirement === 'either' ? '?' : '';

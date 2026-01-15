@@ -90,10 +90,10 @@ begin actions
     simulate({method=>"ode",t_end=>30,n_steps=>60})
     # Phase 2: Stress Pulse (30-100)
     setParameter("k_stress_pulse",5.0)
-    simulate({method=>"ode",t_end=>70,n_steps=>140,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>70,n_steps=>140,continue=>1})
     # Phase 3: Recovery (100-200)
     setParameter("k_stress_pulse",0.1)
-    simulate({method=>"ode",t_end=>100,n_steps=>200,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,continue=>1})
 end actions
 end model
 

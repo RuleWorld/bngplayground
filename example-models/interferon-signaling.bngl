@@ -60,12 +60,12 @@ begin actions
     # Simulates a bolus of Interferon
     setConcentration("IFN(r)", 100)
     saveConcentrations()
-    simulate({method=>"ode",t_end=>80,n_steps=>160,suffix=>"stim"})
+    simulate({continue=>1,method=>"ode",t_end=>80,n_steps=>160,suffix=>"stim"})
     
     # 3. Washout / Reset
     # Simulates clearance of cytokine
     setConcentration("IFN(r)", 0)
-    simulate({method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
 end actions
 end model
 

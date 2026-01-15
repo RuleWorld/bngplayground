@@ -176,7 +176,8 @@ export async function generateExpandedNetwork(
     const maxStoich = networkOpts.maxStoich ? new Map(Object.entries(networkOpts.maxStoich)) : 500;
 
     const generator = new NetworkGenerator({
-        maxSpecies: 20000,
+        maxSpecies: networkOpts.maxSpecies ?? 20000,
+        maxReactions: networkOpts.maxReactions ?? 100000,
         maxIterations: networkOpts.maxIter ?? 5000,
         maxAgg: networkOpts.maxAgg ?? 500,
         maxStoich,

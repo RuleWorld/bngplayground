@@ -34,7 +34,7 @@ function flattenChildren(children: React.ReactNode): React.ReactNode[] {
     if (!child) return;
 
     if (React.isValidElement(child) && child.type === React.Fragment) {
-      out.push(...flattenChildren(child.props.children));
+      out.push(...flattenChildren((child as React.ReactElement<{ children: React.ReactNode }>).props.children));
       return;
     }
 

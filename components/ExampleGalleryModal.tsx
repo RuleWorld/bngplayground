@@ -11,7 +11,7 @@ import { SemanticSearchInput, SearchResult } from './SemanticSearchInput';
 const toTitleCase = (str: string): string => {
   // List of known acronyms that should stay uppercase
   const acronyms = ['mapk', 'egfr', 'akt', 'tlbr', 'blbr', 'bcr', 'tcr', 'fceri', 'nfkb', 'tnf', 'dna', 'rna', 'ode', 'ssa', 'pde'];
-  
+
   return str.split(' ').map(word => {
     const lowerWord = word.toLowerCase();
     // Check if it's a known acronym
@@ -51,8 +51,8 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
         .map(result => {
           // Match by id or by filename (without .bngl extension)
           const modelId = result.id.split('/').pop() || result.id;
-          return allModels.find(m => 
-            m.id === modelId || 
+          return allModels.find(m =>
+            m.id === modelId ||
             m.id === result.filename.replace('.bngl', '') ||
             m.name.toLowerCase().replace(/\s+/g, '-') === modelId.toLowerCase() ||
             m.name.toLowerCase().replace(/\s+/g, '_') === modelId.toLowerCase()
@@ -104,9 +104,9 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
     <Modal isOpen={isOpen} onClose={onClose} title="BNGL Models" size="3xl">
       <div className="mt-4">
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-          Browse {MODEL_CATEGORIES.reduce((sum, cat) => sum + cat.models.length, 0)} models with explicit ODE simulate() actions.
+          Browse {MODEL_CATEGORIES.reduce((sum, cat) => sum + cat.models.length, 0)} models.
         </p>
-        
+
         {/* Semantic Search */}
         <div className="mb-4">
           <SemanticSearchInput
@@ -135,8 +135,8 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
         {!semanticResults && (
           <div className="relative mb-4">
             <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <Input 
-              type="text" 
+            <Input
+              type="text"
               placeholder="Or filter by keyword..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
@@ -149,14 +149,13 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
         {!semanticResults && !searchTerm && (
           <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200 dark:border-slate-700 pb-4">
             {MODEL_CATEGORIES.map(category => (
-              <button 
+              <button
                 key={category.id}
                 onClick={() => setSelectedCategory(category.id)}
-                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${
-                  selectedCategory === category.id
-                    ? 'bg-primary text-white' 
+                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${selectedCategory === category.id
+                    ? 'bg-primary text-white'
                     : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
-                }`}
+                  }`}
               >
                 {category.name} ({category.models.length})
               </button>
@@ -193,7 +192,7 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
                   ))}
                 </div>
               </div>
-              <button 
+              <button
                 onClick={() => onSelect(example.code, toTitleCase(example.name))}
                 className="mt-3 w-full text-center px-4 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-slate-800 dark:text-slate-100"
               >

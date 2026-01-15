@@ -68,11 +68,11 @@ begin actions
     # Approximate oscillation with 4 phases
     simulate({method=>"ode",t_end=>50,n_steps=>100})
     setParameter("k_prod_current",2.0)
-    simulate({method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
     setParameter("k_prod_current",20.0)
-    simulate({method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
     setParameter("k_prod_current",2.0)
-    simulate({method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
 end actions
 end model
 

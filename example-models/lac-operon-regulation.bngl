@@ -72,11 +72,11 @@ begin actions
     # Simulates available lactose substrate
     setConcentration("Lactose(loc~ext)", 200)
     saveConcentrations()
-    simulate({method=>"ode",t_end=>200,n_steps=>200,suffix=>"induced"})
+    simulate({continue=>1,method=>"ode",t_end=>200,n_steps=>200,suffix=>"induced"})
     
     # 3. Remove Lactose (Depletion)
     setConcentration("Lactose(loc~ext)", 0)
-    simulate({method=>"ode",t_end=>200,n_steps=>200,suffix=>"depleted"})
+    simulate({continue=>1,method=>"ode",t_end=>200,n_steps=>200,suffix=>"depleted"})
 end actions
 end model
 

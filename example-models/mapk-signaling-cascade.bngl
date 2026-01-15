@@ -69,12 +69,12 @@ begin actions
     # Activates the MAPK cascade
     setConcentration("Ligand(r)", 100)
     saveConcentrations()
-    simulate({method=>"ode",t_end=>80,n_steps=>160,suffix=>"stim"})
+    simulate({continue=>1,method=>"ode",t_end=>80,n_steps=>160,suffix=>"stim"})
     
     # 3. Washout (Remove Ligand)
     # Simulates signal termination
     setConcentration("Ligand(r)", 0)
-    simulate({method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
+    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
 end actions
 end model
 

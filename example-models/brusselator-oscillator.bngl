@@ -82,7 +82,7 @@ begin actions
     simulate({method=>"ode",t_end=>20,n_steps=>200})
     # Phase 2: Shifted Temp (20-60)
     setParameter("v_temp_current",1.2)
-    simulate({method=>"ode",t_end=>40,n_steps=>400,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>40,n_steps=>400,continue=>1})
 end actions
 end model
 

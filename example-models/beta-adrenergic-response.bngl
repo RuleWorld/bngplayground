@@ -108,12 +108,12 @@ begin actions
     # 2. Stimulation (Add Epinephrine)
     setConcentration("Epi(r)", 100)
     saveConcentrations() # Save state for potential branching
-    simulate({method=>"ode",t_end=>200,n_steps=>200,suffix=>"stim"})
+    simulate({continue=>1,method=>"ode",t_end=>200,n_steps=>200,suffix=>"stim"})
     
     # 3. Washout (Remove Epinephrine)
     # Simulates removing the agonist, allowing system to recover/reset
     setConcentration("Epi(r)", 0)
-    simulate({method=>"ode",t_end=>200,n_steps=>200,suffix=>"wash"})
+    simulate({continue=>1,method=>"ode",t_end=>200,n_steps=>200,suffix=>"wash"})
 end actions
 end model
 

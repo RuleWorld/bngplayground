@@ -99,9 +99,9 @@ begin actions
     simulate({method=>"ode",t_end=>20,n_steps=>40})
     # Phase 2: Stimulus (20-80)
     setParameter("Ca_Stim",5.0)
-    simulate({method=>"ode",t_end=>60,n_steps=>120,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>60,n_steps=>120,continue=>1})
     # Phase 3: Recovery (80-150)
     setParameter("Ca_Stim",0.5)
-    simulate({method=>"ode",t_end=>70,n_steps=>140,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>70,n_steps=>140,continue=>1})
 end actions
 end model

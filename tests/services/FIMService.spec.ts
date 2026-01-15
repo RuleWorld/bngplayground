@@ -43,7 +43,8 @@ describe('FIM Service', () => {
                  val = Math.exp(-k); // Simple model A(1) = exp(-k)
              }
              return {
-                 data: [{ time: 1, A: val }] // Single timepoint
+                 data: [{ time: 1, A: val }], // Single timepoint
+                 headers: ['time', 'A']
              };
         });
         
@@ -73,7 +74,8 @@ describe('FIM Service', () => {
         
         // Mock simulation: Output is constant regardless of k1
         vi.mocked(bnglService.simulateCached).mockResolvedValue({
-            data: [{ time: 1, A: 10 }]
+            data: [{ time: 1, A: 10 }],
+            headers: ['time', 'A']
         });
         
         const result = await computeFIM(model as any, paramNames, {} as any);
@@ -97,7 +99,8 @@ describe('FIM Service', () => {
              const k2 = override?.k2 ?? 2;
              // Linear model: Y = k1 + k2
              return {
-                 data: [{ time: 1, Y: k1 + k2 }]
+                 data: [{ time: 1, Y: k1 + k2 }],
+                 headers: ['time', 'Y']
              };
          });
          

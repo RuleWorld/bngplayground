@@ -95,7 +95,7 @@ begin actions
     simulate({method=>"ode",t_end=>20,n_steps=>40})
     # Phase 2: Mitogen Stimulation (20-150)
     setParameter("k_cycd_synth",0.5)
-    simulate({method=>"ode",t_end=>130,n_steps=>260,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>130,n_steps=>260,continue=>1})
 end actions
 end model
 

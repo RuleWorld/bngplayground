@@ -99,7 +99,7 @@ describe('RepoIntegration', () => {
 
             // Test 1: Parse
             it('1. should parse successfully', () => {
-                if (!bnglContent) this.skip(); // Skip if file read failed
+                if (!bnglContent) return; // Skip if file read failed
                 try {
                     model = parseBNGLStrict(bnglContent);
                     expect(model).toBeDefined();

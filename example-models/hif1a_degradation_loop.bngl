@@ -84,9 +84,9 @@ begin actions
     simulate({method=>"ode",t_end=>40,n_steps=>80})
     # Phase 2: Hypoxia (40-100)
     setParameter("O2_Sens",0.05)
-    simulate({method=>"ode",t_end=>60,n_steps=>120,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>60,n_steps=>120,continue=>1})
     # Phase 3: Normoxia recovery (100-150)
     setParameter("O2_Sens",1.0)
-    simulate({method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
 end actions
 end model

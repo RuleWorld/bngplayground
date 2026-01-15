@@ -114,6 +114,8 @@ export interface BNGLModel {
   // Options provided to generate_network() in the BNGL script.
   // These should be parsed from the BNGL file and respected during network generation.
   networkOptions?: {
+    maxSpecies?: number;
+    maxReactions?: number;
     maxAgg?: number;
     maxIter?: number;
     maxStoich?: number | Record<string, number>;
