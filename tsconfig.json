@@ -12,8 +12,7 @@
     "skipLibCheck": true,
     "types": [
       "node",
-      "@webgpu/types",
-      "@testing-library/jest-dom"
+      "@webgpu/types"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
