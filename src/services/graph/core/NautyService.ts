@@ -27,10 +27,17 @@ export class NautyService {
     try {
       // Dynamic import to avoid build errors if file is missing
       // @ts-ignore
-      const module = await import('../../../wasm/nauty/nauty.js');
+      const module = await import('@/services/nauty_loader.js');
       const createNautyModule = module.default;
 
-      this.nautyModule = await createNautyModule();
+      this.nautyModule = await createNautyModule({
+        locateFile: (path: string) => {
+          if (path.endsWith('.wasm')) {
+            return '/nauty.wasm';
+          }
+          return path;
+        }
+      });
       this.isReady = true;
       console.log('Nauty WASM module initialized successfully.');
     } catch (error) {

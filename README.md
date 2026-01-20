@@ -6,8 +6,12 @@ An interactive, browser-based workspace for exploring BioNetGen (BNGL) models: e
 
 ## Features
 
-- BNGL editor + parser (client-side)
+- BNGL editor + parser (client-side ANTLR4)
 - Network generation and simulation in the browser (Web Worker + WASM)
+- **Primary Solver**: CVODE (SUNDIALS) for stiff ODEs, RK4/RK45 for non-stiff systems
+- **Large Network Support**: Symmetry reduction using **Nauty** WASM for fast canonical labeling
+- **Network-Free Simulation**: Integrated **NFsim** (WASM) for efficient simulation without network generation
+- **Visual Designer**: Construct models using a structured visual interface
 - Example gallery with keyword + semantic search
 - Interactive charts (series toggle / isolate, zoom, export)
 - Analysis tabs: parameter scan, identifiability (FIM), steady state, parameter estimation, flux analysis, verification, and more
@@ -16,6 +20,7 @@ An interactive, browser-based workspace for exploring BioNetGen (BNGL) models: e
 
 ```bash
 npm install
+npm run build
 npm run dev
 ```
 
@@ -26,6 +31,7 @@ npm run dev
 | `npm run dev` | Start the Vite dev server |
 | `npm run build` | Production build (also generates semantic-search embeddings) |
 | `npm run build:quick` | Production build without embeddings generation |
+| `npm run build:full` | Full build including verification |
 | `npm run preview` | Preview the production build |
 | `npm run test` | Run Vitest once |
 | `npm run test:watch` | Run Vitest in watch mode |
@@ -41,7 +47,7 @@ npm run dev
 
 ## Example Gallery + Semantic Search
 
-The Example Gallery features a curated library of 212 BioNetGen models, organized into functional biological categories:
+The Example Gallery features a curated library of 200+ BioNetGen models, organized into functional biological categories:
 
 - **Cancer Biology**: Oncogenic signaling, tumor suppression, and DNA repair.
 - **Immunology**: TCR/BCR signaling, FcεRI, innate immunity, and cytokine pathways.
@@ -107,9 +113,14 @@ The repository also contains additional tab implementations that may not be curr
 
 ## Architecture (high-level)
 
-- React + TypeScript + Vite + Tailwind UI
-- Web Worker for parsing / simulation so the UI stays responsive
-- WASM-backed solvers (including CVODE) and network-generation utilities
+- **Frontend**: React 19 + TypeScript 5.8 + Vite 6 + Tailwind CSS
+- **Concurrency**: Web Workers for parsing, network generation, and simulation (UI remains responsive)
+- **Mathematical Solvers**:
+  - **CVODE** (SUNDIALS) for high-performance stiff ODE solving
+  - **NFsim** for network-free stochastic simulation
+  - **Nauty** for high-efficiency canonical labeling and symmetry reduction
+- **Parser**: ANTLR4-based BNGL parser for full parity with BNG2.pl
+- **Visualization**: Cytoscape.js for networks, Recharts for time series, TensorFlow.js for semantic search
 
 Useful entry points:
 
