@@ -563,8 +563,8 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                     Estimation Results
                   </h3>
                   <span className={`px-2 py-1 rounded text-xs font-medium ${result.convergence
-                      ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
-                      : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
+                    ? 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300'
+                    : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300'
                     }`}>
                     {result.convergence ? '✓ Converged' : '⚠ May not have converged'}
                   </span>

@@ -442,10 +442,12 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 10 && (
           <div className="h-full flex flex-col">
-            <TabHeader
-              title="Model Explorer"
-              description="Browse curated example models and load presets"
-            />
+            <div className="px-4 pt-4">
+              <TabHeader
+                title="Model Explorer"
+                description="Browse curated example models and load presets"
+              />
+            </div>
             <ModelExplorerTab onLoadModel={(code, name, id) => {
               console.log("Model Explorer: request to load model", { name, id });
               // TODO: Implement model loading via custom event or prop callback

@@ -58,6 +58,8 @@ export default defineConfig(() => {
         // Polyfill Node.js modules for ANTLR4 browser compatibility
         'util': 'util',
         'assert': 'assert',
+        // Stub out 'fs' for browser/TensorFlow.js compatibility
+        'fs': path.resolve(__dirname, 'src/shims/fs-shim.js'),
       },
       // Avoid duplicate React copies in the bundle
       dedupe: ['react', 'react-dom']
