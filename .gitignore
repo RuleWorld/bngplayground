@@ -7,7 +7,6 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
-# External repos
 DynamicInfluenceNetworks/
 
 # Dependencies
@@ -132,15 +131,10 @@ profile_*.ts
 # Temporary JS files
 tmp.js
 
-# Generated report/comparison JSON files
 bng2_comparison_results.json
-bng2_test_report.json
-gdat_comparison_report.json
 metadata.json
-scripts/comparison_report.json
 
 bionetgen_python/*
-bionetgen_repo/*
 
 gdat_temp/
 
@@ -152,18 +146,14 @@ artifacts/
 
 # Debug and benchmark output (generated files)
 bng2_comparison.json
-bng2_reference_report.json
 comparison_results.json
 reaction_comparison_results.json
 ode_published_models.json
 *_comparison*.json
-*_report.json
 
 # Embedding cache (regenerated on build)
 .embedding-cache/
 
-# report files
-reports/
 
 # random bngl folder
 bng_exec_*/
@@ -171,14 +161,22 @@ bng_exec_*/
 # agent
 .agent/skills
 .kiro
-playwright-report/
 test-results/
 
-# nfsim
-# nfsim source (allowed)
+# Workspace repositories (Root-relative to avoid matching source)
+/nfsim/
+/bionetgen/
+/bionetgen_repo/
+/nfsim_repo/
+/nfsim-contribution/
 
-# End of .gitignore
+# Workspace configurations
+/*.code-workspace
 
+# Playwright reports
+playwright-report/
+
+# NFsim research (legacy/research folder)
 nfsim_research/**/*.o
 nfsim_research/**/*.d
 nfsim_research/**/*.a
@@ -189,23 +187,24 @@ nfsim_research/build/
 nfsim_research/bin/
 nfsim_research/lib/
 nfsim_research/NFsim_mssys
+
+# WASM build artifacts
 src/wasm/nfsim/build_ems/
+# Note: DO NOT ignore nfsim-src/ here as the user wants to track changes
+src/wasm/nfsim/nfsim-src/models/
+src/wasm/nfsim/nfsim-src/test/
+src/wasm/nfsim/nfsim-src/validate/
+src/wasm/nfsim/nfsim-src/tools/
+src/wasm/nfsim/nfsim-src/build_native/
+src/wasm/nfsim/nfsim-src/build_ems/
+src/wasm/nfsim/nfsim-src/bin/
 
-# nauty build artifacts
-src/wasm/nauty/*.o
-src/wasm/nauty/*.a
-src/wasm/nauty/*.lib
-src/wasm/nauty/*.exe
-src/wasm/nauty/*.rsp
-src/wasm/nauty/*.bat
-src/wasm/nauty/*.js
-src/wasm/nauty/*.wasm
-
-# Ignore build artifacts in nauty and nfsim build dirs
+# Nauty build artifacts
 src/wasm/nauty/*.o
 src/wasm/nauty/*.a
 src/wasm/nauty/*.lib
 src/wasm/nauty/*.exe
 src/wasm/nauty/compile.bat
 src/wasm/nauty/*.rsp
-src/wasm/nfsim/build_ems/
+
+# End of .gitignore
