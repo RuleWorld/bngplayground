@@ -76,6 +76,8 @@ export class BNGXMLWriter {
       })
       .join('');
 
+    const synthesizedFunctions: { name: string; expression: string; args: string[] }[] = [];
+
     const reactionRulesXml = reactions
       .flatMap((r, idx) => {
         const baseId = `RR${idx + 1}`;
@@ -143,9 +145,21 @@ export class BNGXMLWriter {
             })
             .join('');
 
-          const rateConstants: string[] = [];
-          if (variant.rate !== undefined) {
-            rateConstants.push(`\n            <RateConstant value="${escapeXml(String(variant.rate))}"/>`);
+          const rateLawType = 'Ele';
+          const totalrate = r.totalRate ? '1' : '0';
+
+          const rateValue = variant.rate !== undefined ? String(variant.rate) : '0';
+          let finalRateValue = rateValue;
+          
+          // NFsim/BioNetGen XML parity: Complex expressions in rate must be exported as functions
+          const isComplex = rateValue.length > 0 && 
+            !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
+            !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
+
+          if (isComplex) {
+            const funcName = `_func_rate_${variant.id}`;
+            synthesizedFunctions.push({ name: funcName, expression: rateValue, args: [] });
+            finalRateValue = funcName;
           }
 
           const { mapXml, operationsXml } = this.buildRuleOperations(reactantPatternData, productPatternData, {
@@ -155,8 +169,8 @@ export class BNGXMLWriter {
           return `\n    <ReactionRule id="${ruleId}" name="${ruleName}" symmetry_factor="1">\n` +
             `      <ListOfReactantPatterns>${reactantPatterns}\n      </ListOfReactantPatterns>\n` +
             `      <ListOfProductPatterns>${productPatterns}\n      </ListOfProductPatterns>\n` +
-            `      <RateLaw id="${ruleId}_RateLaw" type="Ele" totalrate="0">\n` +
-            `        <ListOfRateConstants>${rateConstants.join('')}\n        </ListOfRateConstants>\n` +
+            `      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n` +
+            `        <ListOfRateConstants>\n            <RateConstant value="${escapeXml(finalRateValue)}"/>\n        </ListOfRateConstants>\n` +
             `      </RateLaw>\n` +
             `      ${mapXml}${operationsXml}\n` +
             `    </ReactionRule>\n`;
@@ -170,9 +184,29 @@ export class BNGXMLWriter {
         const obsType = normalizeObservableType(obs.type);
         const patternsXml = patterns
           .map((pattern, pIdx) => {
-            const graph = BNGLParser.parseSpeciesGraph(pattern);
-            const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `O${idx + 1}_P${pIdx + 1}`, moleculeTypeDefs, true);
-            return `<Pattern id="O${idx + 1}_P${pIdx + 1}">${moleculesXml}${bondsXml}</Pattern>`;
+            // NFsim specific: Stoichiometric constraints (relation/quantity)
+            // Note: NFsim only supports these for 'Species' type observables.
+            let constraintAttrs = '';
+            if (obsType === 'Species') {
+              // Try to extract from pattern string first (precedence)
+              const m = pattern.match(/^(.*?)\s*(==|<=|>=|<|>|!=)\s*(\d+)\s*$/);
+              let cleanPattern = pattern;
+              if (m) {
+                cleanPattern = m[1];
+                constraintAttrs = ` relation="${escapeXml(m[2])}" quantity="${m[3]}"`;
+              } else if (obs.countFilter !== undefined) {
+                // Fallback to observable-level filter if present
+                const rel = obs.countRelation || '>';
+                constraintAttrs = ` relation="${escapeXml(rel)}" quantity="${obs.countFilter}"`;
+              }
+              const graph = BNGLParser.parseSpeciesGraph(cleanPattern);
+              const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `O${idx + 1}_P${pIdx + 1}`, moleculeTypeDefs, true);
+              return `<Pattern id="O${idx + 1}_P${pIdx + 1}"${constraintAttrs}>${moleculesXml}${bondsXml}</Pattern>`;
+            } else {
+              const graph = BNGLParser.parseSpeciesGraph(pattern);
+              const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `O${idx + 1}_P${pIdx + 1}`, moleculeTypeDefs, true);
+              return `<Pattern id="O${idx + 1}_P${pIdx + 1}">${moleculesXml}${bondsXml}</Pattern>`;
+            }
           })
           .join('');
         return `<Observable id="O${idx + 1}" name="${escapeXml(obs.name)}" type="${escapeXml(obsType)}">` +
@@ -181,10 +215,43 @@ export class BNGXMLWriter {
       })
       .join('');
 
-    const functionsXml = (model.functions || [])
+    const parameterNames = new Set(Object.keys(model.parameters || {}));
+    const observableNames = new Set(model.observables.map(o => o.name));
+    const allBNGLFunctions = model.functions || [];
+    const functionNames = new Set([...allBNGLFunctions.map(f => f.name), ...synthesizedFunctions.map(f => f.name)]);
+
+    const allFunctions = [...allBNGLFunctions, ...synthesizedFunctions];
+
+    const functionsXml = allFunctions
       .map((f) => {
+        const argsXml = (f.args || [])
+          .map(arg => `<Argument id="${escapeXml(arg)}"/>`)
+          .join('');
+        
+        // Basic reference detection (very simple regex approach)
+        const refs: { name: string, type: string }[] = [];
+        // Extract all word-like tokens from expression
+        const tokens = f.expression.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+        const uniqueTokens = new Set(tokens);
+        
+        uniqueTokens.forEach(token => {
+          if (parameterNames.has(token)) {
+            refs.push({ name: token, type: 'Constant' });
+          } else if (observableNames.has(token)) {
+            refs.push({ name: token, type: 'Observable' });
+          } else if (functionNames.has(token) && token !== f.name) {
+            refs.push({ name: token, type: 'Function' });
+          }
+        });
+
+        const refsXml = refs
+          .map(ref => `<Reference name="${escapeXml(ref.name)}" type="${escapeXml(ref.type)}"/>`)
+          .join('');
+
         return `      <Function id="${escapeXml(f.name)}">` +
+          (argsXml ? `<ListOfArguments>${argsXml}</ListOfArguments>` : '') +
           `<Expression>${escapeXml(f.expression)}</Expression>` +
+          (refsXml ? `<ListOfReferences>${refsXml}</ListOfReferences>` : '') +
           `</Function>\n`;
       })
       .join('');

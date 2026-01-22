@@ -380,22 +380,26 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     });
 
     // Check for count filter (>N syntax) in the first pattern (NFsim limitation: typically per-species observable)
-    // We scan the patterns for the grammar extension we added: species_def (GT INT)?
-    // Since we are iterating observable patterns, let's look at the first one's context
     let countFilter: number | undefined;
+    let countRelation: string | undefined;
+
     if (patternListCtx.observable_pattern().length > 0) {
       const firstOp = patternListCtx.observable_pattern()[0];
-      const gtToken = firstOp.GT();
-      // INT() returns a single TerminalNode or undefined in the new generated parser
       const intToken = firstOp.INT();
-      if (gtToken && intToken) {
-        // If it's an array (old parser style), take first. If single node, use it.
+
+      if (intToken) {
         const token = Array.isArray(intToken) ? intToken[0] : intToken;
         countFilter = parseInt(token.text);
+
+        if (firstOp.GT()) countRelation = '>';
+        else if (firstOp.GTE()) countRelation = '>=';
+        else if (firstOp.LT()) countRelation = '<';
+        else if (firstOp.LTE()) countRelation = '<=';
+        else if (firstOp.EQUALS()) countRelation = '==';
       }
     }
 
-    this.observables.push({ type, name, pattern: patterns.join(', '), countFilter });
+    this.observables.push({ type, name, pattern: patterns.join(', '), countFilter, countRelation });
   }
 
   // Reaction rules block
@@ -453,6 +457,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Check modifiers (can be prefix or suffix, so we get an array)
     let deleteMolecules = false;
     let moveConnected = false;
+    let totalRate = false;
     const constraints: string[] = [];
 
     // rule_modifiers() returns an array in the new grammar
@@ -464,6 +469,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
       if (modifiersCtx.MOVECONNECTED()) {
         moveConnected = true;
+      }
+      if (modifiersCtx.TOTALRATE()) {
+        totalRate = true;
       }
 
       const getPatternListStr = (pl?: Parser.Pattern_listContext) => {
@@ -509,6 +517,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       deleteMolecules,
       moveConnected,
       constraints,
+      totalRate,
     });
   }
 

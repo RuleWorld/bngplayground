@@ -49,7 +49,8 @@ export interface BNGLObservable {
   name: string;
   pattern: string;
   comment?: string;
-  countFilter?: number; // For NFsim species count filtering (>N)
+  countFilter?: number; // For NFsim species count filtering (quantity)
+  countRelation?: string; // For NFsim species count filtering (e.g. '>', '==')
 }
 
 export interface BNGLCompartment {
