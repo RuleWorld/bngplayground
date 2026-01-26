@@ -195,8 +195,8 @@ export function pmemoize<T extends (...args: any[]) => any>(
  */
 export class Memoize<T extends (...args: any[]) => any> {
   private cache: Map<string, ReturnType<T>> = new Map();
-  
-  constructor(private fn: T) {}
+
+  constructor(private fn: T) { }
 
   call(...args: Parameters<T>): ReturnType<T> {
     const key = JSON.stringify(args);
@@ -222,7 +222,7 @@ export class MemoizeMapped<T extends (...args: any[]) => any> {
   constructor(
     private fn: T,
     private keyFn: (...args: Parameters<T>) => string
-  ) {}
+  ) { }
 
   call(...args: Parameters<T>): ReturnType<T> {
     const key = this.keyFn(...args);
@@ -247,32 +247,34 @@ export class MemoizeMapped<T extends (...args: any[]) => any> {
  * Levenshtein edit distance between two strings
  */
 export const levenshtein = pmemoize((s1: string, s2: string): number => {
+  if (s1 === s2) return 0;
   const l1 = s1.length;
   const l2 = s2.length;
 
   if (l1 === 0) return l2;
   if (l2 === 0) return l1;
 
-  const matrix: number[][] = [];
-  for (let i = 0; i <= l2; i++) {
-    matrix[i] = [];
-    for (let j = 0; j <= l1; j++) {
-      matrix[i][j] = i === 0 ? j : j === 0 ? i : 0;
-    }
-  }
+  // Use two rows instead of full matrix to save memory
+  let prevRow = new Int32Array(l1 + 1);
+  let currRow = new Int32Array(l1 + 1);
 
-  for (let i = 0; i < l2; i++) {
-    for (let j = 0; j < l1; j++) {
-      const cost = s1[j] === s2[i] ? 0 : 1;
-      matrix[i + 1][j + 1] = Math.min(
-        matrix[i + 1][j] + 1,
-        matrix[i][j + 1] + 1,
-        matrix[i][j] + cost
+  for (let j = 0; j <= l1; j++) prevRow[j] = j;
+
+  for (let i = 1; i <= l2; i++) {
+    currRow[0] = i;
+    for (let j = 1; j <= l1; j++) {
+      const cost = s1[j - 1] === s2[i - 1] ? 0 : 1;
+      currRow[j] = Math.min(
+        currRow[j - 1] + 1,      // insertion
+        prevRow[j] + 1,          // deletion
+        prevRow[j - 1] + cost    // substitution
       );
     }
+    // Swap rows
+    [prevRow, currRow] = [currRow, prevRow];
   }
 
-  return matrix[l2][l1];
+  return prevRow[l1];
 }, 'levenshtein');
 
 /**
@@ -314,7 +316,7 @@ export function longestCommonSubstring(s1: string, s2: string): string {
   const m = s1.length;
   const n = s2.length;
   const dp: number[][] = Array(m + 1).fill(null).map(() => Array(n + 1).fill(0));
-  
+
   let maxLen = 0;
   let endIndex = 0;
 
@@ -382,24 +384,24 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
  */
 export function standardizeName(name: string): string {
   let result = name;
-  
+
   for (const [char, replacement] of Object.entries(SBML_TO_BNGL_TRANSLATION)) {
     result = result.split(char).join(replacement);
   }
-  
+
   // Remove any remaining non-alphanumeric characters (except underscore)
   result = result.replace(/[^\w]/g, '');
-  
+
   // Ensure doesn't start with a number
   if (/^\d/.test(result)) {
     result = '_' + result;
   }
-  
+
   // Handle empty result
   if (result === '') {
     result = 'unnamed';
   }
-  
+
   return result;
 }
 
@@ -443,22 +445,22 @@ export function convertMathFunction(mathStr: string): string {
 
   // Power function: pow(a, b) -> (a)^(b)
   result = result.replace(/pow\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, '(($1)^($2))');
-  
+
   // Square root: sqrt(x) -> (x)^(1/2)
   result = result.replace(/sqrt\s*\(\s*([^)]+)\s*\)/g, '(($1)^(1/2))');
-  
+
   // Square: sqr(x) -> (x)^2
   result = result.replace(/sqr\s*\(\s*([^)]+)\s*\)/g, '(($1)^2)');
-  
+
   // Root: root(n, x) -> (x)^(1/n)
   result = result.replace(/root\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/g, '(($2)^(1/($1)))');
 
   // Exponential: exp(x) -> e^(x)
   result = result.replace(/exp\s*\(\s*([^)]+)\s*\)/g, '(2.71828182845905^($1))');
-  
+
   // Natural log: log(x) -> ln(x) in BNGL
   result = result.replace(/\blog\s*\(/g, 'ln(');
-  
+
   // Log base 10: log10(x) -> (ln(x)/ln(10))
   result = result.replace(/log10\s*\(\s*([^)]+)\s*\)/g, '(ln($1)/2.302585093)');
 
@@ -498,14 +500,14 @@ export function convertMathFunction(mathStr: string): string {
  */
 export function cleanParameterValue(value: string): string {
   let result = value;
-  
+
   while (/\binf\b/i.test(result)) {
     result = result.replace(/\binf\b/gi, '1e20');
   }
-  
+
   // Standardize scientific notation
   result = result.replace(/(\d+)[eE]([+-]?\d+)/g, '$1e$2');
-  
+
   return result;
 }
 
@@ -546,10 +548,10 @@ class Logger {
 
   log(level: LogLevel, code: string, message: string, context?: string): void {
     if (LOG_LEVELS[level] >= LOG_LEVELS[this.level]) {
-      const logMsg: LogMessage = { 
-        level, 
-        code, 
-        message, 
+      const logMsg: LogMessage = {
+        level,
+        code,
+        message,
         context,
         timestamp: new Date()
       };
@@ -558,7 +560,7 @@ class Logger {
       if (!this.quietMode) {
         const prefix = `[${level}] ${code}:`;
         const fullMessage = context ? `${message} (${context})` : message;
-        
+
         if (level === 'ERROR' || level === 'CRITICAL') {
           console.error(prefix, fullMessage);
         } else if (level === 'WARNING') {
@@ -642,9 +644,9 @@ export function logMess(codeAndLevel: string, message: string): void {
  * Check if running in Node.js environment
  */
 export function isNode(): boolean {
-  return typeof process !== 'undefined' && 
-         process.versions != null && 
-         process.versions.node != null;
+  return typeof process !== 'undefined' &&
+    process.versions != null &&
+    process.versions.node != null;
 }
 
 // =============================================================================
@@ -658,13 +660,13 @@ export function compareLists<T>(list1: T[], list2: T[]): boolean {
   if (list1.length !== list2.length) return false;
   const counter1 = new Counter(list1.map(String));
   const counter2 = new Counter(list2.map(String));
-  
+
   if (counter1.size !== counter2.size) return false;
-  
+
   for (const [key, count] of counter1) {
     if (counter2.get(key) !== count) return false;
   }
-  
+
   return true;
 }
 
@@ -708,7 +710,7 @@ export class TranslationException extends Error {
  */
 export class CycleError extends Error {
   memory: any;
-  
+
   constructor(memory: any) {
     super('Cycle detected in dependency graph');
     this.name = 'CycleError';
@@ -722,7 +724,7 @@ export class CycleError extends Error {
 export class BindingException extends Error {
   value: any;
   combinations: any;
-  
+
   constructor(value: any, combinations: any) {
     super(String(value));
     this.name = 'BindingException';

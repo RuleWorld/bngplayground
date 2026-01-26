@@ -31,7 +31,7 @@ declare namespace LibSBML {
   interface SBMLReader {
     readSBMLFromString(sbmlString: string): SBMLDocument;
   }
-  
+
   interface SBMLDocument {
     getNumErrors(): number;
     getNumErrorsWithSeverity(severity: number): number;
@@ -39,13 +39,13 @@ declare namespace LibSBML {
     getModel(): Model | null;
     delete(): void;
   }
-  
+
   interface SBMLError {
     getMessage(): string;
     getSeverity(): number;
     getErrorId(): number;
   }
-  
+
   interface Model {
     getId(): string;
     getName(): string;
@@ -76,13 +76,13 @@ declare namespace LibSBML {
     getListOfEvents(): ListOf<Event>;
     getListOfInitialAssignments(): ListOf<InitialAssignment>;
   }
-  
+
   interface ListOf<T> {
     getNumItems(): number;
     get(index: number): T;
     [Symbol.iterator](): Iterator<T>;
   }
-  
+
   interface Compartment {
     getId(): string;
     getName(): string;
@@ -92,7 +92,7 @@ declare namespace LibSBML {
     getConstant(): boolean;
     getOutside(): string;
   }
-  
+
   interface Species {
     getId(): string;
     getName(): string;
@@ -107,7 +107,7 @@ declare namespace LibSBML {
     getNumCVTerms(): number;
     getCVTerm(index: number): CVTerm;
   }
-  
+
   interface Parameter {
     getId(): string;
     getName(): string;
@@ -115,7 +115,7 @@ declare namespace LibSBML {
     getUnits(): string;
     getConstant(): boolean;
   }
-  
+
   interface Reaction {
     getId(): string;
     getName(): string;
@@ -132,17 +132,17 @@ declare namespace LibSBML {
     getListOfProducts(): ListOf<SpeciesReference>;
     getListOfModifiers(): ListOf<ModifierSpeciesReference>;
   }
-  
+
   interface SpeciesReference {
     getSpecies(): string;
     getStoichiometry(): number;
     getConstant(): boolean;
   }
-  
+
   interface ModifierSpeciesReference {
     getSpecies(): string;
   }
-  
+
   interface KineticLaw {
     getFormula(): string;
     getMath(): ASTNode | null;
@@ -153,14 +153,14 @@ declare namespace LibSBML {
     getListOfLocalParameters(): ListOf<LocalParameter>;
     getListOfParameters(): ListOf<Parameter>;
   }
-  
+
   interface LocalParameter {
     getId(): string;
     getName(): string;
     getValue(): number;
     getUnits(): string;
   }
-  
+
   interface ASTNode {
     toInfix(): string;
     toMathML(): string;
@@ -175,7 +175,7 @@ declare namespace LibSBML {
     deepCopy(): ASTNode;
     replaceChild(index: number, node: ASTNode): void;
   }
-  
+
   interface Rule {
     isAlgebraic(): boolean;
     isAssignment(): boolean;
@@ -184,7 +184,7 @@ declare namespace LibSBML {
     getFormula(): string;
     getMath(): ASTNode | null;
   }
-  
+
   interface FunctionDefinition {
     getId(): string;
     getName(): string;
@@ -193,7 +193,7 @@ declare namespace LibSBML {
     getBody(): ASTNode | null;
     getMath(): ASTNode | null;
   }
-  
+
   interface Event {
     getId(): string;
     getName(): string;
@@ -204,38 +204,38 @@ declare namespace LibSBML {
     getEventAssignment(index: number): EventAssignment;
     getListOfEventAssignments(): ListOf<EventAssignment>;
   }
-  
+
   interface Trigger {
     getMath(): ASTNode | null;
   }
-  
+
   interface Delay {
     getMath(): ASTNode | null;
   }
-  
+
   interface EventAssignment {
     getVariable(): string;
     getMath(): ASTNode | null;
   }
-  
+
   interface InitialAssignment {
     getSymbol(): string;
     getMath(): ASTNode | null;
   }
-  
+
   interface UnitDefinition {
     getId(): string;
     getNumUnits(): number;
     getUnit(index: number): Unit;
   }
-  
+
   interface Unit {
     getKind(): number;
     getScale(): number;
     getExponent(): number;
     getMultiplier(): number;
   }
-  
+
   interface CVTerm {
     getQualifierType(): number;
     getBiologicalQualifierType(): number;
@@ -243,17 +243,18 @@ declare namespace LibSBML {
     getNumResources(): number;
     getResourceURI(index: number): string;
   }
-  
+
   interface XMLNode {
     toXMLString(): string;
   }
-  
+
   function formulaToString(math: ASTNode): string;
   function readSBMLFromString(str: string): SBMLDocument;
 }
 
-// Global libsbml module reference
+// Global libsbml module reference and initialization promise
 let libsbml: any = null;
+let initPromise: Promise<void> | null = null;
 
 // =============================================================================
 // SBML Parser Class
@@ -284,12 +285,12 @@ export class SBML2JSON {
     for (let i = 0; i < this.model.getNumUnitDefinitions(); i++) {
       const unitDefinition = this.model.getUnitDefinition(i);
       const unitList: Array<[number, number, number]> = [];
-      
+
       for (let j = 0; j < unitDefinition.getNumUnits(); j++) {
         const unit = unitDefinition.getUnit(j);
         unitList.push([unit.getKind(), unit.getScale(), unit.getExponent()]);
       }
-      
+
       this.unitDictionary.set(unitDefinition.getId(), unitList);
     }
   }
@@ -299,7 +300,7 @@ export class SBML2JSON {
    */
   getParameters(): Map<number, any> {
     const parameters = new Map<number, any>();
-    
+
     // Add standard parameters
     parameters.set(1, {
       name: 'Nav',
@@ -348,17 +349,17 @@ export class SBML2JSON {
    */
   private getRawCompartments(): Map<string, [number, number, string]> {
     const compartmentList = new Map<string, [number, number, string]>();
-    
+
     for (let i = 0; i < this.model.getNumCompartments(); i++) {
       const compartment = this.model.getCompartment(i);
       const name = compartment.getId();
       const size = compartment.getSize() || 1;
       const outside = compartment.getOutside() || '';
       const dimensions = compartment.getSpatialDimensions() || 3;
-      
+
       compartmentList.set(name, [dimensions, size, outside]);
     }
-    
+
     return compartmentList;
   }
 
@@ -371,13 +372,13 @@ export class SBML2JSON {
   ): [string, string] {
     const compData = compartmentList.get(compartment);
     const outside = compData ? compData[2] : '';
-    
+
     for (const [comp, data] of compartmentList) {
       if (data[2] === compartment) {
         return [outside, comp];
       }
     }
-    
+
     return [outside, ''];
   }
 
@@ -393,10 +394,10 @@ export class SBML2JSON {
       const species = this.model.getSpecies(i);
       const compartment = species.getCompartment();
       const compData = compartmentList.get(compartment);
-      
+
       let typeD = '3D';
       let diffusion = '';
-      
+
       if (compData) {
         if (compData[0] === 3) {
           typeD = '3D';
@@ -407,7 +408,7 @@ export class SBML2JSON {
           const [outside, inside] = this.getOutsideInsideCompartment(compartmentList, compartment);
           diffusion = `KB*T*LOG((mu_${compartment}*h/(SQRT(4)*Rc*(mu_${outside}+mu_${inside})/2))-gamma)/(4*PI*mu_${compartment}*h)`;
         }
-        
+
         this.moleculeData.set(species.getId(), [compData[0]]);
       }
 
@@ -468,14 +469,14 @@ export class SBML2JSON {
    */
   getPrunnedTree(math: any, remainderPatterns: string[]): any {
     if (!math) return math;
-    
+
     while (
       (math.getCharacter() === '*' || math.getCharacter() === '/') &&
       remainderPatterns.length > 0
     ) {
       const leftFormula = libsbml.formulaToString(math.getLeftChild());
       const rightFormula = libsbml.formulaToString(math.getRightChild());
-      
+
       if (remainderPatterns.includes(leftFormula)) {
         const idx = remainderPatterns.indexOf(leftFormula);
         remainderPatterns.splice(idx, 1);
@@ -497,7 +498,7 @@ export class SBML2JSON {
         break;
       }
     }
-    
+
     return math;
   }
 
@@ -546,11 +547,11 @@ export class SBML2JSON {
     for (const [species, stoich] of reactants) {
       highStoichoimetryFactor *= factorial(stoich);
       const productStoich = products.find(p => p[0] === species)?.[1] || 0;
-      
+
       if (stoich > productStoich) {
         highStoichoimetryFactor /= comb(Math.floor(stoich), Math.floor(productStoich));
       }
-      
+
       for (let i = 0; i < Math.floor(stoich); i++) {
         remainderPatterns.push(species);
       }
@@ -602,7 +603,7 @@ export class SBML2JSON {
 
     for (let i = 0; i < this.model.getNumReactions(); i++) {
       const reaction = this.model.getReaction(i);
-      
+
       // Get reactants
       const reactants: [string, number][] = [];
       for (let j = 0; j < reaction.getNumReactants(); j++) {
@@ -629,7 +630,7 @@ export class SBML2JSON {
       if (!math) continue;
 
       const reversible = reaction.getReversible();
-      
+
       // Get compartment list
       const compartmentList: string[] = [];
       for (let j = 0; j < this.model.getNumCompartments(); j++) {
@@ -687,9 +688,7 @@ export class SBML2JSON {
   }
 }
 
-// =============================================================================
-// High-Level SBML Parser
-// =============================================================================
+
 
 /**
  * SBMLParser - High-level wrapper for SBML parsing
@@ -701,39 +700,176 @@ export class SBMLParser {
    * Initialize the parser by loading libsbmljs
    */
   async initialize(): Promise<void> {
-    if (this.initialized) return;
+    if (this.initialized && libsbml) return;
+    if (initPromise) return initPromise;
 
-    try {
-      // Dynamic import for libsbmljs
-      const libsbmlModule = await import('libsbmljs_stable');
-      libsbml = await libsbmlModule.default();
-      this.initialized = true;
-      logger.info('SBM001', 'libsbmljs initialized successfully');
-    } catch (error) {
-      logger.error('SBM002', `Failed to load libsbmljs: ${error}`);
-      throw new Error(`Failed to initialize SBML parser: ${error}`);
-    }
+    initPromise = (async () => {
+      try {
+        console.log('[SBMLParser] Dynamic import of libsbmljs_stable ...');
+        const libsbmlModule = await import('libsbmljs_stable');
+        console.log('[SBMLParser] Import complete.');
+
+        const factory = libsbmlModule.default || libsbmlModule;
+        if (typeof factory !== 'function') {
+          throw new Error(`libsbmljs export is not a function: ${typeof factory}`);
+        }
+
+        await new Promise<void>((resolve, reject) => {
+          const timeoutId = setTimeout(() => {
+            reject(new Error('libsbmljs initialization timed out (30s)'));
+          }, 30000);
+
+          const config = {
+            locateFile: (file: string) => {
+              console.log(`[SBMLParser] locateFile: ${file}`);
+              if (file.endsWith('.wasm')) return '/bngplayground/libsbml.wasm';
+              if (file.endsWith('.wast') || file.endsWith('.asm.js')) {
+                return 'data:application/octet-stream;base64,';
+              }
+              return file;
+            },
+            TOTAL_MEMORY: 128 * 1024 * 1024,
+            print: (text: string) => console.log(`[libsbml] ${text}`),
+            printErr: (text: string) => console.warn(`[libsbml-err] ${text}`),
+            onRuntimeInitialized: () => {
+              console.log('[SBMLParser] onRuntimeInitialized');
+              clearTimeout(timeoutId);
+              // Ensure libsbml is set if not already set by Thenable
+              if (libsbml && (typeof libsbml.readSBMLFromString === 'function' || libsbml.SBMLReader)) {
+                console.log('[SBMLParser] libsbml already has required methods');
+              }
+              resolve();
+            },
+            onAbort: (msg: any) => {
+              console.error('[SBMLParser] Aborted:', msg);
+              clearTimeout(timeoutId);
+              reject(new Error(`libsbmljs aborted: ${msg}`));
+            },
+            noInitialRun: true
+          };
+
+          console.log('[SBMLParser] Calling factory...');
+          const result = factory.call(self, config);
+
+          if (result && typeof result.then === 'function') {
+            console.log('[SBMLParser] Factory returned Thenable, awaiting...');
+            result.then(
+              (instance: any) => {
+                libsbml = instance || result;
+                const allKeys = Object.keys(libsbml).filter(k => !k.startsWith('_'));
+                console.log('[SBMLParser] Thenable resolved. ALL libsbml keys:', allKeys);
+
+                // Detailed check for common classes
+                console.log(`[SBMLParser] SBMLReader: ${typeof libsbml.SBMLReader}`);
+                console.log(`[SBMLParser] SBMLDocument: ${typeof libsbml.SBMLDocument}`);
+
+                // We will use SBMLReader directly in parse() instead of shimming
+              },
+              (err: any) => {
+                console.error('[SBMLParser] Thenable rejected:', err);
+                reject(err);
+              }
+            );
+          } else {
+            console.log('[SBMLParser] Factory returned instance immediately');
+            libsbml = result;
+          }
+        });
+
+        this.initialized = true;
+        logger.info('SBM001', 'libsbmljs initialized successfully');
+      } catch (error) {
+        logger.error('SBM002', `Failed to load libsbmljs: ${error}`);
+        throw new Error(`Failed to initialize SBML parser: ${error}`);
+      }
+    })();
+
+    return initPromise;
   }
 
   /**
    * Parse SBML string and extract model data
    */
   async parse(sbmlString: string): Promise<SBMLModel> {
-    if (!this.initialized) {
+    const start = performance.now();
+    let document: any;
+    let reader: any;
+
+    try {
+      const result = await this._parseInternal(sbmlString);
+      document = (result as any)._document;
+      reader = (result as any)._reader;
+      return (result as any).model;
+    } finally {
+      if (document) {
+        if (typeof (document as any).delete === 'function') (document as any).delete();
+        else if (typeof libsbml.destroy === 'function') libsbml.destroy(document);
+      }
+      if (reader) {
+        if (typeof (reader as any).delete === 'function') (reader as any).delete();
+        else if (typeof libsbml.destroy === 'function') libsbml.destroy(reader);
+      }
+    }
+  }
+
+  /**
+   * Internal parse logic that keeps objects alive for extraction
+   */
+  private async _parseInternal(sbmlString: string): Promise<{ model: SBMLModel, _document: any, _reader: any }> {
+    const start = performance.now();
+    if (!this.initialized || !libsbml) {
       await this.initialize();
     }
 
-    const document = libsbml.readSBMLFromString(sbmlString);
+    if (typeof self !== 'undefined' && (self as any).postMessage) {
+      (self as any).postMessage({ type: 'debug_heartbeat', payload: 'BEFORE_READ_SBML' });
+    }
+
+    console.log(`!!! [SBMLParser] _parseInternal: Length: ${sbmlString.length}`);
+    console.log(`!!! [SBMLParser] SBML Snippet: ${sbmlString.substring(0, 200)}`);
+    let document: any;
+    let reader: any;
+    try {
+      reader = new libsbml.SBMLReader();
+      document = reader.readSBMLFromString(sbmlString);
+
+      if (typeof self !== 'undefined' && (self as any).postMessage) {
+        (self as any).postMessage({ type: 'debug_heartbeat', payload: 'AFTER_READ_SBML' });
+      }
+      console.log('!!! [SBMLParser] AFTER readSBMLFromString');
+      if (document) {
+        console.log(`!!! [SBMLParser] document pointer: ${document.ptr}`);
+        console.log(`!!! [SBMLParser] document.getNumErrors: ${typeof document.getNumErrors}`);
+        if (typeof document.getNumErrors === 'function') {
+          console.log(`!!! [SBMLParser] numErrors: ${document.getNumErrors()}`);
+        }
+        if (typeof document.getLevel === 'function') {
+          console.log(`!!! [SBMLParser] Level: ${document.getLevel()}, Version: ${document.getVersion()}`);
+        }
+      }
+    } catch (e) {
+      console.error('!!! [SBMLParser] readSBMLFromString threw error:', e);
+      throw e;
+    }
+
+    if (!document) {
+      throw new Error('libsbml.readSBMLFromString returned null');
+    }
 
     try {
       // Check for errors
-      const numErrors = document.getNumErrors();
+      const numErrors = typeof document.getNumErrors === 'function' ? document.getNumErrors() : 0;
       if (numErrors > 0) {
         const errors: string[] = [];
         for (let i = 0; i < numErrors; i++) {
-          const error = document.getError(i);
-          if (error.getSeverity() >= 2) {
-            errors.push(error.getMessage());
+          const error = document.getError ? document.getError(i) : null;
+          if (!error) continue;
+
+          const severity = typeof (error as any).getSeverity === 'function' ? (error as any).getSeverity() : 0;
+          const message = typeof (error as any).getMessage === 'function' ? (error as any).getMessage() : 'Unknown SBML error';
+
+          if (severity >= 2) {
+            errors.push(message);
           }
         }
         if (errors.length > 0) {
@@ -741,14 +877,24 @@ export class SBMLParser {
         }
       }
 
-      const model = document.getModel();
-      if (!model) {
-        throw new Error('SBML document contains no model');
+      console.log('!!! [SBMLParser] Calling getModel()');
+      const model = typeof document.getModel === 'function' ? document.getModel() : null;
+      console.log(`!!! [SBMLParser] getModel result: ${model ? 'object' : 'null'}`);
+      if (model && typeof model.ptr !== 'undefined') {
+        console.log(`!!! [SBMLParser] model pointer: ${model.ptr}`);
       }
 
-      return this.extractModel(model);
+      if (!model || model.ptr === 0) {
+        console.error('[SBMLParser] document.getModel() returned null or NULL pointer (0)');
+        throw new Error('SBML document contains no model or model pointer is NULL (0)');
+      }
+
+      console.log('!!! [SBMLParser] Calling extractModel()');
+      const extractedModel = this.extractModel(model);
+      console.log(`[SBMLParser] Total parse time: ${(performance.now() - start).toFixed(2)}ms`);
+      return { model: extractedModel, _document: document, _reader: reader };
     } finally {
-      document.delete();
+      // Cleanup happens AFTER extractModel() completes
     }
   }
 
@@ -756,9 +902,24 @@ export class SBMLParser {
    * Extract all model data into internal format
    */
   private extractModel(model: any): SBMLModel {
+    const start = performance.now();
+    console.log('!!! [SBMLParser] extractModel: Entered');
+    if (model) {
+      console.log(`!!! [SBMLParser] model pointer: ${model.ptr}`);
+      console.log(`!!! [SBMLParser] model keys: ${Object.keys(model).filter(k => !k.startsWith('_')).join(', ')}`);
+    }
+
+    console.log('!!! [SBMLParser] extractModel: Calling model.getId()');
+    const modelId = (typeof model.getId === 'function') ? model.getId() : 'unnamed_model';
+    console.log(`!!! [SBMLParser] modelId: ${modelId}`);
+
+    console.log('!!! [SBMLParser] extractModel: Calling model.getName()');
+    const modelName = (typeof model.getName === 'function') ? model.getName() : (modelId || 'Unnamed Model');
+    console.log(`!!! [SBMLParser] modelName: ${modelName}`);
+
     const result: SBMLModel = {
-      id: model.getId() || 'unnamed_model',
-      name: model.getName() || model.getId() || 'Unnamed Model',
+      id: modelId || 'unnamed_model',
+      name: modelName || modelId || 'Unnamed Model',
       compartments: new Map(),
       species: new Map(),
       parameters: new Map(),
@@ -772,34 +933,70 @@ export class SBMLParser {
     };
 
     // Extract compartments
+    console.log('!!! [SBMLParser] extractModel: getNumCompartments');
+    const numComps = model.getNumCompartments();
+    console.log(`!!! [SBMLParser] Extracting ${numComps} compartments...`);
+    let t = performance.now();
     for (let i = 0; i < model.getNumCompartments(); i++) {
-      const comp = this.extractCompartment(model.getCompartment(i));
+      const compRaw = model.getCompartment(i);
+      if (!compRaw) continue;
+      const comp = this.extractCompartment(compRaw);
       result.compartments.set(comp.id, comp);
     }
+    const compTime = performance.now() - t;
 
     // Extract species
+    console.log('!!! [SBMLParser] extractModel: getNumSpecies');
+    const numSpecies = model.getNumSpecies();
+    console.log(`!!! [SBMLParser] Extracting ${numSpecies} species...`);
+    t = performance.now();
     for (let i = 0; i < model.getNumSpecies(); i++) {
-      const sp = this.extractSpecies(model.getSpecies(i));
+      const spRaw = model.getSpecies(i);
+      if (!spRaw) continue;
+      const sp = this.extractSpecies(spRaw);
       result.species.set(sp.id, sp);
-      
+
       if (!result.speciesByCompartment.has(sp.compartment)) {
         result.speciesByCompartment.set(sp.compartment, []);
       }
       result.speciesByCompartment.get(sp.compartment)!.push(sp.id);
     }
+    const speciesTime = performance.now() - t;
 
     // Extract parameters
+    console.log('!!! [SBMLParser] extractModel: getNumParameters');
+    const numParams = model.getNumParameters();
+    console.log(`!!! [SBMLParser] Extracting ${numParams} parameters...`);
+    t = performance.now();
     for (let i = 0; i < model.getNumParameters(); i++) {
-      const param = this.extractParameter(model.getParameter(i), 'global');
+      const paramRaw = model.getParameter(i);
+      if (!paramRaw) continue;
+      const param = this.extractParameter(paramRaw, 'global');
       result.parameters.set(param.id, param);
     }
+    const paramTime = performance.now() - t;
 
     // Extract reactions
+    console.log('!!! [SBMLParser] extractModel: getNumReactions');
+    const numRxns = model.getNumReactions();
+    console.log(`!!! [SBMLParser] Extracting ${numRxns} reactions...`);
+    t = performance.now();
     for (let i = 0; i < model.getNumReactions(); i++) {
-      const rxn = this.extractReaction(model.getReaction(i));
+      const rxnRaw = model.getReaction(i);
+      if (!rxnRaw) continue;
+      const rxn = this.extractReaction(rxnRaw);
       result.reactions.set(rxn.id, rxn);
     }
+    const rxnTime = performance.now() - t;
 
+    // Extract rules/functions/events
+    console.log('[SBMLParser] Extracting rules/functions/events...');
+    t = performance.now();
+    for (let i = 0; i < model.getNumFunctionDefinitions(); i++) {
+      const func = this.extractFunctionDefinition(model.getFunctionDefinition(i));
+      result.functionDefinitions.set(func.id, func);
+    }
+    
     // Extract rules
     for (let i = 0; i < model.getNumRules(); i++) {
       const rule = this.extractRule(model.getRule(i));
@@ -807,69 +1004,67 @@ export class SBMLParser {
         result.rules.push(rule);
       }
     }
-
-    // Extract function definitions
-    for (let i = 0; i < model.getNumFunctionDefinitions(); i++) {
-      const func = this.extractFunctionDefinition(model.getFunctionDefinition(i));
-      result.functionDefinitions.set(func.id, func);
-    }
-
-    // Extract events
+    
     for (let i = 0; i < model.getNumEvents(); i++) {
       const event = this.extractEvent(model.getEvent(i));
-      if (event) {
-        result.events.push(event);
-      }
+      if (event) result.events.push(event);
     }
-
-    // Extract initial assignments
     for (let i = 0; i < model.getNumInitialAssignments(); i++) {
       const ia = this.extractInitialAssignment(model.getInitialAssignment(i));
-      if (ia) {
-        result.initialAssignments.push(ia);
-      }
+      if (ia) result.initialAssignments.push(ia);
     }
+    const otherTime = performance.now() - t;
 
-    logger.info('SBM004', 
+    console.log(`[SBMLParser] extractModel breakdown:
+      Compartments: ${compTime.toFixed(2)}ms
+      Species: ${speciesTime.toFixed(2)}ms
+      Parameters: ${paramTime.toFixed(2)}ms
+      Reactions: ${rxnTime.toFixed(2)}ms
+      Other: ${otherTime.toFixed(2)}ms
+      Total: ${(performance.now() - start).toFixed(2)}ms`);
+
+    logger.info('SBM004',
       `Parsed SBML model: ${result.species.size} species, ${result.reactions.size} reactions`);
 
     return result;
   }
 
   private extractCompartment(comp: any): SBMLCompartment {
+    console.log(`!!! [SBMLParser] extractCompartment: ${comp.getId ? comp.getId() : 'unknown'}`);
     return {
       id: comp.getId(),
       name: comp.getName() || comp.getId(),
-      spatialDimensions: comp.getSpatialDimensions() || 3,
-      size: comp.getSize() || 1,
-      units: comp.getUnits() || '',
-      constant: comp.getConstant(),
-      outside: comp.getOutside() || undefined,
+      spatialDimensions: typeof comp.getSpatialDimensions === 'function' ? comp.getSpatialDimensions() : 3,
+      size: typeof comp.getSize === 'function' ? comp.getSize() : 1,
+      units: typeof comp.getUnits === 'function' ? comp.getUnits() : '',
+      constant: typeof comp.getConstant === 'function' ? comp.getConstant() : true,
+      outside: typeof comp.getOutside === 'function' ? (comp.getOutside() || undefined) : undefined,
     };
   }
 
   private extractSpecies(sp: any): SBMLSpecies {
+    console.log(`!!! [SBMLParser] extractSpecies: ${sp.getId ? sp.getId() : 'unknown'}`);
     return {
       id: sp.getId(),
       name: sp.getName() || sp.getId(),
       compartment: sp.getCompartment(),
-      initialConcentration: sp.getInitialConcentration() || 0,
-      initialAmount: sp.getInitialAmount() || 0,
-      substanceUnits: sp.getSubstanceUnits() || '',
-      hasOnlySubstanceUnits: sp.getHasOnlySubstanceUnits(),
-      boundaryCondition: sp.getBoundaryCondition(),
-      constant: sp.getConstant(),
+      initialConcentration: typeof sp.getInitialConcentration === 'function' ? (sp.getInitialConcentration() || 0) : 0,
+      initialAmount: typeof sp.getInitialAmount === 'function' ? (sp.getInitialAmount() || 0) : 0,
+      substanceUnits: typeof sp.getSubstanceUnits === 'function' ? (sp.getSubstanceUnits() || '') : '',
+      hasOnlySubstanceUnits: typeof sp.getHasOnlySubstanceUnits === 'function' ? sp.getHasOnlySubstanceUnits() : false,
+      boundaryCondition: typeof sp.getBoundaryCondition === 'function' ? sp.getBoundaryCondition() : false,
+      constant: typeof sp.getConstant === 'function' ? sp.getConstant() : false,
       annotations: this.extractAnnotations(sp),
     };
   }
 
   private extractAnnotations(sp: any): AnnotationInfo[] {
     const annotations: AnnotationInfo[] = [];
-    
+
     for (let i = 0; i < sp.getNumCVTerms(); i++) {
       const cvTerm = sp.getCVTerm(i);
       const qualifierType = cvTerm.getQualifierType();
-      
+
       const resources: string[] = [];
       for (let j = 0; j < cvTerm.getNumResources(); j++) {
         resources.push(cvTerm.getResourceURI(j));
@@ -901,6 +1096,91 @@ export class SBMLParser {
       constant: param.getConstant(),
       scope,
     };
+  }
+
+  private safeFormulaToString(math: any): string {
+    if (!math) return '';
+
+    // 1. Try built-in libsbml.formulaToString
+    try {
+      if (typeof libsbml.formulaToString === 'function') {
+        const s = libsbml.formulaToString(math);
+        if (s) return s;
+      }
+    } catch (e) { /* ignore */ }
+
+    // 2. Try object's toString (unless it's [object Object])
+    if (typeof math.toString === 'function') {
+      const s = math.toString();
+      if (s && s !== '[object Object]') return s;
+    }
+
+    // 3. Manual AST Walker
+    return this.astToString(math);
+  }
+
+  /**
+   * Manual AST to string converter for SBML L3 math / MathML
+   * implementing a recursive walker based on AST node types.
+   */
+  private astToString(node: any): string {
+    if (!node) return '';
+
+    const type = node.getType();
+    const children: string[] = [];
+    if (node.getNumChildren) {
+      for (let i = 0; i < node.getNumChildren(); i++) {
+        children.push(this.astToString(node.getChild(i)));
+      }
+    }
+
+    // AST Node Type Constants (mapped from runtime discovery)
+    // Operators
+    if (type === 43) return `(${children.join(' + ')})`; // AST_PLUS
+    if (type === 45) { // AST_MINUS
+      if (children.length === 1) return `-${children[0]}`;
+      return `(${children.join(' - ')})`;
+    }
+    if (type === 42) return `(${children.join(' * ')})`; // AST_TIMES
+    if (type === 47) return `(${children.join(' / ')})`; // AST_DIVIDE
+    if (type === 94) return `(${children[0]}^${children[1]})`; // AST_POWER (using ^ for BNGL compatibility if possible, or pow)
+
+    // Numbers & Leaves
+    if (type === 256) return node.getInteger().toString(); // AST_INTEGER
+    if (type === 257 || type === 258) return node.getReal().toString(); // AST_REAL, AST_REAL_E
+    if (type === 260) return node.getName(); // AST_NAME
+    if (type === 262) return 'time'; // AST_NAME_TIME
+
+    // Functions
+    if (type === 268 || type === 400 || (type >= 269 && type <= 303)) { // AST_FUNCTION & variants
+      const name = node.getName();
+      return `${name}(${children.join(', ')})`;
+    }
+
+    // Logical & Relational
+    if (type === 308) return `(${children.join(' == ')})`; // AST_RELATIONAL_EQ
+    if (type === 310) return `(${children.join(' > ')})`;  // AST_RELATIONAL_GT
+    if (type === 312) return `(${children.join(' < ')})`;  // AST_RELATIONAL_LT
+    if (type === 309) return `(${children.join(' >= ')})`; // AST_RELATIONAL_GEQ
+    if (type === 311) return `(${children.join(' <= ')})`; // AST_RELATIONAL_LEQ
+    if (type === 313) return `(${children.join(' != ')})`; // AST_RELATIONAL_NEQ
+
+    if (type === 304) return `(${children.join(' && ')})`; // AST_LOGICAL_AND
+    if (type === 306) return `(${children.join(' || ')})`; // AST_LOGICAL_OR
+    if (type === 305) return `!(${children[0]})`;         // AST_LOGICAL_NOT
+
+    // Fallback for names if type check failed or unknown (e.g. sometimes vars are just names)
+    if (node.isName && node.isName()) return node.getName();
+    if (node.isNumber && node.isNumber()) {
+      if (node.isInteger()) return node.getInteger().toString();
+      return node.getReal().toString();
+    }
+
+    // Last resort: name
+    const fallbackName = node.getName();
+    if (fallbackName) return fallbackName;
+
+    return '';
   }
 
   private extractReaction(rxn: any): SBMLReaction {
@@ -936,7 +1216,7 @@ export class SBMLParser {
     const kl = rxn.getKineticLaw();
     if (kl) {
       const localParams: SBMLParameter[] = [];
-      
+
       const numParams = kl.getNumLocalParameters?.() ?? kl.getNumParameters?.() ?? 0;
       for (let i = 0; i < numParams; i++) {
         const param = kl.getLocalParameter?.(i) ?? kl.getParameter?.(i);
@@ -946,9 +1226,24 @@ export class SBMLParser {
       }
 
       const math = kl.getMath();
+      let mathExpr = '';
+      let mathML = '';
+
+      if (typeof kl.getFormula === 'function') {
+        mathExpr = kl.getFormula() || '';
+      }
+
+      if (math && !mathExpr) {
+        mathExpr = this.safeFormulaToString(math);
+      }
+
+      if (math && typeof (math as any).toMathML === 'function') {
+        mathML = (math as any).toMathML() || '';
+      }
+
       kineticLaw = {
-        math: kl.getFormula() || (math ? libsbml.formulaToString(math) : ''),
-        mathML: math ? math.toMathML() : '',
+        math: mathExpr,
+        mathML: mathML,
         localParameters: localParams,
       };
     }
@@ -967,42 +1262,53 @@ export class SBMLParser {
 
   private extractRule(rule: any): SBMLRule | null {
     const math = rule.getMath();
-    
+    const formula = rule.getFormula() || (math ? this.safeFormulaToString(math) : '');
+
     if (rule.isAlgebraic()) {
       return {
         type: 'algebraic',
-        math: rule.getFormula() || (math ? libsbml.formulaToString(math) : ''),
+        math: formula,
       };
     } else if (rule.isAssignment()) {
       return {
         type: 'assignment',
         variable: rule.getVariable(),
-        math: rule.getFormula() || (math ? libsbml.formulaToString(math) : ''),
+        math: formula,
       };
     } else if (rule.isRate()) {
       return {
         type: 'rate',
         variable: rule.getVariable(),
-        math: rule.getFormula() || (math ? libsbml.formulaToString(math) : ''),
+        math: formula,
       };
     }
-    
+
     return null;
   }
 
   private extractFunctionDefinition(func: any): SBMLFunctionDefinition {
     const args: string[] = [];
     for (let i = 0; i < func.getNumArguments(); i++) {
+      // Safe check for getArgument return
       const arg = func.getArgument(i);
-      args.push(arg.getName ? arg.getName() : libsbml.formulaToString(arg));
+      // Sometimes arguments are ASTNodes, sometimes they are parameters with names
+      // Check if arg has getName, otherwise use formulaToString
+      let name = `arg${i}`;
+      if (arg) {
+        if (typeof arg.getName === 'function') {
+          name = arg.getName();
+        } else {
+          name = this.safeFormulaToString(arg);
+        }
+      }
+      args.push(name);
     }
-
     const body = func.getBody();
-    
+
     return {
       id: func.getId(),
       name: func.getName() || func.getId(),
-      math: body ? libsbml.formulaToString(body) : '',
+      math: body ? this.safeFormulaToString(body) : '',
       arguments: args,
     };
   }
@@ -1012,22 +1318,22 @@ export class SBMLParser {
     const triggerMath = trigger?.getMath();
     const delay = event.getDelay();
     const delayMath = delay?.getMath();
-    
+
     const assignments: Array<{ variable: string; math: string }> = [];
     for (let i = 0; i < event.getNumEventAssignments(); i++) {
       const ea = event.getEventAssignment(i);
       const math = ea.getMath();
       assignments.push({
         variable: ea.getVariable(),
-        math: math ? libsbml.formulaToString(math) : '',
+        math: math ? this.safeFormulaToString(math) : '',
       });
     }
 
     return {
       id: event.getId(),
       name: event.getName() || event.getId(),
-      trigger: triggerMath ? libsbml.formulaToString(triggerMath) : '',
-      delay: delayMath ? libsbml.formulaToString(delayMath) : undefined,
+      trigger: triggerMath ? this.safeFormulaToString(triggerMath) : '',
+      delay: delayMath ? this.safeFormulaToString(delayMath) : undefined,
       useValuesFromTriggerTime: event.getUseValuesFromTriggerTime?.() || true,
       assignments,
     };
@@ -1036,10 +1342,10 @@ export class SBMLParser {
   private extractInitialAssignment(ia: any): SBMLInitialAssignment | null {
     const math = ia.getMath();
     if (!math) return null;
-    
+
     return {
       symbol: ia.getSymbol(),
-      math: libsbml.formulaToString(math),
+      math: this.safeFormulaToString(math),
     };
   }
 }
@@ -1057,7 +1363,7 @@ export function getAnnotationsByQualifier(
   isBiological: boolean = true
 ): string[] {
   const results: string[] = [];
-  
+
   for (const ann of annotations) {
     if (isBiological && ann.qualifierType === 1 && ann.biologicalQualifier === qualifier) {
       results.push(...ann.resources);
@@ -1065,7 +1371,7 @@ export function getAnnotationsByQualifier(
       results.push(...ann.resources);
     }
   }
-  
+
   return results;
 }
 
@@ -1074,14 +1380,14 @@ export function getAnnotationsByQualifier(
  */
 export function extractUniProtIds(resources: string[]): string[] {
   const uniprotIds: string[] = [];
-  
+
   for (const resource of resources) {
     const match = resource.match(/uniprot[:/]([A-Z0-9]+)/i);
     if (match) {
       uniprotIds.push(match[1]);
     }
   }
-  
+
   return uniprotIds;
 }
 
@@ -1090,13 +1396,13 @@ export function extractUniProtIds(resources: string[]): string[] {
  */
 export function extractGOTerms(resources: string[]): string[] {
   const goTerms: string[] = [];
-  
+
   for (const resource of resources) {
     const match = resource.match(/GO[:/](\d+)/i);
     if (match) {
       goTerms.push(`GO:${match[1]}`);
     }
   }
-  
+
   return goTerms;
 }

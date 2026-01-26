@@ -72,6 +72,8 @@ import polymerDraft from './published-models/tutorials/polymer_draft.bngl?raw';
 import simple from './published-models/tutorials/simple.bngl?raw';
 import toy1 from './published-models/tutorials/toy1.bngl?raw';
 import toy2 from './published-models/tutorials/toy2.bngl?raw';
+import quasiEquilibrium from './published-models/toy-models/quasi_equilibrium.bngl?raw';
+
 
 // Native Tutorials
 import ABTutorial from './published-models/native-tutorials/AB/AB.bngl?raw';
@@ -472,6 +474,7 @@ export const BNG2_COMPATIBLE_MODELS = new Set([
   'pybng__degranulation_model',
   'quorum-sensing-circuit',
   'quorum_sensing_circuit',
+  'quasi_equilibrium',
   'rab-gtpase-cycle',
   'rab_gtpase_cycle',
   'rankl-rank-signaling',
@@ -1259,6 +1262,13 @@ const TUTORIALS: Example[] = [
     description: 'Enzymatic reaction toy',
     code: toy2,
     tags: ['published', 'tutorials'],
+  },
+  {
+    id: 'quasi_equilibrium',
+    name: 'quasi equilibrium',
+    description: 'Quasi-equilibrium approximation',
+    code: quasiEquilibrium,
+    tags: ['published', 'toy models'],
   },
 ];
 

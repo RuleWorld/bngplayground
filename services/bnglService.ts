@@ -160,7 +160,7 @@ class BnglService {
       this.promises.delete(id);
       pending.cleanup();
 
-      if (type === 'parse_success' || type === 'simulate_success' || type === 'generate_network_success') {
+      if (type === 'parse_success' || type === 'simulate_success' || type === 'generate_network_success' || type === 'atomize_success') {
         pending.resolve(payload);
         return;
       }
@@ -170,8 +170,8 @@ class BnglService {
         return;
       }
 
-      if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'generate_network_error') {
-        const errType = type === 'parse_error' ? 'parse' : type === 'simulate_error' ? 'simulate' : 'cache_model';
+      if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'generate_network_error' || type === 'atomize_error') {
+        const errType = type === 'parse_error' ? 'parse' : type === 'simulate_error' ? 'simulate' : type === 'atomize_error' ? 'atomize' : 'cache_model';
         const err = toError(errType === 'parse' ? 'parse' : 'simulate', payload);
         pending.reject(err);
         return;
@@ -341,6 +341,13 @@ class BnglService {
     return this.postMessage<SimulationResults>('simulate', { model, options }, {
       ...requestOptions,
       description: requestOptions?.description ?? `Simulation (${options.method})`,
+    });
+  }
+
+  public atomize(sbmlCode: string, requestOptions?: RequestOptions): Promise<import('../types').AtomizerResult> {
+    return this.postMessage<import('../types').AtomizerResult>('atomize', sbmlCode, {
+      ...requestOptions,
+      description: requestOptions?.description ?? 'Atomize SBML',
     });
   }
 

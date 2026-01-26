@@ -259,11 +259,14 @@ export type WorkerRequest =
   | { id: number; type: 'release_model'; payload: { modelId: number } }
   | { id: number; type: 'simulate'; payload: { modelId: number; parameterOverrides?: Record<string, number>; options: SimulationOptions } }
   | { id: number; type: 'generate_network'; payload: { model: BNGLModel; options?: NetworkGeneratorOptions } }
+  | { id: number; type: 'atomize'; payload: string }
   | { id: number; type: 'cancel'; payload: { targetId: number } };
 
 export type WorkerResponse =
   | { id: number; type: 'parse_success'; payload: BNGLModel }
   | { id: number; type: 'parse_error'; payload: SerializedWorkerError }
+  | { id: number; type: 'atomize_success'; payload: AtomizerResult }
+  | { id: number; type: 'atomize_error'; payload: SerializedWorkerError }
   | { id: number; type: 'simulate_success'; payload: SimulationResults }
   | { id: number; type: 'cache_model_success'; payload: { modelId: number } }
   | { id: number; type: 'cache_model_error'; payload: SerializedWorkerError }
@@ -274,6 +277,16 @@ export type WorkerResponse =
   | { id: number; type: 'generate_network_error'; payload: SerializedWorkerError }
   | { id: number; type: 'generate_network_progress'; payload: GeneratorProgress }
   | { id: -1; type: 'worker_internal_error'; payload: SerializedWorkerError };
+
+export interface AtomizerResult {
+  bngl: string;
+  database: any;
+  annotation: any;
+  observableMap: Map<string, string>;
+  log: any[];
+  success: boolean;
+  error?: string;
+}
 
 export interface NetworkGeneratorOptions {
   maxSpecies?: number;

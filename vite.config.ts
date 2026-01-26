@@ -15,6 +15,14 @@ export default defineConfig(() => {
         // Required for SharedArrayBuffer and WASM threading
         'Cross-Origin-Opener-Policy': 'same-origin',
         'Cross-Origin-Embedder-Policy': 'require-corp'
+      },
+      proxy: {
+        '/api/biomodels': {
+          target: 'https://www.ebi.ac.uk/biomodels',
+          changeOrigin: true,
+          rewrite: (path: string) => path.replace(/^\/api\/biomodels/, ''),
+          secure: false
+        }
       }
     },
     base: '/bngplayground/',

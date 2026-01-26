@@ -350,6 +350,8 @@ export interface AtomizerOptions {
   logLevel: LogLevel;
   /** Output file for observable mapping */
   obsMapFile?: string;
+  /** Variables defined by assignment rules (internal use) */
+  assignmentRuleVariables?: Set<string>;
 }
 
 /**

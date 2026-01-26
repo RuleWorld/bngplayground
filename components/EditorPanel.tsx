@@ -89,6 +89,7 @@ interface EditorPanelProps {
   // New: allow importing SBML from the editor load button and exporting SBML
   onImportSBML?: (file: File) => void;
   onExportSBML?: () => void;
+  onExportBNGL?: () => void;
 }
 
 export const EditorPanel: React.FC<EditorPanelProps> = ({
@@ -108,6 +109,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   selection,
   onImportSBML,
   onExportSBML,
+  onExportBNGL,
 }) => {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   // removed first-time-open example gallery state
@@ -162,7 +164,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   };
 
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="editor-panel">
+    <Card className="flex h-full min-h-0 flex-col" data-testid="editor-panel">
       <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-1">
         {/* Header with Status */}
         <div className="flex items-center justify-between flex-wrap gap-2">
@@ -227,26 +229,34 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         <div className="flex flex-wrap gap-2 items-center justify-between">
           <div className="flex items-center gap-2">
             <Button onClick={() => setIsGalleryOpen(true)}>Models</Button>
-            {/* Load dropdown: Local BNGL/SBML or BioModels
-                - Local file: accepts .bngl, .sbml, .xml and preserves filename for
-                  downstream behavior (e.g., BioModels imports use the accession as
-                  a filename so the editor title shows the model ID).
-                - Import from BioModels: opens a small modal that fetches the model
-                  via the BioModels REST API and extracts an SBML file if needed.
-            */}
+            {/* Load dropdown */}
             <Dropdown trigger={
-              <button className="px-3 py-1 text-sm font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-2">
+              <button className="px-4 py-2 text-sm font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-2">
                 <UploadIcon className="w-4 h-4" />
                 <span>Load</span>
               </button>
-            }>
+            }
+              direction="up"
+            >
               <DropdownItem onClick={() => fileInputRef.current?.click()}>Local file (BNGL / SBML)</DropdownItem>
               <DropdownItem onClick={() => setIsBioModelsOpen(true)}>Import from BioModels...</DropdownItem>
             </Dropdown>
 
-            <Button variant="subtle" onClick={() => onExportSBML?.()} disabled={!modelExists} title="Export current model as SBML">
-              Export SBML
-            </Button>
+            <Dropdown trigger={
+              <button
+                className="px-4 py-2 text-sm font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Export model"
+              >
+                <span>Export</span>
+                <ChevronDownIcon className="w-4 h-4" />
+              </button>
+            }
+              direction="up"
+            >
+              <DropdownItem onClick={() => onExportBNGL?.()}>BNGL File</DropdownItem>
+              <DropdownItem onClick={() => onExportSBML?.()}>SBML File</DropdownItem>
+            </Dropdown>
+
             <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))}>
               Format
             </Button>

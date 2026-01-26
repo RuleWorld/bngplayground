@@ -30,6 +30,7 @@ import {
 // SafeExpressionEvaluator will be dynamically imported only when functional rates are enabled to avoid bundling vulnerable libs
 // Using official ANTLR parser for bng2.pl parity (util polyfill added in vite.config.ts)
 import { parseBNGLStrict as parseBNGLModel } from '../src/parser/BNGLParserWrapper';
+import { Atomizer } from '../src/lib/atomizer';
 
 const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
   ? (self as unknown as DedicatedWorkerGlobalScope)
@@ -117,7 +118,7 @@ console.log = (...args: any[]) => {
   if (activeSimulationJobId !== null && activeSimulationMethod === 'nf') {
     try {
       const match = message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||
-                    message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
+        message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
       if (match) {
         const val = Number(match[1]);
         if (!Number.isNaN(val)) {
@@ -317,6 +318,29 @@ if (typeof ctx.addEventListener === 'function') {
       } catch (error) {
         console.error(`[Worker] Parse error for job ${id}:`, error);
         const response: WorkerResponse = { id, type: 'parse_error', payload: serializeError(error) };
+        ctx.postMessage(response);
+      } finally {
+        markJobComplete(id);
+      }
+      return;
+    }
+
+    if (type === 'atomize') {
+      console.log(`!!! [Worker] Received atomize request ${id}`);
+      registerJob(id);
+      try {
+        const sbml = typeof payload === 'string' ? payload : '';
+        const atomizer = new Atomizer();
+        console.log(`!!! [Worker] Initializing atomizer...`);
+        await atomizer.initialize();
+        console.log(`!!! [Worker] Starting atomization...`);
+        const result = await atomizer.atomize(sbml);
+        console.log(`!!! [Worker] Atomization complete ${id}: success=${result.success}`);
+        const response: WorkerResponse = { id, type: 'atomize_success', payload: result };
+        ctx.postMessage(response);
+      } catch (error) {
+        console.error(`[Worker] Atomize error for job ${id}:`, error);
+        const response: WorkerResponse = { id, type: 'atomize_error', payload: serializeError(error) };
         ctx.postMessage(response);
       } finally {
         markJobComplete(id);

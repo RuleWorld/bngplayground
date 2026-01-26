@@ -29,15 +29,16 @@ export const BioModelsSearch: React.FC<BioModelsSearchProps> = ({ onImportById }
     setError(null);
     setResults([]);
     try {
-      const url = `https://www.ebi.ac.uk/biomodels/search?query=${encodeURIComponent(q)}&format=json`;
+      const url = `/api/biomodels/search?query=${encodeURIComponent(q)}&format=json`;
       const res = await fetch(url, { headers: { Accept: 'application/json' } });
       if (!res.ok) throw new Error(`Search failed: ${res.status}`);
       const json = await res.json();
-      // The API returns results in different shapes depending on version; normalize
-      const hits: Array<{ id: string; name: string }> = (json.results || json.data || []).map((r: any) => ({
-        id: r.identifier || r.id || r.modelId || r.modelId || r['model.identifier'] || r['identifier'] || '',
-        name: r.name || r.title || r.displayName || r['model.name'] || r['name'] || ''
-      })).filter(h => !!h.id);
+      // The API returns results in 'models' (or sometimes 'results'/'data' in older versions/wrappers)
+      const rawList = json.models || json.results || json.data || [];
+      const hits: Array<{ id: string; name: string }> = rawList.map((r: any) => ({
+        id: r.id || r.identifier || r.modelId || r['model.identifier'] || '',
+        name: r.name || r.title || r.displayName || r['model.name'] || r.id || ''
+      })).filter((h: any) => !!h.id);
       setResults(hits.slice(0, 20));
     } catch (e: any) {
       console.warn('BioModels search error', e);

@@ -151,16 +151,21 @@ export function defineEditDistanceMatrix(
   const differences: string[][] = [];
 
   for (let i = 0; i < n; i++) {
+    const s1 = speciesNames[i];
     for (let j = i + 1; j < n; j++) {
-      const dist = levenshtein(speciesNames[i], speciesNames[j]);
+      const s2 = speciesNames[j];
+      
+      // Optimization: If length difference > threshold, distance must be > threshold
+      if (Math.abs(s1.length - s2.length) > similarityThreshold) {
+        continue;
+      }
+
+      const dist = levenshtein(s1, s2);
       matrix[i][j] = dist;
       matrix[j][i] = dist;
 
       if (dist <= similarityThreshold && dist > 0) {
-        const [shorter, longer] = speciesNames[i].length <= speciesNames[j].length
-          ? [speciesNames[i], speciesNames[j]]
-          : [speciesNames[j], speciesNames[i]];
-        
+        const [shorter, longer] = s1.length <= s2.length ? [s1, s2] : [s2, s1];
         pairs.push([shorter, longer]);
         differences.push(getDifferences(shorter, longer));
       }

@@ -37,6 +37,7 @@ function parseArgs(argv) {
     outDir: defaultOutDir,
     bng2: process.env.BNG2_PATH || DEFAULT_BNG2_PATH,
     perl: process.env.PERL_CMD || DEFAULT_PERL_CMD,
+    seed: null,
     verbose: false,
     targets: []
   };
@@ -57,6 +58,9 @@ function parseArgs(argv) {
         break;
       case '--perl':
         args.perl = argv[++i] ?? args.perl;
+        break;
+      case '--seed':
+        args.seed = argv[++i] ? parseInt(argv[i], 10) : null;
         break;
       case '--examples':
         args.targets.push(defaultExampleDir);
@@ -110,7 +114,7 @@ function collectBnGLTargets(targets) {
   return [...files].sort();
 }
 
-function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
+function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose, seed) {
   const tempDir = mkdtempSync(join(tmpdir(), 'bng-'));
   const modelName = basename(sourcePath);
   const modelCopy = join(tempDir, modelName);
@@ -136,22 +140,40 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
             // BioNetGen 2.x XML export for NFsim uses double-colon '::' for compartments in the name field.
             // When reading from BNGL, we see '@c0:', but NFsim XML expects '@c0::'.
             if (comp.startsWith('@') && comp.endsWith(':') && !comp.endsWith('::')) {
-              comp = comp.slice(0, -1) + '::';
+              // keep as is, do not convert to ::
             }
             const species = sm[2].trim();
             const count = Math.round(Number(sm[3]));
-            // Preserve compartment prefix with double colon — NFsim requires it for compartmental models
             speciesLines.push(`${comp}${species}  ${count}`);
           }
         }
         if (speciesLines.length > 0) {
           const baseName = basename(sourcePath, extname(sourcePath));
           const speciesPath = join(tempDir, `${baseName}.species`);
-          writeFileSync(speciesPath, '# species file generated from BNGL seed species\n' + speciesLines.join('\n') + '\n', 'utf8');
-          console.log(`  ✓ Wrote species file: ${relative(projectRoot, speciesPath)}`);
+          // writeFileSync(speciesPath, '# species file generated from BNGL seed species\n' + speciesLines.join('\n') + '\n', 'utf8');
+          console.log(`  ✓ Skipped writing species file: ${relative(projectRoot, speciesPath)}`);
         }
       }
     }
+
+    // Inject seed if provided and simulate_nf is present
+    if (seed !== null && /simulate_nf\s*\(/.test(modelTxt)) {
+      const newTxt = modelTxt.replace(/simulate_nf\s*\((.*?)\)/g, (match, args) => {
+        // Remove existing curly braces to clean up args
+        let cleanArgs = args.replace(/^\s*{/, '').replace(/}\s*$/, '').trim();
+
+        // Remove existing seed or gml if present (to override)
+        cleanArgs = cleanArgs.replace(/,?\s*seed\s*=>\s*\d+/, '');
+        cleanArgs = cleanArgs.replace(/,?\s*gml\s*=>\s*\d+/, '');
+        cleanArgs = cleanArgs.replace(/^,/, ''); // clean leading comma if any
+
+        // output new call with our values
+        return `simulate_nf({${cleanArgs}, seed=>${seed}, gml=>5000000, get_final_state=>0})`;
+      });
+      writeFileSync(modelCopy, newTxt, 'utf8');
+      if (verbose) console.log(`  Included seed=${seed} and gml=1000000 in simulate_nf call.`);
+    }
+
   } catch (e) {
     // Non-fatal: if parsing fails, continue and let BNG2.pl run as before
     if (process.env.DEBUG) console.warn('Failed to auto-generate species file:', e.message);
@@ -178,7 +200,7 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
     const logFile = resolve(projectRoot, 'bng_test_output/nfsim_debug.log');
     mkdirSync(dirname(logFile), { recursive: true });
     appendFileSync(logFile, `--- FAILED: ${modelName} ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
-    
+
     if (!process.env.DEBUG) rmSync(tempDir, { recursive: true, force: true });
     else console.log(`  [DEBUG] Preserved temp dir: ${tempDir}`);
     throw new Error(`BNG2.pl failed for ${modelName} with exit code ${result.status ?? 'unknown'}. See bng_test_output/nfsim_debug.log for details.`);
@@ -195,7 +217,7 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
     const logFile = resolve(projectRoot, 'bng_test_output/nfsim_debug.log');
     mkdirSync(dirname(logFile), { recursive: true });
     appendFileSync(logFile, `--- EMPTY GDAT: ${modelName} (status: ${result.status}) ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
-    
+
     if (!process.env.DEBUG) rmSync(tempDir, { recursive: true, force: true });
     else console.log(`  [DEBUG] Preserved temp dir: ${tempDir}`);
     throw new Error(`No GDAT produced for ${modelName}. See bng_test_output/nfsim_debug.log for details.`);
@@ -215,7 +237,10 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
       const content = readFileSync(sourceGdat, 'utf8').split(/\r?\n/).filter(Boolean);
       const toAppend = content.filter(line => !line.startsWith('#')).join('\n') + '\n';
       appendFileSync(destPath, toAppend);
-      console.log(`  ✔ ${relative(projectRoot, sourcePath)} -> ${relative(projectRoot, destPath)}`);
+      console.log(`  ✔ [APPEND] ${relative(projectRoot, sourcePath)} -> ${relative(projectRoot, destPath)}`);
+    } else {
+      copyFileSync(sourceGdat, destPath);
+      console.log(`  ✔ [CREATE] ${relative(projectRoot, sourcePath)} -> ${relative(projectRoot, destPath)}`);
     }
 
     copiedPaths.push(destPath);
@@ -245,7 +270,7 @@ function main() {
 
   files.forEach((file) => {
     try {
-  const output = runBngModel(args.perl, args.bng2, file, args.outDir, args.verbose);
+      const output = runBngModel(args.perl, args.bng2, file, args.outDir, args.verbose, args.seed);
       if (output) {
         success += 1;
         const rel = relative(projectRoot, output);

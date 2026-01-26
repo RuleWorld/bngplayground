@@ -31,13 +31,17 @@ import { SCTEntry, SpeciesCompositionTable } from '../config/types';
 /**
  * Parse and convert a math expression to BNGL format
  */
+/**
+ * Parse and convert a math expression to BNGL format
+ */
 export function bnglFunction(
   rule: string,
   functionTitle: string,
   reactants: string[],
   compartments: string[] = [],
   parameterDict: Map<string, number> = new Map(),
-  reactionDict: Map<string, string> = new Map()
+  reactionDict: Map<string, string> = new Map(),
+  assignmentRuleVariables: Set<string> = new Set()
 ): string {
   let result = rule;
 
@@ -63,6 +67,14 @@ export function bnglFunction(
   for (const [rxnId, rxnName] of reactionDict) {
     const regex = new RegExp(`\\b${rxnId}\\b`, 'g');
     result = result.replace(regex, `netflux_${rxnName}`);
+  }
+
+  // Handle assignment rule variables (treat as functions)
+  for (const variable of assignmentRuleVariables) {
+    const regex = new RegExp(`\\b${variable}\\b`, 'g');
+    // Ensure we don't double-replace if it already has parens (simple check)
+    // Note: This regex might need refinement if nested, but simpler approaches are safer for now
+    result = result.replace(regex, `${variable}()`);
   }
 
   // Clean up infinity and special values
@@ -155,20 +167,20 @@ function convertMathFunctions(expr: string): string {
  */
 function convertPiecewise(expr: string): string {
   let result = expr;
-  
+
   // Simple piecewise: piecewise(value1, condition1, otherwise)
   const piecewiseRegex = /piecewise\s*\(\s*([^,]+)\s*,\s*([^,]+)\s*,\s*([^)]+)\s*\)/g;
-  
+
   let match;
   while ((match = piecewiseRegex.exec(result)) !== null) {
     const value1 = match[1].trim();
     const condition = match[2].trim();
     const otherwise = match[3].trim();
-    
+
     const replacement = `if(${condition}, ${value1}, ${otherwise})`;
     result = result.replace(match[0], replacement);
   }
-  
+
   return result;
 }
 
@@ -195,11 +207,11 @@ export function extendFunction(
   for (const [funcId, funcDef] of functionDefinitions) {
     const args = funcDef.arguments;
     const body = funcDef.math;
-    
+
     // Create regex to match function call
     const argPattern = args.map(() => '([^,)]+)').join('\\s*,\\s*');
     const regex = new RegExp(`\\b${funcId}\\s*\\(\\s*${argPattern}\\s*\\)`, 'g');
-    
+
     result = result.replace(regex, (...matches) => {
       let expandedBody = body;
       for (let i = 0; i < args.length; i++) {
@@ -229,12 +241,12 @@ export function curateParameters(
 
   for (const [id, param] of parameters) {
     let value = String(param.value);
-    
+
     // Handle infinity
     if (/inf/i.test(value)) {
       value = value.replace(/inf/gi, '1e20');
     }
-    
+
     // Handle NaN
     if (/nan/i.test(value)) {
       logger.warning('BNW001', `Parameter ${id} has NaN value, setting to 0`);
@@ -262,9 +274,9 @@ function sectionTemplate(
   annotations: Map<string, string> = new Map()
 ): string {
   const lines: string[] = [];
-  
+
   lines.push(`begin ${sectionName}`);
-  
+
   for (const line of content) {
     if (annotations.has(line)) {
       lines.push(`  ${line}  # ${annotations.get(line)}`);
@@ -272,10 +284,10 @@ function sectionTemplate(
       lines.push(`  ${line}`);
     }
   }
-  
+
   lines.push(`end ${sectionName}`);
   lines.push('');
-  
+
   return lines.join('\n');
 }
 
@@ -290,8 +302,9 @@ export function writeParameters(
 
   // Add compartment sizes as parameters
   for (const [id, comp] of compartments) {
+    // bnglFunction renames usage to __compartment_${id}__, so we must match that
     const name = standardizeName(id);
-    lines.push(`${name} ${comp.size}`);
+    lines.push(`__compartment_${name}__ ${comp.size}`);
   }
 
   // Add model parameters
@@ -323,7 +336,7 @@ export function writeCompartments(
     const name = standardizeName(id);
     const dim = comp.spatialDimensions;
     const size = comp.size;
-    
+
     if (comp.outside) {
       const outside = standardizeName(comp.outside);
       lines.push(`${name} ${dim} ${size} ${outside}`);
@@ -366,11 +379,11 @@ export function writeSeedSpecies(
 
   for (const { species, concentration, compartment } of seedSpecies) {
     let speciesStr = species.toString();
-    
+
     if (useCompartments && compartment) {
       speciesStr += `@${standardizeName(compartment)}`;
     }
-    
+
     lines.push(`${speciesStr} ${concentration}`);
   }
 
@@ -389,7 +402,9 @@ export function writeObservables(
   for (const [id, sp] of sbmlSpecies) {
     const entry = sct.entries.get(id);
     if (entry && entry.structure) {
-      const name = standardizeName(sp.name || id);
+      // Use id effectively (standardized) to match math formulas which use IDs
+      // ignoring sp.name to prevent mismatch with rate laws
+      const name = standardizeName(id);
       const pattern = entry.structure.toString();
       lines.push(`Molecules ${name} ${pattern}`);
     }
@@ -403,14 +418,16 @@ export function writeObservables(
  */
 export function writeFunctions(
   functions: Map<string, SBMLFunctionDefinition>,
+  assignmentRules: Array<{ variable: string; math: string }> = [],
   parameterDict: Map<string, number | string>
 ): string {
-  if (functions.size === 0) {
+  if (functions.size === 0 && assignmentRules.length === 0) {
     return '';
   }
 
   const lines: string[] = [];
 
+  // Write Function Definitions
   for (const [id, func] of functions) {
     const name = standardizeName(id);
     const args = func.arguments.map(a => standardizeName(a)).join(', ');
@@ -420,6 +437,19 @@ export function writeFunctions(
     body = convertComparisonOperators(body);
     
     lines.push(`${name}(${args}) = ${body}`);
+  }
+
+  // Write Assignment Rules as Functions (variable() = math)
+  // We use standardized names for the variable
+  for (const rule of assignmentRules) {
+    if (!rule.variable) continue;
+    const name = standardizeName(rule.variable);
+    let body = rule.math;
+    
+    body = convertMathFunctions(body);
+    body = convertComparisonOperators(body);
+    
+    lines.push(`${name}() = ${body}`);
   }
 
   return sectionTemplate('functions', lines);
@@ -449,11 +479,11 @@ export function writeReactionRulesFlat(
       const sp = sbmlSpecies.get(ref.species);
       const name = standardizeName(sp?.name || ref.species);
       let speciesStr = `${name}()`;
-      
+
       if (useCompartments && sp?.compartment) {
         speciesStr += `@${standardizeName(sp.compartment)}`;
       }
-      
+
       for (let i = 0; i < (ref.stoichiometry || 1); i++) {
         reactantStrs.push(speciesStr);
       }
@@ -465,11 +495,11 @@ export function writeReactionRulesFlat(
       const sp = sbmlSpecies.get(ref.species);
       const name = standardizeName(sp?.name || ref.species);
       let speciesStr = `${name}()`;
-      
+
       if (useCompartments && sp?.compartment) {
         speciesStr += `@${standardizeName(sp.compartment)}`;
       }
-      
+
       for (let i = 0; i < (ref.stoichiometry || 1); i++) {
         productStrs.push(speciesStr);
       }
@@ -479,7 +509,7 @@ export function writeReactionRulesFlat(
     let rate = '0';
     if (rxn.kineticLaw) {
       rate = rxn.kineticLaw.math;
-      
+
       // Substitute local parameters
       for (const localParam of rxn.kineticLaw.localParameters) {
         const regex = new RegExp(`\\b${localParam.id}\\b`, 'g');
@@ -489,7 +519,7 @@ export function writeReactionRulesFlat(
           rate = rate.replace(regex, standardizeName(`${rxnId}_${localParam.id}`));
         }
       }
-      
+
       // Convert math functions
       rate = bnglFunction(
         rate,
@@ -497,7 +527,8 @@ export function writeReactionRulesFlat(
         rxn.reactants.map(r => r.species),
         Array.from(compartments.keys()),
         new Map(Array.from(parameterDict.entries()).map(([k, v]) => [k, Number(v)])),
-        new Map()
+        new Map(),
+        options.assignmentRuleVariables // Pass set of assignment variables
       );
     }
 
@@ -505,7 +536,7 @@ export function writeReactionRulesFlat(
     const reactants = reactantStrs.length > 0 ? reactantStrs.join(' + ') : '0';
     const products = productStrs.length > 0 ? productStrs.join(' + ') : '0';
     const arrow = rxn.reversible ? '<->' : '->';
-    
+
     const ruleName = standardizeName(rxn.name || rxnId);
     lines.push(`${ruleName}: ${reactants} ${arrow} ${products} ${rate}`);
   }
@@ -535,16 +566,16 @@ export function writeReactionRulesAtomized(
     // Build reactants using translated structures
     for (const ref of rxn.reactants) {
       if (ref.species === 'EmptySet') continue;
-      
+
       const translated = translator.get(ref.species);
       if (translated) {
         let speciesStr = translated.toString();
-        
+
         if (useCompartments) {
           const entry = sct.entries.get(ref.species);
           // Add compartment if needed
         }
-        
+
         for (let i = 0; i < (ref.stoichiometry || 1); i++) {
           reactantStrs.push(speciesStr);
         }
@@ -562,11 +593,11 @@ export function writeReactionRulesAtomized(
     // Build products using translated structures
     for (const ref of rxn.products) {
       if (ref.species === 'EmptySet') continue;
-      
+
       const translated = translator.get(ref.species);
       if (translated) {
         let speciesStr = translated.toString();
-        
+
         for (let i = 0; i < (ref.stoichiometry || 1); i++) {
           productStrs.push(speciesStr);
         }
@@ -584,7 +615,7 @@ export function writeReactionRulesAtomized(
     let rate = '0';
     if (rxn.kineticLaw) {
       rate = rxn.kineticLaw.math;
-      
+
       for (const localParam of rxn.kineticLaw.localParameters) {
         const regex = new RegExp(`\\b${localParam.id}\\b`, 'g');
         if (options.replaceLocParams) {
@@ -593,14 +624,15 @@ export function writeReactionRulesAtomized(
           rate = rate.replace(regex, standardizeName(`${rxnId}_${localParam.id}`));
         }
       }
-      
+
       rate = bnglFunction(
         rate,
         rxnId,
         rxn.reactants.map(r => r.species),
         Array.from(compartments.keys()),
         new Map(Array.from(parameterDict.entries()).map(([k, v]) => [k, Number(v)])),
-        new Map()
+        new Map(),
+        options.assignmentRuleVariables // Pass set of assignment variables
       );
     }
 
@@ -608,7 +640,7 @@ export function writeReactionRulesAtomized(
     const reactants = reactantStrs.length > 0 ? reactantStrs.join(' + ') : '0';
     const products = productStrs.length > 0 ? productStrs.join(' + ') : '0';
     const arrow = rxn.reversible ? '<->' : '->';
-    
+
     const ruleName = standardizeName(rxn.name || rxnId);
     lines.push(`${ruleName}: ${reactants} ${arrow} ${products} ${rate}`);
   }
@@ -638,7 +670,7 @@ export function generateBNGL(
 ): BNGLGenerationResult {
   const warnings: string[] = [];
   const observableMap = new Map<string, string>();
-  
+
   const sections: string[] = [];
 
   // Header comment
@@ -675,19 +707,35 @@ export function generateBNGL(
   // Observables
   sections.push(writeObservables(model.species, sct));
 
-  // Build observable map
   for (const [id, sp] of model.species) {
-    const name = standardizeName(sp.name || id);
+    const name = standardizeName(id);
     observableMap.set(id, name);
   }
 
-  // Functions (if any)
-  if (model.functionDefinitions.size > 0) {
+  // Collect assignment rules for processing
+  const assignmentRules: Array<{ variable: string; math: string }> = [];
+  const assignmentRuleVariables = new Set<string>();
+
+  if (model.rules) {
+    for (const rule of model.rules) {
+      if (rule.type === 'assignment' && rule.variable) {
+        assignmentRules.push({ variable: rule.variable, math: rule.math });
+        assignmentRuleVariables.add(standardizeName(rule.variable));
+      }
+    }
+  }
+
+  // Add assignment variables to options for lower-level writers to use
+  options = { ...options, assignmentRuleVariables };
+
+  // Functions (and Assignment Rules)
+  if (model.functionDefinitions.size > 0 || assignmentRules.length > 0) {
     const paramDict = new Map<string, number | string>();
     for (const [id, param] of model.parameters) {
       paramDict.set(id, param.value);
     }
-    sections.push(writeFunctions(model.functionDefinitions, paramDict));
+    
+    sections.push(writeFunctions(model.functionDefinitions, assignmentRules, paramDict));
   }
 
   // Reaction rules
@@ -695,7 +743,7 @@ export function generateBNGL(
   for (const [id, param] of model.parameters) {
     paramDict.set(id, param.value);
   }
-  
+
   if (options.atomize) {
     // Use atomized translation
     const translator = new Map<string, Species>();
