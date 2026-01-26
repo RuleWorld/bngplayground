@@ -5278,7 +5278,7 @@
     "referenceInferred": true,
     "details": {
       "webRows": 501,
-      "refRows": 501,
+      "refRows": 502,
       "webColumns": [
         "time",
         "TNF",
@@ -5326,83 +5326,83 @@
       "columnMatch": true,
       "missingColumns": [],
       "extraColumns": [],
-      "timeMatch": true,
+      "timeMatch": false,
       "timeOffset": 0,
       "maxRelativeError": 1,
-      "maxAbsoluteError": 6245.989396722,
+      "maxAbsoluteError": 9968.427183869879,
       "absTolDominated": true,
-      "errorAtTime": 200,
-      "errorColumn": "TNF",
+      "errorAtTime": 0,
+      "errorColumn": "NFkB_Inactive",
       "samples": [
         {
-          "time": 200,
+          "time": 0,
+          "column": "NFkB_Inactive",
+          "web": 9968.427183869879,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "NonBoundNonPhos_IkB",
+          "web": 31.572816130129855,
+          "ref": 10000,
+          "relError": 0.996842718386987
+        },
+        {
+          "time": 0,
+          "column": "Unbound_Cyto_NFkB",
+          "web": 31.572816130129855,
+          "ref": 10000,
+          "relError": 0.996842718386987
+        },
+        {
+          "time": 0,
+          "column": "Inactive_Cyto_NFkB",
+          "web": 9968.427183869879,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 400,
           "column": "TNF",
           "web": 0,
           "ref": 316.3184044048,
           "relError": 1
         },
         {
-          "time": 200,
+          "time": 400,
           "column": "Activated_TAK1",
           "web": 0,
           "ref": 86.04556974898,
           "relError": 1
         },
         {
-          "time": 200,
+          "time": 400,
           "column": "Activated_Ikk_complex",
           "web": 0,
           "ref": 0.2627729540999,
           "relError": 1
         },
         {
-          "time": 200,
+          "time": 400,
           "column": "A20",
           "web": 0,
           "ref": 327.4456282295,
           "relError": 1
         },
         {
-          "time": 200,
+          "time": 400,
           "column": "NFkB_Active_Cyto",
           "web": 0,
           "ref": 2172.549585685,
           "relError": 1
         },
         {
-          "time": 200,
+          "time": 400,
           "column": "NFkB_Active_Nucleus",
           "web": 0,
           "ref": 2179.630426299,
           "relError": 1
-        },
-        {
-          "time": 200,
-          "column": "IkB_Degraded",
-          "web": 0,
-          "ref": 4825.912682269,
-          "relError": 1
-        },
-        {
-          "time": 200,
-          "column": "IkB_active",
-          "web": 10000.00000000001,
-          "ref": 5524.38522873,
-          "relError": 0.44756147712700056
-        },
-        {
-          "time": 200,
-          "column": "NFkB_Inactive",
-          "web": 9968.427183869879,
-          "ref": 5523.278966147,
-          "relError": 0.44592272539399863
-        },
-        {
-          "time": 200,
-          "column": "NonBoundNonPhos_IkB",
-          "web": 31.572816130129855,
-          "ref": 1.106262583076,
-          "relError": 0.9649615486145914
         }
       ]
     }
@@ -5730,11 +5730,10 @@
     }
   },
   {
-    "model": "baruafceri_2012",
-    "status": "bng_failed",
+    "model": "BaruaFceRI 2012",
+    "status": "missing_reference",
     "referenceInferred": true,
-    "details": null,
-    "error": "ABORT: Error while parsing species block, in species: FCR(a,b~Y,g~Y,s~o). Found species expressions that refer to observables or functions. This is not allowed, quitting!\r\n  at line 88"
+    "details": null
   },
   {
     "model": "barua_2007",
@@ -6861,8 +6860,34 @@
   },
   {
     "model": "cheemalavagu_2024",
-    "status": "missing_reference",
-    "details": null
+    "status": "match",
+    "referenceFile": "Cheemalavagu_JAK_STAT.gdat",
+    "referenceInferred": false,
+    "details": {
+      "webRows": 92,
+      "refRows": 92,
+      "webColumns": [
+        "time",
+        "total_pS3",
+        "total_pS1"
+      ],
+      "refColumns": [
+        "time",
+        "total_pS3",
+        "total_pS1"
+      ],
+      "columnMatch": true,
+      "missingColumns": [],
+      "extraColumns": [],
+      "timeMatch": true,
+      "timeOffset": 0,
+      "maxRelativeError": 0.000006638706443615888,
+      "maxAbsoluteError": 0.000002480085646017205,
+      "absTolDominated": false,
+      "errorAtTime": 9.89010989011,
+      "errorColumn": "total_pS1",
+      "samples": []
+    }
   },
   {
     "model": "chemotaxis_signal_transduction",
@@ -7798,7 +7823,7 @@
     "referenceInferred": true,
     "details": {
       "webRows": 501,
-      "refRows": 501,
+      "refRows": 502,
       "webColumns": [
         "time",
         "Sos1_act",
@@ -7820,83 +7845,83 @@
       "columnMatch": true,
       "missingColumns": [],
       "extraColumns": [],
-      "timeMatch": true,
+      "timeMatch": false,
       "timeOffset": 0,
-      "maxRelativeError": 0.06902098659778733,
-      "maxAbsoluteError": 38.31920703175763,
+      "maxRelativeError": 1,
+      "maxAbsoluteError": 12040,
       "absTolDominated": false,
-      "errorAtTime": 763.2,
-      "errorColumn": "Grb2Sos1",
+      "errorAtTime": 0,
+      "errorColumn": "Lig_free",
       "samples": [
         {
+          "time": 0,
+          "column": "Lig_free",
+          "web": 12040,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "Grb2Sos1",
+          "web": 556.1503657544032,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 2.4,
+          "column": "Sos1_act",
+          "web": 4.039752465979822,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 2.4,
+          "column": "EGFR_tot",
+          "web": 1788.855721166294,
+          "ref": 1800,
+          "relError": 0.0061912660187255775
+        },
+        {
+          "time": 2.4,
+          "column": "Lig_free",
+          "web": 10311.6927897564,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 2.4,
+          "column": "Dim",
+          "web": 468.7231187137054,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 2.4,
+          "column": "RP",
+          "web": 10.895865060878112,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 2.4,
+          "column": "Grb2Sos1",
+          "web": 552.0851539812639,
+          "ref": 556.1503660212,
+          "relError": 0.0073095556315450685
+        },
+        {
           "time": 4.8,
-          "column": "Grb2Sos1",
-          "web": 541.9032344415997,
-          "ref": 542.1107216444,
-          "relError": 0.00038273952998181483
-        },
-        {
-          "time": 7.2,
           "column": "Sos1_act",
-          "web": 23.614996329738513,
-          "ref": 23.62440190976,
-          "relError": 0.0003981298683206161
+          "web": 14.037610883918658,
+          "ref": 4.039826376604,
+          "relError": 0.7122141075136951
         },
         {
-          "time": 7.2,
-          "column": "Grb2Sos1",
-          "web": 531.9654498274002,
-          "ref": 532.5259641114,
-          "relError": 0.0010525576624888888
-        },
-        {
-          "time": 9.6,
-          "column": "Sos1_act",
-          "web": 31.68564931453153,
-          "ref": 31.70995307989,
-          "relError": 0.000766439650580278
-        },
-        {
-          "time": 9.6,
-          "column": "Grb2Sos1",
-          "web": 523.3985852220312,
-          "ref": 524.4404129413,
-          "relError": 0.001986551176378148
-        },
-        {
-          "time": 12,
-          "column": "Sos1_act",
-          "web": 38.28415097519006,
-          "ref": 38.33163648104,
-          "relError": 0.0012388071632013227
-        },
-        {
-          "time": 12,
-          "column": "Grb2Sos1",
-          "web": 516.2025855767779,
-          "ref": 517.8187295402,
-          "relError": 0.0031210612348016
-        },
-        {
-          "time": 14.4,
-          "column": "Sos1_act",
-          "web": 43.61247319797446,
-          "ref": 43.69132278189,
-          "relError": 0.001804696651304517
-        },
-        {
-          "time": 14.4,
-          "column": "Grb2Sos1",
-          "web": 510.2012710054118,
-          "ref": 512.4590432393,
-          "relError": 0.004405761326049717
-        },
-        {
-          "time": 16.8,
-          "column": "Sos1_act",
-          "web": 47.87430599013811,
-          "ref": 47.99204245239,
-          "relError": 0.0024532496688110333
+          "time": 4.8,
+          "column": "EGFR_tot",
+          "web": 1762.4134109605739,
+          "ref": 1788.855720933,
+          "relError": 0.01478168958122277
         }
       ]
     }
@@ -8682,8 +8707,8 @@
     "referenceFile": "[multi-phase concatenation]",
     "referenceInferred": true,
     "details": {
-      "webRows": 1001,
-      "refRows": 1001,
+      "webRows": 1201,
+      "refRows": 1201,
       "webColumns": [
         "time",
         "DNA_DSB_tot",
@@ -8811,81 +8836,81 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.9999999999999998,
-      "maxAbsoluteError": 1164973.0377786504,
+      "maxRelativeError": 1,
+      "maxAbsoluteError": 1164949.7501734258,
       "absTolDominated": true,
-      "errorAtTime": 86832,
-      "errorColumn": "Bad_u_free",
+      "errorAtTime": 399168,
+      "errorColumn": "BclXL_Bad_u_cplx",
       "samples": [
         {
-          "time": 0,
+          "time": 12096,
           "column": "DNA_DSB_tot",
-          "web": 0.00002443555135357529,
-          "ref": 39.7294106079,
-          "relError": 0.9999993849505698
+          "web": 0.004380104049593559,
+          "ref": 0.000003607940354424,
+          "relError": 0.999176288893238
         },
         {
-          "time": 0,
+          "time": 12096,
           "column": "ATM_p",
-          "web": 0.00019148015578382971,
-          "ref": 13689.51987628,
-          "relError": 0.9999999860126464
+          "web": 0.039540830909007854,
+          "ref": 3.181309084663e-8,
+          "relError": 0.9999991954369668
         },
         {
-          "time": 0,
-          "column": "gene_Wip1_on",
-          "web": 0.0066445182724256206,
-          "ref": 0.007723085255492,
-          "relError": 0.13965493677535085
-        },
-        {
-          "time": 0,
-          "column": "mRNA_Wip1",
-          "web": 1.1074197120709424,
-          "ref": 1.12967634928,
-          "relError": 0.01970178203982305
-        },
-        {
-          "time": 0,
-          "column": "Wip1_tot",
-          "web": 369.13990402364743,
-          "ref": 369.33426962,
-          "relError": 0.0005262593058384019
-        },
-        {
-          "time": 0,
-          "column": "SIAH1_u",
-          "web": 99999.99362960031,
-          "ref": 96466.04714144,
-          "relError": 0.0353394671328685
-        },
-        {
-          "time": 0,
+          "time": 12096,
           "column": "SIAH1_p",
-          "web": 0.006370399499200782,
-          "ref": 3533.952858552,
-          "relError": 0.9999981973728134
+          "web": 0.05540217156945681,
+          "ref": 5.079365023003e-8,
+          "relError": 0.9999990831830452
         },
         {
-          "time": 0,
-          "column": "HIPK2_tot",
-          "web": 18911.075119717614,
-          "ref": 19220.31227236,
-          "relError": 0.01608908056541241
+          "time": 12096,
+          "column": "p53_arr",
+          "web": 3.970156900823641,
+          "ref": 0.00000358436796693,
+          "relError": 0.9999990971722135
         },
         {
-          "time": 0,
-          "column": "p53_tot",
-          "web": 45553.711725199966,
-          "ref": 50120.4550963,
-          "relError": 0.09111536122977384
+          "time": 12096,
+          "column": "p53_kill",
+          "web": 0.08290904291034831,
+          "ref": 7.512264879799e-8,
+          "relError": 0.9999990939148956
         },
         {
-          "time": 0,
-          "column": "p53_0p",
-          "web": 44467.023019805594,
-          "ref": 44384.40086027,
-          "relError": 0.0018580546644374318
+          "time": 12096,
+          "column": "Mdm2_nuc_3p",
+          "web": 0.00149716457331044,
+          "ref": 1.321727725292e-9,
+          "relError": 0.999999117179401
+        },
+        {
+          "time": 12096,
+          "column": "p21_tot",
+          "web": 254.15885852618004,
+          "ref": 625.8241265343,
+          "relError": 0.5938813354261916
+        },
+        {
+          "time": 12096,
+          "column": "p21_free",
+          "web": 0.48272144507104836,
+          "ref": 0.237442841426,
+          "relError": 0.5081162358737709
+        },
+        {
+          "time": 12096,
+          "column": "CyclinE_tot",
+          "web": 99723.77228674234,
+          "ref": 72352.07279626,
+          "relError": 0.27447517139422567
+        },
+        {
+          "time": 12096,
+          "column": "CyclinE_free",
+          "web": 99470.09614966123,
+          "ref": 71726.48611256,
+          "relError": 0.2789140768031289
         }
       ]
     }
@@ -10681,7 +10706,7 @@
   },
   {
     "model": "model_zap",
-    "status": "match",
+    "status": "mismatch",
     "referenceFile": "Model_ZAP.gdat",
     "referenceInferred": false,
     "details": {
@@ -10732,10 +10757,83 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0,
-      "maxAbsoluteError": 0,
+      "maxRelativeError": 1,
+      "maxAbsoluteError": 382,
       "absTolDominated": false,
-      "samples": []
+      "errorAtTime": 0.241,
+      "errorColumn": "tot_bound_ZAP",
+      "samples": [
+        {
+          "time": 0.241,
+          "column": "tot_bound_ZAP",
+          "web": 4,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0.241,
+          "column": "bound_phosph_zeta",
+          "web": 9,
+          "ref": 6,
+          "relError": 0.3333333333333333
+        },
+        {
+          "time": 0.241,
+          "column": "open_U_zeta",
+          "web": 26,
+          "ref": 12,
+          "relError": 0.5384615384615384
+        },
+        {
+          "time": 0.241,
+          "column": "bound_U_zeta",
+          "web": 27,
+          "ref": 12,
+          "relError": 0.5555555555555556
+        },
+        {
+          "time": 0.241,
+          "column": "total_phosph_zeta",
+          "web": 9,
+          "ref": 6,
+          "relError": 0.3333333333333333
+        },
+        {
+          "time": 0.241,
+          "column": "tot_bound_SHP",
+          "web": 1,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0.241,
+          "column": "lig_receptor_complex",
+          "web": 232,
+          "ref": 237,
+          "relError": 0.02109704641350211
+        },
+        {
+          "time": 0.482,
+          "column": "tot_bound_ZAP",
+          "web": 40,
+          "ref": 19,
+          "relError": 0.525
+        },
+        {
+          "time": 0.482,
+          "column": "bound_phosph_zeta",
+          "web": 62,
+          "ref": 30,
+          "relError": 0.5161290322580645
+        },
+        {
+          "time": 0.482,
+          "column": "open_U_zeta",
+          "web": 62,
+          "ref": 17,
+          "relError": 0.7258064516129032
+        }
+      ]
     }
   },
   {
@@ -11656,18 +11754,6 @@
     }
   },
   {
-    "model": "polymer",
-    "status": "missing_reference",
-    "referenceInferred": true,
-    "details": null
-  },
-  {
-    "model": "polymer_draft",
-    "status": "missing_reference",
-    "referenceInferred": true,
-    "details": null
-  },
-  {
     "model": "predator_prey_dynamics",
     "status": "mismatch",
     "referenceFile": "predator-prey-dynamics.gdat",
@@ -11771,8 +11857,131 @@
   },
   {
     "model": "pybng__degranulation_model",
-    "status": "missing_reference",
-    "details": null
+    "status": "mismatch",
+    "referenceFile": "degranulation_model.gdat",
+    "referenceInferred": false,
+    "details": {
+      "webRows": 51,
+      "refRows": 51,
+      "webColumns": [
+        "time",
+        "Ag_total",
+        "Ag_free",
+        "R_bound",
+        "R_free",
+        "RP",
+        "R0",
+        "actSyk",
+        "actShip1",
+        "Ship1_total",
+        "PIP3_total",
+        "degranulation",
+        "Xall",
+        "X_on_free",
+        "X_on_free_or_bound",
+        "XShip1"
+      ],
+      "refColumns": [
+        "time",
+        "Ag_total",
+        "Ag_free",
+        "R_bound",
+        "R_free",
+        "RP",
+        "R0",
+        "actSyk",
+        "actShip1",
+        "Ship1_total",
+        "PIP3_total",
+        "degranulation",
+        "Xall",
+        "X_on_free",
+        "X_on_free_or_bound",
+        "XShip1"
+      ],
+      "columnMatch": true,
+      "missingColumns": [],
+      "extraColumns": [],
+      "timeMatch": true,
+      "timeOffset": 0,
+      "maxRelativeError": 1,
+      "maxAbsoluteError": 1839768.6034477006,
+      "absTolDominated": true,
+      "errorAtTime": 0,
+      "errorColumn": "R_bound",
+      "samples": [
+        {
+          "time": 0,
+          "column": "RP",
+          "web": 0.00024328204142532657,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "actSyk",
+          "web": 0.00003245286756473881,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "PIP3_total",
+          "web": 0.00007027944163501851,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "Xall",
+          "web": 224.6605522992513,
+          "ref": 1839993.264,
+          "relError": 0.9998779014267634
+        },
+        {
+          "time": 0,
+          "column": "X_on_free",
+          "web": 89.3048576212198,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "X_on_free_or_bound",
+          "web": 192.581097797256,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0,
+          "column": "XShip1",
+          "web": 103.27624017603623,
+          "ref": 0,
+          "relError": 1
+        },
+        {
+          "time": 0.1,
+          "column": "actShip1",
+          "web": 0.2488076418044589,
+          "ref": 16.9185194627,
+          "relError": 0.9852937698033802
+        },
+        {
+          "time": 0.1,
+          "column": "degranulation",
+          "web": 1.1426542757533613,
+          "ref": 69.76296487402,
+          "relError": 0.9836209043320221
+        },
+        {
+          "time": 0.1,
+          "column": "Xall",
+          "web": 224.2917340901432,
+          "ref": 1839969.101026,
+          "relError": 0.9998781002713768
+        }
+      ]
+    }
   },
   {
     "model": "pybng__egfr_ode",
@@ -12494,6 +12703,12 @@
     }
   },
   {
+    "model": "stat3 mediated transcription",
+    "status": "skipped",
+    "referenceInferred": false,
+    "details": null
+  },
+  {
     "model": "stat3_mediated_transcription",
     "status": "mismatch",
     "referenceFile": "stat3-mediated-transcription.gdat",
@@ -12599,39 +12814,6 @@
           "relError": 0.02596216610830523
         }
       ]
-    }
-  },
-  {
-    "model": "stress_response_adaptation",
-    "status": "match",
-    "referenceFile": "stress-response-adaptation.gdat",
-    "referenceInferred": false,
-    "details": {
-      "webRows": 241,
-      "refRows": 241,
-      "webColumns": [
-        "time",
-        "Active_sensor",
-        "Adapter",
-        "Enzyme"
-      ],
-      "refColumns": [
-        "time",
-        "Active_sensor",
-        "Adapter",
-        "Enzyme"
-      ],
-      "columnMatch": true,
-      "missingColumns": [],
-      "extraColumns": [],
-      "timeMatch": true,
-      "timeOffset": 0,
-      "maxRelativeError": 0.000027930990883064997,
-      "maxAbsoluteError": 0.000010566182709226268,
-      "absTolDominated": false,
-      "errorAtTime": 0.5,
-      "errorColumn": "Enzyme",
-      "samples": []
     }
   },
   {
@@ -12864,39 +13046,6 @@
       "absTolDominated": false,
       "errorAtTime": 2,
       "errorColumn": "A_total",
-      "samples": []
-    }
-  },
-  {
-    "model": "two_component_system",
-    "status": "match",
-    "referenceFile": "two-component-system.gdat",
-    "referenceInferred": false,
-    "details": {
-      "webRows": 241,
-      "refRows": 241,
-      "webColumns": [
-        "time",
-        "Kinase_P",
-        "Reg_P",
-        "Target"
-      ],
-      "refColumns": [
-        "time",
-        "Kinase_P",
-        "Reg_P",
-        "Target"
-      ],
-      "columnMatch": true,
-      "missingColumns": [],
-      "extraColumns": [],
-      "timeMatch": true,
-      "timeOffset": 0,
-      "maxRelativeError": 0.0000053191282245533475,
-      "maxAbsoluteError": 0.00002447682766160142,
-      "absTolDominated": false,
-      "errorAtTime": 5,
-      "errorColumn": "Kinase_P",
       "samples": []
     }
   },
@@ -13191,39 +13340,6 @@
           "relError": 0.26593304029248577
         }
       ]
-    }
-  },
-  {
-    "model": "wound_healing_pdgf_signaling",
-    "status": "match",
-    "referenceFile": "wound-healing-pdgf-signaling.gdat",
-    "referenceInferred": false,
-    "details": {
-      "webRows": 181,
-      "refRows": 181,
-      "webColumns": [
-        "time",
-        "Active_PDGFR",
-        "Phospho_STAT3",
-        "Migratory_Fibroblast"
-      ],
-      "refColumns": [
-        "time",
-        "Active_PDGFR",
-        "Phospho_STAT3",
-        "Migratory_Fibroblast"
-      ],
-      "columnMatch": true,
-      "missingColumns": [],
-      "extraColumns": [],
-      "timeMatch": true,
-      "timeOffset": 0,
-      "maxRelativeError": 0.000009835190082860854,
-      "maxAbsoluteError": 0.000036167573068901504,
-      "absTolDominated": false,
-      "errorAtTime": 0.4444444444444,
-      "errorColumn": "Migratory_Fibroblast",
-      "samples": []
     }
   },
   {

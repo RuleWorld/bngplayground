@@ -1342,12 +1342,10 @@ class VF2State {
       return true;
     } else {
       // Pattern specifies NO edges and NO wildcard.
-      // Conservative semantics: treat an explicitly specified component (e.g., "s")
-      // as an explicit unbound requirement. That is, "A(s)" should NOT match
-      // "A(s!1)". This aligns with tests that expect explicit unbound matching.
-      // If downstream code needs the looser semantics (match any bond state), it
-      // should use '?' wildcard in the pattern (e.g., "s~?" or explicit wildcard syntax).
-      return !targetBound;
+      // BioNetGen semantics: A(b) matches both A(b) and A(b!1).
+      // If the user wants to specify unbound, they should use !-.
+      // This fix ensures observables like "A()" or "A(b)" count bound molecules correctly.
+      return true;
     }
 
   }

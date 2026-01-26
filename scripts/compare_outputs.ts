@@ -82,15 +82,22 @@ const CSV_MODEL_ALIASES: Record<string, string> = {
   // Fix wrong fuzzy matches (keys normalized: lowercase, no special chars)
   caspaseactivationloop: 'caspase-activation-loop',
   fgfsignalingpathway: 'fgf-signaling-pathway',
+  baruafceri2012: 'BaruaFceRI_2012',
+  mallela2022alabama: 'Alabama',
+  pybngdegranulationmodel: 'degranulation_model',
+  pybngegfrode: 'egfr_ode',
+  cheemalavagu2024: 'Cheemalavagu_JAK_STAT',
   // Multi-phase models: Map to specific phase
-  hat2016: 'Hat_2016_ode_1_equil',  // First simulation phase (equilibration)
+  // Multi-phase models: Explicit mapping if needed, else automatic
+  // hat2016 removed here to let auto-detection handle multi-phase if possible,
+  // or explicitly mapped below if needed.
 };
 
 // For multi-phase models where web output contains all phases but ref is only the first.
 // Limit comparison to rows with time <= limit.
 // Note: Keys are normalized (lowercase, no special chars)
 const PARTIAL_MATCH_TIME: Record<string, number> = {
-  hat2016: 1209600, // 14 * 24 * 60 * 60 seconds (first phase end)
+  // hat2016: 1209600, // Now comparing all phases
   hif1adegradationloop: 100, // BNG2.pl ran phases 1+2 (0-40, 40-100), phase 3 failed
   ltypecalciumchanneldynamics: 30, // BNG2.pl phases 2-3 failed, only phase 1 works (phase 4 time reset)
   sonichedgehoggradient: 50, // BNG2.pl only ran first phase (4 phases total, phases 2-4 failed)
@@ -109,6 +116,7 @@ function normalizeKey(raw: string): string {
     .replace(/^results_/, '')
     .replace(/\.(csv|gdat|bngl)$/i, '')
     .replace(/\(\d+\)$/, '')
+    .replace(/\s+/g, '')
     .replace(/[^a-z0-9]+/g, '');
 }
 
@@ -163,6 +171,7 @@ interface SimCall {
   method: 'ode' | 'ssa' | 'nf';
   suffix?: string;
   t_end?: number;
+  n_steps?: number;
   continue?: boolean;
 }
 
@@ -205,12 +214,13 @@ function parseSimulateCallsFromBngl(bnglContent: string): SimCall[] {
       }
     }
 
-    // Parse continue flag to determine output continuity
-    // format: continue=>1 or continue=>0
     const continueMatch = params.match(/continue\s*=>?\s*([01])/i);
     const continueFlag = continueMatch ? continueMatch[1] === '1' : false;
 
-    calls.push({ method, suffix, t_end, continue: continueFlag });
+    const nStepsMatch = params.match(/n_steps\s*=>?\s*(\d+)/i);
+    const n_steps = nStepsMatch ? parseInt(nStepsMatch[1], 10) : undefined;
+
+    calls.push({ method, suffix, t_end, n_steps, continue: continueFlag });
   }
 
   return calls;
@@ -233,13 +243,11 @@ function getMultiPhaseReference(
   const odeCalls = calls.filter(c => c.method === 'ode');
   if (odeCalls.length <= 1) return null; // Not a multi-phase model
 
-  // Determine which phases are part of the final output chain (matching web simulator logic)
-  let recordFromIdx = odeCalls.length - 1;
-  while (recordFromIdx > 0 && odeCalls[recordFromIdx].continue) {
-    recordFromIdx--;
-  }
+  // Match web simulator logic: record from the beginning
+  // and skip 1-step equilibration phases later.
+  let recordFromIdx = 0;
 
-  const phasesToInclude = odeCalls.slice(recordFromIdx);
+  const phasesToInclude = odeCalls;
   console.log(`[MultiPhase] Identified output chain for ${baseName}: phases ${recordFromIdx + 1} to ${odeCalls.length}`);
 
   const phasesData: { headers: string[]; data: number[][]; t_end: number }[] = [];
@@ -251,8 +259,15 @@ function getMultiPhaseReference(
     // Find matching gdat file
     const gdatFile = gdatFiles.find(gf => gf.toLowerCase() === expectedNameLower);
     if (!gdatFile) {
+      // If this is a 1-step phase, it might be skipped by the web simulator too.
+      // But BNG2.pl usually specifies suffix anyway.
+      // If missing, and it's 100% skipped, maybe continue?
+      if ((call.n_steps ?? 100) <= 1) {
+        console.log(`[MultiPhase] Skipping 1-step phase file: ${expectedName}`);
+        continue;
+      }
       console.log(`[MultiPhase] Missing phase file: ${expectedName}`);
-      return null; // Can't construct reference if any phase is missing
+      return null; // Can't construct reference if any significant phase is missing
     }
 
     const gdatPath = path.join(BNG_OUTPUT_DIR, gdatFile);

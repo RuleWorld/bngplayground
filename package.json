@@ -40,7 +40,9 @@
     "react-markdown": "^9.0.1",
     "recharts": "^3.3.0",
     "remark-gfm": "^4.0.1",
-    "umap-js": "^1.4.0"
+    "umap-js": "^1.4.0",
+    "libsbmljs_stable": "latest",
+    "jszip": "^3.10.1"
   },
   "devDependencies": {
     "@playwright/test": "^1.57.0",

@@ -38,6 +38,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
   private concentrationChanges: ConcentrationChange[] = [];
   private parameterChanges: ParameterChange[] = [];
   private actions: BNGLAction[] = [];
+  private speciesExpressions: string[] = [];
 
   protected defaultResult(): BNGLModel {
     return {
@@ -113,6 +114,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Resolve parameter expressions
     this.resolveParameters();
 
+    // Re-evaluate species concentrations after parameters are resolved
+    this.resolveSpeciesConcentrations();
+
     return this.defaultResult();
   }
 
@@ -147,6 +151,24 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       if (!(name in this.parameters)) {
         this.parameters[name] = 0;
         console.warn(`Failed to resolve parameter '${name}'`);
+      }
+    }
+  }
+
+  private resolveSpeciesConcentrations(): void {
+    const paramMap = new Map(Object.entries(this.parameters));
+    const funcMap = new Map<string, { args: string[]; expr: string }>();
+    for (const f of this.functions) {
+      funcMap.set(f.name, { args: f.args, expr: f.expression });
+    }
+
+    for (let i = 0; i < this.species.length; i++) {
+      const expr = this.speciesExpressions[i];
+      if (expr) {
+        const val = CoreBNGLParser.evaluateExpression(expr, paramMap, undefined, funcMap);
+        if (!isNaN(val)) {
+          this.species[i].initialConcentration = val;
+        }
       }
     }
   }
@@ -334,6 +356,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       initialConcentration: concentration,
       isConstant
     });
+    this.speciesExpressions.push(exprCtx ? exprCtx.text : '0');
   }
 
   // Observables block

@@ -32,16 +32,9 @@ function safeModelName(name: string) {
 async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Promise<SimulationResults> {
     const allPhases = model.simulationPhases || [];
 
-    // Determine which phases to actually include in the final output.
-    // To match BNG2 parity, we typically only want the LAST continuous chain 
-    // of phases that share a common time axis (or the last phase if no continue).
+    // Capture all phases in the final output by default.
+    // BioNetGen playground should show the complete history of all simulations.
     let recordFromIdx = 0;
-    for (let i = 0; i < allPhases.length; i++) {
-        // Fix: handle undefined/null continue as false
-        if (!allPhases[i].continue) {
-            recordFromIdx = i;
-        }
-    }
 
 
     // Execution Plan:
@@ -330,9 +323,10 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
                 cumulativeTime = 0;
             }
 
-            // Determine if we should skip the first row (continuation phases)
-            // BioNetGen skips the t=0 row of continuation phases to avoid duplicates
-            const skipFirstRow = phase.continue && allData.length > 0;
+            // Determine if we should skip the first row (common at phase boundaries)
+            // BioNetGen skips the t=0 row of continuation phases to avoid duplicates.
+            // We should also skip it for regular sequential phases that keep state.
+            const skipFirstRow = allData.length > 0 && phaseResults.data.length > 0 && (phaseResults.data[0].time === 0);
             const startIndex = skipFirstRow ? 1 : 0;
 
             // Determine time offset:

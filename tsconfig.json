@@ -49,6 +49,7 @@
     "scripts",
     "temp_diag",
     "debug_cbngl_simple2.ts",
-    "src/parser/generated"
+    "src/parser/generated",
+    "src/wasm"
   ]
 }

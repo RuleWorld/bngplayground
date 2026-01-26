@@ -13,6 +13,7 @@ import SimulationModal from './components/SimulationModal';
 import { validateBNGLModel, validationWarningsToMarkers } from './services/modelValidation';
 import { getSharedModelFromUrl, clearModelFromUrl } from './src/utils/shareUrl';
 import { resolveAutoMethod } from './src/utils/simulationOptions';
+import { Atomizer } from '@/src/lib/atomizer';
 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 
@@ -487,33 +488,70 @@ const handleStatusClose = () => {
   setStatus(null);
 };
 
+const handleImportSBML = async (file: File) => {
+  setStatus({ type: 'info', message: 'Importing SBML...' });
+  try {
+    const text = await file.text();
+    const atomizer = new Atomizer();
+    await atomizer.initialize();
+    const result = await atomizer.atomize(text);
+    if (result.success && result.bngl) {
+      handleCodeChange(result.bngl);
+      // Use the incoming file name (e.g., BIOMD0000000123.xml) as the loaded model title
+      try {
+        setLoadedModelName(file.name.replace(/\.[^.]+$/, ''));
+      } catch (e) {
+        // ignore failures in name parsing
+      }
+      setStatus({ type: 'success', message: 'SBML imported successfully!' });
+    } else {
+      setStatus({ type: 'error', message: `Import failed: ${result.error || 'Unknown error'}` });
+    }
+  } catch (e) {
+    setStatus({ type: 'error', message: 'Failed to read SBML file.' });
+    console.error('SBML Import error:', e);
+  }
+};
+
+// Note: When importing from BioModels, the file name is set to the BioModels
+// ID (e.g., BIOMD0000000123.xml). We use that file name to set the editor
+// title so users can see the original BioModels accession as the loaded model.
+// If the BioModels download returns a COMBINE/OMEX archive, the importer
+// extracts the primary SBML file and assigns the BioModels ID as the file name.
+
+// Export SBML helper used by Header and EditorPanel
+const handleExportSBML = async () => {
+  if (!model) {
+    setStatus({ type: 'warning', message: 'No model to export. Parse or load a model first.' });
+    return;
+  }
+  setStatus({ type: 'info', message: 'Generating SBML...' });
+  try {
+    const xml = await exportToSBML(model);
+    const blob = new Blob([xml], { type: 'application/xml' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${loadedModelName?.replace(/\s+/g, '_') || 'model'}.sbml`;
+    a.click();
+    URL.revokeObjectURL(url);
+    setStatus({ type: 'success', message: 'SBML export generated.' });
+  } catch (e) {
+    setStatus({ type: 'error', message: 'Failed to export SBML.' });
+    console.warn('SBML export failed', e);
+  }
+};
+
 return (
   <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
+    {/* Export SBML handler exposed to Header and EditorPanel */}
     <Header
       onAboutClick={(focus?: string) => {
         setAboutFocus(focus ?? null);
         setIsAboutModalOpen(true);
       }}
-      onExportSBML={() => {
-        if (!model) {
-          setStatus({ type: 'warning', message: 'No model to export. Parse or load a model first.' });
-          return;
-        }
-        try {
-          const xml = exportToSBML(model);
-          const blob = new Blob([xml], { type: 'application/xml' });
-          const url = URL.createObjectURL(blob);
-          const a = document.createElement('a');
-          a.href = url;
-          a.download = 'bngl_export.sbml';
-          a.click();
-          URL.revokeObjectURL(url);
-          setStatus({ type: 'success', message: 'SBML export generated.' });
-        } catch (e) {
-          setStatus({ type: 'error', message: 'Failed to export SBML.' });
-          console.warn('SBML export failed', e);
-        }
-      }}
+      onExportSBML={handleExportSBML}
+      onImportSBML={handleImportSBML}
       code={code}
       modelName={loadedModelName}
       modelId={loadedModelId}
@@ -521,6 +559,7 @@ return (
       viewMode={viewMode}
       onViewModeChange={setViewMode}
     />
+
 
     <main className="flex-1 min-h-0 overflow-hidden">
       <div className="container mx-auto flex h-full min-h-0 flex-col gap-6 p-4 sm:p-6 lg:p-8">
@@ -546,6 +585,8 @@ return (
                 onModelNameChange={setLoadedModelName}
                 onModelIdChange={setLoadedModelId}
                 selection={editorSelection}
+                onImportSBML={handleImportSBML}
+                onExportSBML={handleExportSBML}
               />
             ) : (
               <DesignerPanel

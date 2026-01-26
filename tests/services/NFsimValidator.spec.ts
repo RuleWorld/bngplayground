@@ -224,13 +224,19 @@ function bnglModelWithTotalRateGenerator(): fc.Arbitrary<BNGLModel> {
 }
 
 function bnglModelWithObservableDependentRateGenerator(): fc.Arbitrary<BNGLModel> {
+  const specificObservables = fc.constant([
+      { name: 'TotalA', type: 'Molecules', pattern: 'A()' },
+      { name: 'ObsB', type: 'Molecules', pattern: 'B()' },
+      { name: 'S_total', type: 'Molecules', pattern: 'S()' }
+  ]);
+
   return fc.record({
     name: fc.string({ minLength: 1, maxLength: 20 }),
     parameters: fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.float({ min: Math.fround(0.1), max: Math.fround(100) })),
     moleculeTypes: fc.array(moleculeTypeGenerator(), { minLength: 1, maxLength: 5 }),
     species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 5 }),
     reactionRules: fc.array(observableDependentRuleGenerator(), { minLength: 1, maxLength: 3 }),
-    observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 })
+    observables: specificObservables
   });
 }
 

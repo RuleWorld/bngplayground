@@ -207,4 +207,7 @@ src/wasm/nauty/*.exe
 src/wasm/nauty/compile.bat
 src/wasm/nauty/*.rsp
 
+# atomizer
+atomizer-ts
+
 # End of .gitignore

@@ -3,8 +3,10 @@ import { Modal } from './ui/Modal';
 import { Card } from './ui/Card';
 import { Input } from './ui/Input';
 import { SearchIcon } from './icons/SearchIcon';
-import { MODEL_CATEGORIES, EXAMPLES } from '../constants';
+import { MODEL_CATEGORIES, EXAMPLES, BNG2_COMPATIBLE_MODELS } from '../constants';
 import { SemanticSearchInput, SearchResult } from './SemanticSearchInput';
+import { BioModelsSearch } from './BioModelsSearch';
+import { Tabs, TabList, Tab, TabPanels, TabPanel } from './ui/Tabs';
 
 // Helper to convert model names to Title Case
 // Handles special acronyms like MAPK, EGFR, etc.
@@ -27,9 +29,10 @@ interface ExampleGalleryModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSelect: (code: string, modelName?: string, modelId?: string) => void;
+  onImportSBML?: (file: File) => void; // optional: allow direct SBML import (used by BioModels search)
 }
 
-export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen, onClose, onSelect }) => {
+export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen, onClose, onSelect, onImportSBML }) => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>(MODEL_CATEGORIES[0]?.id || '');
   const [focusedExample, setFocusedExample] = useState<string | null>(null);
@@ -105,10 +108,15 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
     if (!visibleSet) return filteredExamples;
     return filteredExamples.filter(m => {
       const idOk = visibleSet.has(m.id);
-      const pathOk = !!m.path && visibleSet.has(m.path.replace(/\.bngl$/i, ''));
+      const pathOk = !!(m as any).path && visibleSet.has((m as any).path.replace(/\.bngl$/i, ''));
       return idOk || pathOk;
     });
   }, [filteredExamples, visibleSet]);
+
+  // Total number of models across ALL categories (sum of category counts).
+  const totalModelsCount = useMemo(() => {
+    return BNG2_COMPATIBLE_MODELS.size;
+  }, []);
 
   // Handle semantic search results
   const handleSemanticResults = (results: SearchResult[]) => {
@@ -133,115 +141,170 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
 
   return (
     <Modal isOpen={isOpen} onClose={onClose} title="BNGL Models" size="3xl">
-      <div className="mt-4">
-        <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
-          Browse {displayedExamples.length} models across {MODEL_CATEGORIES.length} categories.
-        </p>
-
-        {/* Semantic Search */}
-        <div className="mb-4">
-          <SemanticSearchInput
-            onResults={handleSemanticResults}
-            onSearchStart={() => setIsSemanticSearching(true)}
-            onSearchEnd={() => setIsSemanticSearching(false)}
-          />
-        </div>
-
-        {/* Semantic search results indicator */}
-        {semanticResults && (
-          <div className="mb-4 flex items-center justify-between">
-            <span className="text-sm text-slate-600 dark:text-slate-300">
-              Found {filteredExamples.length} semantically similar models
-            </span>
-            <button
-              onClick={() => setSemanticResults(null)}
-              className="text-xs text-primary hover:underline"
-            >
-              Clear &amp; browse categories
-            </button>
+      <div className="flex flex-col">
+        <Tabs>
+          <div className="px-1 border-b border-slate-200 dark:border-slate-700">
+            <TabList>
+              <Tab>Example Gallery</Tab>
+              <Tab>BioModels Repository</Tab>
+            </TabList>
           </div>
-        )}
 
-        {/* Fallback keyword search (shows when no semantic results) */}
-        {!semanticResults && (
-          <div className="relative mb-4">
-            <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
-            <Input
-              type="text"
-              placeholder="Or filter by keyword..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="pl-10"
-            />
-          </div>
-        )}
+          <TabPanels>
+            <TabPanel className="py-4">
+              <div className="px-1">
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                  Browse {totalModelsCount} models across {MODEL_CATEGORIES.length} categories.
+                </p>
 
-        {/* Category Tabs - hide when semantic results are shown */}
-        {!semanticResults && !searchTerm && (
-          <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200 dark:border-slate-700 pb-4">
-            {MODEL_CATEGORIES.map(category => (
-              <button
-                key={category.id}
-                onClick={() => setSelectedCategory(category.id)}
-                className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${selectedCategory === category.id
-                    ? 'bg-primary text-white'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
-                  }`}
-              >
-                {category.name} ({category.models.length})
-              </button>
-            ))}
-          </div>
-        )}
+                {/* Semantic Search */}
+                <div className="mb-4">
+                  <SemanticSearchInput
+                    onResults={handleSemanticResults}
+                    onSearchStart={() => setIsSemanticSearching(true)}
+                    onSearchEnd={() => setIsSemanticSearching(false)}
+                  />
+                </div>
 
-        {/* Category Description - hide when semantic results are shown */}
-        {!semanticResults && !searchTerm && currentCategory && (
-          <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 italic">
-            {currentCategory.description}
-          </p>
-        )}
+                {/* Semantic search results indicator */}
+                {semanticResults && (
+                  <div className="mb-4 flex items-center justify-between">
+                    <span className="text-sm text-slate-600 dark:text-slate-300">
+                      Found {filteredExamples.length} semantically similar models
+                    </span>
+                    <button
+                      onClick={() => setSemanticResults(null)}
+                      className="text-xs text-primary hover:underline"
+                    >
+                      Clear &amp; browse categories
+                    </button>
+                  </div>
+                )}
 
-        {/* Model Grid */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 max-h-[60vh] overflow-y-auto pr-2">
-          {displayedExamples.length > 0 ? displayedExamples.map(example => (
-            <Card key={example.id} className="flex flex-col">
-              <div className="flex items-center justify-between">
-                {focusedExample === example.id ? (
-                  <div className="text-xs text-primary">Focused</div>
-                ) : (
-                  <div className="text-xs text-slate-500">&nbsp;</div>
+                {/* Fallback keyword search (shows when no semantic results) */}
+                {!semanticResults && (
+                  <div className="relative mb-4">
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                    <Input
+                      type="text"
+                      placeholder="Or filter by keyword..."
+                      value={searchTerm}
+                      onChange={(e) => setSearchTerm(e.target.value)}
+                      className="pl-10"
+                    />
+                  </div>
+                )}
+
+                {/* Category Tabs - hide when semantic results are shown */}
+                {!semanticResults && !searchTerm && (
+                  <div className="flex flex-wrap gap-2 mb-6 border-b border-stone-200 dark:border-slate-700 pb-4">
+                    {MODEL_CATEGORIES.map(category => (
+                      <button
+                        key={category.id}
+                        onClick={() => setSelectedCategory(category.id)}
+                        className={`px-4 py-2 text-sm font-medium rounded-t-md transition-colors ${selectedCategory === category.id
+                            ? 'bg-primary text-white'
+                            : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700'
+                          }`}
+                      >
+                        {category.name} ({category.models.length})
+                      </button>
+                    ))}
+                  </div>
+                )}
+
+                {/* Category Description - hide when semantic results are shown */}
+                {!semanticResults && !searchTerm && currentCategory && (
+                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4 italic">
+                    {currentCategory.description}
+                  </p>
                 )}
               </div>
-              <div className="flex-grow">
-                <h3 className="font-semibold text-slate-800 dark:text-slate-100">{toTitleCase(example.name)}</h3>
-                <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2">{example.description}</p>
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {example.tags?.slice(0, 2).map(tag => (
-                    <span key={tag} className="px-2 py-0.5 text-xs bg-primary-100 dark:bg-primary-900/50 text-primary-800 dark:text-primary-300 rounded-full">
-                      {tag}
-                    </span>
-                  ))}
+
+              {/* Model Grid */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 pr-2 pb-4">
+                {displayedExamples.length > 0 ? displayedExamples.map(example => (
+                  <Card key={example.id} className="flex flex-col">
+                    <div className="flex items-center justify-between">
+                      {focusedExample === example.id ? (
+                        <div className="text-xs text-primary">Focused</div>
+                      ) : (
+                        <div className="text-xs text-slate-500">&nbsp;</div>
+                      )}
+                    </div>
+                    <div className="flex-grow">
+                      <h3 className="font-semibold text-slate-800 dark:text-slate-100">{toTitleCase(example.name)}</h3>
+                      <p className="text-xs text-slate-600 dark:text-slate-300 mt-1 line-clamp-2">{example.description}</p>
+                      <div className="flex flex-wrap gap-1 mt-2">
+                        {example.tags?.slice(0, 2).map(tag => (
+                          <span key={tag} className="px-2 py-0.5 text-xs bg-primary-100 dark:bg-primary-900/50 text-primary-800 dark:text-primary-300 rounded-full">
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <button
+                      onClick={() => {
+                        console.log('[ExampleGalleryModal] Load Model clicked:', {
+                          id: example.id,
+                          name: example.name,
+                          codeLength: example.code.length,
+                          codePreview: example.code.substring(0, 200)
+                        });
+                        onSelect(example.code, toTitleCase(example.name), example.id);
+                      }}
+                      className="mt-3 w-full text-center px-4 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-slate-800 dark:text-slate-100"
+                    >
+                      Load Model
+                    </button>
+                  </Card>
+                )) : (
+                  <p className="text-slate-500 dark:text-slate-400 col-span-full text-center">No models match your search.</p>
+                )}
+              </div>
+            </TabPanel>
+
+            <TabPanel className="py-4 px-1">
+              <div className="mb-4">
+                <h3 className="text-lg font-medium text-slate-800 dark:text-slate-100 mb-2">BioModels Repository</h3>
+                <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
+                  Search and import public models directly from the BioModels repository (SBML format).
+                </p>
+                <div className="p-4 bg-slate-50 dark:bg-slate-900/40 rounded-md border border-slate-100 dark:border-slate-700">
+                  <BioModelsSearch onImportById={async (id) => {
+                    try {
+                      const url = `https://www.ebi.ac.uk/biomodels/model/${encodeURIComponent(id)}/download?format=xml`;
+                      const res = await fetch(url);
+                      if (!res.ok) throw new Error('Failed to fetch model');
+                      const blob = await res.blob();
+                      const ct = (res.headers.get('content-type') || '').toLowerCase();
+
+                      // If archive, try to extract SBML file
+                      if (ct.includes('zip') || ct.includes('omex')) {
+                        const JSZipModule = await import('jszip');
+                        const JSZip = JSZipModule.default || JSZipModule;
+                        const zip = await JSZip.loadAsync(blob);
+                        const candidates = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.xml') || name.toLowerCase().endsWith('.sbml'));
+                        if (candidates.length === 0) throw new Error('No SBML/XML in archive');
+                        const sbmlText = await zip.file(candidates[0])!.async('string');
+                        const file = new File([sbmlText], `${id}.xml`, { type: 'application/xml' });
+                        if (onImportSBML) onImportSBML(file);
+                        else onSelect(sbmlText, id, id);
+                      } else {
+                        const xmlText = await blob.text();
+                        const file = new File([xmlText], `${id}.xml`, { type: 'application/xml' });
+                        if (onImportSBML) onImportSBML(file);
+                        else onSelect(xmlText, id, id);
+                      }
+                    } catch (e) {
+                      console.warn('BioModels quick import failed', e);
+                    }
+                  }} />
                 </div>
               </div>
-              <button
-                onClick={() => {
-                  console.log('[ExampleGalleryModal] Load Model clicked:', {
-                    id: example.id,
-                    name: example.name,
-                    codeLength: example.code.length,
-                    codePreview: example.code.substring(0, 200)
-                  });
-                  onSelect(example.code, toTitleCase(example.name), example.id);
-                }}
-                className="mt-3 w-full text-center px-4 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-slate-800 dark:text-slate-100"
-              >
-                Load Model
-              </button>
-            </Card>
-          )) : (
-            <p className="text-slate-500 dark:text-slate-400 col-span-full text-center">No models match your search.</p>
-          )}
-        </div>
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
       </div>
     </Modal>
   );

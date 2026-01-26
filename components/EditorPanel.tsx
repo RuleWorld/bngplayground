@@ -9,6 +9,8 @@ import { ExampleGalleryModal } from './ExampleGalleryModal';
 
 import { ParameterPanel } from './ParameterPanel';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { Dropdown, DropdownItem } from './ui/Dropdown';
+import { BioModelsImportModal } from './BioModelsImportModal';
 // Minimal BNGL tidy helper (inlined to avoid module resolution issues)
 function formatBNGLMini(code: string): string {
   if (!code) return '';
@@ -84,6 +86,9 @@ interface EditorPanelProps {
     startColumn?: number;
     endColumn?: number;
   };
+  // New: allow importing SBML from the editor load button and exporting SBML
+  onImportSBML?: (file: File) => void;
+  onExportSBML?: () => void;
 }
 
 export const EditorPanel: React.FC<EditorPanelProps> = ({
@@ -101,6 +106,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   onModelNameChange,
   onModelIdChange,
   selection,
+  onImportSBML,
+  onExportSBML,
 }) => {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   // removed first-time-open example gallery state
@@ -109,20 +116,36 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   );
 
   const [isParamsOpen, setIsParamsOpen] = useState(false);
+  const [isBioModelsOpen, setIsBioModelsOpen] = useState(false);
   const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onload = (e) => {
-        onCodeChange(e.target?.result as string);
-        // Clear model name when loading from file
-        onModelNameChange?.(file.name.replace(/\.bngl$/i, ''));
-        onModelIdChange?.(null);
-      };
-      reader.readAsText(file);
+    if (!file) return;
+
+    const ext = file.name.split('.').pop()?.toLowerCase();
+
+    // If it's an SBML/XML file, delegate to the app's atomizer flow if provided
+    if (ext === 'sbml' || ext === 'xml') {
+      if (onImportSBML) {
+        onImportSBML(file);
+      } else {
+        console.warn('SBML import requested but no onImportSBML handler provided');
+      }
+      // Reset the input value so the same file can be reselected later
+      event.target.value = '';
+      return;
     }
+
+    // Otherwise treat as a BNGL (.bngl) file
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      onCodeChange(e.target?.result as string);
+      // Clear model name when loading from file
+      onModelNameChange?.(file.name.replace(/\.bngl$/i, ''));
+      onModelIdChange?.(null);
+    };
+    reader.readAsText(file);
   };
 
   const handleLoadExample = (exampleCode: string, modelName?: string, modelId?: string) => {
@@ -204,9 +227,25 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         <div className="flex flex-wrap gap-2 items-center justify-between">
           <div className="flex items-center gap-2">
             <Button onClick={() => setIsGalleryOpen(true)}>Models</Button>
-            <Button variant="subtle" onClick={() => fileInputRef.current?.click()}>
-              <UploadIcon className="w-4 h-4 mr-1" />
-              Load
+            {/* Load dropdown: Local BNGL/SBML or BioModels
+                - Local file: accepts .bngl, .sbml, .xml and preserves filename for
+                  downstream behavior (e.g., BioModels imports use the accession as
+                  a filename so the editor title shows the model ID).
+                - Import from BioModels: opens a small modal that fetches the model
+                  via the BioModels REST API and extracts an SBML file if needed.
+            */}
+            <Dropdown trigger={
+              <button className="px-3 py-1 text-sm font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-2">
+                <UploadIcon className="w-4 h-4" />
+                <span>Load</span>
+              </button>
+            }>
+              <DropdownItem onClick={() => fileInputRef.current?.click()}>Local file (BNGL / SBML)</DropdownItem>
+              <DropdownItem onClick={() => setIsBioModelsOpen(true)}>Import from BioModels...</DropdownItem>
+            </Dropdown>
+
+            <Button variant="subtle" onClick={() => onExportSBML?.()} disabled={!modelExists} title="Export current model as SBML">
+              Export SBML
             </Button>
             <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))}>
               Format
@@ -216,7 +255,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
-              accept=".bngl"
+              accept=".bngl,.sbml,.xml"
+              data-testid="editor-load-input"
             />
             <div className="border-l border-slate-300 dark:border-slate-600 h-6 mx-1" />
             <Button onClick={onParse} variant="secondary">Parse</Button>
@@ -253,6 +293,15 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         isOpen={isGalleryOpen}
         onClose={() => setIsGalleryOpen(false)}
         onSelect={handleLoadExample}
+        onImportSBML={onImportSBML}
+      />
+      <BioModelsImportModal
+        isOpen={isBioModelsOpen}
+        onClose={() => setIsBioModelsOpen(false)}
+        onImportSBML={(file) => {
+          if (onImportSBML) onImportSBML(file);
+          else console.warn('Header requested BioModels import but no onImportSBML handler supplied');
+        }}
       />
     </Card>
   );

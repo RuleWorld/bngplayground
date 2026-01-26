@@ -21,6 +21,8 @@ export interface ExpressionEvaluator {
 /**
  * Expand BNG2 built-in rate law macros (Sat, MM, Hill, Arrhenius).
  *
+ * PARITY NOTE: This logic replicates BNG2's pre-processing of rate laws (defined in `BNGAction.pm` / `RateLaw.cpp`).
+ * 
  * IMPORTANT (parity with this codebase): the simulation loop multiplies the
  * evaluated rate by mass-action reactant concentrations.
  *
@@ -44,6 +46,7 @@ export function expandRateLawMacros(
   let expr = rateExpr.trim();
 
   // Sat(k, K) -> k / (K + S)
+  // BNG2: Saturation kinetics (single substrate)
   expr = expr.replace(
     /\bSat\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi,
     (_, k, K) => `(((${k.trim()})) / (((${K.trim()})) + ${S}))`
@@ -51,10 +54,11 @@ export function expandRateLawMacros(
 
   // MM(kcat, Km)
   //
-  // Match BioNetGen Network3 behavior (RateMM::getRate):
+  // PARITY NOTE: Matches BioNetGen Network3 behavior (RateMM::getRate).
+  // Implicitly assumes reaction is S + E -> P + E (or similar).
   //   St = total substrate (reactant 0), Et = total enzyme (reactant 1)
   //   b = St - Et - Km
-  //   S = 0.5 * (b + sqrt(b*b + 4*St*Km))   // free substrate
+  //   S = 0.5 * (b + sqrt(b*b + 4*St*Km))   // free substrate approximation
   //   rate = kcat * Et * S / (Km + S)
   //
   // This simulator multiplies by mass-action reactant concentrations externally.

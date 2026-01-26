@@ -54,9 +54,22 @@ export class GraphCanonicalizer {
       return '';
     }
     if (graph.molecules.length === 1) {
-      let result = this.moleculeToString(graph.molecules[0], new Map(), graph, 0);
-      if (graph.compartment) {
-        result = `@${graph.compartment}:${result}`;
+      const mol = graph.molecules[0];
+      // BNG2 convention: for single-molecule species, the compartment is often 
+      // represented as a prefix @comp::M(...) if set at graph level, 
+      // or M(...)@comp if set at molecule level.
+      // However, internally they are often normalized.
+      // To ensure parity with BNG2 .net files:
+      const comp = graph.compartment || mol.compartment;
+      // Temporarily set graph compartment to effective comp for serialization to avoid redundancy
+      const oldComp = graph.compartment;
+      graph.compartment = comp;
+      const inner = this.moleculeToString(mol, new Map(), graph, 0);
+      graph.compartment = oldComp;
+      
+      let result = inner;
+      if (comp) {
+        result = `@${comp}::${inner}`;
       }
       graph.cachedCanonical = result;
       return result;
@@ -507,7 +520,10 @@ export class GraphCanonicalizer {
     });
 
     const canonicalMolecules = canonicalStrings.join('.');
-    const finalResult = graph.compartment ? `@${graph.compartment}:${canonicalMolecules}` : canonicalMolecules;
+    
+    // BNG2 convention: use double-colon prefix if all molecules are in the same compartment
+    // defined at the graph level.
+    const finalResult = graph.compartment ? `@${graph.compartment}::${canonicalMolecules}` : canonicalMolecules;
     // if (graph.molecules.length === 1 && graph.molecules[0].name === 'CCND') {
     //   console.error(`[Canonical] CCND comp='${graph.compartment}' => '${finalResult}'`);
     // }

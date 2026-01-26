@@ -10,6 +10,10 @@ const scriptDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(scriptDir, '..');
 const defaultExampleDir = resolve(projectRoot, 'example-models');
 const defaultOutDir = resolve(projectRoot, 'tests/fixtures/gdat');
+const NATIVE_NFSIM = resolve(projectRoot, 'src/wasm/nfsim/nfsim-src/build_native/NFsim.exe');
+const BUNDLED_NFSIM = resolve(projectRoot, 'bionetgen_python/bng-win/bin/NFsim.exe');
+
+const NFSIM_PATH = existsSync(NATIVE_NFSIM) ? NATIVE_NFSIM : BUNDLED_NFSIM;
 
 function printHelp() {
   console.log(`Generate GDAT baselines with BioNetGen via Perl.
@@ -128,10 +132,15 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
           // Capture optional compartment prefix (e.g. @c0:)
           const sm = l.match(/^(?:\d+\s+)?(@[^:]+:)?(.+?)\s+([0-9.+\-eE]+)/);
           if (sm) {
-            const comp = (sm[1] || '').trim();
+            let comp = (sm[1] || '').trim();
+            // BioNetGen 2.x XML export for NFsim uses double-colon '::' for compartments in the name field.
+            // When reading from BNGL, we see '@c0:', but NFsim XML expects '@c0::'.
+            if (comp.startsWith('@') && comp.endsWith(':') && !comp.endsWith('::')) {
+              comp = comp.slice(0, -1) + '::';
+            }
             const species = sm[2].trim();
             const count = Math.round(Number(sm[3]));
-            // Preserve compartment prefix if present — NFsim requires it for compartmental models
+            // Preserve compartment prefix with double colon — NFsim requires it for compartmental models
             speciesLines.push(`${comp}${species}  ${count}`);
           }
         }
@@ -150,6 +159,7 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
 
   const result = spawnSync(perlCmd, [bng2Path, modelName], {
     cwd: tempDir,
+    env: { ...process.env, NFSIM_EXEC: NFSIM_PATH },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -164,10 +174,15 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
     if (stderr.trim().length) {
       console.error(stderr.trim());
     }
-    rmSync(tempDir, { recursive: true, force: true });
-    throw new Error(`BNG2.pl failed for ${modelName} with exit code ${result.status ?? 'unknown'}`);
+    // Deep log for NFsim debugging
+    const logFile = resolve(projectRoot, 'bng_test_output/nfsim_debug.log');
+    mkdirSync(dirname(logFile), { recursive: true });
+    appendFileSync(logFile, `--- FAILED: ${modelName} ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
+    
+    if (!process.env.DEBUG) rmSync(tempDir, { recursive: true, force: true });
+    else console.log(`  [DEBUG] Preserved temp dir: ${tempDir}`);
+    throw new Error(`BNG2.pl failed for ${modelName} with exit code ${result.status ?? 'unknown'}. See bng_test_output/nfsim_debug.log for details.`);
   }
-
   if (stderr.trim().length) {
     console.warn(stderr.trim());
   }
@@ -176,8 +191,14 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose) {
   const gdatFiles = outputs.filter((file) => file.toLowerCase().endsWith('.gdat'));
 
   if (gdatFiles.length === 0) {
-    rmSync(tempDir, { recursive: true, force: true });
-    throw new Error(`No GDAT produced for ${modelName}.`);
+    // Log for debugging empty GDAT output
+    const logFile = resolve(projectRoot, 'bng_test_output/nfsim_debug.log');
+    mkdirSync(dirname(logFile), { recursive: true });
+    appendFileSync(logFile, `--- EMPTY GDAT: ${modelName} (status: ${result.status}) ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
+    
+    if (!process.env.DEBUG) rmSync(tempDir, { recursive: true, force: true });
+    else console.log(`  [DEBUG] Preserved temp dir: ${tempDir}`);
+    throw new Error(`No GDAT produced for ${modelName}. See bng_test_output/nfsim_debug.log for details.`);
   }
 
   // Copy all produced GDAT files to the output directory. Preserve their original

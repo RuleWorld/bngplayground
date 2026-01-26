@@ -188,7 +188,7 @@ async function main() {
     });
 
     console.log('[generate:web-output] Opening app...');
-    await page.goto(BASE_URL, { timeout: 120000 });
+    await page.goto(BASE_URL, { timeout: 300000 });
     await waitForPageToSettleAfterNavigation(page);
 
     if (Number.isFinite(WEB_OUTPUT_SEED)) {
