@@ -1423,7 +1423,6 @@ export async function simulate(
           for (let si = 0; si < speciesHeaders.length; si++) {
             if (speciesHeaders[si].includes('STAT3')) matches.push({ name: speciesHeaders[si], dydt: dydt0[si], state: y0[si] });
           }
-          console.log('[DEBUG_Propensities] STAT3 species dydt/state sample:', JSON.stringify(matches.slice(0, 20), null, 2));
         } catch (err) {
           console.warn('[DEBUG_Propensities] Failed to inspect dydt sample:', err?.message ?? err);
         }

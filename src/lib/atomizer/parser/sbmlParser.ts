@@ -722,7 +722,22 @@ export class SBMLParser {
           const config = {
             locateFile: (file: string) => {
               console.log(`[SBMLParser] locateFile: ${file}`);
-              if (file.endsWith('.wasm')) return '/bngplayground/libsbml.wasm';
+              if (file.endsWith('.wasm')) {
+                // Node environment: load from local node_modules if available
+                if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+                  try {
+                    // Construct candidate path relative to process.cwd()
+                    return `${process.cwd().replace(/\\/g,'/')}/node_modules/libsbmljs_stable/${file}`;
+                  } catch (e) {
+                    // fall back to bundled path
+                    return '/bngplayground/libsbml.wasm';
+                  }
+                }
+
+                // Browser default
+                return '/bngplayground/libsbml.wasm';
+              }
+
               if (file.endsWith('.wast') || file.endsWith('.asm.js')) {
                 return 'data:application/octet-stream;base64,';
               }

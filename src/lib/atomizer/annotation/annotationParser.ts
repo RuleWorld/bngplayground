@@ -378,36 +378,14 @@ export function computeAnnotationStats(model: SBMLModel): AnnotationStats {
 }
 
 // =============================================================================
-// UniProt Integration (placeholder for optional network features)
+// UniProt Integration
 // =============================================================================
 
-export interface UniProtEntry {
-  accession: string;
-  name: string;
-  proteinName: string;
-  geneName: string;
-  organism: string;
-  function?: string;
-  subcellularLocation?: string[];
-  keywords?: string[];
-}
+// Delegate UniProt network access to the dedicated service implementation
+import { fetchUniProtEntry as fetchUniProtEntryService, UniProtEntry } from '../services/uniprot';
 
-/**
- * Fetch UniProt entry (stub - requires network access)
- * In browser environment, this would need to be implemented with fetch API
- */
-export async function fetchUniProtEntry(accession: string): Promise<UniProtEntry | null> {
-  // This is a placeholder - actual implementation would require:
-  // 1. Network access (which may not be available in browser environment)
-  // 2. CORS handling
-  // 3. Rate limiting
-  
-  logger.warning('ANN001', 
-    `UniProt fetching not implemented in browser environment: ${accession}`
-  );
-  
-  return null;
-}
+export { UniProtEntry, fetchUniProtEntryService as fetchUniProtEntry };
+
 
 /**
  * Extract UniProt accessions from annotations

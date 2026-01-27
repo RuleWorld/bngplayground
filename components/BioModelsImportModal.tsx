@@ -35,7 +35,7 @@ export const BioModelsImportModal: React.FC<BioModelsImportModalProps> = ({ isOp
     setLoading(true);
     try {
       // Try requesting SBML/XML explicitly (server supports `format` parameter)
-      const url = `/api/biomodels/model/download/${encodeURIComponent(trimmed)}?format=xml`;
+      const url = `https://www.ebi.ac.uk/biomodels/model/${encodeURIComponent(trimmed)}/download?format=xml`;
       const res = await fetch(url);
       if (!res.ok) throw new Error(`Failed to fetch: ${res.status}`);
 
@@ -43,78 +43,31 @@ export const BioModelsImportModal: React.FC<BioModelsImportModalProps> = ({ isOp
       const contentDisposition = (res.headers.get('content-disposition') || '').toLowerCase();
 
       const blob = await res.blob();
-      console.log(`[BioModels] Detected Content-Type: ${contentType}`);
-      console.log(`[BioModels] Detected Content-Disposition: ${contentDisposition}`);
 
-      // Robust archive detection:
-      // 1. Headers (Zip/Omex)
-      // 2. Binary Signature Check (Magic Bytes: 50 4B 03 04 for ZIP)
-      const headerCheck = contentType.includes('zip') || contentType.includes('omex') ||
-        contentDisposition.includes('.zip') || contentDisposition.includes('.omex');
-
-      let isArchive = headerCheck;
-
-      if (!isArchive) {
-        // Sample first 4 bytes
-        const buffer = await blob.slice(0, 4).arrayBuffer();
-        const header = new Uint8Array(buffer);
-        // ZIP magic bytes: PK\x03\x04
-        if (header[0] === 0x50 && header[1] === 0x4B && header[2] === 0x03 && header[3] === 0x04) {
-          console.log('[BioModels] Binary signature matches ZIP archive. Overriding header-based type.');
-          isArchive = true;
-        }
-      }
-
-      if (isArchive) {
-        console.log('[BioModels] Detected archive format. Attempting extraction...');
+      // If we received a zip/omex archive, attempt to unzip and extract an SBML file
+      if (contentType.includes('zip') || contentType.includes('omex') || contentDisposition.includes('.zip') || contentDisposition.includes('.omex')) {
         try {
+          // Dynamic import so tests/dev env that don't have JSZip aren't blocked
           const JSZipModule = await import('jszip');
           const JSZip = JSZipModule.default || JSZipModule;
           const zip = await JSZip.loadAsync(blob);
-          const files = Object.keys(zip.files);
-          console.log('[BioModels] Archive loaded. Files:', files);
-
-          // Refined candidate selection:
-          // 1. Exclude known metadata/manifest files
-          // 2. Prefer .sbml over .xml if both exist
-          // 3. Exclude directories
-          const filtered = files.filter(name => {
-            const lower = name.toLowerCase();
-            return (lower.endsWith('.xml') || lower.endsWith('.sbml')) && 
-                   !lower.endsWith('manifest.xml') && 
-                   !lower.endsWith('metadata.rdf') &&
-                   !zip.files[name].dir;
-          });
-
-          if (filtered.length === 0) throw new Error('No valid SBML/XML files found inside the archive');
-
-          // Sort to prefer .sbml
-          filtered.sort((a, b) => {
-            if (a.toLowerCase().endsWith('.sbml') && !b.toLowerCase().endsWith('.sbml')) return -1;
-            if (!a.toLowerCase().endsWith('.sbml') && b.toLowerCase().endsWith('.sbml')) return 1;
-            return 0;
-          });
-
-          const sbmlName = filtered[0];
-          console.log(`[BioModels] Extracting candidate: ${sbmlName}`);
+          const candidates = Object.keys(zip.files).filter(name => name.toLowerCase().endsWith('.xml') || name.toLowerCase().endsWith('.sbml'));
+          if (candidates.length === 0) throw new Error('No SBML/XML files found inside the archive');
+          // Pick the first SBML/XML file
+          const sbmlName = candidates[0];
           const sbmlText = await zip.file(sbmlName)!.async('string');
-
           const file = new File([sbmlText], `${trimmed}.xml`, { type: 'application/xml' });
           onImportSBML(file);
           onClose();
           return;
         } catch (zipErr) {
-          console.error('[BioModels] Archive extraction failed:', zipErr);
-          throw new Error(`Failed to extract model archive: ${zipErr instanceof Error ? zipErr.message : String(zipErr)}`);
+          console.warn('Failed to extract archive using JSZip:', zipErr);
+          // Fall through to try to interpret blob as XML text
         }
       }
 
-      // Otherwise treat as XML/SBML text (strictly for non-archives)
+      // Otherwise treat as XML/SBML text
       const xml = await blob.text();
-      // Double check snippet to avoid binary junk
-      if (xml.substring(0, 100).includes('PK\x03\x04')) {
-         throw new Error('Fetched file is a ZIP archive despite isArchive=false. Aborting text parse.');
-      }
       const file = new File([xml], `${trimmed}.xml`, { type: 'application/xml' });
       onImportSBML(file);
       onClose();

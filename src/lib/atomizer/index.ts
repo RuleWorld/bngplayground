@@ -105,6 +105,28 @@ export class Atomizer {
     }
 
     try {
+      // If this SBML was produced by BioNetGen (BNG-style SBML), use the fast-path converter
+      if (/ListOfMoleculeTypes\b/i.test(sbmlString) || /ListOfReactionRules\b/i.test(sbmlString)) {
+        // Try conversion to BNGL directly from the BNG-exported SBML XML
+        try {
+          const { convertBNGXmlToBNGL } = await import('./parser/bngXmlParser');
+          const bngl = convertBNGXmlToBNGL(sbmlString);
+          logger.info('ATM_BNG_FASTPATH', 'Detected BNG-style SBML and converted directly to BNGL');
+
+          return {
+            bngl,
+            database: this.databases,
+            annotation: null,
+            observableMap: new Map(),
+            log: logger.getMessages(),
+            success: true,
+          } as AtomizerResult;
+        } catch (e) {
+          logger.warning('ATM_BNG_FASTPATH_FAIL', `BNG XML fast-path failed: ${e}`);
+          // fall through to regular parsing
+        }
+      }
+
       // Parse SBML
       logger.info('ATM003', 'Parsing SBML model...');
       this.model = await this.parser.parse(sbmlString);
