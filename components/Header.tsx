@@ -93,15 +93,6 @@ export const Header: React.FC<HeaderProps> = ({
             <div className="flex items-center gap-2">
               {code && (
                 <div className="flex items-center gap-1 mr-1">
-                  <button
-                    onClick={() => setIsVSCodeModalOpen(true)}
-                    className="p-2 text-slate-500 hover:text-blue-600 dark:text-slate-400 dark:hover:text-blue-400 hover:bg-slate-100 dark:hover:bg-slate-700 rounded transition-colors"
-                    title="Open model in VS Code"
-                  >
-                    <svg className="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-                      <path d="M19.1 22.1l-11.2-4.5-9.6 4.5v-2.1L7.9 16.5l-7.9-3.5v-2L7.9 7.5L0 4.1V2l9.6 4.5L19.1 2z M10.6 12l8.5-4L24 12l-4.9 4z" />
-                    </svg>
-                  </button>
                   <ShareButton
                     code={code}
                     modelName={modelName}

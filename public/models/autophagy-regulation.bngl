@@ -51,8 +51,6 @@ begin observables
     Molecules Growth_Sensor   mTOR(s~on)               # Nutrient status
     Molecules Primed_ULK1     ULK1(s~active)           # Initiator status
     Molecules Cargo_Capture   p62(b!+)                 # Functional clearance
-    
-    Molecules Cargo_Capture   p62(b!+)                 # Functional clearance
 end observables
 
 begin reaction rules

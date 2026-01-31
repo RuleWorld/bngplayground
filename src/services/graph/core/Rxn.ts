@@ -8,12 +8,15 @@ export class Rxn {
   degeneracy: number;
   propensityFactor?: number;
 
+  scalingVolume?: number;
+  totalRate?: boolean;
+
   constructor(
     reactants: number[],
     products: number[],
     rate: number,
     name?: string,
-    options: { degeneracy?: number; propensityFactor?: number; rateExpression?: string; productStoichiometries?: number[] } = {}
+    options: { degeneracy?: number; propensityFactor?: number; rateExpression?: string; productStoichiometries?: number[]; scalingVolume?: number; totalRate?: boolean } = {}
   ) {
     this.reactants = reactants;
     this.products = products;
@@ -23,6 +26,8 @@ export class Rxn {
     this.propensityFactor = options.propensityFactor;
     this.rateExpression = options.rateExpression;
     this.productStoichiometries = options.productStoichiometries;
+    this.scalingVolume = options.scalingVolume;
+    this.totalRate = (options as any).totalRate;
   }
 
   rateExpression?: string;

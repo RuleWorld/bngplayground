@@ -8,7 +8,7 @@
 
 import type { BNGLModel } from '../types.ts';
 import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
-import { SafeExpressionEvaluator } from './safeExpressionEvaluator';
+import { SafeExpressionEvaluator } from './safeExpressionEvaluator.ts';
 import { parseBNGLWithANTLR } from '../src/parser/BNGLParserWrapper.ts';
 
 interface NetworkGenerationOptions {
@@ -609,7 +609,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
         let depth = 0;
 
         // Keywords that should be split on whitespace
-        const keywords = ['exclude_reactants', 'include_reactants', 'DeleteMolecules', 'MoveMolecules'];
+        const keywords = ['exclude_reactants', 'include_reactants', 'DeleteMolecules', 'MoveMolecules', 'TotalRate'];
 
         for (let i = 0; i < chunk.length; i++) {
           const ch = chunk[i];
@@ -649,11 +649,14 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
       const rateConstants: string[] = [];
 
       let deleteMolecules = false;
+      let totalRate = false;
       allRateTokens.forEach(token => {
         if (token.startsWith('exclude_reactants') || token.startsWith('include_reactants')) {
           constraints.push(token);
         } else if (token === 'DeleteMolecules' || token === 'MoveMolecules') {
           deleteMolecules = true;
+        } else if (token === 'TotalRate') {
+          totalRate = true;
         } else {
           rateConstants.push(token);
         }
@@ -676,6 +679,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
         reverseRate: isBidirectional ? reverseRateLabel : undefined,
         constraints,
         deleteMolecules,
+        totalRate,
         comment: extractInlineComment(statement),
       });
     });

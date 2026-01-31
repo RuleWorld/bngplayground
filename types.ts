@@ -42,6 +42,7 @@ export interface BNGLSpecies {
   name: string;
   initialConcentration: number;
   isConstant?: boolean;
+  initialExpression?: string; // Raw expression string from the 'seed species' block (if present)
 }
 
 export interface BNGLObservable {
@@ -74,6 +75,7 @@ export interface BNGLReaction {
   isFunctionalRate?: boolean;  // True if rate depends on observables/functions
   propensityFactor?: number;  // Statistical factor for degeneracy
   productStoichiometries?: number[]; // Volume scaling factors for products
+  scalingVolume?: number;    // NEW: Proper volume/surface for concentration-to-amount flux scaling
 }
 
 // BNG function definition (e.g., gene_Wip1_activity())
@@ -223,6 +225,14 @@ export interface SimulationOptions {
   steadyState?: boolean;
   steadyStateTolerance?: number;
   steadyStateWindow?: number;
+  // CVODE tuning options (advanced)
+  stabLimDet?: boolean;
+  maxOrd?: number;
+  maxNonlinIters?: number;
+  nonlinConvCoef?: number;
+  maxErrTestFails?: number;
+  maxConvFails?: number;
+  minStep?: number;
   // BNG2 parity options
   print_functions?: boolean;
   sparse?: boolean;
@@ -299,6 +309,7 @@ export interface NetworkGeneratorOptions {
   maxIterations?: number;
   progressCallback?: (progress: { currentSpecies: number; totalSpecies: number; iteration: number }) => void;
   compartments?: BNGLCompartment[];
+  seedConcentrationMap?: Map<string, number>;
 }
 
 export interface GeneratorProgress {

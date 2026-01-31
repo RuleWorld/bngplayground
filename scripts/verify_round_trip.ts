@@ -99,10 +99,16 @@ async function verifyModel(modelPath: string) {
         const sbmlOutDir = path.join(OUTPUT_BASE, 'sbml');
         runBNG2(['--sbml', '--outdir', `"${sbmlOutDir}"`, `"${modelPath}"`]);
 
-        // Check for output file (BNG2 usually outputs [modelName].xml or [modelName]_sbml.xml)
+        // Check for output file (BNG2 usually outputs [modelName]_sbml.xml or [modelName].xml)
         let sbmlFile = path.join(sbmlOutDir, `${modelName}_sbml.xml`);
         if (!fs.existsSync(sbmlFile)) {
             sbmlFile = path.join(sbmlOutDir, `${modelName}.xml`);
+        }
+        if (!fs.existsSync(sbmlFile)) {
+            // Some models might have uppercase/hyphen differences or other naming quirks
+            const files = fs.readdirSync(sbmlOutDir);
+            const found = files.find(f => f.toLowerCase().startsWith(modelName.toLowerCase()) && f.endsWith('.xml'));
+            if (found) sbmlFile = path.join(sbmlOutDir, found);
         }
         if (!fs.existsSync(sbmlFile)) throw new Error(`SBML generation failed: ${sbmlFile} missing`);
 
@@ -181,17 +187,15 @@ async function main() {
 
     // Get all BNGL files from native-tutorials/CBNGL (good starting point)
     // Or just pick a few specific ones
-    const tutorialsDir = path.resolve('published-models/native-tutorials/CBNGL');
-    // const tutorialsDir = path.resolve('published-models/native-tutorials/ABC'); // simpler?
+    const tutorialsDir = path.resolve('example-models');
 
     if (!fs.existsSync(tutorialsDir)) {
-        console.error(`Tutorials directory not found: ${tutorialsDir}`);
+        console.error(`Example models directory not found: ${tutorialsDir}`);
         process.exit(1);
     }
 
-    // Explicitly target LR.bngl for debugging
-    const files = ['LR.bngl'];
-    console.log(`Verifying specific models: ${files.join(', ')}`);
+    const files = fs.readdirSync(tutorialsDir).filter(f => f.endsWith('.bngl'));
+    console.log(`Verifying all models in ${tutorialsDir} (${files.length} models)...`);
 
     for (const file of files) {
         await verifyModel(path.join(tutorialsDir, file));

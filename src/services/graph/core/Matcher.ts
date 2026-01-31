@@ -253,6 +253,9 @@ export class GraphMatcher {
   static findAllMaps(pattern: SpeciesGraph, target: SpeciesGraph): MatchMap[] {
     // Fast pre-filter: check if target has enough molecules of each type
     if (!this.canPossiblyMatch(pattern, target)) {
+      if (pattern.toString().includes('C3(s~b)')) {
+        console.log(`[GM_DEBUG] canPossiblyMatch failed for ${pattern.toString()} in ${target.toString()}`);
+      }
       return [];
     }
 
@@ -274,6 +277,9 @@ export class GraphMatcher {
 
     const iterationCount = { value: 0 };
     this.vf2Backtrack(state, matches, iterationCount);
+    if (pattern.toString().includes('C3(s~b)')) {
+      console.log(`[GM_DEBUG] findAllMaps result for ${pattern.toString()} in ${target.toString()}: ${matches.length} matches`);
+    }
 
     // Cache result with LRU eviction
     addToMatchCache(cacheKey, matches);
@@ -606,6 +612,10 @@ class VF2State {
     return true;
   }
 
+  private getEffectiveCompartment(graph: SpeciesGraph, molIdx: number): string | undefined {
+    return graph.molecules[molIdx].compartment || graph.compartment;
+  }
+
   private quickFeasibilityCheck(pMol: number, tMol: number): boolean {
     const patternMol = this.pattern.molecules[pMol];
     const targetMol = this.target.molecules[tMol];
@@ -619,7 +629,9 @@ class VF2State {
     // - If pattern specifies a compartment, target must be in the same compartment
     // - If pattern does NOT specify a compartment (undefined/null), it matches ANY compartment
     // This allows rules like "L(r) + R(l)" to match "L(r)@EC + R(l)@PM"
-    if (patternMol.compartment && patternMol.compartment !== targetMol.compartment) {
+    const pComp = this.getEffectiveCompartment(this.pattern, pMol);
+    const tComp = this.getEffectiveCompartment(this.target, tMol);
+    if (pComp && pComp !== tComp) {
       return false;
     }
 
@@ -670,9 +682,10 @@ class VF2State {
           continue;
         }
         const mol = this.pattern.molecules[neighbor];
-        if (mol.name !== '*' && mol.compartment) {
+        const molComp = this.getEffectiveCompartment(this.pattern, neighbor);
+        if (mol.name !== '*' && molComp) {
           // Pattern specifies compartment - must match exactly
-          const key = `${mol.name}|${mol.compartment}`;
+          const key = `${mol.name}|${molComp}`;
           patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1);
         } else if (mol.name !== '*') {
           // Pattern doesn't specify compartment - track by name only (wildcard)
@@ -704,7 +717,8 @@ class VF2State {
           continue;
         }
         const mol = this.target.molecules[neighbor];
-        const key = `${mol.name}|${mol.compartment ?? ''}`;
+        const molComp = this.getEffectiveCompartment(this.target, neighbor);
+        const key = `${mol.name}|${molComp ?? ''}`;
         targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
         // Also count by name only for wildcard matching
         targetNameOnlyCounts.set(mol.name, (targetNameOnlyCounts.get(mol.name) ?? 0) + 1);
@@ -745,9 +759,10 @@ class VF2State {
         continue;
       }
       const mol = this.pattern.molecules[neighbor];
-      if (mol.name !== '*' && mol.compartment) {
+      const molComp = this.getEffectiveCompartment(this.pattern, neighbor);
+      if (mol.name !== '*' && molComp) {
         // Pattern specifies compartment - must match exactly
-        const key = `${mol.name}|${mol.compartment}`;
+        const key = `${mol.name}|${molComp}`;
         patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1);
       } else if (mol.name !== '*') {
         // Pattern doesn't specify compartment - wildcard match by name
@@ -768,7 +783,8 @@ class VF2State {
         continue;
       }
       const mol = this.target.molecules[neighbor];
-      const key = `${mol.name}|${mol.compartment ?? ''}`;
+      const molComp = this.getEffectiveCompartment(this.target, neighbor);
+      const key = `${mol.name}|${molComp ?? ''}`;
       targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
       // Also count by name only for wildcard matching
       targetNameOnlyCounts.set(mol.name, (targetNameOnlyCounts.get(mol.name) ?? 0) + 1);
@@ -1336,16 +1352,21 @@ class VF2State {
 
     if (hasSpecificBond) {
       if (!targetBound) {
-        if (shouldLogGraphMatcher) console.log(`[GraphMatcher] Specific bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects bond`);
+        if (shouldLogGraphMatcher) {
+          const comp = this.target.molecules[tMolIdx]?.components[tCompIdx];
+          console.log(`[R5_DEBUG] Specific bond check: pMol=${pMolIdx} pComp=${pCompIdx} name=${pComp.name} hasSpecificBond=${hasSpecificBond} targetBound=${targetBound} tMol=${tMolIdx} tComp=${tCompIdx} tCompName=${comp?.name} tEdgesSize=${comp?.edges?.size} tEdgesType=${typeof comp?.edges} tEdgesIsMap=${comp?.edges instanceof Map}`);
+          console.log(`[GraphMatcher] Specific bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects bond`);
+        }
         return false;
       }
       return true;
     } else {
-      // Pattern specifies NO edges and NO wildcard.
-      // BioNetGen semantics: A(b) matches both A(b) and A(b!1).
-      // If the user wants to specify unbound, they should use !-.
-      // This fix ensures observables like "A()" or "A(b)" count bound molecules correctly.
-      return true;
+      // BioNetGen semantics: If a binding site is NOT explicitly given a bond state (!1, !+, !?, !0),
+      // it defaults to UNBOUND.
+      // Reference: BNGL Manual Section 2.2.3 "Binding States"
+      // "If a bond state is not specified, then the site must be unbound."
+      if (targetBound && shouldLogGraphMatcher) console.log(`[GraphMatcher] Omitted bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects unbound`);
+      return !targetBound;
     }
 
   }
@@ -1437,14 +1458,23 @@ class VF2State {
    * where the bonds are dangling (partner not present).
    */
   private targetHasBond(tMolIdx: number, tCompIdx: number): boolean {
+    const key = this.getAdjacencyKey(tMolIdx, tCompIdx);
+    const hasAdj = this.target.adjacency.has(key);
+
     // Check resolved bonds in adjacency map
-    if (this.target.adjacency.has(this.getAdjacencyKey(tMolIdx, tCompIdx))) {
+    if (hasAdj) {
       return true;
     }
     // Also check for dangling/unresolved bonds in component.edges
     // These have value -1 to indicate the partner wasn't found during parsing
     const comp = this.target.molecules[tMolIdx]?.components[tCompIdx];
-    if (comp && comp.edges.size > 0) {
+    const edgeSize = comp?.edges?.size ?? 0;
+
+    if (shouldLogGraphMatcher && !hasAdj && edgeSize === 0) {
+      // console.log(`[GraphMatcher] targetHasBond(${tMolIdx}.${tCompIdx}) failed: adjacency.size=${this.target.adjacency.size}, edges.size=${edgeSize}`);
+    }
+
+    if (edgeSize > 0) {
       return true;
     }
     return false;

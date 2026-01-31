@@ -16,7 +16,7 @@ import type { Rxn } from './graph/core/Rxn';
 /**
  * Compiled RHS function type
  */
-export type CompiledRHS = (t: number, y: Float64Array, dydt: Float64Array) => void;
+export type CompiledRHS = (t: number, y: Float64Array, dydt: Float64Array, speciesVolumes: Float64Array) => void;
 
 /**
  * JIT compilation result
@@ -47,24 +47,53 @@ export class JITCompiler {
             reactantStoich: number[];
             productIndices: number[];
             productStoich: number[];
+
             rateConstant: number | string; // Can be number or expression
             rateConstantIndex?: number;
+            scalingVolume?: number; // Reacting volume anchor (BNG2-style)
+            totalRate?: boolean; // If true, flux is independent of reactant counts
         }>,
         nSpecies: number,
         parameters?: Record<string, number>
     ): JITCompiledFunction {
+        // Build a cache key based on reactions and parameters
+        // Note: For large networks, hashing might be slow, so we use a simplified signature 
+        // or just rely on callers to clear the cache if they know things changed.
+        // However, we want to BE SAFE, so we include parameters because they are inlined.
+        const configSignature = JSON.stringify({
+            rxnSignatures: reactions.map(r => ({
+                r: Array.from(r.reactantIndices),
+                rs: Array.from(r.reactantStoich),
+                p: Array.from(r.productIndices),
+                ps: Array.from(r.productStoich),
+                k: r.rateConstant,
+                v: r.scalingVolume,
+                t: r.totalRate
+            })),
+            nSpecies,
+            parameters: parameters || {}
+        });
+
+        const cached = this.cache.get(configSignature);
+        if (cached) {
+            return cached;
+        }
+
         // Build the function source code
         let source = '';
 
         // Add parameter bindings if provided
         if (parameters) {
             for (const [name, value] of Object.entries(parameters)) {
-                source += `const ${name} = ${value};\n`;
+                // Ensure name is a valid JS identifier
+                if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) {
+                    source += `const ${name} = ${value};\n`;
+                }
             }
         }
 
         // Initialize dydt to zero
-        source += `for (let i = 0; i < ${nSpecies}; i++) dydt[i] = 0;\n\n`;
+        source += `for (let i = 0; i < ${nSpecies}; i++) dydt[i] = 0.0;\n\n`;
 
         // Generate reaction rate calculations
         for (let i = 0; i < reactions.length; i++) {
@@ -78,12 +107,50 @@ export class JITCompiler {
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
                 const idx = rxn.reactantIndices[j];
                 const stoich = rxn.reactantStoich[j];
+                // PARITY FIX: BNG2 mass-action assumes rates are scaled by V_anchor.
+                // Reactant concentrations must be converted from native (N/Vi) to anchor-relative (N/Vanchor).
+                const vAnchor = rxn.scalingVolume || 1.0;
+                const scale = `(speciesVolumes[${idx}] / ${vAnchor})`;
+
                 if (stoich === 1) {
-                    rateExpr += ` * y[${idx}]`;
+                    rateExpr += ` * (y[${idx}] * ${scale})`;
                 } else if (stoich === 2) {
-                    rateExpr += ` * y[${idx}] * y[${idx}]`;
+                    rateExpr += ` * Math.pow(y[${idx}] * ${scale}, 2)`;
                 } else {
-                    rateExpr += ` * Math.pow(y[${idx}], ${stoich})`;
+                    rateExpr += ` * Math.pow(y[${idx}] * ${scale}, ${stoich})`;
+                }
+            }
+
+            // Apply multiplicity/degeneracy if using symbolic expression
+            // Numeric rateConstant already includes degeneracy aggregated in NetworkGenerator
+            if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
+                rateExpr = `(${rateExpr}) * ${(rxn as any).statisticalFactor}`;
+            }
+
+            // Apply reacting volume anchor (matches BNG2 compartmental mass-action scaling)
+            // PARITY FIX: For concentration-based ODEs (y in M), the rate expression should 
+            // represent TOTAL FLUX (Amount/Time) to be correctly distributed into 
+            // compartment-specific dydt (d[C]/dt = Flux / Vol_C).
+            // Flux = k * [A]^n * [B]^m * Vol_Anchor
+            if (rxn.scalingVolume && rxn.scalingVolume !== 1) {
+                const n = rxn.reactantIndices.length;
+                if (n === 0) {
+                    // Zero-order synthesis: Rate = k * V_anchor
+                    rateExpr = `(${rateExpr}) * ${rxn.scalingVolume}`;
+                } else if (n === 1) {
+                    // Unimolecular: Flux = k * [A] * V_anchor
+                    // (Previous implementation skipped this, leading to errors in transport/unimolecular)
+                    rateExpr = `(${rateExpr}) * ${rxn.scalingVolume}`;
+                } else if (n === 2) {
+                    // Bimolecular: Flux = k * [A] * [B] * V_anchor
+                    // (Previous implementation incorrectly divided by V_anchor here)
+                    rateExpr = `(${rateExpr}) * ${rxn.scalingVolume}`;
+                } else if (n === 3) {
+                    // Ternary: Flux = k * [A] * [B] * [C] * V_anchor
+                    rateExpr = `(${rateExpr}) * ${rxn.scalingVolume}`;
+                } else {
+                    // Higher-order: Flux = k * [Patterns] * V_anchor
+                    rateExpr = `(${rateExpr}) * ${rxn.scalingVolume}`;
                 }
             }
 
@@ -93,7 +160,6 @@ export class JITCompiler {
         source += '\n';
 
         // Generate species derivative updates
-        // Group by species for better cache locality
         const speciesContributions: Map<number, string[]> = new Map();
 
         for (let i = 0; i < reactions.length; i++) {
@@ -132,7 +198,8 @@ export class JITCompiler {
         for (const [speciesIdx, contributions] of speciesContributions) {
             if (contributions.length === 0) continue;
 
-            // Clean up the expression (remove leading +)
+            // Check if species is constant (volume = 0 or specific flag)
+            // If speciesVolumes[idx] is provided, we use it for scaling
             let expr = contributions.join(' ');
             if (expr.startsWith('+ ')) {
                 expr = expr.substring(2);
@@ -140,21 +207,24 @@ export class JITCompiler {
                 expr = expr.substring(1);
             }
 
-            source += `dydt[${speciesIdx}] = ${expr};\n`;
+            // Apply species-specific volume scaling: d[C]/dt = Flux_Amount / Vol_Species
+            // Parity: matches BNG2 compartmental ODE semantics
+            source += `dydt[${speciesIdx}] = (${expr})`;
+            source += ` / speciesVolumes[${speciesIdx}];\n`;
         }
 
         // Create the function
-        const fullSource = `(function(t, y, dydt) {\n${source}})`;
+        const fullSource = `(function(t, y, dydt, speciesVolumes) {\n${source}})`;
 
         let evaluate: CompiledRHS;
         try {
-             
+            // eslint-disable-next-line no-eval
             evaluate = eval(fullSource) as CompiledRHS;
         } catch (error) {
             console.error('[JITCompiler] Failed to compile RHS function:', error);
             console.error('[JITCompiler] Source:', fullSource);
             // Fallback to a generic implementation
-            evaluate = (_t, _y, dydt) => {
+            evaluate = (_t, _y, dydt, _speciesVolumes) => {
                 for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
             };
         }
@@ -166,6 +236,13 @@ export class JITCompiler {
             nReactions: reactions.length,
             compiledAt: Date.now()
         };
+
+        // Manage cache size
+        if (this.cache.size >= this.maxCacheSize) {
+            const firstKey = this.cache.keys().next().value;
+            if (firstKey !== undefined) this.cache.delete(firstKey);
+        }
+        this.cache.set(configSignature, result);
 
         console.log(`[JITCompiler] Compiled RHS for ${nSpecies} species, ${reactions.length} reactions`);
 
@@ -213,7 +290,10 @@ export class JITCompiler {
                 reactantStoich,
                 productIndices,
                 productStoich,
-                rateConstant: rxn.rateExpression || rxn.rate
+                rateConstant: rxn.rateExpression || rxn.rate,
+                scalingVolume: rxn.scalingVolume, // Extract scaling volume
+                totalRate: rxn.totalRate, // Handle total rate
+                statisticalFactor: rxn.degeneracy // Pass degeneracy for symbolic expressions
             };
         });
 

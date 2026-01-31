@@ -20,12 +20,15 @@ export function convertBNGXmlToBNGL(xml: string): string {
 
   // Parameters
   const params = Array.from(modelEl.getElementsByTagName('ListOfParameters')[0]?.getElementsByTagName('Parameter') || []);
+  const paramNames = new Set<string>();
   if (params.length > 0) {
     lines.push('begin parameters');
     for (const p of params) {
       const id = p.getAttribute('id') || p.getAttribute('name') || 'p';
-      const val = p.getAttribute('value') || p.getAttribute('expr') || '';
+      // Priority: expr attribute often contains the formula if it's dynamic
+      const val = p.getAttribute('expr') || p.getAttribute('value') || '';
       lines.push(`    ${id} ${val}`);
+      paramNames.add(id);
     }
     lines.push('end parameters', '');
   }
@@ -73,8 +76,10 @@ export function convertBNGXmlToBNGL(xml: string): string {
       lines.push('begin seed species');
       for (const s of speciesEls) {
         const name = s.getAttribute('name') || s.getAttribute('id') || '';
+        const comp = s.getAttribute('compartment');
         const conc = s.getAttribute('concentration') || s.getAttribute('initialConcentration') || s.getAttribute('initialAmount') || '0';
-        lines.push(`    ${escapeName(name)}   ${conc}`);
+        const fullSpecies = comp ? `${name}@${comp}` : name;
+        lines.push(`    ${escapeName(fullSpecies)}   ${conc}`);
       }
       lines.push('end seed species', '');
     }
@@ -93,17 +98,59 @@ export function convertBNGXmlToBNGL(xml: string): string {
         const pattern = o.getElementsByTagName('Pattern')[0];
         let patternStr = '';
         if (pattern) {
+          // Build bond map first
+          const bondIndex = new Map<string, number>();
+          let nextBond = 1;
+          const bondList = pattern.getElementsByTagName('ListOfBonds')[0];
+          if (bondList) {
+            const bonds = Array.from(bondList.getElementsByTagName('Bond'));
+            for (const b of bonds) {
+              const s1 = b.getAttribute('site1') || '';
+              const s2 = b.getAttribute('site2') || '';
+              if (s1 && s2) {
+                bondIndex.set(s1, nextBond);
+                bondIndex.set(s2, nextBond);
+                nextBond++;
+              }
+            }
+          }
+
           const molecules = Array.from(pattern.getElementsByTagName('Molecule'));
           const molStrs = molecules.map(m => {
             const mname = m.getAttribute('name') || '';
+            const mcomp = m.getAttribute('compartment');
             const comps = Array.from(m.getElementsByTagName('Component'));
             const compStr = comps.map(c => {
+              const cname = c.getAttribute('name') || '';
+              const cid = c.getAttribute('id') || '';
               const sattr = c.getAttribute('state');
-              return sattr ? `${c.getAttribute('name')}~${sattr}` : `${c.getAttribute('name')}`;
+              const nb = c.getAttribute('numberOfBonds');
+              const bAttr = c.getAttribute('bond');
+
+              let s = cname;
+              if (sattr) s += `~${sattr}`;
+
+              // Handle bond constraints
+              if (bondIndex.has(cid)) {
+                s += `!${bondIndex.get(cid)}`;
+              } else if (nb && nb.includes('+')) {
+                s += '!+';
+              } else if (nb && nb.includes('?')) {
+                s += '!?';
+              } else if (bAttr) {
+                // Fallback for direct bond attribute
+                if (bAttr === '+' || bAttr.includes('+')) s += '!+';
+                else if (bAttr === '?' || bAttr.includes('?')) s += '!?';
+                else if (bAttr !== '0') s += `!${bAttr}`;
+              }
+              
+              return s;
             }).filter(Boolean).join(',');
-            return compStr.length > 0 ? `${mname}(${compStr})` : `${mname}()`;
+            const base = compStr.length > 0 ? `${mname}(${compStr})` : `${mname}()`;
+            return mcomp ? `${base}@${mcomp}` : base;
           });
           patternStr = molStrs.join('.');
+          console.log(`[Parser Debug] Observable '${name}': reconstructed pattern '${patternStr}'`);
         }
         lines.push(`    ${type}    ${name}    ${patternStr}`);
       }
@@ -119,9 +166,10 @@ export function convertBNGXmlToBNGL(xml: string): string {
       lines.push('begin functions');
       for (const fn of functions) {
         const fname = fn.getAttribute('id') || fn.getAttribute('name') || 'f';
-        // Attempt to extract mathematical expression; if not available, skip
+        // Attempt to extract mathematical expression; priority: <Expression> then <math>
+        const exprTag = fn.getElementsByTagName('Expression')[0];
         const math = fn.getElementsByTagName('math')[0];
-        const mathText = math ? (math.textContent || '').trim() : '';
+        const mathText = (exprTag ? (exprTag.textContent || '').trim() : (math ? (math.textContent || '').trim() : ''));
         lines.push(`    function ${fname} = ${mathText}`);
       }
       lines.push('end functions', '');
@@ -162,10 +210,13 @@ export function convertBNGXmlToBNGL(xml: string): string {
           // For product patterns, there might be bond references (ids in components)
           const molStrs = molecules.map(m => {
             const mname = m.getAttribute('name') || '';
+            const mcomp = m.getAttribute('compartment');
             const comps = Array.from(m.getElementsByTagName('Component'));
             const compStrs = comps.map(c => {
               const cname = c.getAttribute('name') || '';
               const state = c.getAttribute('state');
+              const bond = c.getAttribute('bond');
+              const numberOfBonds = c.getAttribute('numberOfBonds');
               const cid = c.getAttribute('id') || '';
               let cs = cname;
               if (state) cs += `~${state}`;
@@ -190,7 +241,8 @@ export function convertBNGXmlToBNGL(xml: string): string {
               if (foundBond) cs += `!${foundBond}`;
               return cs;
             });
-            return compStrs.length > 0 ? `${mname}(${compStrs.join(',')})` : `${mname}()`;
+            const base = compStrs.length > 0 ? `${mname}(${compStrs.join(',')})` : `${mname}()`;
+            return mcomp ? `${base}@${mcomp}` : base;
           });
 
           return molecules.length > 1 ? molStrs.join(isProduct ? '.' : ' + ') : molStrs.join('');
@@ -199,12 +251,59 @@ export function convertBNGXmlToBNGL(xml: string): string {
         const reactStr = reactPatterns.map(p => patternToString(p, false)).join(' + ');
         const prodStr = prodPatterns.map(p => patternToString(p, true)).join(' + ');
 
-        // Rate - pick first RateConstant value or default
+        // Rate - reconstruct based on type (MM, Sat, etc) for parity with xmlparsers.py
         const rateEl = r.getElementsByTagName('RateLaw')[0];
         let rateName = '';
         if (rateEl) {
-          const rc = rateEl.getElementsByTagName('RateConstant')[0];
-          if (rc) rateName = rc.getAttribute('value') || rc.textContent || '';
+          const type = rateEl.getAttribute('type');
+          if (type === 'Ele') {
+            const rc = rateEl.getElementsByTagName('RateConstant')[0];
+            if (rc) rateName = rc.getAttribute('value') || rc.textContent || '';
+          } else if (type === 'Function') {
+            rateName = rateEl.getAttribute('name') || '';
+          } else if (type && ['MM', 'Sat', 'Hill', 'Arrhenius'].includes(type)) {
+            const rcEls = Array.from(rateEl.getElementsByTagName('RateConstant'));
+            let argVals = rcEls.map(rc => rc.getAttribute('value') || rc.textContent || '0');
+
+            // PARITY FIX: Scale Km (arg 2) from Molar to Molecules if reaction is in a compartment
+            // MM(kcat, Km) -> MM(kcat, Km * vol * NA)
+            // Sat(kcat, Km) -> Sat(kcat, Km * vol * NA)
+            if ((type === 'MM' || type === 'Sat') && argVals.length >= 2) {
+                // Heuristic: determine reaction compartment from first reactant molecule
+                const rPatternList = r.getElementsByTagName('ListOfReactantPatterns')[0];
+                let rxnComp = '';
+                if (rPatternList) {
+                    const rPatterns = Array.from(rPatternList.getElementsByTagName('ReactantPattern'));
+                    for (const rp of rPatterns) {
+                        const mols = Array.from(rp.getElementsByTagName('Molecule'));
+                        for (const m of mols) {
+                             const c = m.getAttribute('compartment');
+                             if (c) {
+                                 rxnComp = c;
+                                 break;
+                             }
+                        }
+                        if (rxnComp) break;
+                    }
+                }
+
+                if (rxnComp) {
+                    const hasNA = paramNames.has('NA');
+                    let scaleFactor = rxnComp;
+                    if (hasNA) scaleFactor += ' * NA';
+                    
+                    // Wrap in parens to be safe
+                    argVals[1] = `(${argVals[1]} * ${scaleFactor})`;
+                    logger.info('BNGXML002', `Scaled ${type} constant for ${rxnComp}: ${argVals[1]}`);
+                }
+            }
+
+            rateName = `${type}(${argVals.join(',')})`;
+          } else {
+            // Fallback for unknown types
+            const rc = rateEl.getElementsByTagName('RateConstant')[0];
+            if (rc) rateName = rc.getAttribute('value') || rc.textContent || '';
+          }
         }
 
         lines.push(`    ${reactStr} -> ${prodStr}   ${rateName}`);

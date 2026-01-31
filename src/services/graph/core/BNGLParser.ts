@@ -64,21 +64,6 @@ export class BNGLParser {
 
     for (const molStr of moleculeStrings) {
       const molecule = this.parseMolecule(molStr.trim());
-      // BNG2 semantics for graph-level compartment prefix (e.g., @CYT:A(b!1).B(a!1)):
-      // - When a graph-level compartment is specified, ALL molecules in the pattern
-      //   that don't have their own explicit compartment annotation inherit it.
-      // - This is different from molecule-level suffix (e.g., A(b!1)@CYT.B(a!1))
-      //   which only applies to that specific molecule.
-      // 
-      // Example patterns:
-      //   @O1V:A(t,b!1).B(a!1)  -> Both A and B are in O1V
-      //   A(t,b!1)@O1V.B(a!1)   -> Only A is in O1V, B has no compartment constraint
-      //
-      // This ensures rules like "@O1V:A(t,b!1).B(a!1) + T1(a)" only match
-      // A.B complexes that are actually in O1V, not in other compartments like CYT.
-      if (!molecule.compartment && globalCompartment) {
-        molecule.compartment = globalCompartment;
-      }
       graph.molecules.push(molecule);
     }
 
@@ -381,6 +366,9 @@ export class BNGLParser {
     for (const bondPart of bondParts) {
       if (bondPart === '+' || bondPart === '?' || bondPart === '-') {
         component.wildcard = bondPart;
+      } else if (bondPart === '0') {
+        // BioNetGen: !0 explicitly denotes an unbound site
+        component.wildcard = '-';
       } else {
         // FIX: Validate bond label is a positive integer
         const bond = parseInt(bondPart);
@@ -401,7 +389,7 @@ export class BNGLParser {
    * Also handles synthesis rules: "0 -> A()" or "" -> A()
    * Also handles degradation rules: "A() -> 0"
    */
-  static parseRxnRule(ruleStr: string, rateConstant: number | string, name?: string): RxnRule {
+  static parseRxnRule(ruleStr: string, rateConstant: number | string, name?: string, options?: { isMoveConnected?: boolean }): RxnRule {
     // Detect arrow robustly (->, <-, <->, ~>) and split around the first arrow
     const arrowRegex = /(?:<->|->|<-|~>)/;
     const arrowMatch = ruleStr.match(arrowRegex);
@@ -479,7 +467,7 @@ export class BNGLParser {
       }
     }
 
-    return new RxnRule(name || '', reactants, products, rateNum, { rateExpression: rateExpr });
+    return new RxnRule(name || '', reactants, products, rateNum, { rateExpression: rateExpr, isMoveConnected: options?.isMoveConnected });
   }
 
   /**

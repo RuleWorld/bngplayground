@@ -22,7 +22,39 @@ export interface StateSnapshot {
 }
 
 export const parseSpeciesGraphs = (patterns: string[]): SpeciesGraph[] => {
-  return patterns.map((pattern) => BNGLParser.parseSpeciesGraph(pattern, true));
+  // Handle patterns that may contain multiple top-level comma-separated
+  // species (e.g., "A(), B()") by splitting on commas that are not
+  // inside parentheses. This is defensive: some callers or upstream
+  // representations sometimes provide combined strings; parsing them
+  // directly will create invalid molecule names like "A(), B()".
+  const splitByTopLevelCommas = (s: string): string[] => {
+    const parts: string[] = [];
+    let current = '';
+    let depth = 0;
+    for (const ch of s) {
+      if (ch === '(') depth++;
+      else if (ch === ')') depth = Math.max(0, depth - 1);
+      if (ch === ',' && depth === 0) {
+        const t = current.trim();
+        if (t) parts.push(t);
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+    const t = current.trim();
+    if (t) parts.push(t);
+    return parts;
+  };
+
+  const graphs: SpeciesGraph[] = [];
+  for (const pattern of patterns) {
+    const pieces = splitByTopLevelCommas(String(pattern));
+    for (const piece of pieces) {
+      graphs.push(BNGLParser.parseSpeciesGraph(piece, true));
+    }
+  }
+  return graphs;
 };
 
 export const buildVisualizationMolecule = (

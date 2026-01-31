@@ -101,7 +101,7 @@ async function simulateModel(inputModel: BNGLModel, t_end: number, n_steps: numb
     const rules = inputModel.reactionRules.flatMap((r, i) => {
         // Pass generic string to parser to preserve functional rates
         const ruleStr = `${formatSpeciesList(r.reactants)} -> ${formatSpeciesList(r.products)}`;
-        const forwardRule = BNGLParser.parseRxnRule(ruleStr, String(r.rate));
+        const forwardRule = BNGLParser.parseRxnRule(ruleStr, String(r.rate), undefined, { isMoveConnected: r.moveConnected });
         forwardRule.name = r.name ? `${r.name}_fwd` : `_R${i + 1}_fwd`;
         if (r.constraints) forwardRule.applyConstraints(r.constraints, (s) => BNGLParser.parseSpeciesGraph(s));
 

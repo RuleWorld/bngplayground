@@ -9,6 +9,13 @@ import { countEmbeddingDegeneracy } from './core/degeneracy';
 import { Molecule } from './core/Molecule';
 import { Component } from './core/Component';
 
+function factorial(n: number): number {
+  if (n <= 1) return 1;
+  let result = 1;
+  for (let i = 2; i <= n; i++) result *= i;
+  return result;
+}
+
 // Performance profiling - can be enabled dynamically
 let profilingEnabled = false;
 
@@ -50,7 +57,7 @@ export function printProfileData() {
   console.log('================================\n');
 }
 
-const shouldLogNetworkGenerator = false;
+const shouldLogNetworkGenerator = true;
 // typeof process !== 'undefined' &&
 // typeof process.env !== 'undefined' &&
 // process.env.DEBUG_NETWORK_GENERATOR === 'true';
@@ -94,7 +101,15 @@ function profiledFindAllMaps(pattern: SpeciesGraph, target: SpeciesGraph): Match
     PROFILE_DATA.findAllMapsCount++;
     return result;
   }
-  return GraphMatcher.findAllMaps(pattern, target);
+  const result = GraphMatcher.findAllMaps(pattern, target);
+
+  // Targeted debug for Opsonization problem
+  const patStr = pattern.toString();
+  if (patStr.includes('FB(b!1,s~Bb)') && target.toString().includes('Surf')) {
+    console.log(`[R5_MATCH_DEBUG] Match check: Pattern='${patStr}' Target='${target.toString().slice(0, 150)}...' Matches=${result.length}`);
+  }
+
+  return result;
 }
 
 // Profiled wrapper for degeneracy
@@ -200,13 +215,16 @@ export class NetworkGenerator {
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
+  // NEW: map Canonical Name -> Initial Concentration (from seed parameter evaluation)
+  private seedConcentrationMap?: Map<string, number>;
+
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
   private aggLimitWarnings = 0;
   private speciesLimitWarnings = 0;
   private currentRuleName: string | null = null;
 
-  constructor(options: Partial<GeneratorOptions> = {}) {
+  constructor(options: Partial<GeneratorOptions> & { seedConcentrationMap?: Map<string, number> } = {}) {
     this.options = {
       maxSpecies: 10000,
       maxReactions: 100000,
@@ -217,6 +235,8 @@ export class NetworkGenerator {
       memoryLimit: 1e9,
       ...options
     };
+    this.seedConcentrationMap = options.seedConcentrationMap;
+
     if (this.options.compartments) {
       for (const c of this.options.compartments) {
         this.compartmentVolumes.set(c.name, c.size);
@@ -225,40 +245,113 @@ export class NetworkGenerator {
     this.currentRuleName = null;
   }
 
+
   /**
-   * Calculate volume scaling for transport reactions between compartments.
-   *
-   * BNG2 Behavior (from Network3 source code):
-   * - For transport A@C1 -> A@C2, the rate is scaled by V_source/V_dest
-   * - This converts concentration-based rates to molecule counts
-   * - When V_source > V_dest (e.g., cytoplasm to membrane), rate increases
-   * - When V_source < V_dest (e.g., membrane to cytoplasm), rate decreases
+   * Helper: Get the effective compartment name for a species or graph.
    */
-  private getTransportVolumeScale(source: SpeciesGraph, dest: SpeciesGraph): number {
-    // For ODE simulation (concentration-based), transport A@V1 -> A@V2
-    // d[A@V1]/dt = -k*[A@V1]
-    // d[A@V2]/dt = +k*[A@V1] * (V1/V2)
-    // We set product stoichiometry to (V1/V2) so SimulationLoop adds velocity * stoich.
-    
-    // 1. Identify compartments
-    const getComp = (s: SpeciesGraph) => { 
-        if (s.compartment) return s.compartment;
-        if (s.molecules.length > 0 && s.molecules[0].compartment) return s.molecules[0].compartment;
-        return null; 
+  private getSpeciesCompartment(s: Species | SpeciesGraph): string | null {
+    const graph = (s instanceof Species) ? s.graph : s;
+    if (graph.compartment) return graph.compartment;
+
+    // Fallback: check molecules. In cBNGL, a species spanning multiple compartments
+    // is assigned to the compartment with the LOWEST dimension (e.g., surface).
+    const molCompartments = graph.molecules
+      .map(m => m.compartment)
+      .filter((c): c is string => typeof c === 'string' && c.length > 0);
+
+    if (molCompartments.length === 0) return null;
+
+    if (this.options.compartments) {
+      let bestComp: string = molCompartments[0];
+      let minDim = 99;
+
+      for (const cName of molCompartments) {
+        const comp = this.options.compartments.find(c => c.name === cName);
+        const dim = comp ? comp.dimension : 3;
+        if (dim < minDim) {
+          minDim = dim;
+          bestComp = cName;
+        }
+      }
+      return bestComp;
+    }
+
+    return molCompartments[0] ?? null;
+  }
+
+  /**
+   * Helper: Get the evaluated size (volume/area) of a species' compartment.
+   */
+  private getSpeciesVolume(s: Species | SpeciesGraph): number {
+    const cName = this.getSpeciesCompartment(s);
+    if (!cName || !this.options.compartments) return 1;
+    const comp = this.options.compartments.find(c => c.name === cName);
+    return (comp && comp.size > 0) ? comp.size : 1;
+  }
+
+  /**
+   * Calculate volume scaling info for reactions.
+   * Mirrors BNG2 Rxn.pm anchor logic:
+   * - If any reactant is on a surface (2D), anchor to the surface.
+   * - Otherwise anchor to a volume (3D).
+   * - For zero-order synthesis (no reactants), anchor to the product compartment.
+   */
+  private getVolumeScalingInfo(reactants: Species[], products: Species[] = []): { scale: number; scalingVolume: number } {
+    if (!this.options.compartments || this.options.compartments.length === 0) {
+      return { scale: 1, scalingVolume: 1 };
+    }
+
+    const pickAnchorVolume = (candidates: Species[]): number => {
+      // INLINE COMMENT: BNG2 prefers 3D volumes as reaction anchors for mass-action ODE scaling.
+      // Surface areas (dim 2) are only used if no 3D volumes are involved in the reaction.
+      const surfaceVolumes: number[] = [];
+      const volumeVolumes: number[] = [];
+
+      for (const species of candidates) {
+        const compName = this.getSpeciesCompartment(species);
+        if (!compName) continue;
+        const comp = this.options.compartments.find(c => c.name === compName);
+        if (!comp) continue;
+        const size = comp.size > 0 ? comp.size : 1;
+        if (comp.dimension === 2) surfaceVolumes.push(size);
+        else volumeVolumes.push(size); // dimension 3 or undefined
+      }
+
+      // Prefer 3D volumes (standard BNG2 behavior)
+      if (volumeVolumes.length > 0) return volumeVolumes[0];
+      if (surfaceVolumes.length > 0) return surfaceVolumes[0];
+      return 1;
     };
-    
-    const c1Name = getComp(source);
-    const c2Name = getComp(dest);
 
-    if (!c1Name || !c2Name || c1Name === c2Name) return 1;
+    const anchorVolume = reactants.length > 0
+      ? pickAnchorVolume(reactants)
+      : pickAnchorVolume(products);
 
-    const c1 = this.options.compartments?.find(c => c.name === c1Name);
-    const c2 = this.options.compartments?.find(c => c.name === c2Name);
+    return { scale: 1, scalingVolume: anchorVolume };
+  }
 
-    if (!c1 || !c2 || c2.size === 0) return 1;
+  /**
+   * Helper: Check if two compartments are adjacent (share a boundary) or identical.
+   * In BNGL, a 2D compartment is adjacent to its 3D parent and possible 3D children.
+   */
+  private areAdjacent(comp1Name: string | null, comp2Name: string | null): boolean {
+    if (comp1Name === comp2Name) return true;
+    if (!comp1Name || !comp2Name) return true; // Default/null compartments can interact? 
 
-    // Return V_source / V_dest
-    return c1.size / c2.size;
+    if (!this.options.compartments) return true;
+
+    const c1 = this.options.compartments.find(c => c.name === comp1Name);
+    const c2 = this.options.compartments.find(c => c.name === comp2Name);
+
+    if (!c1 || !c2) return true;
+
+    // Check parent-child relationship
+    if (c1.parent === c2.name || c2.parent === c1.name) return true;
+
+    // Siblings might be adjacent if they share a surface, but BNGL usually requires 
+    // one to be the parent (Volume) of the other (Surface).
+
+    return false;
   }
 
 
@@ -348,106 +441,6 @@ export class NetworkGenerator {
     return Math.max(addFactor, delFactor, 1);
   }
 
-  /**
-   * Calculate volume scaling factor for bimolecular reactions.
-   * For reactions in 3D compartments, rate is scaled by 1/volume.
-   * For heterogeneous reactions (3D+2D), use the 3D compartment's volume.
-   * Returns 1 if no compartments defined or reactants not in 3D compartment.
-   * 
-   * @param reactant1 First reactant species
-   * @param reactant2 Second reactant species (optional for unimolecular)
-   */
-  private getVolumeScale(reactant1: Species, reactant2?: Species): number {
-    if (!this.options.compartments || this.options.compartments.length === 0) {
-      return 1;  // No compartments defined, no scaling
-    }
-
-    // Determine an effective compartment for a (possibly mixed-compartment) species.
-    // Prefer any 3D compartment present in the complex; otherwise fall back to a 2D
-    // compartment if present. This matches cBNGL semantics where surface-associated
-    // complexes still scale bimolecular rates using the bulk (3D) compartment volume.
-    const getSpeciesCompartment = (species: Species): string | null => {
-      if (species.graph.compartment) {
-        return species.graph.compartment;
-      }
-
-      const molCompartments = species.graph.molecules
-        .map(m => m.compartment)
-        .filter((c): c is string => typeof c === 'string' && c.length > 0);
-
-      if (molCompartments.length === 0) return null;
-
-      // Prefer any 3D compartment present.
-      for (const cName of molCompartments) {
-        const comp = this.options.compartments!.find(c => c.name === cName);
-        if (comp && comp.dimension >= 3) return cName;
-      }
-
-      // Otherwise, return the first known compartment.
-      return molCompartments[0] ?? null;
-    };
-
-    const comp1Name = getSpeciesCompartment(reactant1);
-    const comp2Name = reactant2 ? getSpeciesCompartment(reactant2) : null;
-
-    if (DEBUG_VOLUME_SCALE) {
-      console.log(`[VolumeScale] ${reactant1.toString()} (comp=${comp1Name}) + ${reactant2?.toString()} (comp=${comp2Name})`);
-    }
-
-    // Get compartment details
-    const comp1 = comp1Name ? this.options.compartments.find(c => c.name === comp1Name) : null;
-    const comp2 = comp2Name ? this.options.compartments.find(c => c.name === comp2Name) : null;
-
-    // For heterogeneous reactions (3D + 2D), use the 3D compartment's volume
-    // This matches BioNetGen semantics where adsorption reactions scale by bulk volume
-    let scalingCompartment: { name: string; dimension: number; size: number } | null = null;
-
-    if (comp1 && comp2) {
-      // Bimolecular: 
-      // RULE: "For elementary bimolecular reactions... the rate constant is divided by the volume of the 
-      // reactant compartment with the highest dimension." (Harris et al. 2009, Winter Simulation Conference)
-      //
-      // Scenarios:
-      // 1. 3D + 3D -> Scale by 3D Volume
-      // 2. 2D + 2D -> Scale by 2D Effective Volume (Area * thickness)
-      // 3. 3D + 2D -> Scale by 3D Volume (Highest Dimension Rule)
-      if (comp1.dimension >= 3 && comp2.dimension < 3) {
-        scalingCompartment = comp1;  // FIX: Use 3D volume (Harris et al. 2009 Rule)
-      } else if (comp2.dimension >= 3 && comp1.dimension < 3) {
-        scalingCompartment = comp2;  // FIX: Use 3D volume (Harris et al. 2009 Rule)
-      } else if (comp1.dimension >= 3 && comp2.dimension >= 3) {
-        // Both 3D: use first (should be same compartment typically)
-        scalingCompartment = comp1;
-      } else {
-        // Both 2D: use first (surface reaction)
-        scalingCompartment = comp1;
-      }
-    } else if (comp1) {
-      scalingCompartment = comp1;
-    } else if (comp2) {
-      scalingCompartment = comp2;
-    }
-
-    if (!scalingCompartment || scalingCompartment.size <= 0) {
-      if (DEBUG_VOLUME_SCALE) {
-        console.log(`[VolumeScale] → No scaling compartment, returning 1`);
-      }
-      return 1;
-    }
-
-    const scale = 1 / scalingCompartment.size;
-    if (DEBUG_VOLUME_SCALE) {
-      console.log(`[VolumeScale] → Using ${scalingCompartment.name} (dim=${scalingCompartment.dimension}, size=${scalingCompartment.size}) → scale=${scale}`);
-    }
-    // Scale by 1/size (volume for 3D, area for 2D)
-    return scale;
-  }
-
-  /**
-   * Check if two compartments are adjacent (BNG2: Compartment::adjacent).
-   * Two compartments are adjacent if one is the parent (outside) of the other.
-   * Returns true if adjacent, false otherwise.
-   */
   private areCompartmentsAdjacent(comp1Name: string | null, comp2Name: string | null): boolean {
     // If either is null/undefined, can't check adjacency - allow (for backward compatibility)
     if (!comp1Name || !comp2Name) return true;
@@ -482,17 +475,8 @@ export class NetworkGenerator {
       return true;  // No compartments defined, allow all
     }
 
-    // Get compartment from species graph or first molecule
-    const getSpeciesCompartment = (species: Species): string | null => {
-      if (species.graph.compartment) return species.graph.compartment;
-      if (species.graph.molecules.length > 0 && species.graph.molecules[0].compartment) {
-        return species.graph.molecules[0].compartment;
-      }
-      return null;
-    };
-
-    const comp1Name = getSpeciesCompartment(reactant1);
-    const comp2Name = getSpeciesCompartment(reactant2);
+    const comp1Name = this.getSpeciesCompartment(reactant1);
+    const comp2Name = this.getSpeciesCompartment(reactant2);
 
     // If either has no compartment, allow (sloppy mode)
     if (!comp1Name || !comp2Name) return true;
@@ -519,6 +503,7 @@ export class NetworkGenerator {
     // One surface, one volume - must be adjacent
     return this.areCompartmentsAdjacent(comp1Name, comp2Name);
   }
+
 
   async generate(
     seedSpecies: SpeciesGraph[],
@@ -557,6 +542,14 @@ export class NetworkGenerator {
       const canonical = profiledCanonicalize(sg);
       if (!speciesMap.has(canonical)) {
         const species = new Species(sg, speciesList.length);
+
+        // Populate initial concentration from map (evaluated params)
+        const seedConc = this.seedConcentrationMap?.get(canonical) ?? 0;
+        species.initialConcentration = seedConc;
+        if (canonical.includes('FB') && canonical.includes('s~U')) {
+          console.log(`[NetworkGen] Helper Loop Creating Species '${canonical}': init=${seedConc}`);
+        }
+
         speciesMap.set(canonical, species);
         speciesList.push(species);
         this.indexSpecies(species);
@@ -590,8 +583,12 @@ export class NetworkGenerator {
           return speciesMap.get(canonical)!.index;
         });
 
+        const productSpeciesList = productIndices.map(idx => speciesList[idx]);
+        const { scalingVolume } = this.getVolumeScalingInfo([], productSpeciesList);
+
         const rxn = new Rxn([], productIndices, rule.rateConstant, rule.name, {
-          rateExpression: rule.rateExpression
+          rateExpression: rule.rateExpression,
+          scalingVolume
         });
 
         const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
@@ -713,17 +710,14 @@ export class NetworkGenerator {
                 signal
               );
             } else if (rule.reactants.length > 1) {
-              // Bimolecular rule - only try with current species as FIRST reactant
-              if (shouldLogNetworkGenerator) {
-                debugNetworkLog(
-                  `[applyBimolecularRule] Applying bimolecular rule with patterns: ${rule.reactants[0].toString()} + ${rule.reactants[1].toString()}`
-                );
-              }
-              await this.applyBimolecularRule(
+              // N-ary rule (Bimolecular, Ternary, etc.)
+              // NEW: We must try matching currentSpecies against EVERY reactant pattern
+              // to ensure we find all combinations (e.g. catalyst already exists, substrate is new).
+              await this.applyNaryRule(
                 rule,
                 ruleIdx,
                 currentSpeciesObj,
-                speciesList,
+                speciesList, // allSpecies
                 speciesMap,
                 speciesList,
                 queue,
@@ -1230,17 +1224,21 @@ export class NetworkGenerator {
 
 
 
-      // Calculate volume scaling for each product (e.g. CP -> NU transport needs scaling by V_CP/V_NU)
-      const productStoichiometries = products.map(product => {
-        return this.getTransportVolumeScale(reactantSpecies.graph, product);
-      });
+      // Calculate volume scaling for each product:
+      // Note: SimulationLoop.ts expects 'velocity' in Amount units (Particles/s or Moles/s).
+      // For unimolecular A@V1 -> B@V2, velocity = rate * V1 * [A].
+      // d[B]/dt = (velocity * stoich) / V2 = (rate * V1 * [A] * 1) / V2 = rate * [A] * (V1/V2).
+      // This correctly preserves mass balance in concentration units.
+      const productStoichiometries = products.map(_ => 1);
+
+      const { scalingVolume } = this.getVolumeScalingInfo([reactantSpecies]);
 
       const rxn = new Rxn(
         [reactantSpecies.index],
         productSpeciesIndices,
         effectiveRate,
         rule.name,
-        { degeneracy, rateExpression, propensityFactor, productStoichiometries }
+        { degeneracy, rateExpression, propensityFactor, productStoichiometries, scalingVolume }
       );
 
       // Fast O(1) duplicate detection using Set
@@ -1257,13 +1255,13 @@ export class NetworkGenerator {
   }
 
   /**
-   * FIX: Apply bimolecular rule (A + B -> C)
-   * Only apply when current species is the FIRST reactant to avoid double-counting
+   * FIX: Generalized N-ary rule application (A + B + C -> ...)
+   * Supports arbitrary number of reactants (unimolecular, bimolecular, ternary, etc.)
    */
-  private async applyBimolecularRule(
+  private async applyNaryRule(
     rule: RxnRule,
     ruleIdx: number,
-    reactant1Species: Species,
+    currentSpecies: Species,
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
     speciesList: Species[],
@@ -1271,408 +1269,230 @@ export class NetworkGenerator {
     reactionsList: Rxn[],
     reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
-    processedPairs: Set<string>,
     signal?: AbortSignal
   ): Promise<void> {
-    const patternCount = rule.reactants.length;
-    if (patternCount < 2) {
-      return;
-    }
 
-    const pattern1 = rule.reactants[0];
-    const pattern2 = rule.reactants[1];
+    const patterns = rule.reactants;
+    const n = patterns.length;
+    if (n < 2) return; // Unimolecular handled separately
 
-    // Recover stat_factor for collapsed symmetric embeddings when both reactant matchers
-    // return a single match (common with repeated identical sites like L(r,r)).
-    if (!reactant1Species.graph.adjacencyBitset) {
-      reactant1Species.graph.buildAdjacencyBitset();
-    }
+    // Try matching currentSpecies against EVERY pattern position i
+    for (let i = 0; i < n; i++) {
+      const maps = profiledFindAllMaps(patterns[i], currentSpecies.graph);
+      if (maps.length === 0) continue;
 
-
-    const getDegeneracy = (
-      cache: WeakMap<MatchMap, number>,
-      match: MatchMap,
-      patternGraph: SpeciesGraph,
-      speciesGraph: SpeciesGraph
-    ): number => {
-      const cached = cache.get(match);
-      if (cached !== undefined) {
-        return cached;
-      }
-      const computed = profiledDegeneracy(patternGraph, speciesGraph, match);
-      cache.set(match, computed);
-      return computed;
-    };
-
-    // Debug Trace for Missing Interaction
-    // const traceInteraction = (tag: string, msg: string) => { ... }; // Removed
-
-    for (const firstIdx of [0, 1]) {
-      const firstPattern = firstIdx === 0 ? pattern1 : pattern2;
-      const secondIdx = firstIdx === 0 ? 1 : 0;
-      const secondPattern = secondIdx === 0 ? pattern1 : pattern2;
-
-      const matchesFirst = profiledFindAllMaps(firstPattern, reactant1Species.graph);
-      if (matchesFirst.length === 0) {
-        continue;
+      if (shouldLogNetworkGenerator) {
+        debugNetworkLog(`[applyNaryRule] Rule ${rule.name}: currentSpecies ${currentSpecies.index} matches pattern ${i}`);
       }
 
+      // Recursive helper to match REMAINING patterns j != i
+      const matchPartnersRecursively = async (
+        patternIndicesToMatch: number[],
+        currentIndices: number[], // indices[k] is the species index for pattern k
+        currentMatches: MatchMap[] // matches[k] is the MatchMap for pattern k
+      ) => {
+        if (patternIndicesToMatch.length === 0) {
+          // All patterns matched!
+          // -------------------------------------------------------------------
+          // CANONICAL ANCHOR CHECK (Prevent Double Counting)
+          // A combination (S0, S1, ..., Sn-1) is only processed when:
+          // 1. currentSpecies.index is the MAXIMUM index in the set.
+          // 2. If there are multiple reactants with the same max index,
+          //    currentSpecies must match the FIRST occurrence (earliest patternIdx)
+          //    of that max index.
+          // -------------------------------------------------------------------
 
-      // NOTE: Do not orbit-group matches here; aggregate duplicate reactions by key instead.
+          let maxIdx = -1;
+          for (const idx of currentIndices) if (idx > maxIdx) maxIdx = idx;
 
-      const firstDegeneracyCache = new WeakMap<MatchMap, number>();
+          if (currentSpecies.index !== maxIdx) return; // Not the anchor
 
+          // Find the first pattern index k that matched this max index
+          let kFirst = -1;
+          for (let k = 0; k < n; k++) {
+            if (currentIndices[k] === maxIdx) {
+              kFirst = k;
+              break;
+            }
+          }
 
-      // Candidate optimization: choose only species that contain the molecules required by secondPattern
-      const requiredMols = secondPattern.molecules.map((m) => m.name);
+          if (i !== kFirst) return; // We are matching against pattern i, but kFirst is the anchor.
 
+          // Proceed with reaction generation
+          const reactantSpeciesList = currentIndices.map(idx => allSpecies[idx]);
 
-      let candidateIndices: Set<number> | null = null;
+          // 1. Check Constraints
+          for (let p1 = 0; p1 < n; p1++) {
+            for (let p2 = p1 + 1; p2 < n; p2++) {
+              if (!this.checkConstraints(rule, reactantSpeciesList[p1], reactantSpeciesList[p2])) return;
+              if (!this.isInteractingSet(reactantSpeciesList[p1], reactantSpeciesList[p2])) return;
+            }
+          }
 
-      if (requiredMols.length === 0) {
-        candidateIndices = new Set(allSpecies.map((s) => s.index));
-      } else {
+          // Generate product graphs and aggregate reaction
+          await this.generateNaryReaction(
+            rule,
+            reactantSpeciesList,
+            currentIndices,
+            currentMatches,
+            allSpecies,
+            speciesMap,
+            speciesList,
+            queue,
+            reactionsList,
+            reactionKeys,
+            reactionIndexByKey,
+            signal
+          );
+          return;
+        }
+
+        const nextPatternIdx = patternIndicesToMatch[0];
+        const nextPattern = patterns[nextPatternIdx];
+        const remainingPatterns = patternIndicesToMatch.slice(1);
+
+        // Optimization: Inverted index lookup for molecule types required by nextPattern
+        const requiredMols = nextPattern.molecules.map(m => m.name);
+        let candidateSet: Set<number> | null = null;
         for (const molName of requiredMols) {
           const set = this.speciesByMoleculeIndex.get(molName);
-          if (!set) {
-            candidateIndices = null;
-            break;
+          if (!set) { candidateSet = new Set(); break; }
+          if (!candidateSet) candidateSet = new Set(set);
+          else {
+            for (const c of candidateSet) if (!set.has(c)) candidateSet.delete(c);
           }
-          if (!candidateIndices) {
-            candidateIndices = new Set(set);
-          } else {
-            // intersect
-            const next = new Set<number>();
-            for (const id of candidateIndices) {
-              if (set.has(id)) next.add(id);
-            }
-            candidateIndices = next;
-          }
-        }
-      }
-
-      if (!candidateIndices || candidateIndices.size === 0) {
-        continue;
-      }
-
-      for (const idx of candidateIndices) {
-        const reactant2Species = allSpecies[idx];
-
-        if (signal?.aborted) {
-          throw new DOMException('Network generation cancelled', 'AbortError');
+          if (candidateSet.size === 0) break;
         }
 
-        if (!reactant2Species.graph.adjacencyBitset) {
-          reactant2Species.graph.buildAdjacencyBitset();
-        }
+        const candidates = candidateSet ? Array.from(candidateSet) : [];
+        for (const candidateIdx of candidates) {
+          // BNG2 Rule: For N-ary, partners can be ANY species in the network so far.
+          const candidateSpecies = allSpecies[candidateIdx];
+          const candMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph);
 
-        // Check constraints using correct reactant order
-        // firstIdx=0 -> pattern1 matched reactant1Species, pattern2 matching reactant2Species -> order (R1, R2)
-        // firstIdx=1 -> pattern2 matched reactant1Species, pattern1 matching reactant2Species -> order (R2, R1)
-        const checkR1 = firstIdx === 0 ? reactant1Species : reactant2Species;
-        const checkR2 = firstIdx === 0 ? reactant2Species : reactant1Species;
+          for (const candMatch of candMaps) {
+            const nextIndices = [...currentIndices];
+            nextIndices[nextPatternIdx] = candidateIdx;
+            const nextMatches = [...currentMatches];
+            nextMatches[nextPatternIdx] = candMatch;
 
-        if (!this.checkConstraints(rule, checkR1, checkR2)) {
-          continue;
-        }
-
-        // Check compartment adjacency for cBNGL - species must be in same or adjacent compartments
-        if (!this.isInteractingSet(reactant1Species, reactant2Species)) {
-          continue;
-        }
-
-        const matchesSecond = profiledFindAllMaps(secondPattern, reactant2Species.graph);
-
-
-
-        if (matchesSecond.length === 0) {
-          continue; // No matches found
-        }
-
-
-        // NOTE: Do not orbit-group matches here; aggregate duplicate reactions by key instead.
-
-        const secondDegeneracyCache = new WeakMap<MatchMap, number>();
-
-        const keyA = Math.min(reactant1Species.index, reactant2Species.index);
-        const keyB = Math.max(reactant1Species.index, reactant2Species.index);
-        const pairKey = `${keyA}::${keyB}::${ruleIdx}`;
-        if (processedPairs.has(pairKey)) {
-          continue;
-        }
-
-        const identicalSpecies = reactant1Species.index === reactant2Species.index;
-
-        let producedReaction = false;
-
-        // When reactants contain internal symmetries, `findAllMaps` can return multiple
-        // match combinations that are related by automorphisms but represent the *same physical event*
-        // (e.g., catalysis/state-change rules in symmetric complexes). BNG2 counts such events once.
-        // Deduplicate by a stable signature derived from the concrete transformation outcome.
-        const seenEventSignatures = new Set<string>();
-
-
-        const buildBimolecularEventSignatureFromProducts = (
-          reactantGraphsOrderedLocal: SpeciesGraph[],
-          products: SpeciesGraph[]
-        ): string | null => {
-          // Map (reactantIdx, reactantMolIdx) -> product component index.
-          const molToProduct = new Map<string, number>();
-          for (let pi = 0; pi < products.length; pi++) {
-            const product = products[pi];
-            for (const mol of product.molecules) {
-              const sourceKey = (mol as any)._sourceKey as string | undefined;
-              if (!sourceKey) continue;
-              molToProduct.set(sourceKey, pi);
-            }
-          }
-
-          const ops: string[] = [];
-
-          // Deletions: reactant molecules that disappear from all products.
-          for (let ri = 0; ri < reactantGraphsOrderedLocal.length; ri++) {
-            const rg = reactantGraphsOrderedLocal[ri];
-            for (let molIdx = 0; molIdx < rg.molecules.length; molIdx++) {
-              const sk = `${ri}:${molIdx}`;
-              if (!molToProduct.has(sk)) ops.push(`delMol:${sk}`);
-            }
-          }
-
-          // State changes: compare product molecule components to their source reactant molecule.
-          for (const product of products) {
-            for (let pm = 0; pm < product.molecules.length; pm++) {
-              const pMol = product.molecules[pm];
-              const sourceKey = (pMol as any)._sourceKey as string | undefined;
-              if (!sourceKey) continue;
-              const [rStr, molStr] = sourceKey.split(':');
-              const ri = Number(rStr);
-              const molIdx = Number(molStr);
-              if (!Number.isFinite(ri) || !Number.isFinite(molIdx)) continue;
-              const rg = reactantGraphsOrderedLocal[ri];
-              const rMol = rg?.molecules?.[molIdx];
-              if (!rMol) continue;
-
-              const maxComps = Math.min(rMol.components.length, pMol.components.length);
-              for (let ci = 0; ci < maxComps; ci++) {
-                const rc = rMol.components[ci];
-                const pc = pMol.components[ci];
-                const rState = (rc as any).state;
-                const pState = (pc as any).state;
-                if (rState !== pState) {
-                  ops.push(
-                    `state:${ri}:${molIdx}.${ci}:${rMol.name}:${rc.name}:${String(rState)}->${String(pState)}`
-                  );
-                }
-              }
-            }
-          }
-
-          // Bond cuts: bonds in reactants whose endpoints end up in different products.
-          const seenPairs = new Set<string>();
-          for (let ri = 0; ri < reactantGraphsOrderedLocal.length; ri++) {
-            const rg = reactantGraphsOrderedLocal[ri];
-            for (let molIdx = 0; molIdx < rg.molecules.length; molIdx++) {
-              const mol = rg.molecules[molIdx];
-              const groupA = molToProduct.get(`${ri}:${molIdx}`);
-              if (groupA === undefined) continue;
-
-              for (let compIdx = 0; compIdx < mol.components.length; compIdx++) {
-                const comp = mol.components[compIdx];
-                const partners = rg.adjacency.get(`${molIdx}.${compIdx}`);
-                if (!partners) continue;
-
-                for (const partnerKey of partners) {
-                  const [mol2Str, comp2Str] = partnerKey.split('.');
-                  const mol2Idx = Number(mol2Str);
-                  const comp2Idx = Number(comp2Str);
-                  if (!Number.isFinite(mol2Idx) || !Number.isFinite(comp2Idx)) continue;
-
-                  const groupB = molToProduct.get(`${ri}:${mol2Idx}`);
-                  if (groupB === undefined) continue;
-                  if (groupA === groupB) continue;
-
-                  const aKey = `${ri}:${molIdx}.${compIdx}`;
-                  const bKey = `${ri}:${mol2Idx}.${comp2Idx}`;
-                  const pairKey = [aKey, bKey].sort().join('|');
-                  if (seenPairs.has(pairKey)) continue;
-                  seenPairs.add(pairKey);
-
-                  const mol2 = rg.molecules[mol2Idx];
-                  const comp2 = mol2?.components?.[comp2Idx];
-                  if (!mol2 || !comp2) continue;
-
-                  const aDesc = `${ri}:${molIdx}.${compIdx}:${mol.name}:${comp.name}`;
-                  const bDesc = `${ri}:${mol2Idx}.${comp2Idx}:${mol2.name}:${comp2.name}`;
-                  ops.push(`delBond:${[aDesc, bDesc].sort().join('|')}`);
-                }
-              }
-            }
-          }
-
-          if (ops.length === 0) return null;
-          ops.sort();
-          return ops.join(';');
-        };
-
-
-
-        for (const matchFirst of matchesFirst) {
-          const firstDegeneracy = getDegeneracy(
-            firstDegeneracyCache,
-            matchFirst,
-            firstPattern,
-            reactant1Species.graph
-          );
-
-          for (const matchSecond of matchesSecond) {
-            // NOTE: The intramolecular check (shareTargets / inSameConnectedComponent) is intended
-            // to skip rules that would act within a single complex instance when they are
-            // defined as bimolecular. However, for intermolecular reactions between two
-            // DISTINCT instances of the same species (e.g., S + S -> D), these checks would
-            // incorrectly skip valid matches. Since this loop is specifically for generating
-            // 2-reactant reactions, we assume they are distinct instances and do not skip.
-            // (If we want to support intramolecular reactions from bimolecular rules, they
-            // should be handled as a separate 1-reactant reaction case.)
-
-
-
-            const secondDegeneracy = getDegeneracy(
-              secondDegeneracyCache,
-              matchSecond,
-              secondPattern,
-              reactant2Species.graph
-            );
-
-            // FIX: Ensure arguments are passed in Rule Order [Pattern 1, Pattern 2]
-            // If firstIdx === 1, we matched Pattern 2 first, so we must swap the order.
-
-            const reactantPatternsOrdered = firstIdx === 0
-              ? [firstPattern, secondPattern]
-              : [secondPattern, firstPattern];
-
-            const reactantGraphsOrdered = firstIdx === 0
-              ? [reactant1Species.graph, reactant2Species.graph]
-              : [reactant2Species.graph, reactant1Species.graph];
-
-            const matchesOrdered = firstIdx === 0
-              ? [matchFirst, matchSecond]
-              : [matchSecond, matchFirst];
-
-            // Apply rule transformation to get products
-            const products = this.applyRuleTransformation(
-              rule,
-              reactantPatternsOrdered,
-              reactantGraphsOrdered,
-              matchesOrdered
-            );
-
-            // products === null means transformation failed (e.g., no match)
-            // products === [] (empty array) is valid for degradation rules
-            if (products === null || !this.validateProducts(products)) {
-              continue;
-            }
-
-            // BNG2.pl parity check (RxnRule.pm lines 3156-3170):
-            // Number of product graphs must equal number of product patterns.
-            // For example, a rule like "DNA(A20!0).NFkB(...) + IkB(...) -> DNA(A20) + NFkB.IkB"
-            // expects 2 product components. If applied to a larger complex where breaking the
-            // specified bond does not disconnect the products (e.g., NFkB is still tethered via
-            // another DNA site), the result is fewer components and the reaction is rejected.
-            const expectedProductCount = rule.products.length;
-            if (products.length < expectedProductCount) {
-              if (shouldLogNetworkGenerator) {
-                debugNetworkLog(
-                  `[applyBimolecularRule] Rejecting rule ${rule.name}: product count ${products.length} != expected ${expectedProductCount}`
-                );
-              }
-              continue;
-            }
-
-            const signature = buildBimolecularEventSignatureFromProducts(reactantGraphsOrdered, products);
-            if (signature) {
-              if (seenEventSignatures.has(signature)) {
-                continue;
-              }
-              seenEventSignatures.add(signature);
-            }
-
-            const productSpeciesIndices: number[] = [];
-            for (const product of products) {
-              const productSpecies = this.addOrGetSpecies(product, speciesMap, speciesList, queue, signal);
-              productSpeciesIndices.push(productSpecies.index);
-            }
-
-            // For bimolecular reactions, scale by 1/volume/area per cBNGL.
-            const volumeScale = this.getVolumeScale(reactant1Species, reactant2Species);
-
-            // BioNetGen-style statistical factors:
-            // - If the matcher enumerates multiple distinct embeddings, multiplicity is recovered by
-            //   summing identical reactions via reaction-key aggregation.
-            // - If the matcher collapses symmetric embeddings to a single match (common with repeated
-            //   identical sites/components), BNG2 still applies a stat_factor. Recover it here using
-            //   the computed embedding degeneracy *only* in the single-match case.
-            const totalDegeneracy = Math.max(firstDegeneracy * secondDegeneracy, 1);
-            // Recover stat_factor when the matcher collapses symmetric embeddings into a single match.
-            // IMPORTANT: This can happen independently per reactant. When one side enumerates multiple
-            // embeddings (e.g., pattern matches either of two identical molecules in a complex), and the
-            // other side collapses repeated identical sites into a single embedding with degeneracy>1,
-            // we must still apply the degeneracy for the collapsed side.
-            // Example (mixed): A(x) matches A(x).A(x) (2 embeddings enumerated) and B(y) matches B(y,y)
-            // (1 embedding, degeneracy 2). Correct stat_factor is 2*2=4 (enumeration * degeneracy).
-            const degeneracyFactor =
-              (matchesFirst.length === 1 ? firstDegeneracy : 1) *
-              (matchesSecond.length === 1 ? secondDegeneracy : 1);
-            const symmetryFactor = Math.max(degeneracyFactor, 1);
-
-            // Semantics: effective rate = (numeric scaling) * (evaluated symbolic expression, if present).
-            // Keep scaling in the numeric factor; keep the symbolic rateExpression untouched.
-            const baseRateConstant = rule.rateExpression && rule.rateConstant === 0 ? 1 : rule.rateConstant;
-            const effectiveRate = baseRateConstant * symmetryFactor * volumeScale;
-            const propensityFactor = identicalSpecies ? 0.5 : 1;
-
-            // Preserve the BNGL expression without embedding degeneracy/volume scaling.
-            // The solver/evaluator layer is responsible for multiplying: effectiveRate * eval(rateExpression).
-            const rateExpression = rule.rateExpression ? `(${rule.rateExpression})` : undefined;
-
-            const reactantIndices = [reactant1Species.index, reactant2Species.index];
-            const rxn = new Rxn(
-              reactantIndices,
-              productSpeciesIndices,
-              effectiveRate,
-              rule.name,
-              {
-                // Keep the raw degeneracy for debugging/inspection.
-                degeneracy: totalDegeneracy,
-                propensityFactor,
-                rateExpression
-              }
-            );
-
-            // Fast O(1) duplicate detection using Set
-            const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
-            const existingIdx = reactionIndexByKey.get(rxnKey);
-            if (existingIdx === undefined) {
-              reactionKeys.add(rxnKey);
-              reactionIndexByKey.set(rxnKey, reactionsList.length);
-              reactionsList.push(rxn);
-              producedReaction = true;
-            } else {
-              reactionsList[existingIdx].rate += rxn.rate;
-              producedReaction = true;
-            }
-
-            if (signal?.aborted) {
-              throw new DOMException('Network generation cancelled', 'AbortError');
-            }
+            await matchPartnersRecursively(remainingPatterns, nextIndices, nextMatches);
           }
         }
+      };
 
-        if (producedReaction) {
-          processedPairs.add(pairKey);
-        }
+      // Start recursion for current pattern match i
+      const initialIndices = new Array(n).fill(-1);
+      initialIndices[i] = currentSpecies.index;
+      const initialMatches = new Array(n).fill(null);
+
+      for (const m of maps) {
+        initialMatches[i] = m;
+        const patternIndicesToMatch = [];
+        for (let j = 0; j < n; j++) if (j !== i) patternIndicesToMatch.push(j);
+
+        await matchPartnersRecursively(patternIndicesToMatch, initialIndices, initialMatches);
       }
     }
   }
+
+  /**
+   * Helper: Generate reaction from matched N-ary reactants
+   */
+  private async generateNaryReaction(
+    rule: RxnRule,
+    reactantSpeciesList: Species[],
+    currentSpeciesIndices: number[],
+    currentMatches: MatchMap[],
+    allSpecies: Species[],
+    speciesMap: Map<string, Species>,
+    speciesList: Species[],
+    queue: SpeciesGraph[],
+    reactionsList: Rxn[],
+    reactionKeys: Set<string>,
+    reactionIndexByKey: Map<string, number>,
+    signal?: AbortSignal
+  ): Promise<void> {
+
+    const patterns = rule.reactants;
+    const n = patterns.length;
+
+    // 2. Aggregate Matches / Multiplicity
+    // Multiplicity = (Sum over all embeddings P1..Pn) / ruleSymmetryFactor
+    // However, our outer loop visits each embedding combo.
+    // We aggregate them by (reactantIndices, productIndices).
+
+    // Calculate rule symmetry factor (e.g. 2 for A+A)
+    const rulePatternCounts = new Map<string, number>();
+    for (const p of patterns) {
+      const s = p.toString();
+      rulePatternCounts.set(s, (rulePatternCounts.get(s) || 0) + 1);
+    }
+    let ruleSymmetryFactor = 1;
+    for (const count of rulePatternCounts.values()) {
+      ruleSymmetryFactor *= factorial(count);
+    }
+
+    let totalDegeneracy = 1;
+    for (let k = 0; k < n; k++) {
+      totalDegeneracy *= countEmbeddingDegeneracy(patterns[k], reactantSpeciesList[k].graph, currentMatches[k]);
+    }
+    const multiplicity = totalDegeneracy / ruleSymmetryFactor;
+
+    // 3. Apply Transformation
+    const products = this.applyRuleTransformation(
+      rule,
+      patterns,
+      reactantSpeciesList.map(s => s.graph),
+      currentMatches
+    );
+
+    if (!products) return;
+    if (!this.validateProducts(products)) return;
+
+    // 4. Resolve Product Species
+    const productIndices = products.map(p => this.addOrGetSpecies(p, speciesMap, speciesList, queue, signal).index);
+
+    // 5. Volume Scaling
+    const { scalingVolume } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
+
+    const finalRate = rule.rateConstant * multiplicity;
+
+    // 6. Record Reaction
+    const rxn = new Rxn(
+      currentSpeciesIndices,
+      productIndices,
+      finalRate,
+      rule.name,
+      {
+        degeneracy: multiplicity,
+        rateExpression: rule.rateExpression,
+        scalingVolume: scalingVolume,
+        totalRate: rule.totalRate,
+        ruleName: rule.name
+      }
+    );
+
+    const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
+    const existingIdx = reactionIndexByKey.get(rxnKey);
+
+    if (existingIdx === undefined) {
+      reactionKeys.add(rxnKey);
+      reactionIndexByKey.set(rxnKey, reactionsList.length);
+      reactionsList.push(rxn);
+    } else {
+      reactionsList[existingIdx].rate += rxn.rate;
+      // Sum multiplicities for symbolic JIT evaluation
+      if (reactionsList[existingIdx].degeneracy !== undefined) {
+        reactionsList[existingIdx].degeneracy += multiplicity;
+      }
+    }
+
+    if (shouldLogNetworkGenerator) {
+      debugNetworkLog(`[applyNaryRule] Added reaction: [${currentSpeciesIndices.join(', ')}] -> [${productIndices.join(', ')}] rate=${finalRate}`);
+    }
+  }
+
 
   /**
    * FIX: Properly apply rule transformation
@@ -1690,36 +1510,43 @@ export class NetworkGenerator {
       );
     }
 
-    // Note: We previously returned early for degradation rules (products.length === 0).
-    // This has been removed to allow 'harvestOrphanFragments' to run, which ensures that
-    // implicit context molecules (e.g. B in A(b).B -> 0) are preserved as distinct species.
-
     const productGraphs: SpeciesGraph[] = [];
-    const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules (for deduplication)
+    const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules surviving in products
     const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
+    const survivorLocations = new Map<string, { graphIdx: number; molIdx: number }>(); // FIX: Track where survivors ended up
 
+    // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
+    const matchedReactantKeys = new Set<string>();
+    for (let i = 0; i < matches.length; i++) {
+      const map = matches[i];
+      for (const [patMolIdx, tgtMolIdx] of map.moleculeMap.entries()) {
+        matchedReactantKeys.add(`${i}:${tgtMolIdx}`);
+      }
+    }
+
+    // 1. Build explicit products from patterns
     for (const productPattern of rule.products) {
-      const productGraph = this.buildProductGraph(
+      const fullProductGraph = this.buildProductGraph(
         productPattern,
         reactantPatterns,
         reactantGraphs,
         matches,
-        usedReactantPatternMols // NEW: Pass shared usage set
+        usedReactantPatternMols
       );
 
-      if (!productGraph) {
+      if (!fullProductGraph) {
         if (shouldLogNetworkGenerator) {
           debugNetworkLog('[applyTransformation] Failed to construct product graph; treating as no-op');
         }
         return null;
       }
 
-      // FIX: Split the product graph into connected components.
-      // When bonds are broken during transformation, molecules may become disconnected
-      // and should be treated as separate species.
-      const splitProducts = productGraph.split();
+      // BIO-NETGEN PARITY: Split the product graph into connected components.
+      // Often a single product pattern like A.B produces one connected component,
+      // but if bonds are broken explicitly or implicitly, it might split.
+      const splitProducts = fullProductGraph.split(); // Use fullProductGraph.split()
+
       for (const subgraph of splitProducts) {
-        // Collect source keys for this subgraph
         const sourceKeys = new Set<string>();
         for (const mol of subgraph.molecules) {
           if (mol._sourceKey) {
@@ -1727,11 +1554,7 @@ export class NetworkGenerator {
           }
         }
 
-        // DEDUPLICATION FIX:
-        // Check if ANY molecule in this subgraph was already covered by a previous product fragment.
-        // A molecule from the reactant(s) should only appear in ONE product species.
-        // If we find an overlap, it means multiple product patterns in the rule
-        // point to the same physical connected component in the result.
+        // DEDUPLICATION
         let isAlreadyIncluded = false;
         if (sourceKeys.size > 0) {
           for (const key of sourceKeys) {
@@ -1744,9 +1567,15 @@ export class NetworkGenerator {
 
         if (!isAlreadyIncluded) {
           productGraphs.push(subgraph);
-          // Mark all molecules in this subgraph as used
-          for (const key of sourceKeys) {
-            usedReactantMolsInReaction.add(key);
+          const graphIdx = productGraphs.length - 1;
+
+          // FIX: Track survivor locations
+          for (let i = 0; i < subgraph.molecules.length; i++) {
+            const mol = subgraph.molecules[i];
+            if (mol._sourceKey) {
+              usedReactantMolsInReaction.add(mol._sourceKey);
+              survivorLocations.set(mol._sourceKey, { graphIdx, molIdx: i });
+            }
           }
         } else if (shouldLogNetworkGenerator) {
           debugNetworkLog(`[applyTransformation] Skipping duplicate product fragment containing molecules: ${Array.from(sourceKeys).join(', ')}`);
@@ -1754,202 +1583,227 @@ export class NetworkGenerator {
       }
     }
 
-    // FIX: Collected orphaned fragments (implicit context molecules NOT mapped to any product).
-    // This is critical for rules like "A -> 0" applied to "A.B". B is unmatched and should remain.
-    // Standard BNG2 behavior: unmatched molecules are preserved.
-
-
-    const matchedKeys = new Set<string>();
-    for (let r = 0; r < matches.length; r++) {
-      const match = matches[r];
-      if (match) {
-        for (const tMol of match.moleculeMap.values()) {
-          matchedKeys.add(`${r}:${tMol}`);
-        }
-      }
-    }
-
-    // Scan for reactant molecules that were NOT used in any product and are NOT matched (Context)
-    const processedOrphans = new Set<string>();
-
-
+    // 2. SELECTIVE ORPHAN HARVESTING (BioNetGen Parity Fix 2.0 + Merge Fix)
+    // Identify connected components of molecules that were NOT mapped to explicit products.
+    // - If anchored to survivor: Merge.
+    // - If NOT anchored:
+    //   Check if any molecule in the orphan cluster was MATCHED by the rule.
+    //   - If MATCHED: It was deleted (e.g. A->0). Discard cluster.
+    //   - If NOT MATCHED: It is a bystander (e.g. C3 attached to FB->0). PRESERVE cluster as new product.
 
     for (let r = 0; r < reactantGraphs.length; r++) {
-      const graph = reactantGraphs[r];
+      const rg = reactantGraphs[r];
+      const visitedInOrphanCheck = new Set<number>();
 
-      for (let m = 0; m < graph.molecules.length; m++) {
+      for (let m = 0; m < rg.molecules.length; m++) {
         const key = `${r}:${m}`;
+        if (usedReactantMolsInReaction.has(key) || visitedInOrphanCheck.has(m)) continue;
 
-        // If already used in a product, skip
-        if (usedReactantMolsInReaction.has(key)) continue;
-
-        // If matched by pattern, it is Explicitly Deleted (since it wasn't mapped to product)
-        if (matchedKeys.has(key)) continue;
-
-        // If already processed as part of a fragment, skip
-        if (processedOrphans.has(key)) continue;
-
-        // Found a root of an orphaned fragment!
-        // Traverse to find connected component of unmatched molecules
-        const fragmentMols = new Set<number>();
+        // Found unvisited orphan seed. Traverse its connected component in the Reactant Graph.
+        const clusterIndices = new Set<number>();
         const queue = [m];
-        const visited = new Set<number>([m]); // Visited within this traversal
+        visitedInOrphanCheck.add(m);
+        clusterIndices.add(m);
 
-        // Maps original mol index -> new mol index in fragment graph
-        const molMap = new Map<number, number>();
+        let anchorGraphIdx = -1; // -1 means no anchor found yet
+        let isAnchoredToSurvivor = false;
+        const anchors = new Map<string, { graphIdx: number, molIdx: number }>();
 
-        const fragmentGraph = new SpeciesGraph();
-        if (graph.compartment) fragmentGraph.compartment = graph.compartment;
-
-        // Traverse
-        while (queue.length > 0) {
-          const curr = queue.shift()!;
-          fragmentMols.add(curr);
-
-          // Mark as processed globally
-          processedOrphans.add(`${r}:${curr}`);
-
-          const mol = graph.molecules[curr];
-          if (!mol) continue;
-
-          // Clone molecule
-          const clone = this.cloneMoleculeStructure(mol);
-          clone._sourceKey = `${r}:${curr}`;
-          if (!clone.compartment && graph.compartment) clone.compartment = graph.compartment;
-
-          const newIdx = fragmentGraph.molecules.length;
-          fragmentGraph.molecules.push(clone);
-          molMap.set(curr, newIdx);
+        let head = 0;
+        while (head < queue.length) {
+          const currM = queue[head++];
 
           // Check neighbors
-          for (let cIdx = 0; cIdx < mol.components.length; cIdx++) {
-            const compKey = `${curr}.${cIdx}`;
-            const partners = graph.adjacency.get(compKey);
-            if (partners) {
-              for (const pKey of partners) {
-                const [pMolStr] = pKey.split('.');
-                const pMolIdx = Number(pMolStr);
+          const mol = rg.molecules[currM];
+          for (let c = 0; c < mol.components.length; c++) {
+            const adjKey = `${currM}.${c}`;
+            const neighbors = rg.adjacency.get(adjKey);
+            if (neighbors) {
+              for (const neighbor of neighbors) {
+                const [nMStr] = neighbor.split('.');
+                const nM = Number(nMStr);
+                const nKey = `${r}:${nM}`;
 
-                // If partner is Matched, boundary is cut. Stop.
-                if (matchedKeys.has(`${r}:${pMolIdx}`)) continue;
-
-                // If partner is Used (shouldn't happen for context), Stop? 
-                // Context connected to Transformed?
-                // If A.B -> A'. B is context. A mapped to A'.
-                // buildProductGraph(A) should have included B.
-                // So B is in used.
-                // So we wouldn't reach here.
-                // So if we reach here, it's disjoint.
-
-                if (!visited.has(pMolIdx)) {
-                  visited.add(pMolIdx);
-                  queue.push(pMolIdx);
+                if (usedReactantMolsInReaction.has(nKey)) {
+                  // Connected to a survivor!
+                  isAnchoredToSurvivor = true;
+                  const loc = survivorLocations.get(nKey);
+                  if (loc) {
+                    anchors.set(nKey, loc);
+                    if (anchorGraphIdx === -1) {
+                      anchorGraphIdx = loc.graphIdx;
+                    }
+                  }
+                } else if (matchedReactantKeys.has(nKey)) {
+                  // Connected to a molecule that is being deleted/transformed.
+                  // BioNetGen: Treat as a boundary. Do NOT anchor to it, and do NOT include it in the orphan cluster.
+                  // This allows the byproduct (bystander) to survive as its own species.
+                  continue;
+                } else if (!visitedInOrphanCheck.has(nM)) {
+                  visitedInOrphanCheck.add(nM);
+                  clusterIndices.add(nM);
+                  queue.push(nM);
                 }
               }
             }
           }
         }
 
-        // Rebuild adjacency for fragment
-        fragmentGraph.buildAdjacencyBitset(); // Just to init
+        if (isAnchoredToSurvivor && anchorGraphIdx !== -1) {
+          // Harvest this cluster into the target graph (MERGE)
+          const targetGraph = productGraphs[anchorGraphIdx];
 
-        // For each molecule in fragment, recreate internal bonds
-        for (const orgMolIdx of fragmentMols) {
-          const newMolIdx = molMap.get(orgMolIdx)!;
-          const orgMol = graph.molecules[orgMolIdx];
+          if (shouldLogNetworkGenerator) {
+            debugNetworkLog(`[applyTransformation] Merging orphan fragment into graph ${anchorGraphIdx}: reactant ${r}, mols [${Array.from(clusterIndices).join(',')}]`);
+          }
 
-          for (let cIdx = 0; cIdx < orgMol.components.length; cIdx++) {
-            const partners = graph.adjacency.get(`${orgMolIdx}.${cIdx}`);
-            if (partners) {
-              for (const pKey of partners) {
-                const [pMolStr, pCompStr] = pKey.split('.');
-                const pMolIdx = Number(pMolStr);
-                const pCompIdx = Number(pCompStr);
+          const oldToNewIdx = new Map<number, number>();
+          const survivingInCluster = new Set<number>();
+          for (const idx of clusterIndices) {
+            if (!matchedReactantKeys.has(`${r}:${idx}`)) {
+              survivingInCluster.add(idx);
+            }
+          }
 
-                if (molMap.has(pMolIdx)) {
-                  // Internal bond
-                  const newPMolIdx = molMap.get(pMolIdx)!;
+          // Clone only survivors and append to target graph
+          for (const oldIdx of survivingInCluster) {
+            const oldMol = rg.molecules[oldIdx];
+            const newMol = this.cloneMoleculeStructure(oldMol);
+            newMol._sourceKey = `${r}:${oldIdx}`;
+            if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
+            const newIdx = targetGraph.molecules.length;
+            targetGraph.molecules.push(newMol);
+            oldToNewIdx.set(oldIdx, newIdx);
+          }
 
-                  // Add bond (careful not to double add, adjacency handles it?)
-                  // SpeciesGraph doesn't manage bonds automatically?
-                  // Component.edges manages bonds.
-                  // cloneMoleculeStructure creates molecules with empty edges?
-                  // No, it clones components. Component.edges is Map.
-                  // cloneMoleculeStructure clones components?
-                  // Need to check cloneMoleculeStructure.
-                  // If it clones edges, they point to old indices? No, edges keys are bond labels.
-                  // Wait, Component edges keys are bond labels. Values are list of partners?
-                  // No. Component.edges is Map<string | number, any>.
-                  // The logic usually relies on `buildAdjacency` scanning edges.
-                  // But `cloneMoleculeStructure` usually clears edges?
-                  // I need to verify `cloneMoleculeStructure`.
-                  // Assuming it produces clean components.
+          // Reconstruct internal adjacency (Orphan <-> Orphan)
+          for (const oldIdx of survivingInCluster) {
+            const oldMol = rg.molecules[oldIdx];
+            const newIdx = oldToNewIdx.get(oldIdx)!;
 
-                  // I need to Link them.
-                  // Graph.addBond? No.
-                  // Manually set edges?
-                  // In buildProductGraph, we have `const addedBonds`.
+            for (let c = 0; c < oldMol.components.length; c++) {
+              const adjKey = `${oldIdx}.${c}`;
+              const neighbors = rg.adjacency.get(adjKey);
+              if (neighbors) {
+                for (const neighbor of neighbors) {
+                  const [nMStr, nCStr] = neighbor.split('.');
+                  const nM = Number(nMStr);
+                  const nC = Number(nCStr);
 
-                  // SIMPLER: The components retained their edges from clone?
-                  // If they retained edges, we need to VALIDATE them.
-                  // If edge points to deleted molecule, remove it.
-
-                  // Let's assume I need to RECREATE bonds.
-                  // `cloneMoleculeStructure` (I'll assume) returns components with NO edges?
-
-                  // Checking lines 3027...
-                  // It copies properties.
-                  // `clone.components.push(new Component(c.name, c.state, c.wildcard))` ?
-                  // Usually yes.
-
-                  // So I need to add edges.
-                  // For fragment, I preserve bond labels?
-                  // If `B!1-C!1`. Fragment {B,C}.
-                  // I need to add `1` to B.comp and C.comp.
-                  // Yes.
-
-                  // Recreate edges:
-                  const newMol = fragmentGraph.molecules[newMolIdx];
-                  const newPMol = fragmentGraph.molecules[newPMolIdx];
-                  const newComp = newMol.components[cIdx];
-                  const newPComp = newPMol.components[pCompIdx];
-
-                  // Check if bond already exists (to avoid double adding for undirected graph)
-                  // But here I'm iterating all components.
-                  // Just add. `addBond` handles dedup? 
-                  // Component.edges.set(label, ...).
-                  // I need the label.
-
-                  // Find label in original
-                  const orgComp = orgMol.components[cIdx];
-                  for (const [label] of orgComp.edges) {
-                    // Check if valid in fragment.
-                    if (typeof label === 'number') {
-                      newComp.edges.set(label, 1);
-                      newPComp.edges.set(label, 1);
-                    }
+                  if (survivingInCluster.has(nM)) {
+                    const newN = oldToNewIdx.get(nM)!;
+                    const keyA = `${newIdx}.${c}`;
+                    const valA = `${newN}.${nC}`;
+                    if (!targetGraph.adjacency.has(keyA)) targetGraph.adjacency.set(keyA, []);
+                    if (!targetGraph.adjacency.get(keyA)!.includes(valA)) targetGraph.adjacency.get(keyA)!.push(valA);
                   }
                 }
               }
             }
           }
-        }
 
-        // Correct implementation for bonds:
-        // Iterate internal bonds using `adjacency` of ORIGINAL graph.
-        // For each pair (u, v) in fragment.
-        // Find bond label l between u and v in original.
-        // Add l to u' and v' in fragment.
+          // Reconstruct external adjacency (Orphan <-> Anchor Survivor)
+          for (const oldIdx of survivingInCluster) {
+            const oldMol = rg.molecules[oldIdx];
+            const newIdx = oldToNewIdx.get(oldIdx)!;
 
-        // Re-iterating mols... (lines above)
-        // ... `if (molMap.has(pMolIdx))` ...
-        // Find label.
-        // `comp.edges` has label. `adjacency` helps verify partner.
-        // This is robust enough.
+            for (let c = 0; c < oldMol.components.length; c++) {
+              const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
+              if (neighbors) {
+                for (const neighbor of neighbors) {
+                  const [nMStr, nCStr] = neighbor.split('.');
+                  const nM = Number(nMStr);
+                  const nC = Number(nCStr);
+                  const nKey = `${r}:${nM}`;
+                  const anchorLoc = anchors.get(nKey);
+                  if (anchorLoc && anchorLoc.graphIdx === anchorGraphIdx) {
+                    const bondLabel = oldMol.components[c].edges.keys().next().value;
+                    targetGraph.addBond(newIdx, c, anchorLoc.molIdx, nC, bondLabel);
+                  }
+                }
+              }
+            }
+          }
 
-        productGraphs.push(fragmentGraph);
-        if (shouldLogNetworkGenerator) {
-          debugNetworkLog(`[applyTransformation] Harvested orphan fragment: ${fragmentGraph.toString()}`);
+          for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+
+        } else {
+          // PARTIAL PRESERVATION: The cluster is not anchored to a survivor.
+          // It may contain a mix of DELETED molecules (matched) and BYSTANDERS (not matched).
+          // We must harvest the BYSTANDERS as new products and discard the DELETED ones.
+
+          const survivingOrphans = new Set<number>();
+          for (const idx of clusterIndices) {
+            if (!matchedReactantKeys.has(`${r}:${idx}`)) {
+              survivingOrphans.add(idx);
+            }
+          }
+
+          if (survivingOrphans.size > 0) {
+            if (shouldLogNetworkGenerator) {
+              debugNetworkLog(`[applyTransformation] Preserving bystanders from orphan cluster: reactant ${r}, mols [${Array.from(survivingOrphans).join(',')}] (Original cluster size: ${clusterIndices.size})`);
+            }
+
+            // Create new SpeciesGraph for the surviving bystanders
+            const newGraph = new SpeciesGraph();
+            newGraph.compartment = rg.compartment;
+
+            const oldToNewIdx = new Map<number, number>();
+
+            // 1. Clone only survivors
+            for (const oldIdx of survivingOrphans) {
+              const oldMol = rg.molecules[oldIdx];
+              const newMol = this.cloneMoleculeStructure(oldMol);
+              newMol._sourceKey = `${r}:${oldIdx}`;
+              if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
+
+              const newIdx = newGraph.molecules.length;
+              newGraph.molecules.push(newMol);
+              oldToNewIdx.set(oldIdx, newIdx);
+            }
+
+            // 2. Reconstruct adjacency among survivors
+            for (const oldIdx of survivingOrphans) {
+              const oldMol = rg.molecules[oldIdx];
+              const newIdx = oldToNewIdx.get(oldIdx)!;
+
+              for (let c = 0; c < oldMol.components.length; c++) {
+                const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
+                if (neighbors) {
+                  for (const neighbor of neighbors) {
+                    const [nMStr, nCStr] = neighbor.split('.');
+                    const nM = Number(nMStr);
+                    const nC = Number(nCStr);
+
+                    // Only add bond if neighbor is ALSO a survivor
+                    if (survivingOrphans.has(nM)) {
+                      const newN = oldToNewIdx.get(nM)!;
+                      const keyA = `${newIdx}.${c}`;
+                      const valA = `${newN}.${nC}`;
+                      if (!newGraph.adjacency.has(keyA)) newGraph.adjacency.set(keyA, []);
+                      if (!newGraph.adjacency.get(keyA)!.includes(valA)) newGraph.adjacency.get(keyA)!.push(valA);
+                    }
+                  }
+                }
+              }
+            }
+
+            // Split potential disconnected components if the deleted molecule bridged them
+            const splitOrphans = newGraph.split();
+            for (const sub of splitOrphans) {
+              productGraphs.push(sub);
+            }
+
+            // Track used (even if effectively deleted, we handled them)
+            for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+
+          } else {
+            if (shouldLogNetworkGenerator) {
+              debugNetworkLog(`[applyTransformation] Discarding fully deleted orphan cluster: [${Array.from(clusterIndices).join(',')}]`);
+            }
+            // Mark all as used/handled
+            for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+          }
         }
       }
     }
@@ -1961,6 +1815,49 @@ export class NetworkGenerator {
           .map((p) => p.toString().slice(0, 150))
           .join(' | ')}`
       );
+    }
+
+    // FIX: Transport Multiplicity / MoveConnected
+    // If the rule specifies MoveConnected, ensure the entire connected component moves to the new compartment.
+    if (rule.isMoveConnected) {
+      for (const graph of productGraphs) {
+        let targetCompartment: string | undefined;
+
+        // Find the "authoritative" compartment from the explicitly matched molecules
+        // (These have their compartment set by the product pattern in buildProductGraph)
+        for (const mol of graph.molecules) {
+          if (!mol._sourceKey) continue;
+          const [rStr, mStr] = mol._sourceKey.split(':');
+          const rIdx = Number(rStr);
+          const mIdx = Number(mStr);
+          if (!Number.isFinite(rIdx) || !Number.isFinite(mIdx)) continue;
+
+          // Check if this molecule was matched by the rule
+          const matchMap = matches[rIdx];
+          let isMatched = false;
+          if (matchMap) {
+            for (const tgtIdx of matchMap.moleculeMap.values()) {
+              if (tgtIdx === mIdx) {
+                isMatched = true;
+                break;
+              }
+            }
+          }
+
+          if (isMatched && mol.compartment) {
+            targetCompartment = mol.compartment;
+            break;
+          }
+        }
+
+        // Apply to all molecules in this connected component
+        if (targetCompartment) {
+          for (const mol of graph.molecules) {
+            mol.compartment = targetCompartment;
+          }
+          graph.compartment = targetCompartment;
+        }
+      }
     }
 
     return productGraphs;
@@ -2256,6 +2153,11 @@ export class NetworkGenerator {
           reactantIdx: rpm.reactantIdx,
           targetMolIdx: rpm.targetMolIdx
         });
+        if (pMol.name === 'SARM') {
+          debugNetworkLog(`[buildProductGraph] DEBUG: Mapped product SARM ${pMolIdx} to reactant ${rpm.reactantIdx} mol ${rpm.targetMolIdx}`);
+        }
+      } else if (pMol.name === 'SARM') {
+        debugNetworkLog(`[buildProductGraph] DEBUG: FAILED to map product SARM ${pMolIdx} to any reactant!`);
       }
     }
 
@@ -2585,8 +2487,8 @@ export class NetworkGenerator {
       productGraph.molecules.push(clone);
       reactantToProductMol.set(key, newIdx);
 
-      if (shouldLogNetworkGenerator) {
-        debugNetworkLog(`[buildProductGraph] Cloned reactant ${r} mol ${molIdx} (${sourceMol.name}@${clone.compartment || 'none'}) -> product mol ${newIdx}`);
+      if (shouldLogNetworkGenerator || (sourceMol.name === 'SARM')) {
+        debugNetworkLog(`[buildProductGraph] Cloned reactant ${r} mol ${molIdx} (${sourceMol.name}@${sourceMol.compartment || 'none'}) (from graph ${reactantGraphs[r].compartment}) -> product mol ${newIdx} (@${clone.compartment || 'none'})`);
       }
     }
 
@@ -2641,13 +2543,14 @@ export class NetworkGenerator {
           debugNetworkLog(`[buildProductGraph] Overriding product mol ${productMolIdx} compartment to ${pMol.compartment} from pattern`);
         }
       } else if (pattern.compartment) {
-        // CRITICAL FIX: If pattern has graph-level compartment, ALWAYS apply it to all molecules
-        // This handles transport rules like "A(t!2,b!1).B(a!1).T1(a!2) -> T1(a) + A(t,b!1).B(a!1)@CYT"
-        // where the product complex A.B@CYT should have BOTH A and B in CYT, overriding any
-        // compartment inherited from the reactant (e.g., O1V).
-        productGraph.molecules[productMolIdx].compartment = pattern.compartment;
-        if (shouldLogNetworkGenerator) {
-          debugNetworkLog(`[buildProductGraph] Setting product mol ${productMolIdx} compartment to ${pattern.compartment} from graph-level pattern compartment (override)`);
+        // Only apply graph-level compartment to molecules that don't have their own
+        if (!productGraph.molecules[productMolIdx].compartment) {
+          productGraph.molecules[productMolIdx].compartment = pattern.compartment;
+          if (shouldLogNetworkGenerator || productGraph.molecules[productMolIdx].name === 'SARM') {
+            debugNetworkLog(`[buildProductGraph] Applying species-level compartment ${pattern.compartment} to product mol ${productMolIdx} (${productGraph.molecules[productMolIdx].name})`);
+          }
+        } else if (productGraph.molecules[productMolIdx].name === 'SARM') {
+          debugNetworkLog(`[buildProductGraph] SKIPPING compartment override for ${productGraph.molecules[productMolIdx].name}, already has ${productGraph.molecules[productMolIdx].compartment}`);
         }
       }
     }
@@ -3261,11 +3164,6 @@ export class NetworkGenerator {
     signal?: AbortSignal
   ): Species {
     const canonical = profiledCanonicalize(graph);
-    // Debug logging for specific species
-    if (graph.molecules.some(m => m.name === 'CCND')) {
-      console.log(`[addOrGetSpecies] Check CCND: comp='${graph.compartment}', canonical='${canonical}'`);
-    }
-
 
     if (speciesMap.has(canonical)) {
       return speciesMap.get(canonical)!;
@@ -3279,16 +3177,24 @@ export class NetworkGenerator {
     }
 
     const species = new Species(graph, speciesList.length);
+
+    // Set initial concentration from seeds
+    const seedConcentration = (this.seedConcentrationMap?.get(canonical) ?? 0);
+    species.initialConcentration = seedConcentration;
+
+    // DEBUG: Trace FB species creation
+    if (canonical.includes('FB') && canonical.includes('s~U')) {
+      console.log(`[NetworkGen] Creating Species '${canonical}': init=${seedConcentration}`);
+    }
+
     speciesMap.set(canonical, species);
     speciesList.push(species);
+    this.indexSpecies(species);
     queue.push(graph);
 
     if (signal?.aborted) {
       throw new DOMException('Network generation cancelled', 'AbortError');
     }
-
-    // Index the newly created species by molecule type for faster candidate lookup
-    this.indexSpecies(species);
 
     return species;
   }

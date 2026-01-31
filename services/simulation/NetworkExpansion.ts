@@ -17,7 +17,7 @@ import { NetworkGenerator } from '../../src/services/graph/NetworkGenerator';
 import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
 import { containsRateLawMacro, evaluateFunctionalRate, expandRateLawMacros } from './ExpressionEvaluator';
 import { formatSpeciesList } from '../parity/ParityService';
-import { isFunctionalRateExpr, countPatternMatches, isSpeciesMatch, removeCompartment } from '../parity/PatternMatcher';
+import { isFunctionalRateExpr, countPatternMatches, isSpeciesMatch, removeCompartment, getCompartment } from '../parity/PatternMatcher';
 
 /**
  * Main entry point for network generation.
@@ -119,8 +119,10 @@ export async function generateExpandedNetwork(
         const hasMacro = containsRateLawMacro(r.rate); // Logic like Sat() or MM()
 
         // Check if the rate depends on observables, functions, or changing parameters (Time dependent).
+        // FIX: Do NOT mark as functional if only dependent on changing parameters.
+        // SimulationLoop handles parameter updates separately for mass-action rates IF the rate string is preserved.
         const isForwardFunctional = hasMacro ||
-            isFunctionalRateExpr(expandedRate, observableNames, functionNames, changingParams);
+            isFunctionalRateExpr(expandedRate, observableNames, functionNames, new Set());
 
         let rate: number;
         if (isForwardFunctional) {
@@ -158,7 +160,7 @@ export async function generateExpandedNetwork(
             expandedReverseRate = revExpanded;
             const reverseMacro = containsRateLawMacro(r.reverseRate);
             isReverseFunctional = reverseMacro ||
-                isFunctionalRateExpr(revExpanded, observableNames, functionNames, changingParams);
+                isFunctionalRateExpr(revExpanded, observableNames, functionNames, new Set());
 
             if (isReverseFunctional) {
                 reverseRate = 1;
@@ -181,10 +183,14 @@ export async function generateExpandedNetwork(
 
         // Create Forward Rule Object
         const ruleStr = `${formatSpeciesList(r.reactants)} -> ${formatSpeciesList(r.products)}`;
+
         const forwardRule = BNGLParser.parseRxnRule(ruleStr, isForwardFunctional ? 1 : rate);
         forwardRule.name = r.name;
+        // Always preserve original rate expression for parameter updates
+        (forwardRule as any).originalRate = expandedRate;
+        (forwardRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean; propensityFactor?: number }).rateExpression = expandedRate;
+
         if (isForwardFunctional) {
-            (forwardRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean; propensityFactor?: number }).rateExpression = expandedRate;
             (forwardRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean; propensityFactor?: number }).isFunctionalRate = true;
             (forwardRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean; propensityFactor?: number }).propensityFactor = 1;
         }
@@ -199,8 +205,10 @@ export async function generateExpandedNetwork(
             const reverseRuleStr = `${formatSpeciesList(r.products)} -> ${formatSpeciesList(r.reactants)}`;
             const reverseRule = BNGLParser.parseRxnRule(reverseRuleStr, isReverseFunctional ? 1 : reverseRate);
             reverseRule.name = r.name + '_rev';
+            (reverseRule as any).originalRate = expandedReverseRate;
+            (reverseRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).rateExpression = expandedReverseRate;
+
             if (isReverseFunctional && expandedReverseRate) {
-                (reverseRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).rateExpression = expandedReverseRate;
                 (reverseRule as unknown as { rateExpression?: string; isFunctionalRate?: boolean }).isFunctionalRate = true;
             }
             return [forwardRule, reverseRule];
@@ -246,8 +254,13 @@ export async function generateExpandedNetwork(
             dimension: c.dimension,
             size: c.size,
             parent: c.parent
-        }))
+        })),
+        seedConcentrationMap
     });
+
+    // ... (rest of generation code same) ... 
+    // (omitted for brevity, skipping to result mapping)
+    // Actually I can't skip with replace_file_content unless I replace a chunk.
 
     // Set up progress callback
     // Update frequency: 250ms chosen to balance UI responsiveness
@@ -301,7 +314,7 @@ export async function generateExpandedNetwork(
     const generatedSpecies = result.species.map((s: Species) => {
         // Canonicalize the graph representation for consistent string keys.
         const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
-        
+
         // Lookup exact match in the pre-calculated seed map.
         let concentration = seedConcentrationMap.get(canonicalName);
 
@@ -336,6 +349,16 @@ export async function generateExpandedNetwork(
         return { name: canonicalName, initialConcentration: concentration, isConstant };
     });
 
+    const observableNamesSet = new Set(inputModel.observables.map(o => o.name));
+    const functionNamesSet = new Set((inputModel.functions || []).map(f => f.name));
+    const changingParameterNames = new Set<string>();
+    if (inputModel.parameterChanges) {
+        inputModel.parameterChanges.forEach(c => changingParameterNames.add(c.parameter));
+    }
+    if (inputModel.paramExpressions) {
+        Object.keys(inputModel.paramExpressions).forEach(k => changingParameterNames.add(k));
+    }
+
     // BNG2 Logic: Map generated reactions to output format.
     // Ensure all reactants/products are canonicalized strings.
     const generatedReactions = result.reactions.map((r: Rxn, idx: number) => {
@@ -344,17 +367,21 @@ export async function generateExpandedNetwork(
             // Functional Rate Flag Logic:
             // Rxn objects generated by NetworkGenerator preserve `rateExpression` strings but loose the boolean flag.
             // We re-derive it: if a rate expression exists, it IS a functional rate.
-            const isFunctionalRate = rateExpression != null && String(rateExpression).trim().length > 0;
+            const isFunctionalRate = rateExpression != null && isFunctionalRateExpr(rateExpression, observableNamesSet, functionNamesSet, changingParameterNames);
+            const degeneracy = (r as any).degeneracy ?? 1;
 
             const reaction = {
                 reactants: r.reactants.map((ridx: number) => GraphCanonicalizer.canonicalize(result.species[ridx].graph)),
                 products: r.products.map((pidx: number) => GraphCanonicalizer.canonicalize(result.species[pidx].graph)),
-                rate: rateExpression || String(r.rate),
+                // FIX: Use originalRate to preserve parameter names for non-functional updates
+                rate: rateExpression || (r as any).originalRate || String(r.rate),
                 rateConstant: typeof r.rate === 'number' ? r.rate : 0,
                 isFunctionalRate,
                 rateExpression,
+                degeneracy,
                 propensityFactor: (r as unknown as { propensityFactor?: number }).propensityFactor ?? 1,
-                productStoichiometries: (r as any).productStoichiometries ?? null
+                productStoichiometries: (r as any).productStoichiometries ?? null,
+                scalingVolume: (r as any).scalingVolume ?? null
             };
             return reaction;
         } catch (e: any) {
@@ -492,20 +519,49 @@ export async function generateExpandedNetwork(
                 }
             }
 
-            // Calculate per-match volume scaling (for cBNGL).
+            // Calculate per-match volume scaling (for cBNGL spanning complexes).
+            // FIX: 'Species' type observables should remain as Concentrations (Amount / Volume),
+            // so we should NOT multiply by volume (which SimulationLoop does if `volumes` is present).
+            // 'Molecules' type observables (default) should be Amounts (Concentration * Volume).
             const volumes: number[] = [];
-            matchingIndices.forEach(idx => {
-                const s = generatedSpecies[idx];
-                const match = s.name.match(/@([^:@:]+)/);
-                if (match) {
-                    const compName = match[1];
-                    const comp = inputModel.compartments?.find(c => c.name === compName);
-                    const resolvedVol = (comp as any)?.resolvedVolume ?? comp?.size ?? 1.0;
-                    volumes.push(resolvedVol);
-                } else {
-                    volumes.push(1.0);
-                }
-            });
+            if (obsType !== 'species') {
+                matchingIndices.forEach(idx => {
+                    const s = generatedSpecies[idx];
+                    const patterns = splitByTopLevelCommas(String(obs.pattern || ''));
+                    let totalScaledMatches = 0;
+                    let totalMatches = 0;
+
+                    for (const pat of patterns) {
+                        const patComp = getCompartment(pat);
+                        const cleanPat = removeCompartment(pat);
+                        const specMols = s.name.split('.');
+                        const specPrefixComp = getCompartment(s.name);
+
+                        for (const sMol of specMols) {
+                            const molCompMatch = sMol.match(/@([A-Za-z0-9_]+)$/);
+                            const effCompName = molCompMatch ? molCompMatch[1] : specPrefixComp;
+
+                            if (patComp && patComp !== effCompName) continue;
+
+                            const cleanMol = sMol.replace(/@[A-Za-z0-9_]+$/, '');
+                            const molCount = countPatternMatches(cleanMol, cleanPat);
+                            if (molCount > 0) {
+                                totalMatches += molCount;
+                                const comp = inputModel.compartments?.find(c => c.name === effCompName);
+                                const v = (comp as any)?.resolvedVolume ?? comp?.size ?? 1.0;
+                                totalScaledMatches += molCount * v;
+                            }
+                        }
+                    }
+                    // We store an "Effective Volume" for this species-observable pair
+                    // sum(matches * vol) / sum(matches)
+                    const effVol = totalMatches > 0 ? (totalScaledMatches / totalMatches) : 1.0;
+                    if (obs.name === 'Regulator_Load' || obs.name === 'Pathogen_Sense' || obs.name === 'Opsonization_C3b') {
+                        console.log(`[NetExp_Debug] Obs: ${obs.name}, Species: ${s.name}, matches: ${totalMatches}, effVol: ${effVol}`);
+                    }
+                    volumes.push(effVol);
+                });
+            }
 
             return {
                 name: obs.name,

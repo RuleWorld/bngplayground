@@ -146,6 +146,21 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Assign resolved values to model
     Object.assign(this.parameters, resolvedParams);
 
+    // PARITY FIX: Remove truly constant parameters from paramExpressions.
+    // If a parameter doesn't depend on other parameters (evaluates with empty map),
+    // it shouldn't be in paramExpressions because SimulationLoop.ts uses that list
+    // to "revert" parameter changes back to their original BNGL definitions.
+    // This ensures that setParameter("K", 200) works for parameters defined as constants (e.g. "K 0.1").
+    for (const [name, expr] of Object.entries(this.paramExpressions)) {
+      try {
+        if (!isNaN(CoreBNGLParser.evaluateExpression(expr, new Map()))) {
+          delete this.paramExpressions[name];
+        }
+      } catch {
+        // If it fails with empty map, it's likely dependent or complex; keep it.
+      }
+    }
+
     // Ensure all params have at least a default value (e.g. 0) if resolution failed
     for (const name of Object.keys(this.paramExpressions)) {
       if (!(name in this.parameters)) {
@@ -354,7 +369,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     this.species.push({
       name,
       initialConcentration: concentration,
-      isConstant
+      isConstant,
+      initialExpression: exprCtx ? exprCtx.text : '0'
     });
     this.speciesExpressions.push(exprCtx ? exprCtx.text : '0');
   }

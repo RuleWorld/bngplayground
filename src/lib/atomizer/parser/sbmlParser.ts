@@ -301,15 +301,8 @@ export class SBML2JSON {
   getParameters(): Map<number, any> {
     const parameters = new Map<number, any>();
 
-    // Add standard parameters
-    parameters.set(1, {
-      name: 'Nav',
-      value: '6.022e8',
-      unit: '',
-      type: 'Avogadro number for 1 um^3'
-    });
-
-    let idx = 2;
+    // Add standard parameters (Nav removed to avoid triple-scaling)
+    let idx = 1;
     for (let i = 0; i < this.model.getNumParameters(); i++) {
       const parameter = this.model.getParameter(i);
       const parameterSpecs: any = {
@@ -325,10 +318,11 @@ export class SBML2JSON {
         for (const factor of factors) {
           parameterSpecs.value *= Math.pow(10, factor[1] * factor[2]);
           parameterSpecs.unit = `${parameterSpecs.unit}*1e${factor[1] * factor[2]}`;
-        }
-        if (parameter.getUnits().includes('mole') && !parameter.getUnits().includes('per_mole')) {
-          parameterSpecs.value *= 6.022e8;
-          parameterSpecs.unit = `${parameterSpecs.unit}*avo.num`;
+          // Apply Avogadro scaling if Molar/mole
+          const lowerUnit = (parameter.getUnits() || '').toLowerCase();
+          if (factor[1] === 1 && lowerUnit.includes('mole') && !lowerUnit.includes('per_mole')) {
+            parameterSpecs.value *= 6.02214076e23;
+          }
         }
       }
 
@@ -430,13 +424,12 @@ export class SBML2JSON {
         const factors = this.unitDictionary.get(substanceUnits)!;
         for (const factor of factors) {
           initialConcentration *= Math.pow(10, factor[1] * factor[2]);
+          // Apply Avogadro scaling if Molar/mole
+          const lowerUnit = (substanceUnits || '').toLowerCase();
+          if (factor[1] === 1 && lowerUnit.includes('mole')) {
+            initialConcentration *= 6.02214076e23;
+          }
         }
-        if (substanceUnits.includes('mole')) {
-          initialConcentration /= 6.022e8;
-        }
-      }
-      if (substanceUnits === '') {
-        initialConcentration /= 6.022e8;
       }
 
       if (initialConcentration !== 0 && compData) {
@@ -582,11 +575,9 @@ export class SBML2JSON {
     for (const [key, param] of parameters) {
       if (rate.includes(param.name) && param.unit === '') {
         if (stoichiometry === 2) {
-          param.value *= 6.022e8;
-          param.unit = 'Bimolecular * NaV';
+          param.unit = 'Bimolecular';
         } else if (stoichiometry === 0) {
-          param.value /= 6.022e8;
-          param.unit = '0-order / NaV';
+          param.unit = '0-order';
         } else if (stoichiometry === 1) {
           param.unit = 'Unimolecular';
         }

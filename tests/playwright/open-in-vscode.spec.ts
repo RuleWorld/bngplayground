@@ -25,9 +25,9 @@ test('Open-in-VSCode modal should open without hook errors', async ({ page }) =>
   }
   if (!opened) throw new Error('Could not open any URL candidate. Start the dev server (npm run dev) or set URL env var.');
 
-  // Ensure header button exists
+  // Ensure header VS Code button is removed (not present)
   const headerBtn = page.locator('button[title="Open model in VS Code"]');
-  await expect(headerBtn).toBeVisible({ timeout: 5000 });
+  await expect(headerBtn).toHaveCount(0);
 
   // --- Editor load/export checks ---
   const fileInput = page.getByTestId('editor-load-input');
@@ -95,20 +95,7 @@ test('Open-in-VSCode modal should open without hook errors', async ({ page }) =>
   // Ensure BioModels search section is visible and input is present
   await expect(page.getByPlaceholder('Search BioModels (e.g., MAPK)')).toBeVisible();
 
-  // Click the modal's "Open in VS Code" button
-  const modalButton = page.locator('div:text("Open in VS Code")').locator('button', { hasText: 'Open in VS Code' }).first();
-  if (await modalButton.count() === 0) {
-    // fallback: any button with that text
-    const btn = page.locator('button', { hasText: 'Open in VS Code' }).nth(1);
-    await btn.click();
-  } else {
-    await modalButton.click();
-  }
-
-  // Wait briefly for console messages
-  await page.waitForTimeout(1000);
-
-  // Look for React hook error / minified React error #310
+  // Look for React hook error / minified React error #310 after other interactions
   const foundHookError = errors.find(e => e.includes('Rendered more hooks') || e.includes('Minified React error #310') || e.includes('Rendered more hooks than during the previous render'));
 
   expect(foundHookError).toBeUndefined();

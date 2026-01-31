@@ -9,6 +9,7 @@ export class RxnRule {
   rateConstant: number;
   rateExpression?: string;
   allowsIntramolecular: boolean;
+  totalRate: boolean;
 
   // Transformation operations
   deleteBonds: Array<[number, number, number, number]>; // [mol1, comp1, mol2, comp2]
@@ -34,7 +35,7 @@ export class RxnRule {
     reactants: SpeciesGraph[],
     products: SpeciesGraph[],
     rateConstant: number,
-    options: { allowsIntramolecular?: boolean; rateExpression?: string } = {}
+    options: { allowsIntramolecular?: boolean; rateExpression?: string; isMoveConnected?: boolean; totalRate?: boolean } = {}
   ) {
     this.name = name;
     this.reactants = reactants;
@@ -43,6 +44,8 @@ export class RxnRule {
     // Default to true to match native BNG behavior (allows intramolecular binding)
     this.allowsIntramolecular = options.allowsIntramolecular ?? true;
     this.rateExpression = options.rateExpression;
+    this.isMoveConnected = options.isMoveConnected ?? false;
+    this.totalRate = options.totalRate ?? false;
     this.deleteBonds = [];
     this.addBonds = [];
     this.changeStates = [];

@@ -38,7 +38,7 @@ function componentMatches(pComp: Component, tComp: Component): boolean {
     return targetBondCount > 0;
   }
 
-  // No wildcard, no bonds: explicitly unbound
+  // No wildcard, no bonds: BNGL "unbound" semantics.
   return targetBondCount === 0;
 }
 

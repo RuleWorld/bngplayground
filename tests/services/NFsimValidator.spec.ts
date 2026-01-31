@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
 import { NFsimValidator, ValidationErrorType } from '../../services/simulation/NFsimValidator';
-import { BNGLModel, ReactionRule, BNGLFunction, BNGLCompartment } from '../../types';
+import { BNGLModel, ReactionRule, BNGLFunction, BNGLCompartment, BNGLMoleculeType } from '../../types';
 
 describe('NFsimValidator', () => {
   
@@ -178,7 +178,7 @@ describe('NFsimValidator', () => {
       model.functions = [{
         name: 'conditional_rate',
         expression: 'if(time > 100, k1*2, k1)',
-        arguments: []
+        args: []
       }];
 
       const result = NFsimValidator.validateForNFsim(model);
@@ -219,7 +219,8 @@ function bnglModelWithTotalRateGenerator(): fc.Arbitrary<BNGLModel> {
     moleculeTypes: fc.array(moleculeTypeGenerator(), { minLength: 1, maxLength: 5 }),
     species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 5 }),
     reactionRules: fc.array(totalRateRuleGenerator(), { minLength: 1, maxLength: 3 }),
-    observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 })
+    observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 }),
+    reactions: fc.constant([])
   });
 }
 
@@ -228,7 +229,7 @@ function bnglModelWithObservableDependentRateGenerator(): fc.Arbitrary<BNGLModel
       { name: 'TotalA', type: 'Molecules', pattern: 'A()' },
       { name: 'ObsB', type: 'Molecules', pattern: 'B()' },
       { name: 'S_total', type: 'Molecules', pattern: 'S()' }
-  ]);
+  ]).map(obs => [...obs] as any[]);
 
   return fc.record({
     name: fc.string({ minLength: 1, maxLength: 20 }),
@@ -236,7 +237,8 @@ function bnglModelWithObservableDependentRateGenerator(): fc.Arbitrary<BNGLModel
     moleculeTypes: fc.array(moleculeTypeGenerator(), { minLength: 1, maxLength: 5 }),
     species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 5 }),
     reactionRules: fc.array(observableDependentRuleGenerator(), { minLength: 1, maxLength: 3 }),
-    observables: specificObservables
+    observables: specificObservables,
+    reactions: fc.constant([])
   });
 }
 
@@ -248,7 +250,8 @@ function bnglModelWithUnsupportedFunctionGenerator(): fc.Arbitrary<BNGLModel> {
     species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 5 }),
     reactionRules: fc.array(basicRuleGenerator(), { minLength: 1, maxLength: 3 }),
     observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 }),
-    functions: fc.array(unsupportedFunctionGenerator(), { minLength: 1, maxLength: 2 })
+    functions: fc.array(unsupportedFunctionGenerator(), { minLength: 1, maxLength: 2 }),
+    reactions: fc.constant([])
   });
 }
 
@@ -259,7 +262,8 @@ function complexBnglModelGenerator(): fc.Arbitrary<BNGLModel> {
     moleculeTypes: fc.array(complexMoleculeTypeGenerator(), { minLength: 3, maxLength: 8 }),
     species: fc.array(speciesGenerator(), { minLength: 5, maxLength: 15 }),
     reactionRules: fc.array(complexRuleGenerator(), { minLength: 10, maxLength: 25 }),
-    observables: fc.array(observableGenerator(), { minLength: 3, maxLength: 10 })
+    observables: fc.array(observableGenerator(), { minLength: 3, maxLength: 10 }),
+    reactions: fc.constant([])
   });
 }
 
@@ -269,19 +273,21 @@ function incompleteBnglModelGenerator(): fc.Arbitrary<BNGLModel> {
     fc.record({
       name: fc.string({ minLength: 1, maxLength: 20 }),
       parameters: fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.float({ min: Math.fround(0.1), max: Math.fround(100) })),
-      moleculeTypes: fc.constant([]),
+      moleculeTypes: fc.constant([]).map(m => [...m] as BNGLMoleculeType[]),
       species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 3 }),
       reactionRules: fc.array(basicRuleGenerator(), { minLength: 1, maxLength: 3 }),
-      observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 })
+      observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 }),
+      reactions: fc.constant([]).map(r => [...r] as any[])
     }),
     // Missing species
     fc.record({
       name: fc.string({ minLength: 1, maxLength: 20 }),
       parameters: fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.float({ min: Math.fround(0.1), max: Math.fround(100) })),
       moleculeTypes: fc.array(moleculeTypeGenerator(), { minLength: 1, maxLength: 3 }),
-      species: fc.constant([]),
+      species: fc.constant([]).map(s => [...s] as any[]),
       reactionRules: fc.array(basicRuleGenerator(), { minLength: 1, maxLength: 3 }),
-      observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 })
+      observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 }),
+      reactions: fc.constant([]).map(r => [...r] as any[])
     }),
     // Missing rules
     fc.record({
@@ -289,8 +295,9 @@ function incompleteBnglModelGenerator(): fc.Arbitrary<BNGLModel> {
       parameters: fc.dictionary(fc.string({ minLength: 1, maxLength: 10 }), fc.float({ min: Math.fround(0.1), max: Math.fround(100) })),
       moleculeTypes: fc.array(moleculeTypeGenerator(), { minLength: 1, maxLength: 3 }),
       species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 3 }),
-      reactionRules: fc.constant([]),
-      observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 })
+      reactionRules: fc.constant([]).map(rr => [...rr] as any[]),
+      observables: fc.array(observableGenerator(), { minLength: 1, maxLength: 3 }),
+      reactions: fc.constant([]).map(r => [...r] as any[])
     }),
     // Missing observables
     fc.record({
@@ -299,7 +306,8 @@ function incompleteBnglModelGenerator(): fc.Arbitrary<BNGLModel> {
       moleculeTypes: fc.array(moleculeTypeGenerator(), { minLength: 1, maxLength: 3 }),
       species: fc.array(speciesGenerator(), { minLength: 1, maxLength: 3 }),
       reactionRules: fc.array(basicRuleGenerator(), { minLength: 1, maxLength: 3 }),
-      observables: fc.constant([])
+      observables: fc.constant([]).map(o => [...o] as any[]),
+      reactions: fc.constant([]).map(r => [...r] as any[])
     })
   );
 }
@@ -331,7 +339,7 @@ function basicRuleGenerator(): fc.Arbitrary<ReactionRule> {
     reactionString: fc.string({ minLength: 5, maxLength: 50 }),
     reactants: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1, maxLength: 3 }),
     products: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1, maxLength: 3 }),
-    rate: fc.oneof(fc.float({ min: Math.fround(0.001), max: Math.fround(1000) }), fc.string({ minLength: 1, maxLength: 10 })),
+    rate: fc.oneof(fc.float({ min: Math.fround(0.001), max: Math.fround(1000) }).map(String), fc.string({ minLength: 1, maxLength: 10 })),
     isBidirectional: fc.boolean()
   });
 }
@@ -342,7 +350,7 @@ function totalRateRuleGenerator(): fc.Arbitrary<ReactionRule> {
     reactionString: fc.string({ minLength: 5, maxLength: 50 }).map(s => s + ' TotalRate'),
     reactants: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1, maxLength: 3 }),
     products: fc.array(fc.string({ minLength: 1, maxLength: 20 }), { minLength: 1, maxLength: 3 }),
-    rate: fc.oneof(fc.float({ min: Math.fround(0.001), max: Math.fround(1000) }), fc.string({ minLength: 1, maxLength: 10 })),
+    rate: fc.oneof(fc.float({ min: Math.fround(0.001), max: Math.fround(1000) }).map(String), fc.string({ minLength: 1, maxLength: 10 })),
     isBidirectional: fc.boolean(),
     totalRate: fc.constant(true)
   });
@@ -372,7 +380,7 @@ function complexRuleGenerator(): fc.Arbitrary<ReactionRule> {
     ),
     reactants: fc.array(fc.string({ minLength: 10, maxLength: 50 }), { minLength: 1, maxLength: 2 }),
     products: fc.array(fc.string({ minLength: 10, maxLength: 50 }), { minLength: 1, maxLength: 3 }),
-    rate: fc.oneof(fc.float({ min: Math.fround(0.001), max: Math.fround(1000) }), fc.string({ minLength: 1, maxLength: 10 })),
+    rate: fc.oneof(fc.float({ min: Math.fround(0.001), max: Math.fround(1000) }).map(String), fc.string({ minLength: 1, maxLength: 10 })),
     isBidirectional: fc.boolean()
   });
 }
@@ -394,7 +402,7 @@ function unsupportedFunctionGenerator(): fc.Arbitrary<BNGLFunction> {
       fc.constant('k1 * time'),
       fc.constant('exp(-time/tau)')
     ),
-    arguments: fc.constant([])
+    args: fc.constant([])
   });
 }
 
@@ -417,7 +425,8 @@ function createBasicModel(): BNGLModel {
       rate: 'k1',
       isBidirectional: false
     }],
-    observables: [{ name: 'TotalC', type: 'Molecules', pattern: 'C()' }]
+    observables: [{ name: 'TotalC', type: 'Molecules', pattern: 'C()' }],
+    reactions: []
   };
 }
 
@@ -445,7 +454,8 @@ function createCompleteValidModel(): BNGLModel {
     observables: [
       { name: 'FreeA', type: 'Molecules', pattern: 'A(b)' },
       { name: 'BoundAB', type: 'Molecules', pattern: 'A(b!1).B(a!1)' }
-    ]
+    ],
+    reactions: []
   };
 }
 
@@ -476,7 +486,8 @@ function createComplexModel(): BNGLModel {
     reactionRules: rules,
     observables: [
       { name: 'FreeA', type: 'Molecules', pattern: 'A(b1,b2,b3,b4,b5)' },
-      { name: 'Complexes', type: 'Molecules', pattern: 'A(b1!+)' }
-    ]
+      { name: 'Complexes', type: 'Molecules', pattern: 'A(b!+)' }
+    ],
+    reactions: []
   };
 }
