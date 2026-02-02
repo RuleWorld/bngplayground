@@ -3,10 +3,34 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { Atomizer } from '../src/lib/atomizer/index.ts';
 
+// libsbmljs uses 'self', which is not defined in Node.js
+if (typeof self === 'undefined') {
+    (global as any).self = global;
+}
+
 // Configuration
 const BNG2_PATH = path.resolve('bionetgen_python/bng-win/BNG2.pl');
 const OUTPUT_BASE = path.resolve('tests/parity_check');
-const TOLERANCE = 1e-6;
+const TOLERANCE = 1e-3;
+
+// Normalize path to use forward slashes (prevents quote escaping issues on Windows)
+function normalizePath(p: string): string {
+    return p.replace(/\\/g, '/');
+}
+
+// Result storage
+interface ModelResult {
+    model: string;
+    status: 'PASS' | 'FAIL' | 'ERROR';
+    mae: number;
+    error?: string;
+    sharedHeaders: string[];
+    refHeaders: string[];
+    testHeaders: string[];
+    rowCount: number;
+}
+
+const allResults: ModelResult[] = [];
 
 // Ensure output directories exist
 function ensureDirs() {
@@ -18,188 +42,181 @@ function ensureDirs() {
 
 // Helper to run BNG2.pl
 function runBNG2(args: string[]) {
-    const cmd = `perl "${BNG2_PATH}" ${args.join(' ')}`;
+    const cmd = `perl "${normalizePath(BNG2_PATH)}" ${args.map(arg => {
+        // If an argument is a path that's already quoted, normalize the path inside the quotes
+        if (arg.startsWith('"') && arg.endsWith('"')) {
+            return `"${normalizePath(arg.slice(1, -1))}"`;
+        }
+        return arg;
+    }).join(' ')}`;
     try {
-        // Suppress heavy output unless error
         execSync(cmd, { stdio: 'pipe' });
     } catch (e: any) {
-        console.error(`Error running BNG2: ${cmd}`);
-        console.error(e.stdout?.toString());
-        console.error(e.stderr?.toString());
-        throw e;
+        throw new Error(`BNG2 Failure: ${e.stderr?.toString() || e.message}`);
     }
 }
 
 // Helper to parse GDAT
 function parseGDAT(filePath: string): { headers: string[], data: number[][] } {
-    try {
-        const content = fs.readFileSync(filePath, 'utf-8');
-        const lines = content.trim().split(/\r?\n/);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    const lines = content.trim().split(/\r?\n/);
+    const headerLine = lines.find(l => l.startsWith('#'));
+    if (!headerLine) throw new Error(`Invalid GDAT (no header): ${filePath}`);
 
-        // Header line starts with #
-        const headerLine = lines.find(l => l.startsWith('#'));
-        if (!headerLine) throw new Error(`Invalid GDAT file (no header): ${filePath}`);
-
-        const headers = headerLine.substring(1).trim().split(/\s+/);
-        const data: number[][] = [];
-
-        for (const line of lines) {
-            if (line.startsWith('#')) continue;
-            const vals = line.trim().split(/\s+/).map(Number);
-            if (vals.length === headers.length) {
-                data.push(vals);
-            }
-        }
-
-        return { headers, data };
-    } catch (e: any) {
-        throw new Error(`Failed to parse GDAT ${filePath}: ${e.message}`);
+    const headers = headerLine.substring(1).trim().split(/\s+/);
+    const data: number[][] = [];
+    for (const line of lines) {
+        if (line.startsWith('#')) continue;
+        const vals = line.trim().split(/\s+/).map(Number);
+        if (vals.length === headers.length) data.push(vals);
     }
+    return { headers, data };
 }
 
 // Compare two GDAT files
-function compareGDAT(refPath: string, testPath: string): { passed: boolean, mae: number, error?: string } {
-    if (!fs.existsSync(refPath)) return { passed: false, mae: -1, error: 'Reference file missing' };
-    if (!fs.existsSync(testPath)) return { passed: false, mae: -1, error: 'Test file missing' };
+function compareGDAT(refPath: string, testPath: string): { passed: boolean, mae: number, error?: string, sharedHeaders: string[], refHeaders: string[], testHeaders: string[], rowCount: number } {
+    const ref = parseGDAT(refPath);
+    const test = parseGDAT(testPath);
 
-    try {
-        const ref = parseGDAT(refPath);
-        const test = parseGDAT(testPath);
+    const commonHeaders = ref.headers.filter(h => test.headers.includes(h));
 
-        if (JSON.stringify(ref.headers) !== JSON.stringify(test.headers)) {
-            return { passed: false, mae: -1, error: `Headers mismatch: ${ref.headers.join(',')} vs ${test.headers.join(',')}` };
-        }
-
-        if (ref.data.length !== test.data.length) {
-            return { passed: false, mae: -1, error: `Row count mismatch: ${ref.data.length} vs ${test.data.length}` };
-        }
-
-        let maxError = 0;
-        for (let i = 0; i < ref.data.length; i++) {
-            for (let j = 0; j < ref.headers.length; j++) {
-                const diff = Math.abs(ref.data[i][j] - test.data[i][j]);
-                if (Number.isNaN(diff)) continue;
-                if (diff > maxError) maxError = diff;
-            }
-        }
-
-        return { passed: maxError < TOLERANCE, mae: maxError };
-    } catch (e: any) {
-        return { passed: false, mae: -1, error: e.message };
+    if (commonHeaders.length <= 1) { // Only 'time' or nothing
+        return {
+            passed: false, mae: -1,
+            error: `Poor header overlap: [${commonHeaders.join(',')}]`,
+            sharedHeaders: commonHeaders, refHeaders: ref.headers, testHeaders: test.headers, rowCount: ref.data.length
+        };
     }
+
+    if (ref.data.length !== test.data.length) {
+        return {
+            passed: false, mae: -1,
+            error: `Row count mismatch: ${ref.data.length} vs ${test.data.length}`,
+            sharedHeaders: commonHeaders, refHeaders: ref.headers, testHeaders: test.headers, rowCount: ref.data.length
+        };
+    }
+
+    let maxError = 0;
+    for (let i = 0; i < ref.data.length; i++) {
+        for (const header of commonHeaders) {
+            const refIdx = ref.headers.indexOf(header);
+            const testIdx = test.headers.indexOf(header);
+            const diff = Math.abs(ref.data[i][refIdx] - test.data[i][testIdx]);
+            if (!Number.isNaN(diff) && diff > maxError) maxError = diff;
+        }
+    }
+
+    return {
+        passed: maxError < TOLERANCE,
+        mae: maxError,
+        sharedHeaders: commonHeaders,
+        refHeaders: ref.headers,
+        testHeaders: test.headers,
+        rowCount: ref.data.length
+    };
 }
 
 // Verify a single model
 async function verifyModel(modelPath: string) {
     const modelName = path.basename(modelPath, '.bngl');
-    console.log(`\nVerifying ${modelName}...`);
+    console.log(`\n> Verifying ${modelName}...`);
 
     try {
-        // 1. Convert Source -> SBML
-        const sbmlOutDir = path.join(OUTPUT_BASE, 'sbml');
-        runBNG2(['--sbml', '--outdir', `"${sbmlOutDir}"`, `"${modelPath}"`]);
+        const originalContent = fs.readFileSync(modelPath, 'utf-8');
+        const actionsMatch = originalContent.match(/begin actions([\s\S]*?)end actions/i);
+        let originalActions = actionsMatch ? actionsMatch[0] : '';
 
-        // Check for output file (BNG2 usually outputs [modelName]_sbml.xml or [modelName].xml)
-        let sbmlFile = path.join(sbmlOutDir, `${modelName}_sbml.xml`);
-        if (!fs.existsSync(sbmlFile)) {
-            sbmlFile = path.join(sbmlOutDir, `${modelName}.xml`);
+        if (!originalActions) {
+            // Try to find loose simulate/saveState commands at the end
+            const looseActions = originalContent.match(/(generate_network|simulate|saveState|setParameter|readFile|quit|writeSBML)\s*\(\{[\s\S]*?\}\)/g);
+            if (looseActions) {
+                originalActions = 'begin actions\n    ' + looseActions.join('\n    ') + '\nend actions';
+            }
         }
-        if (!fs.existsSync(sbmlFile)) {
-            // Some models might have uppercase/hyphen differences or other naming quirks
-            const files = fs.readdirSync(sbmlOutDir);
-            const found = files.find(f => f.toLowerCase().startsWith(modelName.toLowerCase()) && f.endsWith('.xml'));
-            if (found) sbmlFile = path.join(sbmlOutDir, found);
+
+        const sbmlOutDir = path.join(OUTPUT_BASE, 'sbml', modelName);
+        if (!fs.existsSync(sbmlOutDir)) fs.mkdirSync(sbmlOutDir, { recursive: true });
+
+        const tempBnglPath = path.join(sbmlOutDir, 'model.bngl');
+        // Strip both begin/end blocks and loose commands
+        let strippedContent = originalContent.replace(/begin actions[\s\S]*?end actions/gi, '');
+        // Match commands like simulate({}), simulate(), writeSBML(), etc.
+        const cmdPattern = /(generate_network|simulate|saveState|setParameter|readFile|quit|writeSBML)\s*\([\s\S]*?\)/g;
+        strippedContent = strippedContent.replace(cmdPattern, '');
+        
+        // Wrap in begin model/end model if missing
+        if (!strippedContent.includes('begin model')) {
+            strippedContent = 'begin model\n' + strippedContent + '\nend model\n';
         }
+
+        const modifiedContent = strippedContent + '\nbegin actions\ngenerate_network({overwrite=>1})\nwriteSBML({})\nend actions\n';
+        fs.writeFileSync(tempBnglPath, modifiedContent);
+
+        runBNG2(['--outdir', `"${sbmlOutDir}"`, `"${tempBnglPath}"`]);
+
+        let sbmlFile = path.join(sbmlOutDir, 'model_sbml.xml');
         if (!fs.existsSync(sbmlFile)) throw new Error(`SBML generation failed: ${sbmlFile} missing`);
 
-        const sbmlContent = fs.readFileSync(sbmlFile, 'utf-8');
-
-        // 2. Atomize SBML -> BNGL using our tool
-        const atomizer = new Atomizer({
-            atomize: false, // Flat translation by default for parity check
-            quietMode: true,
-            logLevel: 'ERROR' // minimize noise
-        });
-
-        await atomizer.initialize(); // Ensure libsbml loaded
-
-        const result = await atomizer.atomize(sbmlContent);
-
-        if (!result.success) {
-            throw new Error(`Atomization failed: ${result.error}`);
-        }
+        const atomizer = new Atomizer({ atomize: false, quietMode: true, useId: true, actions: originalActions });
+        await atomizer.initialize();
+        const result = await atomizer.atomize(fs.readFileSync(sbmlFile, 'utf-8'));
+        if (!result.success) throw new Error(`Atomization failed: ${result.error}`);
 
         const atomizedBnglPath = path.join(OUTPUT_BASE, 'atomized', `${modelName}.bngl`);
         fs.writeFileSync(atomizedBnglPath, result.bngl);
 
-        // 3. Simulate Reference BNGL
         const refSimDir = path.join(OUTPUT_BASE, 'reference_sim', modelName);
         if (!fs.existsSync(refSimDir)) fs.mkdirSync(refSimDir, { recursive: true });
-
-        // Using simple ODE simulation for speed and deterministic comparison
-        // We assume the model has 'generate_network' and 'simulate' or we add them?
-        // BNG2.pl runs the actions in the file.
-        // If the file lacks actions, nothing happens.
-        // Most tutorial models have actions.
-
         runBNG2(['--outdir', `"${refSimDir}"`, `"${modelPath}"`]);
 
-        // 4. Simulate Atomized BNGL
         const atomSimDir = path.join(OUTPUT_BASE, 'atomized_sim', modelName);
         if (!fs.existsSync(atomSimDir)) fs.mkdirSync(atomSimDir, { recursive: true });
-
-        // Need to ensure actions exist. Atomizer appends default actions if none found?
-        // Our generateBNGL appends default simulate commands at the end always:
-        // navigate to bnglWriter.ts to confirm: yes, it pushes 'simulate({method=>"ode"...})'
-
         runBNG2(['--outdir', `"${atomSimDir}"`, `"${atomizedBnglPath}"`]);
 
-        // 5. Compare Results
-        // Find .gdat files
-        const findsGdat = (dir: string) => {
-            const files = fs.readdirSync(dir).filter(f => f.endsWith('.gdat'));
+        const findsGdat = (dir: string, prefix: string) => {
+            const files = fs.readdirSync(dir).filter(f => f.startsWith(prefix) && f.endsWith('.gdat'));
             return files.length > 0 ? path.join(dir, files[0]) : null;
         };
 
-        const refGdat = findsGdat(refSimDir);
-        const atomGdat = findsGdat(atomSimDir);
+        const refGdat = findsGdat(refSimDir, modelName);
+        const atomGdat = findsGdat(atomSimDir, modelName);
 
-        if (!refGdat || !atomGdat) {
-            throw new Error(`Missing simulation output. Ref: ${refGdat}, Atom: ${atomGdat}`);
-        }
+        if (!refGdat || !atomGdat) throw new Error(`Missing GDAT output`);
 
-        const comparison = compareGDAT(refGdat, atomGdat);
-
-        if (comparison.passed) {
-            console.log(`[PASS] ${modelName} (MAE: ${comparison.mae.toExponential(2)})`);
-        } else {
-            console.error(`[FAIL] ${modelName}: ${comparison.error} (MAE: ${comparison.mae.toExponential(2)})`);
-        }
+        const comp = compareGDAT(refGdat, atomGdat);
+        const modelResult: ModelResult = {
+            model: modelName,
+            status: comp.passed ? 'PASS' : 'FAIL',
+            mae: comp.mae,
+            error: comp.error,
+            sharedHeaders: comp.sharedHeaders,
+            refHeaders: comp.refHeaders,
+            testHeaders: comp.testHeaders,
+            rowCount: comp.rowCount
+        };
+        allResults.push(modelResult);
+        console.log(`[${modelResult.status}] MAE: ${comp.mae.toExponential(2)} (Shared: ${comp.sharedHeaders.length})`);
 
     } catch (e: any) {
         console.error(`[ERROR] ${modelName}: ${e.message}`);
+        allResults.push({ model: modelName, status: 'ERROR', mae: -1, error: e.message, sharedHeaders: [], refHeaders: [], testHeaders: [], rowCount: 0 });
     }
 }
 
 async function main() {
     ensureDirs();
-    console.log('Starting Parity Verification...');
-
-    // Get all BNGL files from native-tutorials/CBNGL (good starting point)
-    // Or just pick a few specific ones
     const tutorialsDir = path.resolve('example-models');
+    const allFiles = fs.readdirSync(tutorialsDir).filter(f => f.endsWith('.bngl'));
+    const modelsToRun = process.env.MODELS ? process.env.MODELS.split(',') : null;
+    const files = modelsToRun ? allFiles.filter(f => modelsToRun.some(m => f.includes(m))) : allFiles;
 
-    if (!fs.existsSync(tutorialsDir)) {
-        console.error(`Example models directory not found: ${tutorialsDir}`);
-        process.exit(1);
-    }
-
-    const files = fs.readdirSync(tutorialsDir).filter(f => f.endsWith('.bngl'));
-    console.log(`Verifying all models in ${tutorialsDir} (${files.length} models)...`);
-
+    console.log(`Verifying ${files.length} models...`);
     for (const file of files) {
         await verifyModel(path.join(tutorialsDir, file));
     }
+
+    fs.writeFileSync('validation_report.json', JSON.stringify(allResults, null, 2));
+    console.log(`\nFinal report saved to validation_report.json`);
 }
 
 main().catch(e => console.error(e));

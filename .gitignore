@@ -215,5 +215,6 @@ tests/parity_check/*.bngl
 tests/*.bngl
 test_*.bngl
 manual_*.bngl
+tests/pac/**/*.BNGL
 
 # End of .gitignore

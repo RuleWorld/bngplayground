@@ -883,15 +883,21 @@ export function getSeedSpecies(
   for (const [speciesId, entry] of sct.entries) {
     const sbmlSpecies = model.species.get(speciesId)!;
 
-    const concentration = sbmlSpecies.initialConcentration > 0
-      ? sbmlSpecies.initialConcentration.toString()
-      : sbmlSpecies.initialAmount > 0
-        ? sbmlSpecies.initialAmount.toString()
-        : '0';
+    let amount = 0;
+    if (sbmlSpecies.initialConcentration > 0 && !sbmlSpecies.hasOnlySubstanceUnits) {
+        const comp = model.compartments.get(sbmlSpecies.compartment);
+        const vol = comp ? comp.size : 1;
+        amount = sbmlSpecies.initialConcentration * vol;
+    } else if (sbmlSpecies.initialAmount > 0) {
+        amount = sbmlSpecies.initialAmount;
+    } else if (sbmlSpecies.initialConcentration > 0) {
+        // Fallback for cases where hasOnlySubstanceUnits might be true but concentration is given
+        amount = sbmlSpecies.initialConcentration;
+    }
 
     seedSpecies.push({
       species: entry.structure.copy(),
-      concentration,
+      concentration: amount.toString(),
       compartment: sbmlSpecies.compartment,
     });
   }

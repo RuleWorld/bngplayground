@@ -16,6 +16,27 @@ const ONLY_ID = (process.env.ONLY_ID || '').trim();
 // Scan public/models/
 const MODEL_ROOT = path.join(PROJECT_ROOT, 'public', 'models');
 
+// Extract BNG2_EXCLUDED_MODELS from constants.ts
+function getExcludedModels() {
+    const constantsPath = path.join(PROJECT_ROOT, 'constants.ts');
+    if (!fs.existsSync(constantsPath)) return new Set();
+    
+    const content = fs.readFileSync(constantsPath, 'utf8');
+    const match = content.match(/export const BNG2_EXCLUDED_MODELS = new Set\(\[([\s\S]*?)\]\);/);
+    if (!match) return new Set();
+    
+    const modelsStr = match[1];
+    const excluded = new Set();
+    const regex = /'([^']+)'/g;
+    let m;
+    while ((m = regex.exec(modelsStr)) !== null) {
+        excluded.add(m[1]);
+    }
+    return excluded;
+}
+
+const EXCLUDED_MODELS = getExcludedModels();
+
 function listFilesRecursive(rootDir) {
     const out = [];
     const stack = [rootDir];
@@ -66,9 +87,21 @@ function verifyOneModel(absBnglPath) {
     const elapsedMs = Date.now() - t0;
 
     const timedOut = res.error && res.error.code === 'ETIMEDOUT';
-    const status = (!timedOut && res.status === 0) ? 'PASS' : 'FAIL';
+    
+    // Check for output files
+    const netExists = fs.existsSync(path.join(workDir, `${id}.net`));
+    const gdatExists = fs.existsSync(path.join(workDir, `${id}.gdat`));
+    const cdatExists = fs.existsSync(path.join(workDir, `${id}.cdat`));
+    
+    const status = (!timedOut && res.status === 0 && netExists && (gdatExists || cdatExists)) ? 'PASS' : 'FAIL';
+    
+    let error = '';
+    if (timedOut) error = 'TIMEOUT';
+    else if (res.status !== 0) error = `EXIT_${res.status}`;
+    else if (!netExists) error = 'MISSING_NET';
+    else if (!(gdatExists || cdatExists)) error = 'MISSING_GDAT';
 
-    return { id, status, elapsedMs, exitStatus: res.status, timedOut };
+    return { id, status, elapsedMs, exitStatus: res.status, timedOut, error };
 }
 
 function main() {
@@ -87,16 +120,25 @@ function main() {
     }
 
     console.log(`Found ${candidates.length} candidates.`);
+    console.log(`Excluded models: ${EXCLUDED_MODELS.size}`);
 
     const results = [];
+    const skipped = [];
+    
     for (let i = 0; i < candidates.length; i++) {
         const file = candidates[i];
         const id = path.basename(file, '.bngl');
-        process.stdout.write(`[${i + 1}/${candidates.length}] ${id}... `);
+        
+        if (EXCLUDED_MODELS.has(id)) {
+            skipped.push(id);
+            continue;
+        }
+
+        process.stdout.write(`[${results.length + 1}/${candidates.length - skipped.length}] ${id}... `);
 
         const r = verifyOneModel(file);
         results.push(r);
-        console.log(r.status);
+        console.log(r.status + (r.error ? ` (${r.error})` : ''));
     }
 
     const pass = results.filter(r => r.status === 'PASS').map(r => r.id);
@@ -105,10 +147,11 @@ function main() {
     console.log('\n=== SUMMARY ===');
     console.log('PASS:', pass.length);
     console.log('FAIL:', fail.length);
+    console.log('SKIPPED:', skipped.length);
 
     const outPath = path.join(PROJECT_ROOT, 'public_models_compatibility.json');
-    fs.writeFileSync(outPath, JSON.stringify({ pass, fail }, null, 2));
-    console.log('\nWrote compatible IDs to:', outPath);
+    fs.writeFileSync(outPath, JSON.stringify({ pass, fail, skipped }, null, 2));
+    console.log('\nWrote results to:', outPath);
 }
 
 main();

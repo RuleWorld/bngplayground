@@ -1,4 +1,4 @@
-const fs = require('fs');
+import fs from 'fs';
 const summary = fs.readFileSync('report_summary.txt', 'utf8');
 const table = fs.readFileSync('report_table.txt', 'utf8');
 

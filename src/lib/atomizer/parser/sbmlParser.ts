@@ -1268,6 +1268,7 @@ export class SBMLParser {
       products,
       modifiers,
       kineticLaw,
+      compartment: typeof rxn.getCompartment === 'function' ? rxn.getCompartment() : undefined,
     };
   }
 

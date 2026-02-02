@@ -518,6 +518,7 @@ export interface SBMLReaction {
   products: SBMLSpeciesReference[];
   modifiers: SBMLModifierSpeciesReference[];
   kineticLaw: SBMLKineticLaw | null;
+  compartment?: string;
 }
 
 export interface SBMLFunctionDefinition {
