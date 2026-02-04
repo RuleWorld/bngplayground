@@ -23,6 +23,7 @@ import {
   getSeedSpecies,
   analyzeReactions,
   analyzeNamingConventions,
+  reconcileSCT,
 } from './atomization/core';
 import {
   generateBNGL,
@@ -149,6 +150,9 @@ export class Atomizer {
       const moleculeTypes = getMoleculeTypes(this.sct);
       logger.info('ATM006', `Found ${moleculeTypes.length} molecule types`);
 
+      // Reconcile SCT entries with discovered molecule types
+      reconcileSCT(this.sct, moleculeTypes);
+
       // Get seed species
       const seedSpecies = getSeedSpecies(this.sct, this.model);
       logger.info('ATM007', `Found ${seedSpecies.length} seed species`);
@@ -235,6 +239,18 @@ export class Atomizer {
    */
   getSCT(): SpeciesCompositionTable | null {
     return this.sct;
+  }
+
+  /**
+   * Get UniProt IDs for a species from annotations
+   */
+  getUniProtIds(speciesId: string): string[] {
+    if (!this.model) return [];
+    const species = this.model.species.get(speciesId);
+    if (!species) return [];
+    
+    const { extractUniProtIds } = require('./parser/sbmlParser');
+    return extractUniProtIds(species.annotations);
   }
 
   /**

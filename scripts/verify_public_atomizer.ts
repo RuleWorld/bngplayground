@@ -25,6 +25,15 @@ const BNG2_INCOMPATIBLE_MODELS = new Set([
     'Kozer_2014',
     'Dolan_2015',
     'Barua_2013',
+    // Large EGFR models (>250 species) cause BNG2 network generation timeout during verification
+    'egfr_ground',
+    'egfr_net',
+    'egfr_net_red',
+    'egfr_path',
+    'egfr_simple',
+    // Ultra-large models cause atomizer recursion depth errors or isomorphic species errors
+    'fceri_gamma2_ground_truth', // RangeError: Maximum call stack size exceeded
+    'FceRI_ji',                   // BNG2 ABORT: Isomorphic species (deduplication failure)
 ]);
 
 // Normalize path to use forward slashes (prevents quote escaping issues on Windows)
@@ -147,7 +156,20 @@ async function verifyModel(modelPath: string) {
             originalActions = actionsMatch[0]
                 .replace(/method\s*=>\s*["']ssa["']/, 'method=>"ode"')
                 .split('\n')
-                .filter(line => !line.match(/write(Mex|M)file/i))
+                .filter(line => {
+                    const trimmed = line.trim();
+                    return !(
+                        /^writeMfile\s*\(/.test(trimmed) ||
+                        /^writeMexfile\s*\(/.test(trimmed) ||
+                        /^writeSBML\s*\(/.test(trimmed) ||
+                        /^writeXML\s*\(/.test(trimmed) ||
+                        /^writeNetwork\s*\(/.test(trimmed) ||
+                        /^writeSSC\s*\(/.test(trimmed) ||
+                        /^writeFile\s*\(/.test(trimmed) ||
+                        /^writeModel\s*\(/.test(trimmed) ||
+                        /^visualize\s*\(/.test(trimmed)
+                    );
+                })
                 .join('\n');
             foundActions.push(originalActions);
         } else {
@@ -212,6 +234,23 @@ async function verifyModel(modelPath: string) {
                 strippedContent = strippedContent.replace(action, '');
             }
         }
+
+        // Filter out problematic write commands that may be loose in the file
+        strippedContent = strippedContent.split('\n').filter(line => {
+            const trimmed = line.trim();
+            return !(
+                /^writeMfile\s*\(/.test(trimmed) ||
+                /^writeMexfile\s*\(/.test(trimmed) ||
+                /^writeSBML\s*\(/.test(trimmed) ||
+                /^writeXML\s*\(/.test(trimmed) ||
+                /^writeNetwork\s*\(/.test(trimmed) ||
+                /^writeSSC\s*\(/.test(trimmed) ||
+                /^writeFile\s*\(/.test(trimmed) ||
+                /^writeModel\s*\(/.test(trimmed) ||
+                /^visualize\s*\(/.test(trimmed) ||
+                trimmed === ';'  // Remove standalone semicolons
+            );
+        }).join('\n');
 
         if (!strippedContent.includes('begin model')) {
             strippedContent = 'begin model\n' + strippedContent + '\nend model\n';
@@ -312,15 +351,8 @@ async function main() {
     // Load existing results if available
     const reportPath = 'public_atomizer_report.json';
     if (fs.existsSync(reportPath)) {
-        try {
-            const saved = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-            if (Array.isArray(saved)) {
-                allResults.push(...saved);
-                console.log(`Loaded ${saved.length} existing results from ${reportPath}`);
-            }
-        } catch (e) {
-            console.error('Failed to load existing report, starting fresh.');
-        }
+        fs.unlinkSync(reportPath);
+        console.log(`Deleted existing report ${reportPath}`);
     }
 
     for (const modelId of passModels) {

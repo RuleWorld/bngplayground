@@ -81,7 +81,7 @@ temp_*.bngl
 check_emcc.c
 
 # PDFs
-*.pdf
+artifacts/
 
 # JSON output files (but keep config files)
 test_output.json

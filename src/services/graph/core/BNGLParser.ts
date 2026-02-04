@@ -768,7 +768,10 @@ export class BNGLParser {
       const result = new Function(`return ${evaluable}`)();
       return typeof result === 'number' && !isNaN(result) ? result : NaN;
     } catch (e) {
-      console.error(`[evaluateExpression] Failed to evaluate: "${expr}"`, e);
+      // Silence ReferenceErrors during multi-pass parameter resolution
+      if (!(e instanceof ReferenceError)) {
+        console.error(`[evaluateExpression] Failed to evaluate: "${expr}"`, e);
+      }
       return NaN;
     }
   }

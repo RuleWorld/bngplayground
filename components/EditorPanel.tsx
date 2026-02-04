@@ -89,6 +89,7 @@ interface EditorPanelProps {
   // New: allow importing SBML from the editor load button and exporting SBML
   onImportSBML?: (file: File) => void;
   onExportSBML?: () => void;
+  onExportBNGL?: () => void;
 }
 
 export const EditorPanel: React.FC<EditorPanelProps> = ({
@@ -108,6 +109,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   selection,
   onImportSBML,
   onExportSBML,
+  onExportBNGL,
 }) => {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
   // removed first-time-open example gallery state
@@ -226,7 +228,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         {/* Row 1: Actions & Simulation Controls */}
         <div className="flex flex-wrap gap-2 items-center justify-between">
           <div className="flex items-center gap-2">
-            <Button onClick={() => setIsGalleryOpen(true)}>Models</Button>
+            <Button onClick={() => setIsGalleryOpen(true)} className="h-9 px-3">Models</Button>
             {/* Load dropdown: Local BNGL/SBML or BioModels
                 - Local file: accepts .bngl, .sbml, .xml and preserves filename for
                   downstream behavior (e.g., BioModels imports use the accession as
@@ -234,20 +236,27 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                 - Import from BioModels: opens a small modal that fetches the model
                   via the BioModels REST API and extracts an SBML file if needed.
             */}
-            <Dropdown trigger={
-              <button className="px-3 py-1 text-sm font-medium rounded-md bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 inline-flex items-center gap-2">
+            <Dropdown align="left" trigger={
+              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2">
                 <UploadIcon className="w-4 h-4" />
                 <span>Load</span>
-              </button>
+              </Button>
             }>
               <DropdownItem onClick={() => fileInputRef.current?.click()}>Local file (BNGL / SBML)</DropdownItem>
               <DropdownItem onClick={() => setIsBioModelsOpen(true)}>Import from BioModels...</DropdownItem>
             </Dropdown>
 
-            <Button variant="subtle" onClick={() => onExportSBML?.()} disabled={!modelExists} title="Export current model as SBML">
-              Export SBML
-            </Button>
-            <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))}>
+            <Dropdown trigger={
+              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" disabled={!modelExists && !code?.trim()} title="Export current model">
+                <span>Export</span>
+                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-500" />
+              </Button>
+            }>
+              <DropdownItem onClick={() => onExportBNGL?.()} disabled={!code?.trim()}>Export BNGL</DropdownItem>
+              <DropdownItem onClick={() => onExportSBML?.()} disabled={!modelExists}>Export SBML</DropdownItem>
+            </Dropdown>
+
+            <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3">
               Format
             </Button>
             <input
@@ -259,7 +268,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               data-testid="editor-load-input"
             />
             <div className="border-l border-slate-300 dark:border-slate-600 h-6 mx-1" />
-            <Button onClick={onParse} variant="secondary">Parse</Button>
+            <Button onClick={onParse} variant="secondary" className="h-9 px-3">Parse</Button>
           </div>
 
           <div className="flex items-center gap-2">

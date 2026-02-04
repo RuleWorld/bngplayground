@@ -21,6 +21,7 @@ import {
   SCTEntry,
   SpeciesCompositionTable,
   BiologicalQualifier,
+  SeedSpeciesEntry,
 } from '../config/types';
 import {
   levenshtein,
@@ -574,15 +575,22 @@ function createComplexSpecies(
       // Update bonds to prevent collisions with existing molecules in the species
       compCopy.updateBonds(species.getBondNumbers());
 
-      // Add binding component
+      // Add binding sites for connectivity
       for (const mol of compCopy.molecules) {
-        let bindingName = `b${i + 1}`;
-        let counter = 2;
-        while (mol.contains(bindingName)) {
-          bindingName = `b${i + 1}_${counter++}`;
+        // Site for predecessor (connect i-1 to i)
+        if (i > 0) {
+          let bName = `b${i}`;
+          if (!mol.contains(bName)) {
+            mol.addComponent(new Component(bName, `${mol.idx}_${bName}`));
+          }
         }
-        const bindingSite = new Component(bindingName, `${mol.idx}_${bindingName}`);
-        mol.addComponent(bindingSite);
+        // Site for successor (connect i to i+1)
+        if (i < componentSpeciesIds.length - 1) {
+          let bName = `b${i + 1}`;
+          if (!mol.contains(bName)) {
+            mol.addComponent(new Component(bName, `${mol.idx}_${bName}`));
+          }
+        }
       }
 
       compMolecules.push(compCopy.molecules);
@@ -594,39 +602,42 @@ function createComplexSpecies(
       const name = useId ? compId : standardizeName(compId);
       const molecule = new Molecule(name, compId);
 
-      let bindingName = `b${i + 1}`;
-      // No need to check contains() here as it's a new molecule, unless logic changes
-
-      const bindingSite = new Component(bindingName, `${compId}_${bindingName}`);
-      molecule.addComponent(bindingSite);
+      // Add sites for connectivity
+      if (i > 0) {
+        let bName = `b${i}`;
+        molecule.addComponent(new Component(bName, `${molecule.idx}_${bName}`));
+      }
+      if (i < componentSpeciesIds.length - 1) {
+        let bName = `b${i + 1}`;
+        molecule.addComponent(new Component(bName, `${molecule.idx}_${bName}`));
+      }
 
       compMolecules.push([molecule]);
       species.addMolecule(molecule);
     }
   }
 
-  // Add bonds for binary complexes
-  if (componentSpeciesIds.length === 2 && species.molecules.length >= 2) {
-    const bondNum = Math.max(...species.getBondNumbers(), 0) + 1;
-    // Heuristic: bind the first molecules of each component
-    // Note: This logic assumes simple 1-molecule components for binary binding
-    const mol1 = compMolecules[0][0];
-    const mol2 = compMolecules[1][0];
+  // Add bonds for n-ary complexes (chain connectivity)
+  if (componentSpeciesIds.length > 1 && compMolecules.length >= 2) {
+    for (let i = 0; i < compMolecules.length - 1; i++) {
+        // Connect component i to i+1
+        const mol1 = compMolecules[i][0];
+        const mol2 = compMolecules[i+1][0];
+        
+        const bondNum = Math.max(...species.getBondNumbers(), 0) + 1;
+        
+        // mol1 needs site for successor (b_{i+1}), mol2 needs site for predecessor (b_{i+1})
+        const bName1 = `b${i + 1}`;
+        const bName2 = `b${i + 1}`;
+        
+        const site1 = mol1.getComponent(bName1);
+        const site2 = mol2.getComponent(bName2);
 
-    // Fix: We need to find molecules belonging to the second component
-    // Since we just appended them, we can try to guess or search?
-    // But blindly taking index 1 is definitely wrong for multi-molecule components.
-    // However, fixing that requires bigger refactor. 
-    // We will stick to the existing bond logic but try to find a FREE site if possible?
-    // Actually, finding 'startsWith(b)' finds the first one.
-
-    const site1 = mol1.components.find(c => c.name.startsWith('b') && c.bonds.length === 0) || mol1.components.find(c => c.name.startsWith('b'));
-    const site2 = mol2.components.find(c => c.name.startsWith('b') && c.bonds.length === 0) || mol2.components.find(c => c.name.startsWith('b'));
-
-    if (site1 && site2) {
-      site1.addBond(bondNum);
-      site2.addBond(bondNum);
-      species.bonds.push([site1.idx, site2.idx]);
+        if (site1 && site2) {
+            site1.addBond(bondNum);
+            site2.addBond(bondNum);
+            species.bonds.push([site1.idx, site2.idx]);
+        }
     }
   }
 
@@ -881,8 +892,8 @@ export function reconcileSCT(sct: SpeciesCompositionTable, moleculeTypes: Molecu
     for (const mol of entry.structure.molecules) {
       const type = typeMap.get(mol.name);
       if (type) {
-        const typeCounts = new Counter(type.components.map(c => c.name));
-        const molCounts = new Counter(mol.components.map(c => c.name));
+        const typeCounts = new Counter<string>(type.components.map(c => c.name));
+        const molCounts = new Counter<string>(mol.components.map(c => c.name));
 
         for (const [name, count] of typeCounts.entries()) {
           const diff = count - (molCounts.get(name) || 0);
@@ -922,8 +933,8 @@ export function getMoleculeTypes(sct: SpeciesCompositionTable): Molecule[] {
       } else {
         const existing = moleculeTypes.get(mol.name)!;
         // Count existing components by name
-        const existingCounts = new Counter(existing.components.map(c => c.name));
-        const molCounts = new Counter(mol.components.map(c => c.name));
+        const existingCounts = new Counter<string>(existing.components.map(c => c.name));
+        const molCounts = new Counter<string>(mol.components.map(c => c.name));
 
         for (const [name, count] of molCounts.entries()) {
           const diff = count - (existingCounts.get(name) || 0);
@@ -956,8 +967,8 @@ export function getMoleculeTypes(sct: SpeciesCompositionTable): Molecule[] {
 export function getSeedSpecies(
   sct: SpeciesCompositionTable,
   model: SBMLModel
-): Array<{ species: Species; concentration: string; compartment: string }> {
-  const seedSpecies: Array<{ species: Species; concentration: string; compartment: string }> = [];
+): SeedSpeciesEntry[] {
+  const seedSpecies: SeedSpeciesEntry[] = [];
 
   for (const [speciesId, entry] of sct.entries) {
     const sbmlSpecies = model.species.get(speciesId)!;
@@ -978,6 +989,7 @@ export function getSeedSpecies(
       species: entry.structure.copy(),
       concentration: amount.toString(),
       compartment: sbmlSpecies.compartment,
+      sbmlId: speciesId,
     });
   }
 

@@ -158,9 +158,10 @@ export function countPatternMatches(speciesStr: string, patternStr: string): num
     const cleanPat = removeCompartment(patternStr);
     const cleanSpec = removeCompartment(speciesStr);
 
+    if (patComp && patComp !== specComp) return 0;
+
     if (cleanPat.includes('.')) {
         // Multi-molecule pattern: stricter species-level compartment check for now
-        if (patComp && patComp !== specComp) return 0;
         return countMultiMoleculePatternMatches(speciesStr, patternStr);
     } else {
         // Single-molecule pattern: use findAllMaps on the whole species graph.

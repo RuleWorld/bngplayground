@@ -162,11 +162,14 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     }
 
     // Ensure all params have at least a default value (e.g. 0) if resolution failed
-    for (const name of Object.keys(this.paramExpressions)) {
-      if (!(name in this.parameters)) {
+    const unresolved = Object.keys(this.paramExpressions).filter(name => !(name in this.parameters));
+    if (unresolved.length > 0) {
+      console.warn(`[BNGLVisitor] Failed to resolve ${unresolved.length} parameters: ${unresolved.join(', ')}. Using default value 0 for these.`);
+      for (const name of unresolved) {
         this.parameters[name] = 0;
-        console.warn(`Failed to resolve parameter '${name}'`);
       }
+    } else {
+      // console.log(`[BNGLVisitor] All ${Object.keys(this.paramExpressions).length} parameters resolved successfully.`);
     }
   }
 

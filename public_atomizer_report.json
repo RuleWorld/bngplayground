@@ -1,0 +1,2225 @@
+[
+  {
+    "model": "AB",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "A",
+      "B",
+      "C"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "ABC",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "A",
+      "B",
+      "C"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "ABC_ssa",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "A",
+      "B",
+      "C"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "ABp",
+    "status": "PASS",
+    "mae": 0.00000545559998954559,
+    "sharedHeaders": [
+      "time",
+      "Bu",
+      "Bp",
+      "AB"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "ABp_approx",
+    "status": "PASS",
+    "mae": 1.000017846308765e-10,
+    "sharedHeaders": [
+      "time",
+      "Bu",
+      "Bp"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "akt-signaling",
+    "status": "PASS",
+    "mae": 2.3000268356554443e-10,
+    "sharedHeaders": [
+      "time",
+      "Active_RTK",
+      "Active_PI3K",
+      "pAkt_T308",
+      "pAkt_S473",
+      "Double_pAkt",
+      "Active_mTORC1"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "allosteric-activation",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Free_Enzyme",
+      "Single_Bound",
+      "Double_Bound",
+      "Product_Count",
+      "Inhibited_Enz"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "ampk-signaling",
+    "status": "PASS",
+    "mae": 0.000007210500001519904,
+    "sharedHeaders": [
+      "time",
+      "Energy_Sensor",
+      "Low_Energy_Sig",
+      "SIK_Activity",
+      "Nuclear_CRTC",
+      "Calcium_Stim",
+      "Active_AMPK",
+      "Bound_AMPK_AMP"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "An_2009",
+    "status": "FAIL",
+    "mae": 1181.7017291599986,
+    "sharedHeaders": [
+      "time",
+      "TNF",
+      "Activated_TAK1",
+      "Activated_Ikk_complex",
+      "A20",
+      "NFkB_Active_Cyto",
+      "NFkB_Active_Nucleus",
+      "IkB_Degraded",
+      "IkB_active",
+      "NFkB_Inactive",
+      "NonBoundNonPhos_IkB",
+      "IkBmRNA_Off",
+      "NFkB_DNA_IkB",
+      "Phos_IkB_NFkB",
+      "IkB_Prot26s",
+      "Unbound_Cyto_NFkB",
+      "Inactive_Cyto_NFkB",
+      "TNFmRNA_Off",
+      "TNF_NFkB_DNA",
+      "A20_NFkB_DNA"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "apoptosis-cascade",
+    "status": "PASS",
+    "mae": 4.999947122996673e-10,
+    "sharedHeaders": [
+      "time",
+      "Global_Death",
+      "Mitochondrial_Fail",
+      "CytoC_Released",
+      "Inhibitor_Sequest",
+      "Mitochondria_Gate",
+      "Active_Bid"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "auto-activation-loop",
+    "status": "PASS",
+    "mae": 7.500000620552782e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_Protein",
+      "Transcript_Mass",
+      "Sequest_mRNA",
+      "TF_Dimers"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "autophagy-regulation",
+    "status": "FAIL",
+    "mae": 704.4785240911001,
+    "sharedHeaders": [
+      "time",
+      "Autophagy_Drive",
+      "Stress_Sensor",
+      "Growth_Sensor",
+      "Primed_ULK1",
+      "Cargo_Capture"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "BAB",
+    "status": "FAIL",
+    "mae": 3.527618874399991,
+    "sharedHeaders": [
+      "time",
+      "FreeAsites",
+      "FreeB",
+      "ABbonds",
+      "BAB"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "BAB_coop",
+    "status": "FAIL",
+    "mae": 3.4378992484499946,
+    "sharedHeaders": [
+      "time",
+      "AB",
+      "BAB"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "Barua_2007",
+    "status": "FAIL",
+    "mae": 0.00743145425871,
+    "sharedHeaders": [
+      "time",
+      "pYR"
+    ],
+    "rowCount": 12
+  },
+  {
+    "model": "Barua_2009",
+    "status": "PASS",
+    "mae": 0.000001130077997487,
+    "sharedHeaders": [
+      "time",
+      "J_mono",
+      "JS",
+      "JSS",
+      "JSSJ",
+      "J_active",
+      "J_inactive"
+    ],
+    "rowCount": 10001
+  },
+  {
+    "model": "bcr-signaling",
+    "status": "PASS",
+    "mae": 0.0000011306100020647136,
+    "sharedHeaders": [
+      "time",
+      "Calcium_Signal",
+      "Active_PLCg2",
+      "Active_Relay",
+      "Effector_Load",
+      "Negative_Brake",
+      "Sync_Antigen"
+    ],
+    "rowCount": 161
+  },
+  {
+    "model": "beta-adrenergic-response",
+    "status": "PASS",
+    "mae": 0.0000030100999879323354,
+    "sharedHeaders": [
+      "time",
+      "Signal_Peak",
+      "Active_GS",
+      "Surface_Availability",
+      "Desensitized_Frac",
+      "Sequest_Complex",
+      "Active_AC"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "bistable-toggle-switch",
+    "status": "FAIL",
+    "mae": 0.0031355919600031257,
+    "sharedHeaders": [
+      "time",
+      "State_L_Level",
+      "State_R_Level",
+      "Active_Prom_L",
+      "Active_Prom_R",
+      "Locked_TF_L"
+    ],
+    "rowCount": 261
+  },
+  {
+    "model": "blood-coagulation-thrombin",
+    "status": "PASS",
+    "mae": 9.999894245993346e-10,
+    "sharedHeaders": [
+      "time",
+      "Clot_Mass",
+      "Active_Thrombin",
+      "Proth_Complex",
+      "Feedback_Factors",
+      "Inhibitor_Work"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "bmp-signaling",
+    "status": "PASS",
+    "mae": 2.258808808000166e-7,
+    "sharedHeaders": [
+      "time",
+      "SMAD_Output",
+      "Active_Nuclear_Smad1",
+      "Surface_Engage",
+      "Noggin_Sink",
+      "Feedback_Brake",
+      "Signal_Complex"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "brusselator-oscillator",
+    "status": "PASS",
+    "mae": 1.8000267942852588e-11,
+    "sharedHeaders": [
+      "time",
+      "Activator_X",
+      "Inhibitor_Y",
+      "Feed_Status",
+      "Drive_Force",
+      "Ratio_XY",
+      "A_Level",
+      "X_Level"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "calcineurin-nfat-pathway",
+    "status": "FAIL",
+    "mae": 0.00429575745999955,
+    "sharedHeaders": [
+      "time",
+      "Nuclear_Factor",
+      "Active_NFAT",
+      "Phospho_NFAT",
+      "Active_CaN",
+      "Feedback_Protein",
+      "NFAT_CaN_Binding"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "calcium-spike-signaling",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "Spiking_Ca",
+      "ER_Reserve",
+      "IP3_Driver",
+      "SOCE_Sensor",
+      "Total_Mass"
+    ],
+    "rowCount": 41
+  },
+  {
+    "model": "CaOscillate_Func",
+    "status": "FAIL",
+    "mae": 9502.0625205794,
+    "sharedHeaders": [
+      "time",
+      "G",
+      "P",
+      "C",
+      "NULL"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "CaOscillate_Sat",
+    "status": "FAIL",
+    "mae": 1.400117596044e+21,
+    "sharedHeaders": [
+      "time",
+      "G",
+      "P",
+      "C",
+      "NULL"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "caspase-activation-loop",
+    "status": "PASS",
+    "mae": 0.000013563800052907027,
+    "sharedHeaders": [
+      "time",
+      "Active_Caspase8",
+      "XIAP_Brake",
+      "Flip_Inhibited",
+      "Total_Execution"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "catalysis",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "BNG2 Failure: ABORT: C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\bionetgen_python\\bng-win\\bin\\run_network.exe -o C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis -p cvode -a 0.001 -r 1e-07 --cdat 1 --fdat 0 -g C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis.net C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis.net 30 120\r\n  did not run successfully.\r\n  at line 138\r\n\nSTDOUT: chyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis.net\r\nRead 32 group(s) from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis.net\r\nRead 36 function(s) from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis.net\r\nRead 12 reaction(s) from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\catalysis\\catalysis.net\r\n12 reaction(s) have nonzero rate\r\nInitialization took 0.01 CPU seconds\r\nPropagating with cvode using dense LU\r\n\r\n[CVODE ERROR]  CVode\r\n  At t = 0.00107419 and h = 1.5983e-09, the corrector convergence test failed repeatedly or with |h| = hmin.\r\n\r\nError in CVODE integration (error code -4).\r\n",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "cBNGL_simple",
+    "status": "FAIL",
+    "mae": 127.9478231073,
+    "sharedHeaders": [
+      "time",
+      "L_Bound_PM",
+      "L_Bound_EM",
+      "Rp_tot",
+      "Rp_PM",
+      "Rp_EM",
+      "TF_nuc",
+      "Tot_mRNA",
+      "Tot_P",
+      "P_R"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "cd40-signaling",
+    "status": "PASS",
+    "mae": 0.000022872449989108645,
+    "sharedHeaders": [
+      "time",
+      "Canonical_NFB",
+      "NonCanonical_NFB",
+      "Active_IKK",
+      "NIK_Stabilized",
+      "TRAF_Sequest"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "cell-cycle-checkpoint",
+    "status": "PASS",
+    "mae": 1.2863999865331266e-9,
+    "sharedHeaders": [
+      "time",
+      "Mitotic_Engine",
+      "Total_Mass",
+      "Exit_Signal",
+      "Primed_Engine",
+      "Active_CycB",
+      "Active_APC"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "checkpoint-kinase-signaling",
+    "status": "PASS",
+    "mae": 0.00002744450000591314,
+    "sharedHeaders": [
+      "time",
+      "Active_Checkpt",
+      "Total_Damage",
+      "DSB_Signal",
+      "Replication_Stress",
+      "Arrest_Status"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "Cheemalavagu_JAK_STAT",
+    "status": "FAIL",
+    "mae": 0.040814582756700024,
+    "sharedHeaders": [
+      "time",
+      "total_pS3",
+      "total_pS1"
+    ],
+    "rowCount": 92
+  },
+  {
+    "model": "chemotaxis-signal-transduction",
+    "status": "PASS",
+    "mae": 1.000444171950221e-10,
+    "sharedHeaders": [
+      "time",
+      "Motor_State",
+      "Methylation_Status",
+      "Signaling_Effector",
+      "Environmental_Bias",
+      "Adaptation_Drive",
+      "Active_MCP"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "circadian-oscillator",
+    "status": "PASS",
+    "mae": 0.00025268000013056735,
+    "sharedHeaders": [
+      "time",
+      "Afree",
+      "Rfree",
+      "Atot",
+      "Rtot"
+    ],
+    "rowCount": 801
+  },
+  {
+    "model": "CircadianOscillator",
+    "status": "PASS",
+    "mae": 0.0006573450000360026,
+    "sharedHeaders": [
+      "time",
+      "Afree",
+      "Rfree",
+      "Atot",
+      "Rtot"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "clock-bmal1-gene-circuit",
+    "status": "PASS",
+    "mae": 2.576900082207345e-10,
+    "sharedHeaders": [
+      "time",
+      "Activator_Comp",
+      "Nuclear_Bmal1",
+      "RevErb_Brake",
+      "ROR_Accelerator",
+      "Transcription_ON",
+      "Bmal1_Total_Obs"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "competitive-enzyme-inhibition",
+    "status": "PASS",
+    "mae": 1.000444171950221e-10,
+    "sharedHeaders": [
+      "time",
+      "Free_Enzyme",
+      "ES_Complex",
+      "EI_Complex",
+      "Total_Product",
+      "S_Remaining"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "complement-activation-cascade",
+    "status": "PASS",
+    "mae": 0.000021097899946198595,
+    "sharedHeaders": [
+      "time",
+      "Opsonization_C3b",
+      "C5b_Active",
+      "MAC_Intensity",
+      "C3_Convertase",
+      "C5_Generated",
+      "FB_Consumed"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "contact-inhibition-hippo-yap",
+    "status": "PASS",
+    "mae": 0.0000018448000105308893,
+    "sharedHeaders": [
+      "time",
+      "Transcript_Active",
+      "YAP_Sequested",
+      "Active_LATS",
+      "MST_Trigger",
+      "Nuclear_YAP",
+      "Active_MST"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "continue",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "Atot",
+      "Btot",
+      "Ctot",
+      "Bfree",
+      "Cfree",
+      "BC"
+    ],
+    "rowCount": 81
+  },
+  {
+    "model": "cooperative-binding",
+    "status": "FAIL",
+    "mae": 54.579399600699986,
+    "sharedHeaders": [
+      "time",
+      "Free_Rec",
+      "Mono_Bound",
+      "Fully_Occupied",
+      "Total_Bound",
+      "Half_Life"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "dna-damage-repair",
+    "status": "FAIL",
+    "mae": 49.99865082258275,
+    "sharedHeaders": [
+      "time",
+      "Lesion_Load",
+      "Active_Sensor",
+      "Kinase_Relay",
+      "Repair_In_Work",
+      "Final_Integrity"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "dna-methylation-dynamics",
+    "status": "PASS",
+    "mae": 0.00008392289998937486,
+    "sharedHeaders": [
+      "time",
+      "Silenced_Marks",
+      "Maintain_Burden",
+      "Methyl_Status",
+      "Hemi_CpG",
+      "Methyl_CpG",
+      "Open_Chromatin",
+      "Active_Eraser",
+      "DNMT_Attached"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "dr5-apoptosis-signaling",
+    "status": "PASS",
+    "mae": 2.000319909711834e-10,
+    "sharedHeaders": [
+      "time",
+      "Apoptotic_Drive",
+      "Active_DISC",
+      "Surface_DR5",
+      "FLIP_Block",
+      "Trimer_DR5"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "dual-site-phosphorylation",
+    "status": "PASS",
+    "mae": 9.99875737761613e-11,
+    "sharedHeaders": [
+      "time",
+      "Unmodified",
+      "Mono_Phos",
+      "Fully_Phos",
+      "Kinase_Bound",
+      "Phos_Level"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "e2f-rb-cell-cycle-switch",
+    "status": "FAIL",
+    "mae": 67.80377047879995,
+    "sharedHeaders": [
+      "time",
+      "S_Phase_Drive",
+      "CycE_Level",
+      "Rb_Sequest",
+      "CKI_Inhibition",
+      "CyclinE_Count",
+      "E2F_Active",
+      "HyperPhos_Rb"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "egfr-signaling-pathway",
+    "status": "FAIL",
+    "mae": 11.3836118997,
+    "sharedHeaders": [
+      "time",
+      "Bound_EGFR",
+      "Dimers",
+      "pY1068",
+      "pY1173",
+      "Total_Phos",
+      "Grb2_Recruited",
+      "Shc_Recruited"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "eif2a-stress-response",
+    "status": "FAIL",
+    "mae": 56.35767717019996,
+    "sharedHeaders": [
+      "time",
+      "Transl_Sequest",
+      "Active_GEF",
+      "Global_Stark",
+      "Signal_Sensor",
+      "Feedback_GADD"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "endosomal-sorting-rab",
+    "status": "PASS",
+    "mae": 0.0000013796999951409816,
+    "sharedHeaders": [
+      "time",
+      "Early_Endosome",
+      "Late_Endosome",
+      "Conversion_Node",
+      "Mem_Total",
+      "Cyto_Pool",
+      "Rab5_GDP_Mem",
+      "Total_Rab5_GTP"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "energy_example1",
+    "status": "FAIL",
+    "mae": 2522.489128595499,
+    "sharedHeaders": [
+      "time",
+      "SAB_only",
+      "SAC_only",
+      "SBC_only",
+      "SABC",
+      "S_total",
+      "A_bound",
+      "A_total",
+      "B_bound",
+      "B_total",
+      "C_bound",
+      "C_total"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "er-stress-response",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_PERK",
+      "Phospho_EIF2A",
+      "Induced_Chaperone"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "erk-nuclear-translocation",
+    "status": "FAIL",
+    "mae": 87.70295478810004,
+    "sharedHeaders": [
+      "time",
+      "Functional_ELK",
+      "Total_pERK",
+      "Nuclear_pERK",
+      "Cyto_Buffer",
+      "Trans_Activity",
+      "ELK1_Occupancy"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "FceRI_viz",
+    "status": "FAIL",
+    "mae": 0.4083195726462,
+    "sharedHeaders": [
+      "time",
+      "pLat",
+      "LynFree",
+      "FcRMon",
+      "FcRDim",
+      "FcRPbeta",
+      "FcRPgamma",
+      "FcRSyk",
+      "FcRSykPS",
+      "SykTest",
+      "LynTest",
+      "FcRTest"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "fgf-signaling-pathway",
+    "status": "FAIL",
+    "mae": 8.117565625269997,
+    "sharedHeaders": [
+      "time",
+      "Active_Dimer",
+      "FRS2_Hub_Status",
+      "Ras_Drive_Comp",
+      "Total_Bound_FGF",
+      "Spry_Brake"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "gas6-axl-signaling",
+    "status": "FAIL",
+    "mae": 67.3111950945,
+    "sharedHeaders": [
+      "time",
+      "Survival_Relay",
+      "Total_pAKT",
+      "Active_Platform",
+      "SOCS_Feedback",
+      "AXL_Dimer_Pool"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "gene-expression-toggle",
+    "status": "PASS",
+    "mae": 9.990230864787009e-12,
+    "sharedHeaders": [
+      "time",
+      "Promoter_on",
+      "Promoter_off",
+      "Transcripts",
+      "Protein"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "GK",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "Bu",
+      "Bp"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "glioblastoma-egfrviii-signaling",
+    "status": "PASS",
+    "mae": 0.000012500699995143805,
+    "sharedHeaders": [
+      "time",
+      "Survival_Burst",
+      "Total_pAKT",
+      "vIII_Platform",
+      "Mem_vIII",
+      "Active_vIII",
+      "vIII_Substrate"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "glycolysis-branch-point",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "Glucose_pool",
+      "ATP_pool",
+      "Biomass"
+    ],
+    "rowCount": 121
+  },
+  {
+    "model": "gpcr-desensitization-arrestin",
+    "status": "PASS",
+    "mae": 4.396000008455303e-7,
+    "sharedHeaders": [
+      "time",
+      "G_Signal_Act",
+      "Desensitized_R",
+      "Arrestin_Block",
+      "Internal_Rec",
+      "Surface_Rec",
+      "Active_Rec_Mem"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "Haugh2b",
+    "status": "FAIL",
+    "mae": 0.0022660288011600027,
+    "sharedHeaders": [
+      "time",
+      "S2_P_tot",
+      "S2_P_mem",
+      "R_total",
+      "S1_total",
+      "S2_total"
+    ],
+    "rowCount": 6
+  },
+  {
+    "model": "hedgehog-signaling-pathway",
+    "status": "PASS",
+    "mae": 0.000008160199968187953,
+    "sharedHeaders": [
+      "time",
+      "Active_Output",
+      "Repressor_Level",
+      "Ciliary_Smo",
+      "Ptch_Density",
+      "Gli_Sufu_Comp",
+      "Hh_Signal"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "heise",
+    "status": "PASS",
+    "mae": 1.532800053549721e-9,
+    "sharedHeaders": [
+      "time",
+      "A",
+      "B"
+    ],
+    "rowCount": 41
+  },
+  {
+    "model": "hematopoietic-growth-factor",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_EPOR",
+      "Active_JAK2",
+      "Nuclear_STAT5"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "hif1a_degradation_loop",
+    "status": "PASS",
+    "mae": 9.40005406846467e-10,
+    "sharedHeaders": [
+      "time",
+      "Hypoxia_Factor",
+      "Total_HIF",
+      "OH_HIF_Mark",
+      "VHL_Captured",
+      "Nuclear_Accum",
+      "HIF_Substrate"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "hypoxia-response-signaling",
+    "status": "PASS",
+    "mae": 1.000310945187266e-13,
+    "sharedHeaders": [
+      "time",
+      "Hypoxic_sensor",
+      "Stable_HIF1",
+      "VEGF_pool"
+    ],
+    "rowCount": 181
+  },
+  {
+    "model": "il1b-signaling",
+    "status": "PASS",
+    "mae": 0.000013025760011942111,
+    "sharedHeaders": [
+      "time",
+      "ProInflam_NFkB",
+      "Signal_Burst",
+      "Active_DISC",
+      "Receptor_Occ",
+      "Total_Bound_L",
+      "Active_Clusters"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "il6-jak-stat-pathway",
+    "status": "FAIL",
+    "mae": 95.13701327680002,
+    "sharedHeaders": [
+      "time",
+      "Active_TF",
+      "pgp130_Signals",
+      "Global_pSTAT3",
+      "SOCS_Feedback",
+      "Nuclear_Pool",
+      "Active_gp130"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "immune-synapse-formation",
+    "status": "PASS",
+    "mae": 5.539000369481073e-8,
+    "sharedHeaders": [
+      "time",
+      "Bound_TCR",
+      "Active_TCR",
+      "Phospho_ZAP70"
+    ],
+    "rowCount": 151
+  },
+  {
+    "model": "inflammasome-activation",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Primed_Sensor",
+      "Active_Caspase1",
+      "Mature_IL1B"
+    ],
+    "rowCount": 161
+  },
+  {
+    "model": "innate_immunity",
+    "status": "PASS",
+    "mae": 0.0000019475456800033264,
+    "sharedHeaders": [
+      "time",
+      "RIG_I_total",
+      "PKR_total",
+      "OAS3_total",
+      "RNaseL_total",
+      "RNaseL_a",
+      "eIF2a_total",
+      "eIF2a_p",
+      "RIGI_mRNA",
+      "PKR_mRNA",
+      "OAS3_mRNA",
+      "RNaseL_mRNA",
+      "TAK1_a",
+      "NFkB_nuc_free",
+      "NFkB_nuc_total",
+      "NFkB_total",
+      "IkBa_total",
+      "IkBa_nuc_total",
+      "IkBa_cyt_total",
+      "IkBa_cyt_free",
+      "IkBa_p_cyt",
+      "IkBa_nuc_free",
+      "A20",
+      "IKK_a",
+      "IkBa_mRNA",
+      "A20_mRNA",
+      "IRF3_total",
+      "IRF3_p",
+      "IFNAR_total",
+      "IFNAR_a",
+      "IFNb_ext",
+      "IFNb_cyt",
+      "IFNAR_mRNA",
+      "IFNb_mRNA",
+      "STAT1_total",
+      "STAT2_total",
+      "STAT1_p",
+      "STAT2_p",
+      "STAT1_u",
+      "STAT2_u",
+      "STAT12_dimer",
+      "STAT1_mRNA",
+      "STAT2_mRNA"
+    ],
+    "rowCount": 4321
+  },
+  {
+    "model": "inositol-phosphate-metabolism",
+    "status": "PASS",
+    "mae": 4.200018111077952e-10,
+    "sharedHeaders": [
+      "time",
+      "Calcium_Signal",
+      "Metabolic_Hub",
+      "PIP2_Pool",
+      "Late_Response",
+      "PLC_Output",
+      "Active_Agonist",
+      "Ca_Level",
+      "IP3_Pool"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "insulin-glucose-homeostasis",
+    "status": "FAIL",
+    "mae": 3837.3290878531,
+    "sharedHeaders": [
+      "time",
+      "Blood_Glucose",
+      "Cellular_Glucose",
+      "Insulin_Level",
+      "Surface_GLUT4",
+      "Active_IR"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "ire1a-xbp1-er-stress",
+    "status": "PASS",
+    "mae": 0.000006593069997506973,
+    "sharedHeaders": [
+      "time",
+      "ProSurvival_XBP1",
+      "RIDD_Drive",
+      "Active_IRE1",
+      "Stress_Burden",
+      "Chaperone_Bip",
+      "Spliced_XBP1"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "issue_198_short",
+    "status": "PASS",
+    "mae": 2.0059000016559025e-9,
+    "sharedHeaders": [
+      "time",
+      "Afree"
+    ],
+    "rowCount": 11
+  },
+  {
+    "model": "jak-stat-cytokine-signaling",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Cytokine_pool",
+      "Active_receptor",
+      "Nuclear_STAT"
+    ],
+    "rowCount": 321
+  },
+  {
+    "model": "jnk-mapk-signaling",
+    "status": "PASS",
+    "mae": 0.0003126034999922922,
+    "sharedHeaders": [
+      "time",
+      "Active_JNK",
+      "Scaffold_Hub",
+      "MKK7_Driver",
+      "Cyto_JNK",
+      "Total_pJNK"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "kir-channel-regulation",
+    "status": "PASS",
+    "mae": 3.000195647473447e-10,
+    "sharedHeaders": [
+      "time",
+      "Conducting_Pool",
+      "Fully_Modulated",
+      "Lipid_Occupancy",
+      "G_Signal_Relay",
+      "Lipid_Marker",
+      "Free_PIP2",
+      "G_Bound_Kir"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "Korwek_2023",
+    "status": "PASS",
+    "mae": 0.0000019475456800033264,
+    "sharedHeaders": [
+      "time",
+      "RIG_I_total",
+      "PKR_total",
+      "OAS3_total",
+      "RNaseL_total",
+      "RNaseL_a",
+      "eIF2a_total",
+      "eIF2a_p",
+      "RIGI_mRNA",
+      "PKR_mRNA",
+      "OAS3_mRNA",
+      "RNaseL_mRNA",
+      "TAK1_a",
+      "NFkB_nuc_free",
+      "NFkB_nuc_total",
+      "NFkB_total",
+      "IkBa_total",
+      "IkBa_nuc_total",
+      "IkBa_cyt_total",
+      "IkBa_cyt_free",
+      "IkBa_p_cyt",
+      "IkBa_nuc_free",
+      "A20",
+      "IKK_a",
+      "IkBa_mRNA",
+      "A20_mRNA",
+      "IRF3_total",
+      "IRF3_p",
+      "IFNAR_total",
+      "IFNAR_a",
+      "IFNb_ext",
+      "IFNb_cyt",
+      "IFNAR_mRNA",
+      "IFNb_mRNA",
+      "STAT1_total",
+      "STAT2_total",
+      "STAT1_p",
+      "STAT2_p",
+      "STAT1_u",
+      "STAT2_u",
+      "STAT12_dimer",
+      "STAT1_mRNA",
+      "STAT2_mRNA"
+    ],
+    "rowCount": 4321
+  },
+  {
+    "model": "l-type-calcium-channel-dynamics",
+    "status": "PASS",
+    "mae": 0.00003369789999396744,
+    "sharedHeaders": [
+      "time",
+      "Calcium_Inflow",
+      "Conducting_R",
+      "Inactivated_CH",
+      "Potentiated_R",
+      "Surface_LTCC",
+      "Ca_Level",
+      "Phospho_LTCC",
+      "Voltage_Level"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "lac-operon-regulation",
+    "status": "PASS",
+    "mae": 0.00004706379999674937,
+    "sharedHeaders": [
+      "time",
+      "Promoter_active",
+      "Beta_gal",
+      "Lactose_internal",
+      "Allolactose_pool"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "Lang_2024",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "BNG2 Failure: ABORT: Invalid Molecule name in '@cell:M_S56(b1)' (must begin with a letter or underscore).\r\n  at line 795\r\n\nSTDOUT: tsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\Lang_2024\\Lang_2024.net\r\n282 reaction(s) have nonzero rate\r\nInitialization took 0.06 CPU seconds\r\nPropagating with cvode using dense LU\r\nTime course of concentrations written to file C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\Lang_2024\\Lang_2024.cdat.\r\nTime course of groups written to file C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\Lang_2024\\Lang_2024.gdat.\r\nPropagation took 1.87e-01 CPU seconds\r\nProgram times:  0.25 CPU s 0.00 clock s \r\nUpdating species concentrations from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\Lang_2024\\Lang_2024.cdat\r\nCPU TIME: simulate 0.05 s.\r\n",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "lipid-mediated-pip3-signaling",
+    "status": "PASS",
+    "mae": 9.99911264898401e-12,
+    "sharedHeaders": [
+      "time",
+      "Active_PI3K",
+      "PIP3_High",
+      "Active_PDK1"
+    ],
+    "rowCount": 141
+  },
+  {
+    "model": "Lisman",
+    "status": "PASS",
+    "mae": 1.6000001323845936e-10,
+    "sharedHeaders": [
+      "time",
+      "K1p",
+      "Input"
+    ],
+    "rowCount": 601
+  },
+  {
+    "model": "localfunc",
+    "status": "FAIL",
+    "mae": 0.35462111203199953,
+    "sharedHeaders": [
+      "time",
+      "Atot",
+      "Btot",
+      "Ctot",
+      "AB0",
+      "AB1",
+      "AB2",
+      "AB3",
+      "AB_motif"
+    ],
+    "rowCount": 41
+  },
+  {
+    "model": "LR",
+    "status": "PASS",
+    "mae": 1.000444171950221e-9,
+    "sharedHeaders": [
+      "time",
+      "FreeR",
+      "Bound"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "LRR_comp",
+    "status": "FAIL",
+    "mae": 9268.8096563339,
+    "sharedHeaders": [
+      "time",
+      "FreeR",
+      "Bound",
+      "Dimers"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "LR_comp",
+    "status": "FAIL",
+    "mae": 4985.540047199,
+    "sharedHeaders": [
+      "time",
+      "FreeR",
+      "Bound"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "LV",
+    "status": "PASS",
+    "mae": 4.000867193099111e-9,
+    "sharedHeaders": [
+      "time",
+      "Stot",
+      "Wtot"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "michaelis-menten-kinetics",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "obs_Product",
+      "obs_ES_Complex"
+    ],
+    "rowCount": 51
+  },
+  {
+    "model": "michment",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "BNG2 Failure: ABORT: Can't locate object method \"setConcentrations\" via package \"BNGModel\" at (eval 56) line 1.\r\n\r\n  at line 71\r\n\nSTDOUT: ttsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\michment\\ref_model.net\r\n6 reaction(s) have nonzero rate\r\nInitialization took 0.00 CPU seconds\r\nPropagating with cvode using GMRES\r\nTime course of concentrations written to file C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\michment\\ref_model.cdat.\r\nTime course of groups written to file C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\michment\\ref_model.gdat.\r\nPropagation took 0.00e+00 CPU seconds\r\nProgram times:  0.00 CPU s 0.00 clock s \r\nUpdating species concentrations from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\michment\\ref_model.cdat\r\nCPU TIME: simulate_ode 0.02 s.\r\n",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "Motivating_example",
+    "status": "FAIL",
+    "mae": 14.053424571300013,
+    "sharedHeaders": [
+      "time",
+      "Tot_L",
+      "Tot_R",
+      "Tot_TF",
+      "Tot_DNA",
+      "Tot_mRNA1",
+      "Tot_mRNA2",
+      "Tot_P1",
+      "Tot_P2",
+      "Tot_NP",
+      "Tot_Im",
+      "L_Dimers_EC",
+      "L_Dimers_PM",
+      "L_Dimers_EN",
+      "L_Dimers_EM",
+      "L_Bound_PM",
+      "L_Bound_EM",
+      "R_Dimers_PM",
+      "R_Dimers_EM",
+      "Catalytic_R",
+      "Catalytic_TF",
+      "Phos_TF",
+      "TF_Dimer_CP",
+      "TF_Dimer_NU",
+      "Bound_prom1",
+      "Bound_prom2",
+      "P1_NU",
+      "P1_CP",
+      "Im_NU",
+      "Im_CP",
+      "Im_Cargo_NP",
+      "P1_NU_free",
+      "P1_NU_dna",
+      "CountSink"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "Motivating_example_cBNGL",
+    "status": "FAIL",
+    "mae": 188.5737079173,
+    "sharedHeaders": [
+      "time",
+      "Tot_L",
+      "Tot_R",
+      "Tot_TF",
+      "Tot_DNA",
+      "Tot_mRNA1",
+      "Tot_mRNA2",
+      "Tot_P1",
+      "Tot_P2",
+      "Tot_NP",
+      "Tot_Im",
+      "L_Dimers_EC",
+      "L_Dimers_PM",
+      "L_Dimers_EN",
+      "L_Dimers_EM",
+      "L_Bound_PM",
+      "L_Bound_EM",
+      "R_Dimers_PM",
+      "R_Dimers_EM",
+      "Catalytic_R",
+      "Catalytic_TF",
+      "Phos_TF",
+      "TF_Dimer_CP",
+      "TF_Dimer_NU",
+      "Bound_prom1",
+      "Bound_prom2",
+      "P1_NU",
+      "P1_CP",
+      "Im_NU",
+      "Im_CP",
+      "Im_Cargo_NP",
+      "P1_NU_free",
+      "P1_NU_dna",
+      "CountSink"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "motor",
+    "status": "PASS",
+    "mae": 3.0004230211488903e-9,
+    "sharedHeaders": [
+      "time",
+      "CheYp",
+      "MotCW",
+      "MotCCW"
+    ],
+    "rowCount": 21
+  },
+  {
+    "model": "mtor-signaling",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_Rheb",
+      "Active_MTORC1",
+      "Phospho_S6K",
+      "Active_AMPK"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "mtorc2-signaling",
+    "status": "PASS",
+    "mae": 0.000021294299983765086,
+    "sharedHeaders": [
+      "time",
+      "Active_mTORC2",
+      "Total_pAKT",
+      "Total_pSGK",
+      "mTORC2_Assembled",
+      "PIP3_Sensors"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "mwc",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "BNG2 Failure: ABORT: C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\bionetgen_python\\bng-win\\bin\\run_network.exe -o C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc -p cvode -a 1e-08 -r 1e-08 --cdat 1 --fdat 1 -g C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc.net C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc.net 1 10\r\n  did not run successfully.\r\n  at line 258\r\n\nSTDOUT: s from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc.net\r\nRead 48 group(s) from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc.net\r\nRead 129 function(s) from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc.net\r\nRead 72 reaction(s) from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\atomized_sim\\mwc\\mwc.net\r\n72 reaction(s) have nonzero rate\r\nInitialization took 0.01 CPU seconds\r\nPropagating with cvode using dense LU\r\n\r\n[CVODE ERROR]  CVode\r\n  At t = 0 and h = 1.53326e-39, the error test failed repeatedly or with |h| = hmin.\r\n\r\nError in CVODE integration (error code -3).\r\n",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "myogenic-differentiation",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "High_MYOD",
+      "MYOG_On",
+      "MEF2_On"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "negative-feedback-loop",
+    "status": "PASS",
+    "mae": 1.000088900582341e-11,
+    "sharedHeaders": [
+      "time",
+      "Free_gene",
+      "Bound_gene",
+      "Transcript",
+      "Protein"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "neurotransmitter-release",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "High_Calcium",
+      "Open_SNARE",
+      "Fused_Vesicle",
+      "Postsynaptic_Response"
+    ],
+    "rowCount": 121
+  },
+  {
+    "model": "nfkb-feedback",
+    "status": "PASS",
+    "mae": 0.00005668519997925614,
+    "sharedHeaders": [
+      "time",
+      "Nuclear_NFkB",
+      "Active_IKK",
+      "Total_IkB",
+      "NFkB_complex",
+      "A20_Feedback"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "nfkb",
+    "status": "FAIL",
+    "mae": 0.008716299998923205,
+    "sharedHeaders": [
+      "time",
+      "nNFKB",
+      "cNFKB",
+      "cikba",
+      "Ccomplex",
+      "nikba",
+      "ncomplex",
+      "tIKBA",
+      "ikkN",
+      "ikka",
+      "ikkai",
+      "transcriptA20",
+      "oA20",
+      "pIKBA",
+      "pIKBANFKB",
+      "transcriptTarget",
+      "tComp",
+      "oComp",
+      "TNFR_a",
+      "TNFR_i",
+      "IKKK_a",
+      "TNF"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "no-cgmp-signaling",
+    "status": "PASS",
+    "mae": 0.00000350659996684044,
+    "sharedHeaders": [
+      "time",
+      "Vasodilator_Sig",
+      "Active_sGC",
+      "cGMP_Pool",
+      "Phospho_Drive",
+      "Radical_Load",
+      "Total_Cyclase"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "notch-delta-lateral-inhibition",
+    "status": "PASS",
+    "mae": 1.000310945187266e-13,
+    "sharedHeaders": [
+      "time",
+      "Active_notch",
+      "High_delta"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "organelle_transport",
+    "status": "FAIL",
+    "mae": 1000.0711112726,
+    "sharedHeaders": [
+      "time",
+      "A",
+      "B",
+      "C",
+      "D"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "organelle_transport_struct",
+    "status": "FAIL",
+    "mae": 1000.0711112726,
+    "sharedHeaders": [
+      "time",
+      "FreeA",
+      "FreeB",
+      "A_O1",
+      "C_cyt",
+      "FreeD"
+    ],
+    "rowCount": 1001
+  },
+  {
+    "model": "oxidative-stress-response",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Elevated_ROS",
+      "Released_KEAP1",
+      "Nuclear_NRF2",
+      "High_Antioxidant"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "p38-mapk-signaling",
+    "status": "PASS",
+    "mae": 1.000444171950221e-10,
+    "sharedHeaders": [
+      "time",
+      "Active_p38",
+      "Transducer_Work",
+      "Upstream_Drive",
+      "Complex_States",
+      "Total_Workload"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "p53-mdm2-oscillator",
+    "status": "PASS",
+    "mae": 1.000088900582341e-12,
+    "sharedHeaders": [
+      "time",
+      "p53_total",
+      "MDM2_total"
+    ],
+    "rowCount": 321
+  },
+  {
+    "model": "parp1-mediated-dna-repair",
+    "status": "PASS",
+    "mae": 0.000021421500036922225,
+    "sharedHeaders": [
+      "time",
+      "Damaged_Sites",
+      "Bound_PARP1",
+      "PAR_Chain",
+      "NAD_Pool",
+      "Repaired_Units"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "phosphorelay-chain",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Sensor_P",
+      "Relay_P",
+      "Output_P"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "platelet-activation",
+    "status": "PASS",
+    "mae": 2.6000179786933586e-10,
+    "sharedHeaders": [
+      "time",
+      "High_ADP",
+      "Active_P2Y12",
+      "Open_Integrin",
+      "Elevated_Thromboxane"
+    ],
+    "rowCount": 141
+  },
+  {
+    "model": "predator-prey-dynamics",
+    "status": "FAIL",
+    "mae": 3482.9951498298797,
+    "sharedHeaders": [
+      "time",
+      "Prey_count",
+      "Predator_count"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "quasi_equilibrium",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "A_conc",
+      "B_conc",
+      "C_conc"
+    ],
+    "rowCount": 501
+  },
+  {
+    "model": "quorum-sensing-circuit",
+    "status": "PASS",
+    "mae": 1.0699992003537773e-8,
+    "sharedHeaders": [
+      "time",
+      "Autoinducer_pool",
+      "Gene_on",
+      "Protein",
+      "Autoinducer_env_pool"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "rab-gtpase-cycle",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "RAB_GTP",
+      "Active_GEF",
+      "Active_GAP",
+      "Effector_On"
+    ],
+    "rowCount": 161
+  },
+  {
+    "model": "rankl-rank-signaling",
+    "status": "PASS",
+    "mae": 1.0999769983754959e-9,
+    "sharedHeaders": [
+      "time",
+      "Active_NFAT",
+      "Rank_Occupancy",
+      "OPG_Sequestration",
+      "TRAF6_Complexes",
+      "Total_RANKL"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "ras-gef-gap-cycle",
+    "status": "PASS",
+    "mae": 1.1809999911349678e-7,
+    "sharedHeaders": [
+      "time",
+      "Active_Ras",
+      "GEF_Complexes",
+      "GAP_Complexes",
+      "Total_GTP_Ras",
+      "Exchange_Rate"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "repressilator-oscillator",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Protein_A",
+      "Protein_B",
+      "Protein_C",
+      "GeneA_bound"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "Repressilator",
+    "status": "FAIL",
+    "mae": 0.04237399995326996,
+    "sharedHeaders": [
+      "time",
+      "pTetR",
+      "pCI",
+      "pLacI"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "retinoic-acid-signaling",
+    "status": "PASS",
+    "mae": 4.000355602329364e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_RARRXR",
+      "Released_Corepressor",
+      "Gene_On"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "rho-gtpase-actin-cytoskeleton",
+    "status": "PASS",
+    "mae": 0.00003232770001204699,
+    "sharedHeaders": [
+      "time",
+      "F_Actin_Mass",
+      "Active_RhoA",
+      "Phospho_LIMK",
+      "Stabilized_Cof",
+      "Membrane_RhoA"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "shp2-phosphatase-regulation",
+    "status": "PASS",
+    "mae": 1.000159954855917e-10,
+    "sharedHeaders": [
+      "time",
+      "Active_Enzyme",
+      "Recruited_SHP2",
+      "Substrate_State",
+      "Bound_RTK",
+      "Total_Inactive",
+      "Active_Substrate"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "SHP2_base_model",
+    "status": "FAIL",
+    "mae": 0.00743145425871,
+    "sharedHeaders": [
+      "time",
+      "pYR"
+    ],
+    "rowCount": 12
+  },
+  {
+    "model": "signal-amplification-cascade",
+    "status": "PASS",
+    "mae": 1.000088900582341e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_receptor",
+      "Active_effector",
+      "Messenger"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "simple-dimerization",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "A_free",
+      "B_free",
+      "AB"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "simple_system",
+    "status": "PASS",
+    "mae": 0.00007221589999062417,
+    "sharedHeaders": [
+      "time",
+      "X_free",
+      "X_p_total",
+      "Xp_free",
+      "XY",
+      "Ytotal",
+      "Xtotal"
+    ],
+    "rowCount": 51
+  },
+  {
+    "model": "sir-epidemic-model",
+    "status": "PASS",
+    "mae": 1.000444171950221e-10,
+    "sharedHeaders": [
+      "time",
+      "Susceptible",
+      "Infected",
+      "Recovered"
+    ],
+    "rowCount": 161
+  },
+  {
+    "model": "smad-tgf-beta-signaling",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_TGFBR",
+      "Phospho_SMAD2",
+      "SMAD_Complex"
+    ],
+    "rowCount": 181
+  },
+  {
+    "model": "sonic-hedgehog-gradient",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "Morphogen_Peak",
+      "Morphogen_Drive",
+      "Bound_Shh",
+      "Ptc1_Occupancy",
+      "Total_Endo_Signal"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "stat3-mediated-transcription",
+    "status": "FAIL",
+    "mae": 0.07396644740003921,
+    "sharedHeaders": [
+      "time",
+      "Active_Dimer",
+      "Total_pSTAT3",
+      "DNA_Engagement",
+      "mRNA_Level",
+      "PIAS3_Feedback"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "stress-response-adaptation",
+    "status": "PASS",
+    "mae": 1.000444171950221e-10,
+    "sharedHeaders": [
+      "time",
+      "Active_sensor",
+      "Adapter",
+      "Enzyme"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "synaptic-plasticity-ltp",
+    "status": "PASS",
+    "mae": 0.000009281200021860059,
+    "sharedHeaders": [
+      "time",
+      "Open_NMDAR",
+      "Cytosolic_Ca",
+      "Active_CaMKII",
+      "Surface_AMPAR"
+    ],
+    "rowCount": 301
+  },
+  {
+    "model": "t-cell-activation",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_tcr",
+      "Cytokine_pool"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "test_ANG_synthesis_simple",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "add_molecule",
+      "constant_source",
+      "non_constant_source"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "test_fixed",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "S1",
+      "S2",
+      "S3"
+    ],
+    "rowCount": 21
+  },
+  {
+    "model": "test_mratio",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "Atomization failed: Error: SBML document contains no model or model pointer is NULL (0)",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "test_network_gen",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "BNG2 Failure: ABORT: Species @cell::M_S1(b1!1!2!3!4).M_S3(b1!1,b2,phosphorylation~P).M_S3(b1!2,b2,phosphorylation~P).M_S4(b1!3,b2,phosphorylation~P).M_S4(b1!4,b2,phosphorylation~P) isomorphic to previously defined species index 87\r\n  at line 203\r\n\nSTDOUT: BioNetGen version 2.9.3\r\nReading from file C:/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/tests/pac/atomized/test_network_gen.bngl (level 0)\r\nRead 27 parameters.\r\nRead 1 compartments.\r\nRead 4 molecule types.\r\n",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "test_sat",
+    "status": "ERROR",
+    "mae": -1,
+    "error": "BNG2 Failure: ABORT: Can't locate object method \"setConcentrations\" via package \"BNGModel\" at (eval 53) line 1.\r\n\r\n  at line 37\r\n\nSTDOUT: ttsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\test_sat\\ref_model.net\r\n1 reaction(s) have nonzero rate\r\nInitialization took 0.01 CPU seconds\r\nPropagating with cvode using GMRES\r\nTime course of concentrations written to file C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\test_sat\\ref_model.cdat.\r\nTime course of groups written to file C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\test_sat\\ref_model.gdat.\r\nPropagation took 0.00e+00 CPU seconds\r\nProgram times:  0.01 CPU s 0.00 clock s \r\nUpdating species concentrations from C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\pac\\reference_sim\\test_sat\\ref_model.cdat\r\nCPU TIME: simulate_ode 0.03 s.\r\n",
+    "sharedHeaders": [],
+    "rowCount": 0
+  },
+  {
+    "model": "test_synthesis_cBNGL_simple",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "compartment_suffix",
+      "compartment_preffix",
+      "constant_source",
+      "non_constant_source"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "test_synthesis_complex",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "add_molecule",
+      "constant_source",
+      "non_constant_source",
+      "Receptor"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "test_synthesis_complex_0_cBNGL",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "vs_suffix",
+      "vs_prefix",
+      "ss_suffix",
+      "ss_prefix",
+      "vv_suffix",
+      "vv_prefix"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "test_synthesis_complex_source_cBNGL",
+    "status": "FAIL",
+    "mae": 120,
+    "sharedHeaders": [
+      "time",
+      "vs_suffix",
+      "vs_prefix",
+      "ss_suffix",
+      "ss_prefix",
+      "vv_suffix",
+      "vv_prefix"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "test_synthesis_simple",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "add_molecule",
+      "constant_source",
+      "non_constant_source"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "tlmr",
+    "status": "FAIL",
+    "mae": 50.1857111388,
+    "sharedHeaders": [
+      "time",
+      "S1",
+      "S2",
+      "S3",
+      "S4",
+      "S5"
+    ],
+    "rowCount": 11
+  },
+  {
+    "model": "tlr3-dsrna-sensing",
+    "status": "FAIL",
+    "mae": 1273.6690712078685,
+    "sharedHeaders": [
+      "time",
+      "Active_TLR3",
+      "TRIF_Bound",
+      "Pathogen_Sense",
+      "Nucleark_IRF3",
+      "Cyto_IRF3",
+      "Regulator_Load"
+    ],
+    "rowCount": 401
+  },
+  {
+    "model": "tnf-induced-apoptosis",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_TNFR",
+      "Active_Caspase8",
+      "Truncated_BID",
+      "Active_Caspase3"
+    ],
+    "rowCount": 161
+  },
+  {
+    "model": "toy-jim",
+    "status": "FAIL",
+    "mae": 0.025785456230299986,
+    "sharedHeaders": [
+      "time",
+      "RecDim",
+      "Rec_A",
+      "Rec_K",
+      "Rec_Kp",
+      "RecDim_Kp",
+      "L_total",
+      "A_total",
+      "K_total",
+      "R_total"
+    ],
+    "rowCount": 121
+  },
+  {
+    "model": "two-component-system",
+    "status": "PASS",
+    "mae": 0.000024821999886626145,
+    "sharedHeaders": [
+      "time",
+      "Kinase_P",
+      "Reg_P",
+      "Target"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "univ_synth",
+    "status": "PASS",
+    "mae": 0,
+    "sharedHeaders": [
+      "time",
+      "B_EC",
+      "B_PM",
+      "B_CP",
+      "C_EC",
+      "C_PM",
+      "C_CP"
+    ],
+    "rowCount": 21
+  },
+  {
+    "model": "vegf-angiogenesis",
+    "status": "FAIL",
+    "mae": 108.1988173643,
+    "sharedHeaders": [
+      "time",
+      "Active_Signal",
+      "Surface_VEGFR2",
+      "Migratory_Pool",
+      "Decoy_Occupancy",
+      "Total_Complexes"
+    ],
+    "rowCount": 241
+  },
+  {
+    "model": "viral-sensing-innate-immunity",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_RIGI",
+      "Active_MAVS",
+      "Phospho_IRF3",
+      "IFNB_On"
+    ],
+    "rowCount": 201
+  },
+  {
+    "model": "wnt-beta-catenin-signaling",
+    "status": "PASS",
+    "mae": 0.000003139800014650973,
+    "sharedHeaders": [
+      "time",
+      "Active_Dvl",
+      "Nuclear_BC",
+      "Transcription_Active"
+    ],
+    "rowCount": 101
+  },
+  {
+    "model": "wound-healing-pdgf-signaling",
+    "status": "PASS",
+    "mae": 1.000444171950221e-11,
+    "sharedHeaders": [
+      "time",
+      "Active_PDGFR",
+      "Phospho_STAT3",
+      "Migratory_Fibroblast"
+    ],
+    "rowCount": 181
+  }
+]

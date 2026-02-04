@@ -65,18 +65,6 @@ function App() {
   }, [simOptions]);
 
   // Remove the parameters block from source for equality checks
-  function stripParametersBlock(src: string): string {
-    const lines = src.split(/\r?\n/);
-    let out: string[] = [];
-    let inParams = false;
-    for (const raw of lines) {
-      const l = raw.trim();
-      if (/^begin\s+parameters\b/i.test(l)) { inParams = true; continue; }
-      if (/^end\s+parameters\b/i.test(l)) { inParams = false; continue; }
-      if (!inParams) out.push(raw);
-    }
-    return out.join('\n').replace(/\s+$/g, '').trim();
-  }
 
   // Called by the editor on every change. If the change is strictly numeric parameter edits
   // (nothing else changed), apply them analytically after a 500ms debounce without reparsing/simulating.
@@ -117,18 +105,36 @@ function App() {
       const prevVal = prevParams.get(k);
       if (prevVal === undefined) {
         // New parameter added - only accept if numeric literal
-        if (!isNumericLiteral(v)) return;
+        if (!isNumericLiteral(v)) {
+          if (paramPatchTimerRef.current) {
+            window.clearTimeout(paramPatchTimerRef.current);
+            paramPatchTimerRef.current = null;
+          }
+          return;
+        }
         changes.set(k, v);
       } else if (prevVal !== v) {
         // Changed - allow only numeric literal
-        if (!isNumericLiteral(v)) return;
+        if (!isNumericLiteral(v)) {
+          if (paramPatchTimerRef.current) {
+            window.clearTimeout(paramPatchTimerRef.current);
+            paramPatchTimerRef.current = null;
+          }
+          return;
+        }
         changes.set(k, v);
       }
     }
 
     // Also ensure that no params were removed (that would be a structural change requiring parse)
     for (const k of prevParams.keys()) {
-      if (!newParams.has(k)) return;
+      if (!newParams.has(k)) {
+        if (paramPatchTimerRef.current) {
+          window.clearTimeout(paramPatchTimerRef.current);
+          paramPatchTimerRef.current = null;
+        }
+        return;
+      }
     }
 
     if (changes.size === 0) {
@@ -416,12 +422,46 @@ function App() {
         ...lintDiagnosticsToMarkers(codeRef.current, lintResult.diagnostics),
       ]);
 
-      setStatus({ type: 'success', message: `Updated ${changes.size} parameter${changes.size === 1 ? '' : 's'} (no reparse/simulate)` });
+      setStatus({ type: 'success', message: `Updated ${changes.size} parameter${changes.size === 1 ? '' : 's'} (no reparse)` });
+
+      // If we already have simulation results and options, re-solve without re-parsing (debounced upstream)
+      if (results && simOptionsRef.current) {
+        void runSimulationForParameterUpdate(currentModel, simOptionsRef.current);
+      }
     } catch (e) {
       console.warn('Parameter patch failed:', e);
       setStatus({ type: 'warning', message: 'Parameter update failed; consider re-parsing the model.' });
     }
   }
+
+  const runSimulationForParameterUpdate = async (updatedModel: BNGLModel, options: SimulationOptions) => {
+    if (simulateAbortRef.current) {
+      simulateAbortRef.current.abort('Parameter update replaced.');
+    }
+    const controller = new AbortController();
+    simulateAbortRef.current = controller;
+    setIsSimulating(true);
+    setStatus({ type: 'info', message: 'Updating simulation for parameter change...' });
+    try {
+      const simResults = await bnglService.simulate(updatedModel, options, {
+        signal: controller.signal,
+        description: 'Simulation (parameter update)',
+      });
+      setResults(simResults);
+      setStatus({ type: 'success', message: 'Simulation updated for parameter change.' });
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'AbortError') {
+        return;
+      }
+      const message = error instanceof Error ? error.message : 'An unknown error occurred.';
+      setStatus({ type: 'warning', message: `Parameter update simulation failed: ${message}` });
+    } finally {
+      if (simulateAbortRef.current === controller) {
+        simulateAbortRef.current = null;
+      }
+      setIsSimulating(false);
+    }
+  };
 
   const handleParse = useCallback(async (): Promise<BNGLModel | null> => {
     setResults(null);
@@ -731,6 +771,26 @@ function App() {
     }
   };
 
+  const handleExportBNGL = () => {
+    if (!code?.trim()) {
+      setStatus({ type: 'warning', message: 'No BNGL code to export.' });
+      return;
+    }
+    try {
+      const blob = new Blob([code], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${loadedModelName?.replace(/\s+/g, '_') || 'model'}.bngl`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus({ type: 'success', message: 'BNGL export generated.' });
+    } catch (e) {
+      setStatus({ type: 'error', message: 'Failed to export BNGL.' });
+      console.warn('BNGL export failed', e);
+    }
+  };
+
   return (
     <div className="flex min-h-screen flex-col bg-slate-50 font-sans text-slate-900 dark:bg-slate-900 dark:text-slate-100">
       {/* Export SBML handler exposed to Header and EditorPanel */}
@@ -776,6 +836,7 @@ function App() {
                   selection={editorSelection}
                   onImportSBML={handleImportSBML}
                   onExportSBML={handleExportSBML}
+                  onExportBNGL={handleExportBNGL}
                 />
               ) : (
                 <DesignerPanel

@@ -4,6 +4,7 @@
  */
 
 import { LogLevel } from '../utils/helpers';
+import { Species } from '../core/structures';
 
 // =============================================================================
 // BNGL Model Types (Internal copy for SBML Writer)
@@ -66,6 +67,13 @@ export interface BNGLModel {
   reactionRules: ReactionRule[];
   compartments?: BNGLCompartment[];
   functions?: BNGLFunction[];
+}
+
+export interface SeedSpeciesEntry {
+  species: Species;
+  concentration: string;
+  compartment: string;
+  sbmlId: string;
 }
 
 // =============================================================================
@@ -350,14 +358,18 @@ export interface AtomizerOptions {
   logLevel: LogLevel;
   /** Output file for observable mapping */
   obsMapFile?: string;
-  /** Variables defined by assignment rules (internal use) */
-  assignmentRuleVariables?: Set<string>;
+  /** Custom actions block text */
+  actions?: string;
   /** Simulation end time */
   tEnd?: number;
   /** Number of simulation steps */
   nSteps?: number;
-  /** Custom actions block text */
-  actions?: string;
+  /** Variables defined by assignment rules (internal use) */
+  assignmentRuleVariables?: Set<string>;
+  /** Rules that were converted to observables (internal use) */
+  observableConvertedRules?: Set<string>;
+  /** Species that have amount-based observables (internal use) */
+  speciesAmts?: Set<string>;
 }
 
 /**

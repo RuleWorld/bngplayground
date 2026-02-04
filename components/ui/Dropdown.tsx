@@ -4,11 +4,12 @@ interface DropdownProps {
   trigger: React.ReactNode;
   children: React.ReactNode;
   direction?: 'up' | 'down';
+  align?: 'left' | 'right';
 }
 
 import ReactDOM from 'react-dom';
 
-export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction = 'down' }) => {
+export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction = 'down', align = 'right' }) => {
   const [isOpen, setIsOpen] = useState(false);
   const triggerRef = useRef<HTMLDivElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -39,13 +40,36 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
       const scrollLeft = window.scrollX || document.documentElement.scrollLeft;
 
       // Default: align right edge of dropdown with right edge of trigger
-      let left = triggerRect.right + scrollLeft - dropdownRect.width;
+      let left = align === 'left'
+        ? triggerRect.left + scrollLeft
+        : triggerRect.right + scrollLeft - dropdownRect.width;
 
       // Default: appear below
       let top = triggerRect.bottom + scrollTop + 4;
+      let effectiveDirection: 'up' | 'down' = direction;
 
       if (direction === 'up') {
         top = triggerRect.top + scrollTop - dropdownRect.height - 4;
+      }
+
+      // Auto-flip if dropdown would overflow viewport
+      const viewportTop = scrollTop + 4;
+      const viewportBottom = scrollTop + window.innerHeight - 4;
+      const wouldOverflowBottom = top + dropdownRect.height > viewportBottom;
+      const wouldOverflowTop = top < viewportTop;
+
+      if (effectiveDirection === 'down' && wouldOverflowBottom) {
+        const upTop = triggerRect.top + scrollTop - dropdownRect.height - 4;
+        if (upTop >= viewportTop) {
+          top = upTop;
+          effectiveDirection = 'up';
+        }
+      } else if (effectiveDirection === 'up' && wouldOverflowTop) {
+        const downTop = triggerRect.bottom + scrollTop + 4;
+        if (downTop + dropdownRect.height <= viewportBottom) {
+          top = downTop;
+          effectiveDirection = 'down';
+        }
       }
 
       // Safety check: prevent going off-screen left
@@ -59,7 +83,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
 
       setCoords({ top, left });
     }
-  }, [isOpen, direction]);
+  }, [isOpen, direction, align]);
 
   // Initial calculation and listeners
   React.useLayoutEffect(() => {

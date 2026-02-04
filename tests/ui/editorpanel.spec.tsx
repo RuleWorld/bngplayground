@@ -35,11 +35,13 @@ const baseProps = {
 describe('EditorPanel', () => {
   it('calls onExportSBML when Export SBML button clicked', () => {
     const onExportSBML = vi.fn();
-    render(<EditorPanel {...baseProps} onExportSBML={onExportSBML} /> as any);
+    render(<EditorPanel {...baseProps} onExportSBML={onExportSBML} onExportBNGL={() => {}} /> as any);
 
-    const exportBtn = screen.getByRole('button', { name: /Export SBML/i });
+    const exportBtn = screen.getByRole('button', { name: /^Export$/i });
     expect(exportBtn).toBeInTheDocument();
     fireEvent.click(exportBtn);
+    const exportSbmlItem = screen.getByRole('menuitem', { name: /Export SBML/i });
+    fireEvent.click(exportSbmlItem);
     expect(onExportSBML).toHaveBeenCalled();
   });
 

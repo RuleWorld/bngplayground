@@ -1,0 +1,949 @@
+# Contributing to BNG Playground
+
+Welcome! BNG Playground is a browser-native BioNetGen modeling platform that makes systems biology accessible without installation. This guide will help you contribute effectively.
+
+## Table of Contents
+
+1. [Quick Start](#quick-start)
+2. [Project Architecture](#project-architecture)
+3. [Development Workflow](#development-workflow)
+4. [Testing Strategy](#testing-strategy)
+5. [Key Contribution Areas](#key-contribution-areas)
+6. [Code Organization](#code-organization)
+7. [Common Tasks](#common-tasks)
+8. [Debugging Guide](#debugging-guide)
+
+---
+
+## Quick Start
+
+### Prerequisites
+- Node.js 18+ and npm
+- Git
+- Basic understanding of React/TypeScript
+- (Optional) Docker for WASM builds
+
+### Initial Setup
+
+```bash
+# Clone the repository
+git clone https://github.com/yourusername/bngplayground.git
+cd bngplayground
+
+# Install dependencies
+npm install
+
+# Start development server
+npm run dev
+
+# Open http://localhost:5173
+```
+
+### Your First Contribution
+
+1. **Browse example models**: Load [example-models/simple-dimerization.bngl](file:///c:/Users/Achyudhan/OneDrive%20-%20University%20of%20Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/bionetgen-web-simulator/example-models/simple-dimerization.bngl) to understand the interface
+2. **Run the test suite**: `npm test` to verify your setup
+3. **Read the architecture**: Understand the key subsystems below
+
+---
+
+## Project Architecture
+
+### High-Level Overview
+
+BNG Playground is a complete reimplementation of BioNetGen that runs entirely in the browser. The project maintains a large test suite of models from the BioNetGen repository to ensure compatibility.
+
+```
+User Interface (React/TypeScript)
+    ↓
+BNGL Parser (ANTLR4 Grammar)
+    ↓
+Network Generator (TypeScript + Nauty WASM)
+    ↓
+Simulation Engine (ODE/SSA solvers + NFsim WASM)
+    ↓
+Visualization (Plotly/Cytoscape)
+```
+
+### Core Subsystems
+
+#### 1. **Parser System** (`src/parser/`)
+- **ANTLR4 Grammar**: `BNGLexer.g4` and `BNGParser.g4` define BNGL syntax
+- **Visitor Pattern**: `BNGLVisitor.ts` transforms parse trees to internal AST
+- **Expression Evaluator**: Handles mathematical functions, parameters, and observables
+
+**Key Files**:
+- `src/parser/BNGLParserWrapper.ts` - Main entry point
+- `services/parseBNGL.ts` - Legacy regex-based parser (being phased out)
+- `src/parser/ExpressionDependencies.ts` - Tracks parameter dependencies
+
+#### 2. **Network Generation** (`services/simulation/NetworkExpansion.ts`)
+- Pattern matching using VF2 algorithm
+- Graph canonicalization via Nauty WASM
+- Species generation from reaction rules
+- Memory-efficient handling of large networks
+
+**Key Algorithms**:
+- **VF2 Matching**: Subgraph isomorphism for rule application
+- **Nauty Canonicalization**: Ensures unique species representations
+- **Degeneracy Calculation**: Computes symmetry factors for rates
+
+#### 3. **Simulation Engines**
+
+##### ODE Solver (`wasm-sundials/`)
+- CVODE integration for stiff systems
+- Analytical Jacobian support
+- Adaptive step sizing
+- WebAssembly compiled from C
+
+##### SSA Solver (TypeScript)
+- Gillespie algorithm implementation
+- Direct method for stochastic simulation
+- Efficient reaction propensity tracking
+
+##### NFsim Integration (`src/wasm/nfsim/`)
+- Network-free stochastic simulation
+- Complex model support (e.g., `Barua_2007.bngl`)
+- WASM wrapper around native NFsim
+- Progress monitoring and memory management
+
+**Key Files**:
+- `services/simulation/NFsimRunner.ts` - Main wrapper
+- `services/simulation/NFsimMemoryManager.ts` - Prevents memory leaks
+- `services/cvode_node.ts` - ODE solver interface
+
+#### 4. **SBML Import/Export** (`src/lib/atomizer/`)
+- **Parser**: `sbmlParser.ts` converts SBML XML to internal structures
+- **Rulifier**: `rulifier.ts` infers BNGL rules from reactions
+- **Writer**: `sbmlWriter.ts` generates SBML from BNGL
+- **Atomizer**: Round-trip SBML ↔ BNGL conversion
+
+**Critical for Compatibility**: Achieving SBML parity is a major project goal
+
+#### 5. **Visualization** (`services/visualization/`)
+- **Contact Maps**: `contactMapBuilder.ts` - Protein binding interfaces
+- **Rule Cartoons**: `compactRuleBuilder.ts` - Visual reaction rules
+- **Regulatory Networks**: `regulatoryGraphBuilder.ts` - Influence graphs
+- **AR Graphs**: `arGraphBuilder.ts` - Aggregate-reactant networks
+
+#### 6. **Analysis Tools**
+- **FIM Analysis**: `services/fim.ts` - Fisher Information Matrix
+- **Parameter Estimation**: `src/services/ParameterEstimation.ts`
+- **Conservation Laws**: `src/services/ConservationLaws.ts`
+- **Network Analysis**: `src/services/NetworkAnalysis.ts`
+
+---
+
+## Development Workflow
+
+### Branch Strategy
+```bash
+# Create feature branch
+git checkout -b feature/your-feature-name
+
+# Make changes, commit frequently
+git add .
+git commit -m "feat: descriptive commit message"
+
+# Push and open PR
+git push origin feature/your-feature-name
+```
+
+### Commit Message Convention
+Follow conventional commits:
+- `feat:` New feature
+- `fix:` Bug fix
+- `test:` Adding tests
+- `refactor:` Code restructuring
+- `docs:` Documentation
+- `perf:` Performance improvement
+
+### Code Style
+- **TypeScript**: Strict mode enabled
+- **Formatting**: Prettier (auto-format on save)
+- **Linting**: ESLint with custom rules
+- **Naming**: `camelCase` for variables/functions, `PascalCase` for components
+
+```bash
+# Format code
+npm run format
+
+# Lint code
+npm run lint
+
+# Type check
+npm run type-check
+```
+
+---
+
+## Testing Strategy
+
+### Test Types
+
+#### 1. **Unit Tests** (Vitest)
+Fast, isolated tests for individual functions.
+
+```typescript
+// Example: services/safeExpressionEvaluator.spec.ts
+describe('SafeExpressionEvaluator', () => {
+  it('evaluates simple expressions', () => {
+    const result = evaluateExpression('2 + 2', {});
+    expect(result).toBe(4);
+  });
+});
+```
+
+Run: `npm test`
+
+#### 2. **Integration Tests**
+Test interactions between subsystems.
+
+```typescript
+// Example: tests/network.spec.ts
+describe('Network Generation', () => {
+  it('generates correct species from rules', () => {
+    const model = parseBNGL(bnglCode);
+    const network = generateNetwork(model);
+    expect(network.species).toHaveLength(expectedCount);
+  });
+});
+```
+
+#### 3. **E2E Tests** (Playwright)
+Browser-based tests for full workflows.
+
+```typescript
+// Example: tests/playwright/open-in-vscode.spec.ts
+test('exports model to VSCode', async ({ page }) => {
+  await page.goto('http://localhost:5173');
+  await page.click('[data-testid="vscode-export"]');
+  // ... assertions
+});
+```
+
+Run: `npm run test:e2e`
+
+#### 4. **Parity Tests**
+Compare BNG Playground output against BNG2.pl reference.
+
+```typescript
+// Example: tests/bionetgen-repo/RepoIntegration.spec.ts
+describe('BNG2 Parity', () => {
+  it('matches reference output for model XYZ', async () => {
+    const ourOutput = await simulateModel(model);
+    const bng2Output = loadReferenceOutput('model.gdat');
+    expect(ourOutput).toMatchReference(bng2Output, { tolerance: 1e-6 });
+  });
+});
+```
+
+**Manual Parity Check Command**:
+For checking parity against the web simulator output:
+```powershell
+# Generate web output with a specific seed
+$env:web output seed 12345 npm run generate:web-output
+
+# Compare outputs
+npx tsx scripts/compare_outputs.ts
+```
+
+The project maintains compatibility with BNG2.pl through systematic comparison testing across a large corpus of published models.
+
+
+### Running Tests
+
+```bash
+# Run all tests
+npm test
+
+# Run specific test file
+npm test network.spec.ts
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Run E2E tests
+npm run test:e2e
+```
+
+### Writing Good Tests
+
+1. **Arrange-Act-Assert Pattern**:
+```typescript
+it('calculates correct propensities', () => {
+  // Arrange
+  const reactions = [{ rate: 0.1, reactants: [...] }];
+  
+  // Act
+  const propensities = calculatePropensities(reactions);
+  
+  // Assert
+  expect(propensities[0]).toBeCloseTo(0.1, 5);
+});
+```
+
+2. **Test Edge Cases**: Empty inputs, large numbers, special characters
+3. **Use Descriptive Names**: Test names should read like documentation
+4. **Isolate Tests**: No shared state between tests
+5. **Mock External Dependencies**: Use `vi.mock()` for WASM modules
+
+---
+
+## Key Contribution Areas
+
+### 🟢 Easy (Good First Issues)
+
+#### 1. **Add Example Models**
+**Location**: `example-models/`
+
+Add a new `.bngl` file with biological relevance:
+```bngl
+# Example: toll-like-receptor-signaling.bngl
+begin model
+begin parameters
+  kf 0.001
+  kr 0.01
+end parameters
+
+begin molecule types
+  TLR4(ligand)
+  LPS(receptor)
+end molecule types
+
+begin seed species
+  TLR4(ligand) 1000
+  LPS(receptor) 500
+end seed species
+
+begin reaction rules
+  TLR4(ligand) + LPS(receptor) <-> TLR4(ligand!1).LPS(receptor!1) kf, kr
+end reaction rules
+
+begin observables
+  Molecules Bound TLR4(ligand!1).LPS(receptor!1)
+end observables
+end model
+```
+
+Then update `validation_models.ts` to include it in the gallery.
+
+#### 2. **Improve Error Messages**
+**Location**: `services/parseBNGL.ts`, `services/bnglLinter.ts`
+
+Current error messages can be cryptic. Enhance them:
+
+```typescript
+// Before
+throw new Error("Parse error at line 5");
+
+// After
+throw new Error(
+  "Parse error at line 5: Expected 'end parameters' but found 'end molecule types'.\n" +
+  "Hint: Check that all blocks have matching begin/end statements."
+);
+```
+
+#### 3. **Add Unit Tests**
+Pick any untested function and add comprehensive tests. Target files with low coverage in `npm test -- --coverage`.
+
+#### 4. **Documentation Improvements**
+- Add JSDoc comments to complex functions
+- Create tutorials for specific features
+- Improve README with screenshots
+
+### 🟡 Intermediate
+
+#### 1. **SBML Atomizer Debugging**
+**Location**: `src/lib/atomizer/`
+
+**Current Challenge**: Achieving full round-trip SBML ↔ BNGL conversion compatibility
+
+Common failure modes:
+- Compartment volume handling
+- Rate law macro expansion (Sat, MM, Hill)
+- Observable naming mismatches
+- Bond syntax errors
+
+Debug workflow:
+```bash
+# Run atomizer validation
+npm run test tests/atomizer/regression_full.spec.ts
+
+# Investigate specific failure
+node scripts/atomizer_verify.ts model-name.bngl
+```
+
+#### 2. **Parser Grammar Extensions**
+**Location**: `src/parser/grammar/`
+
+Add support for newer BNGL features:
+- Local functions
+- Energy patterns
+- Advanced compartment syntax
+
+Workflow:
+1. Modify `BNGParser.g4`
+2. Regenerate parser: `npm run antlr4ts`
+3. Update visitor in `BNGLVisitor.ts`
+4. Add tests in `tests/parser/`
+
+#### 3. **Performance Optimization**
+Profile slow operations:
+```bash
+# Use Chrome DevTools Performance tab
+# Or Node.js profiler
+node --prof scripts/benchmark_runner.mjs
+```
+
+Common bottlenecks:
+- Pattern matching in large networks
+- Inefficient React re-renders
+- WASM boundary crossings
+
+### 🔴 Advanced
+
+*(Reserved for future major architectural changes)*
+
+---
+
+## Code Organization
+
+### Component Hierarchy
+
+```
+App.tsx
+├── Header.tsx
+├── EditorPanel.tsx
+│   └── MonacoEditor.tsx (BNGL syntax highlighting)
+├── SimulationControls.tsx
+├── VisualizationPanel.tsx
+│   ├── ResultsChart.tsx (Plotly time-series)
+│   ├── ContactMapViewer.tsx (Cytoscape)
+│   ├── RegulatoryGraphViewer.tsx
+│   └── RuleCartoon.tsx
+└── Tabs/
+    ├── ParametersTab.tsx
+    ├── RulesTab.tsx
+    ├── StructureAnalysisTab.tsx
+    ├── ParameterEstimationTab.tsx
+    └── DebuggerTab.tsx
+```
+
+### Service Layer Pattern
+
+All business logic lives in `services/`:
+
+```typescript
+// Example: services/simulation/NetworkExpansion.ts
+export class NetworkExpansion {
+  constructor(private model: BNGLModel) {}
+  
+  generate(): GeneratedNetwork {
+    const species = this.expandSpecies();
+    const reactions = this.applyRules(species);
+    return { species, reactions };
+  }
+  
+  private expandSpecies(): Species[] {
+    // Implementation
+  }
+  
+  private applyRules(species: Species[]): Reaction[] {
+    // Implementation
+  }
+}
+```
+
+**Benefits**:
+- Decouples UI from logic
+- Easier to test
+- Reusable across components
+
+### State Management
+
+- **Local State**: `useState` for component-specific data
+- **Context**: `DebuggerContext` for cross-cutting concerns
+- **No Redux**: Keep it simple for this project scale
+
+### File Naming Conventions
+
+- **Components**: `PascalCase.tsx` (e.g., `ContactMapViewer.tsx`)
+- **Services**: `camelCase.ts` (e.g., `networkExpansion.ts`)
+- **Tests**: `*.spec.ts` or `*.test.ts`
+- **Types**: `types.ts` or inline interfaces
+
+---
+
+## Common Tasks
+
+### Adding a New BNGL Feature
+
+Example: Add support for `energy_patterns`
+
+1. **Update Grammar**:
+```antlr
+// src/parser/grammar/BNGParser.g4
+energy_pattern_block: ENERGY_PATTERNS energy_pattern+ END ENERGY_PATTERNS;
+energy_pattern: pattern ENERGY_OP NUMBER;
+```
+
+2. **Regenerate Parser**:
+```bash
+npm run antlr4ts
+```
+
+3. **Update Visitor**:
+```typescript
+// src/parser/BNGLVisitor.ts
+visitEnergy_pattern_block(ctx: Energy_pattern_blockContext) {
+  return {
+    type: 'energy_patterns',
+    patterns: ctx.energy_pattern().map(p => this.visit(p))
+  };
+}
+```
+
+4. **Add to Type Definitions**:
+```typescript
+// types.ts
+interface BNGLModel {
+  // ... existing fields
+  energyPatterns?: EnergyPattern[];
+}
+
+interface EnergyPattern {
+  pattern: string;
+  energy: number;
+}
+```
+
+5. **Test**:
+```typescript
+// tests/parser/EnergyPatterns.spec.ts
+describe('Energy Patterns', () => {
+  it('parses energy pattern block', () => {
+    const bngl = `
+      begin energy_patterns
+        A(b!1).B(a!1) = -5.0
+      end energy_patterns
+    `;
+    const model = parseBNGL(bngl);
+    expect(model.energyPatterns).toHaveLength(1);
+    expect(model.energyPatterns[0].energy).toBe(-5.0);
+  });
+});
+```
+
+### Adding a New Visualization
+
+Example: Create a "Stoichiometry Matrix" view
+
+1. **Create Component**:
+```typescript
+// components/tabs/StoichiometryTab.tsx
+export function StoichiometryTab({ model }: { model: BNGLModel }) {
+  const matrix = useMemo(() => buildStoichiometryMatrix(model), [model]);
+  
+  return (
+    <div>
+      <HeatmapChart 
+        data={matrix} 
+        xLabels={model.species.map(s => s.name)}
+        yLabels={model.reactions.map((r, i) => `R${i+1}`)}
+      />
+    </div>
+  );
+}
+```
+
+2. **Implement Builder**:
+```typescript
+// services/visualization/stoichiometryBuilder.ts
+export function buildStoichiometryMatrix(model: BNGLModel): number[][] {
+  const matrix: number[][] = [];
+  
+  model.reactions.forEach(rxn => {
+    const row: number[] = new Array(model.species.length).fill(0);
+    rxn.reactants.forEach(r => row[r.speciesIndex] -= r.stoichiometry);
+    rxn.products.forEach(p => row[p.speciesIndex] += p.stoichiometry);
+    matrix.push(row);
+  });
+  
+  return matrix;
+}
+```
+
+3. **Add to Tab System**:
+```typescript
+// components/VisualizationPanel.tsx
+const tabs = [
+  { id: 'cartoon', label: 'Cartoon', component: CartoonTab },
+  { id: 'contact', label: 'Contact Map', component: ContactMapTab },
+  { id: 'stoichiometry', label: 'Stoichiometry', component: StoichiometryTab },
+  // ...
+];
+```
+
+4. **Test**:
+```typescript
+// tests/ui/StoichiometryTab.spec.tsx
+describe('StoichiometryTab', () => {
+  it('renders matrix with correct dimensions', () => {
+    const model = parseModel('...');
+    render(<StoichiometryTab model={model} />);
+    const heatmap = screen.getByTestId('heatmap');
+    expect(heatmap).toBeInTheDocument();
+  });
+});
+```
+
+### Debugging WASM Modules
+
+Example: Debug NFsim crashes
+
+1. **Enable Debug Symbols**:
+```bash
+cd src/wasm/nfsim
+./build_wasm_debug.bat  # or .sh on Unix
+```
+
+2. **Add Logging**:
+```typescript
+// services/simulation/NFsimRunner.ts
+console.log('[NFsim] Input XML:', xmlInput);
+const result = Module.ccall('runNFsim', 'string', ['string'], [xmlInput]);
+console.log('[NFsim] Output:', result);
+```
+
+3. **Use Browser DevTools**:
+- Set breakpoints in TypeScript
+- Inspect WASM memory in Memory Profiler
+- Check for memory leaks in Performance tab
+
+4. **Reproduce Minimal Case**:
+```typescript
+// tests/nfsim-minimal-repro.spec.ts
+it('reproduces crash with minimal model', () => {
+  const minimal = `
+    begin model
+    begin molecule types
+      A(b)
+    end molecule types
+    begin seed species
+      A(b) 1000
+    end seed species
+    begin reaction rules
+      A(b) + A(b) -> A(b!1).A(b!1) 1.0
+    end reaction rules
+    end model
+  `;
+  
+  const result = runNFsim(minimal, { steps: 10 });
+  expect(result).toBeDefined();
+});
+```
+
+### Profiling Performance
+
+1. **Use Chrome DevTools**:
+   - Open DevTools → Performance tab
+   - Click Record
+   - Perform slow operation (e.g., generate large network)
+   - Stop recording
+   - Analyze flame graph for bottlenecks
+
+2. **Add Custom Markers**:
+```typescript
+performance.mark('network-generation-start');
+const network = generateNetwork(model);
+performance.mark('network-generation-end');
+performance.measure('network-generation', 
+  'network-generation-start', 
+  'network-generation-end'
+);
+console.log(performance.getEntriesByName('network-generation'));
+```
+
+3. **Benchmark Regressions**:
+```bash
+npm run benchmark:compare baseline.json current.json
+```
+
+---
+
+## Debugging Guide
+
+### Common Issues
+
+#### Issue: "Parse error in BNGL code"
+
+**Symptoms**: Red error message, no simulation runs
+
+**Debug Steps**:
+1. Check grammar file: `src/parser/grammar/BNGParser.g4`
+2. Identify failing rule in error message
+3. Add test case to `tests/parser-comprehensive.spec.ts`
+4. Fix grammar or visitor
+5. Verify with `npm test parser-comprehensive`
+
+**Example Fix**:
+```typescript
+// Before: Missing handling for wildcard bonds
+visitBond_state(ctx: Bond_stateContext) {
+  return ctx.NUMBER().text;
+}
+
+// After: Handle both numeric and wildcard bonds
+visitBond_state(ctx: Bond_stateContext) {
+  return ctx.NUMBER()?.text ?? ctx.WILDCARD()?.text ?? '?';
+}
+```
+
+#### Issue: "Species count mismatch vs BNG2"
+
+**Symptoms**: Parity test fails, different number of species generated
+
+**Debug Steps**:
+1. Run: `npm test bionetgen-repo/RepoIntegration.spec.ts -- --grep "model-name"`
+2. Check `parity_details.json` for specifics
+3. Compare species lists:
+```bash
+node scripts/compare_species.ts model-name
+```
+4. Check for:
+   - Canonicalization differences (Nauty version mismatch)
+   - Bond handling edge cases
+   - Compartment volume scaling
+
+**Example Fix**:
+```typescript
+// Bug: Not accounting for symmetry in homodimers
+function calculateDegeneracy(species: Species): number {
+  const bondMap = new Map<number, number>();
+  species.bonds.forEach(b => {
+    bondMap.set(b.id, (bondMap.get(b.id) || 0) + 1);
+  });
+  
+  // Check for identical molecules connected by symmetric bonds
+  let degeneracy = 1;
+  for (const [bondId, count] of bondMap) {
+    if (count === 2) {
+      const [mol1, mol2] = getMoleculesWithBond(species, bondId);
+      if (areIsomorphic(mol1, mol2)) {
+        degeneracy *= 2;  // Account for symmetry
+      }
+    }
+  }
+  return degeneracy;
+}
+```
+
+#### Issue: "NFsim WebAssembly memory leak"
+
+**Symptoms**: Browser tab crashes after multiple simulations, memory usage grows
+
+**Debug Steps**:
+1. Check `NFsimMemoryManager.ts` cleanup
+2. Verify `Module._free()` calls
+3. Use Chrome Memory Profiler:
+   - Take heap snapshot before simulation
+   - Run simulation
+   - Take snapshot after
+   - Compare retained objects
+
+**Example Fix**:
+```typescript
+// services/simulation/NFsimMemoryManager.ts
+class NFsimMemoryManager {
+  private allocatedPointers: Set<number> = new Set();
+  
+  allocate(size: number): number {
+    const ptr = Module._malloc(size);
+    this.allocatedPointers.add(ptr);
+    return ptr;
+  }
+  
+  cleanup() {
+    for (const ptr of this.allocatedPointers) {
+      Module._free(ptr);
+    }
+    this.allocatedPointers.clear();
+  }
+}
+```
+
+#### Issue: "Simulation results differ from BNG2"
+
+**Symptoms**: Time-series plots don't match reference `.gdat` files
+
+**Debug Steps**:
+1. Check solver settings (tolerance, max steps)
+2. Verify initial conditions match
+3. Compare rate constants after expression evaluation
+4. Test with different solvers (RK4 vs CVODE)
+
+**Example Fix**:
+```typescript
+// Bug: Not evaluating expressions before simulation
+function prepareReactions(model: BNGLModel): Reaction[] {
+  const params = evaluateParameters(model.parameters);
+  
+  return model.reactions.map(rxn => ({
+    ...rxn,
+    // Evaluate rate constant expressions
+    forwardRate: evaluateExpression(rxn.forwardRate, params),
+    reverseRate: rxn.reverseRate ? evaluateExpression(rxn.reverseRate, params) : undefined
+  }));
+}
+```
+
+### Debugging Tools
+
+#### 1. **React DevTools**
+- Install browser extension
+- Inspect component props/state
+- Profile component renders
+- Identify unnecessary re-renders
+
+#### 2. **Redux DevTools** (if state management added)
+- Time-travel debugging
+- Action replay
+- State diff visualization
+
+#### 3. **VSCode Debugger**
+```json
+// .vscode/launch.json
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "type": "node",
+      "request": "launch",
+      "name": "Debug Tests",
+      "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/vitest",
+      "args": ["run", "${file}"],
+      "console": "integratedTerminal"
+    }
+  ]
+}
+```
+
+#### 4. **Console Utilities**
+```typescript
+// Add to any component for debugging
+useEffect(() => {
+  console.log('Component mounted with props:', props);
+  return () => console.log('Component unmounted');
+}, []);
+
+// Log performance
+console.time('expensive-operation');
+expensiveOperation();
+console.timeEnd('expensive-operation');
+
+// Conditional breakpoints
+if (condition) debugger;
+```
+
+---
+
+## Getting Help
+
+### Resources
+- **Documentation**: See `README.md` and prior art document
+- **Example Models**: Browse `example-models/` and `published-models/`
+- **Test Suite**: Learn by reading tests in `tests/`
+- **Code Comments**: Many complex functions have detailed JSDoc
+
+### Communication
+- **GitHub Issues**: Report bugs, request features
+- **Pull Requests**: Discuss implementation approach in PR description
+- **Code Review**: Expect constructive feedback, iterate together
+
+### Best Practices
+- **Ask Questions Early**: Don't spend hours stuck on something
+- **Share Work-in-Progress**: Open draft PRs for feedback
+- **Document Decisions**: Add comments explaining "why" not just "what"
+- **Test Edge Cases**: Think about boundary conditions
+- **Keep PRs Focused**: One feature/fix per PR for easier review
+
+---
+
+## Project Goals & Philosophy
+
+### Mission
+Make systems biology modeling accessible to experimental biologists without requiring installation, command-line expertise, or deep computational knowledge.
+
+### Core Principles
+1. **Browser-Native**: Zero installation, works on any device
+2. **Parity First**: Must match BNG2.pl behavior for compatibility
+3. **Performance Matters**: WebAssembly for speed, careful optimization
+4. **User Experience**: Intuitive interface, helpful error messages
+5. **Scientific Rigor**: Validated against published models, transparent methods
+
+### Current Priorities
+1. **SBML Atomizer**: Achieve 100% round-trip compatibility
+2. **Testing Coverage**: Increase from current levels
+3. **Performance**: Optimize network generation for large models
+4. **Documentation**: Improve user guides and API docs
+5. **Feature Consolidation**: Simplify UI, reduce cognitive load
+
+### Future Vision
+- Natural language model generation (WebLLM integration)
+- Real-time collaborative modeling
+- Model repository with semantic search
+- Experimental data overlay tools
+- Publication-ready figure export
+
+---
+
+## Acknowledgments
+
+BNG Playground builds on decades of systems biology research:
+- **BioNetGen**: Original Perl implementation by Faeder, Blinov, et al.
+- **NFsim**: Network-free simulator by Sneddon et al.
+- **SBML**: Systems Biology Markup Language community
+- **ANTLR4**: Parser generator by Terence Parr
+
+Thank you for contributing to open science! 🧬
+
+---
+
+## Quick Reference
+
+### Common Commands
+```bash
+npm run dev          # Start dev server
+npm test             # Run all tests
+npm run build        # Production build
+npm run lint         # Check code style
+npm run format       # Auto-format code
+npm run antlr4ts     # Regenerate parser
+npm run benchmark    # Run performance tests
+```
+
+### Important Paths
+- Models: `example-models/`, `published-models/`, `public/models/`
+- Tests: `tests/`, `src/*.test.ts`
+- Components: `components/`
+- Services: `services/`, `src/services/`
+- Parser: `src/parser/grammar/`
+- WASM: `src/wasm/`, `wasm-sundials/`
+
+### Key Files
+- `types.ts` - Core type definitions
+- `App.tsx` - Main application component
+- `services/parseBNGL.ts` - BNGL parser
+- `services/simulation/NetworkExpansion.ts` - Network generator
+- `src/lib/atomizer/` - SBML converter
+- `validation_models.ts` - Model registry
+
+---
+
+**Happy Contributing! 🚀**
+
+For questions or suggestions about this guide, open an issue with the label `documentation`.
