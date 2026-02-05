@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Cell } from 'recharts';
+import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Cell, Scatter } from 'recharts';
 import { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -32,6 +32,7 @@ interface EstimationResult {
   convergence: boolean;
   iterations: number;
   credibleIntervals: { lower: number; upper: number }[];
+  percentiles: { q1: number; q3: number; median: number }[];
   priorMeans: number[];
 }
 
@@ -241,7 +242,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         verbose: false
       });
 
-      // Compute credible intervals from posterior
+      // Compute percentiles and credible intervals from posterior
       const posteriorSamples = await estimator.samplePosterior(1000);
       const credibleIntervals = paramsSnapshot.map((_, i) => {
         const values = posteriorSamples.map(s => s[i]).sort((a, b) => a - b);
@@ -251,12 +252,22 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         };
       });
 
+      const percentiles = paramsSnapshot.map((_, i) => {
+        const values = posteriorSamples.map(s => s[i]).sort((a, b) => a - b);
+        return {
+          q1: values[Math.floor(0.25 * values.length)],
+          median: values[Math.floor(0.50 * values.length)],
+          q3: values[Math.floor(0.75 * values.length)]
+        };
+      });
+
       if (isMountedRef.current) {
         setResult({
           ...result,
           parameters: paramsSnapshot,
           priorMeans: priorMeansSnapshot,
-          credibleIntervals
+          credibleIntervals,
+          percentiles
         });
       }
 
@@ -305,14 +316,24 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
       const mean = clampPositive(result.posteriorMean[i], 1e-12);
       const lower = clampPositive(result.credibleIntervals[i]?.lower, mean);
       const upper = clampPositive(result.credibleIntervals[i]?.upper, mean);
+      const q1 = clampPositive(result.percentiles[i]?.q1, mean);
+      const q3 = clampPositive(result.percentiles[i]?.q3, mean);
+      const median = clampPositive(result.percentiles[i]?.median, mean);
 
       return {
         name,
         mean,
+        median,
         lower,
         upper,
-        // Recharts ErrorBar supports [low, high] bounds.
+        q1,
+        q3,
+        // Bar as IQR Box: [q1, q3]
+        box: [q1, q3] as [number, number],
+        // Whisker range for ErrorBar: [lower, upper]
         ci: [lower, upper] as [number, number],
+        // For median scatter
+        medianData: [{ name, median }],
         prior: result.priorMeans[i] ?? 0
       };
     });
@@ -603,32 +624,85 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               {/* Posterior Visualization */}
               <Card className="space-y-4">
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                  Posterior Estimates with 95% Credible Intervals
+                  Posterior Estimates (Boxplot: Median, IQR, 95% CI)
                 </h3>
 
-                <ResponsiveContainer width="100%" height={300}>
-                  <BarChart data={posteriorChartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
+                <ResponsiveContainer width="100%" height={400}>
+                  <ComposedChart data={posteriorChartData} margin={{ top: 20, right: 30, left: 80, bottom: 60 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.1)" vertical={false} />
                     <XAxis
                       dataKey="name"
                       angle={-45}
                       textAnchor="end"
                       height={80}
-                      tick={{ fontSize: 11 }}
+                      tick={{ fontSize: 11, fill: '#1e293b' }}
+                      tickLine={{ stroke: '#1e293b' }}
+                      axisLine={{ stroke: '#1e293b' }}
+                      label={{ value: 'Parameter', position: 'bottom', offset: 5, fill: '#1e293b', fontSize: 13, fontWeight: 'bold' }}
                     />
                     <YAxis
                       scale="log"
                       domain={['auto', 'auto']}
+                      padding={{ top: 30, bottom: 30 }}
                       tickFormatter={(v) => v.toExponential(1)}
+                      tick={{ fontSize: 11, fill: '#1e293b' }}
+                      tickLine={{ stroke: '#1e293b' }}
+                      axisLine={{ stroke: '#1e293b' }}
+                      label={{
+                        value: 'Estimated Value',
+                        angle: -90,
+                        position: 'insideLeft',
+                        offset: -55,
+                        fill: '#1e293b',
+                        fontSize: 13,
+                        fontWeight: 'bold',
+                        style: { textAnchor: 'middle' }
+                      }}
                     />
                     <Tooltip
-                      formatter={(value: number) => formatNumber(value)}
-                      labelFormatter={(label) => `Parameter: ${label}`}
+                      formatter={(value: any, name: string) => {
+                        if (name === 'IQR' && Array.isArray(value)) {
+                          return [`${formatNumber(value[0])} - ${formatNumber(value[1])}`, 'IQR'];
+                        }
+                        if (name === '95% CI' && Array.isArray(value)) {
+                          return [`${formatNumber(value[0])} - ${formatNumber(value[1])}`, '95% CI'];
+                        }
+                        if (name === 'Median' || name === 'Posterior Mean') {
+                          return [formatNumber(value), name];
+                        }
+                        return null; // Hide other entries
+                      }}
+                      itemSorter={(item) => (item.name === 'Posterior Mean' ? -1 : 1)}
                     />
-                    <Bar dataKey="mean" fill={CHART_COLORS[0]} name="Posterior Mean">
-                      <ErrorBar dataKey="ci" width={4} strokeWidth={2} stroke={CHART_COLORS[1]} />
+                    <Bar
+                      dataKey="box"
+                      fill="#64748b"
+                      name="IQR"
+                      barSize={40}
+                    >
+                      <ErrorBar
+                        dataKey="ci"
+                        width={10}
+                        strokeWidth={2}
+                        stroke="#0f172a"
+                        name="95% CI"
+                      />
                     </Bar>
-                  </BarChart>
+                    <Scatter
+                      dataKey="median"
+                      fill="#ffffff"
+                      shape="diamond"
+                      name="Median"
+                      stroke="#0f172a"
+                      strokeWidth={1}
+                    />
+                    <Scatter
+                      dataKey="mean"
+                      fill="#ef4444"
+                      shape="circle"
+                      name="Posterior Mean"
+                    />
+                  </ComposedChart>
                 </ResponsiveContainer>
               </Card>
 
@@ -639,11 +713,22 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                     ELBO Convergence
                   </h3>
 
-                  <ResponsiveContainer width="100%" height={200}>
-                    <LineChart data={elboChartData} margin={{ top: 5, right: 20, left: 10, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.3)" />
-                      <XAxis dataKey="iteration" label={{ value: 'Iteration', position: 'insideBottom', offset: -5 }} />
-                      <YAxis label={{ value: 'ELBO', angle: -90, position: 'insideLeft' }} />
+                  <ResponsiveContainer width="100%" height={220}>
+                    <LineChart data={elboChartData} margin={{ top: 10, right: 30, left: 10, bottom: 40 }}>
+                      <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.15)" vertical={false} />
+                      <XAxis
+                        dataKey="iteration"
+                        tick={{ fontSize: 11, fill: 'black' }}
+                        tickLine={{ stroke: 'black' }}
+                        axisLine={{ stroke: 'black' }}
+                        label={{ value: 'Iteration', position: 'bottom', offset: 12, fill: '#334155', fontSize: 13, fontWeight: 'bold' }}
+                      />
+                      <YAxis
+                        tick={{ fontSize: 11, fill: 'black' }}
+                        tickLine={{ stroke: 'black' }}
+                        axisLine={{ stroke: 'black' }}
+                        label={{ value: 'ELBO', angle: -90, position: 'insideLeft', offset: 10, fill: '#334155', fontSize: 13, fontWeight: 'bold' }}
+                      />
                       <Tooltip />
                       <Line type="monotone" dataKey="elbo" stroke={CHART_COLORS[2]} strokeWidth={1.5} dot={false} />
                     </LineChart>

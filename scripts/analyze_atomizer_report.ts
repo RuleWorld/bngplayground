@@ -1,156 +1,51 @@
-
 import * as fs from 'fs';
-import * as path from 'path';
 
-// Copied from constants.ts
-const BNG2_EXCLUDED_MODELS = new Set([
-    'Dolan_2015',
-    'Erdem_2021',
-    'Faeder_2003',
-    'fceri_2003',
-    'Dushek_2014',
-    'Jung_2017',
-    'Mertins_2023',
-    'notch',
-    'toy2',
-    'Blinov_egfr',
-    'Blinov_ran',
-    'Rule_based_Ran_transport',
-    'Rule_based_Ran_transport_draft',
-    'Rule_based_egfr_compart',
-    'polymer',
-    'polymer_draft',
-    'cheemalavagu_2024',
-    'mallela_2022__alabama',
-    'pybng__degranulation_model',
-    'pybng__egfr_ode',
-    'Kozer_2013',
-    'Kozer_2014',
-    'fceri_fyn_lig',
-    'fceri_trimer',
-    'fceri_fyn',
-    'fceri_gamma2_asym',
-    'fceri_gamma2',
-    'fceri_ji_red',
-    'fceri_lyn_745',
-    'hybrid_test_hpp',
-    'test_sbml_flat_SBML',
-    'test_sbml_structured_SBML',
-    'wofsy-goldstein',
-    'ANx',
-    'deleteMolecules',
-    'empty_compartments_block',
-    'gene_expr_func',
-    'gene_expr_simple',
-    'gene_expr',
-    'hybrid_test',
-    'isingspin_energy',
-    'isingspin_localfcn',
-    'isomerization',
-    'partial_dynamical_scaling',
-    'simple_nfsim',
-    'statfactor',
-    'test_ANG_parscan_synthesis_simple',
-    'test_ANG_SSA_synthesis_simple',
-    'test_assignment',
-    'test_compartment_XML',
-    'test_continue',
-    'test_paramname',
-    'test_partial_dynamical_scaling',
-    'test_sat_cont',
-    'test_sbml_flat',
-    'test_sbml_structured',
-    'test_setconc',
-    'test_tfun',
-    'test_write_sbml_multi',
-    // Dependencies or other exclusions
-    'Cheemalavagu_JAK_STAT',
-    'cBNGL_simple',
-    'localfunc'
-]);
+const data = JSON.parse(fs.readFileSync('public_atomizer_report.json', 'utf8'));
 
-const NFSIM_MODELS = new Set([
-    'Blinov_ran',
-    'McMillan_2021',
-    'Blinov_egfr',
-    'Ligon_2014',
-    'Model_ZAP',
-    'polymer',
-    'polymer_draft',
-    'BLBR',
-]);
+const failed = data.filter((m: any) => m.status === 'FAIL').sort((a: any, b: any) => b.mae - a.mae);
+const passed = data.filter((m: any) => m.status === 'PASS');
 
-const EXCLUSION_PATTERNS = [
-    /_ssa/i,    // SSA models
-    /_nf/i,     // NFsim models usually
-    /nfsim/i,
-    /stoch/i,   // Stochastic
-];
+console.log('=== ATOMIZER VERIFICATION SUMMARY ===\n');
+console.log(`Total Models: ${data.length}`);
+console.log(`Passed: ${passed.length}`);
+console.log(`Failed: ${failed.length}`);
+console.log(`Pass Rate: ${((passed.length / data.length) * 100).toFixed(1)}%\n`);
 
-interface ModelResult {
-    model: string;
-    status: 'PASS' | 'FAIL' | 'ERROR';
-    mae: number;
-    error?: string;
+console.log('=== FAILED MODELS (sorted by MAE) ===\n');
+
+// Categorize by MAE magnitude
+const catastrophic = failed.filter((m: any) => m.mae >= 1e10);
+const severe = failed.filter((m: any) => m.mae >= 1e3 && m.mae < 1e10);
+const moderate = failed.filter((m: any) => m.mae >= 10 && m.mae < 1e3);
+const minor = failed.filter((m: any) => m.mae < 10);
+
+if (catastrophic.length > 0) {
+  console.log(`CATASTROPHIC (MAE >= 1e10): ${catastrophic.length} models`);
+  catastrophic.forEach((m: any) => {
+    console.log(`  ${m.model.padEnd(35)} MAE: ${m.mae.toExponential(2)}`);
+  });
+  console.log();
 }
 
-function classifyFailure(result: ModelResult): string {
-    if (result.status === 'PASS') return 'PASS';
-
-    // Check specific error messages
-    const err = result.error || '';
-    if (err.includes('Did not find expected file')) return 'MISSING_FILE';
-    if (err.includes('ABORT:')) return 'BNG_ABORT';
-    if (err.includes('CVODE')) return 'CVODE_ERROR';
-    if (err.includes('Syntax error')) return 'SYNTAX_ERROR';
-
-    return 'UNKNOWN_ERROR';
+if (severe.length > 0) {
+  console.log(`SEVERE (1e3 <= MAE < 1e10): ${severe.length} models`);
+  severe.forEach((m: any) => {
+    console.log(`  ${m.model.padEnd(35)} MAE: ${m.mae.toExponential(2)}`);
+  });
+  console.log();
 }
 
-function main() {
-    const reportPath = 'public_atomizer_report.json';
-    if (!fs.existsSync(reportPath)) {
-        console.error('Report file not found.');
-        return;
-    }
-
-    const results: ModelResult[] = JSON.parse(fs.readFileSync(reportPath, 'utf8'));
-
-    console.log(`Total models processed: ${results.length}`);
-
-    const realFailures = results.filter(r => {
-        // Skip Passes
-        if (r.status === 'PASS') return false;
-
-        // Skip Known Exclusions
-        if (BNG2_EXCLUDED_MODELS.has(r.model)) return false;
-        if (NFSIM_MODELS.has(r.model)) return false;
-
-        // Skip Patterns
-        if (EXCLUSION_PATTERNS.some(p => p.test(r.model))) return false;
-
-        // Skip Missing Dependencies (File not found often implies extra file needed)
-        // Actually, let's keep MISSING_FILE for now to verify if it's a valid missing dependency or broken path.
-
-        // Special manual skips based on user request (e.g. "need an extra file")
-        // If error message clearly says missing external file (e.g. .dat, .csv not generated by us)
-        if (r.error && (r.error.includes('.dat') || r.error.includes('.csv'))) {
-            // Check if it's looking for a read_dat file
-            // Rough heuristic
-        }
-
-        return true;
-    });
-
-    console.log(`Real Failures identified: ${realFailures.length}`);
-    console.log('---------------------------------------------------');
-
-    for (const fail of realFailures) {
-        console.log(`[${fail.model}] Status: ${fail.status}`);
-        console.log(`   Type: ${classifyFailure(fail)}`);
-        console.log(`   Error: ${fail.error?.split('\n')[0]}`); // First line only
-        console.log('---------------------------------------------------');
-    }
+if (moderate.length > 0) {
+  console.log(`MODERATE (10 <= MAE < 1e3): ${moderate.length} models`);
+  moderate.forEach((m: any) => {
+    console.log(`  ${m.model.padEnd(35)} MAE: ${m.mae.toFixed(2)}`);
+  });
+  console.log();
 }
 
-main();
+if (minor.length > 0) {
+  console.log(`MINOR (MAE < 10): ${minor.length} models`);
+  minor.forEach((m: any) => {
+    console.log(`  ${m.model.padEnd(35)} MAE: ${m.mae.toFixed(4)}`);
+  });
+}

@@ -6,6 +6,7 @@ import { BioSentence } from '../services/grammar/types';
 import { CheatsheetModal } from './CheatsheetModal';
 import { Button } from './ui/Button';
 import { BNGLModel } from '../types';
+import { HelpSection } from './HelpSection';
 
 interface DesignerPanelProps {
   text: string;
@@ -109,6 +110,19 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({ text, onTextChange
             ⚡ Sync & Visualize
           </Button>
         </div>
+      </div>
+
+      <div className="px-4 pt-4">
+        <HelpSection
+          title="Designer Mode"
+          description="Build biological models by describing them in structured English. The tool automatically translates your sentences into precise BNGL code."
+          features={[
+            "Natural Language Input (English)",
+            "Real-time BNGL code generation",
+            "Check logic with the Parser feedback",
+            "Example 'Cheatsheet' for quick start"
+          ]}
+        />
       </div>
 
       <div className="flex-1 flex flex-col p-4 gap-4 overflow-hidden">

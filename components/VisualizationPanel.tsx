@@ -21,6 +21,7 @@ import { JupyterExportTab } from './tabs/JupyterExportTab';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { EmptyState } from './ui/EmptyState';
+import { HelpSection } from './HelpSection';
 
 
 interface VisualizationPanelProps {
@@ -51,18 +52,6 @@ const TabButton: React.FC<{
   </button>
 );
 
-const TabHeader: React.FC<{ title: string; description?: string }> = ({ title, description }) => (
-  <div className="mb-3 flex flex-col gap-1">
-    <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-200 tracking-wide">
-      {title}
-    </h4>
-    {description ? (
-      <p className="text-xs text-slate-500 dark:text-slate-400">
-        {description}
-      </p>
-    ) : null}
-  </div>
-);
 
 export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   model,
@@ -261,12 +250,19 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
 
       {/* Content Panels */}
-      <div className={`flex-1 min-h-0 overflow-y-auto ${activeTab === 10 ? '' : 'p-4'}`}>
+      <div className="flex-1 min-h-0 overflow-y-auto p-4">
         {activeTab === 0 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Time Courses"
-              description="Plot observables vs time"
+              description="Visualize how your model's observables (species or groups of species) evolve over simulated time. This is the primary way to observe the dynamic behavior of your biological system."
+              features={[
+                "Real-time plotting of observables",
+                "Custom mathematical expressions",
+                "Toggle visibility of specific trajectories",
+                "Export data as CSV or JSON"
+              ]}
+              plotDescription="The chart shows concentration (or molecular count) on the Y-axis vs. simulated time on the X-axis. Higher peaks represent higher abundance of that molecule at that specific time."
             />
             <div className="flex-1 min-h-0">
               <ResultsChart
@@ -293,9 +289,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 1 && networkViewMode === 'regulatory' && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Regulatory Graph"
-              description="Visual representation of rule influences"
+              description="A rule-level view of how reactions influence each other. This is different from a standard species-interaction network; it shows which rules enable (activate) or disable (inhibit) other rules."
+              features={[
+                "Activation (green +) and Inhibition (red -) edges",
+                "Rule-to-observable mapping",
+                "Interactive node dragging and zooming",
+                "Rule classification by reaction type"
+              ]}
+              plotDescription="Green edges with '+' symbols represent activation (one rule produces a substrate for another). Red edges with '-' symbols represent inhibition (one rule consumes a substrate needed by another)."
             />
             <RegulatoryTab
               model={model}
@@ -307,9 +310,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 1 && networkViewMode === 'contact' && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Contact Map"
-              description="Visualization of molecule interactions"
+              description="The Contact Map provides a global view of the physical structure of your model. It shows every molecule type and all possible bonds between their components."
+              features={[
+                "Visualizes molecule site-map",
+                "Shows potential binding interactions",
+                "Highlights internal state changes",
+                "Simplifies complex multi-state systems"
+              ]}
+              plotDescription="Shapes represent molecules, and internal port-dots represent sites. Lines between sites indicate that those two molecules can physically bind to each other."
             />
             <ContactMapTab model={model} onSelectRule={setSelectedRuleId} />
           </div>
@@ -317,9 +327,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 1 && networkViewMode === 'dynamics' && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Dynamics Graph"
-              description="Dynamic causal network from SSA simulation events. Nodes pulse when rules fire."
+              description="The Dynamics Graph is a live causal network generated from individual simulation events. It shows the real-time 'pulse' of your model as rules fire and trigger subsequent reactions."
+              features={[
+                "Live causal event tracking",
+                "Stochastic simulation visualizer",
+                "Pulse animations on rule firing",
+                "Causal chain analysis"
+              ]}
+              plotDescription="Purple circles represent rules. In the live view, nodes pulse when they fire. Links indicate causal flow—one rule enabling another."
             />
             <div className="min-h-[800px] h-[70vh] relative border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden bg-slate-50 dark:bg-slate-900">
               {results?.ssaInfluence ? (
@@ -353,9 +370,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 1 && networkViewMode === 'rules' && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Rules Inspector"
-              description="Browse rules and their atomic impacts"
+              description="Follow specific site-level changes (atoms) through the simulation. This tool identifies exactly which bonds or states are modified by each rule and tracks their abundance over time."
+              features={[
+                "Track site-specific trajectories",
+                "Classify rule impacts (bind/state/unbind)",
+                "Identify producing/consuming rules",
+                "Linked observable analysis"
+              ]}
+              plotDescription="The chart tracks observables linked to specific sites ('atoms'). Emerald badges show production, Sky badges show modifications, and Amber badges show consumption."
             />
             <RulesTab
               model={model}
@@ -369,9 +393,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 2 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Parameter Scan"
-              description="Explore how observables change with parameter values"
+              description="Parameter scanning allows you to run multiple simulations automatically while varying a specific value. This is used to create dose-response curves and sensitivity maps."
+              features={[
+                "Scan multiple parameters",
+                "Linear and Logarithmic scales",
+                "Dose-response curve generation",
+                "End-point vs. Time-course scans"
+              ]}
+              plotDescription="The X-axis represents the value of the parameter being scanned (e.g., drug concentration), and the Y-axis shows the resulting state of the system."
             />
             <ParameterScanTab model={model} />
           </div>
@@ -379,9 +410,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 3 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Steady State"
-              description="Analyze steady-state behavior and convergence"
+              description="Find the long-term equilibrium where concentrations no longer change over time. This is useful for metabolic modeling and signaling homeostasis."
+              features={[
+                "Adaptive ODE-based equilibration",
+                "Numerical convergence testing",
+                "Relative abundance bar chart",
+                "Export steady-state concentrations"
+              ]}
+              plotDescription="A vertical bar chart showing the final equilibrated concentration of every species. Use this to identify relative abundance in the steady-state network."
             />
             <SteadyStateTab
               model={model}
@@ -395,9 +433,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 4 && (
           <div className="h-full flex flex-col">
-            <TabHeader
-              title="Identifiability (FIM)"
-              description="Parameter sensitivity analysis"
+            <HelpSection
+              title="Sensitivity (FIM)"
+              description="Perform Global Identifiability Analysis using the Fisher Information Matrix. Determine if your parameters can be uniquely identified from your data."
+              features={[
+                "Eigenvalue spectrum analysis",
+                "Parameter loading vectors",
+                "Variance Inflation Factors (VIF)",
+                "Correlation heatmaps"
+              ]}
+              plotDescription="The Eigenvalue spectrum shows which directions in parameter space are well-determined. Loading bars for each eigenvector identify which specific parameters contribute to uncertainty."
             />
             <FIMTab model={model} />
           </div>
@@ -405,9 +450,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 5 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Parameter Estimation"
-              description="Fit parameters to experimental data"
+              description="Infer the parameter distributions that best explain your experimental data. This tool uses Variational Inference (VI) to estimate both the optimal value and the statistical uncertainty (Bayesian posterior) for each parameter."
+              features={[
+                "Bayesian Variational Inference",
+                "Posteriors with 95% Credible Intervals",
+                "ELBO-based convergence tracking",
+                "Direct CSV experimental data import"
+              ]}
+              plotDescription="The 'ELBO Convergence' plot tracks the Evidence Lower Bound; as it increases and stabilizes, the model fit improves. The 'Posterior Estimates' chart displays the final estimated values along with their 95% uncertainty bars."
             />
             <ParameterEstimationTab model={model} />
           </div>
@@ -415,9 +467,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 6 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Flux Analysis"
-              description="Visualize reaction flux contributions"
+              description="Quantify the dynamic flow of material through each reaction. Identify which reactions are the main 'drivers' of the system at any given time point."
+              features={[
+                "Production vs. Consumption breakdown",
+                "Time-point specific flux vectors",
+                "Top-N reaction filtering",
+                "Species-specific flux focus"
+              ]}
+              plotDescription="Green bars represent species production; Red bars represent consumption. The length of the bar indicates the magnitude of the flux (rate) at the selected time point."
             />
             <FluxAnalysisTab model={model} results={results} />
           </div>
@@ -425,9 +484,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 7 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Verification"
-              description="Compare output against validation baselines"
+              description="Verify model behavior by defining mathematical constraints. Ensure your system respects biological limits and physical laws like mass conservation throughout the simulation."
+              features={[
+                "Define conservation laws",
+                "Mathematical constraint checking",
+                "Time-point pass/fail details",
+                "Automated model verification"
+              ]}
+              plotDescription="Constraints are evaluated at every time point. If a condition (like A + B == target) is violated anywhere, the specific failure time and reason will be highlighted."
             />
             <VerificationTab model={model} results={results} />
           </div>
@@ -435,9 +501,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 8 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="What-If Compare"
-              description="See how parameter changes affect simulation results"
+              description="What-If comparison allows you to see the impact of any change side-by-side. Compare different genotypes, drug treatments, or initial concentrations in one view."
+              features={[
+                "Side-by-side comparison",
+                "Snapshots of simulation runs",
+                "Differential analysis",
+                "Multi-state overlay"
+              ]}
+              plotDescription="Baseline results are shown as solid lines, while your modified 'What-If' results appear as dashed lines. This makes it easy to spot deviations."
             />
             <ComparisonPanel model={model} baseResults={results} />
           </div>
@@ -445,9 +518,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 9 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Rule Cartoons"
-              description="Compact visualization of rules and their effects"
+              description="Visualize chemical reaction rules using standardized biological symbols. This view simplifies complex rules into intuitive 'cartoons' showing molecule binding, state changes, and transformations."
+              features={[
+                "Molecule-level symbol representation",
+                "Visual binding/unbinding cues",
+                "State-change highlight (🌀)",
+                "Context vs. reactant distinction"
+              ]}
+              plotDescription="Reactant molecules (involved in the change) are shown in color, while context molecules (required but unchanged) are in gray. Icons like 🔗 (bind) and 🌀 (state) denote specific site-level actions."
             />
             <CartoonTab model={model} selectedRuleId={selectedRuleId} onSelectRule={setSelectedRuleId} />
           </div>
@@ -455,12 +535,17 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 10 && (
           <div className="h-full flex flex-col">
-            <div className="px-4 pt-4">
-              <TabHeader
-                title="Model Explorer"
-                description="Browse curated example models and load presets"
-              />
-            </div>
+            <HelpSection
+              title="Model Explorer"
+              description="Browse nearly 200 published biological models. Use them as templates for your own research or as educational examples."
+              features={[
+                "Semantic Search by author or biology",
+                "UMAP-based similarity map",
+                "One-click loading and comparison",
+                "Curated BNGL library"
+              ]}
+              plotDescription="The similarity map (UMAP) organizes models by their biological motifs. Clusters of models often share similar signaling mechanisms or reaction structures."
+            />
             <ModelExplorerTab onLoadModel={(code, name, id) => {
               console.log("Model Explorer: request to load model", { name, id });
               // TODO: Implement model loading via custom event or prop callback
@@ -470,9 +555,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 11 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Trajectory Explorer"
-              description="Inspect trajectories and compare simulation runs"
+              description="In stochastic systems (SSA), every run is slightly different. The Trajectory Explorer allows you to inspect multiple individual runs to understand biological noise and variance."
+              features={[
+                "Multi-run stochastic analysis",
+                "Variance and noise calculation",
+                "Outlier detection",
+                "Probability distribution views"
+              ]}
+              plotDescription="The UMAP map on the left shows how different stochastic runs cluster together. Selecting a run displays its specific observable trajectory on the right."
             />
             <TrajectoryExplorerTab model={model} />
           </div>
@@ -480,9 +572,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 12 && (
           <div className="h-full flex flex-col">
-            <TabHeader
+            <HelpSection
               title="Jupyter Export"
-              description="Export analysis notebook using pybionetgen"
+              description="Transition from the web UI to professional data science. Export your entire session as a Python-based Jupyter Notebook for reproducibility and custom analysis."
+              features={[
+                "Standard .ipynb format",
+                "Ready-to-run Python code",
+                "Integrated with PyBioNetGen",
+                "Publication-ready plotting code"
+              ]}
+              plotDescription="The preview window shows the exact code that will be generated. Once exported, you can run this in VS Code, Google Colab, or locally."
             />
             <JupyterExportTab model={model} bnglCode={bnglCode} />
           </div>

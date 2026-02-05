@@ -121,13 +121,25 @@ function compareGDAT(refPath: string, testPath: string): { passed: boolean, mae:
     }
 
     let maxError = 0;
+    let worstHeader = '';
     for (let i = 0; i < ref.data.length; i++) {
         for (const header of commonHeaders) {
             const refIdx = ref.headers.indexOf(header);
             const testIdx = test.headers.indexOf(header);
             const diff = Math.abs(ref.data[i][refIdx] - test.data[i][testIdx]);
-            if (!Number.isNaN(diff) && diff > maxError) maxError = diff;
+            if (!Number.isNaN(diff) && diff > maxError) {
+                maxError = diff;
+                worstHeader = header;
+            }
         }
+    }
+
+    if (maxError > TOLERANCE) {
+        console.log(`  [Worst Column] ${worstHeader} Error: ${maxError.toExponential(2)}`);
+        const refIdx = ref.headers.indexOf(worstHeader);
+        const testIdx = test.headers.indexOf(worstHeader);
+        const lastRow = ref.data.length - 1;
+        console.log(`  [Sample @ t=${ref.data[lastRow][0]}] Ref: ${ref.data[lastRow][refIdx].toExponential(2)}, Test: ${test.data[lastRow][testIdx].toExponential(2)}`);
     }
 
     return {
