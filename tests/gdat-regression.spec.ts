@@ -1,11 +1,11 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { mkdtempSync, rmSync, copyFileSync, existsSync, readdirSync, readFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, copyFileSync, existsSync, readdirSync, readFileSync, mkdirSync } from 'node:fs';
 import { join, dirname, resolve, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../scripts/bngDefaults.js';
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD, DEFAULT_PERL5LIB, DEFAULT_BNG_BIN } from '../scripts/bngDefaults.js';
 
 const ABS_TOL = 1e-6;
 const REL_TOL = 1e-4;
@@ -74,10 +74,24 @@ function runBioNetGen(bnglPath: string) {
   const modelCopy = join(tempDir, modelName);
   copyFileSync(bnglPath, modelCopy);
 
-  const result = spawnSync(PERL_CMD, [BNG2_PATH, modelName], {
+  // Create bin directory and copy run_network executable
+  const binDir = join(tempDir, 'bin');
+  mkdirSync(binDir, { recursive: true });
+  const runNetworkSource = join(DEFAULT_BNG_BIN, 'run_network.exe');
+  const runNetworkDest = join(binDir, 'run_network.exe');
+  if (existsSync(runNetworkSource)) {
+    copyFileSync(runNetworkSource, runNetworkDest);
+  }
+
+  const perl5lib = process.env.PERL5LIB || DEFAULT_PERL5LIB;
+  const result = spawnSync(PERL_CMD, ['-I', perl5lib, BNG2_PATH, modelName], {
     cwd: tempDir,
     encoding: 'utf-8',
-    stdio: ['ignore', 'pipe', 'pipe']
+    stdio: ['ignore', 'pipe', 'pipe'],
+    env: {
+      ...process.env,
+      PATH: `${DEFAULT_BNG_BIN};${process.env.PATH}`
+    }
   });
 
   if (result.status !== 0) {

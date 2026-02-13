@@ -14,6 +14,7 @@ const NATIVE_NFSIM = resolve(projectRoot, 'src/wasm/nfsim/nfsim-src/build_native
 const BUNDLED_NFSIM = resolve(projectRoot, 'bionetgen_python/bng-win/bin/NFsim.exe');
 
 const NFSIM_PATH = existsSync(NATIVE_NFSIM) ? NATIVE_NFSIM : BUNDLED_NFSIM;
+const NFSIM_LOG_PATH = resolve(projectRoot, 'artifacts/logs/nfsim_debug.log');
 
 function printHelp() {
   console.log(`Generate GDAT baselines with BioNetGen via Perl.
@@ -86,6 +87,26 @@ function ensureBng2Exists(bng2Path) {
   }
 }
 
+
+function getBnglFilesRecursive(dir) {
+  let results = [];
+  try {
+    const list = readdirSync(dir);
+    for (const file of list) {
+      const filePath = resolve(dir, file);
+      const stat = statSync(filePath);
+      if (stat && stat.isDirectory()) {
+        results = results.concat(getBnglFilesRecursive(filePath));
+      } else if (file.toLowerCase().endsWith('.bngl')) {
+        results.push(filePath);
+      }
+    }
+  } catch (e) {
+    console.warn(`Error scanning directory ${dir}:`, e.message);
+  }
+  return results;
+}
+
 function collectBnGLTargets(targets) {
   const files = new Set();
   targets.forEach((target) => {
@@ -98,11 +119,8 @@ function collectBnGLTargets(targets) {
     }
 
     if (stat.isDirectory()) {
-      readdirSync(target).forEach((entry) => {
-        if (entry.toLowerCase().endsWith('.bngl')) {
-          files.add(resolve(target, entry));
-        }
-      });
+      const recursiveFiles = getBnglFilesRecursive(target);
+      recursiveFiles.forEach(f => files.add(f));
     } else if (stat.isFile()) {
       if (target.toLowerCase().endsWith('.bngl')) {
         files.add(resolve(target));
@@ -181,7 +199,12 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose, seed) {
 
   const result = spawnSync(perlCmd, [bng2Path, modelName], {
     cwd: tempDir,
-    env: { ...process.env, NFSIM_EXEC: NFSIM_PATH },
+    env: { 
+      ...process.env, 
+      NFSIM_EXEC: NFSIM_PATH,
+      PERL5LIB: 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\Perl2',
+      BNGPATH: 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win'
+    },
     stdio: ['ignore', 'pipe', 'pipe']
   });
 
@@ -197,9 +220,8 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose, seed) {
       console.error(stderr.trim());
     }
     // Deep log for NFsim debugging
-    const logFile = resolve(projectRoot, 'bng_test_output/nfsim_debug.log');
-    mkdirSync(dirname(logFile), { recursive: true });
-    appendFileSync(logFile, `--- FAILED: ${modelName} ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
+    mkdirSync(dirname(NFSIM_LOG_PATH), { recursive: true });
+    appendFileSync(NFSIM_LOG_PATH, `--- FAILED: ${modelName} ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
 
     if (!process.env.DEBUG) rmSync(tempDir, { recursive: true, force: true });
     else console.log(`  [DEBUG] Preserved temp dir: ${tempDir}`);
@@ -214,13 +236,96 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose, seed) {
 
   if (gdatFiles.length === 0) {
     // Log for debugging empty GDAT output
-    const logFile = resolve(projectRoot, 'bng_test_output/nfsim_debug.log');
-    mkdirSync(dirname(logFile), { recursive: true });
-    appendFileSync(logFile, `--- EMPTY GDAT: ${modelName} (status: ${result.status}) ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
+    mkdirSync(dirname(NFSIM_LOG_PATH), { recursive: true });
+    appendFileSync(NFSIM_LOG_PATH, `--- EMPTY GDAT: ${modelName} (status: ${result.status}) ---\nSTDOUT:\n${stdout}\nSTDERR:\n${stderr}\n\n`);
 
     if (!process.env.DEBUG) rmSync(tempDir, { recursive: true, force: true });
     else console.log(`  [DEBUG] Preserved temp dir: ${tempDir}`);
     throw new Error(`No GDAT produced for ${modelName}. See bng_test_output/nfsim_debug.log for details.`);
+  }
+
+  // Helper to stitch time in GDAT (handle resets)
+  function stitchGdatFile(filePath) {
+    try {
+      const content = readFileSync(filePath, 'utf8');
+      const lines = content.split(/\r?\n/);
+      if (lines.length < 2) return;
+
+      const newLines = [];
+      let headerIndices = null; // Map of colName -> index
+      let timeIdx = -1;
+      let prevTime = -Infinity;
+      let timeOffset = 0;
+      let lastOutputTime = -Infinity;
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+        if (!line) continue;
+
+        if (line.startsWith('#')) {
+          // If multiple headers (concatenated runs), we typically only want the first one,
+          // OR we accept them but don't reset offset?
+          // BNG2 GDAT usually has one header at top. 
+          // If we see another header later, it might be a restart?
+          if (newLines.length === 0) {
+            newLines.push(line);
+            const cols = line.replace(/^#\s*/, '').split(/\s+/);
+            timeIdx = cols.findIndex(c => c.toLowerCase() === 'time');
+          }
+          continue;
+        }
+
+        if (timeIdx === -1) {
+          // fallback: assume first column is time
+          timeIdx = 0;
+        }
+
+        const cols = line.split(/\s+/);
+        // Clean columns to handle empty strings from split
+        // Actually split(/\s+/) might return empty string at start if leading space
+        // " 1.0  2.0" -> ["", "1.0", "2.0"]
+        const dataCols = cols.filter(c => c.length > 0);
+
+        if (dataCols.length <= timeIdx) {
+          // bad line
+          continue;
+        }
+
+        let rawTime = parseFloat(dataCols[timeIdx]);
+        if (isNaN(rawTime)) continue;
+
+        // Detection of reset
+        if (rawTime < prevTime) {
+          // Time went backward. Assume a new phase starting at 0 or t_start.
+          // We assume continuity: new phase starts where last ended.
+          // So we simply add offset such that newTime >= lastOutputTime
+          timeOffset = lastOutputTime - rawTime;
+        }
+
+        let stitchedTime = rawTime + timeOffset;
+
+        // Avoid slight backward steps due to precision if rawTime was 0 and we added offset
+        if (stitchedTime < lastOutputTime) {
+          // This shouldn't happen if we calculated offset = lastOutputTime - rawTime
+          // But just in case
+          stitchedTime = lastOutputTime;
+        }
+
+        prevTime = rawTime;
+        lastOutputTime = stitchedTime;
+
+        // Replace time column
+        dataCols[timeIdx] = stitchedTime.toExponential(12); // Maintain precision
+        newLines.push(' ' + dataCols.join('  '));
+      }
+
+      writeFileSync(filePath, newLines.join('\n') + '\n', 'utf8');
+      if (timeOffset > 0) {
+        console.log(`  Fixed time discontinuity in ${basename(filePath)} (offset: ${timeOffset})`);
+      }
+    } catch (e) {
+      console.warn(`  Failed to stitch GDAT ${basename(filePath)}: ${e.message}`);
+    }
   }
 
   // Copy all produced GDAT files to the output directory. Preserve their original
@@ -231,17 +336,17 @@ function runBngModel(perlCmd, bng2Path, sourcePath, outDir, verbose, seed) {
     const destName = gf; // preserve original filename
     const destPath = join(outDir, destName);
 
+    // Always overwrite to prevent data duplication from repeated runs.
+    // Multi-phase models produce separate files (model.gdat, model_2.gdat)
+    // which are each copied individually by their original filenames.
     if (existsSync(destPath)) {
-      // If a file with this name already exists, append the new data but skip
-      // header/comment lines (those starting with '#') to avoid duplicate headers.
-      const content = readFileSync(sourceGdat, 'utf8').split(/\r?\n/).filter(Boolean);
-      const toAppend = content.filter(line => !line.startsWith('#')).join('\n') + '\n';
-      appendFileSync(destPath, toAppend);
-      console.log(`  ✔ [APPEND] ${relative(projectRoot, sourcePath)} -> ${relative(projectRoot, destPath)}`);
-    } else {
-      copyFileSync(sourceGdat, destPath);
-      console.log(`  ✔ [CREATE] ${relative(projectRoot, sourcePath)} -> ${relative(projectRoot, destPath)}`);
+      console.log(`  ⟳ [OVERWRITE] ${relative(projectRoot, destPath)}`);
     }
+    copyFileSync(sourceGdat, destPath);
+    console.log(`  ✔ ${relative(projectRoot, sourcePath)} -> ${relative(projectRoot, destPath)}`);
+    
+    // Stitch AFTER copying/appending to ensure destination is fixed
+    stitchGdatFile(destPath);
 
     copiedPaths.push(destPath);
   }
@@ -255,6 +360,10 @@ function main() {
   const args = parseArgs(process.argv.slice(2));
   ensureBng2Exists(args.bng2);
   mkdirSync(args.outDir, { recursive: true });
+
+  // Wipe NFsim debug log at start of run
+  mkdirSync(dirname(NFSIM_LOG_PATH), { recursive: true });
+  writeFileSync(NFSIM_LOG_PATH, `--- NFsim Debug Log Started at ${new Date().toISOString()} ---\n\n`);
 
   const files = collectBnGLTargets(args.targets);
 

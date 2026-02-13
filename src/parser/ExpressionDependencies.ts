@@ -1,9 +1,9 @@
 
 import { CharStreams, CommonTokenStream } from 'antlr4ts';
-import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor';
-import { BNGLexer } from './generated/BNGLexer';
-import { BNGParser, Arg_nameContext, Observable_refContext, Function_callContext } from './generated/BNGParser';
-import { BNGParserVisitor } from './generated/BNGParserVisitor';
+import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
+import { BNGLexer } from './generated/BNGLexer.ts';
+import { BNGParser, Arg_nameContext, Observable_refContext, Function_callContext } from './generated/BNGParser.ts';
+import type { BNGParserVisitor } from './generated/BNGParserVisitor.ts';
 
 export class DependencyVisitor extends AbstractParseTreeVisitor<void> implements BNGParserVisitor<void> {
     public dependencies = new Set<string>();

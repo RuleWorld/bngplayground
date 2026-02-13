@@ -30,6 +30,7 @@ dist-ssr
 
 # Documentation (if generated)
 docs/
+handoffs/
 
 # Compiled WASM artifacts and C build files
 *.o

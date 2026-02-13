@@ -10,7 +10,6 @@ begin parameters
     
     # Translation & Stability
     k_translat_max 10.0 # Peak translation drive
-    Km_ribo 500         # Structural constraint
     k_deg_mrna 0.2
     k_deg_prot 0.05
     
@@ -49,10 +48,17 @@ begin observables
     Molecules Transcript_Mass mRNA()                   # RNA reservoir
     Molecules Promoter_State  Gene(prom~on)            # Circuit status
     Molecules Sequest_mRNA    mRNA(b!1).RBP(b!1)       # Regulation overhead
-    Molecules TF_Dimers       Protein(b!1).Protein(b!1) # Active driver
+    Species   TF_Dimers       Protein(b!1).Protein(b!1) # Active driver
 end observables
 
 
+
+begin functions
+    # PoolConstraint function: modulates rate based on pool size vs capacity
+    Capacity 1000
+    PoolConstraint() = 1 - (Sequest_mRNA + Transcript_Mass)/Capacity
+    v_translat() = k_translat_max * v_stim_current * PoolConstraint()
+end functions
 
 begin reaction rules
     ## TRANSCRIPTION
@@ -61,8 +67,8 @@ begin reaction rules
     Gene(prom~on) -> Gene(prom~on) + mRNA(b) k_trans_max
     
     ## TRANSLATION (Driver-dependent)
-    # TotalRate: driven by ribosome/metabolic status (functional proxy)
-    mRNA(b) -> mRNA(b) + Protein(b) k_translat_max * v_stim_current TotalRate
+    # Uses PoolConstraint to avoid explosive growth
+    mRNA(b) -> mRNA(b) + Protein(b) v_translat()
     
     ## FEEDBACK & ASSEMBLY
     # Protein dimerization to form TF
@@ -72,7 +78,7 @@ begin reaction rules
     Protein(b!1).Protein(b!1) + Gene(prom~off) <-> Protein(b!1).Protein(b!1).Gene(prom~on) k_bind_prom,0.1
     
     ## SEQUESTRATION
-    # RBP binds and silences mRNA
+    # RBP binds and silences mRNA (Anti-feedback)
     mRNA(b) + RBP(b) <-> mRNA(b!1).RBP(b!1) k_rbp_bind,0.2
     
     ## RESET
@@ -83,18 +89,15 @@ end reaction rules
 
 begin actions
     generate_network({overwrite=>1})
-    # Phase 1: Basal
-    setParameter("v_stim_current",0.1)
-    simulate({method=>"ode",t_end=>50,n_steps=>100})
-    # Phase 2: High Stimulus
+    # Phase 1: Basal (0-10s)
+    simulate({method=>"ode",t_end=>10,n_steps=>20})
+    
+    # Phase 2: Pulsatile Stimulation (10-40s)
     setParameter("v_stim_current",5.0)
-    simulate({method=>"ode",t_end=>100,n_steps=>100,continue=>1,suffix=>"2"})
-    # Phase 3: Recovery
+    simulate({method=>"ode",t_start=>10,t_end=>40,n_steps=>60,continue=>1})
+    
+    # Phase 3: Relaxation (40-100s)
     setParameter("v_stim_current",0.1)
-    simulate({method=>"ode",t_end=>150,n_steps=>100,continue=>1,suffix=>"3"})
-    # Phase 4: Re-activation
-    setParameter("v_stim_current",5.0)
-    simulate({method=>"ode",t_end=>200,n_steps=>100,continue=>1,suffix=>"4"})
+    simulate({method=>"ode",t_start=>40,t_end=>100,n_steps=>120,continue=>1})
 end actions
 end model
-

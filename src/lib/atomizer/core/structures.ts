@@ -54,6 +54,10 @@ export class Component {
     if (update) {
       this.setActiveState(state);
     }
+    // Add base state "0" if not present (matches Python behavior)
+    if (!this.states.includes('0')) {
+      this.states.push('0');
+    }
   }
 
   /**
@@ -148,12 +152,22 @@ export class Component {
   }
 
   /**
-   * String representation for molecule types (all possible states)
+   * String representation for molecule types (all possible states and bonds)
+   * Matches Python Component.str2() behavior
    */
   str2(): string {
     let tmp = this.name;
+    // Add bonds (matches Python: tmp += "!" + "!".join([str(x) for x in self.bonds]))
+    if (this.bonds.length > 0) {
+      tmp += '!' + this.bonds.map(b => String(b)).join('!');
+    }
+    // Add states (matches Python: tmp += "~" + "~".join([str(x) for x in self.states]))
     if (this.states.length > 0) {
       tmp += '~' + this.states.join('~');
+    }
+    // Prefix with underscore if name starts with digit (matches Python)
+    if (/^\d/.test(tmp)) {
+      tmp = '_' + tmp;
     }
     return tmp;
   }
@@ -219,6 +233,8 @@ export class Molecule {
         }
       }
     }
+    // Sort components by name (matches Python behavior)
+    this.components.sort((a, b) => a.name.localeCompare(b.name));
   }
 
   /**
@@ -417,10 +433,16 @@ export class Molecule {
 
   /**
    * Molecule type definition string (all possible states)
+   * Matches Python Molecule.str2() behavior
    */
   str2(): string {
     this.components.sort((a, b) => a.name.localeCompare(b.name));
-    let finalStr = this.name;
+    // Match Python: tmp = self.name.replace("-", "_")
+    let finalStr = this.name.replace(/-/g, '_');
+    // Match Python: if tmp[0].isdigit(): tmp = "m__" + tmp
+    if (/^\d/.test(finalStr)) {
+      finalStr = 'm__' + finalStr;
+    }
     if (this.components.length > 0) {
       finalStr += '(' + this.components.map(x => x.str2()).join(',') + ')';
     }

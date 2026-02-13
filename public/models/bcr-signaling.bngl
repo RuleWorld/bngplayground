@@ -26,7 +26,6 @@ begin parameters
     # Initials
     BCR_tot 500
     Antigen_tot 50
-    Lyn_tot 100
     Syk_tot 120
     PLCg2_tot 100
     CD22_tot 150

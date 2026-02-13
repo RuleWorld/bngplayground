@@ -13,6 +13,7 @@ export class RxnRule {
   isArrhenius: boolean;
   arrheniusPhi?: string;
   arrheniusEact?: string;
+  arrheniusA?: string;
 
   // Transformation operations
   deleteBonds: Array<[number, number, number, number]>; // [mol1, comp1, mol2, comp2]
@@ -59,7 +60,6 @@ export class RxnRule {
     this.excludeReactants = [];
     this.includeReactants = [];
     this.isDeleteMolecules = false;
-    this.isMoveConnected = false;
     this.molecularMap = new Map();
   }
 

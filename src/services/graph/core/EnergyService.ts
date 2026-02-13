@@ -1,7 +1,7 @@
-import { SpeciesGraph } from './SpeciesGraph';
-import { GraphMatcher } from './Matcher';
-import { BNGLParser } from './BNGLParser';
-import { BNGLEnergyPattern } from '../../../../types';
+import { SpeciesGraph } from './SpeciesGraph.ts';
+import { GraphMatcher } from './Matcher.ts';
+import { BNGLParser } from './BNGLParser.ts';
+import type { BNGLEnergyPattern } from '../../../../types.ts';
 
 /**
  * EnergyService handles calculation of species energies by matching
@@ -29,7 +29,7 @@ export class EnergyService {
     public calculateEnergy(species: SpeciesGraph): number {
         let totalEnergy = 0;
         for (const p of this.patterns) {
-            const matches = GraphMatcher.findAllMaps(p.graph, species);
+            const matches = GraphMatcher.findAllMaps(p.graph, species, { symmetryBreaking: false });
             if (matches.length > 0) {
                 // Contribution = (n_embeddings / n_automorphisms) * energy_per_embedding
                 totalEnergy += (matches.length / p.symmetry) * p.value;
@@ -52,7 +52,7 @@ export class EnergyService {
      * Calculate the symmetry factor (number of automorphisms) of a graph.
      */
     private calculateSymmetryFactor(graph: SpeciesGraph): number {
-        const selfMatches = GraphMatcher.findAllMaps(graph, graph);
+        const selfMatches = GraphMatcher.findAllMaps(graph, graph, { symmetryBreaking: false });
         return selfMatches.length || 1;
     }
 }

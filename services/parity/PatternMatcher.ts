@@ -9,11 +9,11 @@
  * to handle edge cases in web-parsed BNGL.
  */
 
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
-import { getExpressionDependencies } from '../../src/parser/ExpressionDependencies';
-import { GraphMatcher } from '../../src/services/graph/core/Matcher';
-import { countEmbeddingDegeneracy } from '../../src/services/graph/core/degeneracy';
-import { registerCacheClearCallback } from '../featureFlags';
+import { BNGLParser } from '../../src/services/graph/core/BNGLParser.ts';
+import { getExpressionDependencies } from '../../src/parser/ExpressionDependencies.ts';
+import { GraphMatcher } from '../../src/services/graph/core/Matcher.ts';
+import { countEmbeddingDegeneracy } from '../../src/services/graph/core/degeneracy.ts';
+import { registerCacheClearCallback } from '../featureFlags.ts';
 
 export const getCompartment = (s: string) => {
     // Extract compartment prefix (e.g. @C::A or @C:A) or suffix (e.g. A@C)
@@ -141,10 +141,13 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
         const specGraph = parseGraphCached(cleanSpec);
 
         // BNG2 semantics for Molecules observables (multi-molecule patterns):
-        // Count ALL embeddings of the pattern into the species.
-
+        // Count ALL embeddings of the pattern into the species, divided by pattern automorphisms.
         const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
-        return maps.length;
+        let total = 0;
+        for (const map of maps) {
+            total += countEmbeddingDegeneracy(patGraph, specGraph, map);
+        }
+        return total;
     } catch {
         return 0;
     }
@@ -171,10 +174,13 @@ export function countPatternMatches(speciesStr: string, patternStr: string): num
             const patGraph = cachedPat.clone();
 
             const specGraph = parseGraphCached(cleanSpec);
-
-
             const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
-            return maps.length;
+            let total = 0;
+            for (const map of maps) {
+                total += countEmbeddingDegeneracy(patGraph, specGraph, map);
+            }
+
+            return total;
         } catch {
             return 0;
         }
@@ -199,6 +205,13 @@ export const isFunctionalRateExpr = (
         if (observableNames.has(dep)) return true;
         if (functionNames.has(dep)) return true;
         if (changingParams.has(dep)) return true;
+    }
+
+    // Fallback: if the parser missed a user-defined function call, detect it via regex.
+    if (functionNames.size > 0) {
+        const escapedNames = Array.from(functionNames).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+        const fnRegex = new RegExp(`\\b(?:${escapedNames.join('|')})\\s*\\(`);
+        if (fnRegex.test(rateExpr)) return true;
     }
     return false;
 };

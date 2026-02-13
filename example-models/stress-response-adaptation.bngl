@@ -35,4 +35,3 @@ begin actions
     simulate({method=>"ode",t_end=>120,n_steps=>240})
 end actions
 end model
-

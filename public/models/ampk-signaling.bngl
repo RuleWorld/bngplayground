@@ -23,7 +23,6 @@ begin parameters
     AMPK_tot 500
     AMP_tot 800
     LKB1_tot 50
-    Ca_pulse 200       # Calcium signal proxy
     SIK_tot 100
     CRTC_tot 300
 end parameters

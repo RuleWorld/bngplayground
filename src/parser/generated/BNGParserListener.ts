@@ -1,94 +1,95 @@
 // Generated from src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
-import { ParseTreeListener } from "antlr4ts/tree/ParseTreeListener";
+import type { ParseTreeListener } from "antlr4ts/tree/ParseTreeListener";
 
-import { ProgContext } from "./BNGParser";
-import { Header_blockContext } from "./BNGParser";
-import { Version_defContext } from "./BNGParser";
-import { Substance_defContext } from "./BNGParser";
-import { Set_optionContext } from "./BNGParser";
-import { Set_model_nameContext } from "./BNGParser";
-import { Program_blockContext } from "./BNGParser";
-import { Parameters_blockContext } from "./BNGParser";
-import { Parameter_defContext } from "./BNGParser";
-import { Param_nameContext } from "./BNGParser";
-import { Molecule_types_blockContext } from "./BNGParser";
-import { Molecule_type_defContext } from "./BNGParser";
-import { Molecule_defContext } from "./BNGParser";
-import { Molecule_attributesContext } from "./BNGParser";
-import { Component_def_listContext } from "./BNGParser";
-import { Component_defContext } from "./BNGParser";
-import { Keyword_as_component_nameContext } from "./BNGParser";
-import { State_listContext } from "./BNGParser";
-import { State_nameContext } from "./BNGParser";
-import { Seed_species_blockContext } from "./BNGParser";
-import { Seed_species_defContext } from "./BNGParser";
-import { Species_defContext } from "./BNGParser";
-import { Molecule_compartmentContext } from "./BNGParser";
-import { Molecule_patternContext } from "./BNGParser";
-import { Pattern_bond_wildcardContext } from "./BNGParser";
-import { Molecule_tagContext } from "./BNGParser";
-import { Component_pattern_listContext } from "./BNGParser";
-import { Component_patternContext } from "./BNGParser";
-import { State_valueContext } from "./BNGParser";
-import { Bond_specContext } from "./BNGParser";
-import { Bond_idContext } from "./BNGParser";
-import { Observables_blockContext } from "./BNGParser";
-import { Observable_defContext } from "./BNGParser";
-import { Observable_typeContext } from "./BNGParser";
-import { Observable_pattern_listContext } from "./BNGParser";
-import { Observable_patternContext } from "./BNGParser";
-import { Reaction_rules_blockContext } from "./BNGParser";
-import { Reaction_rule_defContext } from "./BNGParser";
-import { Label_defContext } from "./BNGParser";
-import { Reactant_patternsContext } from "./BNGParser";
-import { Product_patternsContext } from "./BNGParser";
-import { Reaction_signContext } from "./BNGParser";
-import { Rate_lawContext } from "./BNGParser";
-import { Rule_modifiersContext } from "./BNGParser";
-import { Pattern_listContext } from "./BNGParser";
-import { Functions_blockContext } from "./BNGParser";
-import { Function_defContext } from "./BNGParser";
-import { Param_listContext } from "./BNGParser";
-import { Compartments_blockContext } from "./BNGParser";
-import { Compartment_defContext } from "./BNGParser";
-import { Energy_patterns_blockContext } from "./BNGParser";
-import { Energy_pattern_defContext } from "./BNGParser";
-import { Population_maps_blockContext } from "./BNGParser";
-import { Population_map_defContext } from "./BNGParser";
-import { Actions_blockContext } from "./BNGParser";
-import { Wrapped_actions_blockContext } from "./BNGParser";
-import { Begin_actions_blockContext } from "./BNGParser";
-import { Action_commandContext } from "./BNGParser";
-import { Generate_network_cmdContext } from "./BNGParser";
-import { Simulate_cmdContext } from "./BNGParser";
-import { Write_cmdContext } from "./BNGParser";
-import { Set_cmdContext } from "./BNGParser";
-import { Other_action_cmdContext } from "./BNGParser";
-import { Action_argsContext } from "./BNGParser";
-import { Action_arg_listContext } from "./BNGParser";
-import { Action_argContext } from "./BNGParser";
-import { Action_arg_valueContext } from "./BNGParser";
-import { Keyword_as_valueContext } from "./BNGParser";
-import { Nested_hash_listContext } from "./BNGParser";
-import { Nested_hash_itemContext } from "./BNGParser";
-import { Arg_nameContext } from "./BNGParser";
-import { Expression_listContext } from "./BNGParser";
-import { ExpressionContext } from "./BNGParser";
-import { Conditional_exprContext } from "./BNGParser";
-import { Or_exprContext } from "./BNGParser";
-import { And_exprContext } from "./BNGParser";
-import { Equality_exprContext } from "./BNGParser";
-import { Relational_exprContext } from "./BNGParser";
-import { Additive_exprContext } from "./BNGParser";
-import { Multiplicative_exprContext } from "./BNGParser";
-import { Power_exprContext } from "./BNGParser";
-import { Unary_exprContext } from "./BNGParser";
-import { Primary_exprContext } from "./BNGParser";
-import { Function_callContext } from "./BNGParser";
-import { Observable_refContext } from "./BNGParser";
-import { LiteralContext } from "./BNGParser";
+import { ProgContext } from "./BNGParser.ts";
+import { Header_blockContext } from "./BNGParser.ts";
+import { Version_defContext } from "./BNGParser.ts";
+import { Substance_defContext } from "./BNGParser.ts";
+import { Set_optionContext } from "./BNGParser.ts";
+import { Set_model_nameContext } from "./BNGParser.ts";
+import { Program_blockContext } from "./BNGParser.ts";
+import { Parameters_blockContext } from "./BNGParser.ts";
+import { Parameter_defContext } from "./BNGParser.ts";
+import { Param_nameContext } from "./BNGParser.ts";
+import { Molecule_types_blockContext } from "./BNGParser.ts";
+import { Molecule_type_defContext } from "./BNGParser.ts";
+import { Molecule_defContext } from "./BNGParser.ts";
+import { Molecule_attributesContext } from "./BNGParser.ts";
+import { Component_def_listContext } from "./BNGParser.ts";
+import { Component_defContext } from "./BNGParser.ts";
+import { Keyword_as_component_nameContext } from "./BNGParser.ts";
+import { Keyword_as_mol_nameContext } from "./BNGParser.ts";
+import { State_listContext } from "./BNGParser.ts";
+import { State_nameContext } from "./BNGParser.ts";
+import { Seed_species_blockContext } from "./BNGParser.ts";
+import { Seed_species_defContext } from "./BNGParser.ts";
+import { Species_defContext } from "./BNGParser.ts";
+import { Molecule_compartmentContext } from "./BNGParser.ts";
+import { Molecule_patternContext } from "./BNGParser.ts";
+import { Pattern_bond_wildcardContext } from "./BNGParser.ts";
+import { Molecule_tagContext } from "./BNGParser.ts";
+import { Component_pattern_listContext } from "./BNGParser.ts";
+import { Component_patternContext } from "./BNGParser.ts";
+import { State_valueContext } from "./BNGParser.ts";
+import { Bond_specContext } from "./BNGParser.ts";
+import { Bond_idContext } from "./BNGParser.ts";
+import { Observables_blockContext } from "./BNGParser.ts";
+import { Observable_defContext } from "./BNGParser.ts";
+import { Observable_typeContext } from "./BNGParser.ts";
+import { Observable_pattern_listContext } from "./BNGParser.ts";
+import { Observable_patternContext } from "./BNGParser.ts";
+import { Reaction_rules_blockContext } from "./BNGParser.ts";
+import { Reaction_rule_defContext } from "./BNGParser.ts";
+import { Label_defContext } from "./BNGParser.ts";
+import { Reactant_patternsContext } from "./BNGParser.ts";
+import { Product_patternsContext } from "./BNGParser.ts";
+import { Reaction_signContext } from "./BNGParser.ts";
+import { Rate_lawContext } from "./BNGParser.ts";
+import { Rule_modifiersContext } from "./BNGParser.ts";
+import { Pattern_listContext } from "./BNGParser.ts";
+import { Functions_blockContext } from "./BNGParser.ts";
+import { Function_defContext } from "./BNGParser.ts";
+import { Param_listContext } from "./BNGParser.ts";
+import { Compartments_blockContext } from "./BNGParser.ts";
+import { Compartment_defContext } from "./BNGParser.ts";
+import { Energy_patterns_blockContext } from "./BNGParser.ts";
+import { Energy_pattern_defContext } from "./BNGParser.ts";
+import { Population_maps_blockContext } from "./BNGParser.ts";
+import { Population_map_defContext } from "./BNGParser.ts";
+import { Actions_blockContext } from "./BNGParser.ts";
+import { Wrapped_actions_blockContext } from "./BNGParser.ts";
+import { Begin_actions_blockContext } from "./BNGParser.ts";
+import { Action_commandContext } from "./BNGParser.ts";
+import { Generate_network_cmdContext } from "./BNGParser.ts";
+import { Simulate_cmdContext } from "./BNGParser.ts";
+import { Write_cmdContext } from "./BNGParser.ts";
+import { Set_cmdContext } from "./BNGParser.ts";
+import { Other_action_cmdContext } from "./BNGParser.ts";
+import { Action_argsContext } from "./BNGParser.ts";
+import { Action_arg_listContext } from "./BNGParser.ts";
+import { Action_argContext } from "./BNGParser.ts";
+import { Action_arg_valueContext } from "./BNGParser.ts";
+import { Keyword_as_valueContext } from "./BNGParser.ts";
+import { Nested_hash_listContext } from "./BNGParser.ts";
+import { Nested_hash_itemContext } from "./BNGParser.ts";
+import { Arg_nameContext } from "./BNGParser.ts";
+import { Expression_listContext } from "./BNGParser.ts";
+import { ExpressionContext } from "./BNGParser.ts";
+import { Conditional_exprContext } from "./BNGParser.ts";
+import { Or_exprContext } from "./BNGParser.ts";
+import { And_exprContext } from "./BNGParser.ts";
+import { Equality_exprContext } from "./BNGParser.ts";
+import { Relational_exprContext } from "./BNGParser.ts";
+import { Additive_exprContext } from "./BNGParser.ts";
+import { Multiplicative_exprContext } from "./BNGParser.ts";
+import { Power_exprContext } from "./BNGParser.ts";
+import { Unary_exprContext } from "./BNGParser.ts";
+import { Primary_exprContext } from "./BNGParser.ts";
+import { Function_callContext } from "./BNGParser.ts";
+import { Observable_refContext } from "./BNGParser.ts";
+import { LiteralContext } from "./BNGParser.ts";
 
 
 /**
@@ -282,6 +283,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitKeyword_as_component_name?: (ctx: Keyword_as_component_nameContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.keyword_as_mol_name`.
+	 * @param ctx the parse tree
+	 */
+	enterKeyword_as_mol_name?: (ctx: Keyword_as_mol_nameContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.keyword_as_mol_name`.
+	 * @param ctx the parse tree
+	 */
+	exitKeyword_as_mol_name?: (ctx: Keyword_as_mol_nameContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.state_list`.

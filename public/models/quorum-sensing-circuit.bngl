@@ -33,6 +33,10 @@ begin reaction rules
     Autoinducer() + Gene(state~off) -> Gene(state~on) + Autoinducer() k_activate
     Gene(state~on) -> Gene(state~on) + Protein() k_export
     Protein() -> 0 k_import
+    # FIX: Add Autoinducer dynamics (was conserved)
+    Protein() -> Protein() + Autoinducer() 0.1  # Protein produces AI
+    Autoinducer() -> 0 0.05  # AI degradation
+    Autoinducer_env() -> 0 0.02  # Environmental AI clearance
 end reaction rules
 
 begin actions
@@ -40,4 +44,3 @@ begin actions
     simulate({method=>"ode",t_end=>40,n_steps=>240})
 end actions
 end model
-

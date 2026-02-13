@@ -683,10 +683,36 @@ if (typeof ctx.addEventListener === 'function') {
           }
 
           const p = payload as { model: BNGLModel; options?: NetworkGeneratorOptions };
-          const { model, options } = p;
+          let { model, options } = p;
 
           if (!model) {
             throw new Error('Model missing in generate_network payload');
+          }
+
+          // Check for model-defined generate_network action to override defaults
+          if (model.actions) {
+             const genAction = model.actions.slice().reverse().find(a => a.type === 'generate_network');
+             if (genAction) {
+                 const actionMaxIter = Number(genAction.args['max_iter']);
+                 if (!isNaN(actionMaxIter)) {
+                     console.log(`[Worker] Overriding maxIterations with model action value: ${actionMaxIter}`);
+                     options = { ...options, maxIterations: actionMaxIter };
+                 }
+                 
+                 const actionMaxAgg = Number(genAction.args['max_agg']);
+                 if (!isNaN(actionMaxAgg)) {
+                     console.log(`[Worker] Overriding maxAgg with model action value: ${actionMaxAgg}`);
+                     options = { ...options, maxAgg: actionMaxAgg };
+                 }
+                 
+                 const actionMaxStoich = Number(genAction.args['max_stoich']);
+                 if (!isNaN(actionMaxStoich)) {
+                    // For simple numeric max_stoich
+                     console.log(`[Worker] Overriding maxStoich with model action value: ${actionMaxStoich}`);
+                     // Note: NetworkGenerator expects Map<string, number> or number, simplified here
+                     options = { ...options, maxStoich: actionMaxStoich as any };
+                 }
+             }
           }
 
           // Prepare model with options

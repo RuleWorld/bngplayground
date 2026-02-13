@@ -5,7 +5,6 @@ begin parameters
     
     # Upstream Induction
     k_ligand 0.8       # Death ligand drive
-    k_c8_act 1.2       # Caspase-8 activation
     
     # Mitochondrial Decision (MOMP)
     k_bid_trunc 1.0    # BID -> tBID

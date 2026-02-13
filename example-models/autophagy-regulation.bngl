@@ -13,7 +13,6 @@ begin parameters
     k_ampk_ulk 1.8     # AMPK activates ULK1
     
     # Autophagosome Formation
-    k_lc3_lip 5.0      # LC3 lipidation (Structural drive)
     k_p62_bind 1.0     # Cargo recognition
     Km_vps34 300       # Metabolic bottleneck
     
@@ -21,7 +20,6 @@ begin parameters
     k_reset 0.2        # General recovery
     
     # Initials
-    mTOR_tot 500
     AMPK_tot 800
     ULK1_tot 400
     LC3_tot 2000
@@ -53,12 +51,16 @@ begin observables
     Molecules Cargo_Capture   p62(b!+)                 # Functional clearance
 end observables
 
+begin functions
+    v_stress_inh() = k_stress * k_stress_multiplier
+end functions
+
 begin reaction rules
     ## SENSING (Stress/Nutrient competition)
     # Nutrients keep mTOR active
     0 -> mTOR(s~on) k_nutrients
     # Induction using stress multiplier
-    mTOR(s~on) -> mTOR(s~off) k_stress * k_stress_multiplier
+    mTOR(s~on) -> mTOR(s~off) v_stress_inh()
     
     # Stress activates AMPK
     AMPK(s~U) -> AMPK(s~P) k_stress
@@ -94,7 +96,7 @@ begin actions
     simulate({method=>"ode",t_end=>50,n_steps=>100})
     # Phase 2: Stress (Starvation pulse)
     setParameter("k_stress_multiplier", 2.0)
-    simulate({method=>"ode",t_end=>150,n_steps=>200,continue=>1,suffix=>"2"})
+    simulate({method=>"ode",t_end=>150,n_steps=>200,continue=>1})
 end actions
 end model
 

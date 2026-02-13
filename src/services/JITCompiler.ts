@@ -12,6 +12,7 @@
  */
 
 import type { Rxn } from './graph/core/Rxn';
+import { ExpressionTranslator } from './graph/core/ExpressionTranslator';
 
 /**
  * Compiled RHS function type
@@ -51,7 +52,7 @@ export class JITCompiler {
             rateConstant: number | string; // Can be number or expression
             rateConstantIndex?: number;
             scalingVolume?: number; // Reacting volume anchor (BNG2-style)
-            totalRate?: boolean; // If true, flux is independent of reactant counts
+            totalRate?: boolean; // Parsed modifier; BNG2 ODE/network ignores TotalRate
         }>,
         nSpecies: number,
         parameters?: Record<string, number>
@@ -102,8 +103,9 @@ export class JITCompiler {
             // Build rate expression: k * product(y[reactant]^stoich)
             let rateExpr = typeof rxn.rateConstant === 'number'
                 ? rxn.rateConstant.toString()
-                : `(${rxn.rateConstant})`; // Expression in parentheses for safety
+                : `(${ExpressionTranslator.translate(rxn.rateConstant.toString())})`; // Expression in parentheses for safety
 
+            // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
                 const idx = rxn.reactantIndices[j];
                 const stoich = rxn.reactantStoich[j];

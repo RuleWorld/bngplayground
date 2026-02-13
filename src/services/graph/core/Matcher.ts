@@ -1,5 +1,6 @@
 import { SpeciesGraph } from './SpeciesGraph.ts';
 import { Component } from './Component.ts';
+import { countEmbeddingDegeneracy } from './degeneracy.ts';
 
 const adjacencyKey = (molIdx: number, compIdx: number): string => `${molIdx}.${compIdx}`;
 
@@ -250,7 +251,7 @@ export class GraphMatcher {
    * Find ALL isomorphic embeddings of pattern in target
    * BioNetGen: SpeciesGraph::findMaps($pattern)
    */
-  static findAllMaps(pattern: SpeciesGraph, target: SpeciesGraph): MatchMap[] {
+  static findAllMaps(pattern: SpeciesGraph, target: SpeciesGraph, options: { symmetryBreaking?: boolean } = {}): MatchMap[] {
     // Fast pre-filter: check if target has enough molecules of each type
     if (!this.canPossiblyMatch(pattern, target)) {
       if (pattern.toString().includes('C3(s~b)')) {
@@ -261,7 +262,8 @@ export class GraphMatcher {
 
     // Check cache - use toString() as key since graphs are immutable during generation
     // Note: caching is only valid within a single network generation run
-    const cacheKey = pattern.toString() + '|' + target.toString();
+    const symmetryKey = options.symmetryBreaking ? '1' : '0';
+    const cacheKey = `${pattern.toString()}|${target.toString()}|${symmetryKey}`;
     const cached = matchCache.get(cacheKey);
     if (cached !== undefined) {
       // Return a shallow copy to prevent mutations
@@ -273,12 +275,15 @@ export class GraphMatcher {
 
     const matches: MatchMap[] = [];
     const ordering = this.computeNodeOrdering(pattern, target);
-    const state = new VF2State(pattern, target, ordering);
+    const state = new VF2State(pattern, target, ordering, options.symmetryBreaking ?? false);
 
     const iterationCount = { value: 0 };
     this.vf2Backtrack(state, matches, iterationCount);
     if (pattern.toString().includes('C3(s~b)')) {
       console.log(`[GM_DEBUG] findAllMaps result for ${pattern.toString()} in ${target.toString()}: ${matches.length} matches`);
+    }
+    if (pattern.toString().includes('EGFR')) {
+      console.log(`[GM_DEBUG] EGFR Match count for ${pattern.toString()} in ${target.toString()}: ${matches.length} (sb=${options.symmetryBreaking})`);
     }
 
     // Cache result with LRU eviction
@@ -416,6 +421,32 @@ export class GraphMatcher {
 
     return null;
   }
+
+  /**
+   * BNGL PARITY: Calculate the total number of isomorphisms of a pattern into itself.
+   * This includes both molecule-level automorphisms and component-level degeneracies.
+   * Used to correct double-counting in observables and reaction rates.
+   */
+  static getPatternAutomorphismFactor(pattern: SpeciesGraph): number {
+    try {
+      if (pattern.molecules.length === 0) return 1;
+
+      // Find all ways to map molecules.
+      const maps = this.findAllMaps(pattern, pattern);
+      if (maps.length === 0) return 1;
+
+      let total = 0;
+      for (const map of maps) {
+        // Multiply each molecule mapping by the number of ways to assign its components.
+        total += countEmbeddingDegeneracy(pattern, pattern, map);
+      }
+
+      return total || 1;
+    } catch (err) {
+      console.warn(`[GraphMatcher] Failed to compute automorphisms for pattern`, err);
+      return 1;
+    }
+  }
 }
 
 interface BondEndpoint {
@@ -441,10 +472,11 @@ class VF2State {
   pendingComponentResult?: PendingComponentResult;
   bondPartnerLookup: Map<string, BondEndpoint>;
   nodeOrdering: number[];
+  symmetryBreaking: boolean;
   private componentCandidateCache: Map<number, Map<number, Map<number, Map<string, number[]>>>>;
   private usedTargetsScratch: number[];
 
-  constructor(pattern: SpeciesGraph, target: SpeciesGraph, nodeOrdering: number[]) {
+  constructor(pattern: SpeciesGraph, target: SpeciesGraph, nodeOrdering: number[], symmetryBreaking: boolean = false) {
     this.pattern = pattern;
     this.target = target;
     this.corePattern = new Map();
@@ -452,6 +484,7 @@ class VF2State {
     this.componentMatches = new Map();
     this.bondPartnerLookup = this.buildBondPartnerLookup();
     this.nodeOrdering = nodeOrdering.length ? nodeOrdering : pattern.molecules.map((_, idx) => idx);
+    this.symmetryBreaking = symmetryBreaking;
     this.componentCandidateCache = new Map();
     this.usedTargetsScratch = [];
   }
@@ -636,6 +669,10 @@ class VF2State {
     }
 
     if (targetMol.components.length < patternMol.components.length) {
+      return false;
+    }
+
+    if (!this.checkMoleculeWildcard(patternMol, targetMol, tMol)) {
       return false;
     }
 
@@ -1244,6 +1281,16 @@ class VF2State {
    */
 
 
+  private getComponentSignature(comp: Component): string {
+    let sig = `${comp.name}:${comp.state ?? ''}:${comp.wildcard ?? ''}`;
+    if (comp.edges.size > 0) {
+      // Include sorted bond labels to distinguish symmetric components with different bonds
+      const edges = Array.from(comp.edges.keys()).sort().join(',');
+      sig += `!${edges}`;
+    }
+    return sig;
+  }
+
   private componentPriority(comp: Component): number {
     let score = 0;
     score += comp.edges.size * 10;
@@ -1262,6 +1309,22 @@ class VF2State {
     tCompIdx: number,
     currentAssignments: Map<number, number>
   ): boolean {
+    // Symmetry-breaking check
+    if (this.symmetryBreaking) {
+      const pMol = this.pattern.molecules[pMolIdx];
+      const sig = this.getComponentSignature(pMol.components[pCompIdx]);
+      for (const [prevPIdx, prevTIdx] of currentAssignments.entries()) {
+        if (prevPIdx === pCompIdx) continue;
+        const prevSig = this.getComponentSignature(pMol.components[prevPIdx]);
+        if (sig === prevSig) {
+          // Enforce a canonical ordering of matched target components
+          // for symmetric pattern components within the same molecule.
+          if (prevPIdx < pCompIdx && tCompIdx <= prevTIdx) return false;
+          if (prevPIdx > pCompIdx && tCompIdx >= prevTIdx) return false;
+        }
+      }
+    }
+
     if (!this.componentBondStateCompatible(pMolIdx, pCompIdx, tMolIdx, tCompIdx)) {
       if (shouldLogGraphMatcher) {
         console.log(`[GraphMatcher] Bond state incompatible: P${pMolIdx}.${pCompIdx} vs T${tMolIdx}.${tCompIdx}`);
@@ -1349,26 +1412,32 @@ class VF2State {
       if (targetBound && shouldLogGraphMatcher) console.log(`[GraphMatcher] Wildcard - failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects unbound`);
       return !targetBound;
     }
+    const tComp = this.target.molecules[tMolIdx].components[tCompIdx];
 
-    if (hasSpecificBond) {
-      if (!targetBound) {
-        if (shouldLogGraphMatcher) {
-          const comp = this.target.molecules[tMolIdx]?.components[tCompIdx];
-          console.log(`[R5_DEBUG] Specific bond check: pMol=${pMolIdx} pComp=${pCompIdx} name=${pComp.name} hasSpecificBond=${hasSpecificBond} targetBound=${targetBound} tMol=${tMolIdx} tComp=${tCompIdx} tCompName=${comp?.name} tEdgesSize=${comp?.edges?.size} tEdgesType=${typeof comp?.edges} tEdgesIsMap=${comp?.edges instanceof Map}`);
-          console.log(`[GraphMatcher] Specific bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects bond`);
-        }
-        return false;
-      }
-      return true;
-    } else {
-      // BioNetGen semantics: If a binding site is NOT explicitly given a bond state (!1, !+, !?, !0),
-      // it defaults to UNBOUND.
-      // Reference: BNGL Manual Section 2.2.3 "Binding States"
-      // "If a bond state is not specified, then the site must be unbound."
-      if (targetBound && shouldLogGraphMatcher) console.log(`[GraphMatcher] Omitted bond failed: P${pMolIdx}.${pCompIdx}(${pComp.name}) expects unbound`);
-      return !targetBound;
+    // BioNetGen semantics: If a binding site is named, its bond state is constrained.
+    // - Named but with no bond label and no wildcard (e.g., "A(b)"): must be UNBOUND.
+    // - Explicitly unbound "A(b!-)": must be UNBOUND (same as above).
+    // - wildcard "+": must be BOUND.
+    // - wildcard "?": matches ANY.
+    if (pComp.wildcard === '+') return tComp.edges.size > 0;
+    if (pComp.wildcard === '-') return tComp.edges.size === 0;
+    if (pComp.wildcard === '?') return true;
+
+    // Default case: if no wildcard and no specific bonds are defined in the pattern,
+    // it MUST be free.
+    if (pComp.edges.size === 0) {
+      return tComp.edges.size === 0;
     }
 
+    // Specific bonds (e.g., !1, !1!2): in BNG semantics this constrains the number
+    // of bonds on the site unless wildcard modifiers relax it.
+    // Bond partner identity is still validated by VF2 edge mapping.
+    if (!pComp.wildcard && tComp.edges.size !== pComp.edges.size) {
+      return false;
+    }
+
+    // Specific bond partner consistency is handled by VF2 edge mapping.
+    return true;
   }
 
   private componentBondConsistencySatisfied(
@@ -1531,5 +1600,15 @@ class VF2State {
 
   private getAdjacencyKey(molIdx: number, compIdx: number): string {
     return `${molIdx}.${compIdx}`;
+  }
+
+  private checkMoleculeWildcard(pMol: any, tMol: any, tMolIdx: number): boolean {
+    if (!pMol.wildcard) return true;
+    // BioNetGen 2.9.3 semantic: molecule-level !+ and !? are lenient wildcards
+    // that always match if the molecule pattern matches.
+    if (pMol.wildcard === '+' || pMol.wildcard === '?') return true;
+    const targetBound = tMol.components.some((_: any, cIdx: number) => this.targetHasBond(tMolIdx, cIdx));
+    if (pMol.wildcard === '-') return !targetBound;
+    return true;
   }
 }

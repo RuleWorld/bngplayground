@@ -27,6 +27,7 @@ function runBNG2(bnglPath: string, tempDir: string): boolean {
     cwd: tempDir,
     encoding: 'utf-8',
     timeout: 2 * 60 * 1000,
+    env: { ...process.env, PERL5LIB: '/mnt/c/Users/Achyudhan/anaconda3/envs/Research/Lib/site-packages/bionetgen/bng-win/Perl2' },
   });
 
   if (result.status !== 0) {

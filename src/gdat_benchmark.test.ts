@@ -161,13 +161,53 @@ function createExpressionEvaluator(
 
 function evalAsNumber(expr: string, parametersMap: Map<string, number>, observableNames: Set<string>): number {
   // Actions params generally depend only on parameters; treat observables as 0.
+  // console.log(`[evalAsNumber] Evaluating: "${expr}"`);
   const paramsObj: Record<string, number> = {};
   for (const [k, v] of parametersMap.entries()) paramsObj[k] = v;
   const evaluator = createExpressionEvaluator(paramsObj, Array.from(observableNames), []);
   return evaluator.eval(expr, {});
 }
 
-// ... (keep rk4Integrate and beforeAll logic the same) ...
+function parseArrheniusArgs(rateStr: string): { phi: string, Eact: string, A?: string } | null {
+  const match = rateStr.match(/Arrhenius\s*\(\s*([^,]+)\s*,\s*([^,)]+)(?:\s*,\s*([^,)]+))?\s*\)/i);
+  if (!match) return null;
+  return {
+    phi: match[1].trim(),
+    Eact: match[2].trim(),
+    A: match[3]?.trim()
+  };
+}
+
+function rk4Integrate(
+  y: Float64Array,
+  t: number,
+  dt: number,
+  derivatives: (y: Float64Array, dydt: Float64Array) => void
+): Float64Array {
+  const n = y.length;
+  const k1 = new Float64Array(n);
+  const k2 = new Float64Array(n);
+  const k3 = new Float64Array(n);
+  const k4 = new Float64Array(n);
+  const yTemp = new Float64Array(n);
+
+  derivatives(y, k1);
+
+  for (let i = 0; i < n; i++) yTemp[i] = y[i] + 0.5 * dt * k1[i];
+  derivatives(yTemp, k2);
+
+  for (let i = 0; i < n; i++) yTemp[i] = y[i] + 0.5 * dt * k2[i];
+  derivatives(yTemp, k3);
+
+  for (let i = 0; i < n; i++) yTemp[i] = y[i] + dt * k3[i];
+  derivatives(yTemp, k4);
+
+  const nextY = new Float64Array(n);
+  for (let i = 0; i < n; i++) {
+    nextY[i] = y[i] + (dt / 6.0) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
+  }
+  return nextY;
+}
 
 export async function _simulateModel(inputModel: BNGLModel, options: { t_end: number; n_steps: number; solver: string; atol?: number; rtol?: number; maxSteps?: number }): Promise<SimulationResults> {
   // Network generation
@@ -186,7 +226,10 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
   const rules = inputModel.reactionRules.flatMap((r, i) => {
     const parametersMap = new Map(Object.entries(inputModel.parameters).map(([k, v]) => [k, Number(v)]));
     const rateStr = String(r.rate); // Ensure string
-    const rate = BNGLParser.evaluateExpression(rateStr, parametersMap);
+    // FIX: Skip evaluating Arrhenius strings via generic evaluator to avoid ReferenceError.
+    // The NetworkGenerator handles Arrhenius evaluation internally.
+    const isArrhenius = /Arrhenius\s*\(/i.test(rateStr);
+    const rate = isArrhenius ? 1 : BNGLParser.evaluateExpression(rateStr, parametersMap);
     
     const parsedRules: any[] = [];
 
@@ -205,12 +248,25 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
     // Reverse rule
     if (r.isBidirectional && r.reverseRate) {
         const revRateStr = String(r.reverseRate);
-        const reverseRate = BNGLParser.evaluateExpression(revRateStr, parametersMap);
+        const isRevArrhenius = /Arrhenius\s*\(/i.test(revRateStr);
+        const reverseRate = isRevArrhenius ? 1 : BNGLParser.evaluateExpression(revRateStr, parametersMap);
         
         const reverseRuleStr = `${formatSpeciesList(r.products)} -> ${formatSpeciesList(r.reactants)}`;
         const reverseRule = BNGLParser.parseRxnRule(reverseRuleStr, reverseRate);
         reverseRule.name = r.name ? `${r.name}_rev` : `_R${i+1}_rev`;
         reverseRule.rateExpression = revRateStr;
+
+        // ENERGY MODEL PARITY: if forward is Arrhenius and reverse is not, check if we need detailed balance.
+        // Actually, BNGL handles bidirectional energy rules by applying (1-phi) internally to reverse rule.
+        if (isArrhenius) {
+          const fwdArr = parseArrheniusArgs(rateStr);
+          if (fwdArr) {
+             (reverseRule as any).isArrhenius = true;
+             (reverseRule as any).arrheniusPhi = `(1 - (${fwdArr.phi}))`;
+             (reverseRule as any).arrheniusEact = fwdArr.Eact;
+             (reverseRule as any).arrheniusA = fwdArr.A || String(rate);
+          }
+        }
 
         // BNG2.pl parity: reverse of bimolecular rules should only match
         // species that could have been produced by the forward reaction.
@@ -224,7 +280,12 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
     return parsedRules;
   });
 
-  const generator = new NetworkGenerator({ maxSpecies: 1000, maxIterations: 500 });
+  const generator = new NetworkGenerator({ 
+    maxSpecies: 1000, 
+    maxIterations: 500,
+    energyPatterns: inputModel.energyPatterns,
+    parameters: parametersMap
+  });
   const result = await generator.generate(seedSpecies, rules);
 
   const expandedModel: BNGLModel = {
@@ -287,33 +348,18 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
   // target-image signature while preserving distinct component assignments.
   const countObservableMatches = (patternGraph: ReturnType<typeof BNGLParser.parseSpeciesGraph>, speciesGraph: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
     const rawMaps = GraphMatcher.findAllMaps(patternGraph, speciesGraph);
-    if (rawMaps.length <= 1) return rawMaps.length;
+    if (rawMaps.length === 0) return 0;
 
-    const unique = new Set<string>();
+    const autoFactor = GraphMatcher.getPatternAutomorphismFactor(patternGraph);
+    
+    // BioNetGen: count ALL embeddings and divide by pattern symmetry.
+    // For Molecules observables, this yields the number of pattern "instances".
+    let total = 0;
     for (const m of rawMaps) {
-      // Align to BNG2's SpeciesGraph::isomorphicToSubgraph(): count distinct
-      // mappings (pattern mol->target mol and pattern comp->target comp).
-      // This removes only true duplicate match enumerations while preserving
-      // distinct mappings like swapping two identical molecules in a dimer.
-      const molPairs = Array.from(m.moleculeMap.entries())
-        .sort((a, b) => a[0] - b[0])
-        .map(([pMol, tMol]) => `${pMol}->${tMol}`);
-
-      const compPairs = Array.from(m.componentMap.entries())
-        .sort((a, b) => {
-          const [aMolStr, aCompStr] = a[0].split('.');
-          const [bMolStr, bCompStr] = b[0].split('.');
-          const aMol = Number(aMolStr);
-          const bMol = Number(bMolStr);
-          if (aMol !== bMol) return aMol - bMol;
-          return Number(aCompStr) - Number(bCompStr);
-        })
-        .map(([pComp, tComp]) => `${pComp}->${tComp}`);
-
-      unique.add(`${molPairs.join('|')}//${compPairs.join('|')}`);
+      total += countEmbeddingDegeneracy(patternGraph, speciesGraph, m);
     }
-
-    return unique.size;
+    
+    return total / autoFactor;
   };
 
   const concreteObservables = expandedModel.observables.map(obs => {
@@ -749,20 +795,26 @@ describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
     if (modelName.includes('-') && !modelName.includes('_')) {
       bnglPath = path.join(projectRoot, 'example-models', `${modelName}.bngl`);
     } else {
-      const publishedModelsDir = path.join(projectRoot, 'published-models');
-      const subdirs = [
-        path.join('native-tutorials', 'CBNGL'),
-        'cell-regulation',
-        'complex-models',
-        'growth-factor-signaling',
-        'immune-signaling',
-        'tutorials',
-      ];
-      for (const subdir of subdirs) {
-        const candidatePath = path.join(publishedModelsDir, subdir, `${modelName}.bngl`);
-        if (fs.existsSync(candidatePath)) {
-          bnglPath = candidatePath;
-          break;
+      // First check example-models anyway, as some new models use underscores
+      const candidateExample = path.join(projectRoot, 'example-models', `${modelName}.bngl`);
+      if (fs.existsSync(candidateExample)) {
+        bnglPath = candidateExample;
+      } else {
+        const publishedModelsDir = path.join(projectRoot, 'published-models');
+        const subdirs = [
+          path.join('native-tutorials', 'CBNGL'),
+          'cell-regulation',
+          'complex-models',
+          'growth-factor-signaling',
+          'immune-signaling',
+          'tutorials',
+        ];
+        for (const subdir of subdirs) {
+          const candidatePath = path.join(publishedModelsDir, subdir, `${modelName}.bngl`);
+          if (fs.existsSync(candidatePath)) {
+            bnglPath = candidatePath;
+            break;
+          }
         }
       }
     }
@@ -843,9 +895,20 @@ describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
         if (r.isBidirectional) {
           const reverseRuleStr = `${formatSpeciesList(r.products)} -> ${formatSpeciesList(r.reactants)}`;
           const reverseRule = BNGLParser.parseRxnRule(reverseRuleStr, seedRate);
-          reverseRule.name = r.products.join('+') + '->' + r.reactants.join('+');
+          reverseRule.name = r.reactants.join('+') + '<-' + r.products.join('+'); // More descriptive name
           (reverseRule as any).rateExpression = r.reverseRate || r.rate;
           
+          const isArr = /Arrhenius\s*\(/i.test(String(r.rate));
+          if (isArr) {
+            const arr = parseArrheniusArgs(String(r.rate));
+            if (arr) {
+               (reverseRule as any).isArrhenius = true;
+               (reverseRule as any).arrheniusPhi = `(1 - (${arr.phi}))`;
+               (reverseRule as any).arrheniusEact = arr.Eact;
+               (reverseRule as any).arrheniusA = arr.A || String(seedRate);
+            }
+          }
+
           // BNG2.pl parity: reverse of bimolecular rules should only match
           // species that could have been produced by the forward reaction.
           if (r.reactants.length === 2 && r.products.length === 1) {
@@ -870,7 +933,12 @@ describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
         generatorOptions.maxStoich = maxStoich;
       }
 
-      const generator = new NetworkGenerator(generatorOptions);
+      const generator = new NetworkGenerator({ 
+        maxSpecies, 
+        maxIterations: 5000,
+        energyPatterns: model.energyPatterns,
+        parameters: parametersMap
+      });
       const netResult = await generator.generate(seedSpecies, rules);
 
       if (netResult.species.length >= maxSpecies) {
@@ -1169,7 +1237,7 @@ describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
         const currentObservables = evaluateObservables(yIn);
         for (const rxn of concreteReactions) {
           let velocity = rxn.rateConstant;
-          if (rxn.rateExpression) {
+          if (rxn.rateExpression && !/Arrhenius\s*\(/i.test(rxn.rateExpression)) {
             velocity *= expressionEvaluator.eval(rxn.rateExpression, currentObservables);
           }
           velocity *= rxn.propensityFactor;

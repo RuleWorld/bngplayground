@@ -11,6 +11,8 @@ Rules for maintaining the parser logic and build environment.
 
 - **Recursive Splitting**: Do NOT use regex `split` for structures with nested delimiters (e.g., `!+` or `max_stoich=>{...}`). Use manual loop-based parsing with depth tracking.
 - **Quote Handling**: Ensure all regexes and string handlers support BOTH single (`'`) and double (`"`) quotes.
+- **Keyword Resilience**: Support reserved keywords (e.g., `type`, `Species`) as molecule/component names to prevent parsing errors in complex models.
+- **Entity List Splitting**: When splitting reaction strings into reactants/products (using `+`), ensure context-awareness for wildcards like `!+` to avoid incorrect splits.
 
 ## Build Configuration (Vite)
 
@@ -22,7 +24,11 @@ Rules for maintaining the parser logic and build environment.
 - **Ground Truth**: Always validate parser results against `BNG2.pl` output (species/reaction counts).
 - **Iteration Limits**: Default iteration limits (e.g., 20) in `NetworkGenerator` are too low for extensive networks. Increase them or strictly verify against BNG2 if counts are low.
 
-## Parsing Logic
-- **Recursive Splitting**: Do NOT use regex \split\ for nested structures (\!+\). Use manual loop-based parsing with depth tracking.
-- **Option Parsing**: Nested braces in options (\max_stoich=>{...}\) require depth-aware parsing.
-- **Iteration Limits**: Default limit (20) is too low for many models; increase or auto-detect.
+## Expression Compilation
+
+- **Exponentiation**: BNGL `^` MUST be translated to JavaScript `**` or `Math.pow()` in all evaluation contexts (JIT and safe evaluation).
+- **Functions**: Map BNGL functions (`exp`, `ln`, `log10`, `sqrt`, `rint`, etc.) to their `Math.xxx` equivalents.
+
+## Simulator Exports (NFsim)
+
+- **Rate Law Mapping**: Export complex or large functional rate laws as evaluated **Parameters** in BNGXML, not as **Functions**, to ensure NFsim compatibility.

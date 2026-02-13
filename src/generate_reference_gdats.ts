@@ -46,10 +46,16 @@ function findBnglFile(dir: string, modelName: string): string | null {
     return null;
 }
 
-// Search directories - now using flat public/models folder
+// Search directories
 const searchRoots = [
-    path.join(__dirname, '../public/models'),
+    path.join(__dirname, '../example-models'),
 ];
+
+// Instead of successModels, just get all BNGLs
+const allBngls = fs.readdirSync(searchRoots[0]).filter(f => f.endsWith('.bngl'));
+const targetModels = allBngls.map(f => ({ name: f.replace('.bngl', '') }));
+
+console.log(`Found ${targetModels.length} models in example-models to generate reference GDATs for.`);
 
 interface GdatConfig {
     modelName: string;
@@ -64,7 +70,7 @@ let generated = 0;
 let skipped = 0;
 let errors = 0;
 
-for (const model of successModels) {
+for (const model of targetModels) {
     const modelName = model.name;
 
     // Find model BNGL file recursively in all search roots

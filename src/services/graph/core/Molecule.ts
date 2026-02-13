@@ -6,6 +6,7 @@ export class Molecule {
   components: Component[];
   compartment?: string;
   label?: string;  // for pattern matching (e.g., A1, A2 in rules)
+  wildcard?: string; // Molecule-level bond wildcard (!+, !?, !-)
   _sourceKey?: string; // Internal property for tracking reactant source
   hasExplicitEmptyComponentList: boolean;
 
@@ -31,11 +32,12 @@ export class Molecule {
     const sortedComps = [...this.components].sort((a, b) => a.name.localeCompare(b.name));
     const compStr = sortedComps.map(c => c.toString()).join(',');
     const compSuffix = compStr ? `(${compStr})` : (this.hasExplicitEmptyComponentList ? '()' : '');
+    const wildcardSuffix = this.wildcard ? `!${this.wildcard}` : '';
     const compartmentSuffix = this.compartment ? `@${this.compartment}` : '';
     if (compStr || this.hasExplicitEmptyComponentList) {
-      return `${this.name}${compSuffix}${compartmentSuffix}`;
+      return `${this.name}${compSuffix}${wildcardSuffix}${compartmentSuffix}`;
     }
-    return `${this.name}${compartmentSuffix}`;
+    return `${this.name}${wildcardSuffix}${compartmentSuffix}`;
   }
 
   /**
@@ -44,6 +46,7 @@ export class Molecule {
   isomorphicTo(other: Molecule, componentMap: Map<number, number>): boolean {
     if (this.name !== other.name) return false;
     if (this.compartment !== other.compartment) return false;
+    if (this.wildcard !== other.wildcard) return false;
     if (this.components.length !== other.components.length) return false;
 
     // Components must match in order (BioNetGen assumes sorted components)
@@ -70,6 +73,7 @@ export class Molecule {
       this.hasExplicitEmptyComponentList
     );
     cloned.label = this.label;
+    cloned.wildcard = this.wildcard;
     cloned._sourceKey = this._sourceKey;
     return cloned;
   }

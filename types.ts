@@ -64,7 +64,7 @@ export interface BNGLCompartment {
   resolvedVolume?: number;
   scalingFactor?: number;
 }
-  
+
 export interface BNGLEnergyPattern {
   name?: string;
   pattern: string;
@@ -86,6 +86,11 @@ export interface BNGLReaction {
   isArrhenius?: boolean;
   arrheniusPhi?: string;
   arrheniusEact?: string;
+  arrheniusA?: string;
+  isReverseArrhenius?: boolean;
+  reverseArrheniusPhi?: string;
+  reverseArrheniusEact?: string;
+  reverseArrheniusA?: string;
 }
 
 // BNG function definition (e.g., gene_Wip1_activity())
@@ -115,6 +120,11 @@ export interface ReactionRule {
   isArrhenius?: boolean;
   arrheniusPhi?: string;
   arrheniusEact?: string;
+  arrheniusA?: string;
+  isReverseArrhenius?: boolean;
+  reverseArrheniusPhi?: string;
+  reverseArrheniusEact?: string;
+  reverseArrheniusA?: string;
 }
 
 export interface BNGLAction {
@@ -145,7 +155,7 @@ export interface BNGLModel {
     maxStoich?: number | Record<string, number>;
     overwrite?: boolean;
   };
-  simulationOptions?: Partial<SimulationOptions> & { sparse?: boolean };
+  simulationOptions?: Partial<SimulationOptions>;
   // Multi-phase simulation support - actions block commands
   simulationPhases?: SimulationPhase[];
   concentrationChanges?: ConcentrationChange[];
@@ -184,7 +194,7 @@ export interface SimulationPhase {
 export interface ConcentrationChange {
   species: string;           // Species pattern or name
   value: number | string;    // New concentration (can be parameter reference)
-  mode?: 'set' | 'add';      // setConcentration() vs addConcentration() (default: 'set')
+  mode?: 'set' | 'add' | 'save' | 'reset';      // set/add or save/reset concentrations
   afterPhaseIndex: number;   // Execute after this simulation phase (-1 = before first)
 }
 
@@ -261,6 +271,7 @@ export interface SimulationOptions {
   memoryLimit?: number;   // WASM heap limit in MB (default: 512)
   verbose?: boolean;      // Enable detailed NFsim logging
   includeInfluence?: boolean; // Enable Dynamic Influence Network tracking (SSA only)
+  maxEvents?: number;     // Maximum number of events for SSA to prevent hanging
 }
 
 
@@ -293,14 +304,14 @@ export type WorkerResponse =
   | { id: number; type: 'atomize_error'; payload: SerializedWorkerError }
   | { id: number; type: 'simulate_success'; payload: SimulationResults }
   | { id: number; type: 'cache_model_success'; payload: { modelId: number } }
+  | { id: -1; type: 'worker_internal_error'; payload: SerializedWorkerError }
   | { id: number; type: 'cache_model_error'; payload: SerializedWorkerError }
   | { id: number; type: 'release_model_success'; payload: { modelId: number } }
   | { id: number; type: 'release_model_error'; payload: SerializedWorkerError }
   | { id: number; type: 'simulate_error'; payload: SerializedWorkerError }
   | { id: number; type: 'generate_network_success'; payload: BNGLModel }
   | { id: number; type: 'generate_network_error'; payload: SerializedWorkerError }
-  | { id: number; type: 'generate_network_progress'; payload: GeneratorProgress }
-  | { id: -1; type: 'worker_internal_error'; payload: SerializedWorkerError };
+  | { id: number; type: 'generate_network_progress'; payload: GeneratorProgress };
 
 export interface AtomizerResult {
   bngl: string;

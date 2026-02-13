@@ -113,13 +113,32 @@ export class SpeciesGraph {
     const key = `${mol}.${comp}`;
     const partners = this.adjacency.get(key);
 
+    const labelsPerPartner = new Map<string, Set<number>>();
+    const molecule = this.molecules[mol];
+    const component = molecule?.components[comp];
+    if (component && partners) {
+      for (const [label] of component.edges.entries()) {
+        for (const partner of partners) {
+          const [pMolStr, pCompStr] = partner.split('.');
+          const pMol = Number(pMolStr);
+          const pComp = Number(pCompStr);
+          const pComponent = this.molecules[pMol]?.components[pComp];
+          if (!pComponent) continue;
+          if (pComponent.edges.has(label) && pComponent.edges.get(label) === comp) {
+            if (!labelsPerPartner.has(partner)) {
+              labelsPerPartner.set(partner, new Set<number>());
+            }
+            labelsPerPartner.get(partner)!.add(label);
+          }
+        }
+      }
+    }
+
     // 1. Remove forward link from adjacency
     this.adjacency.delete(key);
 
     // 2. Remove edge from this component
-    const molecule = this.molecules[mol];
     if (molecule) {
-      const component = molecule.components[comp];
       if (component) {
         component.edges.clear();
       }
@@ -149,9 +168,10 @@ export class SpeciesGraph {
         if (pMolecule) {
           const pComponent = pMolecule.components[pComp];
           if (pComponent) {
-            // Remove edges that point to our component
-            for (const [label, targetComp] of pComponent.edges.entries()) {
-              if (targetComp === comp) {
+            // Remove only labels that are confirmed to connect to this exact endpoint
+            const labelsToRemove = labelsPerPartner.get(partner);
+            if (labelsToRemove) {
+              for (const label of labelsToRemove) {
                 pComponent.edges.delete(label);
               }
             }
@@ -236,6 +256,37 @@ export class SpeciesGraph {
   }
 
   /**
+   * Find all molecules in the same connected component as the given molecule.
+   */
+  getConnectedComponentMolecules(molIdx: number): Set<number> {
+    const visited = new Set<number>();
+    if (molIdx < 0 || molIdx >= this.molecules.length) return visited;
+
+    const queue = [molIdx];
+    visited.add(molIdx);
+
+    while (queue.length > 0) {
+      const curr = queue.shift()!;
+      // Check neighbors via adjacency (support multi-site bonding)
+      const mol = this.molecules[curr];
+      for (let c = 0; c < mol.components.length; c++) {
+        const key = `${curr}.${c}`;
+        const partners = this.adjacency.get(key);
+        if (partners) {
+          for (const partner of partners) {
+            const [pMol] = partner.split('.').map(Number);
+            if (!visited.has(pMol)) {
+              visited.add(pMol);
+              queue.push(pMol);
+            }
+          }
+        }
+      }
+    }
+    return visited;
+  }
+
+  /**
    * Split graph into connected components (separate species)
    */
   split(): SpeciesGraph[] {
@@ -276,6 +327,11 @@ export class SpeciesGraph {
       componentMols.forEach((oldIdx, newIdx) => oldToNew.set(oldIdx, newIdx));
 
       const newMolecules = componentMols.map(idx => this.molecules[idx].clone());
+      for (const molecule of newMolecules) {
+        for (const component of molecule.components) {
+          component.edges.clear();
+        }
+      }
       const newGraph = new SpeciesGraph(newMolecules);
 
       // Reconstruct bonds (support multi-site bonding)
@@ -297,10 +353,20 @@ export class SpeciesGraph {
                 addedBonds.add(bondKey);
                 // Find bond label
                 let label: number | undefined;
+                const partnerComp = this.molecules[pMolIdx].components[pCompIdx];
                 for (const [l, targetC] of comp.edges.entries()) {
-                  if (targetC === pCompIdx) {
+                  if (targetC !== pCompIdx) continue;
+                  if (partnerComp.edges.has(l) && partnerComp.edges.get(l) === compIdx) {
                     label = l;
                     break;
+                  }
+                }
+                if (label === undefined) {
+                  for (const [l, targetC] of comp.edges.entries()) {
+                    if (targetC === pCompIdx) {
+                      label = l;
+                      break;
+                    }
                   }
                 }
 

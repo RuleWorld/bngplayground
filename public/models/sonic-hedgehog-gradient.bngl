@@ -41,12 +41,13 @@ begin observables
 end observables
 
 begin functions
+    v_prod() = k_prod_current
 end functions
 
 begin reaction rules
     ## PRODUCTION
     # Pulsatile Shh source
-    0 -> Shh(loc~source,b) k_prod_current
+    0 -> Shh(loc~source,b) v_prod()
     
     ## TRANSPORT
     # Spreading from source to target
@@ -68,11 +69,11 @@ begin actions
     # Approximate oscillation with 4 phases
     simulate({method=>"ode",t_end=>50,n_steps=>100})
     setParameter("k_prod_current",2.0)
-    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({method=>"ode",t_end=>100,n_steps=>100,continue=>1})
     setParameter("k_prod_current",20.0)
-    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({method=>"ode",t_end=>150,n_steps=>100,continue=>1})
     setParameter("k_prod_current",2.0)
-    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>100,continue=>1})
+    simulate({method=>"ode",t_end=>200,n_steps=>100,continue=>1})
 end actions
 end model
 

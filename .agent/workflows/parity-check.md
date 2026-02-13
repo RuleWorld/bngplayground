@@ -10,7 +10,7 @@ This workflow runs all models through the web simulator and compares the output 
 
 - Dev server must be running (`npm run dev`)
 - Playwright must be installed (`npx playwright install chromium` if not)
-- Reference GDAT files must exist in `bng_test_output/`
+- Reference GDAT files must exist in `tests/fixtures/gdat/`
 
 ## Steps
 

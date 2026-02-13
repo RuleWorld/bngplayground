@@ -16,6 +16,7 @@ import { fileURLToPath } from 'url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROOT = path.resolve(__dirname, '..');
+const CONSTANTS_TS_PATH = path.join(ROOT, 'constants.ts');
 
 // Model directories to scan
 // NOTE: include the whole 'published-models' tree so newly added subfolders (e.g., Mallela_2022, Ordyan_2020, PyBNG) are automatically discovered.
@@ -228,6 +229,38 @@ function scanModels() {
 }
 
 /**
+ * Read BNG2-compatible model IDs from constants.ts (source of truth for app filtering).
+ */
+function loadBng2CompatibleModelIds() {
+  if (!fs.existsSync(CONSTANTS_TS_PATH)) {
+    throw new Error(`constants.ts not found at ${CONSTANTS_TS_PATH}`);
+  }
+
+  const source = fs.readFileSync(CONSTANTS_TS_PATH, 'utf-8');
+  const setBlockMatch = source.match(
+    /export\s+const\s+BNG2_COMPATIBLE_MODELS\s*=\s*new\s+Set\s*\(\s*\[([\s\S]*?)\]\s*\)/m
+  );
+
+  if (!setBlockMatch) {
+    throw new Error('Could not find BNG2_COMPATIBLE_MODELS in constants.ts');
+  }
+
+  const ids = new Set();
+  const literalRegex = /'([^']+)'/g;
+  let match;
+  while ((match = literalRegex.exec(setBlockMatch[1])) !== null) {
+    const id = match[1].trim();
+    if (id) ids.add(id);
+  }
+
+  if (ids.size === 0) {
+    throw new Error('Parsed zero IDs from BNG2_COMPATIBLE_MODELS in constants.ts');
+  }
+
+  return ids;
+}
+
+/**
  * Generate embeddings for all models.
  */
 async function generateEmbeddings() {
@@ -235,43 +268,27 @@ async function generateEmbeddings() {
   let models = scanModels();
   console.log(`Found ${models.length} models.`);
 
-  // Filter published models by BNG2 verification report: only embed published models that PASS and have GDAT
-  const reportPath = path.join(ROOT, 'temp_bng_output', 'bng2_verify_published_ode_outputs_report.json');
-  let verifiedSet = null;
-  if (fs.existsSync(reportPath)) {
-    try {
-      const report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
-      verifiedSet = new Set();
-      for (const r of report.results || []) {
-        if (r.status === 'PASS' && r.hasGdat) {
-          // Normalize rel to a path without .bngl
-          const relNoExt = (r.rel || '').replace(/\\/g, '/').replace(/\.bngl$/i, '');
-          verifiedSet.add(relNoExt);
-          // Also add id-based entry for convenience
-          if (r.id) verifiedSet.add('published-models/' + r.id);
-        }
-      }
-      console.log(`Loaded BNG2 verification report. ${verifiedSet.size} published models passed with GDAT.`);
-    } catch (e) {
-      console.warn('Failed to read BNG2 verification report:', e.message);
-      verifiedSet = null;
-    }
-  } else {
-    console.warn('BNG2 verification report not found; embedding all models. Run the verification script to filter published models.');
-  }
+  // Filter by constants.ts source of truth
+  const compatibleIds = loadBng2CompatibleModelIds();
+  const compatibleIdsLower = new Set(Array.from(compatibleIds, id => id.toLowerCase()));
 
-  if (verifiedSet) {
-    const before = models.length;
-    models = models.filter(m => {
-      // For published models, require membership in verifiedSet
-      if (m.path && m.path.startsWith('published-models/')) {
-        const idNoExt = m.path.replace(/\.bngl$/, '').replace(/\\/g, '/');
-        return verifiedSet.has(idNoExt) || verifiedSet.has(m.id);
-      }
-      return true; // keep example-models unfiltered
-    });
-    console.log(`Filtered published models: ${before} -> ${models.length} (only BNG2-PASS + GDAT)`);
-  }
+  const before = models.length;
+  models = models.filter(model => {
+    const modelIdNoExt = model.id.replace(/\.bngl$/i, '');
+    const modelPathNoExt = model.path.replace(/\.bngl$/i, '');
+    const baseName = path.basename(model.path, '.bngl');
+
+    const candidates = [
+      modelIdNoExt,
+      modelPathNoExt,
+      baseName,
+      path.basename(modelIdNoExt),
+      path.basename(modelPathNoExt),
+    ];
+
+    return candidates.some(candidate => compatibleIds.has(candidate) || compatibleIdsLower.has(candidate.toLowerCase()));
+  });
+  console.log(`Filtered models by BNG2_COMPATIBLE_MODELS: ${before} -> ${models.length}`);
 
   // Support DRY_RUN for testing the filter without running the heavy embedding step
   if (process.env.DRY_RUN) {

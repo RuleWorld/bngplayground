@@ -4,6 +4,7 @@ import { BNGLModel, SimulationResults, SimulationPhase, SimulationOptions } from
 import { getSimulationOptionsFromParsedModel } from './simulationOptions';
 import { downloadCsv } from './download';
 import { SafeExpressionEvaluator } from '../../services/safeExpressionEvaluator';
+import { isSpeciesMatch } from '../../services/parity/PatternMatcher';
 
 // If you need extra verbosity for batch runner, flip this to true locally
 const VERBOSE_BATCH_RUNNER = false;
@@ -59,9 +60,10 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
     let allData: Record<string, number>[] = [];
     let headers: string[] = [];
     let finalState: number[] | undefined;
+    let savedConcentrationState: Record<string, number> | null = null;
     let previousEndTime = 0; // Track absolute end time of previous phase
-    let combinedExpandedReactions: any[] | undefined;
-    let combinedExpandedSpecies: any[] | undefined;
+    let currentExpandedReactions: any[] | undefined;
+    let currentExpandedSpecies: any[] | undefined;
 
     for (let i = 0; i < allPhases.length; i++) {
         const phase = allPhases[i];
@@ -104,18 +106,23 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
 
         const singlePhaseModel: BNGLModel = {
             ...model,
-            simulationPhases: [adjustedPhase], // Only this phase, with adjusted t_end!
+            simulationPhases: [adjustedPhase],
+            // Use already expanded network if available to preserve state
+            species: currentExpandedSpecies || model.species,
+            reactions: currentExpandedReactions || model.reactions || [],
         };
 
         // If this is a continuation (phase > 1), we need to set initial conditions from previous phase
         if (i > 0 && finalState) {
             // Update species initialConcentration with final state from previous phase
             // This simulates the "continue=>1" behavior
-            singlePhaseModel.species = model.species.map((sp, j) => ({
+            // We MUST use the expanded species list to avoid losing generated species!
+            const speciesList = currentExpandedSpecies || model.species;
+            singlePhaseModel.species = speciesList.map((sp, j) => ({
                 ...sp,
-                initialConcentration: finalState![j] || 0,
+                initialConcentration: finalState![j] !== undefined ? finalState![j] : (sp.initialConcentration || 0),
             }));
-            console.log(`[Multi-phase] Phase ${i + 1} initialized from finalState. First species: ${singlePhaseModel.species[0].name} = ${singlePhaseModel.species[0].initialConcentration}, NFkB_Inactive = ${singlePhaseModel.species.find(s => s.name.includes('NFkB'))?.initialConcentration}`);
+            console.log(`[Multi-phase] Phase ${i + 1} initialized from finalState. Species count: ${singlePhaseModel.species.length}`);
         }
 
         // Apply concentration changes that occur after the previous phase
@@ -124,10 +131,15 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
             .filter(c => c.afterPhaseIndex === i - 1);
 
         // Map these changes to apply BEFORE phase 0 of the single-phase worker run
-        singlePhaseModel.concentrationChanges = concentrationChanges.map(c => ({
-            ...c,
-            afterPhaseIndex: -1
-        }));
+        singlePhaseModel.concentrationChanges = concentrationChanges
+            .filter(c => {
+                const mode = c.mode ?? 'set';
+                return mode === 'set' || mode === 'add';
+            })
+            .map(c => ({
+                ...c,
+                afterPhaseIndex: -1
+            }));
 
         // Apply parameter changes that occur after the previous phase
         const parameterChanges = (model.parameterChanges || [])
@@ -153,12 +165,41 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
         };
 
         for (const change of concentrationChanges) {
+            const mode = change.mode ?? 'set';
+            if (mode === 'save') {
+                const speciesList = singlePhaseModel.species;
+                const saved: Record<string, number> = {};
+                speciesList.forEach(sp => {
+                    saved[sp.name] = sp.initialConcentration ?? 0;
+                });
+                savedConcentrationState = saved;
+                console.log(`[Multi-phase] Saved concentrations for ${Object.keys(saved).length} species.`);
+                continue;
+            }
+
+            if (mode === 'reset') {
+                if (!savedConcentrationState) {
+                    console.warn('[Multi-phase] resetConcentrations requested but no saved state available.');
+                    continue;
+                }
+                const speciesList = currentExpandedSpecies || singlePhaseModel.species;
+                singlePhaseModel.species = speciesList.map(sp => ({
+                    ...sp,
+                    initialConcentration: savedConcentrationState?.[sp.name] ?? sp.initialConcentration ?? 0,
+                }));
+                console.log(`[Multi-phase] Reset concentrations for ${speciesList.length} species.`);
+                continue;
+            }
+
             const changeNormalized = normalizeSpeciesName(change.species);
-            console.log(`[Multi-phase] Looking for species: "${change.species}" (normalized: ${changeNormalized}) in ${model.species.length} species`);
+            console.log(`[Multi-phase] Looking for species: "${change.species}" (normalized: ${changeNormalized}) in ${singlePhaseModel.species.length} species`);
             // First try exact match, then normalized match
             let speciesIndex = singlePhaseModel.species.findIndex(sp => sp.name === change.species);
             if (speciesIndex < 0) {
                 speciesIndex = singlePhaseModel.species.findIndex(sp => normalizeSpeciesName(sp.name) === changeNormalized);
+            }
+            if (speciesIndex < 0) {
+                speciesIndex = singlePhaseModel.species.findIndex(sp => isSpeciesMatch(sp.name, change.species));
             }
             if (speciesIndex >= 0) {
                 console.log(`[Multi-phase] Found at index: ${speciesIndex} with raw value: ${change.value}`);
@@ -166,20 +207,19 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
                 if (typeof change.value === 'number') {
                     newValue = change.value;
                 } else {
-                    // Evaluate expression string with parameters for initial JS state
                     try {
-                        let expr = String(change.value);
-                        for (const [paramName, paramValue] of Object.entries(model.parameters)) {
-                            expr = expr.replace(new RegExp(`\\b${paramName}\\b`, 'g'), String(paramValue));
-                        }
-                        newValue = eval(expr);
+                        newValue = SafeExpressionEvaluator.compile(String(change.value))(singlePhaseModel.parameters);
                     } catch (e) {
                         newValue = NaN;
                     }
                 }
                 if (!isNaN(newValue)) {
-                    singlePhaseModel.species[speciesIndex].initialConcentration = newValue;
-                    console.log(`[Multi-phase] Applied setConcentration for initial state: ${change.species} = ${newValue}`);
+                    const currentValue = singlePhaseModel.species[speciesIndex].initialConcentration ?? 0;
+                    singlePhaseModel.species[speciesIndex].initialConcentration = mode === 'add'
+                        ? currentValue + newValue
+                        : newValue;
+                    const actionLabel = mode === 'add' ? 'addConcentration' : 'setConcentration';
+                    console.log(`[Multi-phase] Applied ${actionLabel} for initial state: ${change.species} = ${singlePhaseModel.species[speciesIndex].initialConcentration}`);
                 }
             }
         }
@@ -280,8 +320,8 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
 
         // Capture network structure from the first phase (assumed static across phases)
         if (i === 0) {
-            combinedExpandedReactions = phaseResults.expandedReactions;
-            combinedExpandedSpecies = phaseResults.expandedSpecies;
+            currentExpandedReactions = phaseResults.expandedReactions;
+            currentExpandedSpecies = phaseResults.expandedSpecies;
         }
 
 
@@ -363,15 +403,20 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
             previousEndTime += effectiveDuration;
         }
 
-        // Save final state for next phase initialization
-        // CRITICAL FIX: Use speciesData (which contains actual species concentrations) instead of data (observables)
-        // Observables do not map 1:1 to species, leading to corrupted state in multi-phase sims.
+        // Save final state and expanded network for next phase initialization
+        if (phaseResults.expandedSpecies) {
+            currentExpandedSpecies = phaseResults.expandedSpecies;
+        }
+        if (phaseResults.expandedReactions) {
+            currentExpandedReactions = phaseResults.expandedReactions;
+        }
+
         if (phaseResults.speciesData && phaseResults.speciesData.length > 0) {
             const lastRow = phaseResults.speciesData[phaseResults.speciesData.length - 1];
-            // Map each species in the model to its final value from the simulation
-            // SimulationLoop returns speciesData keys matching the species names
-            finalState = model.species.map(sp => lastRow[sp.name] ?? 0);
-            console.log(`[Multi-phase] Captured final state. Species count: ${finalState.length}. First: ${finalState[0]}, Last: ${finalState[finalState.length - 1]}`);
+            // Map each species in the current network (expanded or original) to its final value
+            const speciesList = currentExpandedSpecies || model.species;
+            finalState = speciesList.map(sp => lastRow[sp.name] ?? 0);
+            console.log(`[Multi-phase] Captured final state. Species count: ${finalState.length}`);
         } else if (phaseResults.data.length > 0) {
             // Fallback (unsafe but better than crash) - though strictly speaking this path is what caused the bug
             console.warn('[Multi-phase] speciesData missing! SimulationLoop might not be returning it. Falling back to observables (this is likely wrong).');
@@ -384,9 +429,103 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
     return {
         data: allData,
         headers,
-        expandedReactions: combinedExpandedReactions,
-        expandedSpecies: combinedExpandedSpecies
+        expandedReactions: currentExpandedReactions,
+        expandedSpecies: currentExpandedSpecies
     };
+}
+
+
+async function runSingleBatchItem(modelDef: { name: string, code: string, id?: string }, batchSeed?: number) {
+    console.group(`Processing: ${modelDef.name}`);
+    try {
+        // 1. Parse
+        if (VERBOSE_BATCH_RUNNER) console.time('Parse');
+        const model: BNGLModel = await bnglService.parse(modelDef.code, { description: `Batch Parse: ${modelDef.name}` });
+        if (VERBOSE_BATCH_RUNNER) console.timeEnd('Parse');
+
+        // 1b. Network Generation (Fix for rule-based models)
+        const actions = model.actions || [];
+        const needsNetGen = actions.some(a =>
+            a.type === 'generate_network' ||
+            a.type === 'simulate_ode' ||
+            (a.type === 'simulate' && a.args?.method === 'ode')
+        );
+
+        // NFsim models often fail network generation (infinite species)
+        // We should skip this step for known NFsim models unless strictly required?
+        // Actually, if the model is in NFSIM_MODELS, we should probably SKIP the expanded network generation
+        // even if it has a generate_network action, because that action might be intended for BNG2 which handles iter limits better,
+        // or it might just be a leftover. 
+        // User explicitly said: "nfsim isn't supposed to generate a network".
+        const isNfSimModel = NFSIM_MODELS.has(modelDef.id || modelDef.name);
+
+        if (needsNetGen && !isNfSimModel) {
+            if (VERBOSE_BATCH_RUNNER) console.time('NetGen');
+            console.log('Generating network...');
+            // Updating model with expanded network
+            const expanded = await bnglService.generateNetwork(model, { maxSpecies: 2000, maxReactions: 5000 });
+            // Force update just in case Object.assign is flaky with getters/setters (unlikely but possible)
+            if (expanded.reactions) model.reactions = expanded.reactions;
+            if (expanded.species) model.species = expanded.species;
+
+            if (VERBOSE_BATCH_RUNNER) console.timeEnd('NetGen');
+        }
+
+        // 2. Simulate (with multi-phase support)
+        if (VERBOSE_BATCH_RUNNER) console.time('Simulate');
+        // Auto-inject simulate action if none exist (for models that only define network)
+        model.simulationPhases = model.simulationPhases ?? [];
+        if (model.simulationPhases.length === 0) {
+            console.log(`[Batch] Auto-injecting default simulate action for ${model.name}`);
+            model.simulationPhases.push({ method: 'ode', t_end: 100, n_steps: 100 });
+        }
+        const results: SimulationResults = await executeMultiPhaseSimulation(model, batchSeed);
+        if (VERBOSE_BATCH_RUNNER) console.timeEnd('Simulate');
+
+        if (modelDef.id === 'Lang_2024' || modelDef.name.includes('Lang')) {
+            console.log(`[Lang_2024 Debug] Model Loaded: ${model.name}`);
+            console.log(`[Lang_2024 Debug] Seed Species Count: ${model.species.length}`);
+            console.log(`[Lang_2024 Debug] Rules Count: ${model.reactionRules.length}`);
+            if (model.reactionRules.length > 0) {
+                console.log(`[Lang_2024 Debug] First 5 rules: ${model.reactionRules.slice(0, 5).map(r => r.name).join(', ')}`);
+            }
+
+            if (results.expandedReactions) {
+                console.log(`[Lang_2024 Debug] Total Generated Reactions: ${results.expandedReactions.length}`);
+
+                // Look for CCNE degradation reactions
+                // Note: In generated reactions, reactants/products are just indices or names if expanded
+                // We need to inspect them carefully.
+                const ccneReactions = results.expandedReactions.filter(r => {
+                    return r.reactants.some(s => s.includes('CCNE')) || r.products.some(s => s.includes('CCNE'));
+                });
+                console.log(`[Lang_2024 Debug] Found ${ccneReactions.length} reactions involving CCNE:`);
+                ccneReactions.forEach((r, i) => {
+                    console.log(`  CCNE Rxn ${i}: ${r.reactants.join(' + ')} -> ${r.products.join(' + ')} (k=${r.rateConstant}, expr=${r.rateExpression})`);
+                });
+            } else {
+                console.log('[Lang_2024 Debug] No expanded reactions found in results.');
+            }
+        }
+
+        // 4. Export
+        const headers = results.headers || [];
+        const safeName = safeModelName(modelDef.id || modelDef.name);
+        downloadCsv(results.data, headers, `results_${safeName}.csv`);
+
+        console.log('✅ Exported CSV');
+        console.groupEnd();
+        return true;
+    } catch (e: any) {
+        console.error('❌ Failed:', e);
+        // If the worker crashed or was terminated, we MUST restart it to continue processing subsequent models
+        if (e.message?.includes('terminated') || e.message?.includes('Worker')) {
+            console.warn('⚠️ Worker terminated/crashed. Restarting service for next model...');
+            bnglService.restart();
+        }
+        console.groupEnd();
+        return false;
+    }
 }
 
 export async function runModels(modelNames?: string[]) {
@@ -415,86 +554,9 @@ export async function runModels(modelNames?: string[]) {
     }
 
     for (const modelDef of modelsToProcess) {
-        console.group(`Processing: ${modelDef.name}`);
-        try {
-            // 1. Parse
-            if (VERBOSE_BATCH_RUNNER) console.time('Parse');
-            const model: BNGLModel = await bnglService.parse(modelDef.code, { description: `Batch Parse: ${modelDef.name}` });
-            if (VERBOSE_BATCH_RUNNER) console.timeEnd('Parse');
-
-            // 1b. Network Generation (Fix for rule-based models)
-            const actions = model.actions || [];
-            const needsNetGen = actions.some(a =>
-                a.type === 'generate_network' ||
-                a.type === 'simulate_ode' ||
-                (a.type === 'simulate' && a.args?.method === 'ode')
-            );
-
-            if (needsNetGen) {
-                if (VERBOSE_BATCH_RUNNER) console.time('NetGen');
-                console.log('Generating network...');
-                // Updating model with expanded network
-                const expanded = await bnglService.generateNetwork(model, { maxSpecies: 2000, maxReactions: 5000 });
-                // Force update just in case Object.assign is flaky with getters/setters (unlikely but possible)
-                if (expanded.reactions) model.reactions = expanded.reactions;
-                if (expanded.species) model.species = expanded.species;
-
-                if (VERBOSE_BATCH_RUNNER) console.timeEnd('NetGen');
-            }
-
-            // 2. Simulate (with multi-phase support)
-            if (VERBOSE_BATCH_RUNNER) console.time('Simulate');
-            // Auto-inject simulate action if none exist (for models that only define network)
-            if (model.simulationPhases.length === 0) {
-                console.log(`[Batch] Auto-injecting default simulate action for ${model.name}`);
-                model.simulationPhases.push({ method: 'ode', t_end: 100, n_steps: 100 });
-            }
-            const results: SimulationResults = await executeMultiPhaseSimulation(model, batchSeed);
-            if (VERBOSE_BATCH_RUNNER) console.timeEnd('Simulate');
-
-            if (modelDef.id === 'Lang_2024' || modelDef.name.includes('Lang')) {
-                console.log(`[Lang_2024 Debug] Model Loaded: ${model.name}`);
-                console.log(`[Lang_2024 Debug] Seed Species Count: ${model.species.length}`);
-                console.log(`[Lang_2024 Debug] Rules Count: ${model.reactionRules.length}`);
-                if (model.reactionRules.length > 0) {
-                    console.log(`[Lang_2024 Debug] First 5 rules: ${model.reactionRules.slice(0, 5).map(r => r.name).join(', ')}`);
-                }
-
-                if (results.expandedReactions) {
-                    console.log(`[Lang_2024 Debug] Total Generated Reactions: ${results.expandedReactions.length}`);
-
-                    // Look for CCNE degradation reactions
-                    // Note: In generated reactions, reactants/products are just indices or names if expanded
-                    // We need to inspect them carefully.
-                    const ccneReactions = results.expandedReactions.filter(r => {
-                        return r.reactants.some(s => s.includes('CCNE')) || r.products.some(s => s.includes('CCNE'));
-                    });
-                    console.log(`[Lang_2024 Debug] Found ${ccneReactions.length} reactions involving CCNE:`);
-                    ccneReactions.forEach((r, i) => {
-                        console.log(`  CCNE Rxn ${i}: ${r.reactants.join(' + ')} -> ${r.products.join(' + ')} (k=${r.rateConstant}, expr=${r.rateExpression})`);
-                    });
-                } else {
-                    console.log('[Lang_2024 Debug] No expanded reactions found in results.');
-                }
-            }
-
-            // 4. Export
-            const headers = results.headers || [];
-            const safeName = safeModelName(modelDef.name);
-            downloadCsv(results.data, headers, `results_${safeName}.csv`);
-
-            console.log('✅ Exported CSV');
-            successCount++;
-        } catch (e: any) {
-            console.error('❌ Failed:', e);
-            failCount++;
-            // If the worker crashed or was terminated, we MUST restart it to continue processing subsequent models
-            if (e.message?.includes('terminated') || e.message?.includes('Worker')) {
-                console.warn('⚠️ Worker terminated/crashed. Restarting service for next model...');
-                bnglService.restart();
-            }
-        }
-        console.groupEnd();
+        const success = await runSingleBatchItem(modelDef, batchSeed);
+        if (success) successCount++;
+        else failCount++;
 
         // Slight delay to allow browser to breathe/download
         await new Promise(r => setTimeout(r, 500));
@@ -505,10 +567,14 @@ export async function runModels(modelNames?: string[]) {
     return { success: successCount, failed: failCount };
 }
 
-export function getModelNames() {
+export function getModelEntries() {
     return MODEL_CATEGORIES.flatMap(c => c.models)
         .filter(m => !BNG2_EXCLUDED_MODELS.has(m.id) && !BNG2_EXCLUDED_MODELS.has(m.name))
-        .map(m => m.name);
+        .map(m => ({ id: m.id || m.name, name: m.name }));
+}
+
+export function getModelNames() {
+    return getModelEntries().map(m => m.name);
 }
 
 export async function runAllModels() {
@@ -523,7 +589,13 @@ export async function runNfSimModels() {
 // Expose on window for Playwright
 if (typeof window !== 'undefined') {
     (window as any).runModels = runModels;
+    (window as any).runCustomModel = async (name: string, code: string) => {
+        const globalAny = (window as any);
+        const batchSeed = typeof globalAny.__batchSeed === 'number' ? globalAny.__batchSeed : undefined;
+        return runSingleBatchItem({ name, code, id: name }, batchSeed);
+    };
     (window as any).runAllModels = runAllModels;
     (window as any).runNfSimModels = runNfSimModels;
+    (window as any).getModelEntries = getModelEntries;
     (window as any).getModelNames = getModelNames;
 }

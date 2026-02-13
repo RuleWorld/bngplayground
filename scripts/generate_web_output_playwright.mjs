@@ -33,6 +33,92 @@ function normalizeBasePath(p) {
   return out;
 }
 
+function safeModelName(name) {
+  return String(name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+}
+
+function normalizeKey(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function safeKey(value) {
+  return normalizeKey(value).replace(/[^a-z0-9]+/g, '_');
+}
+
+function addKey(map, key, id) {
+  if (!key) return;
+  const existing = map.get(key);
+  if (existing) {
+    existing.add(id);
+    return;
+  }
+  map.set(key, new Set([id]));
+}
+
+function resolveModelList(requested, entries) {
+  const idMap = new Map();
+  const keyMap = new Map();
+
+  for (const entry of entries) {
+    const id = entry.id;
+    const name = entry.name;
+    idMap.set(normalizeKey(id), id);
+    addKey(keyMap, normalizeKey(name), id);
+    addKey(keyMap, safeKey(name), id);
+    addKey(keyMap, safeKey(id), id);
+  }
+
+  const resolved = [];
+  const resolvedSet = new Set();
+  const missing = [];
+  const ambiguous = [];
+
+  for (const raw of requested) {
+    const trimmed = String(raw ?? '').trim();
+    if (!trimmed) continue;
+    const key = normalizeKey(trimmed);
+    if (idMap.has(key)) {
+      const id = idMap.get(key);
+      if (!resolvedSet.has(id)) {
+        resolvedSet.add(id);
+        resolved.push(id);
+      }
+      continue;
+    }
+
+    const candidates = keyMap.get(key) || keyMap.get(safeKey(trimmed));
+    if (!candidates || candidates.size === 0) {
+      missing.push(trimmed);
+      continue;
+    }
+
+    if (candidates.size > 1) {
+      ambiguous.push({ name: trimmed, ids: Array.from(candidates).sort() });
+      continue;
+    }
+
+    const id = Array.from(candidates)[0];
+    if (!resolvedSet.has(id)) {
+      resolvedSet.add(id);
+      resolved.push(id);
+    }
+  }
+
+  if (missing.length || ambiguous.length) {
+    if (missing.length) {
+      console.error(`[generate:web-output] Unknown models: ${missing.join(', ')}`);
+    }
+    if (ambiguous.length) {
+      for (const entry of ambiguous) {
+        console.error(`[generate:web-output] Ambiguous model selector "${entry.name}" matches: ${entry.ids.join(', ')}`);
+      }
+    }
+    throw new Error('Model list contains unknown or ambiguous entries. Use model IDs for disambiguation.');
+  }
+
+  return resolved;
+}
+
 const BASE_PATH = normalizeBasePath(readViteBasePath());
 const BASE_URL = `http://localhost:${PORT}${BASE_PATH}?batch=true`;
 const WEB_OUTPUT_SEED = Number(process.env.WEB_OUTPUT_SEED || '12345');
@@ -199,17 +285,22 @@ async function main() {
     }
 
     // Get full list of models from the app
-    const allModels = await page.evaluate(() => window.getModelNames());
-    const modelsToRun = envModelList || allModels;
+    const allModels = await page.evaluate(() => {
+      if (typeof window.getModelEntries === 'function') return window.getModelEntries();
+      const names = (typeof window.getModelNames === 'function' ? window.getModelNames() : []) || [];
+      return names.map((name) => ({ id: name, name }));
+    });
+
+    const modelsToRun = envModelList ? resolveModelList(envModelList, allModels) : allModels.map(m => m.id);
     console.log(`[generate:web-output] Found ${allModels.length} available models.`);
     console.log(`[generate:web-output] Scheduled to run: ${modelsToRun.length} models.`);
 
     let successCount = 0;
     let failCount = 0;
 
-    for (const modelName of modelsToRun) {
+    for (const modelId of modelsToRun) {
       console.log(`\n--------------------------------------------------`);
-      console.log(`[generate:web-output] Processing: ${modelName}`);
+      console.log(`[generate:web-output] Processing: ${modelId}`);
 
       try {
         const timeoutPromise = new Promise((_, reject) =>
@@ -218,7 +309,7 @@ async function main() {
 
         // Run single model
         await Promise.race([
-          page.evaluate((name) => window.runModels([name]), modelName),
+          page.evaluate((name) => window.runModels([name]), modelId),
           timeoutPromise
         ]);
 
@@ -239,13 +330,13 @@ async function main() {
 
         successCount++;
       } catch (err) {
-        console.error(`[generate:web-output] ❌ FAILED ${modelName}:`, err.message);
+        console.error(`[generate:web-output] ❌ FAILED ${modelId}:`, err.message);
         failCount++;
 
         if (err.message === 'TIMEOUT') {
-          console.log(`[generate:web-output] ⚠️ Timeout exceeded for ${modelName}. Writing skipped marker.`);
+          console.log(`[generate:web-output] ⚠️ Timeout exceeded for ${modelId}. Writing skipped marker.`);
           // Create a marker file so the report generator knows it was skipped
-          const skippedFile = path.join(WEB_OUTPUT_DIR, `results_${modelName}.csv`);
+          const skippedFile = path.join(WEB_OUTPUT_DIR, `results_${safeModelName(modelId)}.csv`);
           fs.writeFileSync(skippedFile, 'Time,Observable\n# SKIPPED (Timeout)\n0,0');
         }
 

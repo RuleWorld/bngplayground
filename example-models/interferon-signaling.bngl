@@ -52,20 +52,7 @@ end observables
 
 begin actions
     generate_network({overwrite=>1})
-    
-    # 1. Equilibration (No Ligand)
-    simulate({method=>"ode",t_end=>20,n_steps=>40,suffix=>"equil"})
-    
-    # 2. Stimulation (Add IFN)
-    # Simulates a bolus of Interferon
     setConcentration("IFN(r)", 100)
-    saveConcentrations()
-    simulate({continue=>1,method=>"ode",t_end=>80,n_steps=>160,suffix=>"stim"})
-    
-    # 3. Washout / Reset
-    # Simulates clearance of cytokine
-    setConcentration("IFN(r)", 0)
-    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,suffix=>"wash"})
+    simulate({method=>"ode",t_end=>100,n_steps=>200})
 end actions
 end model
-

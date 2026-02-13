@@ -75,12 +75,14 @@ begin observables
     Molecules Total_Mass      Ca()                     # Conservation metric
 end observables
 
-
+begin functions
+    v_stim() = v_stim_current * k_ip3_synth
+end functions
 
 begin reaction rules
     ## ACTIVATION 
     # Stimulus triggers IP3
-    0 -> IP3()@Cyt v_stim_current * k_ip3_synth
+    0 -> IP3()@Cyt v_stim()
     IP3()@Cyt -> 0 k_ip3_deg
 
     ## STIM1 SENSOR DYNAMICS (Added to fix 0 observable)
@@ -117,12 +119,12 @@ begin actions
     generate_network({overwrite=>1})
     # Phase 1: Basal
     setParameter("v_stim_current",0.2)
-    simulate({method=>"ode",t_end=>20,n_steps=>40})
+    simulate({method=>"ode",t_end=>100,n_steps=>200})
     # Phase 2: High Stimulus
     setParameter("v_stim_current",5.0)
     simulate({method=>"ode",t_end=>120,n_steps=>200,continue=>1,suffix=>"2"})
     # Phase 3: Recovery
     setParameter("v_stim_current",0.2)
-    simulate({method=>"ode",t_end=>200,n_steps=>160,continue=>1,suffix=>"3"})
+    simulate({method=>"ode",t_end=>1000,n_steps=>200,continue=>1,suffix=>"3"})
 end actions
 end model

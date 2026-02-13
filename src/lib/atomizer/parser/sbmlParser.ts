@@ -21,6 +21,8 @@ import {
   ModelQualifier,
 } from '../config/types';
 import { standardizeName, logger, factorial, comb } from '../utils/helpers';
+// import { pathToFileURL } from 'node:url';
+// import { resolve } from 'node:path';
 
 // Polyfill self for Node.js compatibility (libsbmljs uses it)
 if (typeof self === 'undefined') {
@@ -702,12 +704,12 @@ export class SBMLParser {
         const libsbmlModule = await import('libsbmljs_stable');
         console.log('[SBMLParser] Import complete.');
 
-        const factory = libsbmlModule.default || libsbmlModule;
+        const factory = libsbmlModule.default || libsbmlModule.libsbml || libsbmlModule;
         if (typeof factory !== 'function') {
           throw new Error(`libsbmljs export is not a function: ${typeof factory}`);
         }
 
-        await new Promise<void>((resolve, reject) => {
+        await new Promise<void>((res, reject) => {
           const timeoutId = setTimeout(() => {
             reject(new Error('libsbmljs initialization timed out (30s)'));
           }, 30000);
@@ -716,14 +718,13 @@ export class SBMLParser {
             locateFile: (file: string) => {
               console.log(`[SBMLParser] locateFile: ${file}`);
               if (file.endsWith('.wasm')) {
-                // Node environment: load from local node_modules if available
+                // Node environment: prefer the local public asset via file URL
                 if (typeof process !== 'undefined' && process.versions && process.versions.node) {
                   try {
-                    // Construct candidate path relative                    // Construct candidate path relative to process.cwd()
-                    // User requested to use public/libsbml.wasm explicitly
-                    const wasmPath = `${process.cwd().replace(/\\/g, '/')}/public/libsbml.wasm`;
-                    return `${wasmPath}`;
+                    // For Node environment, use a simple string path
+                    return './public/libsbml.wasm';
                   } catch (e) {
+                    console.warn('[SBMLParser] Failed to locate libsbml.wasm via resolve:', e);
                     // fall back to bundled path
                     return '/bngplayground/libsbml.wasm';
                   }
@@ -744,11 +745,19 @@ export class SBMLParser {
             onRuntimeInitialized: () => {
               console.log('[SBMLParser] onRuntimeInitialized');
               clearTimeout(timeoutId);
-              // Ensure libsbml is set if not already set by Thenable
-              if (libsbml && (typeof libsbml.readSBMLFromString === 'function' || libsbml.SBMLReader)) {
-                console.log('[SBMLParser] libsbml already has required methods');
+              
+              // If libsbml wasn't set by the Thenable yet, it might be available in 'this' or global
+              if (!libsbml && (typeof (self as any).readSBMLFromString === 'function' || (self as any).SBMLReader)) {
+                libsbml = self;
               }
-              resolve();
+
+              if (libsbml && (typeof libsbml.readSBMLFromString === 'function' || libsbml.SBMLReader)) {
+                console.log('[SBMLParser] libsbml ready via onRuntimeInitialized');
+                res();
+              } else {
+                console.log('[SBMLParser] waiting for Thenable to set libsbml...');
+                // We don't resolve yet, wait for the factory promise
+              }
             },
             onAbort: (msg: any) => {
               console.error('[SBMLParser] Aborted:', msg);
@@ -759,31 +768,48 @@ export class SBMLParser {
           };
 
           console.log('[SBMLParser] Calling factory...');
-          const result = factory.call(self, config);
+          try {
+            const result = factory.call(self, config);
 
-          if (result && typeof result.then === 'function') {
-            console.log('[SBMLParser] Factory returned Thenable, awaiting...');
-            result.then(
-              (instance: any) => {
-                libsbml = instance || result;
-                const allKeys = Object.keys(libsbml).filter(k => !k.startsWith('_'));
-                console.log('[SBMLParser] Thenable resolved. ALL libsbml keys:', allKeys);
-
-                // Detailed check for common classes
-                console.log(`[SBMLParser] SBMLReader: ${typeof libsbml.SBMLReader}`);
-                console.log(`[SBMLParser] SBMLDocument: ${typeof libsbml.SBMLDocument}`);
-
-                // We will use SBMLReader directly in parse() instead of shimming
-              },
-              (err: any) => {
-                console.error('[SBMLParser] Thenable rejected:', err);
-                reject(err);
+            if (result && typeof result.then === 'function') {
+              console.log('[SBMLParser] Factory returned Thenable, awaiting...');
+              result.then(
+                (instance: any) => {
+                  console.log('[SBMLParser] Thenable resolved. Instance type:', typeof instance);
+                  // Only set libsbml if instance is actually valid
+                  if (instance && (typeof instance.SBMLReader === 'function' || typeof instance.readSBMLFromString === 'function')) {
+                    libsbml = instance;
+                    console.log('[SBMLParser] libsbml ready via Thenable. SBMLReader type:', typeof libsbml.SBMLReader);
+                  } else {
+                    console.error('[SBMLParser] Invalid libsbml instance:', instance);
+                    reject(new Error('libsbml initialization returned invalid instance'));
+                    return;
+                  }
+                  clearTimeout(timeoutId);
+                  res();
+                },
+                (err: any) => {
+                  console.error('[SBMLParser] Thenable rejected:', err);
+                  clearTimeout(timeoutId);
+                  reject(err);
+                }
+              );
+            } else {
+              console.log('[SBMLParser] Factory returned immediate result. SBMLReader type:', typeof (result as any)?.SBMLReader);
+              if (result && (typeof (result as any).SBMLReader === 'function' || typeof (result as any).readSBMLFromString === 'function')) {
+                libsbml = result;
+                clearTimeout(timeoutId);
+                res();
+              } else {
+                reject(new Error('libsbml factory returned invalid result'));
               }
-            );
-          } else {
-            console.log('[SBMLParser] Factory returned instance immediately');
-            libsbml = result;
+            }
+          } catch (e) {
+            console.error('[SBMLParser] Factory call THREW:', e);
+            clearTimeout(timeoutId);
+            reject(e);
           }
+
         });
 
         this.initialized = true;
@@ -1087,14 +1113,25 @@ export class SBMLParser {
 
   private extractSpecies(sp: any): SBMLSpecies {
     console.log(`!!! [SBMLParser] extractSpecies: ${sp.getId ? sp.getId() : 'unknown'}`);
+    const name = typeof sp.getName === 'function' ? (sp.getName() || '') : '';
+    const attrName = typeof sp.getAttributeValue === 'function' ? (sp.getAttributeValue('name') || '') : '';
+    const finalName = name || attrName || sp.getId();
+    
+    const hasInitialAmount = typeof sp.getInitialAmount === 'function' && (sp.getInitialAmount() || 0) > 0;
+    const hasInitialConcentration = typeof sp.getInitialConcentration === 'function' && (sp.getInitialConcentration() || 0) > 0;
+    
+    // Only use explicit hasOnlySubstanceUnits attribute from SBML.
+    // Inferred logic based on non-zero initialAmount was incorrect for mixed-unit systems.
+    const hasOnlySubstanceUnits = typeof sp.getHasOnlySubstanceUnits === 'function' ? sp.getHasOnlySubstanceUnits() : false;
+    
     return {
       id: sp.getId(),
-      name: sp.getName() || sp.getId(),
+      name: finalName,
       compartment: sp.getCompartment(),
-      initialConcentration: typeof sp.getInitialConcentration === 'function' ? (sp.getInitialConcentration() || 0) : 0,
-      initialAmount: typeof sp.getInitialAmount === 'function' ? (sp.getInitialAmount() || 0) : 0,
+      initialConcentration: hasInitialConcentration ? (sp.getInitialConcentration() || 0) : 0,
+      initialAmount: hasInitialAmount ? (sp.getInitialAmount() || 0) : 0,
       substanceUnits: typeof sp.getSubstanceUnits === 'function' ? (sp.getSubstanceUnits() || '') : '',
-      hasOnlySubstanceUnits: typeof sp.getHasOnlySubstanceUnits === 'function' ? sp.getHasOnlySubstanceUnits() : false,
+      hasOnlySubstanceUnits,
       boundaryCondition: typeof sp.getBoundaryCondition === 'function' ? sp.getBoundaryCondition() : false,
       constant: typeof sp.getConstant === 'function' ? sp.getConstant() : false,
       annotations: this.extractAnnotations(sp),
@@ -1257,7 +1294,7 @@ export class SBMLParser {
 
     let kineticLaw: SBMLKineticLaw | null = null;
     const kl = rxn.getKineticLaw();
-    if (kl) {
+    if (kl && (typeof kl.ptr === 'undefined' || kl.ptr !== 0)) {
       const localParams: SBMLParameter[] = [];
 
       const numParams = kl.getNumLocalParameters?.() ?? kl.getNumParameters?.() ?? 0;
@@ -1347,12 +1384,37 @@ export class SBMLParser {
       }
       args.push(name);
     }
-    const body = func.getBody();
+
+    // Try getBody() first (standard SBML with <lambda>), fall back to getMath() (BNG-XML without <lambda>)
+    let body = func.getBody();
+    let mathStr = '';
+    if (body) {
+      mathStr = this.safeFormulaToString(body);
+    } else {
+      // BNG-XML format: use getMath() directly, skipping <lambda> wrapper if present
+      const math = func.getMath();
+      if (math) {
+        const mathStrRaw = this.safeFormulaToString(math);
+        // If the result looks like it's wrapped in lambda (starts with lambda or has bvar),
+        // we need to extract just the body
+        if (/^lambda\s*\(/i.test(mathStrRaw) || /\bbvar\b/i.test(mathStrRaw)) {
+          // Extract content inside lambda(...), skipping bvar declarations
+          const lambdaMatch = mathStrRaw.match(/lambda\s*\(\s*(?:[^)]*?\bbvar\b[^)]*,?\s*)*(.+)\s*\)/is);
+          if (lambdaMatch) {
+            mathStr = lambdaMatch[1].trim();
+          } else {
+            mathStr = mathStrRaw;
+          }
+        } else {
+          mathStr = mathStrRaw;
+        }
+      }
+    }
 
     return {
       id: func.getId(),
       name: func.getName() || func.getId(),
-      math: body ? this.safeFormulaToString(body) : '',
+      math: mathStr,
       arguments: args,
     };
   }

@@ -24,7 +24,6 @@ begin parameters
     k_recycle 0.05     # Receptor return
     
     # Initials
-    Epi_tot 100
     BetaR_tot 500
     Gs_tot 800
     AC_tot 100

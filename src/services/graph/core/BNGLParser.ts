@@ -1,9 +1,10 @@
-import { Component } from './Component';
-import { Molecule } from './Molecule';
-import { SpeciesGraph } from './SpeciesGraph';
+import { Component } from './Component.ts';
+import { Molecule } from './Molecule.ts';
+import { SpeciesGraph } from './SpeciesGraph.ts';
+import { ExpressionTranslator } from './ExpressionTranslator.ts';
 
-import { evaluateExpressionHighPrecision, needsHighPrecision } from './highPrecisionEvaluator';
-import { RxnRule } from './RxnRule';
+import { evaluateExpressionHighPrecision, needsHighPrecision } from './highPrecisionEvaluator.ts';
+import { RxnRule } from './RxnRule.ts';
 
 const shouldLogParser = false;
 
@@ -190,8 +191,9 @@ export class BNGLParser {
       }
 
       // Check for molecule-level bonds (e.g., "A(b,c)!1") - not supported
-      if (trimmedMol.includes(')!')) {
-        return `Molecule-level bonds like "${trimmedMol}" are not supported`;
+      // BUT molecule-level wildcards "A(b,c)!+" are supported
+      if (trimmedMol.includes(')!') && !trimmedMol.includes(')!+') && !trimmedMol.includes(')!?')) {
+        return `Molecule-level specific bonds like "${trimmedMol}" are not supported. Use molecule-level wildcards (!+, !?) instead.`;
       }
 
       // Validate molecule name (must start with letter, underscore, or wildcard *)
@@ -294,7 +296,7 @@ export class BNGLParser {
     // Parse name and components
     // FIX: Molecule name must start with letter or underscore (not number or wildcard)
     // Allow '*' for wildcard molecule patterns
-    const match = baseStr.match(/^\s*([A-Za-z_*][A-Za-z0-9_*]*)\s*(?:\(([^)]*)\))?(?:@([A-Za-z0-9_]+))?\s*$/);
+    const match = baseStr.match(/^\s*([A-Za-z_*][A-Za-z0-9_*]*)\s*(?:\(([^)]*)\))?\s*(?:!([+?]))?\s*(?:@([A-Za-z0-9_]+))?\s*$/);
     if (!match) {
       // Check if this is a wildcard-only molecule like "*"
       if (baseStr.trim() === '*') {
@@ -316,7 +318,8 @@ export class BNGLParser {
 
     const name = match[1];
     const componentStr = match[2] || '';
-    const suffixCompartment = match[3];
+    const moleculeWildcard = match[3];
+    const suffixCompartment = match[4];
 
     if (suffixCompartment) {
       compartment = suffixCompartment;
@@ -341,6 +344,7 @@ export class BNGLParser {
 
     const molecule = new Molecule(name, components, compartment);
     if (label) molecule.label = label;
+    if (moleculeWildcard) molecule.wildcard = moleculeWildcard;
     return molecule;
   }
 
@@ -366,6 +370,9 @@ export class BNGLParser {
     for (const bondPart of bondParts) {
       if (bondPart === '+' || bondPart === '?' || bondPart === '-') {
         component.wildcard = bondPart;
+      } else if (bondPart === '.') {
+        // BioNetGen semantic: "." explicitly means UNBOUND
+        component.wildcard = '-';
       } else {
         // FIX: Allow '0' as a valid bond label (common in BNG2)
         const bond = parseInt(bondPart);
@@ -417,9 +424,15 @@ export class BNGLParser {
           depth--;
           current += char;
         } else if (depth === 0 && char === '+') {
-          // Split on + at top level
-          if (current.trim()) parts.push(current.trim());
-          current = '';
+          // PROPOSED FIX: Check if preceded by '!'. If so, it's a wildcard '!+', not a separator.
+          const prev = i > 0 ? segment[i - 1] : '';
+          if (prev === '!') {
+            current += char;
+          } else {
+            // Split on + at top level
+            if (current.trim()) parts.push(current.trim());
+            current = '';
+          }
         } else {
           current += char;
         }
@@ -699,35 +712,8 @@ export class BNGLParser {
         evaluable = evaluable.replace(regex, valueStr);
       }
 
-      // Convert BNGL operators to JavaScript
-      evaluable = evaluable.replace(/\^/g, '**');  // Power operator
-
-      // Replace BNGL math constants
-      evaluable = evaluable.replace(/\b_pi\b/g, String(Math.PI));
-      evaluable = evaluable.replace(/\b_e\b/g, String(Math.E));
-
-      // BNGL math functions with JavaScript equivalents
-      evaluable = evaluable.replace(/\bexp\(/g, 'Math.exp(');
-      evaluable = evaluable.replace(/\bln\(/g, 'Math.log(');
-      evaluable = evaluable.replace(/\blog10\(/g, 'Math.log10(');
-      evaluable = evaluable.replace(/\bsqrt\(/g, 'Math.sqrt(');
-      evaluable = evaluable.replace(/\babs\(/g, 'Math.abs(');
-      evaluable = evaluable.replace(/\bsin\(/g, 'Math.sin(');
-      evaluable = evaluable.replace(/\bcos\(/g, 'Math.cos(');
-      evaluable = evaluable.replace(/\btan\(/g, 'Math.tan(');
-      evaluable = evaluable.replace(/\basin\(/g, 'Math.asin(');
-      evaluable = evaluable.replace(/\bacos\(/g, 'Math.acos(');
-      evaluable = evaluable.replace(/\batan\(/g, 'Math.atan(');
-      evaluable = evaluable.replace(/\basinh\(/g, 'Math.asinh(');
-      evaluable = evaluable.replace(/\bacosh\(/g, 'Math.acosh(');
-      evaluable = evaluable.replace(/\batanh\(/g, 'Math.atanh(');
-      evaluable = evaluable.replace(/\brint\(/g, 'Math.round(');
-      evaluable = evaluable.replace(/\batan2\(/g, 'Math.atan2(');
-      evaluable = evaluable.replace(/\bpow\(/g, 'Math.pow(');
-      evaluable = evaluable.replace(/\bmin\(/g, 'Math.min(');
-      evaluable = evaluable.replace(/\bmax\(/g, 'Math.max(');
-      evaluable = evaluable.replace(/\bfloor\(/g, 'Math.floor(');
-      evaluable = evaluable.replace(/\bceil\(/g, 'Math.ceil(');
+      // Convert BNGL operators and math functions to JavaScript
+      evaluable = ExpressionTranslator.translate(evaluable);
 
       // Check if mratio, if, or FunctionProduct is used
       const usesMratio = /\bmratio\s*\(/g.test(evaluable);

@@ -4,13 +4,15 @@ import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { VALIDATION_MODEL_NAMES } from '../validation_models';
 
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from './bngDefaults.js';
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 
 // Configuration
-const BNG2_PATH = process.env.BNG2_PATH || path.join(PROJECT_ROOT, 'bionetgen_python/bng-win/BNG2.pl');
-const PERL_CMD = process.env.PERL_CMD || 'perl';
+const BNG2_PATH = process.env.BNG2_PATH ?? DEFAULT_BNG2_PATH;
+const PERL_CMD = process.env.PERL_CMD ?? DEFAULT_PERL_CMD;
 const OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 const MODELS_DIR = path.join(PROJECT_ROOT, 'public/models');
 

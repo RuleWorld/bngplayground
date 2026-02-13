@@ -5,9 +5,9 @@
  * Provides BNG2.pl-compatible parsing for maximum parity.
  */
 import { CharStreams, CommonTokenStream } from 'antlr4ts';
-import { BNGLexer } from './generated/BNGLexer';
-import { BNGParser } from './generated/BNGParser';
-import { BNGLVisitor } from './BNGLVisitor';
+import { BNGLexer } from './generated/BNGLexer.ts';
+import { BNGParser } from './generated/BNGParser.ts';
+import { BNGLVisitor } from './BNGLVisitor.ts';
 import type { BNGLModel } from '../../types';
 
 export interface ParseError {

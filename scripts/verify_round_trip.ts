@@ -9,7 +9,7 @@ if (typeof self === 'undefined') {
 }
 
 // Configuration
-const BNG2_PATH = path.resolve('bionetgen_python/bng-win/BNG2.pl');
+const BNG2_PATH = 'C:/Users/Achyudhan/anaconda3/envs/Research/Lib/site-packages/bionetgen/bng-win/BNG2.pl';
 const OUTPUT_BASE = path.resolve('tests/parity_check');
 const TOLERANCE = 1e-3;
 
@@ -73,12 +73,29 @@ function parseGDAT(filePath: string): { headers: string[], data: number[][] } {
     return { headers, data };
 }
 
-// Compare two GDAT files
-function compareGDAT(refPath: string, testPath: string): { passed: boolean, mae: number, error?: string, sharedHeaders: string[], refHeaders: string[], testHeaders: string[], rowCount: number } {
+  // Compare two GDAT files
+function compareGDAT(refPath: string, testPath: string, observableMap?: Map<string, string>): { passed: boolean, mae: number, error?: string, sharedHeaders: string[], refHeaders: string[], testHeaders: string[], rowCount: number } {
     const ref = parseGDAT(refPath);
     const test = parseGDAT(testPath);
 
-    const commonHeaders = ref.headers.filter(h => test.headers.includes(h));
+    // Apply observable mapping if provided
+    let refHeaders = ref.headers;
+    let testHeaders = test.headers;
+    
+    if (observableMap) {
+      // Map reference headers to test headers using observableMap
+      refHeaders = ref.headers.map(header => {
+        // Find if this header is in the observableMap values
+        for (const [key, value] of observableMap.entries()) {
+          if (value === header) {
+            return key; // Use the key as the mapped header
+          }
+        }
+        return header; // Keep original if no mapping found
+      });
+    }
+
+    const commonHeaders = refHeaders.filter(h => testHeaders.includes(h));
 
     if (commonHeaders.length <= 1) { // Only 'time' or nothing
         return {
@@ -183,7 +200,7 @@ async function verifyModel(modelPath: string) {
 
         if (!refGdat || !atomGdat) throw new Error(`Missing GDAT output`);
 
-        const comp = compareGDAT(refGdat, atomGdat);
+        const comp = compareGDAT(refGdat, atomGdat, result.observableMap);
         const modelResult: ModelResult = {
             model: modelName,
             status: comp.passed ? 'PASS' : 'FAIL',

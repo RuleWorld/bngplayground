@@ -52,7 +52,6 @@ end observables
 
 begin actions
     generate_network({overwrite=>1})
-    simulate({method=>"ode",t_start=>0,t_end=>10,n_steps=>240})
+    simulate({method=>"ode",t_start=>0,t_end=>120,n_steps=>200})
 end actions
 end model
-

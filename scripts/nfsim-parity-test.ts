@@ -12,10 +12,12 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import { createRequire } from 'module';
 
+import { DEFAULT_BNG2_PATH } from './bngDefaults.js';
+
 const require = createRequire(import.meta.url);
 
 const SEED = 12345;
-const BNG2_PATH = path.join(process.cwd(), 'bionetgen_python/bng-win/BNG2.pl');
+const BNG2_PATH = process.env.BNG2_PATH ?? DEFAULT_BNG2_PATH;
 
 // Helper to parse gdat file
 function parseGdat(content: string): { headers: string[], data: number[][] } {

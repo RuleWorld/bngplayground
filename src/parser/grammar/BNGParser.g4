@@ -79,8 +79,9 @@ molecule_type_def
     ;
 
 // Molecules can have optional parentheses (e.g., "dead" or "A()" are both valid)
+// Allow block keywords (Species, Molecule, etc.) as molecule names for BNG2 parity
 molecule_def
-    : STRING (LPAREN component_def_list? RPAREN)? molecule_attributes?
+    : (STRING | keyword_as_mol_name) (LPAREN component_def_list? RPAREN)? molecule_attributes?
     ;
 
 molecule_attributes
@@ -97,11 +98,21 @@ component_def
     ;
 
 // Allow math function keywords to be used as component names (e.g., sin, max, exp)
+// Also allow action-related keywords that BNG2 permits as identifiers (e.g., type, method)
 keyword_as_component_name
     : SIN | COS | TAN | ASIN | ACOS | ATAN | SINH | COSH | TANH
     | ASINH | ACOSH | ATANH | EXP | LN | LOG10 | LOG2 | SQRT | ABS
     | MIN | MAX | SUM | AVG | IF | TIME | SAT |  MM | HILL | ARRHENIUS
     | MRATIO | TFUN | FUNCTIONPRODUCT
+    | TYPE | METHOD | PARAMETER | FILE | FORMAT | PREFIX | SUFFIX
+    ;
+
+// Allow block header keywords to be used as molecule names
+// BNG2 permits this since molecule names are just identifiers
+keyword_as_mol_name
+    : SPECIES | MOLECULE | MOLECULES | REACTION | REACTIONS | RULES
+    | PARAMETERS | OBSERVABLES | FUNCTIONS | COMPARTMENTS | ENERGY | PATTERNS
+    | MODEL | SEED | GROUPS | POPULATION | COUNTER
     ;
 
 // Allow numeric states like ~0~p and mixed like ~2P~10P (INT followed by STRING)
@@ -116,8 +127,9 @@ state_name
     ;
 
 // Seed species block
+// BNG2 allows multiple seed species definitions per line (tab/space separated)
 seed_species_block
-    : BEGIN (SEED SPECIES | SPECIES) LB+ (seed_species_def LB+)* END (SEED SPECIES | SPECIES) LB*
+    : BEGIN (SEED SPECIES | SPECIES) LB+ (seed_species_def+ LB+)* END (SEED SPECIES | SPECIES) LB*
     ;
 
 // Support: "1 @c0:Species(...) concentration" or just species without concentration
@@ -140,7 +152,7 @@ molecule_compartment
 // Molecule tagging: pattern%1, pattern%2 for identifying molecules in reactions
 // Bond wildcards can appear after entire patterns: e.g., Smad1(loc~cyt)!+
 molecule_pattern
-    : STRING (LPAREN component_pattern_list? RPAREN)? pattern_bond_wildcard? molecule_tag? molecule_attributes?
+    : (STRING | keyword_as_mol_name) (LPAREN component_pattern_list? RPAREN)? pattern_bond_wildcard? molecule_tag? molecule_attributes?
     ;
 
 // Bond wildcards that apply to entire molecule patterns

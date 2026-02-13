@@ -7,10 +7,10 @@
 
 import Decimal from 'decimal.js';
 import { CharStreams, CommonTokenStream } from 'antlr4ts';
-import { BNGLexer } from './../../../parser/generated/BNGLexer';
-import { BNGParser, ExpressionContext, Function_callContext, Conditional_exprContext, Or_exprContext, And_exprContext, Equality_exprContext, Relational_exprContext, Additive_exprContext, Multiplicative_exprContext, Power_exprContext, Unary_exprContext, Primary_exprContext } from './../../../parser/generated/BNGParser';
-import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor';
-import { BNGParserVisitor } from './../../../parser/generated/BNGParserVisitor';
+import { BNGLexer } from './../../../parser/generated/BNGLexer.ts';
+import { BNGParser, ExpressionContext, Function_callContext, Conditional_exprContext, Or_exprContext, And_exprContext, Equality_exprContext, Relational_exprContext, Additive_exprContext, Multiplicative_exprContext, Power_exprContext, Unary_exprContext, Primary_exprContext } from './../../../parser/generated/BNGParser.ts';
+import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
+import type { BNGParserVisitor } from './../../../parser/generated/BNGParserVisitor.ts';
 
 // Configure decimal.js
 Decimal.set({
@@ -217,6 +217,8 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       // Check for built-in constants if not caught by literal
       if (name === '_pi' || name === 'pi') return Decimal.acos(-1);
       if (name === '_e' || name === 'e') return new Decimal(1).exp();
+      // Allow unresolved species amount placeholders to fall back to standard evaluation.
+      if (name.endsWith('_amt')) return new Decimal(NaN);
 
       throw new Error(`Unknown identifier: ${name}`);
     }

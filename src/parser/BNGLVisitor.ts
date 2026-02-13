@@ -1,12 +1,12 @@
-import { BNGLParser as CoreBNGLParser } from '../services/graph/core/BNGLParser';
+import { BNGLParser as CoreBNGLParser } from '../services/graph/core/BNGLParser.ts';
 /**
  * ANTLR4 BNGL Visitor
  * 
  * Converts ANTLR4 parse tree to BNGLModel type.
  */
-import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor';
-import { BNGParserVisitor } from './generated/BNGParserVisitor';
-import * as Parser from './generated/BNGParser';
+import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
+import type { BNGParserVisitor } from './generated/BNGParserVisitor.ts';
+import * as Parser from './generated/BNGParser.ts';
 import type {
   BNGLModel,
   BNGLMoleculeType,
@@ -238,6 +238,28 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     }
   }
 
+  private splitTopLevelCommaList(text: string): string[] {
+    const parts: string[] = [];
+    let depth = 0;
+    let current = '';
+
+    for (let i = 0; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '(') depth++;
+      else if (ch === ')') depth = Math.max(0, depth - 1);
+
+      if (ch === ',' && depth === 0) {
+        parts.push(current.trim());
+        current = '';
+        continue;
+      }
+      current += ch;
+    }
+
+    if (current.trim()) parts.push(current.trim());
+    return parts;
+  }
+
   // Parameters block
   visitParameters_block(ctx: Parser.Parameters_blockContext): void {
     for (const paramDef of ctx.parameter_def()) {
@@ -302,7 +324,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const molDef = ctx.molecule_def();
     if (!molDef) return;
 
-    const nameNode = molDef.STRING();
+    const nameNode = molDef.STRING() || (molDef as any).keyword_as_mol_name?.();
     if (!nameNode) return;
     const name = nameNode.text;
     const components: string[] = [];
@@ -340,7 +362,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const speciesDefCtx = ctx.species_def();
     if (!speciesDefCtx) return;
 
-    let name = this.getSpeciesString(speciesDefCtx);
+    let name = this.getSpeciesString(speciesDefCtx, { completeMissingComponents: false });
     let isConstant = false;
 
     // Check all children for $ prefix (constant/source species)
@@ -423,7 +445,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const patterns = patternListCtx.observable_pattern().map(op => {
       const speciesDef = op.species_def();
       if (speciesDef) {
-        return this.getSpeciesString(speciesDef);
+        return this.getSpeciesString(speciesDef, { completeMissingComponents: true });
       }
       // For stoichiometry comparisons like R==1, just return the text
       return op.text;
@@ -489,13 +511,13 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     // Original logic: "0 -> Product" meant reactants = []
     // New logic: collect all species. If only '0' is present, results in [] anyway.
-    let reactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd));
+    let reactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
 
     // Get products - collect all species and skip '0'
     const productSpecies = productCtx.species_def();
 
     // Mixed products like "A + 0" should result in ["A"]
-    let products: string[] = productSpecies.map(sd => this.getSpeciesString(sd));
+    let products: string[] = productSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
 
     // Get rate(s)
     const rateExpressions = rateLawCtx.expression();
@@ -505,16 +527,55 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     let isArrhenius = false;
     let arrheniusPhi: string | undefined;
     let arrheniusEact: string | undefined;
+    let arrheniusA: string | undefined;
+
+    let isReverseArrhenius = false;
+    let reverseArrheniusPhi: string | undefined;
+    let reverseArrheniusEact: string | undefined;
+    let reverseArrheniusA: string | undefined;
 
     if (rateExpressions.length > 0) {
       if (rate.toLowerCase().startsWith('arrhenius(')) {
         isArrhenius = true;
-        const match = rate.match(/arrhenius\s*\(\s*([^,]+)\s*,\s*(.+)\s*\)/i);
-        if (match) {
-          arrheniusPhi = match[1].trim();
-          arrheniusEact = match[2].trim();
-          // For Arrhenius rules, we might want to evaluate expressions later.
-          // In the visitor, we just store the raw sub-expressions.
+        const openParen = rate.indexOf('(');
+        const closeParen = rate.lastIndexOf(')');
+        if (openParen !== -1 && closeParen !== -1) {
+          const argStr = rate.substring(openParen + 1, closeParen);
+          const args = this.splitTopLevelCommaList(argStr);
+          if (args.length === 1) {
+            arrheniusPhi = "0.5";
+            arrheniusEact = args[0].trim();
+          } else if (args.length === 2) {
+            arrheniusPhi = args[0].trim();    // phi is FIRST argument
+            arrheniusEact = args[1].trim();   // Ea is SECOND argument
+          } else if (args.length >= 3) {
+            arrheniusPhi = args[0].trim();
+            arrheniusEact = args[1].trim();
+            arrheniusA = args[2].trim();
+          }
+        }
+      }
+    }
+
+    if (rateExpressions.length > 1 && reverseRate) {
+      if (reverseRate.toLowerCase().startsWith('arrhenius(')) {
+        isReverseArrhenius = true;
+        const openParen = reverseRate.indexOf('(');
+        const closeParen = reverseRate.lastIndexOf(')');
+        if (openParen !== -1 && closeParen !== -1) {
+          const argStr = reverseRate.substring(openParen + 1, closeParen);
+          const args = this.splitTopLevelCommaList(argStr);
+          if (args.length === 1) {
+            reverseArrheniusPhi = "0.5";
+            reverseArrheniusEact = args[0].trim();
+          } else if (args.length === 2) {
+            reverseArrheniusPhi = args[0].trim();    // phi is FIRST argument
+            reverseArrheniusEact = args[1].trim();   // Ea is SECOND argument
+          } else if (args.length >= 3) {
+            reverseArrheniusPhi = args[0].trim();
+            reverseArrheniusEact = args[1].trim();
+            reverseArrheniusA = args[2].trim();
+          }
         }
       }
     }
@@ -542,7 +603,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
 
       const getPatternListStr = (pl?: Parser.Pattern_listContext) => {
-        return pl ? pl.species_def().map(sd => this.getSpeciesString(sd)).join(',') : '';
+        return pl ? pl.species_def().map(sd => this.getSpeciesString(sd, { completeMissingComponents: true })).join(',') : '';
       };
 
       if (modifiersCtx.INCLUDE_REACTANTS()) {
@@ -579,6 +640,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       products,
       rate,
       rateExpression: rate, // Always preserve the rate expression string
+      reactionString: reactantCtx.text + (isBidirectional ? ' <-> ' : ' -> ') + productCtx.text,
       reverseRate,
       isBidirectional,
       deleteMolecules,
@@ -588,6 +650,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       isArrhenius,
       arrheniusPhi,
       arrheniusEact,
+      arrheniusA,
+      isReverseArrhenius,
+      reverseArrheniusPhi,
+      reverseArrheniusEact,
+      reverseArrheniusA,
     });
   }
 
@@ -659,7 +726,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const expr = ctx.expression();
     if (!speciesDef || !expr) return;
 
-    const pattern = this.getSpeciesString(speciesDef);
+    const pattern = this.getSpeciesString(speciesDef, { completeMissingComponents: true });
     const expression = expr.text;
 
     // Optional label
@@ -919,7 +986,31 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       return;
     }
 
-    // For other commands (e.g. saveConcentrations), default to visiting children
+    if (ctx.SAVECONCENTRATIONS()) {
+      const afterPhaseIndex = this.simulationPhases.length - 1;
+      this.concentrationChanges.push({
+        species: '',
+        value: 0,
+        mode: 'save',
+        afterPhaseIndex,
+      });
+      this.actions.push({ type: 'saveConcentrations', args: {} });
+      return;
+    }
+
+    if (ctx.RESETCONCENTRATIONS()) {
+      const afterPhaseIndex = this.simulationPhases.length - 1;
+      this.concentrationChanges.push({
+        species: '',
+        value: 0,
+        mode: 'reset',
+        afterPhaseIndex,
+      });
+      this.actions.push({ type: 'resetConcentrations', args: {} });
+      return;
+    }
+
+    // For other commands, default to visiting children
     this.visitChildren(ctx);
   }
 
@@ -954,7 +1045,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
   }
 
   // Helper: Get species pattern as string
-  private getSpeciesString(ctx: Parser.Species_defContext): string {
+  private getSpeciesString(
+    ctx: Parser.Species_defContext,
+    options: { completeMissingComponents?: boolean } = {}
+  ): string {
     const molPatterns = ctx.molecule_pattern();
     if (!molPatterns || molPatterns.length === 0) return '';
 
@@ -978,14 +1072,34 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
 
     const molecules = molPatterns.map(mp => {
-      const nameNode = mp.STRING();
+      const nameNode = mp.STRING() || (mp as any).keyword_as_mol_name?.();
       if (!nameNode) return '';
       const name = nameNode.text;
       const compListCtx = mp.component_pattern_list();
 
+      const shouldComplete = options.completeMissingComponents === true;
+      const molType = this.moleculeTypes.find((m) => m.name === name);
+
+      const buildWildcardComponent = (compDef: string): string => {
+        const parts = compDef.split('~');
+        const base = parts[0];
+        let comp = base;
+        if (parts.length > 1) {
+          comp += '~?';
+        }
+        comp += '!?';
+        return comp;
+      };
+
       // If no component list, molecule has no components (e.g., "dead" or "I")
       // Normalize to name() to match GraphCanonicalizer and BioNetGen conventions
-      if (!compListCtx) return `${name}()`;
+      if (!compListCtx) {
+        if (shouldComplete && molType && molType.components.length > 0) {
+          const completed = molType.components.map(buildWildcardComponent);
+          return `${name}(${completed.join(',')})`;
+        }
+        return `${name}()`;
+      }
 
 
       // Filter out undefined/empty entries (from double commas ",,")
@@ -994,7 +1108,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       // console.log(`[getSpeciesString] Mol ${name}, total comps: ${compPatterns.length}, valid comps: ${validComps.length}`);
       if (validComps.length === 0) return `${name}()`;
 
-      const components = validComps.map(cp => {
+      let components = validComps.map(cp => {
         const compNode = cp.STRING() || cp.INT() || cp.keyword_as_component_name();
         let comp = compNode ? compNode.text : '';
 
@@ -1025,8 +1139,37 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         return comp;
       }).filter(c => c); // Filter out empty components
 
+      if (shouldComplete && molType && molType.components.length > 0) {
+        const byName = new Map<string, string[]>();
+        for (const comp of components) {
+          const base = comp.split('~')[0].split('!')[0].trim();
+          if (!byName.has(base)) byName.set(base, []);
+          byName.get(base)!.push(comp);
+        }
+
+        const ordered: string[] = [];
+        for (const compDef of molType.components) {
+          const base = compDef.split('~')[0];
+          const queue = byName.get(base);
+          if (queue && queue.length > 0) {
+            ordered.push(queue.shift()!);
+          } else {
+            ordered.push(buildWildcardComponent(compDef));
+          }
+        }
+
+        for (const remaining of byName.values()) {
+          ordered.push(...remaining);
+        }
+        components = ordered;
+      }
+
       // console.log(`[getSpeciesString] Mol ${name}, components:`, components);
       let molStr = `${name}(${components.join(',')})`;
+
+      // Support molecule-level wildcards (!+, !?)
+      const wildcardCtx = mp.pattern_bond_wildcard();
+      if (wildcardCtx) molStr += wildcardCtx.text;
 
       const tagCtx = mp.molecule_tag();
       if (tagCtx) molStr += tagCtx.text;

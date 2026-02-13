@@ -4,6 +4,8 @@ import { execSync } from 'child_process';
 import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
 
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../scripts/bngDefaults.js';
+
 /**
  * Parity tests for polymer models with compartments
  * Compares web simulator (WASM NFsim) against BNG2.pl (native NFsim)
@@ -76,6 +78,9 @@ describe('Polymer Compartment Parity Tests', () => {
       try {
         const bnglPath = path;
         const outputDir = `temp_parity_${name}`;
+
+        const BNG2_PATH = process.env.BNG2_PATH ?? DEFAULT_BNG2_PATH;
+        const PERL_CMD = process.env.PERL_CMD ?? DEFAULT_PERL_CMD;
         
         // Create output directory
         execSync(`New-Item -ItemType Directory -Force -Path ${outputDir}`, { 
@@ -86,7 +91,7 @@ describe('Polymer Compartment Parity Tests', () => {
         // Run BNG2.pl with NFsim method
         console.log(`\n🔬 Running BNG2.pl simulation for ${name}.bngl...`);
         
-        const bngCommand = `perl bionetgen_python/bng-win/BNG2.pl ${bnglPath} --outdir ${outputDir}`;
+        const bngCommand = `${PERL_CMD} "${BNG2_PATH}" ${bnglPath} --outdir ${outputDir}`;
         
         try {
           const output = execSync(bngCommand, {

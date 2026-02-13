@@ -18,6 +18,7 @@ import { clearAllEvaluatorCaches, evaluateFunctionalRate, evaluateExpressionOrPa
 import { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from '../../src/services/cvodeStiffConfig.js';
 import { getFeatureFlags } from '../featureFlags.js';
 import { jitCompiler } from '../../src/services/JITCompiler.js';
+import { SeededRandom } from '../../src/utils/random.js';
 // import * as fs from 'node:fs';
 
 /**
@@ -94,6 +95,7 @@ export async function simulate(
 
   // 1. Prepare Model State (Deep Copy to avoid mutating input across phases if reused)
   const model = JSON.parse(JSON.stringify(inputModel)) as BNGLModel;
+  let loggedVDephos = false;
 
   const numSpecies = model.species.length;
   const speciesHeaders = model.species.map(s => s.name);
@@ -131,6 +133,9 @@ export async function simulate(
   const recordPhaseIndices = Array.from({ length: phases.length }, (_, i) => i); // Record ALL phases
   const defaultRecordFromIdx = recordPhaseIndices.length > 0 ? recordPhaseIndices[0] : 0;
   const recordFromPhaseIdx = options.recordFromPhase !== undefined ? options.recordFromPhase : defaultRecordFromIdx;
+
+  // Seeded random number generator for SSA
+  const rng = new SeededRandom(options.seed ?? 12345);
 
   const allSsa = phases.every(p => p.method === 'ssa') || options.method === 'ssa';
 
@@ -336,31 +341,88 @@ export async function simulate(
   });
 
   // 4. Initialize State Vector
-  // FIX: Pre-calculate species volumes for concentration scaling (needed for ODE parity)
   const speciesVolumes = new Float64Array(numSpecies);
+  const compartmentMap = new Map<string, number>();
+  if (model.compartments && model.compartments.length > 0) {
+    console.log(`[Worker] RESOLVING COMPARTMENTS: Found ${model.compartments.length} compartments`);
+    (model.compartments || []).forEach(c => {
+      const vol = c.resolvedVolume ?? c.size ?? 1.0;
+      compartmentMap.set(c.name, vol);
+      console.log(`[Worker]   - Compartment: '${c.name}', Vol: ${vol}`);
+    });
+  }
+
   model.species.forEach((s, idx) => {
-    // PARITY FIX: BNG2 compartmental ODEs are mathematically equivalent to solving in molecule COUNTS 
-    // while scaling rates by the anchor volume. We set all speciesVolumes to 1.0 to maintain 
-    // a count-based state, ensuring parity with the regression suite's unit expectations.
-    speciesVolumes[idx] = 1.0;
+    let compName: string | null = null;
+    // 1. Prefix notation: @Comp:Species
+    if (s.name.startsWith('@')) {
+      const colonIdx = s.name.indexOf(':');
+      if (colonIdx > 0) compName = s.name.substring(1, colonIdx);
+    }
+    // 2. Suffix notation: Species@Comp (fallback)
+    if (!compName) {
+      const parts = s.name.split('@');
+      if (parts.length > 1) {
+        compName = parts[parts.length - 1].trim();
+      }
+    }
+
+    let vol = 1.0;
+    if (compName && compartmentMap.has(compName)) {
+      vol = compartmentMap.get(compName)!;
+    }
+    speciesVolumes[idx] = vol;
   });
 
   // PARITY FIX: Pre-calculate reacting volumes for each reaction.
-  // This must be available before simulation phases (SSA/ODE).
+  // BioNetGen scales ODE rates by the volume of the anchor compartment.
+  // For inter-compartment reactions (e.g., 3D + 2D -> 2D), the anchor is typically
+  // the lower-dimensional compartment (the surface). We use Math.min to heuristically
+  // select the correct anchor volume, matching BNG2's inter-compartment scaling.
+  // PARITY FIX: Pre-calculate reacting volumes for each reaction.
+  // BioNetGen scales ODE rates by the volume of the anchor compartment.
+  // Highest Dimension Rule: The anchor volume is determined by the reactant 
+  // with the highest compartment dimension (typically 3D vol over 2D surface).
   const reactionReactingVolumes = new Float64Array(model.reactions.length);
-  model.reactions.forEach((rxn, i) => {
-    // Standard BNG ODE scaling: Reacting Volume is the MINIMUM volume of any species involved.
-    let minVol = Infinity;
-    rxn.reactants.forEach(idx => {
-      if (speciesVolumes[idx] < minVol) minVol = speciesVolumes[idx];
+  const compartmentMapForDim = new Map(inputModel.compartments.map(c => [c.name, c]));
+
+  model.reactions.forEach((r, idx) => {
+    let vAnchor = 1.0;
+    let maxDim = -1;
+    
+    const candidates = r.reactants.length > 0 ? r.reactants : r.products;
+
+    candidates.forEach(speciesName => {
+      // Parse compartment name from species string (e.g. "@EC:L" or "L@EC")
+      let compName: string | null = null;
+      if (speciesName.startsWith('@')) {
+        const colonIdx = speciesName.indexOf(':');
+        if (colonIdx > 0) compName = speciesName.substring(1, colonIdx);
+      }
+      if (!compName) {
+        const parts = speciesName.split('@');
+        if (parts.length > 1) compName = parts[parts.length - 1].trim();
+      }
+
+      const comp = compName ? compartmentMapForDim.get(compName) : null;
+      if (comp) {
+        const dim = comp.dimension ?? 3;
+        // In this loop, we don't have speciesVolumes yet, but we have compartmentMap
+        const vol = compartmentMap.get(compName!) ?? 1.0;
+        if (dim > maxDim) {
+          maxDim = dim;
+          vAnchor = vol;
+        }
+      } else {
+        // Fallback for no compartment: default to 1.0 and dim 3
+        if (3 > maxDim) {
+          maxDim = 3;
+          vAnchor = 1.0;
+        }
+      }
     });
-    if (minVol === Infinity && rxn.products.length > 0) {
-      rxn.products.forEach(idx => {
-        if (speciesVolumes[idx] < minVol) minVol = speciesVolumes[idx];
-      });
-    }
-    if (minVol === Infinity) minVol = 1.0;
-    reactionReactingVolumes[i] = rxn.scalingVolume ?? minVol;
+    
+    reactionReactingVolumes[idx] = vAnchor;
   });
 
   const isOde = !allSsa && options.method !== 'ssa';
@@ -430,8 +492,15 @@ export async function simulate(
       for (let i = 0; i < concreteObservables.length; i++) {
         const obs = concreteObservables[i];
         let sum = 0;
+        const isMolecules = obs.type?.toLowerCase() === 'molecules' || (obs.type as any) === 0;
         for (let j = 0; j < obs.indices.length; j++) {
-          sum += currentState[obs.indices[j]] * obs.coefficients[j];
+          const idx = obs.indices[j];
+          const val = currentState[idx];
+          if (isMolecules) {
+            sum += (val * speciesVolumes[idx]) * obs.coefficients[j];
+          } else {
+            sum += val * obs.coefficients[j];
+          }
         }
         obsValues[obs.name] = sum;
       }
@@ -440,15 +509,16 @@ export async function simulate(
 
     const evaluateFunctionsForOutput = (currentState: Float64Array, observableValues: Record<string, number>) => {
       if (!shouldPrintFunctions) return {} as Record<string, number>;
-        const obsValues: Record<string, number> = {};
-        for (const obs of concreteObservables) {
-          let sum = 0;
-          for (let j = 0; j < obs.indices.length; j++) {
-            sum += currentState[obs.indices[j]] * obs.coefficients[j];
-          }
-          obsValues[obs.name] = sum;
+      const results: Record<string, number> = {};
+      for (const f of model.functions || []) {
+        if (f.args && f.args.length > 0) continue;
+        try {
+          results[f.name] = evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions);
+        } catch {
+          results[f.name] = 0;
         }
-        return obsValues;
+      }
+      return results;
     };
 
 
@@ -458,11 +528,12 @@ export async function simulate(
       for (const change of parameterChanges) {
 
         if (change.afterPhaseIndex === targetPhaseIdx - 1) {
+          const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
           let newVal: number = 0;
           if (typeof change.value === 'number') newVal = change.value;
           else {
             try {
-              newVal = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions);
+              newVal = evaluateFunctionalRate(change.value, model.parameters, currentObsValues, model.functions);
             } catch {
               newVal = parseFloat(String(change.value)) || 0;
             }
@@ -491,7 +562,8 @@ export async function simulate(
           let anyChanged = false;
           for (const [name, expr] of Object.entries(model.paramExpressions)) {
             try {
-              const val = evaluateFunctionalRate(expr, model.parameters, {}, model.functions);
+              const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
+              const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
               if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
 
                 model.parameters[name] = val;
@@ -532,7 +604,7 @@ export async function simulate(
 
     if (allSsa) {
       if (functionalRateCount > 0) {
-        console.warn('[Worker] SSA selected but functional rates were detected; SSA will ignore rate expressions and may be inaccurate.');
+        console.warn('[Worker] SSA selected with functional rates; evaluating rate expressions during propensity updates.');
       }
 
       for (let i = 0; i < numSpecies; i++) state[i] = Math.round(state[i]);
@@ -612,8 +684,26 @@ export async function simulate(
       const calcPropensity = (rxnIdx: number): number => {
         const rxn = concreteReactions[rxnIdx];
         const n = rxn.reactants.length;
-        let a = rxn.rateConstant * rxn.propensityFactor;
-        
+        let rate = rxn.rateConstant;
+        if (rxn.isFunctionalRate && rxn.rateExpression) {
+          try {
+            const currentObs = evaluateObservablesFast(state);
+            rate = evaluateFunctionalRate(
+              rxn.rateExpression,
+              model.parameters || {},
+              currentObs,
+              model.functions,
+              undefined,
+              undefined
+            );
+          } catch (e: any) {
+            console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e?.message ?? String(e));
+            rate = 0;
+          }
+        }
+
+        let a = rate * rxn.propensityFactor;
+
         // PARITY FIX: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
         // to convert to propensity in reciprocal molecule-counts.
         // n=0: a = k*V
@@ -647,39 +737,36 @@ export async function simulate(
         applyParameterUpdates(phaseIdx + 1);
 
         for (const change of concentrationChanges) {
-          if (change.afterPhaseIndex === phaseIdx - 1) {
-            // ... (Simpler concentration update for brevity, assume similar to bnglWorker)
-            // Note: Full logic with regex lookup needed if rigorous.
-            // For this extraction, I'll trust pattern matching helpers.
-            // Implementing robust species lookup using `speciesMap` + `isSpeciesMatch` again.
-            let resolvedValue: number;
-            if (typeof change.value === 'number') resolvedValue = change.value;
-            else {
-              try { resolvedValue = evaluateExpressionOrParse(change.value); }
-              catch { resolvedValue = parseFloat(String(change.value)) || 0; }
-            }
+          if (change.afterPhaseIndex !== phaseIdx - 1) continue;
+          const mode = change.mode ?? 'set';
+          if (mode === 'save' || mode === 'reset') continue;
 
-            let speciesIdx = speciesMap.get(change.species.trim());
-            if (speciesIdx === undefined) {
-              const matches: number[] = [];
-              for (const [sName, idx] of speciesMap.entries()) {
-                // Normalize compartment name if needed
-                if (isSpeciesMatch(sName, change.species)) matches.push(idx);
-              }
-              if (matches.length > 0) speciesIdx = matches[0];
-            }
+          let resolvedValue: number;
+          if (typeof change.value === 'number') resolvedValue = change.value;
+          else {
+            try { resolvedValue = evaluateExpressionOrParse(change.value); }
+            catch { resolvedValue = parseFloat(String(change.value)) || 0; }
+          }
 
-            if (speciesIdx !== undefined) {
-              let finalVal = resolvedValue;
-              // PARITY FIX: Respect ODE vs SSA scaling for concentration updates
-              if (isOde) {
-                // Input is usually an amount/count, convert to concentration
-                finalVal /= speciesVolumes[speciesIdx];
-              } else {
-                // SSA uses integer counts
-                finalVal = Math.round(finalVal);
-              }
-              state[speciesIdx] = finalVal;
+          let speciesIdx = speciesMap.get(change.species.trim());
+          if (speciesIdx === undefined) {
+            const matches: number[] = [];
+            for (const [sName, idx] of speciesMap.entries()) {
+              // Normalize compartment name if needed
+              if (isSpeciesMatch(sName, change.species)) matches.push(idx);
+            }
+            if (matches.length > 0) speciesIdx = matches[0];
+          }
+
+          if (speciesIdx !== undefined) {
+            if (isOde) {
+              const delta = resolvedValue / speciesVolumes[speciesIdx];
+              const base = state[speciesIdx];
+              state[speciesIdx] = mode === 'add' ? base + delta : delta;
+            } else {
+              const delta = Math.round(resolvedValue);
+              const base = state[speciesIdx];
+              state[speciesIdx] = mode === 'add' ? base + delta : delta;
             }
           }
         }
@@ -700,14 +787,45 @@ export async function simulate(
           for (let i = 0; i < numSpecies; i++) speciesPoint0[speciesHeaders[i]] = state[i];
           speciesData.push(speciesPoint0);
         }
+        let totalEvents = 0;
+        const maxEvents = options.maxEvents ?? 100_000_000; // 100 million events safeguard
 
         while (t < phaseTEnd) {
+          if (totalEvents >= maxEvents) {
+            console.warn(`[Worker] SSA Terminating early (maxEvents=${maxEvents} reached) at t=${(globalTime + t).toFixed(3)}. Population count may be exploding.`);
+            break;
+          }
           callbacks.checkCancelled();
+          let currentObsForPropensity: Record<string, number> | null = null;
+          const getCurrentObsForPropensity = (): Record<string, number> => {
+            if (!currentObsForPropensity) {
+              currentObsForPropensity = evaluateObservablesFast(state);
+            }
+            return currentObsForPropensity;
+          };
+
           let aTotal = 0;
           for (let i = 0; i < numReactions; i++) {
             const rxn = concreteReactions[i];
             const n = rxn.reactants.length;
-            let a = rxn.rateConstant * rxn.propensityFactor;
+            let rate = rxn.rateConstant;
+            if (rxn.isFunctionalRate && rxn.rateExpression) {
+              try {
+                rate = evaluateFunctionalRate(
+                  rxn.rateExpression,
+                  model.parameters || {},
+                  getCurrentObsForPropensity(),
+                  model.functions,
+                  undefined,
+                  undefined
+                );
+              } catch (e: any) {
+                console.error(`[Worker] SSA functional rate evaluation failed for reaction ${i}:`, e?.message ?? String(e));
+                rate = 0;
+              }
+            }
+
+            let a = rate * rxn.propensityFactor;
 
             // PARITY FIX: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
             if (n === 0) {
@@ -727,8 +845,9 @@ export async function simulate(
             propensities[i] = a;
             aTotal += a;
 
-            if (isNaN(a)) {
-              throw new Error(`NaN propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter used in the rate expression.`);
+            if (isNaN(a) || !isFinite(a)) {
+              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): rate=${rxn.rateConstant}, factor=${rxn.propensityFactor}, vol=${reactionReactingVolumes[i]}, n=${n}`);
+              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
             }
           }
 
@@ -739,7 +858,7 @@ export async function simulate(
             break;
           }
 
-          const r1 = Math.random();
+          const r1 = rng.next();
           const tau = (1 / aTotal) * Math.log(1 / r1);
           if (t + tau > phaseTEnd) {
             t = phaseTEnd;
@@ -747,7 +866,7 @@ export async function simulate(
           }
           t += tau;
 
-          const r2 = Math.random() * aTotal;
+          const r2 = rng.next() * aTotal;
           let sumA = 0;
           let reactionIndex = propensities.length - 1;
           for (let i = 0; i < propensities.length; i++) {
@@ -759,6 +878,7 @@ export async function simulate(
           }
 
           const firedRxn = concreteReactions[reactionIndex];
+          totalEvents++;
 
           // === DIN INFLUENCE TRACKING: Capture old propensities BEFORE state change ===
           let numAffected = 0;
@@ -932,7 +1052,8 @@ export async function simulate(
           let rate = rxn.rateConstant;
           if (rxn.isFunctionalRate && rxn.rateExpression) {
             try {
-              rate = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, {}, model.functions, undefined, undefined);
+              const currentObs = evaluateObservablesFast(state as any as Float64Array);
+              rate = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, currentObs, model.functions, undefined, undefined);
             } catch {
               rate = rxn.rateConstant;
             }
@@ -963,8 +1084,9 @@ export async function simulate(
               let rateNum = rxn.rateConstant;
               if (rxn.isFunctionalRate && rxn.rateExpression) {
                 try {
-                  // provide basic observable and parameter context (no rxnContext) for initial probe
-                  rateNum = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, {}, model.functions, undefined, undefined);
+                  // provide current observable context for initial probe
+                  const currentObs = evaluateObservablesFast(state as any as Float64Array);
+                  rateNum = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, currentObs, model.functions, undefined, undefined);
                 } catch {
                   rateNum = rxn.rateConstant;
                 }
@@ -1008,7 +1130,8 @@ export async function simulate(
               let rateNum = rxn.rateConstant;
               if (rxn.isFunctionalRate && rxn.rateExpression) {
                 try {
-                  rateNum = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, {}, model.functions, undefined, undefined);
+                  const currentObs = evaluateObservablesFast(state as any as Float64Array);
+                  rateNum = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, currentObs, model.functions, undefined, undefined);
                 } catch {
                   rateNum = rxn.rateConstant;
                 }
@@ -1037,8 +1160,15 @@ export async function simulate(
           for (let i = 0; i < concreteObservables.length; i++) {
             const obs = concreteObservables[i];
             let sum = 0;
+            const isMolecules = obs.type?.toLowerCase() === 'molecules' || (obs.type as any) === 0;
             for (let j = 0; j < obs.indices.length; j++) {
-              sum += yIn[obs.indices[j]] * obs.coefficients[j];
+              const idx = obs.indices[j];
+              const val = yIn[idx];
+              if (isMolecules) {
+                sum += (val * speciesVolumes[idx]) * obs.coefficients[j];
+              } else {
+                sum += val * obs.coefficients[j];
+              }
             }
             obsValues[obs.name] = sum;
           }
@@ -1081,6 +1211,15 @@ export async function simulate(
                   model.functions,
                   debugContext
                 );
+                if (!loggedVDephos && rxn.rateExpression.includes('v_dephos')) {
+                  loggedVDephos = true;
+                  console.log('[Worker Debug] v_dephos eval:', {
+                    expr: rxn.rateExpression,
+                    rate,
+                    Active_Enzyme: obsValues.Active_Enzyme,
+                    Active_Substrate: obsValues.Active_Substrate
+                  });
+                }
                 if (isNaN(rate) || !isFinite(rate)) {
                   console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}. Context:`, debugContext);
                   rate = 0;
@@ -1102,6 +1241,7 @@ export async function simulate(
             const vAnchor = reactionReactingVolumes[i] || 1.0;
             const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1) * vAnchor;
             let multiplicative = 1;
+            // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
             for (let j = 0; j < rxn.reactants.length; j++) {
               const ridx = rxn.reactants[j];
               const nativeVal = yIn[ridx];
@@ -1188,49 +1328,62 @@ export async function simulate(
         } catch (e) {
           console.warn('[Worker] JIT integration failed, falling back to loop:', e instanceof Error ? e.message : String(e));
         }
+      }
+
+      // Fallback: Mass Action Loop
+      return (yIn: Float64Array, dydt: Float64Array) => {
+        if (!(globalThis as any)._hasLoggedDerivCall) {
+          console.log('[Worker] DERIVATIVE FUNCTION CALLED (Loop Fallback)');
+          (globalThis as any)._hasLoggedDerivCall = true;
+        }
+        dydt.fill(0);
+        if (!(globalThis as any)._hasLoggedDeriv && debugDerivs) {
+          console.log('[Worker] Computing derivatives (first step)...');
+          (globalThis as any)._hasLoggedDeriv = true;
         }
 
-        // Fallback: Mass Action Loop
-        return (yIn: Float64Array, dydt: Float64Array) => {
-          if (!(globalThis as any)._hasLoggedDerivCall) {
-            console.log('[Worker] DERIVATIVE FUNCTION CALLED (Loop Fallback)');
-            (globalThis as any)._hasLoggedDerivCall = true;
+        for (let i = 0; i < concreteReactions.length; i++) {
+          const rxn = concreteReactions[i];
+          let velocity = rxn.rateConstant; // Start with rate constant
+
+          // Mass action kinetics (not functional rate)
+          // PARITY FIX: Apply volume scaling to reactants in fallback loop
+          let multiplicative = 1.0;
+          const vAnchor = reactionReactingVolumes[i] || 1.0;
+          // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            const ridx = rxn.reactants[j];
+            // PARITY FIX: Scale reactant concentration by (Vol_Species / Vol_Anchor)
+            // This converts concentration in species volume to concentration in anchor volume.
+            const scale = speciesVolumes[ridx] / vAnchor;
+            multiplicative *= (yIn[ridx] * scale);
           }
-          dydt.fill(0);
-          if (!(globalThis as any)._hasLoggedDeriv && debugDerivs) {
-            console.log('[Worker] Computing derivatives (first step)...');
-            (globalThis as any)._hasLoggedDeriv = true;
-          }
+          velocity *= multiplicative * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
 
-          for (let i = 0; i < concreteReactions.length; i++) {
-            const rxn = concreteReactions[i];
-            const velocityBase = rxn.rateConstant * rxn.propensityFactor * (rxn.degeneracy ?? 1) * reactionReactingVolumes[i];
-            let multiplicative = 1;
+          // Apply anchor volume scaling to get FLUX (Amount/Time)
+          // Flux = k * [Patterns] * Vol_Anchor
+          velocity *= vAnchor;
 
-            for (let j = 0; j < rxn.reactants.length; j++) {
-              multiplicative *= yIn[rxn.reactants[j]];
-            }
-            const velocity = velocityBase * multiplicative;
-
-            for (let j = 0; j < rxn.reactants.length; j++) {
-              const reactantIdx = rxn.reactants[j];
-              if (!model.species[reactantIdx].isConstant) {
-                dydt[reactantIdx] -= velocity / speciesVolumes[reactantIdx];
-              }
-            }
-            for (let j = 0; j < rxn.products.length; j++) {
-              const productIdx = rxn.products[j];
-              if (!model.species[productIdx].isConstant) {
-                const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
-                dydt[productIdx] += (velocity * stoich) / speciesVolumes[productIdx];
-              }
+          // Distribute flux to products and reactants
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            const reactantIdx = rxn.reactants[j];
+            if (!model.species[reactantIdx].isConstant) {
+              // Each occurrence in reactants list implies stoichiometry 1 for that entry
+              dydt[reactantIdx] -= velocity / speciesVolumes[reactantIdx];
             }
           }
-        };
+          for (let j = 0; j < rxn.products.length; j++) {
+            const productIdx = rxn.products[j];
+            if (!model.species[productIdx].isConstant) {
+              const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+              dydt[productIdx] += (velocity * stoich) / speciesVolumes[productIdx];
+            }
+          }
+        }
+      };
     };
 
     derivatives = buildDerivativesFunction();
-
 
     if (functionalRateCount > 0) {
       // Just ensuring derivatives func is correct (already done above)
@@ -1322,55 +1475,70 @@ export async function simulate(
           const k = rxn.rateConstant;
           const reactants = rxn.reactants;
           const reactantCounts = reactantCountMaps[r];
+          const volR = reactionReactingVolumes[r] || 1.0;
+          const propensity = rxn.propensityFactor ?? 1;
+          const degeneracy = (rxn as any).degeneracy ?? 1;
+
+          // Velocity base: k * volR * propensity * degeneracy
+          const base = k * propensity * degeneracy * volR;
 
           for (const [speciesK, orderK] of reactantCounts) {
-            // Volume scaling factor for the reaction
-            const volR = reactionReactingVolumes[r];
-            const propensity = rxn.propensityFactor;
-            const degeneracy = (rxn as any).degeneracy ?? 1;
+            // dv = d(ReactionVelocity) / d(y[speciesK])
+            // ReactionVelocity = base * Product_i( y[i] * Vol_i / volR )
+            // d(Velocity) / d(y[speciesK]) = base * orderK * (y[speciesK]^(orderK-1)) * (Vol_speciesK / volR)^orderK * Product_j!=K(...)
 
-            let velocityTerm = `${k * propensity * degeneracy * volR}`;
-            for (let j = 0; j < reactants.length; j++) {
-              velocityTerm += ` * y[${reactants[j]}]`;
+            let velocityTerm = `${base}`;
+            for (let rj = 0; rj < reactants.length; rj++) {
+              const ridx = reactants[rj];
+              const scale = speciesVolumes[ridx] / volR;
+              velocityTerm += ` * (y[${ridx}] * ${scale})`;
             }
 
+            // Differentiate via power rule: d(y^n)/dy = n * (y^n)/y
+            const scaleK = speciesVolumes[speciesK] / volR;
+            lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] * ${scaleK} : 0.0;`);
+
+            // Special case for order 1 to avoid /y[speciesK] when y is 0
             if (orderK === 1) {
-              let partialProduct = `${k * propensity * degeneracy * volR}`;
-              for (let j = 0; j < reactants.length; j++) {
-                if (reactants[j] !== speciesK) {
-                  partialProduct += ` * y[${reactants[j]}]`;
+              let partialProduct = `${base} * ${scaleK}`;
+              for (let rj = 0; rj < reactants.length; rj++) {
+                if (reactants[rj] !== speciesK) {
+                  const ridx = reactants[rj];
+                  const scale = speciesVolumes[ridx] / volR;
+                  partialProduct += ` * (y[${ridx}] * ${scale})`;
                 }
               }
-              lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] : ${partialProduct};`);
-            } else {
-              lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] : 0;`);
+              lines.push(`if (y[${speciesK}] <= 1e-100) dv = ${partialProduct};`);
             }
 
             if (columnMajor) {
-              for (let j = 0; j < reactants.length; j++) {
-                const rIdx = reactants[j];
-                if (!model.species[rIdx].isConstant) {
-                  lines.push(`J[${rIdx + speciesK * numSpecies}] -= dv / ${speciesVolumes[rIdx]};`);
+              // Reactants
+              for (let rj = 0; rj < reactants.length; rj++) {
+                const sIdx = reactants[rj];
+                if (!model.species[sIdx].isConstant) {
+                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${speciesVolumes[sIdx]};`);
                 }
               }
-              for (let j = 0; j < rxn.products.length; j++) {
-                const pIdx = rxn.products[j];
+              // Products
+              for (let pj = 0; pj < rxn.products.length; pj++) {
+                const pIdx = rxn.products[pj];
                 if (!model.species[pIdx].isConstant) {
-                  const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+                  const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1;
                   lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${speciesVolumes[pIdx]};`);
                 }
               }
             } else {
-              for (let j = 0; j < reactants.length; j++) {
-                const rIdx = reactants[j];
-                if (!model.species[rIdx].isConstant) {
-                  lines.push(`J[${rIdx * numSpecies + speciesK}] -= dv / ${speciesVolumes[rIdx]};`);
+              // Row Major
+              for (let rj = 0; rj < reactants.length; rj++) {
+                const sIdx = reactants[rj];
+                if (!model.species[sIdx].isConstant) {
+                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${speciesVolumes[sIdx]};`);
                 }
               }
-              for (let j = 0; j < rxn.products.length; j++) {
-                const pIdx = rxn.products[j];
+              for (let pj = 0; pj < rxn.products.length; pj++) {
+                const pIdx = rxn.products[pj];
                 if (!model.species[pIdx].isConstant) {
-                  const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+                  const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1;
                   lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${speciesVolumes[pIdx]};`);
                 }
               }
@@ -1486,34 +1654,34 @@ export async function simulate(
 
       // Concentration updates
       for (const change of concentrationChanges) {
-        if (change.afterPhaseIndex === phaseIdx - 1) {
-          // ... (Same logic as SSA above)
-          let resolvedValue: number;
-          if (typeof change.value === 'number') resolvedValue = change.value;
-          else {
-            try {
-              resolvedValue = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions);
-            } catch {
-              resolvedValue = parseFloat(String(change.value)) || 0;
-            }
-          }
+        if (change.afterPhaseIndex !== phaseIdx - 1) continue;
+        const mode = change.mode ?? 'set';
+        if (mode === 'save' || mode === 'reset') continue;
 
-          let speciesIdx = speciesMap.get(change.species.trim());
-          if (speciesIdx === undefined) {
-            const matches: number[] = [];
-            for (const [sName, idx] of speciesMap.entries()) {
-              if (isSpeciesMatch(sName, change.species)) matches.push(idx);
-            }
-            if (matches.length > 0) speciesIdx = matches[0];
+        let resolvedValue: number;
+        if (typeof change.value === 'number') resolvedValue = change.value;
+        else {
+          try {
+            resolvedValue = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions);
+          } catch {
+            resolvedValue = parseFloat(String(change.value)) || 0;
           }
-          if (speciesIdx !== undefined) {
-            let finalVal = resolvedValue;
-            if (isOde) {
-              finalVal /= speciesVolumes[speciesIdx];
-            }
-            y[speciesIdx] = finalVal;
-            state[speciesIdx] = finalVal;
+        }
+
+        let speciesIdx = speciesMap.get(change.species.trim());
+        if (speciesIdx === undefined) {
+          const matches: number[] = [];
+          for (const [sName, idx] of speciesMap.entries()) {
+            if (isSpeciesMatch(sName, change.species)) matches.push(idx);
           }
+          if (matches.length > 0) speciesIdx = matches[0];
+        }
+        if (speciesIdx !== undefined) {
+          const delta = isOde ? (resolvedValue / speciesVolumes[speciesIdx]) : resolvedValue;
+          const base = y[speciesIdx];
+          const finalVal = mode === 'add' ? base + delta : delta;
+          y[speciesIdx] = finalVal;
+          state[speciesIdx] = finalVal;
         }
       }
 

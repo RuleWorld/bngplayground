@@ -82,6 +82,44 @@ declare namespace LibSBML {
 
 let libsbml: any = null;
 
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function replaceSpeciesNames(formula: string, speciesIdByName: Map<string, string>): string {
+  let result = formula;
+  const entries = Array.from(speciesIdByName.entries()).sort((a, b) => b[0].length - a[0].length);
+
+  for (const [name, id] of entries) {
+    const escaped = escapeRegExp(name);
+    const isWord = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+    const pattern = isWord ? new RegExp(`\\b${escaped}\\b`, 'g') : new RegExp(escaped, 'g');
+    result = result.replace(pattern, id);
+  }
+
+  return result;
+}
+
+function expandRateMacroForSBML(rate: string, substrateId: string | null): string {
+  if (!substrateId) return rate;
+  const match = rate.match(/\b(Sat|MM|Hill)\s*\(([^)]*)\)/);
+  if (!match) return rate;
+
+  const macro = match[1];
+  const args = match[2].split(',').map(arg => arg.trim()).filter(Boolean);
+  if (args.length < 2) return rate;
+
+  const vmax = args[0];
+  const km = args[1];
+
+  if (macro === 'Hill') {
+    const n = args[2] || '1';
+    return `((${vmax} * pow(${substrateId}, ${n})) / (pow(${km}, ${n}) + pow(${substrateId}, ${n})))`;
+  }
+
+  return `((${vmax} * ${substrateId}) / (${km} + ${substrateId}))`;
+}
+
 /**
  * Initialize libsbml for the writer
  */
@@ -89,7 +127,34 @@ async function ensureLibSBML() {
   if (!libsbml) {
     // @ts-ignore - Dynamic WASM import
     const libsbmlModule = await import('libsbmljs_stable');
-    libsbml = await libsbmlModule.default();
+    const factory = libsbmlModule.default || libsbmlModule.libsbml || libsbmlModule;
+    const config: Record<string, unknown> = {
+      locateFile: (file: string) => {
+        if (file.endsWith('.wasm')) {
+          if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+            return (config.__wasmPath as string) || file;
+          }
+          return '/bngplayground/libsbml.wasm';
+        }
+        if (file.endsWith('.wast') || file.endsWith('.asm.js')) {
+          return 'data:application/octet-stream;base64,';
+        }
+        return file;
+      }
+    };
+    if (typeof process !== 'undefined' && process.versions && process.versions.node) {
+      try {
+        const fs = await import('node:fs');
+        const path = await import('node:path');
+        const wasmPath = path.resolve(process.cwd(), 'public', 'libsbml.wasm');
+        (config as any).__wasmPath = wasmPath;
+        config.wasmBinary = new Uint8Array(fs.readFileSync(wasmPath));
+      } catch (e) {
+        console.warn('[sbmlWriter] Failed to preload libsbml.wasm:', e);
+      }
+    }
+
+    libsbml = await factory(config);
   }
   return libsbml;
 }
@@ -136,11 +201,13 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
 
   // 3. Species
   const speciesList = model.species || [];
+  const speciesIdByName = new Map<string, string>();
   speciesList.forEach((s, i) => {
     const spec = sbmlModel.createSpecies();
     const sid = `s${i}`;
     spec.setId(sid);
     spec.setName(s.name);
+    speciesIdByName.set(s.name, sid);
     
     // Determine compartment from name (e.g., @c0:A) or use first available/default
     let compId = 'default';
@@ -168,6 +235,25 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       rxn.setId(rid);
       rxn.setReversible(false);
 
+      const reactantCounts = new Map<string, number>();
+      const productCounts = new Map<string, number>();
+      for (const reactName of r.reactants) {
+        reactantCounts.set(reactName, (reactantCounts.get(reactName) || 0) + 1);
+      }
+      for (const prodName of r.products) {
+        productCounts.set(prodName, (productCounts.get(prodName) || 0) + 1);
+      }
+
+      const catalysts = new Set<string>();
+      for (const [name, count] of reactantCounts) {
+        if (productCounts.get(name) === count) {
+          catalysts.add(name);
+        }
+      }
+
+      const substrateName = r.reactants.find(name => !catalysts.has(name)) || r.reactants[0] || null;
+      const substrateId = substrateName ? (speciesIdByName.get(substrateName) || null) : null;
+
       // Map reactants
       r.reactants.forEach(reactName => {
         const sIdx = speciesList.findIndex(s => s.name === reactName);
@@ -194,6 +280,9 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       const kl = rxn.createKineticLaw();
       // Simple mass action formula for now
       let formula = r.rate || '0';
+      formula = replaceSpeciesNames(formula, speciesIdByName);
+      formula = expandRateMacroForSBML(formula, substrateId);
+      formula = replaceSpeciesNames(formula, speciesIdByName);
       // If the rate is a parameter name, it's fine. If it's a number, it's fine.
       // For more complex expressions, we should use MathML, but libsbml.setFormula handles infix.
       kl.setFormula(formula);

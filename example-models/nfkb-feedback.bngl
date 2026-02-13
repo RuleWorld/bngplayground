@@ -96,20 +96,19 @@ end reaction rules
 
 begin actions
     generate_network({overwrite=>1})
-    # Phase 1: Basal (0-10)
-    simulate({method=>"ode",t_end=>10,n_steps=>20})
-    # Phase 2: Pulse 1 (10-25) - High TNF
+    # Phase 1: Basal (0-80)
+    simulate({method=>"ode",t_end=>80,n_steps=>200})
+    # Phase 2: Pulse 1 (80-105) - High TNF
     setParameter("TNF_Stim",2.0)
-    simulate({continue=>1,method=>"ode",t_end=>25,n_steps=>30,continue=>1})
-    # Phase 3: Reset 1 (25-50) - Low TNF
+    simulate({method=>"ode",t_end=>105,n_steps=>200,continue=>1})
+    # Phase 3: Reset 1 (105-155) - Low TNF
     setParameter("TNF_Stim",0.1)
-    simulate({continue=>1,method=>"ode",t_end=>50,n_steps=>50,continue=>1})
-    # Phase 4: Pulse 2 (50-65) - High TNF
+    simulate({method=>"ode",t_end=>155,n_steps=>200,continue=>1})
+    # Phase 4: Pulse 2 (155-170) - High TNF
     setParameter("TNF_Stim",2.0)
-    simulate({continue=>1,method=>"ode",t_end=>65,n_steps=>30,continue=>1})
-    # Phase 5: Reset 2 (65-100) - Low TNF
+    simulate({method=>"ode",t_end=>170,n_steps=>200,continue=>1})
+    # Phase 5: Reset 2 (170-800) - Low TNF
     setParameter("TNF_Stim",0.1)
-    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>70,continue=>1})
+    simulate({method=>"ode",t_end=>800,n_steps=>400,continue=>1})
 end actions
 end model
-

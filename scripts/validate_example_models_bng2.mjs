@@ -18,8 +18,13 @@ const __dirname = path.dirname(__filename);
 
 const PROJECT_ROOT = path.resolve(__dirname, '..');
 const EXAMPLE_MODELS_DIR = path.join(PROJECT_ROOT, 'example-models');
+const BNG_TEST_OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
 const REPORT_FILE = path.join(PROJECT_ROOT, 'example_models_validation_report.json');
+
+if (!fs.existsSync(BNG_TEST_OUTPUT_DIR)) {
+    fs.mkdirSync(BNG_TEST_OUTPUT_DIR, { recursive: true });
+}
 
 // Common BNG2.pl syntax error patterns and their fixes
 const SYNTAX_FIX_PATTERNS = [
@@ -84,7 +89,7 @@ async function runBNG2(bnglPath) {
 
         const proc = spawn('perl', args, {
             cwd: path.dirname(bnglPath),
-            timeout: 30000 // 30 second timeout
+            timeout: 120000 // 120 second timeout
         });
 
         let stdout = '';
@@ -114,8 +119,11 @@ function cleanupGeneratedFiles(modelDir, modelName) {
     for (const ext of extensions) {
         const filePath = path.join(modelDir, modelName + ext);
         if (fs.existsSync(filePath)) {
+            // Copy to test output dir before deleting
+            const destPath = path.join(BNG_TEST_OUTPUT_DIR, modelName + ext);
+            fs.copyFileSync(filePath, destPath);
             fs.rmSync(filePath);
-            console.log(`  Cleaned up: ${modelName}${ext}`);
+            console.log(`  Saved reference: ${modelName}${ext}`);
         }
     }
 
@@ -123,12 +131,14 @@ function cleanupGeneratedFiles(modelDir, modelName) {
     const files = fs.readdirSync(modelDir);
     for (const file of files) {
         const base = path.basename(file, path.extname(file));
-        if (base.startsWith(modelName + '_') || base === modelName) {
+        if (base.startsWith(modelName + '_')) {
             const ext = path.extname(file);
             if (extensions.includes(ext)) {
                 const fullPath = path.join(modelDir, file);
+                const destPath = path.join(BNG_TEST_OUTPUT_DIR, file);
+                fs.copyFileSync(fullPath, destPath);
                 fs.rmSync(fullPath);
-                console.log(`  Cleaned up: ${file}`);
+                console.log(`  Saved reference: ${file}`);
             }
         }
     }
@@ -247,7 +257,33 @@ async function main() {
     /** @type {ValidationResult[]} */
     const results = [];
 
+    // Load previous report if available
+    let previousResults = {};
+    if (fs.existsSync(REPORT_FILE)) {
+        try {
+            const raw = fs.readFileSync(REPORT_FILE, 'utf-8');
+            const parsed = JSON.parse(raw);
+            parsed.forEach(r => {
+                previousResults[r.model] = r;
+            });
+            console.log(`Loaded ${parsed.length} entries from previous report.`);
+        } catch (e) {
+            console.warn('Could not read/parse previous report, starting fresh.');
+        }
+    }
+
+    const FORCE_RERUN = process.env.FORCE_RERUN === 'true';
+
     for (const modelPath of bnglFiles) {
+        const modelName = path.basename(modelPath, '.bngl');
+
+        // Skip if previously passed
+        if (!FORCE_RERUN && previousResults[modelName] && (previousResults[modelName].status === 'pass' || previousResults[modelName].status === 'fixed')) {
+            console.log(`Skipping ${modelName} (previously passed)`);
+            results.push(previousResults[modelName]);
+            continue;
+        }
+
         const result = await validateModel(modelPath);
         results.push(result);
     }

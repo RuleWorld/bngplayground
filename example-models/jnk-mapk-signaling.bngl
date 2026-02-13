@@ -41,9 +41,9 @@ end seed species
 begin observables
     # KEY BIOLOGICAL OUTPUTS
     Molecules Active_JNK      JNK(s~P)                 # Primary stress signal
-    Molecules Scaffold_Hub    JIP1(b1!+,b2!+)         # Full signaling cluster
+    Molecules Scaffold_Hub    JIP1(b1!+,b2!+)          # Full signaling cluster
     Molecules MKK7_Driver     MKK7(s~on)               # Upstream activity
-    Molecules Cyto_JNK        JNK(s~U,b)             # Reservoir capacity
+    Molecules Cyto_JNK        JNK(s~U,b)               # Reservoir capacity
     Molecules Total_pJNK      JNK(s~P)                 # Global signal pool
 end observables
 
@@ -66,8 +66,8 @@ begin reaction rules
     # Global activation (Non-scaffolded)
     MKK7(s~on,b) + JNK(s~U,b) -> MKK7(s~on,b) + JNK(s~P,b) k_jnk_phos
     
-    # Nucleocytoplasmic transport (MoveConnected: scaffold partners follow)
-    JNK(loc~cyt) <-> JNK(loc~nuc) 1.0,0.5 MoveConnected
+    # Nucleocytoplasmic transport
+    JNK(loc~cyt) <-> JNK(loc~nuc) 1.0,0.5
     
     ## RECOVERY Phase
     # Saturable dephosphorylation (MKP Axis)
@@ -83,7 +83,6 @@ end reaction rules
 
 begin actions
     generate_network({overwrite=>1})
-    simulate({method=>"ode",t_end=>15,n_steps=>300})
+    simulate({method=>"ode",t_end=>100,n_steps=>200})
 end actions
 end model
-

@@ -4,6 +4,7 @@ import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
+import * as path from 'node:path';
 
 import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../../scripts/bngDefaults.js';
 import { BNGLModel, SimulationOptions } from '../../types';
@@ -12,6 +13,9 @@ import { simulate } from '../../services/simulation/SimulationLoop';
 import { convertBNGXmlToBNGL } from '../../src/lib/atomizer/parser/bngXmlParser';
 import { BNG2_EXCLUDED_MODELS } from '../../constants';
 import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
+
+console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
+console.error(`[DEBUG-ENTRY] example-models exists: ${fs.existsSync('example-models')}`);
 
 const VALIDATE_DIR = 'bionetgen/bng2/Validate';
 const BNG_OUTPUT_DIR = 'bng_test_output';
@@ -57,6 +61,7 @@ function runBNG2EnsureSBML(modelPath: string, outdir: string): boolean {
     cwd: outdir,
     encoding: 'utf-8',
     timeout: 120000,
+    env: { ...process.env, PERL5LIB: 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\Perl2' },
   });
   return result.status === 0 && true;
 }
@@ -153,6 +158,21 @@ function parseActionsFromBngl(bnglContent: string): BnglAction[] {
   return actions;
 }
 
+function getBnglFiles(dir: string): string[] {
+  let files: string[] = [];
+  if (!fs.existsSync(dir)) return files;
+  const items = fs.readdirSync(dir, { withFileTypes: true });
+  for (const item of items) {
+    const fullPath = path.join(dir, item.name);
+    if (item.isDirectory()) {
+      files = files.concat(getBnglFiles(fullPath));
+    } else if (item.name.endsWith('.bngl')) {
+      files.push(path.resolve(fullPath));
+    }
+  }
+  return files;
+}
+
 // Helper to convert actions to Model-level phases and changes
 function applyActionsToModel(model: any, actions: BnglAction[]) {
   const phases: any[] = [];
@@ -241,21 +261,11 @@ const masterReport: Record<string, { history: RunSummary[]; latest?: RunSummary 
 
 describe('Atomizer+Simulation parity (numeric comparison) — example-models', () => {
   // Discover all .bngl files under example-models (recursive)
-  function discoverModels(dir: string): string[] {
-    const out: string[] = [];
-    const walk = (cur: string) => {
-      for (const name of fs.readdirSync(cur)) {
-        const full = join(cur, name);
-        const stat = fs.statSync(full);
-        if (stat.isDirectory()) walk(full);
-        else if (stat.isFile() && name.toLowerCase().endsWith('.bngl')) out.push(full);
-      }
-    };
-    if (fs.existsSync(dir)) walk(dir);
-    return out;
-  }
-
-  const allModels = discoverModels('example-models');
+    const allModels = getBnglFiles('example-models');
+    console.error(`[DEBUG] Discovered ${allModels.length} models: ${JSON.stringify(allModels.map(m => basename(m)))}`);
+    it('should have discovered models', () => {
+      expect(allModels.length).toBeGreaterThan(0);
+    });
   const filter = process.env.ATOMIZER_REGRESSION_FILTER;
 
   // Optional exclusions from constants (imported statically above)
@@ -263,14 +273,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — example-models', (
   for (const modelPath of allModels) {
     const base = basename(modelPath);
     const modelKey = base.replace(/\.bngl$/i, '');
-    if (filter && !modelKey.toLowerCase().includes(filter.toLowerCase())) {
-      continue; // allow targeted runs via env
-    }
-
-    if (BNG2_EXCLUDED_MODELS && (BNG2_EXCLUDED_MODELS.has(modelKey) || BNG2_EXCLUDED_MODELS.has(modelKey.replace(/[^a-z0-9]+/gi, '_')))) {
-      it(`${modelKey} - skipped (BNG2_EXCLUDED_MODELS)`, () => { console.warn('Skipping excluded model', modelKey); });
-      continue;
-    }
+    console.error(`[DEBUG] Registering test for: ${modelKey}`);
 
     it(`${modelKey}: TS simulation matches BNG2 .gdat within tolerances`, { timeout: 6 * 60 * 1000 }, async () => {
       const start = Date.now();

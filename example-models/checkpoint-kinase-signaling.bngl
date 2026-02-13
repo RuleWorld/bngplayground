@@ -33,7 +33,7 @@ begin parameters
 end parameters
 
 begin molecule types
-    DNA(s~intact~dsb~ssb~damaged)
+    DNA(s~intact~dsb~ssb)
     ATM(s~U~A)
     ATR(s~U~A)
     Chk1(s~U~P)
@@ -55,7 +55,7 @@ end seed species
 begin observables
     # KEY BIOLOGICAL OUTPUTS
     Molecules Active_Checkpt   Chk1(s~P),Chk2(s~P)      # Integrated signal relay
-    Molecules Total_Damage     DNA(s~damaged),DNA(s~dsb),DNA(s~ssb)   # Input sensor status
+    Molecules Total_Damage     DNA(s~dsb),DNA(s~ssb)   # Input sensor status
     Molecules DSB_Signal      ATM(s~A)                 # DSB pathway intensity
     Molecules Replication_Stress ATR(s~A)               # SSB/Stall intensity
     Molecules Arrest_Status   Cdc25(s~off)             # Biological functional halt
@@ -93,7 +93,8 @@ begin reaction rules
     Chk2(s~P) + p53(s~U) -> Chk2(s~P) + p53(s~A) k_p53_stab
     
     ## RECOVERY
-    DNA(s~damaged) -> DNA(s~intact) k_repair
+    DNA(s~dsb) -> DNA(s~intact) k_repair
+    DNA(s~ssb) -> DNA(s~intact) k_repair
     ATM(s~A) -> ATM(s~U) k_reset
     ATR(s~A) -> ATR(s~U) k_reset
     Chk1(s~P) -> Chk1(s~U) k_reset
@@ -103,7 +104,6 @@ end reaction rules
 
 begin actions
     generate_network({overwrite=>1})
-    simulate({method=>"ode",t_end=>5,n_steps=>300})
+    simulate({method=>"ode",t_end=>80,n_steps=>300})
 end actions
 end model
-

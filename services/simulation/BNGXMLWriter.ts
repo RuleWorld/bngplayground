@@ -39,10 +39,41 @@ export class BNGXMLWriter {
 
     const moleculeTypeDefs = this.inferMoleculeTypes(model);
 
+    const synthesizedParameters: { id: string; expression: string }[] = [];
+
+    // Pre-pass on reaction rules to collect synthesized rate laws
+    reactions.forEach((r, idx) => {
+      const baseId = `RR${idx + 1}`;
+      const rates = r.isBidirectional && r.reverseRate !== undefined ? [r.rate, r.reverseRate] : [r.rate];
+      rates.forEach((rate, rIdx) => {
+        const rateValue = rate !== undefined ? String(rate) : '0';
+        const isComplex = rateValue.length > 0 && 
+          !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
+          !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
+        
+        if (isComplex) {
+          const pId = rIdx === 0 ? `_func_rate_${baseId}` : `_func_rate_${baseId}_rev`;
+          synthesizedParameters.push({ id: pId, expression: rateValue });
+        }
+      });
+    });
+
+    const evalParams = new Map<string, number>();
+    Object.entries(parameters).forEach(([name, value]) => {
+      evalParams.set(name, typeof value === 'number' ? value : parseFloat(String(value)));
+    });
+
     const parametersXml = Object.entries(parameters)
       .map(([name, value]) => {
         const val = escapeXml(String(value));
         return `      <Parameter id="${escapeXml(name)}" type="Constant" value="${val}" expr="${val}"/>\n`;
+      })
+      .join('') +
+      synthesizedParameters
+      .map(p => {
+        const val = BNGLParser.evaluateExpression(p.expression, evalParams);
+        const valStr = isNaN(val) ? p.expression : String(val);
+        return `      <Parameter id="${escapeXml(p.id)}" type="Constant" value="${escapeXml(valStr)}" expr="${escapeXml(p.expression)}"/>\n`;
       })
       .join('');
 
@@ -151,15 +182,13 @@ export class BNGXMLWriter {
           const rateValue = variant.rate !== undefined ? String(variant.rate) : '0';
           let finalRateValue = rateValue;
           
-          // NFsim/BioNetGen XML parity: Complex expressions in rate must be exported as functions
+          // NFsim/BioNetGen XML parity: Complex expressions in rate must be exported as parameters
           const isComplex = rateValue.length > 0 && 
             !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
             !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
 
           if (isComplex) {
-            const funcName = `_func_rate_${variant.id}`;
-            synthesizedFunctions.push({ name: funcName, expression: rateValue, args: [] });
-            finalRateValue = funcName;
+            finalRateValue = `_func_rate_${variant.id}`;
           }
 
           const { mapXml, operationsXml } = this.buildRuleOperations(reactantPatternData, productPatternData, {

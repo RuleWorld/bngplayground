@@ -95,7 +95,6 @@ end reaction rules
 
 begin actions
     generate_network({overwrite=>1})
-    simulate({method=>"ode",t_start=>0,t_end=>150,n_steps=>300})
+    simulate({method=>"ode",t_start=>0,t_end=>500,n_steps=>250})
 end actions
 end model
-

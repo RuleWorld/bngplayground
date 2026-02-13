@@ -5,7 +5,7 @@
  * Handles caching of expanded expressions and compiled functions.
  */
 
-import { getFeatureFlags, registerCacheClearCallback } from '../featureFlags';
+import { getFeatureFlags, registerCacheClearCallback } from '../featureFlags.ts';
 // console.log("ExpressionEvaluator module loaded");
 
 /**
@@ -89,12 +89,6 @@ export function expandRateLawMacros(
     }
   );
 
-  // Arrhenius(A, Ea) -> A * exp(-Ea / (R * T))
-  // Use fixed R=8.314 J/mol/K and T=298K for now (parity expectation in failing models).
-  expr = expr.replace(
-    /\bArrhenius\s*\(\s*([^,]+)\s*,\s*([^)]+)\s*\)/gi,
-    (_, A, Ea) => `(((${A.trim()})) * exp(-(${Ea.trim()}) / (8.314 * 298)))`
-  );
 
   return expr;
 }
@@ -103,7 +97,7 @@ export function expandRateLawMacros(
  * Check if expression contains BNG2 rate law macros.
  */
 export function containsRateLawMacro(expr: string): boolean {
-  return /\b(Sat|MM|Hill|Arrhenius)\s*\(/i.test(expr);
+  return /\b(Sat|MM|Hill)\s*\(/i.test(expr);
 }
 
 // PERFORMANCE OPTIMIZATION: Cache for pre-expanded expressions
@@ -203,7 +197,7 @@ export async function loadEvaluator(): Promise<void> {
       // Dynamic import relative to THIS file
       // file is services/simulation/ExpressionEvaluator.ts
       // target is services/safeExpressionEvaluator.ts -> ../safeExpressionEvaluator
-      const mod = await import('../safeExpressionEvaluator');
+      const mod = await import('../safeExpressionEvaluator.ts');
       SafeExpressionEvaluatorRef = mod.SafeExpressionEvaluator;
     } catch (e: any) {
       throw new Error(`Failed to load SafeExpressionEvaluator: ${e?.message ?? String(e)}`);
@@ -305,7 +299,16 @@ export function getCompiledRateFunction(
     setBoundedCache(compiledRateFunctions, cacheKey, fn, MAX_COMPILED_RATE_FUNCTIONS);
     return fn;
   } catch (e: any) {
-    console.error(`[getCompiledRateFunction] Failed to compile '${expandedExpr}': ${e?.message ?? String(e)}`);
+    const providedVars = new Set(varNames);
+    const missingVars = referenced.filter(v => !providedVars.has(v));
+
+    console.error(`[getCompiledRateFunction] Failed to compile '${expandedExpr}'`);
+    if (missingVars.length > 0) {
+      console.error(`  - Missing variables: ${missingVars.join(', ')}`);
+      console.error(`  - Provided variables: ${varNames.slice(0, 20).join(', ')}${varNames.length > 20 ? '...' : ''}`);
+    }
+    console.error(`  - Error: ${e?.message ?? String(e)}`);
+
     const zeroFn = () => 0;
     setBoundedCache(compiledRateFunctions, cacheKey, zeroFn, MAX_COMPILED_RATE_FUNCTIONS);
     return zeroFn;

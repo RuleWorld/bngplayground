@@ -52,6 +52,8 @@ begin observables
 end observables
 
 begin functions
+    v_ind_L() = k_ind_L_synth
+    v_ind_R() = k_ind_R_synth
 end functions
 
 begin reaction rules
@@ -74,10 +76,10 @@ begin reaction rules
     
     ## INDUCTION (External Control)
     # Pulses of inducer sequester local TFs
-    0 -> Ind_L(b) k_ind_L_synth
+    0 -> Ind_L(b) v_ind_L()
     Ind_L(b) + TF_L(i) <-> Ind_L(b!1).TF_L(i!1) k_ind_bind,k_ind_off
     
-    0 -> Ind_R(b) k_ind_R_synth
+    0 -> Ind_R(b) v_ind_R()
     Ind_R(b) + TF_R(i) <-> Ind_R(b!1).TF_R(i!1) k_ind_bind,k_ind_off
     
     ## RESET

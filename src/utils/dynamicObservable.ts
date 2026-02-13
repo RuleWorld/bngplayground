@@ -91,7 +91,8 @@ export function computeObservableValue(
     if (matches.length > 0) {
       matchCount++;
       if (type === 'molecules') {
-        value += conc * matches.length;
+        const autoFactor = GraphMatcher.getPatternAutomorphismFactor(pattern);
+        value += conc * (matches.length / autoFactor);
       } else {
         value += conc;
       }

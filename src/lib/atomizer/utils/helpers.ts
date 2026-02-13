@@ -389,8 +389,8 @@ export function standardizeName(name: string): string {
     result = result.split(char).join(replacement);
   }
 
-  // Remove any remaining non-alphanumeric characters (except underscore)
-  result = result.replace(/[^\w]/g, '');
+  // Ensure match with Python logic: re.sub(r'[^a-zA-Z0-9_]', '_', name)
+  result = result.replace(/[^a-zA-Z0-9_]/g, '_');
 
   // Ensure doesn't start with a number
   if (/^\d/.test(result)) {

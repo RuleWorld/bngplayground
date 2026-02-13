@@ -31,7 +31,7 @@ end parameters
 begin molecule types
     Stress()
     eIF2a(b,s~U~P)
-    eIF2B(b)           # The rate-limiting GEF
+    eIF2B(b,s~Active~Inactive)           # The rate-limiting GEF
     PERK(s~off~on)
     GADD34()
 end molecule types
@@ -39,7 +39,7 @@ end molecule types
 begin seed species
     Stress() 0
     eIF2a(b,s~U) eIF2a_tot
-    eIF2B(b) eIF2B_tot
+    eIF2B(b,s~Active) eIF2B_tot
     PERK(s~off) PERK_tot
     GADD34() GADD34_pool
 end seed species
@@ -47,7 +47,7 @@ end seed species
 begin observables
     # KEY BIOLOGICAL OUTPUTS
     Molecules Transl_Sequest eIF2a(b!1).eIF2B(b!1)    # Core inhibitory complex
-    Molecules Active_GEF     eIF2B(b)                 # Available translational drive
+    Molecules Active_GEF     eIF2B(s~Active)          # Available translational drive
     Molecules Global_Stark   eIF2a(s~P)               # Total stress signal
     Molecules Signal_Sensor  PERK(s~on)               # Sensing activity
     Molecules Feedback_GADD  GADD34()                 # Recovery agent
@@ -68,7 +68,7 @@ begin reaction rules
     
     ## SEQUESTRATION (The translational block)
     # p-eIF2a acts as a competitive inhibitor of eIF2B
-    eIF2a(s~P,b) + eIF2B(b) <-> eIF2a(s~P,b!1).eIF2B(b!1) k_eif2b_bind,k_eif2b_off
+    eIF2a(s~P,b) + eIF2B(b,s~Active) <-> eIF2a(s~P,b!1).eIF2B(b!1,s~Inactive) k_eif2b_bind,k_eif2b_off
     
     ## FEEDBACK & RECOVERY
     # p-eIF2a induces GADD34 (Self-limit)
@@ -87,13 +87,12 @@ end reaction rules
 begin actions
     generate_network({overwrite=>1})
     # Phase 1: Basal (0-30)
-    simulate({method=>"ode",t_end=>30,n_steps=>60})
+    simulate({method=>"ode",t_end=>30,n_steps=>100})
     # Phase 2: Stress Pulse (30-100)
     setParameter("k_stress_pulse",5.0)
-    simulate({continue=>1,method=>"ode",t_end=>70,n_steps=>140,continue=>1})
+    simulate({method=>"ode",t_end=>100,n_steps=>200,continue=>1})
     # Phase 3: Recovery (100-200)
     setParameter("k_stress_pulse",0.1)
-    simulate({continue=>1,method=>"ode",t_end=>100,n_steps=>200,continue=>1})
+    simulate({method=>"ode",t_end=>200,n_steps=>200,continue=>1})
 end actions
 end model
-

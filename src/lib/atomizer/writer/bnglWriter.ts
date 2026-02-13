@@ -25,6 +25,7 @@ import {
 } from '../utils/helpers';
 import { SCTEntry, SpeciesCompositionTable } from '../config/types';
 
+
 /**
  * Detect and extract statistical factors from SBML kinetic law.
  * SBML often includes statistical factors (e.g., "2 * ka * S1 * S2") to account for
@@ -134,10 +135,10 @@ export function bnglFunction(
   reactionDict: Map<string, string> = new Map(),
   assignmentRuleVariables: Set<string> = new Set(),
   observableIds: Set<string> = new Set(),
-  speciesToCompartment: Map<string, string> = new Map(),
   speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
   observableConvertedRules: Set<string> = new Set(),
-  speciesWithConcFunctions: Set<string> = new Set()
+  speciesWithConcFunctions: Set<string> = new Set(),
+  sbmlToBnglId: Map<string, string> = new Map()
 ): string {
   let result = rule;
 
@@ -145,21 +146,27 @@ export function bnglFunction(
   // These use amount-based parameters, so we should use amounts, not concentrations
   const isSaturationRate = /\b(Sat|MM|Hill)\s*\(/.test(rule);
 
-  // Replace species IDs
-  for (const obsId of observableIds) {
-    const regex = new RegExp(`\\b${obsId}\\b`, 'g');
-    const bnglName = standardizeName(obsId);
+  // Replace IDs based on sbmlToBnglId map
+  // We extract all alphanumeric tokens and check if they map to a consolidated species ID
+  result = result.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (match) => {
+    // Skip math functions to avoid replacing them if an SBML ID happens to match
+    if (/^(Sat|MM|Hill|pow|sqrt|exp|abs|log|ln|log10|piecewise|if|gt|lt|geq|leq|eq|neq|and|or|not)$/i.test(match)) return match;
+
+    const mappedId = sbmlToBnglId.get(match);
+    if (!mappedId) return match;
+
+    const bnglName = mappedId;
 
     if (isSaturationRate && speciesWithConcFunctions.has(bnglName)) {
-      // For saturation kinetics, use amounts directly to avoid unit mismatch
-      // (K4 is in molecules, so substrate must also be in molecules)
-      result = result.replace(regex, `${bnglName}_amt`);
+      return `${bnglName}_amt`;
     } else if (speciesWithConcFunctions.has(bnglName)) {
-      // Normal rate laws: use concentration functions
-      result = result.replace(regex, `_c_${bnglName}()`);
+      return `_c_${bnglName}()`;
+    } else {
+      // In functions block, species names should generally refer to their amounts (S1_amt)
+      // because S1 itself is a pattern and cannot be used in expressions
+      return `${bnglName}_amt`;
     }
-    // Otherwise, leave it as-is (it's a parameter or constant)
-  }
+  });
 
   // Convert comparison operators
   result = convertComparisonOperators(result);
@@ -198,9 +205,28 @@ export function bnglFunction(
     }
   }
 
-  // NOTE: We do NOT scale Sat/MM Km by volume here anymore.
-  // The saturation kinetics now use amounts directly (X_amt instead of _c_X()),
-  // so the parameters (K4, K6, etc.) are already in the correct units (molecules).
+  // Handle Sat/MM/Hill macros specifically if they are missing the substrate argument
+  if (isSaturationRate) {
+    result = replaceNestedFunc(result, 'Sat', (args) => {
+      // If we have 2 args (k, K), append the first reactant as substrate
+      if (args.length === 2 && reactants.length > 0) {
+        return `Sat(${args[0]}, ${args[1]}, ${standardizeName(reactants[0])}_amt)`;
+      }
+      return `Sat(${args.join(', ')})`;
+    });
+    result = replaceNestedFunc(result, 'MM', (args) => {
+      if (args.length === 2 && reactants.length > 0) {
+        return `MM(${args[0]}, ${args[1]}, ${standardizeName(reactants[0])}_amt)`;
+      }
+      return `MM(${args.join(', ')})`;
+    });
+    result = replaceNestedFunc(result, 'Hill', (args) => {
+      if (args.length === 3 && reactants.length > 0) {
+        return `Hill(${args[0]}, ${args[1]}, ${standardizeName(reactants[0])}_amt, ${args[2]})`;
+      }
+      return `Hill(${args.join(', ')})`;
+    });
+  }
 
   // Clean up infinity and special values
   result = cleanParameterValue(result);
@@ -322,20 +348,28 @@ function convertMathFunctions(expr: string): string {
   result = replaceNestedFunc(result, 'abs', (args) => `if(${args[0]}>=0,${args[0]},-(${args[0]}))`);
 
   // Logarithm: log(x) or ln(x) -> ln(x)
-  // Protect against log(0) by adding small epsilon
-  const epsilon = '1e-9';
-  result = result.replace(/\blog\s*\(/g, `ln(${epsilon}+`);
-  result = result.replace(/\bln\s*\(/g, `ln(${epsilon}+`);
+  result = result.replace(/\blog\s*\(/g, 'ln(');
+  result = result.replace(/\bln\s*\(/g, 'ln(');
 
   // Log base 10: log10(x) -> (ln(x)/ln(10))
-  result = replaceNestedFunc(result, 'log10', (args) => `(ln(${epsilon}+${args[0]})/2.302585093)`);
+  result = replaceNestedFunc(result, 'log10', (args) => `(ln(${args[0]})/2.302585093)`);
 
-  // Sat and MM are kept as-is (BNGL native functions)
+  // Sat and MM: handle 3rd argument (rate constant) if present
   result = replaceNestedFunc(result, 'Sat', (args) => {
+    if (args.length === 3) return `((${args[0]}) * Sat(${args[2]}, ${args[1]}))`;
     return `Sat(${args[0]}, ${args[1]})`;
   });
   result = replaceNestedFunc(result, 'MM', (args) => {
+    if (args.length === 3) return `((${args[0]}) * MM(${args[2]}, ${args[1]}))`;
     return `MM(${args[0]}, ${args[1]})`;
+  });
+
+  // Hill(k, K, sub, n) -> k * sub^n / (K^n + sub^n)
+  result = replaceNestedFunc(result, 'Hill', (args) => {
+    if (args.length === 4) {
+      return `((${args[0]}) * (${args[2]})^(${args[3]}) / ((${args[1]})^(${args[3]}) + (${args[2]})^(${args[3]})))`;
+    }
+    return `Hill(${args.join(',')})`;
   });
 
   // Special constants
@@ -393,20 +427,37 @@ export function extendFunction(
 ): string {
   let result = functionStr;
 
+  // Track which functions have been substituted to avoid issues with nested calls
+  const definedFunctions = new Set<string>();
+
   // Substitute function calls with their definitions
   for (const [funcId, funcDef] of functionDefinitions) {
     const args = funcDef.arguments;
     const body = funcDef.math;
 
     // Create regex to match function call
-    const argPattern = args.map(() => '([^,)]+)').join('\\s*,\\s*');
-    const regex = new RegExp(`\\b${funcId}\\s*\\(\\s*${argPattern}\\s*\\)`, 'g');
+    // Handle zero-argument functions differently: match empty parens
+    let regex: RegExp;
+    if (args.length === 0) {
+      // For zero-arg functions like kPlus(), match kPlus() or kPlus( )
+      regex = new RegExp(`\\b${funcId}\\s*\\(\\s*\\)`, 'g');
+    } else {
+      // For functions with arguments, the argument may or may not have () parens
+      // Use a pattern that allows (optional) parens after the argument
+      const argPattern = args.map(() => '((?:\\w+\\s*(?:\\([^)]*\\))?)+)').join('\\s*,\\s*');
+      regex = new RegExp(`\\b${funcId}\\s*\\(\\s*${argPattern}\\s*\\)`, 'g');
+    }
 
     result = result.replace(regex, (...matches) => {
+      definedFunctions.add(funcId);
       let expandedBody = body;
-      for (let i = 0; i < args.length; i++) {
-        const argRegex = new RegExp(`\\b${args[i]}\\b`, 'g');
-        expandedBody = expandedBody.replace(argRegex, `(${matches[i + 1]})`);
+
+      // For zero-arg functions, there's no substitution needed
+      if (args.length > 0) {
+        for (let i = 0; i < args.length; i++) {
+          const argRegex = new RegExp(`\\b${args[i]}\\b`, 'g');
+          expandedBody = expandedBody.replace(argRegex, `(${matches[i + 1]})`);
+        }
       }
       return `(${expandedBody})`;
     });
@@ -497,6 +548,7 @@ export function writeParameters(
     lines.push(`__compartment_${name}__ ${comp.size}`);
   }
 
+
   // Add model parameters
   for (const [id, param] of parameters) {
     if (param.scope === 'global') {
@@ -545,6 +597,35 @@ export function writeCompartments(
 }
 
 /**
+ * Helper to build a canonical BNGL pattern string for an atomizer-complex.
+ * This ensures isomorphic complexes generate identical strings by sorting molecules.
+ */
+function getBnglPatternHelper(
+  sbmlId: string,
+  sct: SpeciesCompositionTable,
+  speciesToCompartment: Map<string, string>
+): string {
+  const entry = sct.entries.get(sbmlId);
+  if (!entry || !entry.structure) return standardizeName(sbmlId);
+
+  entry.structure.renumberBonds();
+  const spCompId = speciesToCompartment.get(sbmlId);
+  const compName = spCompId ? standardizeName(spCompId) : '';
+  const compSuffix = compName ? `@${compName}` : '';
+
+  const moleculePatterns = entry.structure.molecules.map(m => {
+    // Note: toString(true) for 3D/standard formatting
+    const molStr = m.toString(true);
+    const withPrefix = molStr.replace(/^(\w+)/, 'M_$1');
+    // If the molecule already has a compartment (unlikely in atomization), don't append suffix
+    if (withPrefix.includes('@')) return withPrefix;
+    return withPrefix + compSuffix;
+  }).sort();
+
+  return moleculePatterns.join('.');
+}
+
+/**
  * Generate molecule types section
  */
 export function writeMoleculeTypes(
@@ -573,80 +654,43 @@ export function writeSeedSpecies(
   seedSpecies: SeedSpeciesEntry[],
   compartments: Map<string, SBMLCompartment>,
   sct: SpeciesCompositionTable,
-  model: SBMLModel
-): string {
-  const patterns = new Map<string, { concentration: number | string, isBoundary: boolean }>();
+  speciesToCompartment: Map<string, string>,
+  isAtomized: boolean = false
+): { section: string, patternToId: Map<string, string>, sbmlToBnglId: Map<string, string>, idToPattern: Map<string, string> } {
+  const patterns = new Map<string, { concentration: number | string; names: string[] }>();
+  const sbmlToBnglId = new Map<string, string>();
+  const idToPattern = new Map<string, string>();
 
-  for (const { species, concentration, compartment, sbmlId } of seedSpecies) {
-    // Canonical string representation
-    // Sort molecules by name to handle isomorphisms (A!1.B!1 vs B!1.A!1)
-    const sortedMolecules = [...species.molecules].sort((a, b) => a.name.localeCompare(b.name));
+  // Use getBnglPattern helper for consistent pattern generation
+  for (const s of seedSpecies) {
+    const pattern = getBnglPatternHelper(s.sbmlId, sct, speciesToCompartment);
+    const concentration = s.concentration;
 
-    // Check if molecules have compartment info
-    const moleculeCompartments = sortedMolecules.map(m => m.compartment).filter(c => c !== '');
-    const uniqueCompartments = new Set(moleculeCompartments);
-    const hasCompartments = moleculeCompartments.length > 0;
-    const isHeterogeneous = uniqueCompartments.size > 1;
-
-    let speciesStr: string;
-
-    // Determine species-level compartment fallback
-    const compName = compartment ? standardizeName(compartment) : '';
-
-    const compSuffix = compName ? `@${compName}` : '';
-
-    if (isHeterogeneous || hasCompartments) {
-      // Use suffix notation on each molecule.
-      speciesStr = sortedMolecules.map(m => {
-        const molStr = m.toString(true); // toString(true) includes molecule-level suffix if present
-        let finalMol = molStr.replace(/^(\w+)/, 'M_$1');
-        // If it doesn't already have a suffix and we have a species-level fallback (for homogeneous), add it
-        if (!molStr.includes('@') && compSuffix) {
-          finalMol += compSuffix;
-        }
-        return finalMol;
-      }).join('.');
-    } else if (compSuffix) {
-      // Homogeneous with fallback
-      speciesStr = sortedMolecules.map(m => {
-        const molStr = m.toString(true);
-        return molStr.replace(/^(\w+)/, 'M_$1') + compSuffix;
-      }).join('.');
+    if (!patterns.has(pattern)) {
+      patterns.set(pattern, { concentration, names: [s.sbmlId] });
     } else {
-      // Truly no compartments
-      speciesStr = sortedMolecules.map(m => {
-        const molStr = m.toString(true);
-        return molStr.replace(/^(\w+)/, 'M_$1');
-      }).join('.');
-    }
-
-    const isBoundary = sbmlId ? model.species.get(sbmlId)?.boundaryCondition : false;
-    let fullPattern = speciesStr;
-
-    if (isBoundary) {
-      // $ must be at the start of the FIRST molecule
-      fullPattern = '$' + fullPattern;
-    }
-
-    if (patterns.has(fullPattern)) {
-      const existing = patterns.get(fullPattern)!;
-      const val1 = parseFloat(String(existing.concentration));
-      const val2 = parseFloat(String(concentration));
-      if (!isNaN(val1) && !isNaN(val2)) {
-        existing.concentration = val1 + val2;
-      } else {
-        existing.concentration = `(${existing.concentration}) + (${concentration})`;
-      }
-    } else {
-      patterns.set(fullPattern, { concentration, isBoundary });
+      patterns.get(pattern)!.names.push(s.sbmlId);
     }
   }
 
-  const lines = Array.from(patterns.entries()).map(([pattern, data]) => {
-    return `${pattern} ${data.concentration}`;
+  const patternToId = new Map<string, string>();
+  const lines = Array.from(patterns.entries()).map(([pattern, data], index) => {
+    const id = `S${index + 1}`;
+    patternToId.set(pattern, id);
+    idToPattern.set(id, pattern);
+    // Link each SBML ID that maps to this pattern to the BNGL ID
+    for (const sbmlId of data.names) {
+      sbmlToBnglId.set(sbmlId, id);
+    }
+    return `  ${pattern} ${data.concentration}`;
   });
 
-  return sectionTemplate('species', lines);
+  return {
+    section: sectionTemplate('species', lines),
+    patternToId,
+    sbmlToBnglId,
+    idToPattern
+  };
 }
 
 /**
@@ -662,86 +706,63 @@ export interface WriteObservablesResult {
 export function writeObservables(
   sbmlSpecies: Map<string, SBMLSpecies>,
   sct: SpeciesCompositionTable,
-  assignmentRules: Array<{ variable: string; math: string }> = [],
-  speciesToCompartment: Map<string, string> = new Map()
+  assignmentRules: Array<{ variable: string; math: string }>,
+  speciesToCompartment: Map<string, string>,
+  speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
+  options: Partial<AtomizerOptions> = {},
+  patternToId: Map<string, string> = new Map(),
+  sbmlToBnglId: Map<string, string> = new Map(),
+  idToPattern: Map<string, string> = new Map()
 ): WriteObservablesResult {
   const lines: string[] = [];
   const writtenRules = new Set<string>();
   const speciesAmts = new Set<string>();
   const assignmentRuleCompartments = new Map<string, string>();
 
+  // Issue 7 helper
+  const needsStandardization = (name: string): boolean => {
+    return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+  };
+
+  // First pass: Define direct observables for each species
+  // These are used for concentration scaling functions (_c_S1) and rates (S1_amt)
   for (const [id, sp] of sbmlSpecies) {
     const entry = sct.entries.get(id);
     if (entry && entry.structure) {
       const name = needsStandardization(id) ? standardizeName(id) : id;
+      const bnglId = sbmlToBnglId.get(id);
 
-      // Check if molecules have compartment info
-      const molecules = entry.structure.molecules;
-      const moleculeCompartments = molecules.map(m => m.compartment).filter(c => c !== '');
-      const uniqueCompartments = new Set(moleculeCompartments);
-      const hasCompartments = moleculeCompartments.length > 0;
-      const isHeterogeneous = uniqueCompartments.size > 1;
-
-      // Determine fallback compartment from map
-      const spCompId = speciesToCompartment.get(id);
-      const compName = spCompId ? standardizeName(spCompId) : '';
-
-      const compSuffix = compName ? `@${compName}` : '';
-      let pattern: string;
-
-      if (isHeterogeneous || hasCompartments) {
-        pattern = molecules.map(m => {
-          const molStr = m.toString(true);
-          let finalMol = molStr.replace(/^(\w+)/, 'M_$1');
-          if (!molStr.includes('@') && compSuffix) {
-            finalMol += compSuffix;
-          }
-          return finalMol;
-        }).join('.');
-      } else if (compSuffix) {
-        pattern = molecules.map(m => {
-          const molStr = m.toString(true);
-          return molStr.replace(/^(\w+)/, 'M_$1') + compSuffix;
-        }).join('.');
-      } else {
-        pattern = molecules.map(m => {
-          const molStr = m.toString(true);
-          return molStr.replace(/^(\w+)/, 'M_$1');
-        }).join('.');
+      if (bnglId) {
+        const pattern = idToPattern.get(bnglId);
+        if (pattern) {
+          // Use the actual pattern instead of the ID label (S1, S2...)
+          // This avoids BioNetGen interpreting S1 as a molecule type
+          lines.push(`Species ${name}_amt ${pattern}`);
+          lines.push(`Species ${name} ${pattern}`);
+          speciesAmts.add(name);
+          writtenRules.add(id); // Use original ID for tracking rules
+        }
       }
-
-      // Species observable
-      lines.push(`Species ${name}_amt ${pattern}`);    // For rate calculations (need complex count)
-      lines.push(`Species ${name} ${pattern}`);        // For GDAT output (same as _amt)
-      speciesAmts.add(name);
-      writtenRules.add(name);
     }
   }
 
-  // Issue 7 helper
-  function needsStandardization(name: string): boolean {
-    return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
-  }
-
-  // Handle assignment rules mapping back to observables
+  // Second pass: Handle assignment rules mapping back to observables
   for (const rule of assignmentRules) {
+    if (!rule.math) continue;
     const name = standardizeName(rule.variable);
 
-    // Filter out complex math. 
-    // ONLY simple addition or weighted sums of species are supported as BNGL observables.
-    // Complex mathematical functions MUST be handled as BNGL functions.
+    // Only handle simple sums/weighted sums
     if (/[/^()]/.test(rule.math)) continue;
 
-    // Find all species identifiers (S1, S2, etc.) and their coefficients
     const terms = rule.math.split('+').map(t => t.trim());
-    const finalPatterns: string[] = [];
+    const patternCounts = new Map<string, number>();
     let ruleCompartment: string | undefined;
 
     for (const term of terms) {
+      if (!term) continue;
       let coef = 1;
       let spId = term;
 
-      // Parse coefficient if present (e.g., "2*S9")
       if (term.includes('*')) {
         const parts = term.split('*').map(p => p.trim());
         if (/^\d+$/.test(parts[0])) {
@@ -753,63 +774,49 @@ export function writeObservables(
         }
       }
 
-      const entry = sct.entries.get(spId);
-      if (entry && entry.structure) {
-        const compId = speciesToCompartment.get(spId);
-        if (compId && !ruleCompartment) {
-          ruleCompartment = compId;
-        }
-
-        // Check if molecules already have compartments
-        const molecules = entry.structure.molecules;
-        const hasMoleculeCompartments = molecules.some(m => m.compartment !== '');
-
-        let pattern: string;
-        if (hasMoleculeCompartments) {
-          // Molecules have compartments: use toString output directly
-          pattern = molecules.map(m => {
-            const molStr = m.toString(true);
-            return molStr.replace(/^(\w+)/, 'M_$1');
-          }).join('.');
-        } else if (compId) {
-          // No molecule compartments but have species compartment: add suffix
-          const compSuffix = `@${standardizeName(compId)}`;
-          pattern = molecules.map(m => {
-            const molStr = m.toString(true);
-            return molStr.replace(/^(\w+)/, 'M_$1') + compSuffix;
-          }).join('.');
-        } else {
-          // No compartments at all
-          pattern = molecules.map(m => {
-            const molStr = m.toString(true);
-            return molStr.replace(/^(\w+)/, 'M_$1');
-          }).join('.');
-        }
-
-        // For BNGL Molecules observables, we write each pattern ONCE (coef = 1)
-        // regardless of the SBML coefficient. The SBML coefficient represents
-        // free sites for rate calculations, but BNGL patterns match each species
-        // once regardless of site count.
-        finalPatterns.push(pattern);
-      } else if (spId.match(/^S\d+$/)) {
-        // Fallback for non-atomized species ids - still use coef = 1
-        finalPatterns.push(spId);
+      // Skip numeric constants like "0" - they don't contribute to the pattern
+      if (/^\d+$/.test(spId)) {
+        continue;
       }
+
+      const bnglId = sbmlToBnglId.get(spId);
+
+      // Skip if this is not a valid species (e.g., it's a parameter)
+      if (!bnglId && !sbmlSpecies.has(spId)) {
+        patternCounts.clear();
+        break;
+      }
+
+      // For Molecules observables, always use the actual molecule pattern
+      let patternToUse = bnglId ? idToPattern.get(bnglId) : undefined;
+
+      // Fallback to standardized name if no bnglId or pattern found
+      if (!patternToUse) {
+        patternToUse = bnglId || standardizeName(spId);
+      }
+
+      // Use the coefficient. If multiple SBML species map to this same pattern,
+      // we assume they have the same coefficient (or we take the max).
+      // We don't SUM them, because the BNGL amount of the pattern already
+      // represents the sum of the SBML species amounts.
+      const currentCoef = patternCounts.get(patternToUse) || 0;
+      patternCounts.set(patternToUse, Math.max(currentCoef, coef));
+
+      const comp = speciesToCompartment.get(spId);
+      if (comp && !ruleCompartment) ruleCompartment = comp;
     }
 
-      if (finalPatterns.length > 0) {
-        // Deduplicate patterns - each species pattern should appear once
-        const uniquePatterns = Array.from(new Set(finalPatterns));
-        // Use the original variable name (H_ox, H_free) without _amt suffix
-        // so that functions like boundfrac() can reference them directly
-        lines.push(`Molecules ${name} ${uniquePatterns.join(' ')}`);
-      // DO NOT write the unscaled observable name here. 
-      // It will be handled as a scaled function _c_${name} if needed.
+    if (patternCounts.size > 0) {
+      const finalPatterns: string[] = [];
+      for (const [pattern, count] of patternCounts.entries()) {
+        for (let i = 0; i < count; i++) {
+          finalPatterns.push(pattern);
+        }
+      }
+      lines.push(`Molecules ${name} ${finalPatterns.join(' ')}`);
       writtenRules.add(rule.variable);
       speciesAmts.add(name);
-      if (ruleCompartment) {
-        assignmentRuleCompartments.set(name, ruleCompartment);
-      }
+      if (ruleCompartment) assignmentRuleCompartments.set(name, ruleCompartment);
     }
   }
 
@@ -821,13 +828,14 @@ export function writeObservables(
  */
 export function writeFunctions(
   functions: Map<string, SBMLFunctionDefinition>,
-  assignmentRules: Array<{ variable: string; math: string }> = [],
+  assignmentRules: Array<{ variable: string; math: string }>,
   parameterDict: Map<string, number | string>,
-  speciesToCompartment: Map<string, string> = new Map(),
-  speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
-  skipRules: Set<string> = new Set(),
-  speciesAmts: Set<string> = new Set(),
-  assignmentRuleCompartments: Map<string, string> = new Map()
+  speciesToCompartment: Map<string, string>,
+  speciesToHasOnlySubstanceUnits: Map<string, boolean>,
+  skipRules: Set<string>,
+  speciesAmts: Set<string>,
+  assignmentRuleCompartments: Map<string, string>,
+  sbmlToBnglId: Map<string, string> = new Map()
 ): string {
   const lines: string[] = [];
 
@@ -850,9 +858,10 @@ export function writeFunctions(
       compId = assignmentRuleCompartments.get(name);
     }
 
-    const bnglName = `_c_${name}`;  // Prefix with _c_ to avoid conflict with observable
+    const bnglName = `_c_${name}`;
     if (!isAmountOnly && compId) {
-      lines.push(`${bnglName}() = ${name} / __compartment_${standardizeName(compId)}__`);
+      const volParam = `__compartment_${standardizeName(compId)}__`;
+      lines.push(`${bnglName}() = ${name} / ${volParam}`);
     } else {
       lines.push(`${bnglName}() = ${name}`);
     }
@@ -872,6 +881,7 @@ export function writeFunctions(
 
     lines.push(`${name}(${args}) = ${body}`);
   }
+
 
   // Sort assignment rules by dependency to ensure sub-functions are defined before use
   const sortedRules: Array<{ variable: string; math: string }> = [];
@@ -919,8 +929,9 @@ export function writeFunctions(
     // If it's observable-compatible, it was already handled in writeObservables
     if (!/[*/^()]/.test(rule.math) && /\bS\d+\b/.test(rule.math)) continue;
 
+    let inlinedMath = inlineSBMLFunctions(rule.math, functions);
     let body = bnglFunction(
-      rule.math,
+      inlinedMath,
       ruleId,
       [],
       [],
@@ -928,10 +939,10 @@ export function writeFunctions(
       new Map(),
       assignmentRuleIds,
       new Set(speciesToCompartment.keys()),
-      speciesToCompartment,
       speciesToHasOnlySubstanceUnits,
       skipRules,
-      speciesAmts
+      speciesAmts,
+      sbmlToBnglId
     );
 
     lines.push(`${name}() = ${body}`);
@@ -958,15 +969,63 @@ function areCompartmentsAdjacent(
 export function writeReactionRulesFlat(
   reactions: Map<string, SBMLReaction>,
   sbmlSpecies: Map<string, SBMLSpecies>,
+  sct: SpeciesCompositionTable,
   compartments: Map<string, SBMLCompartment>,
   parameterDict: Map<string, number | string>,
   functionDefinitions: Map<string, SBMLFunctionDefinition>,
   speciesToCompartment: Map<string, string>,
   speciesToHasOnlySubstanceUnits: Map<string, boolean>,
-  options: AtomizerOptions
+  options: AtomizerOptions,
+  sbmlToBnglId: Map<string, string> = new Map(),
+  idToPattern: Map<string, string> = new Map()
 ): string {
   const lines: string[] = [];
   const useCompartments = compartments.size > 0;
+
+  const buildFlatPattern = (speciesId: string): string => {
+    // Robust mapping first - use actual pattern instead of BNGL ID
+    const bnglId = sbmlToBnglId.get(speciesId);
+    if (bnglId) {
+      const pattern = idToPattern.get(bnglId);
+      if (pattern) return pattern;
+      return bnglId;
+    }
+
+    const entry = sct.entries.get(speciesId);
+    const compId = speciesToCompartment.get(speciesId);
+    if (entry?.structure) {
+      const molecules = entry.structure.molecules;
+      const hasMoleculeCompartments = molecules.some(m => m.compartment !== '');
+
+      if (hasMoleculeCompartments) {
+        return molecules.map(m => {
+          const molStr = m.toString(true);
+          return molStr.replace(/^(\w+)/, 'M_$1');
+        }).join('.');
+      }
+
+      if (useCompartments && compId) {
+        const suffix = `@${standardizeName(compId)}`;
+        return molecules.map(m => {
+          const molStr = m.toString(true);
+          return molStr.replace(/^(\w+)/, 'M_$1') + suffix;
+        }).join('.');
+      }
+
+      return molecules.map(m => {
+        const molStr = m.toString(true);
+        return molStr.replace(/^(\w+)/, 'M_$1');
+      }).join('.');
+    }
+
+    const sp = sbmlSpecies.get(speciesId);
+    const name = standardizeName(sp?.name || speciesId);
+    let pattern = `M_${name}`;
+    if (useCompartments && compId) {
+      pattern = `${pattern}@${standardizeName(compId)}`;
+    }
+    return pattern;
+  };
 
   for (const [rxnId, rxn] of reactions) {
     const reactantStrs: string[] = [];
@@ -975,13 +1034,7 @@ export function writeReactionRulesFlat(
     // Build reactants
     for (const ref of rxn.reactants) {
       if (ref.species === 'EmptySet') continue;
-      const sp = sbmlSpecies.get(ref.species);
-      const name = options.useId ? standardizeName(ref.species) : standardizeName(sp?.name || ref.species);
-      let speciesStr = `M_${name}`;
-      const compId = speciesToCompartment.get(ref.species);
-      if (useCompartments && compId) {
-        speciesStr = `${speciesStr}@${standardizeName(compId)}`;
-      }
+      const speciesStr = buildFlatPattern(ref.species);
 
       for (let i = 0; i < (ref.stoichiometry || 1); i++) {
         reactantStrs.push(speciesStr);
@@ -991,21 +1044,15 @@ export function writeReactionRulesFlat(
     // Build products
     for (const ref of rxn.products) {
       if (ref.species === 'EmptySet') continue;
-      const sp = sbmlSpecies.get(ref.species);
-      const name = options.useId ? standardizeName(ref.species) : standardizeName(sp?.name || ref.species);
-      let speciesStr = `M_${name}`;
       const compId = speciesToCompartment.get(ref.species);
+      const speciesStr = buildFlatPattern(ref.species);
       const reactantComp = rxn.reactants.length > 0 ? speciesToCompartment.get(rxn.reactants[0].species) : null;
 
-      if (useCompartments && compId) {
-        speciesStr = `${speciesStr}@${standardizeName(compId)}`;
-
-        if (reactantComp && reactantComp !== compId) {
-          if (!areCompartmentsAdjacent(reactantComp, compId, compartments)) {
-            logger.info('BNW004',
-              `Transport reaction ${rxnId}: ${ref.species} moves from ${reactantComp} to ${compId}`
-            );
-          }
+      if (useCompartments && compId && reactantComp && reactantComp !== compId) {
+        if (!areCompartmentsAdjacent(reactantComp, compId, compartments)) {
+          logger.info('BNW004',
+            `Transport reaction ${rxnId}: ${ref.species} moves from ${reactantComp} to ${compId}`
+          );
         }
       }
 
@@ -1039,6 +1086,9 @@ export function writeReactionRulesFlat(
           rate = rate.replace(compPattern, '');
           const compPattern2 = new RegExp(`\\s*\\*\\s*${compId}\\s*`, 'g');
           rate = rate.replace(compPattern2, '');
+          // Handle division by volume which appears in 2nd order SBML rates
+          const divCompPattern = new RegExp(`\\s*\\/\\s*__compartment_${compId}__\\s*`, 'g');
+          rate = rate.replace(divCompPattern, ''); // Remove the division
         }
       }
 
@@ -1051,73 +1101,104 @@ export function writeReactionRulesFlat(
         new Map(),
         options.assignmentRuleVariables,
         new Set(sbmlSpecies.keys()),
-        speciesToCompartment,
         speciesToHasOnlySubstanceUnits,
         new Set(),
-        options.speciesAmts || new Set()
+        options.speciesAmts || new Set(),
+        sbmlToBnglId
       );
     }
 
-    // Check if this is a saturation rate law (Sat, MM, Hill)
-    const isSaturationRateLaw = /\b(Sat|MM|Hill)\s*\(/.test(rate);
+    const reactantCounts = new Map<string, number>();
+    let totalStoichiometry = 0;
+    for (const ref of rxn.reactants) {
+      if (ref.species === 'EmptySet') continue;
+      const stoich = ref.stoichiometry || 1;
+      reactantCounts.set(ref.species, (reactantCounts.get(ref.species) || 0) + stoich);
+      totalStoichiometry += stoich;
+    }
+
+    const ruleCompId = rxn.compartment || (rxn.reactants[0]?.species ? sbmlSpecies.get(rxn.reactants[0].species)?.compartment : rxn.products[0]?.species ? sbmlSpecies.get(rxn.products[0].species)?.compartment : '');
+    // Standard scaling: Restore one factor of V that was removed from the rate expression
+    const vScale = (useCompartments && ruleCompId && totalStoichiometry > 0) ? `(__compartment_${standardizeName(ruleCompId)}__)` : '1';
 
     let finalRate: string;
 
-    if (isSaturationRateLaw) {
-      // Saturation kinetics: the rate expression already uses amounts (X_amt)
-      // and BNG's Sat/MM macros handle the kinetics correctly.
-      // We just need volume scaling for bimolecular reactions.
-      let vScale = '1';
-      if (useCompartments) {
-        const ruleCompId = rxn.compartment || (rxn.reactants[0]?.species ? sbmlSpecies.get(rxn.reactants[0].species)?.compartment : rxn.products[0]?.species ? sbmlSpecies.get(rxn.products[0].species)?.compartment : '');
-        const totalStoichiometry = rxn.reactants.reduce((sum, ref) => sum + (ref.stoichiometry || 1), 0);
-        const n = totalStoichiometry;
-        if (n !== 1 && ruleCompId) {
-          vScale = `(__compartment_${ruleCompId}__^${n - 1})`;
+    let denominatorContent = '';
+    const divMatch = rate.match(/\/\s*\(/);
+    if (divMatch) {
+      const divIdx = divMatch.index!;
+      let parenDepth = 0;
+      for (let i = divIdx; i < rate.length; i++) {
+        if (rate[i] === '(') parenDepth++;
+        else if (rate[i] === ')') {
+          if (--parenDepth === 0) {
+            denominatorContent = rate.substring(divIdx + 1, i);
+            break;
+          }
         }
       }
-      finalRate = vScale === '1' ? rate : `((${rate}) * ${vScale})`;
+    }
+
+    let hasDenominator = denominatorContent.includes('+');
+    let satSubstrate: string | null = null;
+    if (hasDenominator) {
+      for (const spId of reactantCounts.keys()) {
+        const spName = standardizeName(spId);
+        if (denominatorContent.includes(`${spName}_amt`) || denominatorContent.includes(`_c_${spName}()`)) {
+          satSubstrate = spId;
+          break;
+        }
+      }
+    }
+
+    const divisorParts: string[] = [];
+    if (hasDenominator && satSubstrate && reactantCounts.size > 1) {
+      for (const [spId, stoich] of reactantCounts) {
+        const name = standardizeName(spId);
+        if (spId === satSubstrate) divisorParts.push(`${name}_amt`);
+        else divisorParts.push(`(${name}_amt * ${name}_amt)`);
+      }
     } else {
-      // Normal mass-action kinetics: divide by reactant concentrations
-      const productCounts = new Map<string, number>();
-      for (const ref of rxn.products) {
-        if (ref.species === 'EmptySet') continue;
-        const stoich = ref.stoichiometry || 1;
-        productCounts.set(ref.species, (productCounts.get(ref.species) || 0) + stoich);
+      for (const [spId, stoich] of reactantCounts) {
+        const name = standardizeName(spId);
+        divisorParts.push(stoich === 1 ? `${name}_amt` : `((${name}_amt^${stoich})/${getFactorial(stoich)})`);
       }
+    }
+    const divisor = divisorParts.length > 0 ? '(' + divisorParts.join('*') + ')' : '1';
 
-      const reactantCounts = new Map<string, number>();
-      let totalStoichiometry = 0;
-      for (const ref of rxn.reactants) {
-        if (ref.species === 'EmptySet') continue;
-        const stoich = ref.stoichiometry || 1;
-        reactantCounts.set(ref.species, (reactantCounts.get(ref.species) || 0) + stoich);
-        totalStoichiometry += stoich;
-      }
+    // Check if Sat/MM/Hill macro is used
+    const isSaturationRateLaw = /\b(Sat|MM|Hill)\s*\(/.test(rate);
 
-      const divisorParts: string[] = [];
-      const numReactants = Array.from(reactantCounts.keys()).length;
-      const reactantIds = Array.from(reactantCounts.keys());
+    if (isSaturationRateLaw) {
+      const satPrefix = (vScale !== '1') ? `(${rate}) * ${vScale}` : rate;
+      finalRate = (divisor !== '1') ? `(${satPrefix}) / (${divisor})` : satPrefix;
+    } else {
+      const reactantIds: string[] = Array.from(reactantCounts.keys());
 
-      // Detect catalyst species (appear on both reactant and product sides)
-      const catalystSpecies = new Set<string>();
-      for (const ref of rxn.reactants) {
-        if (ref.species === 'EmptySet') continue;
-        for (const prodRef of rxn.products) {
-          if (prodRef.species === 'EmptySet') continue;
-          if (ref.species === prodRef.species) {
-            catalystSpecies.add(ref.species);
+      let rateAlreadyIncludesReactants = false;
+      for (const [spId, stoich] of reactantCounts) {
+        const spName = standardizeName(spId);
+        const concPattern = new RegExp(`_c_${spName}\\(\\)`, 'i');
+        const amtPattern = new RegExp(`${spName}_amt`, 'i');
+        if (concPattern.test(rate) || amtPattern.test(rate)) {
+          const concMatches = rate.match(new RegExp(`_c_${spName}\\(\\)`, 'gi')) || [];
+          const amtMatches = rate.match(new RegExp(`${spName}_amt`, 'gi')) || [];
+          if (concMatches.length + amtMatches.length >= stoich) {
+            rateAlreadyIncludesReactants = true;
+            break;
           }
         }
       }
 
-      // For saturation-style kinetics in the SBML expression (not using Sat macro),
-      // identify which species is the substrate by looking for denominator pattern (K + substrate)
-      let satSubstrate: string | null = null;
-      let satCatalyst: string | null = null;
-      
-      // Check for Sat/MM pattern: contains "/" followed by "(...)" with "+" inside
-      // Handle nested parentheses by finding matching closing paren
+      // Catalyst/Saturation heuristics
+      const catalysts = new Set<string>();
+      for (const ref of rxn.reactants) {
+        if (ref.species === 'EmptySet') continue;
+        for (const prodRef of rxn.products) {
+          if (ref.species === prodRef.species) catalysts.add(ref.species);
+        }
+      }
+
       let denominatorContent = '';
       const divMatch = rate.match(/\/\s*\(/);
       if (divMatch) {
@@ -1126,173 +1207,76 @@ export function writeReactionRulesFlat(
         for (let i = divIdx; i < rate.length; i++) {
           if (rate[i] === '(') parenDepth++;
           else if (rate[i] === ')') {
-            parenDepth--;
-            if (parenDepth === 0) {
+            if (--parenDepth === 0) {
               denominatorContent = rate.substring(divIdx + 1, i);
               break;
             }
           }
         }
       }
-      // For Sat/MM detection, we need:
-      // 1. A denominator with "+" (indicating K + substrate form)
-      // 2. At least one reactant species appearing in that denominator
-      let hasDenominator = false;
-      if (denominatorContent.includes('+')) {
-        // Check if any reactant appears in the denominator
-        for (const spId of reactantIds) {
+
+      let hasDenominator = denominatorContent.includes('+');
+      let satSubstrate: string | null = null;
+      if (hasDenominator) {
+        for (const spId of reactantCounts.keys()) {
           const spName = standardizeName(spId);
-          if (denominatorContent.includes(`${spName}_amt`) || 
-              denominatorContent.includes(`_c_${spName}()`)) {
-            hasDenominator = true;
-            break;
-          }
-        }
-      }
-      
-      // First pass: identify potential substrates (in denominator) and catalysts (in numerator AND products)
-      const potentialSubstrates = new Set<string>();
-      const potentialCatalysts = new Set<string>();
-      
-      for (const spId of reactantIds) {
-        const spName = standardizeName(spId);
-        const hasSpeciesAmt = denominatorContent.includes(`${spName}_amt`);
-        const hasSpeciesConc = denominatorContent.includes(`_c_${spName}()`);
-        
-        if (hasDenominator && (hasSpeciesAmt || hasSpeciesConc)) {
-          potentialSubstrates.add(spId);
-        }
-        if (catalystSpecies.has(spId)) {
-          potentialCatalysts.add(spId);
-        }
-      }
-      
-      // If a potential substrate is also a catalyst, it's likely misidentified (buggy SBML)
-      // Use the other reactant as the substrate
-      for (const spId of potentialSubstrates) {
-        if (!potentialCatalysts.has(spId)) {
-          satSubstrate = spId;
-          break;
-        }
-      }
-      
-      // If all potential substrates are also catalysts (buggy SBML case), 
-      // pick the first non-catalyst reactant as substrate
-      if (!satSubstrate) {
-        for (const spId of reactantIds) {
-          if (!potentialCatalysts.has(spId)) {
+          if (denominatorContent.includes(`${spName}_amt`) || denominatorContent.includes(`_c_${spName}()`)) {
             satSubstrate = spId;
             break;
           }
         }
       }
-      
-      // Identify the actual catalyst (non-substrate that appears in products)
-      if (satSubstrate) {
-        for (const spId of reactantIds) {
-          if (spId !== satSubstrate && catalystSpecies.has(spId)) {
-            satCatalyst = spId;
-            break;
-          }
-        }
-      }
-      
-      // If we have a substrate and there's another reactant that's a catalyst,
-      // this is a saturation rate law with catalyst (buggy BNG SBML export)
-      let modifiedRate = rate;
-      if (hasDenominator && satSubstrate && numReactants > 1) {
-        // Check for catalyst in numerator (buggy pattern: k * substrate * catalyst / (K + substrate))
-        for (const spId of reactantIds) {
-          if (spId === satSubstrate) continue;
-          const catName = standardizeName(spId);
-          // Check for both _amt and _c_SX() formats
-          const catAmtPattern = new RegExp(`${catName}_amt`, 'i');
-          const catConcPattern = new RegExp(`_c_${catName}\\(\\)`, 'i');
-          if (catAmtPattern.test(modifiedRate) || catConcPattern.test(modifiedRate)) {
-            // Remove catalyst from numerator - handle both _amt and _c_SX() formats
-            const catAmtPatternGlobal = new RegExp(`\\s*\\*\\s*${catName}_amt\\s*`, 'g');
-            const catConcPatternGlobal = new RegExp(`\\s*\\*\\s*_c_${catName}\\(\\)\\s*`, 'g');
-            modifiedRate = modifiedRate.replace(catAmtPatternGlobal, ' ');
-            modifiedRate = modifiedRate.replace(catConcPatternGlobal, ' ');
-            satCatalyst = spId;
-            break;
-          }
-        }
-      }
 
-      if (hasDenominator && satSubstrate && numReactants > 1) {
-        // Saturation kinetics: divide by substrate once, other reactants appropriately
-        for (const [spId, totalStoich] of reactantCounts) {
+      let modifiedRate = rate;
+      const divisorParts: string[] = [];
+      if (hasDenominator && satSubstrate && reactantCounts.size > 1) {
+        // Saturation specific divisor logic (from vetoed version)
+        for (const [spId, stoich] of reactantCounts) {
           const name = standardizeName(spId);
-          if (spId === satSubstrate) {
-            // Substrate (in Sat denominator): divide once
-            divisorParts.push(`${name}_amt`);
-          } else if (catalystSpecies.has(spId)) {
-            // Catalyst (buggy BNG SBML export): do NOT divide
-            // The catalyst was erroneously added to numerator, we removed it above
-            // so we shouldn't divide by it either
-            totalStoichiometry -= totalStoich;
+          if (spId === satSubstrate) divisorParts.push(`${name}_amt`);
+          else if (catalysts.has(spId)) {
+            // Catalyst in numerator handled here
+            const catPattern = new RegExp(`\\s*\\*\\s*(${name}_amt|_c_${name}\\(\\))\\s*`, 'g');
+            modifiedRate = modifiedRate.replace(catPattern, ' ');
+            totalStoichiometry -= stoich;
           } else {
-            // Other reactant (not substrate, not catalyst): divide TWICE (buggy SBML pattern)
             divisorParts.push(`(${name}_amt * ${name}_amt)`);
-            totalStoichiometry -= totalStoich;
+            totalStoichiometry -= stoich;
           }
         }
       } else {
-        // Normal mass-action: divide by all reactants once
-        for (const [spId, totalStoich] of reactantCounts) {
+        for (const [spId, stoich] of reactantCounts) {
           const name = standardizeName(spId);
-          if (totalStoich === 1) {
-            divisorParts.push(`${name}_amt`);
-          } else {
-            divisorParts.push(`((${name}_amt^${totalStoich})/${getFactorial(totalStoich)})`);
-          }
+          divisorParts.push(stoich === 1 ? `${name}_amt` : `((${name}_amt^${stoich})/${getFactorial(stoich)})`);
         }
       }
-      const divisor = divisorParts.length > 0 ? divisorParts.join('*') : '1';
 
-      // Remove statistical factors from rate (BNGL handles these through pattern matching)
+      const divisor = divisorParts.length > 0 ? '(' + divisorParts.join('*') + ')' : '1';
       const reactantSpeciesMap = new Map<string, Species>();
-      for (const ref of rxn.reactants) {
-        if (ref.species === 'EmptySet') continue;
-        const sp = sbmlSpecies.get(ref.species);
+      for (const spId of reactantCounts.keys()) {
+        const sp = sbmlSpecies.get(spId);
         if (sp?.name) {
           try {
             const parsed = readFromString(sp.name);
-            if (parsed.molecules.length > 0) {
-              reactantSpeciesMap.set(ref.species, parsed);
-            }
-          } catch (e) {
-            // Ignore parse errors
-          }
+            if (parsed.molecules.length > 0) reactantSpeciesMap.set(spId, parsed);
+          } catch { }
         }
       }
-      // Use modified rate (with catalyst removed from numerator if applicable)
+
       const cleanedRate = extractStatisticalFactors(modifiedRate, reactantSpeciesMap);
+      const atomizedRatePrefix = (vScale !== '1') ? `(${cleanedRate}) * ${vScale}` : cleanedRate;
 
-      const ruleCompId = rxn.compartment || (rxn.reactants[0]?.species ? sbmlSpecies.get(rxn.reactants[0].species)?.compartment : rxn.products[0]?.species ? sbmlSpecies.get(rxn.products[0].species)?.compartment : '');
+      if (divisor !== '1') finalRate = `(${atomizedRatePrefix}) / (${divisor})`;
+      else finalRate = atomizedRatePrefix;
 
-      let vScale = '1';
-      if (useCompartments && ruleCompId) {
-        const n = totalStoichiometry;
-        if (n !== 1) {
-          vScale = `(__compartment_${ruleCompId}__^${n - 1})`;
-        }
-      }
-
-      // After stripping compartment from SBML rate, we need to DIVIDE by vScale
-      // SBML: k * [S1] * [S2] * C = k * (S1_amt/C) * (S2_amt/C) * C = k * S1_amt * S2_amt / C
-      // After stripping C: k * S1_amt * S2_amt / C
-      // We divide by vScale = C^(n-1) to get proper propensity
-      finalRate = `(((${cleanedRate}) / ${vScale}) / (${divisor} + 1e-60))`;
+      const massActionK = checkMassAction(modifiedRate, divisor, vScale, parameterDict, compartments, speciesToCompartment, options.assignmentRuleVariables);
+      if (massActionK !== null) finalRate = String(massActionK);
     }
 
     const reactants = reactantStrs.length > 0 ? reactantStrs.join(' + ') : '0';
     const products = productStrs.length > 0 ? productStrs.join(' + ') : '0';
     const arrow = rxn.reversible ? '<->' : '->';
-
-    const ruleName = standardizeName(rxn.name || rxnId);
-    lines.push(`${ruleName}: ${reactants} ${arrow} ${products} ${finalRate}`);
+    lines.push(`${standardizeName(rxn.name || rxnId)}: ${reactants} ${arrow} ${products} ${finalRate}`);
   }
 
   return sectionTemplate('reaction rules', lines);
@@ -1310,7 +1294,9 @@ export function writeReactionRulesAtomized(
   functionDefinitions: Map<string, SBMLFunctionDefinition>,
   speciesToCompartment: Map<string, string>,
   speciesToHasOnlySubstanceUnits: Map<string, boolean>,
-  options: AtomizerOptions
+  options: AtomizerOptions,
+  sbmlToBnglId: Map<string, string> = new Map(),
+  idToPattern: Map<string, string> = new Map()
 ): string {
   const lines: string[] = [];
   const useCompartments = compartments.size > 0;
@@ -1332,296 +1318,65 @@ export function writeReactionRulesAtomized(
         const mol = translated || entry!.structure!;
         mol.renumberBonds();
 
-        // Use suffix notation for rules if compartment is known
         const speciesCompSuffix = compId ? `@${standardizeName(compId)}` : '';
         const pattern = mol.molecules.map(m => {
           const molStr = m.toString(true);
-          // Check if molecule already has compartment info (heterogeneous species)
-          if (molStr.includes('@')) {
-            // Keep molecule's own compartment
-            return molStr.replace(/^(\w+)/, 'M_$1');
-          } else {
-            // Apply species compartment
-            return molStr.replace(/^(\w+)/, 'M_$1') + speciesCompSuffix;
-          }
+          if (molStr.includes('@')) return molStr.replace(/^(\w+)/, 'M_$1');
+          return molStr.replace(/^(\w+)/, 'M_$1') + speciesCompSuffix;
         }).join('.');
         speciesStr = pattern;
       }
-
       if (speciesStr) {
-        for (let i = 0; i < (ref.stoichiometry || 1); i++) {
-          reactantStrs.push(speciesStr);
-        }
+        for (let i = 0; i < (ref.stoichiometry || 1); i++) reactantStrs.push(speciesStr);
       }
     }
 
-    // Build products using translated structures
+    // Build products
     for (const ref of rxn.products) {
       if (ref.species === 'EmptySet') continue;
 
       const translated = translator.get(ref.species);
       const entry = sct.entries.get(ref.species);
+      const speciesCompId = speciesToCompartment.get(ref.species) || rxn.compartment || '';
 
       let speciesPattern = '';
       if (translated || (entry && entry.structure)) {
         const mol = translated || entry!.structure!;
-        const spId = ref.species;
-        const speciesCompId = speciesToCompartment.get(spId) || rxn.compartment || '';
-
+        const compSuffix = speciesCompId ? `@${standardizeName(speciesCompId)}` : '';
         speciesPattern = mol.molecules.map(m => {
           const molStr = m.toString(true);
-          // Check if molecule already has compartment info (heterogeneous species)
-          if (molStr.includes('@')) {
-            // Keep molecule's own compartment
-            return molStr.replace(/^(\w+)/, 'M_$1');
-          } else {
-            // Apply species compartment
-            const compSuffix = speciesCompId ? `@${standardizeName(speciesCompId)}` : '';
-            return molStr.replace(/^(\w+)/, 'M_$1') + compSuffix;
-          }
+          if (molStr.includes('@')) return molStr.replace(/^(\w+)/, 'M_$1');
+          return molStr.replace(/^(\w+)/, 'M_$1') + compSuffix;
         }).join('.');
       }
-
       if (speciesPattern) {
-        for (let i = 0; i < (ref.stoichiometry || 1); i++) {
-          productStrs.push(speciesPattern);
-        }
+        for (let i = 0; i < (ref.stoichiometry || 1); i++) productStrs.push(speciesPattern);
       }
     }
 
-    // Get rate law
-    let rate = '0';
-    if (rxn.kineticLaw) {
-      rate = rxn.kineticLaw.math;
-
-      for (const localParam of rxn.kineticLaw.localParameters) {
-        const regex = new RegExp(`\\b${localParam.id}\\b`, 'g');
-        if (options.replaceLocParams) {
-          rate = rate.replace(regex, String(localParam.value));
-        } else {
-          rate = rate.replace(regex, standardizeName(`${rxnId}_${localParam.id}`));
-        }
-      }
-
-      // Strip compartment volume terms from SBML kinetic law
-      // BNG2.pl exports SBML with "* C" for reactions in compartment C
-      // We strip this because we're using molecule-based rates (not concentration-based)
-      if (useCompartments) {
-        for (const compId of compartments.keys()) {
-          const compPattern = new RegExp(`\\s*\\*\\s*__compartment_${compId}__\\s*`, 'g');
-          rate = rate.replace(compPattern, '');
-          const compPattern2 = new RegExp(`\\s*\\*\\s*${compId}\\s*`, 'g');
-          rate = rate.replace(compPattern2, '');
-        }
-      }
-
-      rate = bnglFunction(
-        rate,
-        rxnId,
-        rxn.reactants.map(r => r.species),
-        Array.from(compartments.keys()),
-        new Map(Array.from(parameterDict.entries()).map(([k, v]) => [k, Number(v)])),
-        new Map(),
-        options.assignmentRuleVariables || new Set(),
-        new Set(sct.entries.keys()),
-        speciesToCompartment,
-        speciesToHasOnlySubstanceUnits,
-        options.observableConvertedRules || new Set(),
-        new Set() // Pass empty set to prevent _c_S() conversion in reaction rates
-      );
-
-      // Post-processing: Replace S1 with S1_amt for molecule-based rates
-      for (const ref of rxn.reactants) {
-        if (ref.species === 'EmptySet') continue;
-        const spName = standardizeName(ref.species);
-        const amtName = `${spName}_amt`;
-        const regex = new RegExp(`\\b${spName}\\b`, 'g');
-        rate = rate.replace(regex, amtName);
-      }
-    }
-
-    // Identify catalysts (species appearing on both sides)
-    const catalysts = new Set<string>();
-    for (const ref of rxn.reactants) {
-      if (ref.species === 'EmptySet') continue;
-      for (const prodRef of rxn.products) {
-        if (prodRef.species === 'EmptySet') continue;
-        if (ref.species === prodRef.species) {
-          catalysts.add(ref.species);
-        }
-      }
-    }
-
-    // For saturation-style kinetics in the SBML expression (not using Sat macro),
-    // identify which species is the substrate by looking for denominator pattern (K + substrate)
-    let satSubstrate: string | null = null;
-    let satCatalyst: string | null = null;
-    
-    // Check for Sat/MM pattern: contains "/" followed by "(...)" with "+" inside
-    // Handle nested parentheses by finding matching closing paren
-    let denominatorContent = '';
-    const divMatch = rate.match(/\/\s*\(/);
-    if (divMatch) {
-      const divIdx = divMatch.index!;
-      let parenDepth = 0;
-      for (let i = divIdx; i < rate.length; i++) {
-        if (rate[i] === '(') parenDepth++;
-        else if (rate[i] === ')') {
-          parenDepth--;
-          if (parenDepth === 0) {
-            denominatorContent = rate.substring(divIdx + 1, i);
-            break;
-          }
-        }
-      }
-    }
-    
-    // For Sat/MM detection, we need:
-    // 1. A denominator with "+" (indicating K + substrate form)
-    // 2. At least one reactant species appearing in that denominator
-    let hasDenominator = false;
-    let potentialSubstrate: string | null = null;
-    if (denominatorContent.includes('+')) {
-      // Check if any reactant appears in the denominator
-      for (const ref of rxn.reactants) {
-        if (ref.species === 'EmptySet') continue;
-        const spName = standardizeName(ref.species);
-        if (denominatorContent.includes(`${spName}_amt`) || 
-            denominatorContent.includes(`_c_${spName}()`)) {
-          hasDenominator = true;
-          potentialSubstrate = ref.species;
-          break;
-        }
-      }
-    }
-    
-    // Determine true substrate and catalyst
-    // Case 1: Normal Sat/MM - substrate NOT a catalyst, other reactant IS catalyst
-    // Case 2: Buggy BNG SBML - substrate IN denominator IS a catalyst, other reactant is true substrate
-    satSubstrate = null;
-    satCatalyst = null;
-    
-    if (hasDenominator && potentialSubstrate) {
-      if (catalysts.has(potentialSubstrate)) {
-        // Buggy SBML: the species in denominator is actually a catalyst
-        // Find the true substrate (the other reactant)
-        for (const ref of rxn.reactants) {
-          if (ref.species === 'EmptySet' || ref.species === potentialSubstrate) continue;
-          satSubstrate = ref.species;
-          satCatalyst = potentialSubstrate;
-          break;
-        }
-      } else {
-        // Normal case: potentialSubstrate is the true substrate
-        satSubstrate = potentialSubstrate;
-        // Find catalyst (other reactant that appears in products)
-        for (const ref of rxn.reactants) {
-          if (ref.species === 'EmptySet' || ref.species === satSubstrate) continue;
-          if (catalysts.has(ref.species)) {
-            satCatalyst = ref.species;
-            break;
-          }
-        }
-      }
-    }
-    
-    let modifiedRate = rate;
-    const numReactants = rxn.reactants.filter(r => r.species !== 'EmptySet').length;
-    
-    // If we have a substrate and there's another reactant that's a catalyst,
-    // this is a saturation rate law with catalyst (buggy BNG SBML export)
-    if (hasDenominator && satSubstrate && satCatalyst && numReactants > 1) {
-      // Remove catalyst from numerator
-      const catName = standardizeName(satCatalyst);
-      const catAmtPatternGlobal = new RegExp(`\\s*\\*\\s*${catName}_amt\\s*`, 'g');
-      const catConcPatternGlobal = new RegExp(`\\s*\\*\\s*_c_${catName}\\(\\)\\s*`, 'g');
-      modifiedRate = modifiedRate.replace(catAmtPatternGlobal, ' ');
-      modifiedRate = modifiedRate.replace(catConcPatternGlobal, ' ');
-      
-      // Fix denominator: replace catalyst with true substrate
-      // When satSubstrate is the catalyst (buggy SBML), find the true substrate
-      let trueSubstrateName = null;
-      if (catalysts.has(satSubstrate)) {
-        // satSubstrate is actually a catalyst, find the other reactant as true substrate
-        const trueSub = rxn.reactants.find(r => r.species !== 'EmptySet' && !catalysts.has(r.species));
-        if (trueSub) {
-          trueSubstrateName = standardizeName(trueSub.species);
-        }
-      } else {
-        // satSubstrate is already the true substrate
-        trueSubstrateName = standardizeName(satSubstrate);
-      }
-      
-      // Replace catalyst in denominator with true substrate
-      if (trueSubstrateName && trueSubstrateName !== catName) {
-        const denomCatPatternGlobal = new RegExp(`\\+\\s*${catName}_amt`, 'g');
-        modifiedRate = modifiedRate.replace(denomCatPatternGlobal, `+ ${trueSubstrateName}_amt`);
-      }
-    }
-
-    // Unified kinetics: build divisor based on reactant amounts to extract specific rate constant
-    const reactantCounts = new Map<string, number>();
-    for (const ref of rxn.reactants) {
-      if (ref.species === 'EmptySet') continue;
-      const stoich = ref.stoichiometry || 1;
-      reactantCounts.set(ref.species, (reactantCounts.get(ref.species) || 0) + stoich);
-    }
-
-    const divisorParts: string[] = [];
-    if (hasDenominator && satSubstrate && numReactants > 1) {
-      // Saturation kinetics: the rate already has substrate/(K+substrate)
-      // We should NOT add extra divisors - the Sat macro handles it correctly
-      // Just identify components but don't add divisors
-    } else {
-      // Normal mass-action: divide by all reactants once
-      for (const [spId, totalStoich] of reactantCounts) {
-        const name = standardizeName(spId);
-        if (totalStoich === 1) {
-          divisorParts.push(`${name}_amt`);
-        } else {
-          divisorParts.push(`((${name}_amt^${totalStoich})/${getFactorial(totalStoich)})`);
-        }
-      }
-    }
-    const divisor = divisorParts.length > 0 ? divisorParts.join('*') : '1';
-    const vScale = '1';
-
-    // Remove statistical factors from rate (BNGL handles these through pattern matching)
-    const reactantSpeciesMap = new Map<string, Species>();
-    for (const ref of rxn.reactants) {
-      if (ref.species === 'EmptySet') continue;
-      const entry = sct.entries.get(ref.species);
-      if (entry?.structure) {
-        reactantSpeciesMap.set(ref.species, entry.structure);
-      }
-    }
-    // Use modifiedRate (with catalyst removed if applicable)
-    const rateToUse = modifiedRate || rate;
-    const cleanedRate = extractStatisticalFactors(rateToUse, reactantSpeciesMap);
-
-    let finalRate = `(((${cleanedRate}) * ${vScale}) / (${divisor} + 1e-20))`;
-
-    // Attempt to detect Mass Action to simplify
-    const massActionK = checkMassAction(
-      rateToUse,
-      divisor,
-      vScale,
-      parameterDict,
+    // ─── NEW: Unified rate processing ───
+    const processed = processReactionRate(
+      rxn,
+      rxnId,
+      functionDefinitions,   // Pass the model's functionDefinitions map
       compartments,
-      new Map(),
-      options.assignmentRuleVariables
+      parameterDict,
+      speciesToCompartment,
+      speciesToHasOnlySubstanceUnits,
+      options,
+      sbmlToBnglId,
+      bnglFunction,       // Pass reference to existing bnglFunction
+      checkMassAction,    // Pass reference to existing checkMassAction
     );
 
-    if (massActionK !== null) {
-      finalRate = String(massActionK);
-    }
+    const finalRate = processed.rateString;
+
+    // If reversible split failed, force to irreversible
+    const arrow = (rxn.reversible && !processed.forceIrreversible) ? '<->' : '->';
 
     const reactants = reactantStrs.length > 0 ? reactantStrs.join(' + ') : '0';
     const products = productStrs.length > 0 ? productStrs.join(' + ') : '0';
-    const arrow = rxn.reversible ? '<->' : '->';
-
-    const ruleName = standardizeName(rxn.name || rxnId);
-    lines.push(`${ruleName}: ${reactants} ${arrow} ${products} ${finalRate}`);
+    lines.push(`${standardizeName(rxn.name || rxnId)}: ${reactants} ${arrow} ${products} ${finalRate}`);
   }
 
   return sectionTemplate('reaction rules', lines);
@@ -1647,6 +1402,7 @@ export function generateBNGL(
   seedSpecies: SeedSpeciesEntry[],
   options: AtomizerOptions
 ): BNGLGenerationResult {
+  console.error("DEBUG_MARKER: EXECUTING CONSOLIDATED BNGLWRITER VERSION 4.0");
   const warnings: string[] = [];
   const observableMap = new Map<string, string>();
 
@@ -1693,10 +1449,8 @@ export function generateBNGL(
   sections.push(`# Model: ${model.name}`);
   sections.push(`# Species: ${model.species.size}, Reactions: ${model.reactions.size}`);
   sections.push('');
-  
-  // Add NumberPerQuantityUnit option for proper energy-based kinetics
-  sections.push('setOption("NumberPerQuantityUnit", 6.0221e23)');
-  sections.push('');
+
+  /* REMOVED: setOption("NumberPerQuantityUnit") to avoid unintended scaling with Avogadro's number */
 
   // Issue 4: Ensure all structures in seedSpecies are canonicalized
   for (const s of seedSpecies) {
@@ -1727,9 +1481,26 @@ export function generateBNGL(
   sections.push(writeMoleculeTypes(moleculeTypes, molTypeAnnotations));
 
   // Seed species
-  sections.push(writeSeedSpecies(seedSpecies, model.compartments, sct, model));
+  const { section: speciesSection, patternToId, sbmlToBnglId, idToPattern } = writeSeedSpecies(seedSpecies, model.compartments, sct, speciesToCompartment, options.atomize);
+  if (speciesSection) sections.push(speciesSection);
 
-  const { lines: observableLines, writtenRules: observableRules, speciesAmts, assignmentRuleCompartments } = writeObservables(model.species, sct, assignmentRules, speciesToCompartment);
+  // Observables
+  const {
+    lines: observableLines,
+    writtenRules: observableRules,
+    speciesAmts,
+    assignmentRuleCompartments,
+  } = writeObservables(
+    model.species,
+    sct,
+    assignmentRules,
+    speciesToCompartment,
+    speciesToHasOnlySubstanceUnits,
+    options,
+    patternToId,
+    sbmlToBnglId,
+    idToPattern
+  );
   sections.push(sectionTemplate('observables', observableLines));
 
   // Pass speciesAmts to options so it reaches reaction writers
@@ -1746,7 +1517,7 @@ export function generateBNGL(
     paramDict.set(id, param.value);
   }
 
-  sections.push(writeFunctions(model.functionDefinitions, assignmentRules, paramDict, speciesToCompartment, speciesToHasOnlySubstanceUnits, observableRules, speciesAmts, assignmentRuleCompartments));
+  sections.push(writeFunctions(model.functionDefinitions, assignmentRules, paramDict, speciesToCompartment, speciesToHasOnlySubstanceUnits, observableRules, speciesAmts, assignmentRuleCompartments, sbmlToBnglId));
 
   // Reaction rules
   if (options.atomize) {
@@ -1763,18 +1534,23 @@ export function generateBNGL(
       model.functionDefinitions,
       speciesToCompartment,
       speciesToHasOnlySubstanceUnits,
-      options
+      options,
+      sbmlToBnglId,
+      idToPattern
     ));
   } else {
-    sections.push(writeReactionRulesFlat(
+    sections.push(writeReactionRulesFlat_V2(
       model.reactions,
       model.species,
+      sct,
       model.compartments,
       paramDict,
       model.functionDefinitions,
       speciesToCompartment,
       speciesToHasOnlySubstanceUnits,
-      options
+      options,
+      sbmlToBnglId,
+      idToPattern
     ));
   }
 
@@ -1940,11 +1716,18 @@ export function generateBNGL(
     }
 
     if (actions) {
+      // Ensure mxstep is set for simulate if method is ode
+      if (actions.includes('simulate') && actions.includes('"ode"') && !actions.includes('mxstep')) {
+        actions = actions.replace(/simulate\s*\(\s*\{/g, 'simulate({mxstep=>1e8,');
+        if (!actions.includes('{')) {
+          actions = actions.replace(/simulate\s*\(\s*\)/g, 'simulate({mxstep=>1e8})');
+        }
+      }
       actionLines.push('    ' + actions);
     } else {
       const tEnd = options.tEnd ?? 10;
       const nSteps = options.nSteps ?? 100;
-      actionLines.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps}})`);
+      actionLines.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},mxstep=>1e8})`);
     }
     actionLines.push('end actions');
     sections.push(actionLines.join('\n'));
@@ -1953,7 +1736,7 @@ export function generateBNGL(
     sections.push('    generate_network({overwrite=>1})');
     const tEnd = options.tEnd ?? 10;
     const nSteps = options.nSteps ?? 100;
-    sections.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps}})`);
+    sections.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},mxstep=>1e8})`);
     sections.push('end actions');
   }
 
@@ -2016,7 +1799,8 @@ export function bnglReaction(
   }
 
   // Clean up
-  finalString = finalString.replace(/(\W|^)0\(\)/g, '0');
+  // Clean up 0() patterns (zero-order) while avoiding species named like S0()
+  finalString = finalString.replace(/(^|\s)0\(\)(?=\s|$)/g, '$1 0');
 
   // Add reaction name
   if (reactionName) {
@@ -2112,19 +1896,41 @@ function checkMassAction(
   let jsDiv = toJs(divisorExpr);
   let jsVScale = toJs(vScaleExpr);
 
+  // Unify concentration and amount references: replace _c_NAME() and NAME_amt
+  // During check, we want to know if (Rate / (Reactant1 * Reactant2 ...)) is constant.
+  // We must be careful about V vs 1. 
+  // If BNGL uses amounts, Mass Action is k * (A / V) * (B / V) * V = k * A * B / V.
+  // If SBML rate is k * _c_A() * _c_B() * V, then dividing by (A_amt * B_amt) should give k/V.
+
   const vars = new Set<string>();
-  for (const [spId, _] of speciesToCompartment) {
-    const name = standardizeName(spId);
+  for (const sId of speciesToCompartment.keys()) {
+    const name = standardizeName(sId);
     const amtName = `${name}_amt`;
+    const concName = `_c_${name}(\\(\\))?`;
 
     const nameRegex = new RegExp(`\\b${name}\\b`, 'g');
     const amtRegex = new RegExp(`\\b${amtName}\\b`, 'g');
+    const concRegex = new RegExp(`\\b${concName}`, 'g');
 
-    if (nameRegex.test(jsRate) || nameRegex.test(jsDiv) || nameRegex.test(jsVScale)) {
+    // Replace concentration calls with (name / V)
+    jsRate = jsRate.replace(concRegex, `(${name} / V)`);
+    jsDiv = jsDiv.replace(concRegex, `(${name} / V)`);
+    jsVScale = jsVScale.replace(concRegex, `(${name} / V)`);
+
+    // Replace amount references with name
+    jsRate = jsRate.replace(amtRegex, name);
+    jsDiv = jsDiv.replace(amtRegex, name);
+    jsVScale = jsVScale.replace(amtRegex, name);
+
+    // Final pass for plain names
+    jsRate = jsRate.replace(nameRegex, name);
+    jsDiv = jsDiv.replace(nameRegex, name);
+    jsVScale = jsVScale.replace(nameRegex, name);
+
+    if (new RegExp(`\\b${name}\\b`).test(jsRate) ||
+      new RegExp(`\\b${name}\\b`).test(jsDiv) ||
+      new RegExp(`\\b${name}\\b`).test(jsVScale)) {
       vars.add(name);
-    }
-    if (amtRegex.test(jsRate) || amtRegex.test(jsDiv) || amtRegex.test(jsVScale)) {
-      vars.add(amtName);
     }
   }
 
@@ -2135,8 +1941,16 @@ function checkMassAction(
     jsRate = jsRate.replace(pRegex, pName);
   }
 
+  const evalExpr = `(${jsRate}) * (${jsVScale}) / (${jsDiv})`;
+
+  // Strip () from variables in vars for JS evaluation
+  let jsEvalExpr = evalExpr;
+  for (const v of vars) {
+    const vRegex = new RegExp(`\\b${v}\\(\\)`, 'g');
+    jsEvalExpr = jsEvalExpr.replace(vRegex, v);
+  }
+
   try {
-    const evalExpr = `(${jsRate}) * (${jsVScale}) / (${jsDiv})`;
 
     const keys = Object.keys(context);
     const values = Object.values(context);
@@ -2147,18 +1961,28 @@ function checkMassAction(
 
     for (let i = 0; i < 3; i++) {
       const localContext = { ...context };
+      localContext['V'] = Math.random() * 10 + 1; // Random Volume
+
+      for (const pId of assignmentRuleVariables) {
+        localContext[standardizeName(pId)] = Math.random() * 10 + 1;
+      }
       for (const v of varList) {
         localContext[v] = Math.random() * 1000 + 1;
       }
 
-      const allKeys = [...keys, ...varList];
-      const allValues = [...values, ...varList.map(v => localContext[v])];
+      const allKeys = [...keys, 'V', ...varList];
+      const allValues = [...values, localContext['V'], ...varList.map(v => localContext[v])];
 
-      const f = new Function(...allKeys, `return ${evalExpr};`);
-      const result = f(...allValues);
+      try {
+        let evalExprV = jsEvalExpr.replace(/\^/g, '**');
+        const f = new Function(...allKeys, `return ${evalExprV};`);
+        const result = f(...allValues);
 
-      if (!Number.isFinite(result) || Number.isNaN(result)) return null;
-      results.push(result);
+        if (!Number.isFinite(result) || Number.isNaN(result)) return null;
+        results.push(result);
+      } catch (e) {
+        return null;
+      }
     }
 
     const mean = results.reduce((a, b) => a + b, 0) / results.length;
@@ -2166,9 +1990,9 @@ function checkMassAction(
 
     const variance = results.reduce((a, b) => a + Math.pow(b - mean, 2), 0) / results.length;
     const stdDev = Math.sqrt(variance);
-    const cv = stdDev / Math.abs(mean);
+    const cv = stdDev / (Math.abs(mean) + 1e-60);
 
-    if (cv < 1e-5) {
+    if (cv < 0.0001) {
       return mean;
     }
 
@@ -2177,4 +2001,617 @@ function checkMassAction(
   }
 
   return null;
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 1 — SBML Function Inlining
+// ─────────────────────────────────────────────────────────────────────────────
+
+export function inlineSBMLFunctions(
+  rateExpr: string,
+  functionDefs: Map<string, SBMLFunctionDefinition>
+): string {
+  let result = rateExpr;
+  let modified = true;
+  let iterations = 0;
+  const MAX_ITERATIONS = 20; // Guard against infinite recursion in mutually-recursive defs
+
+  while (modified && iterations < MAX_ITERATIONS) {
+    modified = false;
+    iterations++;
+
+    for (const [funcId, funcDef] of functionDefs) {
+      // Check if funcId appears as a function call in the expression
+      const callRegex = new RegExp(`\\b${funcId}\\s*\\(`);
+      if (!callRegex.test(result)) continue;
+
+      // Use parenthesis-aware replacement
+      const expanded = expandFunctionCall(result, funcId, funcDef);
+      if (expanded !== result) {
+        result = expanded;
+        modified = true;
+        break; // Restart the loop since new calls may have been introduced
+      }
+    }
+  }
+
+  return result;
+}
+
+function expandFunctionCall(
+  expr: string,
+  funcName: string,
+  funcDef: SBMLFunctionDefinition
+): string {
+  let result = expr;
+  const regexStr = `\\b${funcName}\\s*\\(`;
+
+  // Process each occurrence (re-search from start since positions shift)
+  while (true) {
+    const regex = new RegExp(regexStr);
+    const match = result.match(regex);
+    if (!match || match.index === undefined) break;
+
+    const startIndex = match.index;
+    // Find the matching close paren
+    let parenCount = 1;
+    let i = startIndex + match[0].length;
+    while (parenCount > 0 && i < result.length) {
+      if (result[i] === '(') parenCount++;
+      else if (result[i] === ')') parenCount--;
+      i++;
+    }
+
+    if (parenCount !== 0) break; // Unmatched parens, bail
+
+    const inner = result.substring(startIndex + match[0].length, i - 1);
+    const actualArgs = splitArguments(inner);
+
+    // Build the substituted body
+    let body = funcDef.math;
+    const formalArgs = funcDef.arguments;
+
+    // The last "argument" in SBML lambda is actually the body — skip it if
+    // the function def already has it separated into .math
+    // Substitute each formal parameter with the actual argument
+    for (let j = 0; j < Math.min(formalArgs.length, actualArgs.length); j++) {
+      const formalName = formalArgs[j].trim();
+      const actualValue = actualArgs[j].trim();
+      // Word-boundary replacement to avoid partial matches
+      const paramRegex = new RegExp(`\\b${formalName}\\b`, 'g');
+      body = body.replace(paramRegex, `(${actualValue})`);
+    }
+
+    // Replace the function call with the parenthesized body
+    result = result.substring(0, startIndex) + `(${body})` + result.substring(i);
+  }
+
+  return result;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 2 — Reversible Reaction Splitting
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ReversibleRateSplit {
+  success: boolean;
+  forwardRate: string;
+  reverseRate: string;
+}
+
+export function splitReversibleRate(rateExpr: string): ReversibleRateSplit {
+  const terms = extractTopLevelAdditiveTerms(rateExpr.trim());
+
+  if (terms.length < 2) {
+    return { success: false, forwardRate: rateExpr, reverseRate: '0' };
+  }
+
+  const positiveTerms: string[] = [];
+  const negativeTerms: string[] = [];
+
+  for (const term of terms) {
+    const trimmed = term.trim();
+    if (trimmed.startsWith('-')) {
+      // Negative term — strip the leading minus and flip sign
+      const body = trimmed.substring(1).trim();
+      if (body.length > 0) {
+        negativeTerms.push(body);
+      }
+    } else if (trimmed.startsWith('+')) {
+      const body = trimmed.substring(1).trim();
+      if (body.length > 0) {
+        positiveTerms.push(body);
+      }
+    } else {
+      positiveTerms.push(trimmed);
+    }
+  }
+
+  if (positiveTerms.length === 0 || negativeTerms.length === 0) {
+    return { success: false, forwardRate: rateExpr, reverseRate: '0' };
+  }
+
+  const forwardRate = positiveTerms.length === 1
+    ? positiveTerms[0]
+    : positiveTerms.map(t => `(${t})`).join(' + ');
+
+  const reverseRate = negativeTerms.length === 1
+    ? negativeTerms[0]
+    : negativeTerms.map(t => `(${t})`).join(' + ');
+
+  return { success: true, forwardRate, reverseRate };
+}
+
+function extractTopLevelAdditiveTerms(expr: string): string[] {
+  const terms: string[] = [];
+  let depth = 0;
+  let currentStart = 0;
+
+  for (let i = 0; i < expr.length; i++) {
+    const ch = expr[i];
+    if (ch === '(' || ch === '[') depth++;
+    else if (ch === ')' || ch === ']') depth--;
+    else if (depth === 0 && (ch === '+' || ch === '-') && i > 0) {
+      // Check it's not inside a number exponent like "1e-5" or a unary minus
+      const before = expr[i - 1];
+      if (before === 'e' || before === 'E') {
+        // Part of scientific notation, skip
+        continue;
+      }
+      // Check it's not a unary operator right after another operator or open paren
+      if (before === '*' || before === '/' || before === '^' || before === '(') {
+        continue;
+      }
+
+      const term = expr.substring(currentStart, i).trim();
+      if (term.length > 0) {
+        terms.push(term);
+      }
+      currentStart = i; // Include the sign character in the next term
+    }
+  }
+
+  // Last term
+  const lastTerm = expr.substring(currentStart).trim();
+  if (lastTerm.length > 0) {
+    terms.push(lastTerm);
+  }
+
+  return terms;
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FIX 3 — Unified Rate Processing Pipeline with split_rxn Fallback
+// ─────────────────────────────────────────────────────────────────────────────
+
+export interface ProcessedRate {
+  rateString: string;
+  forceIrreversible: boolean;
+  isSplitRxn: boolean;
+}
+
+export function processReactionRate(
+  rxn: SBMLReaction,
+  rxnId: string,
+  functionDefs: Map<string, SBMLFunctionDefinition>,
+  compartments: Map<string, SBMLCompartment>,
+  parameterDict: Map<string, number | string>,
+  speciesToCompartment: Map<string, string>,
+  speciesToHasOnlySubstanceUnits: Map<string, boolean>,
+  options: AtomizerOptions,
+  sbmlToBnglId: Map<string, string>,
+  // Pass these as callbacks so we don't duplicate your existing logic
+  bnglFunctionFn: (
+    rule: string, functionTitle: string, reactants: string[],
+    compartments: string[], parameterDict: Map<string, number>,
+    reactionDict: Map<string, string>, assignmentRuleVariables: Set<string>,
+    observableIds: Set<string>, speciesToHasOnlySubstanceUnits: Map<string, boolean>,
+    observableConvertedRules: Set<string>, speciesWithConcFunctions: Set<string>,
+    sbmlToBnglId: Map<string, string>
+  ) => string,
+  checkMassActionFn: (
+    rateExpr: string, divisorExpr: string, vScaleExpr: string,
+    parameterDict: Map<string, number | string>, compartments: Map<string, SBMLCompartment>,
+    speciesToCompartment: Map<string, string>, assignmentRuleVariables: Set<string>
+  ) => number | null,
+): ProcessedRate {
+
+  if (!rxn.kineticLaw) {
+    return { rateString: '0', forceIrreversible: false, isSplitRxn: false };
+  }
+
+  // ── Step 1: Get raw rate and substitute local parameters ──
+  let rate = rxn.kineticLaw.math;
+  for (const localParam of rxn.kineticLaw.localParameters) {
+    const regex = new RegExp(`\\b${localParam.id}\\b`, 'g');
+    if (options.replaceLocParams) {
+      rate = rate.replace(regex, String(localParam.value));
+    } else {
+      rate = rate.replace(regex, standardizeName(`${rxnId}_${localParam.id}`));
+    }
+  }
+
+  // ── Step 2: Inline SBML function definitions (FIX 1) ──
+  rate = inlineSBMLFunctions(rate, functionDefs);
+
+  // ── Step 3: Strip compartment volumes from rate expression ──
+  const useCompartments = compartments.size > 0;
+  if (useCompartments) {
+    for (const compId of compartments.keys()) {
+      // Strip "* compartment" and "/ compartment" patterns
+      const patterns = [
+        new RegExp(`\\s*\\*\\s*__compartment_${compId}__\\s*`, 'g'),
+        new RegExp(`\\s*\\*\\s*${compId}\\s*`, 'g'),
+        new RegExp(`\\s*\\/\\s*__compartment_${compId}__\\s*`, 'g'),
+        new RegExp(`\\s*\\/\\s*${compId}\\s*`, 'g'),
+      ];
+      for (const pat of patterns) {
+        rate = rate.replace(pat, ' ');
+      }
+    }
+    rate = rate.trim();
+    if (!rate) rate = '1';
+  }
+
+  // ── Step 4: Convert to BNGL math ──
+  const convertedRate = bnglFunctionFn(
+    rate,
+    rxnId,
+    rxn.reactants.map(r => r.species),
+    Array.from(compartments.keys()),
+    new Map(Array.from(parameterDict.entries()).map(([k, v]) => [k, Number(v)])),
+    new Map(),
+    options.assignmentRuleVariables || new Set(),
+    new Set(speciesToCompartment.keys()),
+    speciesToHasOnlySubstanceUnits,
+    options.observableConvertedRules || new Set(),
+    options.speciesAmts || new Set(),
+    sbmlToBnglId,
+  );
+
+  // ── Step 5: Build reactant counts and volume scale ──
+  const reactantCounts = new Map<string, number>();
+  let totalStoichiometry = 0;
+  for (const ref of rxn.reactants) {
+    if (ref.species === 'EmptySet') continue;
+    const stoich = ref.stoichiometry || 1;
+    reactantCounts.set(ref.species, (reactantCounts.get(ref.species) || 0) + stoich);
+    totalStoichiometry += stoich;
+  }
+
+  const productCounts = new Map<string, number>();
+  let totalProductStoichiometry = 0;
+  for (const ref of rxn.products) {
+    if (ref.species === 'EmptySet') continue;
+    const stoich = ref.stoichiometry || 1;
+    productCounts.set(ref.species, (productCounts.get(ref.species) || 0) + stoich);
+    totalProductStoichiometry += stoich;
+  }
+
+  const ruleCompId = rxn.compartment
+    || (rxn.reactants[0]?.species
+      ? speciesToCompartment.get(rxn.reactants[0].species) || ''
+      : rxn.products[0]?.species
+        ? speciesToCompartment.get(rxn.products[0].species) || ''
+        : '');
+
+  const vScaleName = (useCompartments && ruleCompId)
+    ? `__compartment_${standardizeName(ruleCompId)}__`
+    : '1';
+
+  // ── Step 6: If reversible, try to split (FIX 2) ──
+  if (rxn.reversible) {
+    const split = splitReversibleRate(convertedRate);
+
+    if (split.success) {
+      // Process forward and reverse independently
+      const fwdRate = processOneDirection(
+        split.forwardRate, reactantCounts, totalStoichiometry,
+        vScaleName, parameterDict, compartments, speciesToCompartment,
+        options, checkMassActionFn
+      );
+      const revRate = processOneDirection(
+        split.reverseRate, productCounts, totalProductStoichiometry,
+        vScaleName, parameterDict, compartments, speciesToCompartment,
+        options, checkMassActionFn
+      );
+
+      if (fwdRate.isSplitRxn || revRate.isSplitRxn) {
+        // One direction couldn't be decomposed — use split_rxn fallback
+        // Output the full rate as a functional rate on a unidirectional rule
+        return {
+          rateString: convertedRate,
+          forceIrreversible: true,
+          isSplitRxn: true,
+        };
+      }
+
+      // Both sides decomposed successfully — output as "kf, kr"
+      return {
+        rateString: `${fwdRate.rateString}, ${revRate.rateString}`,
+        forceIrreversible: false,
+        isSplitRxn: false,
+      };
+    } else {
+      // Can't split — fall through to irreversible processing with warning
+      // The Python does: "SBML claims reversibility but kinetic law is not
+      // easily separated. Assuming irreversible."
+      return {
+        rateString: processOneDirection(
+          convertedRate, reactantCounts, totalStoichiometry,
+          vScaleName, parameterDict, compartments, speciesToCompartment,
+          options, checkMassActionFn
+        ).rateString,
+        forceIrreversible: true,
+        isSplitRxn: false,
+      };
+    }
+  }
+
+  // ── Step 7: Irreversible — process single direction ──
+  const result = processOneDirection(
+    convertedRate, reactantCounts, totalStoichiometry,
+    vScaleName, parameterDict, compartments, speciesToCompartment,
+    options, checkMassActionFn
+  );
+
+  return {
+    rateString: result.rateString,
+    forceIrreversible: false,
+    isSplitRxn: result.isSplitRxn,
+  };
+}
+
+interface DirectionResult {
+  rateString: string;
+  isSplitRxn: boolean;
+}
+
+function processOneDirection(
+  rateExpr: string,
+  speciesCounts: Map<string, number>,
+  totalStoichiometry: number,
+  vScaleName: string,
+  parameterDict: Map<string, number | string>,
+  compartments: Map<string, SBMLCompartment>,
+  speciesToCompartment: Map<string, string>,
+  options: AtomizerOptions,
+  checkMassActionFn: (
+    rateExpr: string, divisorExpr: string, vScaleExpr: string,
+    parameterDict: Map<string, number | string>, compartments: Map<string, SBMLCompartment>,
+    speciesToCompartment: Map<string, string>, assignmentRuleVariables: Set<string>
+  ) => number | null,
+): DirectionResult {
+
+  // Build divisor expression: product of (speciesName_amt^stoich / stoich!)
+  const divisorParts: string[] = [];
+  for (const [spId, stoich] of speciesCounts) {
+    const name = standardizeName(spId);
+    if (stoich === 1) {
+      divisorParts.push(`${name}_amt`);
+    } else {
+      const fact = getFactorial(stoich);
+      divisorParts.push(`((${name}_amt^${stoich})/${fact})`);
+    }
+  }
+  const divisorExpr = divisorParts.length > 0 ? divisorParts.join(' * ') : '1';
+
+  // ── Tier 1: Numerical mass-action check ──
+  const maConstant = checkMassActionFn(
+    rateExpr,
+    divisorExpr,
+    vScaleName,
+    parameterDict,
+    compartments,
+    speciesToCompartment,
+    options.assignmentRuleVariables || new Set(),
+  );
+
+  if (maConstant !== null) {
+    return { rateString: String(maConstant), isSplitRxn: false };
+  }
+
+  // ── Tier 2: Reactant neutralization ──
+  let modifiedRate = rateExpr;
+  for (const [spId, stoich] of speciesCounts) {
+    const name = standardizeName(spId);
+    // Replace concentration and amount references with 1
+    // Important: replace exactly the right number of occurrences for stoichiometry
+    const concPattern = new RegExp(`_c_${name}\\(\\)`, 'gi');
+    const amtPattern = new RegExp(`\\b${name}_amt\\b`, 'gi');
+
+    modifiedRate = modifiedRate.replace(concPattern, '1');
+    modifiedRate = modifiedRate.replace(amtPattern, '1');
+  }
+
+  // Clean up: remove residual "* 1" and "1 *" factors
+  modifiedRate = modifiedRate
+    .replace(/\b1\b\s*\*\s*/g, '')
+    .replace(/\s*\*\s*\b1\b/g, '')
+    .trim();
+
+  if (!modifiedRate || modifiedRate === '') modifiedRate = '1';
+
+  // ── Check for singularity (FIX 3) ──
+  // If after neutralization the rate still contains species references in a
+  // denominator context, this suggests we have a Michaelis-Menten or similar
+  // form where the reactant is in both numerator and denominator. In that case,
+  // neutralization is wrong — fall back to split_rxn (keep the full rate).
+  if (hasDenominatorIssue(modifiedRate, speciesCounts)) {
+    // split_rxn fallback: keep the full rate as a functional rate
+    // The reaction will use the complete expression; BNG handles it via
+    // pattern matching on the reactant patterns.
+    const fullRate = (vScaleName !== '1')
+      ? `(${rateExpr}) * ${vScaleName}`
+      : rateExpr;
+    return { rateString: fullRate, isSplitRxn: true };
+  }
+
+  // Normal path: apply volume scaling
+  let finalRate: string;
+  if (vScaleName !== '1') {
+    finalRate = (modifiedRate === '1') ? vScaleName : `(${modifiedRate}) * ${vScaleName}`;
+  } else {
+    finalRate = modifiedRate;
+  }
+
+  return { rateString: finalRate, isSplitRxn: false };
+}
+
+function hasDenominatorIssue(
+  neutralizedRate: string,
+  speciesCounts: Map<string, number>
+): boolean {
+  // Find denominator content (everything after "/" at top level)
+  const divIdx = findTopLevelDivision(neutralizedRate);
+  if (divIdx === -1) return false;
+
+  const afterDiv = neutralizedRate.substring(divIdx + 1).trim();
+
+  // Check if the denominator contains "+" which indicates a sum (e.g., Km + S)
+  // AND has "1" terms that were likely from neutralized reactants
+  if (afterDiv.includes('+')) {
+    // Check if any of the "1"s in the denominator correspond to neutralized species
+    // Simple heuristic: if denominator has pattern like "(something + 1)" or "(1 + something)"
+    if (/[\(+]\s*1\s*[+\)]/.test(afterDiv) || /[\(+]\s*1\s*$/.test(afterDiv)) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+function findTopLevelDivision(expr: string): number {
+  let depth = 0;
+  for (let i = 0; i < expr.length; i++) {
+    if (expr[i] === '(' || expr[i] === '[') depth++;
+    else if (expr[i] === ')' || expr[i] === ']') depth--;
+    else if (expr[i] === '/' && depth === 0) return i;
+  }
+  return -1;
+}
+
+// ─── NEW: Patched Reaction Rule Writer ───
+export function writeReactionRulesFlat_V2(
+  reactions: Map<string, SBMLReaction>,
+  sbmlSpecies: Map<string, SBMLSpecies>,
+  sct: SpeciesCompositionTable,
+  compartments: Map<string, SBMLCompartment>,
+  parameterDict: Map<string, number | string>,
+  functionDefinitions: Map<string, SBMLFunctionDefinition>,
+  speciesToCompartment: Map<string, string>,
+  speciesToHasOnlySubstanceUnits: Map<string, boolean>,
+  options: AtomizerOptions,
+  sbmlToBnglId: Map<string, string> = new Map(),
+  idToPattern: Map<string, string> = new Map()
+): string {
+  const lines: string[] = [];
+  const useCompartments = compartments.size > 0;
+
+  const buildFlatPattern = (speciesId: string): string => {
+    // Robust mapping first - use actual pattern instead of BNGL ID
+    const bnglId = sbmlToBnglId.get(speciesId);
+    if (bnglId) {
+      const pattern = idToPattern.get(bnglId);
+      if (pattern) return pattern;
+      return bnglId;
+    }
+
+    const entry = sct.entries.get(speciesId);
+    const compId = speciesToCompartment.get(speciesId);
+    if (entry?.structure) {
+      const molecules = entry.structure.molecules;
+      const hasMoleculeCompartments = molecules.some(m => m.compartment !== '');
+
+      if (hasMoleculeCompartments) {
+        return molecules.map(m => {
+          const molStr = m.toString(true);
+          return molStr.replace(/^(\w+)/, 'M_$1');
+        }).join('.');
+      }
+
+      if (useCompartments && compId) {
+        const suffix = `@${standardizeName(compId)}`;
+        return molecules.map(m => {
+          const molStr = m.toString(true);
+          return molStr.replace(/^(\w+)/, 'M_$1') + suffix;
+        }).join('.');
+      }
+
+      return molecules.map(m => {
+        const molStr = m.toString(true);
+        return molStr.replace(/^(\w+)/, 'M_$1');
+      }).join('.');
+    }
+
+    const sp = sbmlSpecies.get(speciesId);
+    const name = standardizeName(sp?.name || speciesId);
+    let pattern = `M_${name}`;
+    if (useCompartments && compId) {
+      pattern = `${pattern}@${standardizeName(compId)}`;
+    }
+    return pattern;
+  };
+
+  for (const [rxnId, rxn] of reactions) {
+    const reactantStrs: string[] = [];
+    const productStrs: string[] = [];
+
+    // Build reactants
+    for (const ref of rxn.reactants) {
+      if (ref.species === 'EmptySet') continue;
+      const speciesStr = buildFlatPattern(ref.species);
+
+      for (let i = 0; i < (ref.stoichiometry || 1); i++) {
+        reactantStrs.push(speciesStr);
+      }
+    }
+
+    // Build products
+    for (const ref of rxn.products) {
+      if (ref.species === 'EmptySet') continue;
+      const compId = speciesToCompartment.get(ref.species);
+      const speciesStr = buildFlatPattern(ref.species);
+      const reactantComp = rxn.reactants.length > 0 ? speciesToCompartment.get(rxn.reactants[0].species) : null;
+
+      if (useCompartments && compId && reactantComp && reactantComp !== compId) {
+        if (!areCompartmentsAdjacent(reactantComp, compId, compartments)) {
+          logger.info('BNW004',
+            `Transport reaction ${rxnId}: ${ref.species} moves from ${reactantComp} to ${compId}`
+          );
+        }
+      }
+
+      for (let i = 0; i < (ref.stoichiometry || 1); i++) {
+        productStrs.push(speciesStr);
+      }
+    }
+
+    // ─── NEW: Unified rate processing ───
+    const processed = processReactionRate(
+      rxn,
+      rxnId,
+      functionDefinitions,   // Pass the model's functionDefinitions map
+      compartments,
+      parameterDict,
+      speciesToCompartment,
+      speciesToHasOnlySubstanceUnits,
+      options,
+      sbmlToBnglId,
+      bnglFunction,       // Pass reference to existing bnglFunction
+      checkMassAction,    // Pass reference to existing checkMassAction
+    );
+
+    const finalRate = processed.rateString;
+
+    // If reversible split failed, force to irreversible
+    const arrow = (rxn.reversible && !processed.forceIrreversible) ? '<->' : '->';
+
+    const reactants = reactantStrs.length > 0 ? reactantStrs.join(' + ') : '0';
+    const products = productStrs.length > 0 ? productStrs.join(' + ') : '0';
+    lines.push(`${standardizeName(rxn.name || rxnId)}: ${reactants} ${arrow} ${products} ${finalRate}`);
+  }
+
+  return sectionTemplate('reaction rules', lines);
 }

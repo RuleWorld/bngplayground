@@ -55,6 +55,7 @@ begin functions
     v_decay() = k_decay_max * X_Level / (Km_x + X_Level)
     
 
+    v_auto() = k_auto * v_temp_current
 end functions
 
 begin reaction rules
@@ -68,7 +69,7 @@ begin reaction rules
     
     # 2X + Y -> 3X (Auto-catalysis with "Temp" modulation)
     # ternary rule - standard Brusselator
-    X() + X() + Y() -> X() + X() + X() k_auto * v_temp_current
+    X() + X() + Y() -> X() + X() + X() v_auto()
     
     ## DECAY (Output)
     # X -> 0 (Clearance)
@@ -85,10 +86,10 @@ begin actions
     simulate({method=>"ode",t_end=>20,n_steps=>200})
     # Phase 2: Heat Pulse (20-40)
     setParameter("v_temp_current", 5.0)
-    simulate({method=>"ode",t_end=>40,n_steps=>200,continue=>1,suffix=>"2"})
+    simulate({method=>"ode",t_end=>40,n_steps=>200,continue=>1})
     # Phase 3: Recovery (40-60)
     setParameter("v_temp_current", 2.5)
-    simulate({method=>"ode",t_end=>60,n_steps=>200,continue=>1,suffix=>"3"})
+    simulate({method=>"ode",t_end=>60,n_steps=>200,continue=>1})
 end actions
 end model
 
