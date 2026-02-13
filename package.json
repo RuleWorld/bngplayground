@@ -38,7 +38,7 @@
     "jszip": "^3.10.1",
     "libsbmljs_stable": "latest",
     "ml-matrix": "^6.8.0",
-    "node-abi": "^3.87.0",
+    "node-abi": "^4.26.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^9.0.1",
