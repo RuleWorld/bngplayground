@@ -38,10 +38,10 @@
     "jszip": "^3.10.1",
     "libsbmljs_stable": "latest",
     "ml-matrix": "^6.8.0",
-    "node-abi": "^3.87.0",
+    "node-abi": "^4.26.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
-    "react-markdown": "^9.0.1",
+    "react-markdown": "^10.1.0",
     "recharts": "^3.3.0",
     "remark-gfm": "^4.0.1",
     "umap-js": "^1.4.0"
@@ -74,7 +74,7 @@
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
-    "typescript": "~5.8.2",
+    "typescript": "~5.9.3",
     "util": "^0.12.5",
     "vite": "^7.3.1",
     "vitest": "^4.0.8"
