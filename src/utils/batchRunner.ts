@@ -129,26 +129,16 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
         // Apply concentration changes that occur after the previous phase
         const concentrationChanges = (model.concentrationChanges || [])
             .filter(c => c.afterPhaseIndex === i - 1);
-
-        // Map these changes to apply BEFORE phase 0 of the single-phase worker run
-        singlePhaseModel.concentrationChanges = concentrationChanges
-            .filter(c => {
-                const mode = c.mode ?? 'set';
-                return mode === 'set' || mode === 'add';
-            })
-            .map(c => ({
-                ...c,
-                afterPhaseIndex: -1
-            }));
+        // These are applied manually below for multi-phase execution.
+        // Keep worker-side concentrationChanges empty to avoid double-application.
+        singlePhaseModel.concentrationChanges = [];
 
         // Apply parameter changes that occur after the previous phase
         const parameterChanges = (model.parameterChanges || [])
             .filter(p => p.afterPhaseIndex === i - 1);
-
-        singlePhaseModel.parameterChanges = parameterChanges.map(p => ({
-            ...p,
-            afterPhaseIndex: -1
-        }));
+        // These are also applied manually below; avoid forwarding to worker to
+        // prevent duplicate setParameter effects.
+        singlePhaseModel.parameterChanges = [];
 
         // For all other phases, clear changes to prevent double-application or stale resets
         // (Worker will only see the current phase's changes)

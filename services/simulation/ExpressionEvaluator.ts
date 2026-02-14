@@ -209,7 +209,13 @@ function preExpandExpression(
   expression: string,
   functions?: { name: string; args: string[]; expression: string }[]
 ): string {
-  const cacheKey = `${EXPANDED_EXPR_CACHE_VERSION}::${expression}`;
+  const fnSignature = (functions && functions.length > 0)
+    ? functions
+      .map((f) => `${f.name}(${(f.args || []).join(',')})=${f.expression}`)
+      .sort()
+      .join('||')
+    : '';
+  const cacheKey = `${EXPANDED_EXPR_CACHE_VERSION}::${expression}::${fnv1aHash(fnSignature)}`;
   const cached = expandedExpressionCache.get(cacheKey);
   if (cached !== undefined) return cached;
 

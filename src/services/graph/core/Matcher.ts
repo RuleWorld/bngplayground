@@ -254,7 +254,7 @@ export class GraphMatcher {
   static findAllMaps(pattern: SpeciesGraph, target: SpeciesGraph, options: { symmetryBreaking?: boolean } = {}): MatchMap[] {
     // Fast pre-filter: check if target has enough molecules of each type
     if (!this.canPossiblyMatch(pattern, target)) {
-      if (pattern.toString().includes('C3(s~b)')) {
+      if (shouldLogGraphMatcher && pattern.toString().includes('C3(s~b)')) {
         console.log(`[GM_DEBUG] canPossiblyMatch failed for ${pattern.toString()} in ${target.toString()}`);
       }
       return [];
@@ -279,10 +279,10 @@ export class GraphMatcher {
 
     const iterationCount = { value: 0 };
     this.vf2Backtrack(state, matches, iterationCount);
-    if (pattern.toString().includes('C3(s~b)')) {
+    if (shouldLogGraphMatcher && pattern.toString().includes('C3(s~b)')) {
       console.log(`[GM_DEBUG] findAllMaps result for ${pattern.toString()} in ${target.toString()}: ${matches.length} matches`);
     }
-    if (pattern.toString().includes('EGFR')) {
+    if (shouldLogGraphMatcher && pattern.toString().includes('EGFR')) {
       console.log(`[GM_DEBUG] EGFR Match count for ${pattern.toString()} in ${target.toString()}: ${matches.length} (sb=${options.symmetryBreaking})`);
     }
 
@@ -1418,14 +1418,14 @@ class VF2State {
     // - "!+": must be BOUND.
     // - "!?": matches ANY.
     // - "!-" or "!." (parsed as '-') : must be UNBOUND.
-    // - No bond label/wildcard (e.g., "A(b)"): implicitly UNBOUND.
+    // - No bond label/wildcard (e.g., "A(b)"): site is required to be UNBOUND.
     if (pComp.wildcard === '+') return tComp.edges.size > 0;
     if (pComp.wildcard === '-') return tComp.edges.size === 0;
     if (pComp.wildcard === '?') return true;
 
     // Default case: no wildcard and no specific bonds means site must be unbound.
     if (pComp.edges.size === 0) {
-      return tComp.edges.size === 0;
+      return !targetBound;
     }
 
     // Specific bonds (e.g., !1, !1!2): in BNG semantics this constrains the number

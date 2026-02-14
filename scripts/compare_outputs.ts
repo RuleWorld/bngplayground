@@ -84,8 +84,25 @@ const REL_TOL = 2e-4;
 const TIME_TOL = 1e-10;
 // Model-specific tolerances for numerically sensitive models.
 const MODEL_TOLERANCE_OVERRIDES: Record<string, { absTol?: number; relTol?: number }> = {
-  mtmusicsequencer: { absTol: 3e-2 },
-  spfouriersynthesizer: { absTol: 2e-3 }
+  // mtmusicsequencer: { absTol: 3e-2 },
+  // spfouriersynthesizer: { absTol: 2e-3 },
+  // cbnglsimple: { absTol: 1e-2 },
+  // betaadrenergicresponse: { absTol: 2e2 },
+  // calciumspikesignaling: { absTol: 2e1 },
+  // clockbmal1genecircuit: { absTol: 6e-2 },
+  // ecocoevolutionhostparasite: { absTol: 2e1 },
+  // egfrsignalingpathway: { relTol: 5e-2 },
+  // egfrsimple: { relTol: 5e-2 },
+  // energyallosterymwc: { absTol: 5e1 },
+  // fgfsignalingpathway: { absTol: 1.5 },
+  // gas6axlsignaling: { relTol: 6e-3 },
+  // gpcrdesensitizationarrestin: { absTol: 1.5e1 },
+  // il6jakstatpathway: { absTol: 2.3e1 },
+  // insulinglucosehomeostasis: { absTol: 2.0 },
+  // ire1axbp1erstress: { absTol: 1.1e1 },
+  // lang2024: { absTol: 1.2 },
+  // tlr3dsrnasensing: { absTol: 4.8e2 },
+  // vegfangiogenesis: { relTol: 4e-2 }
 };
 
 // Allow steady-state models to have different row counts if values match in overlap
@@ -96,7 +113,6 @@ const STEADY_STATE_MODELS = ['barua_2007'];
 // Keys and values are normalized via normalizeKey().
 const CSV_MODEL_ALIASES: Record<string, string> = {
   // Web example name vs reference file base
-  cheemalavagu2014: 'Cheemalavagu_JAK_STAT',
   lin2019: 'Lin_ERK_2019',
   jaruszewicz2023: 'Jaruszewicz-Blonska_2023',
   // Tutorials that have different ref file names

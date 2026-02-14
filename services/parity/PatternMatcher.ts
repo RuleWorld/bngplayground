@@ -87,15 +87,43 @@ function countMoleculeEmbeddings(patMol: string, specMol: string): number {
 
         const specGraph = parseGraphCached(specMol);
 
-        // Strict graph embedding check
-        if (!GraphMatcher.matchesPattern(patGraph, specGraph)) {
-            return 0;
+        const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
+        if (maps.length === 0) return 0;
+
+        const patternMol = patGraph.molecules[0];
+        const hasRepeatedConstrainedComponents = !!patternMol && (() => {
+            const byName = new Map<string, typeof patternMol.components>();
+            for (const comp of patternMol.components) {
+                const list = byName.get(comp.name);
+                if (list) list.push(comp);
+                else byName.set(comp.name, [comp]);
+            }
+
+            const isConstrained = (comp: { state?: string; wildcard?: '+' | '?' | '-'; edges: Map<number, number> }) => {
+                if (comp.state !== undefined) return true;
+                if (comp.edges.size > 0) return true;
+                if (comp.wildcard === '+' || comp.wildcard === '-') return true;
+                return false;
+            };
+
+            for (const comps of byName.values()) {
+                if (comps.length < 2) continue;
+                if (comps.some(isConstrained)) return true;
+            }
+
+            return false;
+        })();
+
+        if (!hasRepeatedConstrainedComponents) {
+            return maps.length;
         }
 
-        // Single-molecule observable: count all valid component assignments within the molecule.
-        // Reference: BNG2 pattern matching semantics (VF2 algorithm or similar).
-        const match = { moleculeMap: new Map<number, number>([[0, 0]]), componentMap: new Map<string, string>() };
-        return countEmbeddingDegeneracy(patGraph, specGraph, match);
+        let total = 0;
+        for (const map of maps) {
+            const d = countEmbeddingDegeneracy(patGraph, specGraph, map);
+            total += Number.isFinite(d) && d > 0 ? d : 1;
+        }
+        return total;
     } catch {
         return 0;
     }
@@ -145,16 +173,10 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
 
         const specGraph = parseGraphCached(cleanSpec);
 
-        // For Molecules observables, count unique target molecules that can serve as
-        // the anchor (pattern molecule index 0). This avoids over-counting equivalent
-        // embeddings caused by wildcard/symmetric components (e.g., duplicated "c!?" sites).
         const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
-        const anchorTargets = new Set<number>();
-        for (const map of maps) {
-            const targetIdx = map.moleculeMap.get(0);
-            if (targetIdx !== undefined) anchorTargets.add(targetIdx);
-        }
-        return anchorTargets.size;
+        if (maps.length === 0) return 0;
+
+        return maps.length;
     } catch {
         return 0;
     }
@@ -174,23 +196,7 @@ export function countPatternMatches(speciesStr: string, patternStr: string): num
         // Multi-molecule pattern: stricter species-level compartment check for now
         return countMultiMoleculePatternMatches(speciesStr, patternStr);
     } else {
-        // Single-molecule Molecules observable: count unique target molecules that
-        // match the pattern, not all equivalent component embeddings.
-        try {
-            const cachedPat = parseGraphCached(cleanPat);
-            const patGraph = cachedPat.clone();
-
-            const specGraph = parseGraphCached(cleanSpec);
-            const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
-            const anchorTargets = new Set<number>();
-            for (const map of maps) {
-                const targetIdx = map.moleculeMap.get(0);
-                if (targetIdx !== undefined) anchorTargets.add(targetIdx);
-            }
-            return anchorTargets.size;
-        } catch {
-            return 0;
-        }
+        return countMoleculeEmbeddings(cleanPat, cleanSpec);
     }
 }
 

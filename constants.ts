@@ -3159,42 +3159,85 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
 
 const CANCER_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["egfr-signaling-pathway", "glioblastoma-egfrviii-signaling", "hif1a-degradation-loop", "hypoxia-response-signaling", "vegf-angiogenesis", "dna-damage-repair", "checkpoint-kinase-signaling", "ras-gef-gap-cycle", "p38-mapk-signaling", "mapk-signaling-cascade"].includes(m.id)),
-  ...COMPLEX_MODELS.filter(m => ["Barua_2007", "Nag_2009", "Nosbisch_2022"].includes(m.id)),
-  ...GROWTH_FACTOR_SIGNALING.filter(m => ["Blinov_egfr", "egfr_ode"].includes(m.id)).filter(() => false),
-  ...GROWTH_FACTOR_SIGNALING.filter(m => ["egfr_ode"].includes(m.id)), // Just keeping the pattern, Blinov_egfr is excluded.
+  ...COMPLEX_MODELS.filter(m => ["Barua_2007", "Barua_2009", "Nag_2009", "Nosbisch_2022", "Kozer_2013", "Kozer_2014", "mapk-dimers", "mapk-monomers"].includes(m.id)),
+  ...GROWTH_FACTOR_SIGNALING.filter(m => ["Blinov_egfr", "egfr_ode", "Ligon_2014", "Mertins_2023"].includes(m.id)),
+  ...INTERNAL_VALIDATION_MODELS.filter(m => ["egfr_net", "egfr_path"].includes(m.id)),
 ];
 
 const IMMUNOLOGY_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["bcr-signaling", "cd40-signaling", "complement-activation-cascade", "immune-synapse-formation", "inflammasome-activation", "interferon-signaling", "jak-stat-cytokine-signaling", "t-cell-activation", "tlr3-dsrna-sensing", "viral-sensing-innate-immunity", "platelet-activation", "blood-coagulation-thrombin"].includes(m.id)),
-  ...IMMUNE_SIGNALING.filter(m => ["An_2009", "BaruaBCR_2012", "BaruaFceRI_2012", "ChylekTCR_2014", "Lin_TCR_2019", "Cheemalavagu_JAK_STAT", "Model_ZAP", "degranulation_model"].includes(m.id)),
+  ...IMMUNE_SIGNALING.filter(m => ["An_2009", "BaruaBCR_2012", "BaruaFceRI_2012", "ChylekTCR_2014", "Lin_TCR_2019", "Cheemalavagu_JAK_STAT", "Model_ZAP", "degranulation_model", "Dushek_2011", "Dushek_2014", "Faeder_2003", "Mukhopadhyay_2013", "fceri_fyn", "tlbr"].includes(m.id)),
   ...COMPLEX_MODELS.filter(m => ["McMillan_2021"].includes(m.id)),
+  ...INTERNAL_VALIDATION_MODELS.filter(m => ["fceri_ji_comp"].includes(m.id)),
 ];
 
 const NEUROSCIENCE_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["ampk-signaling", "calcineurin-nfat-pathway", "calcium-spike-signaling", "inositol-phosphate-metabolism", "l-type-calcium-channel-dynamics", "mtor-signaling", "neurotransmitter-release", "synaptic-plasticity-ltp", "beta-adrenergic-response"].includes(m.id)),
-  ...COMPLEX_MODELS.filter(m => ["Chattaraj_2021"].includes(m.id)),
+  ...COMPLEX_MODELS.filter(m => ["Chattaraj_2021", "Lin_Prion_2019", "Jung_2017"].includes(m.id)),
   ...NATIVE_TUTORIALS.filter(m => ["Lisman", "Lisman_bifurcate"].includes(m.id)),
   ...ORDYAN_2020,
+  ...INTERNAL_VALIDATION_MODELS.filter(m => ["motor", "mwc"].includes(m.id)),
 ];
 
 const CELL_CYCLE_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["apoptosis-cascade", "caspase-activation-loop", "cell-cycle-checkpoint", "dr5-apoptosis-signaling", "e2f-rb-cell-cycle-switch", "tnf-induced-apoptosis", "parp1-mediated-dna-repair", "p53-mdm2-oscillator", "clock-bmal1-gene-circuit"].includes(m.id)),
   ...CELL_REGULATION.filter(m => ["Hat_2016", "vilar_2002", "vilar_2002b", "Blinov_ran"].includes(m.id)),
   ...GROWTH_FACTOR_SIGNALING.filter(m => ["Lang_2024"].includes(m.id)),
-  ...COMPLEX_MODELS.filter(m => ["Blinov_2006"].includes(m.id)),
+  ...COMPLEX_MODELS.filter(m => ["Blinov_2006", "Kesseler_2013"].includes(m.id)),
   ...NATIVE_TUTORIALS.filter(m => ["Repressilator", "CircadianOscillator"].includes(m.id)),
+  ...INTERNAL_VALIDATION_MODELS.filter(m => ["Kiefhaber_emodel"].includes(m.id)),
 ];
 
 const METABOLISM_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["allosteric-activation", "auto-activation-loop", "autophagy-regulation", "glycolysis-branch-point", "insulin-glucose-homeostasis", "lac-operon-regulation", "no-cgmp-signaling", "michaelis-menten-kinetics", "competitive-enzyme-inhibition"].includes(m.id)),
-  ...INTERNAL_VALIDATION_MODELS.filter(m => ["toy-jim", "michment", "michment_cont"].includes(m.id)),
+  ...INTERNAL_VALIDATION_MODELS.filter(m => ["toy-jim", "michment", "michment_cont", "Haugh2b", "CaOscillate_Func", "CaOscillate_Sat", "heise", "SHP2_base_model", "catalysis"].includes(m.id)),
   ...NATIVE_TUTORIALS.filter(m => ["ABC", "ABp", "GK"].includes(m.id)),
+  ...COMPLEX_MODELS.filter(m => ["Erdem_2021"].includes(m.id)),
+  ...GROWTH_FACTOR_SIGNALING.filter(m => ["Dolan_2015"].includes(m.id)),
 ];
 
 const DEVELOPMENTAL_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["hedgehog-signaling-pathway", "myogenic-differentiation", "notch-delta-lateral-inhibition", "rankl-rank-signaling", "sonic-hedgehog-gradient", "wnt-beta-catenin-signaling", "fgf-signaling-pathway", "smad-tgf-beta-signaling", "retinoic-acid-signaling", "bmp-signaling"].includes(m.id)),
   ...COMPLEX_MODELS.filter(m => ["Zhang_2021", "Zhang_2023", "Massole_2023"].includes(m.id)),
   ...IMMUNE_SIGNALING.filter(m => ["Lin_ERK_2019"].includes(m.id)),
+];
+
+const ECOLOGY_MODELS: Example[] = [
+  ...TEST_MODELS.filter(m => [
+    "eco_coevolution_host_parasite", "eco_food_web_chaos_3sp", "eco_lotka_volterra_grid",
+    "eco_mutualism_obligate", "eco_rock_paper_scissors_spatial", "wacky_zombie_infection",
+    "sir-epidemic-model"
+  ].includes(m.id)),
+];
+
+const PHYSICS_MODELS: Example[] = [
+  ...TEST_MODELS.filter(m => [
+    "ph_lorenz_attractor", "ph_nbody_gravity", "ph_schrodinger", "ph_wave_equation",
+    "wacky_bouncing_ball", "wacky_traffic_jam_asep", "brusselator-oscillator"
+  ].includes(m.id)),
+];
+
+const COMPUTER_SCIENCE_MODELS: Example[] = [
+  ...TEST_MODELS.filter(m => [
+    "cs_diffie_hellman", "cs_hash_function", "cs_huffman", "cs_monte_carlo_pi",
+    "cs_pagerank", "cs_pid_controller", "cs_regex_nfa", "mt_arithmetic_compiler",
+    "mt_bngl_interpreter", "mt_music_sequencer", "mt_pascal_triangle", "mt_quine"
+  ].includes(m.id)),
+];
+
+const ML_SIGNAL_MODELS: Example[] = [
+  ...TEST_MODELS.filter(m => [
+    "ml_gradient_descent", "ml_hopfield", "ml_kmeans", "ml_q_learning", "ml_svm",
+    "nn_xor", "sp_fourier_synthesizer", "sp_image_convolution", "sp_kalman_filter"
+  ].includes(m.id)),
+];
+
+const SYNBIO_MODELS: Example[] = [
+  ...TEST_MODELS.filter(m => [
+    "synbio_band_pass_filter", "synbio_counter_molecular", "synbio_edge_detector",
+    "synbio_logic_gates_enzymatic", "synbio_oscillator_synchronization", "wacky_alchemy_stone"
+  ].includes(m.id)),
+  ...NATIVE_TUTORIALS.filter(m => ["Repressilator", "toggle"].includes(m.id)),
 ];
 
 const RAW_MODEL_CATEGORIES: ModelCategory[] = [
@@ -3233,6 +3276,36 @@ const RAW_MODEL_CATEGORIES: ModelCategory[] = [
     name: 'Developmental Biology',
     description: 'Models of morphogens, differentiation, and tissue patterning',
     models: DEVELOPMENTAL_MODELS,
+  },
+  {
+    id: 'ecology',
+    name: 'Ecology & Evolution',
+    description: 'Predator-prey dynamics, food webs, and spatial niche models',
+    models: ECOLOGY_MODELS,
+  },
+  {
+    id: 'physics',
+    name: 'Mathematics & Physics',
+    description: 'Strange attractors, N-body gravity, wave equations, and quantum circuits',
+    models: PHYSICS_MODELS,
+  },
+  {
+    id: 'cs',
+    name: 'Computer Science & Algorithms',
+    description: 'Encryption, compression, logic engines, and interpreters',
+    models: COMPUTER_SCIENCE_MODELS,
+  },
+  {
+    id: 'ml-signal',
+    name: 'Machine Learning & Signal Processing',
+    description: 'Bio-inspired ML algorithms and digital signal filters',
+    models: ML_SIGNAL_MODELS,
+  },
+  {
+    id: 'synbio',
+    name: 'Synthetic Biology',
+    description: 'Pulse generators, molecular counters, and logic gates',
+    models: SYNBIO_MODELS,
   },
 
   {

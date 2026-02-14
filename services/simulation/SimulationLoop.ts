@@ -313,13 +313,12 @@ export async function simulate(
         if (obsType === 'species') {
           const constraintMatch = matchesCountConstraint(s.name, pat);
           if (constraintMatch === true) {
-            count = 1;
-            break;
+            count += 1;
+            continue;
           }
           if (constraintMatch === false) continue;
           if (isSpeciesMatch(s.name, pat)) {
-            count = 1;
-            break;
+            count += 1;
           }
         } else {
           const matchCount = countPatternMatches(s.name, pat);
@@ -1394,7 +1393,7 @@ export async function simulate(
     // Default to 'auto' which may apply adaptive CVODE tuning.
     // For explicit solver selections (e.g., cvode/cvode_sparse), keep strict BNG2 defaults
     // unless the caller explicitly overrides individual knobs in SimulationOptions.
-    const requestedSolverType: string = options.solver ?? 'auto';
+    const requestedSolverType: string = options.solver ?? (functionalRateCount > 0 ? 'cvode' : 'auto');
     let solverType: string = requestedSolverType;
     const allMassAction = functionalRateCount === 0;
 
@@ -1460,6 +1459,16 @@ export async function simulate(
       maxErrTestFails: options.maxErrTestFails ?? (useAdaptiveCvodeTuning ? stiffConfig.maxErrTestFails : 7),
       maxConvFails: options.maxConvFails ?? (useAdaptiveCvodeTuning ? stiffConfig.maxConvFails : 10)
     };
+
+    const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
+    const isCbnglSimpleModel =
+      observableNamesSet.has('TF_nuc') &&
+      observableNamesSet.has('Tot_mRNA') &&
+      observableNamesSet.has('Tot_P') &&
+      observableNamesSet.has('P_R');
+    const cbnglTraceSteps = new Set([1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 470, 478, 500]);
+    const tfCpIdx = model.species.findIndex((s) => s.name === '@CP::TF(d~pY)');
+    const tfNuIdx = model.species.findIndex((s) => s.name === '@NU::TF(d~pY)');
 
     // Root detection is currently disabled by default because global auto-detection
     // of if() conditions can introduce broad parity regressions across unrelated models.
@@ -1887,6 +1896,36 @@ export async function simulate(
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = y[k];
             speciesData.push(sp);
+
+            if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
+              const tfCpAmt = tfCpIdx >= 0 ? (y[tfCpIdx] * speciesVolumes[tfCpIdx]) : NaN;
+              const tfNuAmt = tfNuIdx >= 0 ? (y[tfNuIdx] * speciesVolumes[tfNuIdx]) : NaN;
+              let rateTranscribeVal = Number.NaN;
+              const rateTranscribeFn = (model.functions || []).find((f) => f.name === 'rate_transcribe');
+              if (rateTranscribeFn) {
+                try {
+                  rateTranscribeVal = evaluateFunctionalRate(
+                    rateTranscribeFn.expression,
+                    model.parameters || {},
+                    obsValues,
+                    model.functions
+                  );
+                } catch {
+                  rateTranscribeVal = Number.NaN;
+                }
+              }
+
+              console.log('[cBNGL_TRACE]', JSON.stringify({
+                step: i,
+                t: outT,
+                TF_nuc_obs: obsValues.TF_nuc,
+                Tot_mRNA_obs: obsValues.Tot_mRNA,
+                Tot_P_obs: obsValues.Tot_P,
+                TF_CP_pY_amount: tfCpAmt,
+                TF_NU_pY_amount: tfNuAmt,
+                rate_transcribe: rateTranscribeVal
+              }));
+            }
           }
 
           if (steadyStateEnabled) {

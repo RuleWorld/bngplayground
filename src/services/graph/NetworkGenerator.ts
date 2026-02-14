@@ -131,9 +131,10 @@ function profiledDegeneracy(pattern: SpeciesGraph, target: SpeciesGraph, match: 
 /**
  * Determine if degeneracy should be used as a statistical factor for the reaction rate.
  * 
- * This applies only in BAB-like scenarios where:
- * - The pattern specifies fewer bound/specific components than the target molecule has
- * - Example: pattern A(b!1) matching target A(b!1,b!2) - pattern has 1 bound b, target has 2
+ * This applies in BAB-like scenarios where:
+ * - The pattern specifies fewer constrained components than the target molecule has
+ * - Example (bound): pattern A(b!1) matching target A(b!1,b!2)
+ * - Example (unbound): pattern A(b,b!?) matching target A(b,b)
  * 
  * This should NOT apply for cases like LRR dimer where the pattern fully covers the target.
  */
@@ -144,20 +145,27 @@ function shouldApplyDegeneracyStatFactor(pattern: SpeciesGraph, target: SpeciesG
     const tMol = target.molecules[tMolIdx];
     if (!pMol || !tMol) continue;
 
-    // Count bound components with same name in pattern and target
-    // Group by component name since symmetry is within same-named components
+    // Count constrained bound components with same name in pattern and target.
+    // Group by component name since symmetry is within same-named components.
     const pBoundByName = new Map<string, number>();
     const tBoundByName = new Map<string, number>();
+    // Count constrained unbound components (exclude wildcard '?', which is unconstrained).
+    const pUnboundByName = new Map<string, number>();
+    const tUnboundByName = new Map<string, number>();
 
     for (const comp of pMol.components) {
       if (comp.edges.size > 0 || comp.wildcard === '+') {
         pBoundByName.set(comp.name, (pBoundByName.get(comp.name) ?? 0) + 1);
+      } else if (comp.wildcard !== '?') {
+        pUnboundByName.set(comp.name, (pUnboundByName.get(comp.name) ?? 0) + 1);
       }
     }
 
     for (const comp of tMol.components) {
       if (comp.edges.size > 0) {
         tBoundByName.set(comp.name, (tBoundByName.get(comp.name) ?? 0) + 1);
+      } else {
+        tUnboundByName.set(comp.name, (tUnboundByName.get(comp.name) ?? 0) + 1);
       }
     }
 
@@ -165,6 +173,14 @@ function shouldApplyDegeneracyStatFactor(pattern: SpeciesGraph, target: SpeciesG
     // then degeneracy represents valid multiplicity (BAB-like case)
     for (const [compName, pCount] of pBoundByName.entries()) {
       const tCount = tBoundByName.get(compName) ?? 0;
+      if (tCount > pCount) {
+        return true;
+      }
+    }
+
+    // Likewise for constrained unbound components (free-site multiplicity).
+    for (const [compName, pCount] of pUnboundByName.entries()) {
+      const tCount = tUnboundByName.get(compName) ?? 0;
       if (tCount > pCount) {
         return true;
       }
@@ -1719,12 +1735,30 @@ export class NetworkGenerator {
     for (let k = 0; k < n; k++) {
       totalDegeneracy *= countEmbeddingDegeneracy(patterns[k], reactantSpeciesList[k].graph, currentMatches[k]);
     }
+
+    const countGraphBonds = (graph: SpeciesGraph): number => {
+      let edgeEndpoints = 0;
+      for (const mol of graph.molecules) {
+        for (const comp of mol.components) {
+          edgeEndpoints += comp.edges.size;
+        }
+      }
+      return Math.floor(edgeEndpoints / 2);
+    };
+
+    const reactantPatternBondCount = patterns.reduce((sum, p) => sum + countGraphBonds(p), 0);
+    const productPatternBondCount = rule.products.reduce((sum, p) => sum + countGraphBonds(p), 0);
+    const hasPatternBondChange = reactantPatternBondCount !== productPatternBondCount;
+
     const hasWildcardBoundPattern = patterns.some((pat) =>
       pat.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
     );
     const hasBondTopologyOps =
       rule.addBonds.length > 0 ||
-      rule.deleteBonds.length > 0;
+      rule.deleteBonds.length > 0 ||
+      rule.changeStates.length > 0 ||
+      rule.deleteMolecules.length > 0 ||
+      hasPatternBondChange;
     const useEmbeddingDegeneracy =
       hasBondTopologyOps &&
       (
@@ -1791,16 +1825,6 @@ export class NetworkGenerator {
 
     if (!products) return;
     if (!this.validateProducts(products)) return;
-
-    const countGraphBonds = (graph: SpeciesGraph): number => {
-      let edgeEndpoints = 0;
-      for (const mol of graph.molecules) {
-        for (const comp of mol.components) {
-          edgeEndpoints += comp.edges.size;
-        }
-      }
-      return Math.floor(edgeEndpoints / 2);
-    };
 
     const reactantBondCount = reactantSpeciesList.reduce((sum, s) => sum + countGraphBonds(s.graph), 0);
     const productBondCount = products.reduce((sum, g) => sum + countGraphBonds(g), 0);
@@ -1970,7 +1994,8 @@ export class NetworkGenerator {
         reactantPatterns,
         reactantGraphs,
         matches,
-        usedReactantPatternMols
+        usedReactantPatternMols,
+        !!(rule as any).isMoveConnected
       );
 
       if (!fullProductGraph) {
@@ -1986,23 +2011,28 @@ export class NetworkGenerator {
       const splitProducts = fullProductGraph.split(); // Use fullProductGraph.split()
 
       // CRITICAL FIX FOR BIO-NETGEN PARITY:
-      // A single product pattern (e.g., "A().B()") MUST resolve to a single connected component.
-      // If it resolves to multiple disconnected components (e.g., A and B with no bonds),
-      // it means the user defined a complex that isn't connected, which BNG2 considers invalid.
-      // BNG2 ignores/rejects such rules.
-      //
-      // Exception: If the user explicitly wrote "A() + B()", that's TWO product patterns,
-      // and each is handled in a separate iteration of this loop (returning 1 component each).
-      // This check ONLY catches "A().B()" -> disconnected.
+      // A single product pattern like "A().B()" should still be rejected if it resolves
+      // to multiple disconnected components that all originate from explicitly matched
+      // reactant molecules. However, transformations can legitimately disconnect extra
+      // bystander molecules (not matched by the reactant pattern), and BNG2 drops those
+      // bystanders rather than rejecting the reaction.
+      let productsToKeep = splitProducts;
       if (splitProducts.length > 1) {
-        if (shouldLogNetworkGenerator) {
-          debugNetworkLog(`[applyTransformation] Rule ${rule.name} REJECTED: Product pattern yielded ${splitProducts.length} disconnected components (BNG2 requires 1).`);
+        const anchored = splitProducts.filter((subgraph) =>
+          subgraph.molecules.some((mol) => mol._sourceKey && matchedReactantKeys.has(mol._sourceKey))
+        );
+
+        if (anchored.length === 1) {
+          productsToKeep = anchored;
+        } else {
+          if (shouldLogNetworkGenerator) {
+            debugNetworkLog(`[applyTransformation] Rule ${rule.name} REJECTED: Product pattern yielded ${splitProducts.length} disconnected anchored components.`);
+          }
+          return null;
         }
-        // Fail gracefully for this match
-        return null;
       }
 
-      for (const subgraph of splitProducts) {
+      for (const subgraph of productsToKeep) {
         const sourceKeys = new Set<string>();
         for (const mol of subgraph.molecules) {
           if (mol._sourceKey) {
@@ -2153,6 +2183,46 @@ export class NetworkGenerator {
             }
           }
 
+          // Keep only orphan molecules that can still reconnect to a bound anchor site.
+          // If a transformation explicitly unbound an anchor component, connected bystanders
+          // should not be resurrected as detached products for this anchored merge path.
+          const reconnectable = new Set<number>();
+          for (const oldIdx of survivingInCluster) {
+            const oldMol = rg.molecules[oldIdx];
+            for (let c = 0; c < oldMol.components.length; c++) {
+              const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
+              if (!neighbors) continue;
+              for (const neighbor of neighbors) {
+                const [nMStr, nCStr] = neighbor.split('.');
+                const nM = Number(nMStr);
+                const nC = Number(nCStr);
+                const nKey = `${r}:${nM}`;
+                const anchorLoc = anchors.get(nKey);
+                if (!anchorLoc || anchorLoc.graphIdx !== anchorGraphIdx) continue;
+
+                const anchorMol = targetGraph.molecules[anchorLoc.molIdx] as Molecule & { _explicitUnboundComponents?: Set<number> };
+                const explicitUnbound = anchorMol?._explicitUnboundComponents;
+                if (explicitUnbound && explicitUnbound.has(nC)) continue;
+
+                const anchorComp = anchorMol?.components?.[nC];
+                if (!anchorComp || anchorComp.edges.size === 0) continue;
+
+                reconnectable.add(oldIdx);
+              }
+            }
+          }
+
+          for (const oldIdx of Array.from(survivingInCluster)) {
+            if (!reconnectable.has(oldIdx)) {
+              survivingInCluster.delete(oldIdx);
+            }
+          }
+
+          if (survivingInCluster.size === 0) {
+            for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+            continue;
+          }
+
           // Clone only survivors and append to target graph
           for (const oldIdx of survivingInCluster) {
             const oldMol = rg.molecules[oldIdx];
@@ -2231,8 +2301,15 @@ export class NetworkGenerator {
                   if (anchorLoc && anchorLoc.graphIdx === anchorGraphIdx) {
                     const bondLabel = oldMol.components[c].edges.keys().next().value;
                     const anchorMol = targetGraph.molecules[anchorLoc.molIdx];
+                    const anchorComp = anchorMol?.components?.[nC];
+                    const anchorStillBound = !!anchorComp && anchorComp.edges.size > 0;
                     const explicitUnbound = (anchorMol as any)?._explicitUnboundComponents as Set<number> | undefined;
                     if (explicitUnbound && explicitUnbound.has(nC)) {
+                      continue;
+                    }
+                    if (!anchorStillBound) {
+                      // The transformed anchor component is currently unbound in the retained
+                      // product graph; do not resurrect historical orphan bonds during merge.
                       continue;
                     }
                     targetGraph.addBond(newIdx, c, anchorLoc.molIdx, nC, bondLabel);
@@ -2412,7 +2489,8 @@ export class NetworkGenerator {
     reactantPatterns: SpeciesGraph[],
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[],
-    usedReactantPatternMols: Set<string> // NEW: Shared tracking across product patterns
+    usedReactantPatternMols: Set<string>, // NEW: Shared tracking across product patterns
+    isMoveConnectedRule: boolean
   ): SpeciesGraph | null {
     if (shouldLogNetworkGenerator) {
       debugNetworkLog(`[buildProductGraph] Building from pattern ${pattern.toString()}`);
@@ -3457,8 +3535,41 @@ export class NetworkGenerator {
                 // Reactant pattern explicitly expected unbound, product should be unbound
                 if (bound) continue;
                 markExplicitUnbound = true;
+              } else if (reactantPatternComp.wildcard === '?') {
+                const reactantState = reactantPatternComp.state ?? '?';
+                const productState = pComp.state ?? '?';
+                const reactantStateSpecific = reactantState !== '?' && reactantState.length > 0;
+                const productStateSpecific = productState !== '?' && productState.length > 0;
+
+                // When a product refines an unconstrained or different wildcard state
+                // (e.g., s~? -> s~U), BioNetGen semantics require the resulting site to be
+                // explicitly unbound unless an explicit product bond says otherwise.
+                // Preserve bond state only for true wildcard preservation cases such as
+                // tf~pY!? -> tf~pY where no refinement occurs.
+                const refinesWildcardState =
+                  productStateSpecific &&
+                  (!reactantStateSpecific || reactantState !== productState);
+                if (refinesWildcardState) {
+                  markExplicitUnbound = true;
+                }
+              } else if (bound) {
+                // Reactant explicitly specified this component (no wildcard), but product
+                // leaves the component unbound and bond-label-free. If this mapping lands
+                // on a currently bound target site, explicitly clear that bond to match
+                // BioNetGen's product-site semantics.
+                markExplicitUnbound = true;
               }
               // Otherwise, preserve bond state (allow either)
+            }
+
+            if (!pComp.wildcard && pComp.edges.size === 0 && bound) {
+              // Product omits any explicit bond for this component. If we mapped onto a
+              // currently bound target site, force explicit unbinding in the product.
+              const productStateSpecific = !!pComp.state && pComp.state !== '?';
+              if (isMoveConnectedRule && !productStateSpecific) {
+                continue;
+              }
+              markExplicitUnbound = true;
             }
 
             candidateIdx = idx;
@@ -3523,10 +3634,25 @@ export class NetworkGenerator {
                 if (typeof unboundIdx === 'number') {
                   candidateIdx = unboundIdx;
                 } else {
-                  if (shouldLogNetworkGenerator) {
-                    debugNetworkLog(`[buildProductGraph] No unbound site available for mapping: ${pMolIdx}.${pCompIdx} (${pComp.name})`);
+                  // If this product molecule is mapped from an existing reactant molecule,
+                  // BNGL allows omitted-reactant-site updates like:
+                  //   BetaR(l,g,loc~cyt) -> BetaR(l,g,loc~mem,s~U)
+                  // to apply even when the target site is currently bound. In that case
+                  // map to the bound site and force explicit unbinding later.
+                  const isReactantMapped = productPatternToReactant.has(pMolIdx);
+                  if (isReactantMapped && typeof boundIdx === 'number') {
+                    const productStateSpecific = !!pComp.state && pComp.state !== '?';
+                    if (isMoveConnectedRule && !productStateSpecific) {
+                      return null;
+                    }
+                    candidateIdx = boundIdx;
+                    markExplicitUnbound = true;
+                  } else {
+                    if (shouldLogNetworkGenerator) {
+                      debugNetworkLog(`[buildProductGraph] No unbound site available for mapping: ${pMolIdx}.${pCompIdx} (${pComp.name})`);
+                    }
+                    return null;
                   }
-                  return null;
                 }
               }
             }
@@ -3559,6 +3685,12 @@ export class NetworkGenerator {
             newComponent.wildcard = pComp.wildcard;
             candidateIdx = productMol.components.length;
             productMol.components.push(newComponent);
+          } else if (!pComp.wildcard && pComp.edges.size === 0 && isBound(candidateIdx)) {
+            // Relaxed fallback selected a currently bound site with no explicit bond
+            // in the product pattern. This means product semantics require this site
+            // to become unbound (e.g., BetaR(l,g,loc~cyt) -> BetaR(l,g,loc~mem,s~U)
+            // acting on a reactant where s was omitted from the pattern but bound).
+            markExplicitUnbound = true;
           }
         }
 
@@ -3639,6 +3771,19 @@ export class NetworkGenerator {
     // (e.g., NFkB Activation!0!1 binding two partners). Our graph core supports multi-site
     // bonding on a single component; do not reject such transformations.
     //
+    // Clear bonds from components explicitly marked unbound in the product mapping stage.
+    // This is required for rules that refine wildcard-bound reactant sites into concrete
+    // unbound product sites (e.g., s~? -> s~U without an explicit product bond).
+    for (let molIdx = 0; molIdx < productGraph.molecules.length; molIdx++) {
+      const productMol = productGraph.molecules[molIdx] as Molecule & { _explicitUnboundComponents?: Set<number> };
+      if (!productMol._explicitUnboundComponents || productMol._explicitUnboundComponents.size === 0) {
+        continue;
+      }
+      for (const compIdx of productMol._explicitUnboundComponents) {
+        productGraph.deleteBond(molIdx, compIdx);
+      }
+    }
+
     // We still clear any pre-existing bonds from endpoints that participate in explicit bonds
     // to avoid accidentally accumulating stale bonds from the reactant embedding.
     const newBondComponents = new Set<string>();
