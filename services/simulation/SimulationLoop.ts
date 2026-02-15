@@ -380,7 +380,7 @@ export async function simulate(
   // select the correct anchor volume, matching BNG2's inter-compartment scaling.
   // PARITY FIX: Pre-calculate reacting volumes for each reaction.
   // BioNetGen scales ODE rates by the volume of the anchor compartment.
-  // Highest Dimension Rule: The anchor volume is determined by the reactant 
+  // Highest Dimension Rule: The anchor volume is determined by the reactant
   // with the highest compartment dimension (typically 3D vol over 2D surface).
   const reactionReactingVolumes = new Float64Array(model.reactions.length);
   const compartmentMapForDim = new Map(inputModel.compartments.map(c => [c.name, c]));
@@ -412,7 +412,6 @@ export async function simulate(
       const comp = compName ? compartmentMapForDim.get(compName) : null;
       if (comp) {
         const dim = comp.dimension ?? 3;
-        // In this loop, we don't have speciesVolumes yet, but we have compartmentMap
         const vol = compartmentMap.get(compName!) ?? 1.0;
         if (dim > maxDim) {
           maxDim = dim;
@@ -500,7 +499,11 @@ export async function simulate(
         for (let j = 0; j < obs.indices.length; j++) {
           const idx = obs.indices[j];
           const val = currentState[idx];
-          const amount = isOde ? (val * speciesVolumes[idx]) : val;
+          const obsVolumes = (obs as any).volumes;
+          const termVolume = Array.isArray(obsVolumes)
+            ? (obsVolumes[j] ?? speciesVolumes[idx])
+            : speciesVolumes[idx];
+          const amount = isOde ? (val * termVolume) : val;
           sum += amount * obs.coefficients[j];
         }
         obsValues[obs.name] = sum;
@@ -1161,15 +1164,15 @@ export async function simulate(
           for (let i = 0; i < concreteObservables.length; i++) {
             const obs = concreteObservables[i];
             let sum = 0;
-            const isMolecules = obs.type?.toLowerCase() === 'molecules' || (obs.type as any) === 0;
             for (let j = 0; j < obs.indices.length; j++) {
               const idx = obs.indices[j];
               const val = yIn[idx];
-              if (isMolecules) {
-                sum += (val * speciesVolumes[idx]) * obs.coefficients[j];
-              } else {
-                sum += val * obs.coefficients[j];
-              }
+              const obsVolumes = (obs as any).volumes;
+              const termVolume = Array.isArray(obsVolumes)
+                ? (obsVolumes[j] ?? speciesVolumes[idx])
+                : speciesVolumes[idx];
+              const amount = isOde ? (val * termVolume) : val;
+              sum += amount * obs.coefficients[j];
             }
             obsValues[obs.name] = sum;
           }
@@ -1393,7 +1396,7 @@ export async function simulate(
     // Default to 'auto' which may apply adaptive CVODE tuning.
     // For explicit solver selections (e.g., cvode/cvode_sparse), keep strict BNG2 defaults
     // unless the caller explicitly overrides individual knobs in SimulationOptions.
-    const requestedSolverType: string = options.solver ?? (functionalRateCount > 0 ? 'cvode' : 'auto');
+    const requestedSolverType: string = options.solver ?? 'auto';
     let solverType: string = requestedSolverType;
     const allMassAction = functionalRateCount === 0;
 

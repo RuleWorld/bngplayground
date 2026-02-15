@@ -6,6 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 import { GraphMatcher } from '../src/services/graph/core/Matcher';
+import { countPatternMatches } from '../services/parity/PatternMatcher';
 
 describe('Pattern Matching - Simple Patterns', () => {
   it('should match single molecule pattern', () => {
@@ -146,6 +147,20 @@ describe('Pattern Matching - Compartment Matching', () => {
     
     // Compartments should differ
     expect(pattern.compartment).not.toBe(target.compartment);
+  });
+});
+
+describe('Pattern Matching - Compartment Observable Semantics', () => {
+  it('should treat prefix compartment as species-level anchor', () => {
+    const species = '@PM::L(r!1)@EC.R(l!1,tf~Y)';
+    const pattern = '@PM:L(r!?)';
+    expect(countPatternMatches(species, pattern)).toBe(1);
+  });
+
+  it('should treat suffix compartment as molecule-level location', () => {
+    const species = '@End_M::SARM(b!1)@Cyt.TLR3(d,l,t!1)';
+    const pattern = 'SARM()@Cyt';
+    expect(countPatternMatches(species, pattern)).toBe(1);
   });
 });
 

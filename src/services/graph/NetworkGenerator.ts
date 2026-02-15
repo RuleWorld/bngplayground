@@ -20,6 +20,25 @@ function factorial(n: number): number {
   return result;
 }
 
+const patternSymmetryKeyCache = new WeakMap<SpeciesGraph, string>();
+
+function getPatternSymmetryKey(pattern: SpeciesGraph): string {
+  const cached = patternSymmetryKeyCache.get(pattern);
+  if (cached !== undefined) return cached;
+
+  let key: string;
+  try {
+    // Canonicalization removes incidental bond-label numbering differences
+    // between otherwise identical reactant patterns (e.g. A(b!1)+A(b!2)).
+    key = GraphCanonicalizer.canonicalize(pattern);
+  } catch {
+    key = pattern.toString();
+  }
+
+  patternSymmetryKeyCache.set(pattern, key);
+  return key;
+}
+
 // Performance profiling - can be enabled dynamically
 let profilingEnabled = false;
 
@@ -245,6 +264,41 @@ function getReactionKeyWithOrderMode(
     return `${reactants.join(',')}:${products.join(',')}:${ruleName}`;
   }
   return getReactionKey(reactants, products, ruleName);
+}
+
+function normalizeExprForCompare(expr: string): string {
+  return expr.replace(/\s+/g, ' ').trim();
+}
+
+function mergeRateExpressions(existingExpr?: string, incomingExpr?: string): string | undefined {
+  if (!existingExpr) return incomingExpr;
+  if (!incomingExpr) return existingExpr;
+
+  const lhs = normalizeExprForCompare(existingExpr);
+  const rhs = normalizeExprForCompare(incomingExpr);
+  if (lhs === rhs) {
+    return `(2) * (${existingExpr})`;
+  }
+
+  return `(${existingExpr}) + (${incomingExpr})`;
+}
+
+function shouldMergeExpressionMultiplicity(existingRxn: Rxn, incomingRxn: Rxn): boolean {
+  if (!existingRxn.rateExpression || !incomingRxn.rateExpression) return false;
+  if (existingRxn.rate !== 0 || incomingRxn.rate !== 0) return true;
+
+  // In symmetric unimolecular collapse/degradation outcomes, duplicate embeddings can
+  // correspond to the same physical event and should not be summed symbolically.
+  if (incomingRxn.reactants.length === 1) {
+    if (incomingRxn.products.length === 0) return false;
+    if (incomingRxn.products.length > 1) {
+      const first = incomingRxn.products[0];
+      const allSame = incomingRxn.products.every((p) => p === first);
+      if (allSame) return false;
+    }
+  }
+
+  return true;
 }
 
 export interface CompartmentInfo {
@@ -676,6 +730,12 @@ export class NetworkGenerator {
           reactionsList.push(rxn);
         } else {
           reactionsList[existingIdx].rate += rxn.rate;
+          if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
+            reactionsList[existingIdx].rateExpression = mergeRateExpressions(
+              reactionsList[existingIdx].rateExpression,
+              rxn.rateExpression
+            );
+          }
         }
 
         debugNetworkLog(`[NetworkGenerator] Added synthesis reaction: 0 -> [${productIndices.join(', ')}]`);
@@ -1207,27 +1267,25 @@ export class NetworkGenerator {
     const collapsedRuleStatFactor = matchCount === 1 ? this.computeCollapsedRuleStatFactor(rule) : 1;
 
     const signatureMultiplicityByOutcome = new Map<string, number>();
-    if (hasWildcardBoundPattern) {
-      for (const candidateMatch of matches) {
-        const candidateProducts = this.applyRuleTransformation(
-          rule,
-          [rule.reactants[0]],
-          [reactantSpecies.graph],
-          [candidateMatch]
-        );
-        if (candidateProducts === null || !this.validateProducts(candidateProducts)) {
-          continue;
-        }
-        const expectedProductCount = rule.products.length;
-        if (candidateProducts.length < expectedProductCount) {
-          continue;
-        }
-        const sig =
-          buildUnimolecularEventSignatureFromRuleOps(candidateMatch) ??
-          buildUnimolecularEventSignatureFromProducts(candidateProducts);
-        if (!sig) continue;
-        signatureMultiplicityByOutcome.set(sig, (signatureMultiplicityByOutcome.get(sig) ?? 0) + 1);
+    for (const candidateMatch of matches) {
+      const candidateProducts = this.applyRuleTransformation(
+        rule,
+        [rule.reactants[0]],
+        [reactantSpecies.graph],
+        [candidateMatch]
+      );
+      if (candidateProducts === null || !this.validateProducts(candidateProducts)) {
+        continue;
       }
+      const expectedProductCount = rule.products.length;
+      if (candidateProducts.length < expectedProductCount) {
+        continue;
+      }
+      const sig =
+        buildUnimolecularEventSignatureFromRuleOps(candidateMatch) ??
+        buildUnimolecularEventSignatureFromProducts(candidateProducts);
+      if (!sig) continue;
+      signatureMultiplicityByOutcome.set(sig, (signatureMultiplicityByOutcome.get(sig) ?? 0) + 1);
     }
 
 
@@ -1365,6 +1423,15 @@ export class NetworkGenerator {
         hasTopologyChangingSignature ||
         hasConcreteBondChange;
 
+      const isSplitToIdenticalProductSpecies =
+        rule.reactants.length === 1 &&
+        rule.products.length === 2 &&
+        productSpeciesIndices.length === 2 &&
+        productSpeciesIndices[0] === productSpeciesIndices[1] &&
+        rule.addBonds.length === 0 &&
+        rule.changeStates.length === 0 &&
+        rule.deleteMolecules.length === 0;
+
       const isSymmetricHomodimerUnbind =
         (
           rule.deleteBonds.length > 0 &&
@@ -1382,7 +1449,8 @@ export class NetworkGenerator {
             pg.molecules.length === 1 &&
             pg.molecules[0].name === pattern.molecules[0].name
           )
-        );
+        ) ||
+        isSplitToIdenticalProductSpecies;
 
       const wildcardDegeneracyAllowed =
         hasWildcardBoundPattern &&
@@ -1411,7 +1479,12 @@ export class NetworkGenerator {
         }
       }
 
-      if (!isSymmetricHomodimerUnbind && hasTopologyChangingOps && hasWildcardBoundPattern && signatureMultiplicity > 1) {
+      if (
+        !isSymmetricHomodimerUnbind &&
+        hasTopologyChangingOps &&
+        signatureMultiplicity > 1 &&
+        rule.products.length > 0
+      ) {
         statFactor = Math.max(statFactor, signatureMultiplicity);
       }
 
@@ -1477,6 +1550,12 @@ export class NetworkGenerator {
         reactionsList.push(rxn);
       } else {
         reactionsList[existingIdx].rate += rxn.rate;
+        if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
+          reactionsList[existingIdx].rateExpression = mergeRateExpressions(
+            reactionsList[existingIdx].rateExpression,
+            rxn.rateExpression
+          );
+        }
       }
     }
   }
@@ -1495,7 +1574,6 @@ export class NetworkGenerator {
         const patternComp = patternMol.components[patternCompIdx];
 
         if (patternComp.wildcard) continue;
-        if (patternComp.edges.size === 0) continue;
 
         const targetCompKey = match.componentMap.get(`${patternMolIdx}.${patternCompIdx}`);
         if (!targetCompKey) return false;
@@ -1503,6 +1581,15 @@ export class NetworkGenerator {
         const targetCompIdx = Number(targetCompKey.split('.')[1]);
         const targetComp = targetMol.components[targetCompIdx];
         if (!targetComp) return false;
+
+        // Explicit unbound site (e.g. b) should not match a bound target site.
+        // Unconstrained matching is represented via wildcard syntax (e.g. b!?).
+        if (patternComp.edges.size === 0) {
+          if (targetComp.edges.size !== 0) {
+            return false;
+          }
+          continue;
+        }
 
         // Reaction-rule parity: an explicit bonded site like b!1 should not match a site
         // with additional bonds (e.g., b!1!2) unless wildcard semantics are used.
@@ -1540,7 +1627,7 @@ export class NetworkGenerator {
 
     const identicalPatternGroups = new Map<string, number[]>();
     for (let idx = 0; idx < n; idx++) {
-      const key = patterns[idx].toString();
+      const key = getPatternSymmetryKey(patterns[idx]);
       const group = identicalPatternGroups.get(key);
       if (group) group.push(idx);
       else identicalPatternGroups.set(key, [idx]);
@@ -1723,7 +1810,7 @@ export class NetworkGenerator {
     // Calculate rule symmetry factor (e.g. 2 for A+A)
     const rulePatternCounts = new Map<string, number>();
     for (const p of patterns) {
-      const s = p.toString();
+      const s = getPatternSymmetryKey(p);
       rulePatternCounts.set(s, (rulePatternCounts.get(s) || 0) + 1);
     }
     let ruleSymmetryFactor = 1;
@@ -1791,7 +1878,7 @@ export class NetworkGenerator {
     // within that group (e.g., A+A distinct pair: no 1/2; A+A same species: 1/2 applies).
     const identicalPatternGroups = new Map<string, number[]>();
     for (let idx = 0; idx < n; idx++) {
-      const key = patterns[idx].toString();
+      const key = getPatternSymmetryKey(patterns[idx]);
       const group = identicalPatternGroups.get(key);
       if (group) group.push(idx);
       else identicalPatternGroups.set(key, [idx]);
@@ -1811,7 +1898,44 @@ export class NetworkGenerator {
         denom *= factorial(count);
       }
 
-      const correction = factorial(group.length) / denom;
+      let correction = factorial(group.length) / denom;
+      const isDirectionalSingleMoleculePairAssociation =
+        group.length === 2 &&
+        speciesCountInGroup.size === 1 &&
+        rule.deleteBonds.length === 0 &&
+        rule.changeStates.length === 0 &&
+        rule.deleteMolecules.length === 0 &&
+        rule.products.length === 1 &&
+        productPatternBondCount > reactantPatternBondCount &&
+        patterns[group[0]].molecules.length === 1 &&
+        patterns[group[1]].molecules.length === 1 &&
+        rule.products[0].molecules.length === 2 &&
+        (() => {
+          const productMolA = rule.products[0].molecules[0];
+          const productMolB = rule.products[0].molecules[1];
+          const boundSig = (mol: Molecule): string =>
+            mol.components
+              .filter((comp) => comp.edges.size > 0)
+              .map((comp) => comp.name)
+              .sort()
+              .join(',');
+          return boundSig(productMolA) !== boundSig(productMolB);
+        })();
+
+      const isPureSelfAssociation =
+        group.length === 2 &&
+        speciesCountInGroup.size === 1 &&
+        rule.addBonds.length > 0 &&
+        rule.deleteBonds.length === 0 &&
+        rule.changeStates.length === 0 &&
+        rule.deleteMolecules.length === 0 &&
+        rule.products.length === 1 &&
+        totalDegeneracy === 1;
+      // For A + A -> A2 style associations, BNG2 keeps the base rate constant
+      // when symmetry would otherwise reduce multiplicity below 1.
+      if ((isPureSelfAssociation || isDirectionalSingleMoleculePairAssociation) && multiplicity < 1) {
+        correction = factorial(group.length);
+      }
       multiplicity *= correction;
     }
 
@@ -1937,13 +2061,25 @@ export class NetworkGenerator {
       reactionIndexByKey.set(rxnKey, reactionsList.length);
       reactionsList.push(rxn);
     } else {
-      if (hasCarryThroughReactant && multiplicity === 1) {
-        if (products.length === reactantSpeciesList.length) {
-          return;
-        }
+      const sortedReactants = currentSpeciesIndices.slice().sort((a, b) => a - b);
+      const sortedProducts = productIndices.slice().sort((a, b) => a - b);
+      const isNoNetSpeciesChange =
+        sortedReactants.length === sortedProducts.length &&
+        sortedReactants.every((idx, pos) => idx === sortedProducts[pos]);
+
+      // Skip exact no-op duplicates only; for catalytic/state-change reactions with a
+      // carry-through reactant, repeated embeddings are legitimate multiplicity.
+      if (hasCarryThroughReactant && multiplicity === 1 && isNoNetSpeciesChange) {
+        return;
       }
 
       reactionsList[existingIdx].rate += rxn.rate;
+      if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
+        reactionsList[existingIdx].rateExpression = mergeRateExpressions(
+          reactionsList[existingIdx].rateExpression,
+          rxn.rateExpression
+        );
+      }
       // Keep degeneracy fixed for n-ary merged reactions: multiplicity is already
       // accumulated in `rate`, and ODE/SSA kernels apply `degeneracy` multiplicatively.
       if (reactionsList[existingIdx].degeneracy !== undefined) {
@@ -2096,6 +2232,38 @@ export class NetworkGenerator {
       }
     }
 
+    // Mirror BNG2 MolDel auto-mode per reactant pattern (RxnRule.pm):
+    // - molecule-level deletion when DeleteMolecules is set OR only a subset of the
+    //   matched reactant-pattern molecules are deleted
+    // - whole-species deletion when all matched reactant-pattern molecules are deleted
+    //   and DeleteMolecules is NOT set
+    const deletesWholeSpeciesByReactant = new Array<boolean>(reactantGraphs.length).fill(false);
+    for (let r = 0; r < reactantGraphs.length; r++) {
+      const reactantPattern = rule.reactants[r];
+      const match = matches[r];
+      if (!reactantPattern || !match) continue;
+
+      const patternMolCount = reactantPattern.molecules.length;
+      if (patternMolCount === 0) continue;
+
+      let mappedCount = 0;
+      let deletedCount = 0;
+      for (let pMolIdx = 0; pMolIdx < patternMolCount; pMolIdx++) {
+        const targetMolIdx = match.moleculeMap.get(pMolIdx);
+        if (targetMolIdx === undefined) continue;
+        mappedCount++;
+        if (!usedReactantMolsInReaction.has(`${r}:${targetMolIdx}`)) {
+          deletedCount++;
+        }
+      }
+
+      // Be conservative if mapping is incomplete.
+      if (mappedCount !== patternMolCount) continue;
+
+      const usesMoleculeDeletionMode = rule.isDeleteMolecules || deletedCount < patternMolCount;
+      deletesWholeSpeciesByReactant[r] = !usesMoleculeDeletionMode && deletedCount === patternMolCount;
+    }
+
     // 2. SELECTIVE ORPHAN HARVESTING (BioNetGen Parity Fix 2.0 + Merge Fix)
     // Identify connected components of molecules that were NOT mapped to explicit products.
     // - If anchored to survivor: Merge.
@@ -2120,6 +2288,7 @@ export class NetworkGenerator {
 
         let anchorGraphIdx = -1; // -1 means no anchor found yet
         let isAnchoredToSurvivor = false;
+        let touchesMatchedBoundary = false;
         const anchors = new Map<string, { graphIdx: number, molIdx: number }>();
 
         let head = 0;
@@ -2149,8 +2318,9 @@ export class NetworkGenerator {
                   }
                 } else if (matchedReactantKeys.has(nKey)) {
                   // Connected to a molecule that is being deleted/transformed.
-                  // BioNetGen: Treat as a boundary. Do NOT anchor to it, and do NOT include it in the orphan cluster.
-                  // This allows the byproduct (bystander) to survive as its own species.
+                  // Treat as boundary. Whether this orphan survives is decided below based
+                  // on BNG2 deletion mode for this reactant (whole-species vs molecule-level).
+                  touchesMatchedBoundary = true;
                   continue;
                 } else if (!visitedInOrphanCheck.has(nM)) {
                   visitedInOrphanCheck.add(nM);
@@ -2161,11 +2331,6 @@ export class NetworkGenerator {
             }
           }
         }
-
-        // RECURSIVE DELETION FIX:
-        // BioNetGen semantics: If rule is a degradation rule (products.length === 0),
-        // then ANY connected component that was not explicitly matched/preserved is DELETED.
-        const isDegradationRule = rule.products.length === 0 && rule.deleteMolecules.length === 0;
 
         if (isAnchoredToSurvivor && anchorGraphIdx !== -1) {
           // Harvest this cluster into the target graph (MERGE)
@@ -2324,13 +2489,14 @@ export class NetworkGenerator {
         } else {
           // PARTIAL PRESERVATION: The cluster is not anchored to a survivor.
 
-          if (isDegradationRule) {
-            // RECURSIVE DELETION (BNG2 Parity):
-            // If the rule is a degradation rule (products=0), then EVERYTHING connected to the
-            // deleted molecule is also deleted, even if it wasn't explicitly matched.
+          if (touchesMatchedBoundary && deletesWholeSpeciesByReactant[r]) {
+            // BNG2 whole-species deletion mode: if all matched molecules in this reactant
+            // pattern were deleted and DeleteMolecules is not set, bystanders connected
+            // through that boundary are deleted too.
             if (shouldLogNetworkGenerator) {
-              debugNetworkLog(`[applyTransformation] Recursive Deletion: Dropping orphan cluster from reactant ${r} (Rule ${rule.name} -> 0)`);
+              debugNetworkLog(`[applyTransformation] Whole-species deletion: Dropping orphan cluster from reactant ${r} (Rule ${rule.name})`);
             }
+            for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
             continue;
           }
 
@@ -2632,6 +2798,8 @@ export class NetworkGenerator {
     ): number => {
       const rpMol = reactantPatterns[rpm.reactantIdx].molecules[rpm.patternMolIdx];
       if (!rpMol) return -Infinity;
+      const targetMol = reactantGraphs[rpm.reactantIdx]?.molecules?.[rpm.targetMolIdx];
+      if (!targetMol) return -Infinity;
 
       let score = 0;
 
@@ -2645,16 +2813,17 @@ export class NetworkGenerator {
         score -= 200;
       }
 
-      // NOTE: Do NOT strongly weight pattern-level "isBound".
-      // A molecule can be bound in the *reactant graph* via bonds not mentioned in the rule
-      // (e.g., receptor dimers via DD!1), while the reactant *pattern* may omit that bond.
-      // Over-weighting this causes incorrect molecule identity swaps.
-      if (rpm.isBound === pMolIsBound) score += 5;
+      // NOTE: Do NOT score pattern-level "isBound".
+      // A molecule can be bound in the reactant graph via bonds not represented in
+      // a reactant pattern. Even a small bonus here can flip tie-breaks and swap
+      // molecule identity in symmetric/catalytic rules.
 
       // Prefer compatible component states. This helps disambiguate identical molecule names
       // in symmetric complexes (e.g., multiple R molecules with different Y1/Y2 states).
       const rpCompByName = new Map<string, any>();
       for (const c of rpMol.components) rpCompByName.set(c.name, c);
+      const targetCompByName = new Map<string, any>();
+      for (const c of targetMol.components) targetCompByName.set(c.name, c);
 
       // Reward overlap of *specified* component names between the two pattern molecules.
       // This is important because BNGL patterns often omit components as wildcards, and
@@ -2690,6 +2859,27 @@ export class NetworkGenerator {
       score += sharedBondSites * 50;
 
       for (const pc of pMol.components) {
+        if (!pc.wildcard && pc.edges.size > 0) {
+          const tc = targetCompByName.get(pc.name);
+          if (tc) {
+            const rcForBondCheck = rpCompByName.get(pc.name);
+
+            // If the reactant pattern does not mention this component (or mentions it
+            // as explicitly unbound), product bond creation should originate from a free
+            // target site rather than preserving hidden pre-existing bonds.
+            const mustStartUnbound =
+              !rcForBondCheck ||
+              (!rcForBondCheck.wildcard && rcForBondCheck.edges.size === 0);
+            if (mustStartUnbound && tc.edges.size !== 0) {
+              return -Infinity;
+            }
+
+            if (tc.edges.size > pc.edges.size) {
+              return -Infinity;
+            }
+          }
+        }
+
         const rc = rpCompByName.get(pc.name);
         if (!rc) continue;
 
@@ -2889,6 +3079,21 @@ export class NetworkGenerator {
             // Check for wildcard
             if (matchingPpComp.wildcard === '+' || matchingPpComp.wildcard === '?') {
               bondPreserved = true;
+            }
+            // Preserve bond state for optional reactant wildcard (!?) when product keeps
+            // the same site semantics without explicitly refining/breaking the bond.
+            // Example: R(tf~pY!?) -> R(tf~pY) should keep existing TF/P partners.
+            if (!bondPreserved && rpComp.wildcard === '?') {
+              const reactantState = rpComp.state ?? '?';
+              const productState = matchingPpComp.state ?? '?';
+              const reactantStateSpecific = reactantState !== '?' && reactantState.length > 0;
+              const productStateSpecific = productState !== '?' && productState.length > 0;
+              const refinesWildcardState =
+                productStateSpecific &&
+                (!reactantStateSpecific || reactantState !== productState);
+              if (!refinesWildcardState) {
+                bondPreserved = true;
+              }
             }
             // Check for same bond label
             for (const [ppBondLabel] of matchingPpComp.edges) {
@@ -3468,6 +3673,7 @@ export class NetworkGenerator {
         // Find a matching component in the product molecule
         let candidateIdx = -1;
         let markExplicitUnbound = pComp.wildcard === '-';
+        let preserveOptionalWildcardBond = false;
         const isBound = (idx: number) => productGraph.adjacency.has(`${productMolIdx}.${idx}`);
 
         // CRITICAL FIX: First try to use componentMap for exact component identification
@@ -3551,6 +3757,9 @@ export class NetworkGenerator {
                   (!reactantStateSpecific || reactantState !== productState);
                 if (refinesWildcardState) {
                   markExplicitUnbound = true;
+                  preserveOptionalWildcardBond = false;
+                } else {
+                  preserveOptionalWildcardBond = true;
                 }
               } else if (bound) {
                 // Reactant explicitly specified this component (no wildcard), but product
@@ -3562,7 +3771,7 @@ export class NetworkGenerator {
               // Otherwise, preserve bond state (allow either)
             }
 
-            if (!pComp.wildcard && pComp.edges.size === 0 && bound) {
+            if (!pComp.wildcard && pComp.edges.size === 0 && bound && !preserveOptionalWildcardBond) {
               // Product omits any explicit bond for this component. If we mapped onto a
               // currently bound target site, force explicit unbinding in the product.
               const productStateSpecific = !!pComp.state && pComp.state !== '?';
@@ -4168,7 +4377,43 @@ export class NetworkGenerator {
       }
     }
 
-    if (ops.length === 0) return null;
+    if (ops.length === 0) {
+      // Fallback for rules where explicit op arrays are empty (common for state-only
+      // transforms parsed via reactant/product graphs). Build a signature from changed
+      // reactant embeddings while ignoring pure carry-through catalysts.
+      const remainingProductCounts = new Map<string, number>();
+      for (const product of rule.products) {
+        const key = getPatternSymmetryKey(product);
+        remainingProductCounts.set(key, (remainingProductCounts.get(key) ?? 0) + 1);
+      }
+
+      const embeddingSignatureParts: string[] = [];
+      for (let k = 0; k < rule.reactants.length; k++) {
+        const reactantKey = getPatternSymmetryKey(rule.reactants[k]);
+        const remaining = remainingProductCounts.get(reactantKey) ?? 0;
+        const reactantSpecies = reactantSpeciesList[k];
+        const speciesPart = `R${k}:S${reactantSpecies?.index ?? -1}`;
+
+        if (remaining > 0) {
+          remainingProductCounts.set(reactantKey, remaining - 1);
+          embeddingSignatureParts.push(`${speciesPart}:carry`);
+          continue;
+        }
+
+        const match = matches[k];
+        if (!match || !reactantSpecies) continue;
+
+        const mappedMolecules = Array.from(match.moleculeMap.values()).sort((a, b) => a - b);
+        embeddingSignatureParts.push(`${speciesPart}:M${mappedMolecules.join(',')}`);
+      }
+
+      if (embeddingSignatureParts.length === 0) {
+        return 'identity';
+      }
+
+      embeddingSignatureParts.sort();
+      return embeddingSignatureParts.join('|');
+    }
     ops.sort();
     return ops.join(';');
   }

@@ -246,6 +246,22 @@ describe('parseBNGL - Reaction Rules', () => {
     expect(model.reactionRules[0].reactants).toHaveLength(0);
     expect(model.reactionRules[0].products).toHaveLength(1);
   });
+
+  it('should preserve molecule-level compartments in product complexes', () => {
+    const code = `
+      begin parameters
+        kf 1
+      end parameters
+      begin reaction rules
+        SARM(b)@Cyt + TLR3(t)@End_M -> SARM(b!1)@Cyt.TLR3(t!1)@End_M kf
+      end reaction rules
+    `;
+    const model = parseBNGL(code);
+    const product = model.reactionRules[0].products[0];
+    expect(product).toMatch(/SARM\([^)]*\)@Cyt/);
+    expect(product).toContain('TLR3');
+    expect(product).toContain('@End_M');
+  });
 });
 
 describe('parseBNGL - Functions', () => {

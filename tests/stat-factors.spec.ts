@@ -185,5 +185,50 @@ describe('Stat factors / degeneracy', () => {
     expect(rxn?.rate).toBeCloseTo(0.4, 12);
     expect((rxn as any)?.propensityFactor ?? 1).toBe(1);
   });
+
+  it('recovers collapsed single-molecule embeddings for n-ary pure state-change rules', async () => {
+    const seedSpecies = [
+      BNGLParser.parseSpeciesGraph('G(b!1,s~P).G(b!1,s~U)'),
+      BNGLParser.parseSpeciesGraph('S(b!1,s~U).S(b!1,s~U)'),
+    ];
+
+    const rule = BNGLParser.parseRxnRule(
+      'G(s~P) + S(s~U) -> G(s~P) + S(s~P)',
+      1.2,
+      'phos'
+    );
+
+    const generator = new NetworkGenerator({ maxSpecies: 40, maxIterations: 3 });
+    const result = await generator.generate(seedSpecies, [rule]);
+
+    const reactantA = canon(BNGLParser.parseSpeciesGraph('G(b!1,s~P).G(b!1,s~U)'));
+    const reactantB = canon(BNGLParser.parseSpeciesGraph('S(b!1,s~U).S(b!1,s~U)'));
+    const productA = canon(BNGLParser.parseSpeciesGraph('G(b!1,s~P).G(b!1,s~U)'));
+    const productB = canon(BNGLParser.parseSpeciesGraph('S(b!1,s~P).S(b!1,s~U)'));
+
+    const speciesByIndex = new Map<number, string>();
+    for (const s of result.species as any[]) {
+      speciesByIndex.set(Number(s.index), canon(s.graph));
+    }
+
+    const targetReactants = [reactantA, reactantB].sort().join(' + ');
+    const targetProducts = [productA, productB].sort().join(' + ');
+
+    const rxn = result.reactions.find((r) => {
+      const reactants = r.reactants
+        .map((idx: number) => speciesByIndex.get(Number(idx)) ?? '')
+        .sort()
+        .join(' + ');
+      const products = r.products
+        .map((idx: number) => speciesByIndex.get(Number(idx)) ?? '')
+        .sort()
+        .join(' + ');
+      return reactants === targetReactants && products === targetProducts;
+    });
+
+    expect(rxn).toBeDefined();
+    expect(rxn?.rate).toBeCloseTo(2.4, 12);
+    expect((rxn as any)?.propensityFactor ?? 1).toBe(1);
+  });
 });
 

@@ -1071,7 +1071,35 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     }
 
 
-    const molecules = molPatterns.map(mp => {
+    const moleculeEntries: Array<{ pattern: Parser.Molecule_patternContext; compartment?: string }> = [];
+    const getRuleIndex = (node: unknown): number | undefined => {
+      if (!node || typeof node !== 'object') return undefined;
+      const maybeRuleIndex = (node as { ruleIndex?: unknown }).ruleIndex;
+      return typeof maybeRuleIndex === 'number' ? maybeRuleIndex : undefined;
+    };
+    if (ctx.children) {
+      for (const child of ctx.children) {
+        const ruleIndex = getRuleIndex(child);
+        if (ruleIndex === Parser.BNGParser.RULE_molecule_pattern) {
+          moleculeEntries.push({ pattern: child as Parser.Molecule_patternContext });
+          continue;
+        }
+        if (ruleIndex === Parser.BNGParser.RULE_molecule_compartment && moleculeEntries.length > 0) {
+          const compNode = (child as Parser.Molecule_compartmentContext).STRING();
+          if (compNode) {
+            moleculeEntries[moleculeEntries.length - 1].compartment = compNode.text;
+          }
+        }
+      }
+    }
+    if (moleculeEntries.length === 0) {
+      for (const mp of molPatterns) {
+        moleculeEntries.push({ pattern: mp });
+      }
+    }
+
+    const molecules = moleculeEntries.map((entry) => {
+      const mp = entry.pattern;
       const nameNode = mp.STRING() || (mp as any).keyword_as_mol_name?.();
       if (!nameNode) return '';
       const name = nameNode.text;
@@ -1091,81 +1119,82 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         return comp;
       };
 
-      // If no component list, molecule has no components (e.g., "dead" or "I")
-      // Normalize to name() to match GraphCanonicalizer and BioNetGen conventions
+      let molStr = `${name}()`;
+
       if (!compListCtx) {
+        // If no component list, molecule has no components (e.g., "dead" or "I")
+        // Normalize to name() to match GraphCanonicalizer and BioNetGen conventions
         if (shouldComplete && molType && molType.components.length > 0) {
           const completed = molType.components.map(buildWildcardComponent);
-          return `${name}(${completed.join(',')})`;
+          molStr = `${name}(${completed.join(',')})`;
         }
-        return `${name}()`;
-      }
+      } else {
+        // Filter out undefined/empty entries (from double commas ",,")
+        const compPatterns = compListCtx.component_pattern();
+        const validComps = compPatterns.filter(cp => cp && (cp.STRING() || cp.INT() || cp.keyword_as_component_name()));
+        // console.log(`[getSpeciesString] Mol ${name}, total comps: ${compPatterns.length}, valid comps: ${validComps.length}`);
 
+        if (validComps.length > 0) {
+          let components = validComps.map(cp => {
+            const compNode = cp.STRING() || cp.INT() || cp.keyword_as_component_name();
+            let comp = compNode ? compNode.text : '';
 
-      // Filter out undefined/empty entries (from double commas ",,")
-      const compPatterns = compListCtx.component_pattern();
-      const validComps = compPatterns.filter(cp => cp && (cp.STRING() || cp.INT() || cp.keyword_as_component_name()));
-      // console.log(`[getSpeciesString] Mol ${name}, total comps: ${compPatterns.length}, valid comps: ${validComps.length}`);
-      if (validComps.length === 0) return `${name}()`;
-
-      let components = validComps.map(cp => {
-        const compNode = cp.STRING() || cp.INT() || cp.keyword_as_component_name();
-        let comp = compNode ? compNode.text : '';
-
-        const stateCtxs = cp.state_value();
-        if (stateCtxs && stateCtxs.length > 0) {
-          for (const stateCtx of stateCtxs) {
-            const stateStr = stateCtx.STRING()?.text || stateCtx.INT()?.text;
-            const qmark = stateCtx.QMARK();
-            comp += `~${stateStr || (qmark ? '?' : '')}`;
-          }
-        }
-
-        // Handle multiple bond specs (bond_spec* returns array)
-        const bondSpecs = cp.bond_spec();
-        if (bondSpecs && bondSpecs.length > 0) {
-          for (const bondCtx of bondSpecs) {
-            const bondIdCtx = bondCtx.bond_id();
-            if (bondIdCtx) {
-              comp += `!${bondIdCtx.INT()?.text || bondIdCtx.STRING()?.text || ''}`;
-            } else if (bondCtx.PLUS()) {
-              comp += '!+';
-            } else if (bondCtx.QMARK()) {
-              comp += '!?';
+            const stateCtxs = cp.state_value();
+            if (stateCtxs && stateCtxs.length > 0) {
+              for (const stateCtx of stateCtxs) {
+                const stateStr = stateCtx.STRING()?.text || stateCtx.INT()?.text;
+                const qmark = stateCtx.QMARK();
+                comp += `~${stateStr || (qmark ? '?' : '')}`;
+              }
             }
+
+            // Handle multiple bond specs (bond_spec* returns array)
+            const bondSpecs = cp.bond_spec();
+            if (bondSpecs && bondSpecs.length > 0) {
+              for (const bondCtx of bondSpecs) {
+                const bondIdCtx = bondCtx.bond_id();
+                if (bondIdCtx) {
+                  comp += `!${bondIdCtx.INT()?.text || bondIdCtx.STRING()?.text || ''}`;
+                } else if (bondCtx.PLUS()) {
+                  comp += '!+';
+                } else if (bondCtx.QMARK()) {
+                  comp += '!?';
+                }
+              }
+            }
+
+            return comp;
+          }).filter(c => c); // Filter out empty components
+
+          if (shouldComplete && molType && molType.components.length > 0) {
+            const byName = new Map<string, string[]>();
+            for (const comp of components) {
+              const base = comp.split('~')[0].split('!')[0].trim();
+              if (!byName.has(base)) byName.set(base, []);
+              byName.get(base)!.push(comp);
+            }
+
+            const ordered: string[] = [];
+            for (const compDef of molType.components) {
+              const base = compDef.split('~')[0];
+              const queue = byName.get(base);
+              if (queue && queue.length > 0) {
+                ordered.push(queue.shift()!);
+              } else {
+                ordered.push(buildWildcardComponent(compDef));
+              }
+            }
+
+            for (const remaining of byName.values()) {
+              ordered.push(...remaining);
+            }
+            components = ordered;
           }
-        }
 
-        return comp;
-      }).filter(c => c); // Filter out empty components
-
-      if (shouldComplete && molType && molType.components.length > 0) {
-        const byName = new Map<string, string[]>();
-        for (const comp of components) {
-          const base = comp.split('~')[0].split('!')[0].trim();
-          if (!byName.has(base)) byName.set(base, []);
-          byName.get(base)!.push(comp);
+          // console.log(`[getSpeciesString] Mol ${name}, components:`, components);
+          molStr = `${name}(${components.join(',')})`;
         }
-
-        const ordered: string[] = [];
-        for (const compDef of molType.components) {
-          const base = compDef.split('~')[0];
-          const queue = byName.get(base);
-          if (queue && queue.length > 0) {
-            ordered.push(queue.shift()!);
-          } else {
-            ordered.push(buildWildcardComponent(compDef));
-          }
-        }
-
-        for (const remaining of byName.values()) {
-          ordered.push(...remaining);
-        }
-        components = ordered;
       }
-
-      // console.log(`[getSpeciesString] Mol ${name}, components:`, components);
-      let molStr = `${name}(${components.join(',')})`;
 
       // Support molecule-level wildcards (!+, !?)
       const wildcardCtx = mp.pattern_bond_wildcard();
@@ -1177,23 +1206,23 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       const attrCtx = (mp as any).molecule_attributes?.();
       if (attrCtx) molStr += attrCtx.text;
 
+      if (entry.compartment) {
+        molStr += `@${entry.compartment}`;
+      }
+
       return molStr;
     }).filter(m => m); // Filter out empty molecules
 
     let res = prefix + molecules.join('.');
 
-    // Handle suffix compartment (AT STRING at end) - e.g., R(l,tf~Y)@PM
-    const atCtx = ctx.AT();
-    if (atCtx && !prefix) {  // Only apply suffix if no prefix was already set
-      // Find the compartment name from the AT token's sibling
-      // The grammar: (AT STRING)?
-      const fullText = ctx.text;
-      const atIndex = fullText.lastIndexOf('@');
-      if (atIndex >= 0) {
-        const suffixComp = fullText.substring(atIndex + 1);
-        if (suffixComp && /^[A-Za-z0-9_]+$/.test(suffixComp)) {
-          res = res + '@' + suffixComp;
-        }
+    // Handle species-level suffix compartment (AT STRING at end) - e.g., A.B@PM
+    // This is distinct from molecule_compartment contexts (e.g., A@EC.B@PM).
+    if (!prefix && ctx.children && ctx.children.length >= 2) {
+      const last = ctx.children[ctx.children.length - 1];
+      const prev = ctx.children[ctx.children.length - 2];
+      const suffixComp = last?.text ?? '';
+      if (prev?.text === '@' && /^[A-Za-z0-9_]+$/.test(suffixComp)) {
+        res = `${res}@${suffixComp}`;
       }
     }
 

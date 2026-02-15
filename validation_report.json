@@ -542,7 +542,7 @@
   },
   {
     "model": "bab",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "BAB.gdat",
     "referenceInferred": false,
     "details": {
@@ -567,84 +567,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.5,
-      "maxAbsoluteError": 100,
+      "maxRelativeError": 3.5059365706738815e-13,
+      "maxAbsoluteError": 4.959588295605499e-11,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 0,
+      "errorAtTime": 2.5,
       "errorColumn": "FreeAsites",
-      "samples": [
-        {
-          "time": 0,
-          "column": "FreeAsites",
-          "web": 100,
-          "ref": 200,
-          "relError": 0.5
-        },
-        {
-          "time": 0.05,
-          "column": "FreeAsites",
-          "web": 99.79401300119513,
-          "ref": 190.9228394992,
-          "relError": 0.4773070981818638
-        },
-        {
-          "time": 0.1,
-          "column": "FreeAsites",
-          "web": 99.31319765963525,
-          "ref": 183.4252924744,
-          "relError": 0.45856323127577386
-        },
-        {
-          "time": 0.15,
-          "column": "FreeAsites",
-          "web": 98.69875032820218,
-          "ref": 177.1855344141,
-          "relError": 0.4429638364408829
-        },
-        {
-          "time": 0.2,
-          "column": "FreeAsites",
-          "web": 98.03437384533666,
-          "ref": 171.9598427178,
-          "relError": 0.42989960739718175
-        },
-        {
-          "time": 0.25,
-          "column": "FreeAsites",
-          "web": 97.36917222016373,
-          "ref": 167.5603473045,
-          "relError": 0.4189008689316032
-        },
-        {
-          "time": 0.3,
-          "column": "FreeAsites",
-          "web": 96.73113617515955,
-          "ref": 163.8400020891,
-          "relError": 0.4096000064590154
-        },
-        {
-          "time": 0.35,
-          "column": "FreeAsites",
-          "web": 96.13527216236419,
-          "ref": 160.6821791689,
-          "relError": 0.40170544948041664
-        },
-        {
-          "time": 0.4,
-          "column": "FreeAsites",
-          "web": 95.58859365888833,
-          "ref": 157.9933049234,
-          "relError": 0.3949832639729094
-        },
-        {
-          "time": 0.45,
-          "column": "FreeAsites",
-          "web": 95.09323096556649,
-          "ref": 155.697545096,
-          "relError": 0.38924386439790104
-        }
-      ]
+      "samples": []
     }
   },
   {
@@ -1241,89 +1170,89 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 1.0000000000345795,
-      "maxAbsoluteError": 75.70968240723835,
+      "maxRelativeError": 0.08595699584000087,
+      "maxAbsoluteError": 0.00845932162916796,
       "absTolDominated": true,
       "overlapMatch": false,
-      "errorAtTime": 478,
-      "errorColumn": "TF_nuc",
+      "errorAtTime": 2,
+      "errorColumn": "P_R",
       "samples": [
         {
-          "time": 1,
-          "column": "Rp_tot",
-          "web": 19.361716123231723,
-          "ref": 19.39346338759,
-          "relError": 0.0016370084973368949
+          "time": 288,
+          "column": "Tot_mRNA",
+          "web": 0.11632989120212331,
+          "ref": 0.1163661717622,
+          "relError": 0.0003117792699310768
         },
         {
-          "time": 1,
-          "column": "Rp_EM",
-          "web": 5.967169317523814,
-          "ref": 5.997769706774,
-          "relError": 0.005101961353338692
+          "time": 307,
+          "column": "Tot_mRNA",
+          "web": 0.35279292999274847,
+          "ref": 0.3528821073906,
+          "relError": 0.0002527115883288925
         },
         {
-          "time": 1,
-          "column": "TF_nuc",
-          "web": 0.6758717783684965,
-          "ref": 0.7397949778655,
-          "relError": 0.0864066415825617
+          "time": 325,
+          "column": "Tot_mRNA",
+          "web": 0.08806912303356805,
+          "ref": 0.08810732484203,
+          "relError": 0.0004335826621730351
         },
         {
-          "time": 2,
-          "column": "L_Bound_EM",
-          "web": 11.14201004905603,
-          "ref": 11.14471336721,
-          "relError": 0.00024256506783967873
+          "time": 344,
+          "column": "Tot_mRNA",
+          "web": 0.29208522192527187,
+          "ref": 0.2921787485496,
+          "relError": 0.0003201007081878105
         },
         {
-          "time": 2,
-          "column": "Rp_tot",
-          "web": 41.15623469699865,
-          "ref": 41.34181872768,
-          "relError": 0.004489014668265954
+          "time": 362,
+          "column": "Tot_mRNA",
+          "web": 0.0658022726195035,
+          "ref": 0.06584152228397,
+          "relError": 0.0005961232836813777
         },
         {
-          "time": 2,
-          "column": "Rp_PM",
-          "web": 19.63984086680984,
-          "ref": 19.65425897478,
-          "relError": 0.0007335869537823457
+          "time": 381,
+          "column": "Tot_mRNA",
+          "web": 0.23691542009020752,
+          "ref": 0.2370196183277,
+          "relError": 0.00043961861987477723
         },
         {
-          "time": 2,
-          "column": "Rp_EM",
-          "web": 21.51639383018881,
-          "ref": 21.6875597529,
-          "relError": 0.007892355094874223
+          "time": 399,
+          "column": "Tot_mRNA",
+          "web": 0.048619618086399766,
+          "ref": 0.04865341680824,
+          "relError": 0.0006946834170649815
         },
         {
-          "time": 2,
-          "column": "TF_nuc",
-          "web": 2.2405771269001984,
-          "ref": 2.484692273206,
-          "relError": 0.09824763772087544
+          "time": 400,
+          "column": "Tot_mRNA",
+          "web": 0.5434502431769207,
+          "ref": 0.5435951673952,
+          "relError": 0.0002666032131479798
         },
         {
-          "time": 3,
-          "column": "L_Bound_PM",
-          "web": 27.5205557593693,
-          "ref": 27.5109481627,
-          "relError": 0.00034910620095419265
+          "time": 418,
+          "column": "Tot_mRNA",
+          "web": 0.18838117463483,
+          "ref": 0.1884934463485,
+          "relError": 0.0005956266164416427
         },
         {
-          "time": 3,
-          "column": "L_Bound_EM",
-          "web": 19.71871627253059,
-          "ref": 19.73168349088,
-          "relError": 0.0006571774960511024
+          "time": 420,
+          "column": "Tot_mRNA",
+          "web": 0.4277703683292151,
+          "ref": 0.4276708504757,
+          "relError": 0.00023264316765039627
         }
       ]
     }
   },
   {
     "model": "cd40_signaling",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "cd40-signaling.gdat",
     "referenceInferred": false,
     "details": {
@@ -1350,89 +1279,18 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 1.759979204257394,
-      "maxAbsoluteError": 99.33242553356754,
+      "maxRelativeError": 1.946525426453693,
+      "maxAbsoluteError": 0.00002757414278420356,
       "absTolDominated": true,
       "overlapMatch": false,
-      "errorAtTime": 143.5,
+      "errorAtTime": 150,
       "errorColumn": "TRAF_Sequest",
-      "samples": [
-        {
-          "time": 0.5,
-          "column": "NonCanonical_NFB",
-          "web": 97.37947239248892,
-          "ref": 97.98272304795,
-          "relError": 0.006156704332108303
-        },
-        {
-          "time": 0.5,
-          "column": "Active_IKK",
-          "web": 192.5702825968109,
-          "ref": 197.2127865597,
-          "relError": 0.02354058296054613
-        },
-        {
-          "time": 0.5,
-          "column": "NIK_Stabilized",
-          "web": 9.098978137956857,
-          "ref": 9.582040912475,
-          "relError": 0.05041334919466226
-        },
-        {
-          "time": 0.5,
-          "column": "TRAF_Sequest",
-          "web": 12.105601626985193,
-          "ref": 21.24868839735,
-          "relError": 0.4302894653726051
-        },
-        {
-          "time": 1,
-          "column": "NonCanonical_NFB",
-          "web": 99.30364444098163,
-          "ref": 99.32457625811,
-          "relError": 0.0002107415698807183
-        },
-        {
-          "time": 1,
-          "column": "Active_IKK",
-          "web": 196.97974052947046,
-          "ref": 198.8982121614,
-          "relError": 0.009645494602901539
-        },
-        {
-          "time": 1,
-          "column": "NIK_Stabilized",
-          "web": 9.531521901614402,
-          "ref": 9.826722439009,
-          "relError": 0.03004058975175123
-        },
-        {
-          "time": 1,
-          "column": "TRAF_Sequest",
-          "web": 12.970436326653756,
-          "ref": 36.86602570392,
-          "relError": 0.6481737296332815
-        },
-        {
-          "time": 1.5,
-          "column": "NonCanonical_NFB",
-          "web": 99.30213825877868,
-          "ref": 99.32872644128,
-          "relError": 0.0002676786812225161
-        },
-        {
-          "time": 1.5,
-          "column": "Active_IKK",
-          "web": 196.6049114815127,
-          "ref": 199.1659486435,
-          "relError": 0.012858810351017788
-        }
-      ]
+      "samples": []
     }
   },
   {
     "model": "cell_cycle_checkpoint",
-    "status": "match",
+    "status": "mismatch",
     "referenceFile": "cell-cycle-checkpoint.gdat",
     "referenceInferred": false,
     "details": {
@@ -1463,13 +1321,84 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 1.5619212735513906e-7,
-      "maxAbsoluteError": 1.315457187622826e-9,
+      "maxRelativeError": 0.9625365954302734,
+      "maxAbsoluteError": 0.042760587943067425,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 98.25,
+      "errorAtTime": 0.25,
       "errorColumn": "Active_CycB",
-      "samples": []
+      "samples": [
+        {
+          "time": 0.25,
+          "column": "Active_CycB",
+          "web": 0.0016643078438325792,
+          "ref": 0.0444248957869,
+          "relError": 0.9625365954302734
+        },
+        {
+          "time": 0.5,
+          "column": "Active_CycB",
+          "web": 0.0016663813438993647,
+          "ref": 0.04287871622896,
+          "relError": 0.9611373312810634
+        },
+        {
+          "time": 0.75,
+          "column": "Active_CycB",
+          "web": 0.001668462563372948,
+          "ref": 0.0413916865331,
+          "relError": 0.9596908774896448
+        },
+        {
+          "time": 1,
+          "column": "Active_CycB",
+          "web": 0.0016705489901821299,
+          "ref": 0.03996156207062,
+          "relError": 0.9581961038652608
+        },
+        {
+          "time": 1.25,
+          "column": "Active_CycB",
+          "web": 0.0016726406370183018,
+          "ref": 0.03858617173364,
+          "relError": 0.9566518117276696
+        },
+        {
+          "time": 1.5,
+          "column": "Active_CycB",
+          "web": 0.0016747375229880603,
+          "ref": 0.03726342643632,
+          "relError": 0.9550568027916048
+        },
+        {
+          "time": 1.75,
+          "column": "Active_CycB",
+          "web": 0.0016768396677510947,
+          "ref": 0.03599131686432,
+          "relError": 0.9534098828872407
+        },
+        {
+          "time": 2,
+          "column": "Active_CycB",
+          "web": 0.0016789470910988234,
+          "ref": 0.03476791048464,
+          "relError": 0.9517098649963287
+        },
+        {
+          "time": 2.25,
+          "column": "Active_CycB",
+          "web": 0.0016810598129244196,
+          "ref": 0.03359134860925,
+          "relError": 0.9499555724160027
+        },
+        {
+          "time": 2.5,
+          "column": "Active_CycB",
+          "web": 0.0016831778532211657,
+          "ref": 0.03245984356469,
+          "relError": 0.9481458421120632
+        }
+      ]
     }
   },
   {
@@ -1620,7 +1549,7 @@
   },
   {
     "model": "clock_bmal1_gene_circuit",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "clock-bmal1-gene-circuit.gdat",
     "referenceInferred": false,
     "details": {
@@ -1649,84 +1578,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.9988633799886032,
-      "maxAbsoluteError": 0.05951268510699618,
+      "maxRelativeError": 0.00000243677245683551,
+      "maxAbsoluteError": 2.475898862319692e-8,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 120,
+      "errorAtTime": 117.2,
       "errorColumn": "Transcription_ON",
-      "samples": [
-        {
-          "time": 0.4,
-          "column": "Activator_Comp",
-          "web": 0.019621436632708277,
-          "ref": 0.01927086846948,
-          "relError": 0.017866589984746162
-        },
-        {
-          "time": 0.4,
-          "column": "Transcription_ON",
-          "web": 0.0033197971293480585,
-          "ref": 0.002835702316085,
-          "relError": 0.1458206011998465
-        },
-        {
-          "time": 0.8,
-          "column": "Activator_Comp",
-          "web": 0.020501744519473036,
-          "ref": 0.02013240194808,
-          "relError": 0.018015177734861783
-        },
-        {
-          "time": 0.8,
-          "column": "Transcription_ON",
-          "web": 0.0035826039065772596,
-          "ref": 0.003045178496085,
-          "relError": 0.15000972044540198
-        },
-        {
-          "time": 1.2,
-          "column": "Activator_Comp",
-          "web": 0.021414384619679445,
-          "ref": 0.02102590032101,
-          "relError": 0.01814127772377986
-        },
-        {
-          "time": 1.2,
-          "column": "Transcription_ON",
-          "web": 0.0038641765193473403,
-          "ref": 0.003268059677619,
-          "relError": 0.1542674975492642
-        },
-        {
-          "time": 1.6,
-          "column": "Activator_Comp",
-          "web": 0.022359584457047842,
-          "ref": 0.02195163963072,
-          "relError": 0.018244740957127102
-        },
-        {
-          "time": 1.6,
-          "column": "Transcription_ON",
-          "web": 0.004165198450114163,
-          "ref": 0.003504602325124,
-          "relError": 0.15859895582455547
-        },
-        {
-          "time": 2,
-          "column": "Activator_Comp",
-          "web": 0.023337988336745958,
-          "ref": 0.02291028723263,
-          "relError": 0.018326391201530304
-        },
-        {
-          "time": 2,
-          "column": "Transcription_ON",
-          "web": 0.004486725547993974,
-          "ref": 0.003755371393561,
-          "relError": 0.16300398734216415
-        }
-      ]
+      "samples": []
     }
   },
   {
@@ -3056,89 +2914,89 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.04737682890693812,
-      "maxAbsoluteError": 6.535414499775442,
+      "maxRelativeError": 0.012468064018402999,
+      "maxAbsoluteError": 1.7877804027232003,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 0.5,
-      "errorColumn": "Grb2_Recruited",
+      "errorAtTime": 100,
+      "errorColumn": "pY1068",
       "samples": [
         {
           "time": 0.5,
           "column": "Dimers",
-          "web": 97.23693843336761,
+          "web": 94.77514256200284,
           "ref": 95.28718538727,
-          "relError": 0.02005156761937436
+          "relError": 0.005373679820493109
         },
         {
           "time": 0.5,
           "column": "pY1068",
-          "web": 58.32182441571524,
+          "web": 55.50380837873144,
           "ref": 55.57779019769,
-          "relError": 0.04704986933306293
+          "relError": 0.0013311399876714178
         },
         {
           "time": 0.5,
           "column": "pY1173",
-          "web": 58.14261604543887,
+          "web": 55.33890896521603,
           "ref": 55.41173147914,
-          "relError": 0.046968725386636594
+          "relError": 0.0013142075149084333
         },
         {
           "time": 0.5,
           "column": "Total_Phos",
-          "web": 116.46444046115414,
+          "web": 110.84271734394744,
           "ref": 110.9895216768,
-          "relError": 0.047009359789782906
+          "relError": 0.0013226864179129102
         },
         {
           "time": 0.5,
           "column": "Grb2_Recruited",
-          "web": 57.66914215584748,
+          "web": 54.86497502944528,
           "ref": 54.93696107472,
-          "relError": 0.04737682890693812
+          "relError": 0.0013103390480010593
         },
         {
           "time": 0.5,
           "column": "Shc_Recruited",
-          "web": 56.11886328826756,
+          "web": 53.41381110972132,
           "ref": 53.47966480691,
-          "relError": 0.04702872308372864
+          "relError": 0.001231378271095112
         },
         {
           "time": 1,
           "column": "Dimers",
-          "web": 97.73354557361496,
+          "web": 95.93318640654121,
           "ref": 96.61010867235,
-          "relError": 0.011494895582384968
+          "relError": 0.007006743653550207
         },
         {
           "time": 1,
           "column": "pY1068",
-          "web": 83.67075908341722,
+          "web": 81.72461519619284,
           "ref": 81.83158989859,
-          "relError": 0.021981026645086738
+          "relError": 0.0013072543565354367
         },
         {
           "time": 1,
           "column": "pY1173",
-          "web": 83.33779330085186,
+          "web": 81.4154009393676,
           "ref": 81.51989907348,
-          "relError": 0.021813563275058182
+          "relError": 0.0012818727120627598
         },
         {
           "time": 1,
           "column": "Total_Phos",
-          "web": 167.00855238426908,
+          "web": 163.14001613556044,
           "ref": 163.3514889721,
-          "relError": 0.021897461896170305
+          "relError": 0.0012945877498285994
         }
       ]
     }
   },
   {
     "model": "egfr_simple",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "egfr_simple.gdat",
     "referenceInferred": false,
     "details": {
@@ -3167,84 +3025,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.04654884750112536,
-      "maxAbsoluteError": 5.891707057789262,
+      "maxRelativeError": 1.8656600147695427e-11,
+      "maxAbsoluteError": 9.416567081643734e-9,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 220.8,
+      "errorAtTime": 806.4,
       "errorColumn": "Sos1_act",
-      "samples": [
-        {
-          "time": 2.4,
-          "column": "Sos1_act",
-          "web": 3.867929555035486,
-          "ref": 4.039826376604,
-          "relError": 0.04255054686607982
-        },
-        {
-          "time": 2.4,
-          "column": "RP",
-          "web": 10.43337655908019,
-          "ref": 10.89586546212,
-          "relError": 0.04244627511671059
-        },
-        {
-          "time": 2.4,
-          "column": "Grb2Sos1",
-          "web": 552.2820790185009,
-          "ref": 552.1105396446,
-          "relError": 0.0003106010142603143
-        },
-        {
-          "time": 4.8,
-          "column": "Sos1_act",
-          "web": 13.418444187273137,
-          "ref": 14.03964437683,
-          "relError": 0.04424614846954713
-        },
-        {
-          "time": 4.8,
-          "column": "RP",
-          "web": 36.211921944049166,
-          "ref": 37.8664977168,
-          "relError": 0.04369497768516247
-        },
-        {
-          "time": 4.8,
-          "column": "Grb2Sos1",
-          "web": 542.7264355597015,
-          "ref": 542.1107216444,
-          "relError": 0.0011344830009368172
-        },
-        {
-          "time": 7.2,
-          "column": "Sos1_act",
-          "web": 22.5757551883446,
-          "ref": 23.62440190976,
-          "relError": 0.04438828654460745
-        },
-        {
-          "time": 7.2,
-          "column": "RP",
-          "web": 60.97024274923968,
-          "ref": 63.71766527454,
-          "relError": 0.04311869421866787
-        },
-        {
-          "time": 7.2,
-          "column": "Grb2Sos1",
-          "web": 533.5564612896567,
-          "ref": 532.5259641114,
-          "relError": 0.0019313741900265136
-        },
-        {
-          "time": 9.6,
-          "column": "Sos1_act",
-          "web": 30.301387508080445,
-          "ref": 31.70995307989,
-          "relError": 0.04442029820292752
-        }
-      ]
+      "samples": []
     }
   },
   {
@@ -3329,7 +3116,7 @@
   },
   {
     "model": "energy_allostery_mwc",
-    "status": "match",
+    "status": "mismatch",
     "referenceFile": "energy_allostery_mwc.gdat",
     "referenceInferred": false,
     "details": {
@@ -3356,13 +3143,84 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 3.5557463226706913e-12,
-      "maxAbsoluteError": 5.7553961596568115e-12,
+      "maxRelativeError": 0.5000000000017779,
+      "maxAbsoluteError": 50,
       "absTolDominated": false,
       "overlapMatch": false,
       "errorAtTime": 19.2,
       "errorColumn": "P_T",
-      "samples": []
+      "samples": [
+        {
+          "time": 0,
+          "column": "P_T",
+          "web": 100,
+          "ref": 50,
+          "relError": 0.5
+        },
+        {
+          "time": 0.1,
+          "column": "P_T",
+          "web": 77.15539145168094,
+          "ref": 38.57769572584,
+          "relError": 0.5000000000000061
+        },
+        {
+          "time": 0.1,
+          "column": "P_R",
+          "web": 22.844608538349412,
+          "ref": 11.42230426917,
+          "relError": 0.500000000000206
+        },
+        {
+          "time": 0.2,
+          "column": "P_T",
+          "web": 50.56230656703248,
+          "ref": 25.28115328352,
+          "relError": 0.49999999999992567
+        },
+        {
+          "time": 0.2,
+          "column": "P_R",
+          "web": 49.437693422997874,
+          "ref": 24.7188467115,
+          "relError": 0.4999999999999785
+        },
+        {
+          "time": 0.3,
+          "column": "P_T",
+          "web": 33.03922479528203,
+          "ref": 16.51961239764,
+          "relError": 0.5000000000000308
+        },
+        {
+          "time": 0.3,
+          "column": "P_R",
+          "web": 66.9607751947483,
+          "ref": 33.48038759737,
+          "relError": 0.500000000000062
+        },
+        {
+          "time": 0.4,
+          "column": "P_T",
+          "web": 22.314874986531464,
+          "ref": 11.15743749327,
+          "relError": 0.4999999999998087
+        },
+        {
+          "time": 0.4,
+          "column": "P_R",
+          "web": 77.68512500349884,
+          "ref": 38.84256250175,
+          "relError": 0.4999999999999925
+        },
+        {
+          "time": 0.5,
+          "column": "P_T",
+          "web": 15.78686859524315,
+          "ref": 7.893434297621,
+          "relError": 0.5000000000000364
+        }
+      ]
     }
   },
   {
@@ -3403,7 +3261,7 @@
   },
   {
     "model": "energy_cooperativity_adh",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "energy_cooperativity_adh.gdat",
     "referenceInferred": false,
     "details": {
@@ -3428,21 +3286,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.5000670265659805,
-      "maxAbsoluteError": 50,
-      "absTolDominated": true,
+      "maxRelativeError": 0.00013569022684607854,
+      "maxAbsoluteError": 4.880007509200368e-11,
+      "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 0.9,
+      "errorAtTime": 0.2,
       "errorColumn": "Bound_0",
-      "samples": [
-        {
-          "time": 0,
-          "column": "Bound_0",
-          "web": 50,
-          "ref": 100,
-          "relError": 0.5
-        }
-      ]
+      "samples": []
     }
   },
   {
@@ -3845,89 +3695,89 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.4873661003244606,
-      "maxAbsoluteError": 1.3827947583059341,
-      "absTolDominated": false,
+      "maxRelativeError": 0.0007399506105102342,
+      "maxAbsoluteError": 0.031369937180748764,
+      "absTolDominated": true,
       "overlapMatch": false,
-      "errorAtTime": 0.1333333333333,
-      "errorColumn": "Ras_Drive_Comp",
+      "errorAtTime": 40,
+      "errorColumn": "Active_Dimer",
       "samples": [
         {
-          "time": 0.1333333333333,
-          "column": "Active_Dimer",
-          "web": 0.0007372036901441411,
-          "ref": 0.0003931660160354,
-          "relError": 0.4666792620659203
-        },
-        {
-          "time": 0.1333333333333,
-          "column": "FRS2_Hub_Status",
-          "web": 0.00044365180500907875,
-          "ref": 0.0002277439764722,
-          "relError": 0.4866605434693554
-        },
-        {
-          "time": 0.1333333333333,
-          "column": "Ras_Drive_Comp",
-          "web": 0.0003939318289557428,
-          "ref": 0.0002019428096839,
-          "relError": 0.4873661003244606
-        },
-        {
-          "time": 0.1333333333333,
-          "column": "Spry_Brake",
-          "web": 0.016837459580962787,
-          "ref": 0.008751818729365,
-          "relError": 0.48021738746976933
-        },
-        {
-          "time": 0.2666666666667,
-          "column": "Active_Dimer",
-          "web": 0.0021441951347922704,
-          "ref": 0.001322940333705,
-          "relError": 0.3830130885763966
-        },
-        {
-          "time": 0.2666666666667,
-          "column": "FRS2_Hub_Status",
-          "web": 0.00594847724460756,
-          "ref": 0.003264464664095,
-          "relError": 0.4512100273974626
-        },
-        {
-          "time": 0.2666666666667,
-          "column": "Ras_Drive_Comp",
-          "web": 0.005629895510078324,
-          "ref": 0.00308237803725,
-          "relError": 0.45249818016478294
-        },
-        {
           "time": 0.2666666666667,
           "column": "Spry_Brake",
-          "web": 0.10908761238471623,
+          "web": 0.062240847542732326,
           "ref": 0.06226562063476,
-          "relError": 0.42921456182238565
+          "relError": 0.0003978614807839279
         },
         {
           "time": 0.4,
-          "column": "Active_Dimer",
-          "web": 0.003246187997358264,
-          "ref": 0.002324028961362,
-          "relError": 0.2840744395416142
+          "column": "Spry_Brake",
+          "web": 0.17654365999591878,
+          "ref": 0.1766140797945,
+          "relError": 0.0003987213174802054
         },
         {
-          "time": 0.4,
+          "time": 0.5333333333333,
+          "column": "Spry_Brake",
+          "web": 0.342204384862831,
+          "ref": 0.3423410457413,
+          "relError": 0.00039919513061325017
+        },
+        {
+          "time": 0.6666666666667,
           "column": "FRS2_Hub_Status",
-          "web": 0.023739851964749783,
-          "ref": 0.01412833471274,
-          "relError": 0.40486845774276453
+          "web": 0.07482889746486315,
+          "ref": 0.07485881857506,
+          "relError": 0.0003997005398480667
+        },
+        {
+          "time": 0.6666666666667,
+          "column": "Ras_Drive_Comp",
+          "web": 0.07376259276293456,
+          "ref": 0.07379208569409,
+          "relError": 0.00039967607471757074
+        },
+        {
+          "time": 0.6666666666667,
+          "column": "Spry_Brake",
+          "web": 0.5416774597664832,
+          "ref": 0.5418939525791,
+          "relError": 0.00039951140179077455
+        },
+        {
+          "time": 0.8,
+          "column": "FRS2_Hub_Status",
+          "web": 0.12736393752414957,
+          "ref": 0.127414933979,
+          "relError": 0.00040023922830613966
+        },
+        {
+          "time": 0.8,
+          "column": "Ras_Drive_Comp",
+          "web": 0.12627537142749207,
+          "ref": 0.1263259287707,
+          "relError": 0.0004002135088174168
+        },
+        {
+          "time": 0.8,
+          "column": "Spry_Brake",
+          "web": 0.7599788551125083,
+          "ref": 0.7602827769785,
+          "relError": 0.00039974845569900653
+        },
+        {
+          "time": 0.9333333333333,
+          "column": "FRS2_Hub_Status",
+          "web": 0.19400788382261366,
+          "ref": 0.1940856631983,
+          "relError": 0.0004007476616491499
         }
       ]
     }
   },
   {
     "model": "gas6_axl_signaling",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "gas6-axl-signaling.gdat",
     "referenceInferred": false,
     "details": {
@@ -3954,84 +3804,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.005647171449027864,
-      "maxAbsoluteError": 0.31614261763628093,
+      "maxRelativeError": 5.130582882129606e-7,
+      "maxAbsoluteError": 0.0002953442485704727,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 4.5,
+      "errorAtTime": 85.5,
       "errorColumn": "Active_Platform",
-      "samples": [
-        {
-          "time": 0.5,
-          "column": "Survival_Relay",
-          "web": 0.03072087706055667,
-          "ref": 0.03074048470646,
-          "relError": 0.000637844396097249
-        },
-        {
-          "time": 0.5,
-          "column": "Total_pAKT",
-          "web": 112.58862362891867,
-          "ref": 112.6175417968,
-          "relError": 0.00025678209113734165
-        },
-        {
-          "time": 0.5,
-          "column": "Active_Platform",
-          "web": 0.7011629136487992,
-          "ref": 0.7014565303144,
-          "relError": 0.0004185814129767831
-        },
-        {
-          "time": 1,
-          "column": "Active_Platform",
-          "web": 5.560175834207322,
-          "ref": 5.568621332592,
-          "relError": 0.001516622855148846
-        },
-        {
-          "time": 1,
-          "column": "SOCS_Feedback",
-          "web": 33.74637567249784,
-          "ref": 33.75407177106,
-          "relError": 0.00022800504230589662
-        },
-        {
-          "time": 1.5,
-          "column": "Active_Platform",
-          "web": 13.06424292748439,
-          "ref": 13.09818752161,
-          "relError": 0.0025915489505404874
-        },
-        {
-          "time": 2,
-          "column": "Active_Platform",
-          "web": 21.23053084419157,
-          "ref": 21.30602357658,
-          "relError": 0.003543257713814448
-        },
-        {
-          "time": 2.5,
-          "column": "Active_Platform",
-          "web": 29.26923277722282,
-          "ref": 29.39658587915,
-          "relError": 0.004332241249059741
-        },
-        {
-          "time": 3,
-          "column": "Active_Platform",
-          "web": 36.74248945396664,
-          "ref": 36.92499797083,
-          "relError": 0.004942681838670264
-        },
-        {
-          "time": 3.5,
-          "column": "Active_Platform",
-          "web": 43.376538311125096,
-          "ref": 43.61053110856,
-          "relError": 0.0053655112993790674
-        }
-      ]
+      "samples": []
     }
   },
   {
@@ -4527,7 +4306,7 @@
   },
   {
     "model": "gpcr_desensitization_arrestin",
-    "status": "match",
+    "status": "mismatch",
     "referenceFile": "gpcr-desensitization-arrestin.gdat",
     "referenceInferred": false,
     "details": {
@@ -4556,13 +4335,84 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 1.8211214395259357e-8,
-      "maxAbsoluteError": 0.000003418397795940109,
+      "maxRelativeError": 0.9725676401648491,
+      "maxAbsoluteError": 14.2688085121884,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 69,
+      "errorAtTime": 0.5,
       "errorColumn": "Internal_Rec",
-      "samples": []
+      "samples": [
+        {
+          "time": 0.5,
+          "column": "G_Signal_Act",
+          "web": 5.374211458609141,
+          "ref": 5.38036380682,
+          "relError": 0.0011434818223743288
+        },
+        {
+          "time": 0.5,
+          "column": "Desensitized_R",
+          "web": 0.8738548640354614,
+          "ref": 0.8725610921415,
+          "relError": 0.0014805340648752195
+        },
+        {
+          "time": 0.5,
+          "column": "Internal_Rec",
+          "web": 0.23692316333124697,
+          "ref": 0.006499361469785,
+          "relError": 0.9725676401648491
+        },
+        {
+          "time": 0.5,
+          "column": "Surface_Rec",
+          "web": 499.7630768355497,
+          "ref": 499.9935006334,
+          "relError": 0.0004608535862133681
+        },
+        {
+          "time": 0.5,
+          "column": "Active_Rec_Mem",
+          "web": 1.4982301054260585,
+          "ref": 1.502451064753,
+          "relError": 0.002809382232782051
+        },
+        {
+          "time": 1,
+          "column": "G_Signal_Act",
+          "web": 14.553764772259353,
+          "ref": 14.64844871589,
+          "relError": 0.0064637522694084475
+        },
+        {
+          "time": 1,
+          "column": "Desensitized_R",
+          "web": 2.58894271000156,
+          "ref": 2.586996608437,
+          "relError": 0.0007516974234470124
+        },
+        {
+          "time": 1,
+          "column": "Internal_Rec",
+          "web": 1.1573567384271928,
+          "ref": 0.06808835214294,
+          "relError": 0.9411690882489095
+        },
+        {
+          "time": 1,
+          "column": "Surface_Rec",
+          "web": 498.8426432604528,
+          "ref": 499.9319116392,
+          "relError": 0.00217883346389241
+        },
+        {
+          "time": 1,
+          "column": "Active_Rec_Mem",
+          "web": 1.973721039785011,
+          "ref": 2.004026025649,
+          "relError": 0.015122052047290547
+        }
+      ]
     }
   },
   {
@@ -4755,7 +4605,7 @@
   },
   {
     "model": "il6_jak_stat_pathway",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "il6-jak-stat-pathway.gdat",
     "referenceInferred": false,
     "details": {
@@ -4784,84 +4634,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.08996995952353538,
-      "maxAbsoluteError": 22.54027374795288,
+      "maxRelativeError": 0.0004114140409473085,
+      "maxAbsoluteError": 0.000017808020274401315,
       "absTolDominated": true,
       "overlapMatch": false,
-      "errorAtTime": 184,
-      "errorColumn": "pgp130_Signals",
-      "samples": [
-        {
-          "time": 2,
-          "column": "pgp130_Signals",
-          "web": 18.37670082888704,
-          "ref": 18.11363665906,
-          "relError": 0.014315092370308324
-        },
-        {
-          "time": 2,
-          "column": "Active_gp130",
-          "web": 18.37670082888704,
-          "ref": 18.11363665906,
-          "relError": 0.014315092370308324
-        },
-        {
-          "time": 4,
-          "column": "pgp130_Signals",
-          "web": 13.413779063624412,
-          "ref": 13.27342007499,
-          "relError": 0.010463791595840363
-        },
-        {
-          "time": 4,
-          "column": "Active_gp130",
-          "web": 13.413779063624412,
-          "ref": 13.27342007499,
-          "relError": 0.010463791595840363
-        },
-        {
-          "time": 6,
-          "column": "pgp130_Signals",
-          "web": 11.4876925346286,
-          "ref": 11.38457317347,
-          "relError": 0.008976507757998879
-        },
-        {
-          "time": 6,
-          "column": "Active_gp130",
-          "web": 11.4876925346286,
-          "ref": 11.38457317347,
-          "relError": 0.008976507757998879
-        },
-        {
-          "time": 8,
-          "column": "pgp130_Signals",
-          "web": 10.478945616258434,
-          "ref": 10.39304846911,
-          "relError": 0.008197117371728945
-        },
-        {
-          "time": 8,
-          "column": "Active_gp130",
-          "web": 10.478945616258434,
-          "ref": 10.39304846911,
-          "relError": 0.008197117371728945
-        },
-        {
-          "time": 10,
-          "column": "pgp130_Signals",
-          "web": 9.889726321636399,
-          "ref": 9.813166151233,
-          "relError": 0.007741384130711788
-        },
-        {
-          "time": 10,
-          "column": "Active_gp130",
-          "web": 9.889726321636399,
-          "ref": 9.813166151233,
-          "relError": 0.007741384130711788
-        }
-      ]
+      "errorAtTime": 598,
+      "errorColumn": "Global_pSTAT3",
+      "samples": []
     }
   },
   {
@@ -4978,7 +4757,7 @@
   },
   {
     "model": "insulin_glucose_homeostasis",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "insulin-glucose-homeostasis.gdat",
     "referenceInferred": false,
     "details": {
@@ -5005,84 +4784,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.8322875735128927,
-      "maxAbsoluteError": 1.9823826612248205,
+      "maxRelativeError": 0.0026483996059165635,
+      "maxAbsoluteError": 0.0004525207258438968,
       "absTolDominated": true,
       "overlapMatch": false,
-      "errorAtTime": 202.6666666667,
-      "errorColumn": "Insulin_Level",
-      "samples": [
-        {
-          "time": 2.666666666667,
-          "column": "Insulin_Level",
-          "web": 0.005420966668530146,
-          "ref": 0.005662381894196,
-          "relError": 0.04263492469720334
-        },
-        {
-          "time": 5.333333333333,
-          "column": "Insulin_Level",
-          "web": 0.020636187799146853,
-          "ref": 0.02249087349963,
-          "relError": 0.08246392477880671
-        },
-        {
-          "time": 8,
-          "column": "Insulin_Level",
-          "web": 0.04413779472889156,
-          "ref": 0.05012857049296,
-          "relError": 0.11950821069014489
-        },
-        {
-          "time": 10.66666666667,
-          "column": "Insulin_Level",
-          "web": 0.07449267429950392,
-          "ref": 0.08806978776031,
-          "relError": 0.15416312229294168
-        },
-        {
-          "time": 13.33333333333,
-          "column": "Insulin_Level",
-          "web": 0.11034852077252864,
-          "ref": 0.1356808223485,
-          "relError": 0.18670510052558967
-        },
-        {
-          "time": 16,
-          "column": "Insulin_Level",
-          "web": 0.15044129033015385,
-          "ref": 0.1922235838322,
-          "relError": 0.21736299297447112
-        },
-        {
-          "time": 18.66666666667,
-          "column": "Insulin_Level",
-          "web": 0.1936008202456791,
-          "ref": 0.256877963433,
-          "relError": 0.2463315355730198
-        },
-        {
-          "time": 21.33333333333,
-          "column": "Insulin_Level",
-          "web": 0.23875372815124618,
-          "ref": 0.3287617601787,
-          "relError": 0.2737788968477646
-        },
-        {
-          "time": 24,
-          "column": "Insulin_Level",
-          "web": 0.28492414979306463,
-          "ref": 0.4069484057422,
-          "relError": 0.2998519080731752
-        },
-        {
-          "time": 26.66666666667,
-          "column": "Insulin_Level",
-          "web": 0.33123327625179755,
-          "ref": 0.4904832234,
-          "relError": 0.3246797026905252
-        }
-      ]
+      "errorAtTime": 2.666666666667,
+      "errorColumn": "Cellular_Glucose",
+      "samples": []
     }
   },
   {
@@ -5150,8 +4858,8 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.8521845380932604,
-      "maxAbsoluteError": 30.772615310149092,
+      "maxRelativeError": 0.683587862787969,
+      "maxAbsoluteError": 25.224446951411522,
       "absTolDominated": false,
       "overlapMatch": false,
       "errorAtTime": 150,
@@ -5160,72 +4868,72 @@
         {
           "time": 0.5,
           "column": "RIDD_Drive",
-          "web": 593.0973888949674,
+          "web": 593.0975065934442,
           "ref": 593.2585252301,
-          "relError": 0.0002716123380950966
+          "relError": 0.0002714139448620442
         },
         {
           "time": 0.5,
           "column": "Active_IRE1",
-          "web": 138.5694953908466,
+          "web": 138.56882168437346,
           "ref": 138.0917687258,
-          "relError": 0.003447560111979554
+          "relError": 0.003442714982884668
         },
         {
           "time": 1,
           "column": "RIDD_Drive",
-          "web": 428.17791093714817,
+          "web": 428.18003743084415,
           "ref": 428.9275210676,
-          "relError": 0.001747638222387963
+          "relError": 0.001742680523029597
         },
         {
           "time": 1,
           "column": "Active_IRE1",
-          "web": 150.4069206545283,
+          "web": 150.3996780573989,
           "ref": 148.8601655146,
-          "relError": 0.010283802987238008
+          "relError": 0.010236142541550823
         },
         {
           "time": 1.5,
           "column": "RIDD_Drive",
-          "web": 305.00896662444364,
+          "web": 305.01742175924215,
           "ref": 306.5352766587,
-          "relError": 0.004979231267909764
+          "relError": 0.0049516483583971205
         },
         {
           "time": 1.5,
           "column": "Active_IRE1",
-          "web": 157.21197811967005,
+          "web": 157.18536269220704,
           "ref": 154.2757229023,
-          "relError": 0.018677045174859155
+          "relError": 0.018510882566111147
         },
         {
           "time": 2,
           "column": "RIDD_Drive",
-          "web": 215.6102279146843,
+          "web": 215.62962184602964,
           "ref": 217.8453933996,
-          "relError": 0.010260329355763258
+          "relError": 0.010171303230203772
         },
         {
           "time": 2,
           "column": "Active_IRE1",
-          "web": 161.39887713050788,
+          "web": 161.33435892327046,
           "ref": 156.8735930598,
-          "relError": 0.028037890666666357
+          "relError": 0.027649199421878764
         },
         {
           "time": 2.5,
           "column": "RIDD_Drive",
-          "web": 151.70586649418493,
+          "web": 151.73925199760316,
           "ref": 154.4500056628,
-          "relError": 0.017767167808372678
+          "relError": 0.017551010461696246
         },
         {
           "time": 2.5,
           "column": "Active_IRE1",
-          "web": 164.05470591230372,
+          "web": 163.92920397388278,
           "ref": 157.8083129049,
-          "relError": 0.038075061441655726
+          "relError": 0.037338624971045224
         }
       ]
     }
@@ -5382,7 +5090,7 @@
   },
   {
     "model": "lang_2024",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "[multi-phase concatenation]",
     "referenceInferred": true,
     "details": {
@@ -5407,84 +5115,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.9913223765716473,
-      "maxAbsoluteError": 1.1213914563394642,
-      "absTolDominated": true,
+      "maxRelativeError": 0.00012596416723936873,
+      "maxAbsoluteError": 0.00005409412543144754,
+      "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 323520,
+      "errorAtTime": 225920,
       "errorColumn": "tCCNA",
-      "samples": [
-        {
-          "time": 18688,
-          "column": "tCCNA",
-          "web": 0.10142636817920833,
-          "ref": 0.1013958635415,
-          "relError": 0.000300756482322557
-        },
-        {
-          "time": 18761,
-          "column": "tCCNA",
-          "web": 0.10223181350457534,
-          "ref": 0.1022003724352,
-          "relError": 0.0003075468222417743
-        },
-        {
-          "time": 18834,
-          "column": "tCCNA",
-          "web": 0.10304630445412563,
-          "ref": 0.1030139042139,
-          "relError": 0.0003144240872806548
-        },
-        {
-          "time": 18907,
-          "column": "tCCNA",
-          "web": 0.10387000234062647,
-          "ref": 0.1038366159877,
-          "relError": 0.000321424397555999
-        },
-        {
-          "time": 18980,
-          "column": "tCCNA",
-          "web": 0.10470306943472411,
-          "ref": 0.1046686683221,
-          "relError": 0.0003285587787429173
-        },
-        {
-          "time": 19053,
-          "column": "tCCNA",
-          "web": 0.10554566961020988,
-          "ref": 0.1055102220703,
-          "relError": 0.0003358502536464624
-        },
-        {
-          "time": 19126,
-          "column": "tCCNA",
-          "web": 0.10639796653392714,
-          "ref": 0.1063614424255,
-          "relError": 0.00034327825631415553
-        },
-        {
-          "time": 19199,
-          "column": "tCCNA",
-          "web": 0.10726012609386555,
-          "ref": 0.1072224961331,
-          "relError": 0.0003508289812433845
-        },
-        {
-          "time": 19272,
-          "column": "tCCNA",
-          "web": 0.10813231416547427,
-          "ref": 0.1080935490685,
-          "relError": 0.0003584968773992018
-        },
-        {
-          "time": 19345,
-          "column": "tCCNA",
-          "web": 0.10901469796691776,
-          "ref": 0.1089747669539,
-          "relError": 0.00036629017703537715
-        }
-      ]
+      "samples": []
     }
   },
   {
@@ -6619,7 +6256,7 @@
       "timeMatch": true,
       "timeOffset": 0,
       "maxRelativeError": 1,
-      "maxAbsoluteError": 178,
+      "maxAbsoluteError": 175,
       "absTolDominated": false,
       "overlapMatch": false,
       "errorAtTime": 3,
@@ -6628,72 +6265,72 @@
         {
           "time": 0.25,
           "column": "Dimers",
-          "web": 216,
+          "web": 254,
           "ref": 118,
-          "relError": 0.4537037037037037
+          "relError": 0.5354330708661418
         },
         {
           "time": 0.25,
           "column": "Free_Sites",
-          "web": 7,
+          "web": 2,
           "ref": 170,
-          "relError": 0.9588235294117647
+          "relError": 0.9882352941176471
         },
         {
           "time": 0.5,
           "column": "Dimers",
-          "web": 218,
+          "web": 250,
           "ref": 110,
-          "relError": 0.4954128440366973
+          "relError": 0.56
         },
         {
           "time": 0.5,
           "column": "Free_Sites",
-          "web": 6,
+          "web": 3,
           "ref": 176,
-          "relError": 0.9659090909090909
+          "relError": 0.9829545454545454
         },
         {
           "time": 0.75,
           "column": "Dimers",
-          "web": 222,
+          "web": 246,
           "ref": 110,
-          "relError": 0.5045045045045045
+          "relError": 0.5528455284552846
         },
         {
           "time": 0.75,
           "column": "Free_Sites",
-          "web": 4,
+          "web": 5,
           "ref": 171,
-          "relError": 0.9766081871345029
+          "relError": 0.9707602339181286
         },
         {
           "time": 1,
           "column": "Dimers",
-          "web": 220,
+          "web": 250,
           "ref": 110,
-          "relError": 0.5
+          "relError": 0.56
         },
         {
           "time": 1,
           "column": "Free_Sites",
-          "web": 8,
+          "web": 3,
           "ref": 168,
-          "relError": 0.9523809523809523
+          "relError": 0.9821428571428571
         },
         {
           "time": 1.25,
           "column": "Dimers",
-          "web": 222,
+          "web": 248,
           "ref": 110,
-          "relError": 0.5045045045045045
+          "relError": 0.5564516129032258
         },
         {
           "time": 1.25,
           "column": "Free_Sites",
-          "web": 4,
+          "web": 5,
           "ref": 166,
-          "relError": 0.9759036144578314
+          "relError": 0.9698795180722891
         }
       ]
     }
@@ -6727,75 +6364,75 @@
       "maxAbsoluteError": 6,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 6,
+      "errorAtTime": 4,
       "errorColumn": "Size_1",
       "samples": [
         {
           "time": 2,
+          "column": "Size_1",
+          "web": 4,
+          "ref": 2,
+          "relError": 0.5
+        },
+        {
+          "time": 2,
           "column": "Size_2",
-          "web": 5,
+          "web": 2,
           "ref": 1,
-          "relError": 0.8
+          "relError": 0.5
         },
         {
           "time": 2,
           "column": "Size_Large",
-          "web": 4,
+          "web": 5,
           "ref": 7,
-          "relError": 0.42857142857142855
+          "relError": 0.2857142857142857
         },
         {
-          "time": 6,
+          "time": 4,
           "column": "Size_1",
-          "web": 2,
-          "ref": 0,
-          "relError": 1
-        },
-        {
-          "time": 6,
-          "column": "Size_2",
-          "web": 1,
-          "ref": 2,
-          "relError": 0.5
-        },
-        {
-          "time": 6,
-          "column": "Size_Large",
-          "web": 2,
-          "ref": 1,
-          "relError": 0.5
-        },
-        {
-          "time": 8,
-          "column": "Size_1",
-          "web": 2,
-          "ref": 0,
-          "relError": 1
-        },
-        {
-          "time": 8,
-          "column": "Size_2",
-          "web": 1,
-          "ref": 2,
-          "relError": 0.5
-        },
-        {
-          "time": 8,
-          "column": "Size_Large",
           "web": 0,
-          "ref": 3,
+          "ref": 2,
           "relError": 1
         },
         {
-          "time": 10,
-          "column": "Size_1",
-          "web": 2,
-          "ref": 0,
-          "relError": 1
-        },
-        {
-          "time": 10,
+          "time": 4,
           "column": "Size_2",
+          "web": 4,
+          "ref": 1,
+          "relError": 0.75
+        },
+        {
+          "time": 4,
+          "column": "Size_Large",
+          "web": 1,
+          "ref": 3,
+          "relError": 0.6666666666666666
+        },
+        {
+          "time": 8,
+          "column": "Size_Large",
+          "web": 1,
+          "ref": 3,
+          "relError": 0.6666666666666666
+        },
+        {
+          "time": 10,
+          "column": "Size_Large",
+          "web": 1,
+          "ref": 3,
+          "relError": 0.6666666666666666
+        },
+        {
+          "time": 12,
+          "column": "Size_2",
+          "web": 0,
+          "ref": 2,
+          "relError": 1
+        },
+        {
+          "time": 12,
+          "column": "Size_Large",
           "web": 1,
           "ref": 2,
           "relError": 0.5
@@ -6827,7 +6464,7 @@
       "timeMatch": true,
       "timeOffset": 0,
       "maxRelativeError": 1,
-      "maxAbsoluteError": 196,
+      "maxAbsoluteError": 627,
       "absTolDominated": false,
       "overlapMatch": false,
       "errorAtTime": 0.4,
@@ -6836,14 +6473,14 @@
         {
           "time": 0.4,
           "column": "LargeCells",
-          "web": 1,
+          "web": 2,
           "ref": 0,
           "relError": 1
         },
         {
           "time": 0.6,
           "column": "LargeCells",
-          "web": 2,
+          "web": 3,
           "ref": 0,
           "relError": 1
         },
@@ -6862,42 +6499,42 @@
           "relError": 0.6666666666666666
         },
         {
-          "time": 1.4,
+          "time": 1.2,
           "column": "LargeCells",
           "web": 3,
           "ref": 2,
           "relError": 0.3333333333333333
+        },
+        {
+          "time": 1.4,
+          "column": "LargeCells",
+          "web": 4,
+          "ref": 2,
+          "relError": 0.5
         },
         {
           "time": 1.6,
           "column": "LargeCells",
-          "web": 3,
+          "web": 4,
           "ref": 2,
-          "relError": 0.3333333333333333
+          "relError": 0.5
         },
         {
           "time": 1.8,
-          "column": "LargeCells",
-          "web": 4,
-          "ref": 3,
-          "relError": 0.25
-        },
-        {
-          "time": 2,
-          "column": "LargeCells",
-          "web": 3,
-          "ref": 4,
-          "relError": 0.25
-        },
-        {
-          "time": 2.6,
           "column": "Cells",
           "web": 11,
           "ref": 10,
           "relError": 0.09090909090909091
         },
         {
-          "time": 2.8,
+          "time": 1.8,
+          "column": "LargeCells",
+          "web": 7,
+          "ref": 3,
+          "relError": 0.5714285714285714
+        },
+        {
+          "time": 2,
           "column": "Cells",
           "web": 11,
           "ref": 10,
@@ -6933,11 +6570,11 @@
       "maxAbsoluteError": 1,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 0.4,
+      "errorAtTime": 0.2,
       "errorColumn": "P_at_0",
       "samples": [
         {
-          "time": 0.4,
+          "time": 0.2,
           "column": "P_at_0",
           "web": 0,
           "ref": 1,
@@ -6945,13 +6582,6 @@
         },
         {
           "time": 0.4,
-          "column": "P_at_2",
-          "web": 1,
-          "ref": 0,
-          "relError": 1
-        },
-        {
-          "time": 0.6,
           "column": "P_at_0",
           "web": 0,
           "ref": 1,
@@ -6959,9 +6589,9 @@
         },
         {
           "time": 0.6,
-          "column": "P_at_2",
-          "web": 1,
-          "ref": 0,
+          "column": "P_at_0",
+          "web": 0,
+          "ref": 1,
           "relError": 1
         },
         {
@@ -7031,16 +6661,9 @@
       "maxAbsoluteError": 2,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 0.25,
-      "errorColumn": "Monomers",
+      "errorAtTime": 4.25,
+      "errorColumn": "Cyclic_Dimers",
       "samples": [
-        {
-          "time": 0.25,
-          "column": "Monomers",
-          "web": 1,
-          "ref": 0,
-          "relError": 1
-        },
         {
           "time": 4.25,
           "column": "Cyclic_Dimers",
@@ -7078,30 +6701,23 @@
         },
         {
           "time": 5.5,
-          "column": "Cyclic_Dimers",
-          "web": 2,
+          "column": "Linear_Dimers",
+          "web": 1,
           "ref": 0,
           "relError": 1
         },
         {
           "time": 5.75,
-          "column": "Cyclic_Dimers",
-          "web": 2,
+          "column": "Linear_Dimers",
+          "web": 1,
           "ref": 0,
           "relError": 1
         },
         {
-          "time": 6,
-          "column": "Cyclic_Dimers",
-          "web": 2,
-          "ref": 0,
-          "relError": 1
-        },
-        {
-          "time": 6.25,
-          "column": "Cyclic_Dimers",
-          "web": 2,
-          "ref": 0,
+          "time": 18.5,
+          "column": "Linear_Dimers",
+          "web": 0,
+          "ref": 1,
           "relError": 1
         }
       ]
@@ -7755,53 +7371,53 @@
       "timeMatch": true,
       "timeOffset": 0,
       "maxRelativeError": 1,
-      "maxAbsoluteError": 8,
+      "maxAbsoluteError": 6,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 3.5,
+      "errorAtTime": 0.5,
       "errorColumn": "Free_Monomers",
       "samples": [
         {
-          "time": 0.5,
-          "column": "Free_Monomers",
-          "web": 4,
-          "ref": 2,
-          "relError": 0.5
-        },
-        {
-          "time": 0.5,
-          "column": "Filaments",
-          "web": 48,
-          "ref": 49,
-          "relError": 0.02040816326530612
-        },
-        {
-          "time": 0.75,
+          "time": 0.25,
           "column": "Free_Monomers",
           "web": 2,
           "ref": 4,
           "relError": 0.5
         },
         {
-          "time": 0.75,
+          "time": 0.25,
           "column": "Filaments",
           "web": 49,
           "ref": 48,
           "relError": 0.02040816326530612
         },
         {
+          "time": 0.5,
+          "column": "Free_Monomers",
+          "web": 0,
+          "ref": 2,
+          "relError": 1
+        },
+        {
+          "time": 0.5,
+          "column": "Filaments",
+          "web": 50,
+          "ref": 49,
+          "relError": 0.02
+        },
+        {
           "time": 1,
           "column": "Free_Monomers",
-          "web": 8,
+          "web": 2,
           "ref": 6,
-          "relError": 0.25
+          "relError": 0.6666666666666666
         },
         {
           "time": 1,
           "column": "Filaments",
-          "web": 46,
+          "web": 49,
           "ref": 47,
-          "relError": 0.02127659574468085
+          "relError": 0.04081632653061224
         },
         {
           "time": 1.25,
@@ -8156,7 +7772,7 @@
   },
   {
     "model": "repressilator",
-    "status": "match",
+    "status": "mismatch",
     "referenceFile": "Repressilator.gdat",
     "referenceInferred": false,
     "details": {
@@ -8179,13 +7795,84 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 3.2325721624403273e-10,
-      "maxAbsoluteError": 0.00029980321414768696,
+      "maxRelativeError": 0.9480191354315671,
+      "maxAbsoluteError": 1325167.861237571,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 33700,
-      "errorColumn": "pLacI",
-      "samples": []
+      "errorAtTime": 29800,
+      "errorColumn": "pTetR",
+      "samples": [
+        {
+          "time": 100,
+          "column": "pTetR",
+          "web": 206395.42031890078,
+          "ref": 205102.7893875,
+          "relError": 0.006262885723934873
+        },
+        {
+          "time": 100,
+          "column": "pCI",
+          "web": 1873403.9223998396,
+          "ref": 1872027.832871,
+          "relError": 0.0007345396859620066
+        },
+        {
+          "time": 100,
+          "column": "pLacI",
+          "web": 150352.00971004827,
+          "ref": 149575.6711339,
+          "relError": 0.005163473222908175
+        },
+        {
+          "time": 200,
+          "column": "pTetR",
+          "web": 242267.85895414185,
+          "ref": 225983.1718154,
+          "relError": 0.067217695360177
+        },
+        {
+          "time": 200,
+          "column": "pCI",
+          "web": 1745777.7346944832,
+          "ref": 1729356.217825,
+          "relError": 0.009406419009208581
+        },
+        {
+          "time": 200,
+          "column": "pLacI",
+          "web": 140978.717270736,
+          "ref": 135210.5928431,
+          "relError": 0.04091485962777547
+        },
+        {
+          "time": 300,
+          "column": "pTetR",
+          "web": 317311.0681016629,
+          "ref": 257242.0923125,
+          "relError": 0.1893062733314978
+        },
+        {
+          "time": 300,
+          "column": "pCI",
+          "web": 1647519.1475269021,
+          "ref": 1591343.432475,
+          "relError": 0.034097154583136606
+        },
+        {
+          "time": 300,
+          "column": "pLacI",
+          "web": 139553.16226872755,
+          "ref": 122439.6788753,
+          "relError": 0.12263056684070935
+        },
+        {
+          "time": 400,
+          "column": "pTetR",
+          "web": 437158.6895587144,
+          "ref": 300524.2082262,
+          "relError": 0.3125512190331587
+        }
+      ]
     }
   },
   {
@@ -9134,7 +8821,7 @@
   },
   {
     "model": "tlr3_dsrna_sensing",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "tlr3-dsrna-sensing.gdat",
     "referenceInferred": false,
     "details": {
@@ -9163,84 +8850,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.9807310047955509,
-      "maxAbsoluteError": 471.7507015194205,
+      "maxRelativeError": 7.921019477211318e-8,
+      "maxAbsoluteError": 0.000005233998933817929,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 0.5,
-      "errorColumn": "Regulator_Load",
-      "samples": [
-        {
-          "time": 0.5,
-          "column": "Active_TLR3",
-          "web": 76.12647638515324,
-          "ref": 75.97051539069,
-          "relError": 0.0020487089626239343
-        },
-        {
-          "time": 0.5,
-          "column": "TRIF_Bound",
-          "web": 65.76933499925993,
-          "ref": 66.05703119201,
-          "relError": 0.004355269795789346
-        },
-        {
-          "time": 0.5,
-          "column": "Pathogen_Sense",
-          "web": 88.17143863102102,
-          "ref": 87.2516955555,
-          "relError": 0.010431303943785514
-        },
-        {
-          "time": 0.5,
-          "column": "Nucleark_IRF3",
-          "web": 17.03261176496757,
-          "ref": 17.12564069653,
-          "relError": 0.005432143136185197
-        },
-        {
-          "time": 0.5,
-          "column": "Cyto_IRF3",
-          "web": 56.51863320183048,
-          "ref": 56.98186014381,
-          "relError": 0.00812937557339187
-        },
-        {
-          "time": 0.5,
-          "column": "Regulator_Load",
-          "web": 0.09909096077498675,
-          "ref": 5.142507936901,
-          "relError": 0.9807310047955509
-        },
-        {
-          "time": 1,
-          "column": "Active_TLR3",
-          "web": 93.63473596154381,
-          "ref": 95.07116426526,
-          "relError": 0.01510897983439412
-        },
-        {
-          "time": 1,
-          "column": "TRIF_Bound",
-          "web": 89.48059238048877,
-          "ref": 92.03830661511,
-          "relError": 0.02778967072174846
-        },
-        {
-          "time": 1,
-          "column": "Pathogen_Sense",
-          "web": 98.1359129710145,
-          "ref": 96.08280554465,
-          "relError": 0.020921061048985324
-        },
-        {
-          "time": 1,
-          "column": "Nucleark_IRF3",
-          "web": 92.31432129119611,
-          "ref": 93.62560553626,
-          "relError": 0.014005615638512953
-        }
-      ]
+      "errorAtTime": 71,
+      "errorColumn": "TRIF_Bound",
+      "samples": []
     }
   },
   {
@@ -9281,7 +8897,7 @@
   },
   {
     "model": "toy_jim",
-    "status": "match",
+    "status": "mismatch",
     "referenceFile": "toy-jim.gdat",
     "referenceInferred": false,
     "details": {
@@ -9316,13 +8932,84 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 4.392042284787128e-13,
-      "maxAbsoluteError": 4.3920422854171193e-13,
-      "absTolDominated": false,
+      "maxRelativeError": 0.14338838638554577,
+      "maxAbsoluteError": 0.05296654125999167,
+      "absTolDominated": true,
       "overlapMatch": false,
-      "errorAtTime": 103,
-      "errorColumn": "A_total",
-      "samples": []
+      "errorAtTime": 120,
+      "errorColumn": "RecDim",
+      "samples": [
+        {
+          "time": 1,
+          "column": "RecDim",
+          "web": 0.0024947135889508095,
+          "ref": 0.002528745212992,
+          "relError": 0.013457909427310205
+        },
+        {
+          "time": 2,
+          "column": "RecDim",
+          "web": 0.014445797816174923,
+          "ref": 0.01483041019976,
+          "relError": 0.02593403543155551
+        },
+        {
+          "time": 3,
+          "column": "RecDim",
+          "web": 0.03496510012994247,
+          "ref": 0.03630670114154,
+          "relError": 0.036951884071410306
+        },
+        {
+          "time": 4,
+          "column": "RecDim",
+          "web": 0.059813801828484996,
+          "ref": 0.06273381191211,
+          "relError": 0.04654603306612285
+        },
+        {
+          "time": 4,
+          "column": "Rec_Kp",
+          "web": 0.0008336926129141768,
+          "ref": 0.0008486433884968,
+          "relError": 0.01761726513784014
+        },
+        {
+          "time": 4,
+          "column": "RecDim_Kp",
+          "web": 0.0007846565625376681,
+          "ref": 0.0008066637387611,
+          "relError": 0.02728172244017218
+        },
+        {
+          "time": 5,
+          "column": "RecDim",
+          "web": 0.085529466430943,
+          "ref": 0.09049862512169,
+          "relError": 0.05490866501082383
+        },
+        {
+          "time": 5,
+          "column": "Rec_Kp",
+          "web": 0.0012963400201829029,
+          "ref": 0.001324780200028,
+          "relError": 0.021467847907521615
+        },
+        {
+          "time": 5,
+          "column": "RecDim_Kp",
+          "web": 0.001210890922750939,
+          "ref": 0.001251160883564,
+          "relError": 0.03218607722002127
+        },
+        {
+          "time": 6,
+          "column": "RecDim",
+          "web": 0.11012956794435806,
+          "ref": 0.117438680748,
+          "relError": 0.06223769508553861
+        }
+      ]
     }
   },
   {
@@ -9393,7 +9080,7 @@
   },
   {
     "model": "vegf_angiogenesis",
-    "status": "mismatch",
+    "status": "match",
     "referenceFile": "vegf-angiogenesis.gdat",
     "referenceInferred": false,
     "details": {
@@ -9420,84 +9107,13 @@
       "extraColumns": [],
       "timeMatch": true,
       "timeOffset": 0,
-      "maxRelativeError": 0.031573546478518885,
-      "maxAbsoluteError": 0.04268033421156958,
+      "maxRelativeError": 1.9175499218299825e-7,
+      "maxAbsoluteError": 0.00003172231265580194,
       "absTolDominated": false,
       "overlapMatch": false,
-      "errorAtTime": 400,
-      "errorColumn": "Total_Complexes",
-      "samples": [
-        {
-          "time": 26,
-          "column": "Total_Complexes",
-          "web": 0.3907105906616873,
-          "ref": 0.3906028891484,
-          "relError": 0.000275655474567157
-        },
-        {
-          "time": 28,
-          "column": "Total_Complexes",
-          "web": 0.3985273830363125,
-          "ref": 0.3983906454936,
-          "relError": 0.0003431070198257377
-        },
-        {
-          "time": 30,
-          "column": "Total_Complexes",
-          "web": 0.4061454334997349,
-          "ref": 0.4059758056955,
-          "relError": 0.0004176528658053154
-        },
-        {
-          "time": 32,
-          "column": "Total_Complexes",
-          "web": 0.41362774923237755,
-          "ref": 0.4134213862035,
-          "relError": 0.000498910020569289
-        },
-        {
-          "time": 34,
-          "column": "Total_Complexes",
-          "web": 0.4210136588619035,
-          "ref": 0.4207667258318,
-          "relError": 0.0005865202349277613
-        },
-        {
-          "time": 36,
-          "column": "Total_Complexes",
-          "web": 0.4283276692389055,
-          "ref": 0.4280363595333,
-          "relError": 0.0006801094734858196
-        },
-        {
-          "time": 38,
-          "column": "Total_Complexes",
-          "web": 0.43558505820774646,
-          "ref": 0.4352455981636,
-          "relError": 0.0007793197625814267
-        },
-        {
-          "time": 40,
-          "column": "Total_Complexes",
-          "web": 0.44279534012176286,
-          "ref": 0.4424040125471,
-          "relError": 0.0008837662441417288
-        },
-        {
-          "time": 42,
-          "column": "Total_Complexes",
-          "web": 0.4499644712891714,
-          "ref": 0.4495175981496,
-          "relError": 0.000993129831542153
-        },
-        {
-          "time": 44,
-          "column": "Total_Complexes",
-          "web": 0.45709622360052526,
-          "ref": 0.4565901517122,
-          "relError": 0.0011071451965604512
-        }
-      ]
+      "errorAtTime": 346,
+      "errorColumn": "Decoy_Occupancy",
+      "samples": []
     }
   },
   {

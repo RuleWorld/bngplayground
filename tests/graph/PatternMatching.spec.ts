@@ -90,4 +90,11 @@ describe('PatternMatching', () => {
         const count = countPatternMatches(target, pattern);
         expect(count).toBeGreaterThanOrEqual(2);
     });
+
+    // 51. Count symmetric component embeddings (BAB parity guard)
+    it('51. should count symmetric free-site embeddings on one molecule', () => {
+        const target = 'A(b,b)';
+        const pattern = 'A(b)';
+        expect(countPatternMatches(target, pattern)).toBe(2);
+    });
 });

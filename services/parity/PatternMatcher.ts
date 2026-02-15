@@ -36,6 +36,13 @@ const normalizeBareMoleculePattern = (s: string): string => {
     return /^[A-Za-z0-9_]+$/.test(s) ? `${s}()` : s;
 };
 
+const getLeadingCompartment = (s: string): string | null => {
+    const prefix = s.match(/^@([A-Za-z0-9_]+)::?/);
+    return prefix ? prefix[1] : null;
+};
+
+const removeLeadingCompartment = (s: string): string => s.replace(/^@[A-Za-z0-9_]+::?/, '');
+
 // -------------------------------------------------------------------------
 // Graph Caching (Performance Optimization)
 // -------------------------------------------------------------------------
@@ -89,35 +96,9 @@ function countMoleculeEmbeddings(patMol: string, specMol: string): number {
 
         const maps = GraphMatcher.findAllMaps(patGraph, specGraph);
         if (maps.length === 0) return 0;
-
-        const patternMol = patGraph.molecules[0];
-        const hasRepeatedConstrainedComponents = !!patternMol && (() => {
-            const byName = new Map<string, typeof patternMol.components>();
-            for (const comp of patternMol.components) {
-                const list = byName.get(comp.name);
-                if (list) list.push(comp);
-                else byName.set(comp.name, [comp]);
-            }
-
-            const isConstrained = (comp: { state?: string; wildcard?: '+' | '?' | '-'; edges: Map<number, number> }) => {
-                if (comp.state !== undefined) return true;
-                if (comp.edges.size > 0) return true;
-                if (comp.wildcard === '+' || comp.wildcard === '-') return true;
-                return false;
-            };
-
-            for (const comps of byName.values()) {
-                if (comps.length < 2) continue;
-                if (comps.some(isConstrained)) return true;
-            }
-
-            return false;
-        })();
-
-        if (!hasRepeatedConstrainedComponents) {
-            return maps.length;
-        }
-
+        // Always account for component-level degeneracy for single-molecule observables.
+        // GraphMatcher may return one molecule mapping while symmetric components (e.g., A(b,b))
+        // still provide multiple valid embeddings for a pattern like A(b).
         let total = 0;
         for (const map of maps) {
             const d = countEmbeddingDegeneracy(patGraph, specGraph, map);
@@ -131,13 +112,15 @@ function countMoleculeEmbeddings(patMol: string, specMol: string): number {
 
 // --- Helper: Check if Species Matches Pattern (Boolean) ---
 export function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
-    const patComp = getCompartment(pattern);
-    const specComp = getCompartment(speciesStr);
+    const rawPat = pattern.trim();
+    const rawSpec = speciesStr.trim();
 
-    if (patComp && patComp !== specComp) return false;
+    const patPrefixComp = getLeadingCompartment(rawPat);
+    const specPrefixComp = getLeadingCompartment(rawSpec);
+    if (patPrefixComp && patPrefixComp !== specPrefixComp) return false;
 
-    const cleanPat = normalizeBareMoleculePattern(removeCompartment(pattern));
-    const cleanSpec = removeCompartment(speciesStr);
+    const cleanPat = normalizeBareMoleculePattern(patPrefixComp ? removeLeadingCompartment(rawPat) : rawPat);
+    const cleanSpec = patPrefixComp ? removeLeadingCompartment(rawSpec) : rawSpec;
 
     try {
         const cachedPat = parseGraphCached(cleanPat);
@@ -159,13 +142,15 @@ export function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
  * for a match of a multi-molecule pattern. This follows BNG2 semantics for Molecules observables.
  */
 export function countMultiMoleculePatternMatches(speciesStr: string, pattern: string): number {
-    const patComp = getCompartment(pattern);
-    const specComp = getCompartment(speciesStr);
+    const rawPat = pattern.trim();
+    const rawSpec = speciesStr.trim();
 
-    if (patComp && patComp !== specComp) return 0;
+    const patPrefixComp = getLeadingCompartment(rawPat);
+    const specPrefixComp = getLeadingCompartment(rawSpec);
+    if (patPrefixComp && patPrefixComp !== specPrefixComp) return 0;
 
-    const cleanPat = normalizeBareMoleculePattern(removeCompartment(pattern));
-    const cleanSpec = removeCompartment(speciesStr);
+    const cleanPat = normalizeBareMoleculePattern(patPrefixComp ? removeLeadingCompartment(rawPat) : rawPat);
+    const cleanSpec = patPrefixComp ? removeLeadingCompartment(rawSpec) : rawSpec;
 
     try {
         const cachedPat = parseGraphCached(cleanPat);
@@ -184,17 +169,18 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
 
 // --- Helper: Count Matches for Molecules Observable ---
 export function countPatternMatches(speciesStr: string, patternStr: string): number {
-    const patComp = getCompartment(patternStr);
-    const specComp = getCompartment(speciesStr);
+    const rawPat = patternStr.trim();
+    const rawSpec = speciesStr.trim();
 
-    const cleanPat = normalizeBareMoleculePattern(removeCompartment(patternStr));
-    const cleanSpec = removeCompartment(speciesStr);
+    const patPrefixComp = getLeadingCompartment(rawPat);
+    const specPrefixComp = getLeadingCompartment(rawSpec);
+    if (patPrefixComp && patPrefixComp !== specPrefixComp) return 0;
 
-    if (patComp && patComp !== specComp) return 0;
+    const cleanPat = normalizeBareMoleculePattern(patPrefixComp ? removeLeadingCompartment(rawPat) : rawPat);
+    const cleanSpec = patPrefixComp ? removeLeadingCompartment(rawSpec) : rawSpec;
 
     if (cleanPat.includes('.')) {
-        // Multi-molecule pattern: stricter species-level compartment check for now
-        return countMultiMoleculePatternMatches(speciesStr, patternStr);
+        return countMultiMoleculePatternMatches(cleanSpec, cleanPat);
     } else {
         return countMoleculeEmbeddings(cleanPat, cleanSpec);
     }

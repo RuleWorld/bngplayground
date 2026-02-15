@@ -1,10 +1,45 @@
-import { BNGLModel, BNGLObservable } from '../../../types.ts';
+import type { BNGLModel, BNGLObservable } from '../../../types.ts';
 import { Species } from './core/Species.ts';
 import { Rxn } from './core/Rxn.ts';
 import { BNGLParser } from './core/BNGLParser.ts';
 import { GraphMatcher } from './core/Matcher.ts';
+import { GraphCanonicalizer } from './core/Canonical.ts';
 
 export class NetworkExporter {
+  private static splitObservablePatterns(pattern: string): string[] {
+    const parts: string[] = [];
+    let start = 0;
+    let parenDepth = 0;
+    let braceDepth = 0;
+    let bracketDepth = 0;
+
+    for (let i = 0; i < pattern.length; i++) {
+      const ch = pattern[i];
+      if (ch === '(') parenDepth++;
+      else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
+      else if (ch === '{') braceDepth++;
+      else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1);
+      else if (ch === '[') bracketDepth++;
+      else if (ch === ']') bracketDepth = Math.max(0, bracketDepth - 1);
+      else if (ch === ',' && parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
+        const token = pattern.slice(start, i).trim();
+        if (token.length > 0) parts.push(token);
+        start = i + 1;
+      }
+    }
+
+    const tail = pattern.slice(start).trim();
+    if (tail.length > 0) parts.push(tail);
+    return parts;
+  }
+
+  private static formatNumericFactor(v: number): string {
+    if (!Number.isFinite(v)) return 'NaN';
+    if (Math.abs(v) < 1e-15) return '0';
+    // Keep enough precision for parity while staying compact.
+    return Number(v.toPrecision(12)).toString();
+  }
+
   /**
    * Exports the model and its expanded network to BioNetGen .net format.
    * @param model The parsed BNGL model containing parameters, observables, etc.
@@ -131,7 +166,9 @@ export class NetworkExporter {
     out += 'begin species\n';
     speciesList.forEach((spec, i) => {
       const idx = i + 1;
-      const name = spec.toString();
+      // Use canonical species strings so ordering/formatting is stable and
+      // closer to BNG2 .net conventions (notably compartment prefixes).
+      const name = GraphCanonicalizer.canonicalize(spec.graph);
       const conc = spec.initialConcentration ?? 0;
       out += `    ${idx.toString().padStart(5)} ${name.padEnd(30)} ${conc}\n`;
     });
@@ -141,11 +178,40 @@ export class NetworkExporter {
     out += 'begin reactions\n';
     reactionList.forEach((rxn, i) => {
       const idx = i + 1;
-      const reactants = rxn.reactants.map(r => r + 1).join(','); // 1-indexed
-      const products = rxn.products.map(p => p + 1).join(',');   // 1-indexed
+      const reactants = rxn.reactants.length > 0
+        ? rxn.reactants.map(r => r + 1).join(',')
+        : '0'; // BNG .net explicit null species
+      const products = rxn.products.length > 0
+        ? rxn.products.map(p => p + 1).join(',')
+        : '0'; // BNG .net explicit null species
+
       const rateName = rxnRateNames[i];
+
+      // BNG2 .net stores compartment unit conversion in reaction coefficients.
+      // Web runtime keeps anchor-volume scaling separate (scalingVolume), so fold
+      // that into exported net rates as 1 / V^(order-1) for n-th order reactions.
+      const reactantOrder = rxn.reactants.length;
+      const scalingVolume = (rxn as any).scalingVolume as number | undefined;
+      let rateToken = rateName;
+      if (
+        typeof scalingVolume === 'number' &&
+        Number.isFinite(scalingVolume) &&
+        scalingVolume > 0
+      ) {
+        let unitFactor = 1;
+        if (reactantOrder === 0) {
+          // Zero-order synthesis in compartment C scales as k * Volume(C).
+          unitFactor = scalingVolume;
+        } else if (reactantOrder > 1) {
+          unitFactor = 1 / Math.pow(scalingVolume, reactantOrder - 1);
+        }
+        if (Math.abs(unitFactor - 1) > 1e-15) {
+          rateToken = `${this.formatNumericFactor(unitFactor)}*${rateName}`;
+        }
+      }
+
       const ruleName = rxn.name ? ` #${rxn.name}` : '';
-      out += `    ${idx.toString().padStart(5)} ${reactants.padEnd(10)} ${products.padEnd(10)} ${rateName}${ruleName}\n`;
+      out += `    ${idx.toString().padStart(5)} ${reactants.padEnd(10)} ${products.padEnd(10)} ${rateToken}${ruleName}\n`;
     });
     out += 'end reactions\n';
 
@@ -185,8 +251,9 @@ export class NetworkExporter {
   ): { speciesIdx: number; weight: number }[] {
     const weightsMap = new Map<number, number>();
 
-    // Split multi-pattern observables (e.g., "A(b), B(a)")
-    const patternStrings = obs.pattern.split(',').map(s => s.trim()).filter(Boolean);
+    // Split multi-pattern observables on top-level commas only so component
+    // lists like A(b,b!?) are preserved as one pattern.
+    const patternStrings = this.splitObservablePatterns(obs.pattern);
 
     for (const patternStr of patternStrings) {
       try {

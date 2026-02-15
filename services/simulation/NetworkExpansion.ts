@@ -613,76 +613,23 @@ export async function generateExpandedNetwork(
             const coefficients: number[] = [];
             const volumes: number[] = [];
 
-            for (let idx = 0; idx < generatedSpecies.length; idx++) {
+            const sortedEntries = Array.from(coeffMap.entries()).sort((a, b) => a[0] - b[0]);
+            for (const [idx, count] of sortedEntries) {
                 const s = generatedSpecies[idx];
-                let count = 0;
+                matchingIndices.push(idx);
+                coefficients.push(count);
 
-                // Optimization Step 1: Filter Candidates
-                // Remove compartment tags to find base molecules required by the pattern.
-                const patterns = splitByTopLevelCommas(String(obs.pattern || ''));
-                
-                for (const pat of patterns) {
-                    const obsType = (obs.type ?? '').toLowerCase();
-
-                    if (obsType === 'species') {
-                        // "Species" Type Observable: Matches entire species exactly or by constraint.
-                        const trimmedPat = pat.trim();
-                        const subparts = trimmedPat.split('.').map(x => x.trim()).filter(Boolean);
-                        let ok = true;
-                        
-                        // Check constraints first
-                        for (const sp of subparts) {
-                            const cMatch = matchesCountConstraint(s.name, sp);
-                            if (cMatch === false) { ok = false; break; }
-                            if (cMatch === true) { continue; }
-                        }
-
-                        if (ok) {
-                             // Check exact match (ignoring constraints now)
-                             let matchesMetadata = true;
-                             for (const sp of subparts) {
-                                if (matchesCountConstraint(s.name, sp) !== null) continue; // Skip constraints
-                                if (!isSpeciesMatch(s.name, sp)) { matchesMetadata = false; break; }
-                             }
-
-                             if (matchesMetadata) {
-                                 // For Species observables, the count is always 1 per species concentration
-                                 count += 1;
-                             }
-                        }
-                    } else {
-                        // "Molecules" Type Observable (Default): Counts individual pattern matches within species.
-                        count += countPatternMatches(s.name, pat.trim());
+                // 'Molecules' observables are tracked in amount units (conc * vol in ODE mode).
+                // 'Species' observables are tracked in concentration units (vol factor = 1).
+                let vol = 1.0;
+                if ((obs.type ?? '').toLowerCase() !== 'species' && inputModel.compartments && inputModel.compartments.length > 0) {
+                    const specCompName = getCompartment(s.name);
+                    const comp = inputModel.compartments.find(c => c.name === specCompName);
+                    if (comp) {
+                        vol = (comp as any).resolvedVolume ?? comp.size ?? 1.0;
                     }
                 }
-                
-                if (count > 0) {
-                    matchingIndices.push(idx);
-                    coefficients.push(count);
-
-                    // Calculate Volume Scaling
-                    // 'Molecules' observables -> Amount (Conc * Vol)
-                    // 'Species' observables -> Concentration (Amount / Vol) - so NO scaling needed if using Conc state.
-                    
-                    let vol = 1.0;
-                    if (inputModel.compartments && inputModel.compartments.length > 0) {
-                        // Determine effective volume for the matches
-                         // (Simplified: use species compartment volume)
-                         const specCompName = getCompartment(s.name);
-                         const comp = inputModel.compartments.find(c => c.name === specCompName);
-                         if (comp) {
-                             vol = (comp as any).resolvedVolume ?? comp.size ?? 1.0;
-                         }
-                    }
-                    
-                    // IF Molecules -> Scale by Vol
-                    // IF Species -> Do NOT Scale (keep as Conc)
-                    if ((obs.type ?? '').toLowerCase() !== 'species') {
-                        volumes.push(vol);
-                    } else {
-                        volumes.push(1.0); // No scaling for Species (Conc)
-                    }
-                }
+                volumes.push((obs.type ?? '').toLowerCase() !== 'species' ? vol : 1.0);
             }
             
             return {
