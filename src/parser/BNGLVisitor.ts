@@ -519,6 +519,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     // Original logic: "0 -> Product" meant reactants = []
     // New logic: collect all species. If only '0' is present, results in [] anyway.
+    // completeMissingComponents: true adds any absent components as synthetic `!?` wildcards.
+    // Components added this way are flagged syntheticWildcard=true in buildWildcardComponent so
+    // that matchRespectsProductImpliedFreeConstraints can distinguish them from explicitly-written
+    // !? wildcards (e.g. CD40(l!?) in cd40-signaling). Synthetic wildcards are treated as absent
+    // in the product-implied-free filter (GPCR fix), while explicit !? wildcards are carry-through.
     let reactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
 
     // Get products - collect all species and skip '0'
@@ -1130,7 +1135,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         if (parts.length > 1) {
           comp += '~?';
         }
-        comp += '!?';
+        // Use !?__SYN__ to mark this as a synthetically-added wildcard (absent in user rule).
+        // BNGLParser.parseComponent recognises __SYN__ and sets syntheticWildcard=true so that
+        // matchRespectsProductImpliedFreeConstraints can treat this component as absent rather than
+        // as an explicit !? carry-through (e.g. CD40(l!?) which must NOT be treated as synthetic).
+        comp += '!?__SYN__';
         return comp;
       };
 
@@ -1157,7 +1166,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
             const stateCtxs = cp.state_value();
             if (stateCtxs && stateCtxs.length > 0) {
               for (const stateCtx of stateCtxs) {
-                const stateStr = stateCtx.STRING()?.text || stateCtx.INT()?.text;
+                // state_value grammar: STRING | INT STRING? | QMARK
+                // For states like "2P", INT()="2" and STRING()="P" — must concatenate both.
+                const intPart = stateCtx.INT()?.text ?? '';
+                const strPart = stateCtx.STRING()?.text ?? '';
+                const stateStr = intPart + strPart;
                 const qmark = stateCtx.QMARK();
                 comp += `~${stateStr || (qmark ? '?' : '')}`;
               }

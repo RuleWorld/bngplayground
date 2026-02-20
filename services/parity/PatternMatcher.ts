@@ -154,7 +154,10 @@ function countMoleculeEmbeddings(patMol: string, specMol: string): number {
 
         const specGraph = parseGraphCached(specMol);
 
-        const maps = GraphMatcher.findAllMaps(patGraph, specGraph, { allowExtraTargetBonds: true, symmetryBreaking: false });
+        // BNG2 uses exact bond-count matching at specified component sites (strict):
+        // if pattern says Cyclin(b!1) [1 bond at b], species Cyclin(b!1!2) [2 bonds at b] must NOT match.
+        // allowExtraTargetBonds: false enforces this for ALL Molecules-type observable matching.
+        const maps = GraphMatcher.findAllMaps(patGraph, specGraph, { allowExtraTargetBonds: false, symmetryBreaking: false });
         if (maps.length === 0) return 0;
         // Always account for component-level degeneracy for single-molecule observables.
         // GraphMatcher may return one molecule mapping while symmetric components (e.g., A(b,b))
@@ -222,7 +225,8 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
 
         const specGraph = parseGraphCached(graphSpec);
 
-        const maps = GraphMatcher.findAllMaps(patGraph, specGraph, { allowExtraTargetBonds: true });
+        // BNG2 uses exact bond-count matching at specified component sites (strict, same as NetworkExporter).
+        const maps = GraphMatcher.findAllMaps(patGraph, specGraph, { allowExtraTargetBonds: false });
         if (maps.length === 0) return 0;
         let total = 0;
         for (const map of maps) {

@@ -125,13 +125,6 @@ function profiledFindAllMaps(pattern: SpeciesGraph, target: SpeciesGraph, option
     return result;
   }
   const result = GraphMatcher.findAllMaps(pattern, target, options);
-
-  // Targeted debug for Opsonization problem
-  const patStr = pattern.toString();
-  if (patStr.includes('FB(b!1,s~Bb)') && target.toString().includes('Surf')) {
-    console.log(`[R5_MATCH_DEBUG] Match check: Pattern='${patStr}' Target='${target.toString().slice(0, 150)}...' Matches=${result.length}`);
-  }
-
   return result;
 }
 
@@ -1322,16 +1315,19 @@ export class NetworkGenerator {
     let filteredMatches: MatchMap[];
     if (rule.isMatchOnce) {
       const firstMap = profiledFindFirstMap(pattern, reactantSpecies.graph, { symmetryBreaking: true });
-      if (firstMap && this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, firstMap)) {
+      if (firstMap && this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, firstMap) &&
+          this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, firstMap)) {
         filteredMatches = [firstMap];
       } else {
         filteredMatches = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true }).filter((match) =>
-          this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match)
+          this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
+          this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
         );
       }
     } else {
       filteredMatches = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true }).filter((match) =>
-        this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match)
+        this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
+        this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
       );
     }
     const matches = rule.isMatchOnce ? filteredMatches.slice(0, 1) : filteredMatches;
@@ -1501,10 +1497,6 @@ export class NetworkGenerator {
         continue;
       }
 
-      if (rule.name === 'DeCe1' && products.length > 0) {
-        console.log(`[DeCe1_DEBUG] Pushed reaction with products: ${productSpeciesIndices.join(',')}`);
-      }
-
       // Unimolecular reactions do not get the identical-reactant 1/2 factor.
       // Symmetry-equivalent embeddings are handled via event-signature dedup.
       const propensityFactor = 1;
@@ -1626,6 +1618,32 @@ export class NetworkGenerator {
       if (!hasTopologyChangingOps) {
         statFactor = 1;
       }
+
+      // For unimolecular bond-topology rules on symmetric multi-monomer complexes,
+      // symmetry-broken matching collapses equivalent embeddings to a single match.
+      // When full (non-SB) map count exceeds the SB match count, the missing factor
+      // must be restored (e.g., dsRNA unbinding from TLR3 homodimer has 2 equivalent sites).
+      // Only apply when statFactor is not already accounting for the symmetry (statFactor <= 1)
+      // and the rule genuinely has topology-changing ops.
+      if (
+        hasTopologyChangingOps &&
+        !isSymmetricHomodimerUnbind &&
+        !rule.isMatchOnce &&
+        statFactor <= 1
+      ) {
+        const fullMapsNoSB = profiledFindAllMaps(pattern, reactantSpecies.graph, {
+          symmetryBreaking: false,
+        }).filter(
+          (m) =>
+            this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, m) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, m)
+        );
+        // matchCount = SB match count (from filteredMatches above)
+        // Only apply if SB collapsed some equivalent embeddings
+        if (fullMapsNoSB.length > matchCount && matchCount > 0) {
+          statFactor = Math.max(statFactor, fullMapsNoSB.length / matchCount);
+        }
+      }
       const hasRateExpression = !!rule.rateExpression;
       let effectiveRate = baseRateConstant * statFactor;
 
@@ -1636,15 +1654,19 @@ export class NetworkGenerator {
         const phi = this.evaluateArrheniusParam(rule.arrheniusPhi, 0.5);
         const Eact = this.evaluateArrheniusParam(rule.arrheniusEact);
         const A = this.evaluateArrheniusParam(rule.arrheniusA, rule.rateConstant === 0 ? 1 : rule.rateConstant);
-        const RT = this.evaluateArrheniusParam(this.options.parameters?.get('RT')?.toString(), 1.0);
 
-        // k = A * exp(-(Eact + phi * deltaG) / RT)
+        // BNG2 parity: k = A * exp(-(Eact + phi * deltaG))
+        // deltaG is already dimensionless (in units of RT) from EnergyService.
+        // Eact is used as a raw numeric value (per BNG2 NET reference: exp(-(Ea0 + phi*(Gf/RT)))).
+        // Do NOT divide by RT — that would double-divide deltaG which is already Gf/RT.
         // Reference: Sekar, Hogg & Faeder, "Energy-based Modeling in BioNetGen", IEEE BIBM 2016
-        effectiveRate = A * Math.exp(-(Eact + phi * deltaG) / RT) * statFactor;
+        // Verified against BNG2-generated catalysis.net: __R1_local1 = exp(-(Ea0_S_kinase+(phi*(Gf_S_kinase/RT))))
+        effectiveRate = A * Math.exp(-(Eact + phi * deltaG)) * statFactor;
       }
 
-      // Preserve the BNGL expression without embedding statistical factors.
-      const rateExpression = rule.rateExpression;
+      // For Arrhenius rules: use null rateExpression so the NET file writes the numeric rate.
+      // The string "Arrhenius(phi,Ea0)" cannot be evaluated by downstream tools.
+      const rateExpression = (rule as any).isArrhenius ? undefined : rule.rateExpression;
 
 
 
@@ -1730,7 +1752,111 @@ export class NetworkGenerator {
   }
 
   /**
-   * FIX: Generalized N-ary rule application (A + B + C -> ...)
+   * BNG2 parity: if a product explicitly lists a component as unbound (free site),
+   * but the reactant pattern for the same molecule type doesn't mention that component,
+   * BNG2 interprets this as an implicit requirement that the component is already free
+   * in the matched target species.
+   *
+   * Example rule that requires this:
+   *   GPCR(b!1,loc~mem).Arrestin(b!1) -> GPCR(l,b!1,loc~cyt,s~P).Arrestin(b!1) k MoveConnected
+   * The reactant pattern for GPCR does not include `l`, but the product specifies `l`
+   * as unbound. BNG2 infers that the rule may only fire when GPCR.l is already free.
+   * Without this check the web generator fires the rule on GPCR with an occupied `l`
+   * site, producing 2 extra spurious reactions not present in the BNG2 .net file.
+   */
+  private matchRespectsProductImpliedFreeConstraints(
+    rule: RxnRule,
+    reactantPattern: SpeciesGraph,
+    target: SpeciesGraph,
+    match: MatchMap
+  ): boolean {
+    if (rule.products.length === 0) return true;
+
+    // Count total reactant molecules by name across ALL reactant patterns, and
+    // total product molecules by name. If a molecule type has more reactant instances
+    // than product instances, some are being deleted (DeleteMolecules). For deleted
+    // molecules, we cannot determine which product corresponds to which reactant, so
+    // we skip the product-implied-free constraint for those molecule types.
+    // Example: DeCe2: CCNE(CDKN1A) + CCNE() -> CCNE(CDKN1A) DeleteMolecules
+    //   2 CCNE reactants, 1 CCNE product → 1 CCNE is deleted → skip constraint for CCNE
+    //   (The product CCNE(CDKN1A) comes from reactant slot 0, NOT slot 1; applying it to slot 1
+    //    would wrongly reject CCNE complexes from matching the "any CCNE" pattern.)
+    const totalReactantMolsByName = new Map<string, number>();
+    for (const rPat of rule.reactants) {
+      for (const rMol of rPat.molecules) {
+        totalReactantMolsByName.set(rMol.name, (totalReactantMolsByName.get(rMol.name) ?? 0) + 1);
+      }
+    }
+    const totalProductMolsByName = new Map<string, number>();
+    for (const pPat of rule.products) {
+      for (const pMol of pPat.molecules) {
+        totalProductMolsByName.set(pMol.name, (totalProductMolsByName.get(pMol.name) ?? 0) + 1);
+      }
+    }
+
+    for (let pMolIdx = 0; pMolIdx < reactantPattern.molecules.length; pMolIdx++) {
+      const reactantMol = reactantPattern.molecules[pMolIdx];
+      const targetMolIdx = match.moleculeMap.get(pMolIdx);
+      if (targetMolIdx === undefined) continue;
+      const targetMol = target.molecules[targetMolIdx];
+      if (!targetMol) continue;
+
+      // If fewer products have this molecule name than there are reactant instances, some are
+      // deleted. Skip the product-implied-free constraint to avoid cross-contamination where a
+      // product belonging to a different reactant slot is wrongly applied as a constraint here.
+      const reactCountForName = totalReactantMolsByName.get(reactantMol.name) ?? 0;
+      const prodCountForName = totalProductMolsByName.get(reactantMol.name) ?? 0;
+      if (reactCountForName > prodCountForName) continue;
+
+      // Build set of component names present in the reactant pattern molecule.
+      // Components in the pattern are explicitly constrained; missing ones are free.
+      const reactantCompNames = new Set(reactantMol.components.map(c => c.name));
+
+      // Search for a matching product molecule by molecule name and collect
+      // components that are explicitly unbound in the product but absent from
+      // the reactant pattern.
+      for (const prodPattern of rule.products) {
+        for (const prodMol of prodPattern.molecules) {
+          if (prodMol.name !== reactantMol.name) continue;
+
+          for (const prodComp of prodMol.components) {
+            if (prodComp.wildcard) continue;
+            if (prodComp.edges.size !== 0) continue;            // not unbound in product
+            // If the product explicitly assigns a new state (e.g. s~U, Y1068~P), the rule is
+            // actively modifying this component and is allowed to break any existing bond as a
+            // side-effect (BNG2 semantics). Do NOT apply the "must be free in target" filter here.
+            // Examples: BetaR(l,g,loc~cyt)->BetaR(l,g,loc~mem,s~U) may act on BetaR(s~P!1).Arr;
+            //           EGFR(d!1).EGFR(d!1,Y1068~U)->EGFR(d!1).EGFR(d!1,Y1068~P) k_phos acts on
+            //           EGFR complexes where the first EGFR's Y1068 may be bonded to Grb2.
+            if (prodComp.state && prodComp.state !== '?') continue;
+            if (reactantCompNames.has(prodComp.name)) {
+              // Component is present in the reactant pattern. If it was explicitly written by the user
+              // (e.g. CD40(l!?)), the pattern matcher already handles it — skip.
+              // But a synthetically-added wildcard (completeMissingComponents added it as !?__SYN__)
+              // means the user DID NOT write it; treat it as absent and apply the product-implied-free
+              // check, just like GPCR where l is absent from the reactant but free in the product.
+              const reactantComp = reactantMol.components.find(c => c.name === prodComp.name);
+              if (!reactantComp?.syntheticWildcard) continue; // explicit pattern component — already constrained
+              // synthetic wildcard — fall through to check target bond state
+            }
+
+            // Component is explicitly free in product but absent from reactant pattern.
+            // BNG2 requires the target to also have it free.
+            const targetComp = targetMol.components.find(c => c.name === prodComp.name);
+            if (!targetComp) continue; // molecule type doesn't have this component on this instance
+            if (targetComp.edges.size !== 0) {
+              // Target has this component bonded — reject this match.
+              return false;
+            }
+          }
+        }
+      }
+    }
+
+    return true;
+  }
+
+  /**
    * Supports arbitrary number of reactants (unimolecular, bimolecular, ternary, etc.)
    */
   private async applyNaryRule(
@@ -1759,6 +1885,68 @@ export class NetworkGenerator {
       rule.deleteMolecules.length === 0;
     const matchSymmetryBreaking = !isPureStateChangeRule;
 
+    // Detect carry-through (catalyst) reactant patterns by comparing reactant pattern keys
+    // against product pattern keys. A reactant is "carry-through" if the same pattern graph
+    // (molecule types, component names, states, bond topology) appears unchanged in the products.
+    // This handles the common case where the parser does NOT populate changeStates.
+    //
+    // Example: gp130(s~P) + STAT3(s~U) → gp130(s~P) + STAT3(s~P)
+    //   gp130(s~P) key matches a product pattern → carry-through catalyst
+    //   STAT3(s~U) key does NOT match any product pattern → substrate
+    const productPatternCounts = new Map<string, number>();
+    for (const p of rule.products) {
+      const pk = getPatternSymmetryKey(p);
+      productPatternCounts.set(pk, (productPatternCounts.get(pk) ?? 0) + 1);
+    }
+    const carryThroughPatternIndices = new Set<number>();
+    const usedFromProducts = new Map<string, number>();
+    for (let ki = 0; ki < n; ki++) {
+      const rk = getPatternSymmetryKey(rule.reactants[ki]);
+      const avail = (productPatternCounts.get(rk) ?? 0) - (usedFromProducts.get(rk) ?? 0);
+      if (avail > 0) {
+        carryThroughPatternIndices.add(ki);
+        usedFromProducts.set(rk, (usedFromProducts.get(rk) ?? 0) + 1);
+      }
+    }
+    // Also include carry-through detected via explicit changeStates ops (for parsers that do populate them).
+    if (isPureStateChangeRule && rule.changeStates.length > 0) {
+      const changedPatternSet = new Set<number>();
+      let molOffset = 0;
+      for (let k = 0; k < n; k++) {
+        const patternMolCount = patterns[k].molecules.length;
+        for (const [globalMolIdx] of rule.changeStates) {
+          if (globalMolIdx >= molOffset && globalMolIdx < molOffset + patternMolCount) {
+            changedPatternSet.add(k);
+          }
+        }
+        molOffset += patternMolCount;
+      }
+      for (let k = 0; k < n; k++) {
+        if (!changedPatternSet.has(k)) {
+          carryThroughPatternIndices.add(k);
+        }
+      }
+    }
+
+    // Only apply carry-through anchor-skip optimization when:
+    //   1. Some (but not all) patterns are carry-through — partial catalyst scenario
+    //   2. Rule has equal count of reactant and product patterns (not synthesis/degradation)
+    //   3. No repeated reactant patterns (identical-pattern rules handled separately)
+    // When active, substrate anchors enumerate without symmetry-breaking to capture all
+    // substrate embeddings; carry-through partner matches are restricted to 1 canonical pick.
+    const rulePatternCountsLocal = new Map<string, number>();
+    for (const p of patterns) {
+      const pk = getPatternSymmetryKey(p);
+      rulePatternCountsLocal.set(pk, (rulePatternCountsLocal.get(pk) || 0) + 1);
+    }
+    const hasRepeatedReactantPatternsLocal = Array.from(rulePatternCountsLocal.values()).some(c => c > 1);
+    const applyCarryThroughAnchorSkip = (
+      carryThroughPatternIndices.size > 0 &&
+      carryThroughPatternIndices.size < n &&
+      !hasRepeatedReactantPatternsLocal &&
+      rule.products.length === rule.reactants.length
+    );
+
     const identicalPatternGroups = new Map<string, number[]>();
     for (let idx = 0; idx < n; idx++) {
       const key = getPatternSymmetryKey(patterns[idx]);
@@ -1769,22 +1957,36 @@ export class NetworkGenerator {
 
     // Try matching currentSpecies against EVERY pattern position i
     for (let i = 0; i < n; i++) {
+      // For carry-through rules (catalyst + substrate pattern), substrate anchors need
+      // SB=false to enumerate ALL substrate embeddings. This enables sigMult to capture
+      // the correct rate multiplier (e.g., STAT3(U).STAT3(U) has 2 s~U sites → sigMult=2 → rate=2k).
+      // Carry-through (catalyst) anchors use the standard matchSymmetryBreaking flag.
+      // The canonical anchor check (maxIdx guard below) prevents double-counting:
+      // only the species with the highest index in the reaction set acts as anchor.
+      const isSubstrateAnchor = applyCarryThroughAnchorSkip && !carryThroughPatternIndices.has(i);
+      const anchorSB = isSubstrateAnchor ? false : matchSymmetryBreaking;
+
       let allMatches: MatchMap[];
       if (rule.isMatchOnce) {
-        const firstMap = profiledFindFirstMap(patterns[i], currentSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
-        if (firstMap && this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, firstMap)) {
+        const firstMap = profiledFindFirstMap(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
+        if (firstMap && this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, firstMap) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, firstMap)) {
           allMatches = [firstMap];
         } else {
-          allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((match) =>
-            this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match)
+          allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB }).filter((match) =>
+            this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
           );
         }
       } else {
-        allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((match) =>
-          this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match)
+        allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB }).filter((match) =>
+          this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
+          this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
         );
       }
-      const matches = rule.isMatchOnce ? allMatches.slice(0, 1) : allMatches;
+      // isMatchOnce and non-substrate carry-through anchors are restricted to 1 match.
+      // Substrate anchors in carry-through rules (SB=false) use all matches for full embedding count.
+      const matches = (rule.isMatchOnce || (!isSubstrateAnchor && carryThroughPatternIndices.has(i))) ? allMatches.slice(0, 1) : allMatches;
       if (matches.length === 0) continue;
 
       if (shouldLogNetworkGenerator) {
@@ -1909,25 +2111,33 @@ export class NetworkGenerator {
         }
 
         const candidates = candidateSet ? Array.from(candidateSet) : [];
+        // Carry-through patterns (unchanged by rule ops) should only contribute ONE match
+        // per candidate species. Their monomer-level multiplicity does NOT add to the rate
+        // (only changed-reactant embeddings count toward BNG2 stat factors).
+        const isCarryThroughPattern = carryThroughPatternIndices.has(nextPatternIdx);
         for (const candidateIdx of candidates) {
           // BNG2 Rule: For N-ary, partners can be ANY species in the network so far.
           const candidateSpecies = allSpecies[candidateIdx];
           let allCandMaps: MatchMap[];
-          if (rule.isMatchOnce) {
+          if (rule.isMatchOnce || isCarryThroughPattern) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
-            if (firstCandMap && this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, firstCandMap)) {
+            if (firstCandMap && this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, firstCandMap) &&
+                this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, firstCandMap)) {
               allCandMaps = [firstCandMap];
             } else {
               allCandMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((candMatch) =>
-                this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch)
+                this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
+                this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
               );
+              if (isCarryThroughPattern) allCandMaps = allCandMaps.slice(0, 1);
             }
           } else {
             allCandMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((candMatch) =>
-              this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch)
+              this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
+              this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
             );
           }
-          const candMaps = rule.isMatchOnce ? allCandMaps.slice(0, 1) : allCandMaps;
+          const candMaps = (rule.isMatchOnce || isCarryThroughPattern) ? allCandMaps.slice(0, 1) : allCandMaps;
 
           for (const candMatch of candMaps) {
             const nextIndices = [...currentIndices];
@@ -2021,6 +2231,34 @@ export class NetworkGenerator {
       totalDegeneracy *= countEmbeddingDegeneracy(patterns[k], reactantSpeciesList[k].graph, currentMatches[k]);
     }
 
+    // Account for signature-collapsed duplicate SB matches: bucket.multiplicity
+    // represents how many SB match-tuples were deduplicated into this signature.
+    // For most cases we must multiply totalDegeneracy by signatureMultiplicity to
+    // recover the true raw-embedding count. However, for N-ary rules with
+    // repeated reactant patterns (e.g. ternary rules with A + A + B), the
+    // signature multiplicity is already reflected in the cross-product of
+    // per-pattern embeddings and in tuple-aware combinatorics below; multiplying
+    // here causes double-counting. Skip multiplicative application in that
+    // scenario and let tuple-aware corrections handle multiplicity.
+    const skipSignatureMultForRepeatedPatterns = (n > 2 && Array.from(rulePatternCounts.values()).some(c => c > 1));
+    // For bond-topology rules with wildcard-bound patterns, signatureMultiplicity is already
+    // handled by the bondTopoFullMapCount fix. Multiplying it here causes 2x overcounting.
+    const _earlyHasWilcardBound = patterns.some((pat) =>
+      pat.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
+    );
+    const _earlyHasBondTopoOps =
+      rule.addBonds.length > 0 ||
+      rule.deleteBonds.length > 0 ||
+      rule.changeStates.length > 0 ||
+      rule.deleteMolecules.length > 0;
+    const skipSignatureMultForBondTopo = _earlyHasBondTopoOps && _earlyHasWilcardBound;
+    if (!skipSignatureMultForRepeatedPatterns && !skipSignatureMultForBondTopo) {
+      totalDegeneracy *= signatureMultiplicity;
+    } else {
+      // preserve signatureMultiplicity for later consideration via Math.max() guards
+      // (do not include it in totalDegeneracy product to avoid overcounting)
+    }
+
     const countGraphBonds = (graph: SpeciesGraph): number => {
       let edgeEndpoints = 0;
       for (const mol of graph.molecules) {
@@ -2095,17 +2333,15 @@ export class NetworkGenerator {
       rule.deleteBonds.length === 0 &&
       rule.deleteMolecules.length === 0;
 
-    // For pure state-change rules, symmetry-broken matching can collapse
-    // equivalent embeddings (e.g., either monomer of a symmetric dimer).
-    // Reconstruct multiplicity from full embedding counts in that mode.
+    // For pure state-change rules, symmetry-broken matching is disabled (matchSymmetryBreaking=false),
+    // so distinct equivalent events are enumerated as separate buckets in seenSignaturesForThisSpeciesSet,
+    // each with signatureMultiplicity=1. Each bucket represents exactly one physical event and should
+    // contribute multiplicity=1 (not the total full-map count across all events).
+    // Using all full maps here would over-count: N buckets × N full-maps/bucket = N² instead of N.
+    // Use signatureMultiplicity (the collapsed count for THIS bucket) instead.
     let stateChangeEmbeddingDegeneracy = totalDegeneracy;
     if (hasPureStateChangeOps) {
-      stateChangeEmbeddingDegeneracy = 1;
-      for (let k = 0; k < n; k++) {
-        const fullMaps = profiledFindAllMaps(patterns[k], reactantSpeciesList[k].graph, { symmetryBreaking: false });
-        const mapCount = fullMaps.length || 1;
-        stateChangeEmbeddingDegeneracy *= mapCount;
-      }
+      stateChangeEmbeddingDegeneracy = signatureMultiplicity;
     }
     const useEmbeddingDegeneracy =
       hasBondTopologyOps &&
@@ -2129,6 +2365,32 @@ export class NetworkGenerator {
       multiplicity = Math.max(multiplicity, stateChangeEmbeddingDegeneracy / ruleSymmetryFactor);
     }
 
+    // For bond-topology rules, symmetry-broken matching can collapse equivalent
+    // molecule-level embeddings when a reactant is a symmetric multi-molecule complex
+    // (e.g., TRIF or SARM binding to either monomer of a TLR3 homodimer).
+    // Only applies when the full (non-SB) map count exceeds the SB map count — i.e. when
+    // symmetry breaking actually eliminated some equivalent matches. For asymmetric complexes,
+    // noSB == SB so no correction is needed (the two distinct matches already create two
+    // separate reaction paths with distinct products).
+    // Only applies for heterodimeric rules (no repeated reactant patterns) to avoid
+    // double-counting in symmetric cases already handled by ruleSymmetryFactor.
+    if (hasBondTopologyOps && !hasPureStateChangeOps && !hasRepeatedReactantPatterns && multiplicity <= 1) {
+      let bondTopoFullMapCount = 1;
+      let bondTopoSBMapCount = 1;
+      for (let k = 0; k < n; k++) {
+        const fullMaps = profiledFindAllMaps(patterns[k], reactantSpeciesList[k].graph, { symmetryBreaking: false });
+        const sbMaps = profiledFindAllMaps(patterns[k], reactantSpeciesList[k].graph, { symmetryBreaking: true });
+        bondTopoFullMapCount *= fullMaps.length || 1;
+        bondTopoSBMapCount *= sbMaps.length || 1;
+      }
+      // The signature-dedup mechanism already handles signatureMultiplicity>1 cases.
+      // Scale the SB baseline by signatureMultiplicity to account for deduplicated matches.
+      const effectiveSBCount = bondTopoSBMapCount * signatureMultiplicity;
+      if (bondTopoFullMapCount > effectiveSBCount * totalDegeneracy) {
+        multiplicity = Math.max(multiplicity, bondTopoFullMapCount / (effectiveSBCount * ruleSymmetryFactor));
+      }
+    }
+
     const shouldSkipBondTopologySignatureMultiplicity =
       n > 2 &&
       hasRepeatedReactantPatterns;
@@ -2143,31 +2405,17 @@ export class NetworkGenerator {
     }
 
     if (!rule.isMatchOnce && !hasBondTopologyOps && signatureMultiplicity > 1) {
-      let changedPatternIndices: number[] = [];
-      if (patterns.length === rule.products.length) {
-        for (let idx = 0; idx < patterns.length; idx++) {
-          if (patterns[idx].toString() !== rule.products[idx].toString()) {
-            changedPatternIndices.push(idx);
-          }
-        }
-      }
-
-      if (changedPatternIndices.length === 0) {
-        changedPatternIndices = [0];
-      }
-
-      let inferredMultiplicity = 1;
-      for (const idx of changedPatternIndices) {
-        const fullMaps = profiledFindAllMaps(patterns[idx], reactantSpeciesList[idx].graph, { symmetryBreaking: false });
-        const uniqueMoleculeAssignments = new Set<string>();
-        for (const map of fullMaps) {
-          const assignment = Array.from(map.moleculeMap.values()).sort((a, b) => a - b).join(',');
-          uniqueMoleculeAssignments.add(assignment);
-        }
-        inferredMultiplicity *= Math.max(1, uniqueMoleculeAssignments.size);
-      }
-
-      multiplicity = Math.max(multiplicity, inferredMultiplicity);
+      // For non-topology rules where the fallback signature (ops arrays all empty) collapsed
+      // N equivalent N-ary event-tuples into one bucket, signatureMultiplicity directly
+      // encodes the total number of physically distinct events that produce the same product.
+      // Example: G(s~P) + S(s~U) → G(s~P) + S(s~P) with S(b!1,s~U).S(b!1,s~U):
+      //   both S monomers give the same fallback signature (molecule index dropped) →
+      //   signatureMultiplicity=2 → multiplicity=2 → rate=2*k. ✓
+      //
+      // For the full-parser / topology-signature path, this block is not entered because
+      // hasPureStateChangeOps=true → distinct topology signatures per monomer → sigMult=1 per
+      // bucket → two separate buckets merge via rate += to give the correct total.
+      multiplicity = Math.max(multiplicity, signatureMultiplicity / ruleSymmetryFactor);
     }
 
     const collapsedRuleStatFactor = this.computeCollapsedRuleStatFactor(rule);
@@ -2185,6 +2433,9 @@ export class NetworkGenerator {
     // but for a concrete species tuple we should divide only by repeats of the SAME species
     // within that group (e.g., A+A distinct pair: no 1/2; A+A same species: 1/2 applies).
     const identicalPatternGroups = new Map<string, number[]>();
+    // Track whether a tuple-aware combinatorial correction was applied; this will
+    // prevent the SB-enumeration fallback from *lowering* that corrected value.
+    let tupleAwareCorrectionApplied = false;
     for (let idx = 0; idx < n; idx++) {
       const key = getPatternSymmetryKey(patterns[idx]);
       const group = identicalPatternGroups.get(key);
@@ -2201,12 +2452,45 @@ export class NetworkGenerator {
         speciesCountInGroup.set(speciesIdx, (speciesCountInGroup.get(speciesIdx) || 0) + 1);
       }
 
-      let denom = 1;
-      for (const count of speciesCountInGroup.values()) {
-        denom *= factorial(count);
+      // For correctness with embedding degeneracy we must convert the naive
+      // per-pattern product-of-embeddings into the proper combinatorial count
+      // of unordered assignments for identical patterns mapped across species.
+      // Let e_j = embedding count for species j, and c_j the number of
+      // identical patterns mapped to that species.  The correct contribution
+      // is product_j C(e_j, c_j).  The current `multiplicity` was initialized
+      // earlier to (product_j e_j^{c_j}) / factorial(group.length).  We apply
+      // a corrective multiplier so the net group contribution becomes
+      // product_j C(e_j, c_j).
+      // Compute per-species embedding counts (emb_j) for this identical-pattern
+      // group.  If every emb_j == 1 (no component-level degeneracy), apply the
+      // classic tuple-aware correction factorial(group.length)/denom to undo the
+      // ruleSymmetryFactor division; otherwise *do not* apply the general
+      // correction (BNG2 semantics for embedding-degenerate cases match the
+      // baseline multiplicity = totalDegeneracy / ruleSymmetryFactor).
+      const embCounts: number[] = [];
+      for (const [speciesIdx, count] of speciesCountInGroup.entries()) {
+        const repPatternIdx = group.find((pIdx) => currentSpeciesIndices[pIdx] === speciesIdx)!;
+        const emb = Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx], reactantSpeciesList[repPatternIdx].graph, currentMatches[repPatternIdx]));
+        embCounts.push(emb);
       }
 
-      let correction = factorial(group.length) / denom;
+      // Historical/BNG2 semantics:
+      // - If there is NO component-level embedding degeneracy for this identical
+      //   pattern group (all emb_j == 1), restore the classic tuple-aware
+      //   correction factorial(group.length)/prod_j factorial(c_j).
+      // - Otherwise (some emb_j > 1), *do not* apply the tuple-aware collapse and
+      //   leave multiplicity as initialized (totalDegeneracy / ruleSymmetryFactor).
+      const allEmbeddingsAreOne = embCounts.every((v) => v === 1);
+      if (allEmbeddingsAreOne) {
+        const correction = factorial(group.length) / Array.from(speciesCountInGroup.values()).reduce((s, c) => s * factorial(c), 1);
+        multiplicity *= correction;
+        if (correction !== 1) tupleAwareCorrectionApplied = true;
+      }
+
+      // Maintain the historical special-case behavior for pure self-association
+      // / directional-pair situations handled below (these may restore a
+      // factorial(group.length) factor when multiplicity would otherwise be < 1).
+
       const isDirectionalSingleMoleculePairAssociation =
         group.length === 2 &&
         speciesCountInGroup.size === 1 &&
@@ -2239,12 +2523,132 @@ export class NetworkGenerator {
         rule.deleteMolecules.length === 0 &&
         rule.products.length === 1 &&
         totalDegeneracy === 1;
-      // For A + A -> A2 style associations, BNG2 keeps the base rate constant
-      // when symmetry would otherwise reduce multiplicity below 1.
+
+      // Restore factorial(group.length) for pure self-association / directional-pair
+      // cases when multiplicity would otherwise be < 1.
       if ((isPureSelfAssociation || isDirectionalSingleMoleculePairAssociation) && multiplicity < 1) {
-        correction = factorial(group.length);
+        multiplicity *= factorial(group.length);
+        // For directional (asymmetric-bond) cases, the two identical reactant patterns play
+        // different roles (e.g. Actin.p bonds to Actin.m), so each ordered pair is a DISTINCT
+        // physical event. The ruleSymmetryFactor divide-by-2 is incorrect for this case and
+        // the correction above (×2) must be protected from the exact-enumeration fallback,
+        // which would otherwise reduce multiplicity back to 0.5.
+        // Note: isPureSelfAssociation (symmetric bond, e.g. FGFR.d + FGFR.d) must still allow
+        // the enum fallback to correct multiplicity to 0.5, so we only protect directional cases.
+        if (isDirectionalSingleMoleculePairAssociation) {
+          tupleAwareCorrectionApplied = true;
+        }
       }
-      multiplicity *= correction;
+    }
+
+    // Exact-enumeration fallback for identical-pattern groups (bounded cost).
+    // Enumerate full (non-SB) match maps for each pattern and count how many
+    // ordered match-tuples produce the same product outcome; convert to the
+    // multiplicity used by the rate calculation by dividing out the rule symmetry.
+    if (hasRepeatedReactantPatterns && n <= 4) {
+      try {
+        // Use symmetry-broken (SB) maps + degeneracy weights so we count unique
+        // event-signatures and weight them by how many full (non-SB) embeddings
+        // each SB map represents. This avoids overcounting automorphism-equivalent
+        // full-maps while still reconstructing the true ordered embedding total.
+        const sbMapsForPattern: MatchMap[][] = new Array(n);
+        const sbDegeneracyForPattern: number[][] = new Array(n);
+        let totalSBCombos = 1;
+        for (let k = 0; k < n; k++) {
+          const sbMaps = profiledFindAllMaps(patterns[k], reactantSpeciesList[k].graph, { symmetryBreaking: true })
+            .filter((m) =>
+              this.matchRespectsExplicitComponentBondCounts(patterns[k], reactantSpeciesList[k].graph, m) &&
+              this.matchRespectsProductImpliedFreeConstraints(rule, patterns[k], reactantSpeciesList[k].graph, m)
+            );
+          // Fall back to the provided match (if any) to ensure at least one representative
+          sbMapsForPattern[k] = sbMaps.length > 0 ? sbMaps : (currentMatches[k] ? [currentMatches[k]] : []);
+          // Precompute degeneracy (how many full embeddings each SB map represents)
+          sbDegeneracyForPattern[k] = sbMapsForPattern[k].map((m) => profiledDegeneracy(patterns[k], reactantSpeciesList[k].graph, m) || 1);
+          totalSBCombos *= Math.max(1, sbMapsForPattern[k].length);
+          if (totalSBCombos > 2000) { totalSBCombos = Infinity; break; }
+        }
+
+        if (isFinite(totalSBCombos) && totalSBCombos > 0) {
+          const targetProducts = this.applyRuleTransformation(rule, patterns, reactantSpeciesList.map(s => s.graph), currentMatches);
+          if (targetProducts) {
+            const targetCanon = targetProducts.map((p) => profiledCanonicalize(p)).join('||');
+
+            // Cartesian over SB representatives; weight each tuple by the product of
+            // per-pattern degeneracies so orderedFullEmbeddingCount is reconstructed.
+            const lens = sbMapsForPattern.map((a) => a.length || 1);
+            const idx = new Array(n).fill(0);
+            const inc = () => {
+              for (let i = 0; i < n; i++) {
+                idx[i]++;
+                if (idx[i] < lens[i]) return true;
+                idx[i] = 0;
+              }
+              return false;
+            };
+
+            let first = true;
+            let orderedFullEmbeddingCount = 0;
+            while (first || inc()) {
+              first = false;
+              const candidateMatches: MatchMap[] = new Array(n).fill(null);
+              // Compute weight correctly for repeated-species cases. When multiple
+              // pattern positions map to the same concrete species, sbDegeneracy
+              // values represent the pool of distinct full embeddings for that
+              // species. The number of *ordered* ways to assign c_j distinct
+              // embeddings to c_j pattern positions is P(e_j, c_j).
+              const degBySpecies = new Map<number, number[]>();
+              for (let k = 0; k < n; k++) {
+                const sel = sbMapsForPattern[k][idx[k]] ?? currentMatches[k];
+                candidateMatches[k] = sel;
+                const speciesIdx = currentSpeciesIndices[k];
+                const deg = sbDegeneracyForPattern[k][idx[k]] || 1;
+                const arr = degBySpecies.get(speciesIdx) ?? [];
+                arr.push(deg);
+                degBySpecies.set(speciesIdx, arr);
+              }
+
+              let weight = 1;
+              for (const [_, degArray] of degBySpecies.entries()) {
+                // Prefer the common degeneracy if all entries agree (typical case).
+                const common = degArray[0];
+                if (degArray.every((d) => d === common)) {
+                  const e = common;
+                  const c = degArray.length;
+                  // permutations P(e, c) = e * (e-1) * ... * (e-c+1)
+                  let perm = 1;
+                  for (let t = 0; t < c; t++) {
+                    perm *= Math.max(1, e - t);
+                  }
+                  weight *= perm;
+                } else {
+                  // Fallback: multiply degeneracies (conservative).
+                  weight *= degArray.reduce((s, v) => s * (v || 1), 1);
+                }
+              }
+
+              const prod = this.applyRuleTransformation(rule, patterns, reactantSpeciesList.map(s => s.graph), candidateMatches);
+              if (!prod) continue;
+              const prodCanon = prod.map((p) => profiledCanonicalize(p)).join('||');
+              if (prodCanon === targetCanon) {
+                orderedFullEmbeddingCount += weight;
+              }
+            }
+
+            const exactMultiplicity = orderedFullEmbeddingCount / ruleSymmetryFactor;
+            if (Number.isFinite(exactMultiplicity) && exactMultiplicity > 0) {
+              // Only accept enumeration when it *reduces* a previously-overcounted value.
+              // Do not allow enumeration to *lower* multiplicity if a
+              // tuple-aware combinatorial correction was previously applied
+              // for identical-pattern groups (BNG2 semantics).
+              if (!(tupleAwareCorrectionApplied && exactMultiplicity < multiplicity - 1e-12)) {
+                if (exactMultiplicity < multiplicity - 1e-12) multiplicity = exactMultiplicity;
+              }
+            }
+          }
+        }
+      } catch (err) {
+        // If enumeration fails or is too large, keep previously computed `multiplicity`.
+      }
     }
 
     // 3. Apply Transformation
@@ -2291,6 +2695,7 @@ export class NetworkGenerator {
 
     const hasRateExpression = !!rule.rateExpression;
     const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
+
     let effectiveRate = baseRateConstant * multiplicity;
 
     // Arrhenius rate law calculation for N-ary rule
@@ -2300,9 +2705,33 @@ export class NetworkGenerator {
       const phi = this.evaluateArrheniusParam(rule.arrheniusPhi, 0.5);
       const Eact = this.evaluateArrheniusParam(rule.arrheniusEact);
       const A = this.evaluateArrheniusParam(rule.arrheniusA, rule.rateConstant === 0 ? 1 : rule.rateConstant);
-      const RT = this.evaluateArrheniusParam(this.options.parameters?.get('RT')?.toString(), 1.0);
 
-      effectiveRate = A * Math.exp(-(Eact + phi * deltaG) / RT) * multiplicity;
+      // BNG2 parity: k = A * exp(-(Eact + phi * deltaG))
+      // deltaG is already dimensionless (in units of RT) from EnergyService.
+      // Do NOT divide by RT — verified against BNG2-generated catalysis.net.
+      effectiveRate = A * Math.exp(-(Eact + phi * deltaG)) * multiplicity;
+
+      // Count-based compartment correction:
+      // Models using setOption("NumberPerQuantityUnit", NA) specify seed species in molecule
+      // counts and have real compartment volumes. The JIT state vector uses state[i] = count/V,
+      // which equals NA * [M] (NA times molar concentration). For a bimolecular reaction:
+      //   JIT flux = k * (NA*[A]) * (NA*[B]) * V
+      //   BNG2 ODE  = kf_M * [A] * [B] * NA * V
+      // Match requires: k = kf_M / NA. For n-reactant reactions: k = kf_M / NA^(n-1).
+      // Unimolecular reactions (handled separately above) need no correction.
+      // Signal: scalingVolume != 1.0 means real compartment volumes are in play.
+      if (scalingVolume && scalingVolume !== 1.0) {
+        const naParam = this.options.parameters?.get('NA') ?? this.options.parameters?.get('Navo');
+        if (naParam !== undefined) {
+          const naValue = this.evaluateArrheniusParam(naParam.toString(), 6.022e23);
+          if (naValue > 1e20) { // sanity check: NA must be ~6e23
+            const numReactants = currentSpeciesIndices.length;
+            for (let r = 1; r < numReactants; r++) {
+              effectiveRate /= naValue;
+            }
+          }
+        }
+      }
     }
 
     // BIO-NETGEN PARITY: Pattern Automorphism Correction
@@ -2318,7 +2747,9 @@ export class NetworkGenerator {
       }
     }
 
-    let finalRateExpr = rule.rateExpression;
+    // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
+    // not the un-evaluatable "Arrhenius(phi, Eact)" string.
+    let finalRateExpr = (rule as any).isArrhenius ? undefined : rule.rateExpression;
     let exprScaleFactor = multiplicity;
 
     const allIdenticalReactants =
@@ -2354,21 +2785,70 @@ export class NetworkGenerator {
     // for identical patterns (ruleSymmetryFactor) already accounts for it.
     // Applying it again would cause double-counting (e.g. 0.25*k instead of 0.5*k).
 
+    // BNG2 NET PARITY: For identical-reactant bimolecular rules WITHOUT bond formation
+    // (e.g. A+A→B state-change, logistic carrying-capacity terms like R+R→R),
+    // BNG2 writes the full rate constant k in the NET (no 0.5 prefix).
+    // The web was incorrectly writing 0.5*k because multiplicity = 1/2 was baked into storedRate.
+    // Fix: split the ruleSymmetryFactor (1/2) into a separate propensityFactor field so that:
+    //   - NET file writes the full k (matches BNG2 convention for non-bond rules)
+    //   - ODE/SSA simulation kernels apply propensityFactor implicitly (already do this)
+    //
+    // NOTE: For bond-FORMING symmetric A+A rules (e.g. gp130+gp130→gp130.gp130),
+    // BNG2 *does* write 0.5*k in the NET. These are handled by the existing multiplicity
+    // logic (symmetric bond → multiplicity=0.5, effectiveRate=0.5*k → NET writes "0.5*k").
+    // Do NOT apply the split for bond-forming rules or we break that convention.
+    let storedRate = effectiveRate;
+    let storedExprScaleFactor = exprScaleFactor;
+    let storedPropensityFactor: number | undefined = undefined;
+    // Detect bond formation either from explicit ops (full parser) or from the
+    // reactant→product bond count change (simplified parser / tests).
+    const hasBondFormation =
+      rule.addBonds.length > 0 || productPatternBondCount > reactantPatternBondCount;
+    const isNonBondFormingSymmetricPair =
+      hasRepeatedReactantPatterns && n === 2 && ruleSymmetryFactor > 1 &&
+      !hasBondFormation &&
+      // BNG2 convention for A+A symmetric non-bond rules:
+      // - writes k  when a reactant molecule TYPE appears in products (state-change or carry-through)
+      //   e.g. Droplet(s~1)+Droplet(s~1)→Droplet(s~2), A+A→A+B
+      // - writes 0.5*k when the product is a completely NEW molecule type (pure combination)
+      //   e.g. RA()+RA()→R2() (where R2 is a different molecule type from RA)
+      // The propensityFactor=0.5 below is applied by the ODE/SSA kernel to correctly halve
+      // the propensity for same-pool molecule selection.
+      (() => {
+        if (hasCarryThroughReactant) return true;
+        // Check molecule-level carry-through: does the product contain any molecule
+        // type that appears in the reactant patterns?
+        const reactantMolNames = new Set<string>();
+        for (const pat of patterns) {
+          for (const mol of pat.molecules) {
+            if (mol.name) reactantMolNames.add(mol.name);
+          }
+        }
+        return rule.products.some(productPattern =>
+          productPattern.molecules.some(mol => reactantMolNames.has(mol.name))
+        );
+      })();
+    if (isNonBondFormingSymmetricPair) {
+      storedRate = effectiveRate * ruleSymmetryFactor;
+      storedExprScaleFactor = exprScaleFactor * ruleSymmetryFactor;
+      storedPropensityFactor = 1 / ruleSymmetryFactor;
+    }
+
     // 6. Record Reaction
     const rxn = new Rxn(
       currentSpeciesIndices,
       productIndices,
-      effectiveRate,
+      storedRate,
       rule.name,
       {
-        degeneracy: 1, // Fix: Multiplicity is already in effectiveRate. ODE loop applies degeneracy again, so set to 1.
-        statFactor: exprScaleFactor,
+        degeneracy: 1, // Fix: Multiplicity is already in storedRate. ODE loop applies degeneracy again, so set to 1.
+        propensityFactor: storedPropensityFactor,
+        statFactor: storedExprScaleFactor,
         rateExpression: finalRateExpr,
         scalingVolume: scalingVolume,
         totalRate: rule.totalRate
       }
     );
-
     if (isIdentityReactionBySpeciesIndices(rxn.reactants, rxn.products)) {
       return;
     }
@@ -4218,31 +4698,20 @@ export class NetworkGenerator {
                 // Reactant pattern explicitly expected unbound, product should be unbound
                 if (bound) continue;
                 markExplicitUnbound = true;
-              } else if (reactantPatternComp.wildcard === '?') {
-                const reactantState = reactantPatternComp.state ?? '?';
-                const productState = pComp.state ?? '?';
-                const reactantStateSpecific = reactantState !== '?' && reactantState.length > 0;
-                const productStateSpecific = productState !== '?' && productState.length > 0;
-
-                // Preserve bond state only for explicit wildcard-preservation cases where
-                // the reactant wildcard had a specific state and the product keeps that same
-                // state (e.g., tf~pY!? -> tf~pY). Auto-expanded unconstrained wildcards
-                // (e.g., omitted site -> !?) should not preserve implicit bonds.
-                const preservesExplicitWildcardState =
-                  reactantStateSpecific &&
-                  productStateSpecific &&
-                  reactantState === productState;
-                if (preservesExplicitWildcardState) {
-                  preserveOptionalWildcardBond = true;
-                } else {
-                  // For unconstrained wildcards (often parser-expanded omitted sites),
-                  // allow matching bound targets and explicitly clear the bond when
-                  // product omits bond syntax.
-                  markExplicitUnbound = true;
-                  preserveOptionalWildcardBond = false;
-                }
+              } else if (reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard) {
+                // BNG2 semantics: EXPLICITLY written !? in reactant means the bond ALWAYS
+                // carries through to the product — the rule does not modify the bond on this
+                // component regardless of how the product pattern writes it.
+                // Example: CD40(l!?,t!1).TRAF(b!1,s~U) -> CD40(l,t) DeleteMolecules
+                //   l!? in reactant → l in product (no bond label) → preserve l bond.
+                //   t!1 in reactant → t in product (no bond label) → delete t bond (explicit).
+                // Synthetic wildcards (added by completeMissingComponents) do NOT get
+                // carry-through: they should obey the product pattern instead, e.g.
+                //   BetaR(l,g,loc~cyt) -> BetaR(l,g,loc~mem,s~U)  where `s` is absent in
+                //   reactant (synthetic !?) but explicitly free in product → break bond.
+                preserveOptionalWildcardBond = true;
               } else if (bound) {
-                // Reactant explicitly specified this component (no wildcard), but product
+                // Reactant explicitly specified this component (no wildcard or !?), but product
                 // leaves the component unbound and bond-label-free. If this mapping lands
                 // on a currently bound target site, explicitly clear that bond to match
                 // BioNetGen's product-site semantics.
@@ -4385,7 +4854,43 @@ export class NetworkGenerator {
             // in the product pattern. This means product semantics require this site
             // to become unbound (e.g., BetaR(l,g,loc~cyt) -> BetaR(l,g,loc~mem,s~U)
             // acting on a reactant where s was omitted from the pattern but bound).
-            markExplicitUnbound = true;
+            //
+            // BNG2 EXCEPTION (cd40 parity): When the REACTANT pattern had this exact
+            // component as a wildcard bond (!?), product showing it as free means
+            // CARRY-THROUGH — preserve the existing bond, do NOT clear it.
+            // Example: CD40(l!?,t!1).TRAF(b!1,s~U) -> CD40(l,t)
+            //   l!? in reactant → l appears free in product → preserve l bond
+            //   t!1 in reactant → t appears free in product → delete t bond (explicit)
+            let reactantHadWildcardForComp = false;
+            const reactantMapping4 = productPatternToReactant.get(pMolIdx);
+            if (reactantMapping4 !== undefined) {
+              const { reactantIdx: rIdx4, targetMolIdx: rTgtMol4 } = reactantMapping4;
+              const rMatch4 = matches[rIdx4];
+              if (rMatch4) {
+                for (const [rPatMolIdx4, rTgtMolIdx4] of rMatch4.moleculeMap.entries()) {
+                  if (rTgtMolIdx4 === rTgtMol4) {
+                    const rPatMol4 = reactantPatterns[rIdx4]?.molecules[rPatMolIdx4];
+                    if (rPatMol4) {
+                      const rComp4 = rPatMol4.components.find(c => c.name === pComp.name);
+                      if (rComp4 && rComp4.wildcard) {
+                        reactantHadWildcardForComp = true;
+                      }
+                    }
+                    break;
+                  }
+                }
+              }
+            }
+            // Carry-through applies ONLY when the product shows this component with no
+            // state change (e.g. CD40 l!? → l, where the product doesn't alter `l` at all).
+            // If the product DOES set an explicit new state (e.g. s~U, Y1068~P), the rule
+            // is actively modifying the component, so any existing bond should be broken:
+            //   BetaR(l,g,loc~cyt) -> BetaR(l,g,loc~mem,s~U)  applied to s~P!1 → breaks Arr bond
+            //   EGFR(d!1,Y1068~U) -> EGFR(d!1,Y1068~P) applied to Y1068~P!3 → breaks GRB2 bond
+            const productSetsExplicitState = !!(pComp.state && pComp.state !== '?');
+            if (!reactantHadWildcardForComp || productSetsExplicitState) {
+              markExplicitUnbound = true;
+            }
           }
         }
 
@@ -4934,7 +5439,29 @@ export class NetworkGenerator {
         const mappedMoleculeSignatures = Array.from(match.moleculeMap.values())
           .map((molIdx) => {
             const mol = reactantSpecies.graph.molecules[molIdx];
-            return mol ? `M${molIdx}:${buildMoleculeLocalSignature(mol)}` : `M${molIdx}`;
+            if (!mol) return `M${molIdx}`;
+            // Use 1-hop neighborhood signature (neighbor LOCAL signatures per component)
+            // to distinguish non-equivalent embeddings in asymmetric species.
+            // E.g., FGFR bonded to Spry vs FGFR bonded to FRS2 — identical local
+            // degree signatures but different neighbors → should NOT be deduplicated.
+            // Using full local signature of neighbor (includes state+degree) also
+            // distinguishes FGFR bonded to FRS2(s~P) vs FRS2(s~U).
+            // For truly symmetric cases the neighbor-extended sigs are still equal,
+            // so correct sigMult=2 is preserved for those.
+            const compSig = mol.components.map((comp, ci) => {
+              const state = comp.state ?? '';
+              const bondDegree = comp.edges.size;
+              const partnerKeys = reactantSpecies.graph.adjacency.get(`${molIdx}.${ci}`) ?? [];
+              const neighborSigs = partnerKeys.map((pk: string) => {
+                const partnerMolIdx = parseInt(pk.split('.')[0]);
+                const neighborMol = reactantSpecies.graph.molecules[partnerMolIdx];
+                if (!neighborMol) return '?';
+                // Local (degree-only) sig of neighbor: captures name+state+bond degree
+                return buildMoleculeLocalSignature(neighborMol);
+              }).sort().join(',');
+              return `${comp.name}~${state}#${bondDegree}[${neighborSigs}]`;
+            }).sort().join(',');
+            return `${mol.name}(${compSig})`;
           })
           .sort();
         embeddingSignatureParts.push(`${speciesPart}:M${mappedMoleculeSignatures.join('|')}`);

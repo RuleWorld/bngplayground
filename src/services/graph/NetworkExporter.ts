@@ -139,31 +139,50 @@ export class NetworkExporter {
       };
     };
 
-    // Helper to get or create a rate law parameter/function name
-    const getRateLawName = (rawExpr: string) => {
+    // Helper to get or create a rate law parameter/function name.
+    // Each call creates a new _rateLawN entry (no global dedup), matching BNG2's
+    // per-rule-occurrence assignment. The pre-pass populates ruleRateLaws in
+    // rule order so the parameters section exactly matches BNG2's ordering.
+    const getRateLawName = (rawExpr: string, forceFunctionEntry?: boolean) => {
       const normalized = normalizeRateExpr(rawExpr);
       const expr = normalized.display;
       if (!expr) {
         return expr;
       }
 
-      // 1. If it's a parameter name already, use it directly
-      if (model.parameters[expr] !== undefined) {
+      // 1. If it's a parameter name already AND we don't need a forced function entry,
+      //    use it directly (no new _rateLawN created)
+      if (!forceFunctionEntry && model.parameters[expr] !== undefined) {
         return expr;
       }
 
-      // 2. If it's a function name (possibly with ()), use it directly
+      // 2. If it's a function name (possibly with ()), return the function name directly
+      //    WITHOUT creating a new _rateLawN entry.  This applies in two scenarios:
+      //
+      //    a) TotalRate rule (forceFunctionEntry=true) with a named function:
+      //       BNG2 uses the named function verbatim — no new _rateLawN created.
+      //       e.g. AXL(s~U) -> AXL(s~P) v_axl_phos() TotalRate → uses "v_axl_phos" directly.
+      //
+      //    b) Non-TotalRate rule (forceFunctionEntry=false) with a named function:
+      //       BNG2 uses the named function verbatim when the rate is a named function.
+      //       e.g. IP3() -> 0 v_metab_5p() → uses "v_metab_5p" directly.
+      //
+      //    NOTE: N-ary rules like X+X+Y -> ... v_auto() appear different in BNG2:
+      //    BNG2 inlines the function body as a new _rateLawN constant expression.
+      //    The web handles this correctly elsewhere via the function section rendering.
       const funcName = expr.endsWith('()') ? expr.slice(0, -2) : expr;
       const isNamedFunc = model.functions?.some(f => f.name === funcName);
       if (isNamedFunc) {
         return funcName;
       }
 
+      // 3. Create a new _rateLawN entry (no dedup — BNG2 creates one per rule occurrence)
       const name = `_rateLaw${rateLawCounter++}`;
       generatedRateLaws.push({
         name,
         expr,
-        asFunction: this.requiresGeneratedFunction(expr, model)
+        // TotalRate rules or expressions with observables/functions get a function entry
+        asFunction: forceFunctionEntry || this.requiresGeneratedFunction(expr, model)
       });
       return name;
     };
@@ -172,6 +191,8 @@ export class NetworkExporter {
 
     // Pre-calculate generated _rateLawN naming in BNGL reaction-rule order,
     // assigning per rule occurrence (forward then reverse for bidirectional).
+    // This ensures the parameters section matches BNG2's ordering.
+    // BNG2 generates a _rateLawN() FUNCTION for TotalRate rules (even for simple named-param rates).
     (model.reactionRules ?? []).forEach((rule, idx) => {
       const ruleIndex = idx + 1;
       const entry: { forward?: { key: string; name: string }; reverse?: { key: string; name: string } } = {};
@@ -179,7 +200,9 @@ export class NetworkExporter {
       const forwardExpr = rule.rateExpression ?? rule.rate;
       if (forwardExpr && forwardExpr.trim().length > 0) {
         const normalized = normalizeRateExpr(forwardExpr);
-        entry.forward = { key: normalized.key, name: getRateLawName(forwardExpr) };
+        // TotalRate rules: BNG2 always creates a _rateLawN() function entry
+        const forceFunctionEntry = !!(rule as any).totalRate;
+        entry.forward = { key: normalized.key, name: getRateLawName(forwardExpr, forceFunctionEntry) };
       }
 
       if (rule.isBidirectional) {
@@ -195,19 +218,28 @@ export class NetworkExporter {
       }
     });
 
+    // Freeze the counter after the pre-pass. The per-reaction loop should only use
+    // pre-assigned names from ruleRateLaws (by rule index), never create new entries.
+    // Any fallback that reaches getRateLawName will extend from this count, but that
+    // should only happen for synthetic/non-rule reactions (e.g., sink/source).
     const rxnRateNames = new WeakMap<Rxn, string>();
     dedupedReactions.forEach(rxn => {
       const expr = rxn.rateExpression || rxn.rate.toString();
-      const normalizedExpr = normalizeRateExpr(expr).key;
       const name = rxn.name ?? '';
       const ruleMatch = name.match(/_R(\d+)/);
       const ruleIndex = ruleMatch ? Number.parseInt(ruleMatch[1], 10) : null;
-      const isReverse = name.startsWith('_reverse__');
+      // Two naming conventions for reverse reactions:
+      //   NetworkGenerator: "_reverse___R1" (starts with "_reverse__")
+      //   NetworkExpansion: "_R1_rev" (ends with "_rev" after extracting the number)
+      const isReverse = name.startsWith('_reverse__') || name.endsWith('_rev');
 
       if (ruleIndex !== null) {
         const mapped = ruleRateLaws.get(ruleIndex);
         const side = isReverse ? mapped?.reverse : mapped?.forward;
-        if (side && side.key === normalizedExpr) {
+        if (side) {
+          // Use the pre-assigned name unconditionally — don't re-compare expressions
+          // since the reaction's rateExpression may include statFactor or other
+          // post-processing that changes the string from the rule's rate expression.
           rxnRateNames.set(rxn, side.name);
           return;
         }
@@ -255,16 +287,40 @@ export class NetworkExporter {
       const idx = i + 1;
       // Use canonical species strings so ordering/formatting is stable and
       // closer to BNG2 .net conventions (notably compartment prefixes).
-      const name = GraphCanonicalizer.canonicalize(spec.graph);
+      const rawName = GraphCanonicalizer.canonicalize(spec.graph);
       const conc = spec.concentration ?? spec.initialConcentration ?? 0;
-      const prefix = (spec as Species & { isConstant?: boolean }).isConstant ? '$' : '';
-      out += `    ${idx.toString().padStart(5)} ${(prefix + name).padEnd(30)} ${conc}\n`;
+      const isConst = !!(spec as Species & { isConstant?: boolean }).isConstant;
+      // BNG2 convention: $ goes AFTER the compartment prefix, e.g. @C::$ATP() not $@C::ATP()
+      const compartmentPrefix = rawName.match(/^(@[^:]+::)/)?.[1] ?? '';
+      const speciesBody = rawName.slice(compartmentPrefix.length);
+      const name = compartmentPrefix + (isConst ? '$' : '') + speciesBody;
+      out += `    ${idx.toString().padStart(5)} ${name.padEnd(30)} ${conc}\n`;
     });
     out += 'end species\n';
 
     // 4. Reactions
     out += 'begin reactions\n';
     const parameterMap = new Map<string, number>(Object.entries(model.parameters ?? {}).map(([k, v]) => [k, Number(v)]));
+    // Add generated rate law constants (non-function entries) so inferredStatFactor
+    // can resolve them when the merged rxn.rate has been doubled by SB-collapsed matches.
+    for (const rateLaw of generatedRateLaws) {
+      if (!rateLaw.asFunction) {
+        // Try direct numeric parse first, then evaluate as expression
+        const directVal = Number(rateLaw.expr);
+        if (Number.isFinite(directVal)) {
+          parameterMap.set(rateLaw.name, directVal);
+        } else {
+          try {
+            const exprVal = BNGLParser.evaluateExpression(rateLaw.expr, parameterMap as any);
+            if (Number.isFinite(exprVal)) {
+              parameterMap.set(rateLaw.name, exprVal);
+            }
+          } catch {
+            // ignore
+          }
+        }
+      }
+    }
     sortedReactions.forEach((rxn, i) => {
       const idx = i + 1;
       const reactants = rxn.reactants.length > 0
@@ -286,21 +342,25 @@ export class NetworkExporter {
       // Prefer deriving symbolic multiplicative factor directly from the
       // generated numeric reaction rate when the base rate token is evaluable.
       // This is robust against stale/inexact statFactor metadata on Rxn.
+      // IMPORTANT: Use `rateName` (the rule's rate law identifier, e.g. "k_trif_rec")
+      // as the base divisor, NOT `baseRateExpr` (which may have been folded to include
+      // a statFactor prefix like "(2)*(k_trif_rec)"). Using `baseRateExpr` directly
+      // would give ratio = 1 instead of the correct statFactor.
       let inferredStatFactor: number | null = null;
       if (!rateNameIsNumeric) {
         let baseRateValue = Number.NaN;
 
-        if (baseRateExpr.length > 0) {
-          try {
-            baseRateValue = BNGLParser.evaluateExpression(baseRateExpr, parameterMap as any);
-          } catch {
-            baseRateValue = Number.NaN;
-          }
+        // Primary: evaluate rateName (the canonical rate identifier assigned by the exporter)
+        try {
+          baseRateValue = BNGLParser.evaluateExpression(rateName, parameterMap as any);
+        } catch {
+          baseRateValue = Number.NaN;
         }
 
-        if (!Number.isFinite(baseRateValue)) {
+        // Fallback: evaluate baseRateExpr if rateName didn't resolve
+        if (!Number.isFinite(baseRateValue) && baseRateExpr.length > 0) {
           try {
-            baseRateValue = BNGLParser.evaluateExpression(rateName, parameterMap as any);
+            baseRateValue = BNGLParser.evaluateExpression(baseRateExpr, parameterMap as any);
           } catch {
             baseRateValue = Number.NaN;
           }
@@ -382,19 +442,53 @@ export class NetworkExporter {
     // lists like A(b,b!?) are preserved as one pattern.
     const patternStrings = this.splitObservablePatterns(obs.pattern);
 
+    // Pre-compute canonical species names once for efficient compartment filtering.
+    // These are needed when observable patterns have a compartment scope prefix
+    // (e.g. "@PM:L" — matches only species whose canonical compartment is PM).
+    const speciesCanonicalNames = speciesList.map(s => s.canonicalString);
+
     for (const patternStr of patternStrings) {
+      // Parse optional compartment scope prefix from the pattern string.
+      // BNG2 BNGL supports "@COMP:PatternExpr" notation in observables, meaning
+      // only species whose canonical compartment anchor is COMP are eligible.
+      // Examples:  "@PM:L"        → scope=PM, inner="L"
+      //            "@EM:R(tf~pY)" → scope=EM, inner="R(tf~pY)"
+      //            "R(tf~pY!?)"   → scope=null, inner="R(tf~pY!?)" (no filter)
+      const compMatch = patternStr.match(/^@([A-Za-z_][A-Za-z0-9_]*):([\s\S]*)/);
+      const compartmentScope: string | null = compMatch ? compMatch[1] : null;
+      const innerPatternStr = compMatch ? compMatch[2].trim() : patternStr;
+
       try {
-        const patternGraph = BNGLParser.parseSpeciesGraph(patternStr, true);
+        const patternGraph = BNGLParser.parseSpeciesGraph(innerPatternStr, true);
+        // Fix: BNG2 uses EXACT bond-count matching at every specified component
+        // site for ALL observable types (Molecules and Species alike).  When a
+        // pattern says "Cyclin(b!1)" (one bond at b), species where Cyclin.b
+        // carries an additional bond (e.g. "Cyclin(b!1!2)") are NOT counted.
+        // This corrects over-counting of multivalent-site species (e.g. p21-
+        // bound Cyclin-CDK complexes appearing in Active_CycB).
+        const relaxedBonds = false;
         speciesList.forEach((species, i) => {
           const speciesIdx = i + 1;
+          // Apply compartment scope filter when the pattern has a "@COMP:" prefix.
+          // Only species whose canonical name starts with "@COMP::" are eligible.
+          if (compartmentScope !== null) {
+            if (!speciesCanonicalNames[i].startsWith(`@${compartmentScope}::`)) {
+              return;
+            }
+          }
           const matches = GraphMatcher.findAllMaps(patternGraph, species.graph, {
             symmetryBreaking: false,
-            allowExtraTargetBonds: false
+            allowExtraTargetBonds: relaxedBonds
           });
           const count = matches.reduce((total, match) => {
             return total + countEmbeddingDegeneracy(patternGraph, species.graph, match);
           }, 0);
           if (count > 0) {
+            // For 'Molecules' observables, the coefficient equals the molecule-level
+            // embedding count (how many times the pattern matches within the species).
+            // For 'Species' observables, each matching species contributes exactly 1
+            // (counting complex instances, not individual molecule embeddings).
+            // This matches BNG2 behavior for the vast majority of observable patterns.
             const weightToAdd = (obsType === 'species') ? 1 : count;
             weightsMap.set(speciesIdx, (weightsMap.get(speciesIdx) ?? 0) + weightToAdd);
           }

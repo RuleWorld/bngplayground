@@ -11,6 +11,7 @@ export class Component {
   state?: string;             // current state (for species instances)
   edges: Map<number, number>; // component index => bond partner component index
   wildcard?: '+' | '?' | '-';  // bond wildcard semantics (include '!' modifiers like !+, !? and !-)
+  syntheticWildcard?: boolean; // true when this component was added by completeMissingComponents (implicit !?) rather than explicitly written in the rule
 
   constructor(name: string, states: string[] = []) {
     this.name = name;

@@ -55,7 +55,11 @@ describe('Stat factors / degeneracy', () => {
     expect((rxn as any)?.propensityFactor ?? 1).toBe(1);
   });
 
-  it('applies propensityFactor=0.5 for identical-reactant bimolecular association (A+A)', async () => {
+  it('simple A(x)+A(x)->A(x!1).A(x!1) homodimer: 0.5 baked into rate, no propensityFactor (BNG2 convention)', async () => {
+    // BNG2 convention for bond-forming symmetric A+A:
+    //   Exact enumeration gives multiplicity=0.5 → effectiveRate = 0.5*k.
+    //   The propensityFactor split does NOT apply (bond-forming rule detected via bond count change).
+    //   NET writes "0.5*k" (the 0.5 is factored into the stored rate).
     const seedSpecies = [BNGLParser.parseSpeciesGraph('A(x)')];
 
     const rule = BNGLParser.parseRxnRule(
@@ -74,9 +78,10 @@ describe('Stat factors / degeneracy', () => {
     const rxn = result.reactions.find((r) => r.reactants.length === 2 && r.products.length === 1);
     expect(rxn).toBeDefined();
 
-    // For identical bimolecular reactants, NetworkGenerator stores the 1/2 factor separately.
-    expect(rxn?.rate).toBeCloseTo(1.23, 12);
-    expect(rxn?.propensityFactor).toBe(0.5);
+    // Bond-forming rule: no propensityFactor split. multiplicity=0.5 → rate=0.5*1.23=0.615.
+    // BNG2 writes "0.5*k" in the NET for symmetric bond-forming A+A.
+    expect(rxn?.rate).toBeCloseTo(0.615, 12);
+    expect((rxn as any)?.propensityFactor ?? 1).toBe(1);
   });
 
   it('applies stat_factor=4 when both reactants have repeated identical sites (L(r,r)+R(l,l))', async () => {
@@ -229,6 +234,52 @@ describe('Stat factors / degeneracy', () => {
     expect(rxn).toBeDefined();
     expect(rxn?.rate).toBeCloseTo(2.4, 12);
     expect((rxn as any)?.propensityFactor ?? 1).toBe(1);
+  });
+
+  it('IRE1-like ternary identical-reactant multiplicity (monomer/dimer cases)', async () => {
+    const seedSpecies = [
+      BNGLParser.parseSpeciesGraph('Unfolded(b)'),
+      BNGLParser.parseSpeciesGraph('IRE1(b,s~U)'),
+      BNGLParser.parseSpeciesGraph('IRE1(b!1,s~U).IRE1(b!1,s~U)'),
+      BNGLParser.parseSpeciesGraph('IRE1(b!1,s~P).IRE1(b!1,s~U)')
+    ];
+
+    const rule = BNGLParser.parseRxnRule(
+      'Unfolded(b) + IRE1(s~U) + IRE1(s~U) -> Unfolded(b) + IRE1(b!1,s~P).IRE1(b!1,s~P)',
+      1.0,
+      '_R3'
+    );
+
+    const generator = new NetworkGenerator({ maxSpecies: 50, maxIterations: 5 });
+    const result = await generator.generate(seedSpecies, [rule]);
+
+    const speciesByIndex = new Map<number, string>();
+    for (const s of result.species as any[]) {
+      speciesByIndex.set(Number(s.index), canon(s.graph));
+    }
+
+    const findRateFor = (reactantNames: string[]) => {
+      const key = reactantNames.map((n) => canon(BNGLParser.parseSpeciesGraph(n))).sort().join(' + ');
+      const rx = result.reactions.find((r) => {
+        const rs = r.reactants.map((idx: number) => speciesByIndex.get(Number(idx)) ?? '').sort().join(' + ');
+        return rs === key;
+      });
+      return rx ? rx.rate : undefined;
+    };
+
+    // monomer + monomer -> multiplicity 1/2 => rate 0.5
+    expect(findRateFor(['Unfolded(b)', 'IRE1(b,s~U)', 'IRE1(b,s~U)'])).toBeCloseTo(0.5, 12);
+
+    // monomer + dimer -> multiplicity 1 => rate 1.0
+    expect(findRateFor(['Unfolded(b)', 'IRE1(b,s~U)', 'IRE1(b!1,s~U).IRE1(b!1,s~U)'])).toBeCloseTo(1.0, 12);
+
+    // Additional heterodimer / mixed combinations (BNG2 reference cases)
+    expect(findRateFor(['Unfolded(b)', 'IRE1(b,s~U)', 'IRE1(b!1,s~P).IRE1(b!1,s~U)'])).toBeCloseTo(1.0, 12); // monomer + heterodimer
+    expect(findRateFor(['Unfolded(b)', 'IRE1(b!1,s~P).IRE1(b!1,s~U)', 'IRE1(b!1,s~U).IRE1(b!1,s~U)'])).toBeCloseTo(1.0, 12); // heterodimer + dimer (different species)
+    expect(findRateFor(['Unfolded(b)', 'IRE1(b!1,s~P).IRE1(b!1,s~U)', 'IRE1(b!1,s~P).IRE1(b!1,s~U)'])).toBeCloseTo(0.5, 12); // heterodimer + heterodimer (same species)
+
+    // dimer + dimer -> multiplicity 1/2 => rate 0.5
+    expect(findRateFor(['Unfolded(b)', 'IRE1(b!1,s~U).IRE1(b!1,s~U)', 'IRE1(b!1,s~U).IRE1(b!1,s~U)'])).toBeCloseTo(0.5, 12);
   });
 });
 

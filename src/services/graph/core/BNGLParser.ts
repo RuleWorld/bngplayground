@@ -368,7 +368,11 @@ export class BNGLParser {
 
     // Handle ALL bonds (for multi-site bonding like !1!2)
     for (const bondPart of bondParts) {
-      if (bondPart === '+' || bondPart === '?' || bondPart === '-') {
+      if (bondPart === '?__SYN__') {
+        // Synthetically-added wildcard from completeMissingComponents — marks absent component.
+        component.wildcard = '?';
+        component.syntheticWildcard = true;
+      } else if (bondPart === '+' || bondPart === '?' || bondPart === '-') {
         component.wildcard = bondPart;
       } else if (bondPart === '.') {
         // BioNetGen semantic: "." explicitly means UNBOUND

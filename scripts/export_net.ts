@@ -49,42 +49,57 @@ function normalizeReactionString(raw: string): string {
   return `${normalizeRuleSide(parts[0])} ${arrow} ${normalizeRuleSide(parts[1])}`;
 }
 
-function applySetParameterActions(model: BNGLModel): void {
-  const actions = model.actions ?? [];
-  if (actions.length === 0) return;
+function applySetParameterActions(model: BNGLModel, bnglCode: string): void {
+  // BNG2 semantics: the .net file reflects the LAST value of each parameter after
+  // ALL setParameter() calls have been processed. BNG2 updates the .net file parameter
+  // table whenever setParameter is called (or at the final generate_network).
+  // We replicate this by applying ALL setParameter() calls in order (last wins).
+  //
+  // We parse directly from the raw BNGL text because parseBNGL() does not populate
+  // model.actions with setParameter entries.
+  //
+  // IMPORTANT: Strip full-line comments (lines starting with optional whitespace + '#')
+  // before searching for setParameter calls, to avoid matching commented-out calls.
+  const uncommentedCode = bnglCode
+    .split('\n')
+    .map((line) => {
+      const commentIdx = line.indexOf('#');
+      return commentIdx >= 0 ? line.slice(0, commentIdx) : line;
+    })
+    .join('\n');
 
-  const paramMap = new Map<string, number>(
+  const evalMap = new Map<string, number>(
     Object.entries(model.parameters).map(([k, v]) => [k, Number(v)])
   );
 
-  for (const action of actions) {
-    if (action.type !== 'setParameter') continue;
+  // Match: setParameter("ParamName", value_or_expr)
+  const setParamRegex = /setParameter\s*\(\s*"([^"]+)"\s*,\s*([^)]+)\)/g;
+  let m: RegExpExecArray | null;
+  while ((m = setParamRegex.exec(uncommentedCode)) !== null) {
+    const paramName = m[1].trim();
+    const rawValue = m[2].trim();
 
-    const parameter = action.args?.parameter;
-    if (typeof parameter !== 'string' || parameter.length === 0) continue;
-
-    const rawValue = action.args?.value;
-    let evaluated: number | null = null;
-    if (typeof rawValue === 'number' && Number.isFinite(rawValue)) {
-      evaluated = rawValue;
-    } else if (typeof rawValue === 'string') {
-      const trimmed = rawValue.trim().replace(/^"(.*)"$/, '$1');
-      const parsed = Number(trimmed);
-      if (Number.isFinite(parsed)) {
-        evaluated = parsed;
-      } else {
-        try {
-          const v = BNGLParser.evaluateExpression(trimmed, paramMap);
-          if (Number.isFinite(v)) evaluated = v;
-        } catch {
-          // Ignore invalid expressions and keep existing value.
+    let numValue: number = NaN;
+    // Try as a plain numeric literal (handles "0", "2.5", "1e-3", etc.)
+    const strictNum = Number(rawValue);
+    if (Number.isFinite(strictNum)) {
+      numValue = strictNum;
+    } else {
+      // Try to evaluate as an expression using current parameter values
+      try {
+        const evaluated = BNGLParser.evaluateExpression(rawValue, evalMap);
+        if (Number.isFinite(evaluated)) {
+          numValue = evaluated;
         }
+      } catch {
+        // Ignore unresolvable expressions
       }
     }
 
-    if (evaluated === null) continue;
-    model.parameters[parameter] = evaluated;
-    paramMap.set(parameter, evaluated);
+    if (!isNaN(numValue)) {
+      model.parameters[paramName] = numValue;
+      evalMap.set(paramName, numValue);
+    }
   }
 }
 
@@ -213,7 +228,7 @@ async function main() {
   // 1. Parse BNGL model
   log('Parsing BNGL...');
   const model = parseBNGL(bnglCode);
-  applySetParameterActions(model);
+  applySetParameterActions(model, bnglCode);
   const evalParamMap = new Map<string, number>(
     Object.entries(model.parameters).map(([k, v]) => [k, Number(v)])
   );
@@ -246,6 +261,8 @@ async function main() {
         const concentration = Number(s.initialConcentration ?? 0);
         const sp = new Species(graph, idx, concentration);
         sp.initialConcentration = concentration;
+        // Propagate isConstant from expanded species (set by NetworkExpansion from seed $ prefix)
+        (sp as Species & { isConstant?: boolean }).isConstant = !!s.isConstant;
         return sp;
       });
 
@@ -325,7 +342,12 @@ async function main() {
 
     for (const s of species) {
       const canonical = GraphCanonicalizer.canonicalize(s.graph);
-      (s as Species & { isConstant?: boolean }).isConstant = seedConstantMap.get(canonical) ?? false;
+      const mapped = seedConstantMap.get(canonical);
+      if (mapped !== undefined) {
+        // seedConstantMap found an explicit match — use it (handles canonical key consistency)
+        (s as Species & { isConstant?: boolean }).isConstant = mapped;
+      }
+      // else: keep the value already copied from expandedSpecies.isConstant (set above)
       if (s.concentration === undefined) {
         s.concentration = s.initialConcentration ?? 0;
       }

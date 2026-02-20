@@ -505,6 +505,8 @@ export async function generateExpandedNetwork(
                 rateExpression: foldedRateExpression,
                 degeneracy,
                 totalRate,
+                // Preserve the rule name so NetworkExporter can look up pre-assigned _rateLawN names
+                name: rxnName,
                 propensityFactor: (r as unknown as { propensityFactor?: number }).propensityFactor ?? 1,
                 productStoichiometries: (r as any).productStoichiometries ?? null,
                 scalingVolume: (r as any).scalingVolume ?? null

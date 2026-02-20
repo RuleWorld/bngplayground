@@ -580,31 +580,63 @@ export class GraphCanonicalizer {
     graph: SpeciesGraph,
     _molOrigIdx: number
   ): string {
+    // For single-molecule species, intramolecular bonds may exist (both endpoints on mol 0).
+    // Assign sequential bond labels to any intramolecular bonds so that a molecule with an
+    // intramolecular bond gets a distinct canonical string from the same molecule without one.
+    const intraBondLabels = new Map<number, number>(); // compIdx -> assigned bond label
+    let nextIntraLabel = 1;
+
+    // Collect intramolecular bond pairs (both endpoints have mol index 0)
+    const seenIntraBonds = new Set<string>();
+    for (let compIdx = 0; compIdx < mol.components.length; compIdx++) {
+      const adjKey = `0.${compIdx}`;
+      const partners = graph.adjacency.get(adjKey);
+      if (!partners) continue;
+      for (const partnerKey of partners) {
+        const dot = partnerKey.indexOf('.');
+        const pMolIdx = parseInt(partnerKey.substring(0, dot), 10);
+        if (pMolIdx !== 0) continue; // Only intramolecular (same molecule)
+        const pCompIdx = parseInt(partnerKey.substring(dot + 1), 10);
+        const bondKey = compIdx < pCompIdx
+          ? `${compIdx}-${pCompIdx}`
+          : `${pCompIdx}-${compIdx}`;
+        if (!seenIntraBonds.has(bondKey)) {
+          seenIntraBonds.add(bondKey);
+          const label = nextIntraLabel++;
+          intraBondLabels.set(compIdx, label);
+          intraBondLabels.set(pCompIdx, label);
+        }
+      }
+    }
+
     // Build component strings with their original indices
     const componentData = mol.components.map((comp: any, compIdx: number) => {
-      let str = comp.name;
-      if (comp.state && comp.state !== '?') str += `~${comp.state}`;
+      let baseStr = comp.name;
+      if (comp.state && comp.state !== '?') baseStr += `~${comp.state}`;
 
-      if (comp.wildcard) {
-        str += `!${comp.wildcard}`;
+      let bondStr = '';
+      const intraLabel = intraBondLabels.get(compIdx);
+      if (intraLabel !== undefined) {
+        bondStr = `!${intraLabel}`;
+      } else if (comp.wildcard) {
+        bondStr = `!${comp.wildcard}`;
       }
 
-      return { str, compIdx };
+      return { baseStr, bondStr, compIdx, hasRealBond: intraLabel !== undefined };
     });
 
-    // Sort components alphabetically
-    /*console.log('[Canonical Debug] Before Sort:', componentData.map(c => c.str));*/
+    // Sort components alphabetically by base string.
+    // When base strings are identical, bound before unbound (BNG2 convention).
     componentData.sort((a: any, b: any) => {
-      // Compare the base string (without bonds)
-      const baseA = a.str.split('!')[0];
-      const baseB = b.str.split('!')[0];
-      return baseA < baseB ? -1 : baseA > baseB ? 1 : 0;
+      if (a.baseStr !== b.baseStr) return a.baseStr < b.baseStr ? -1 : 1;
+      if (a.hasRealBond !== b.hasRealBond) return a.hasRealBond ? -1 : 1;
+      if (a.bondStr !== b.bondStr) return a.bondStr < b.bondStr ? -1 : 1;
+      return a.compIdx - b.compIdx;
     });
-    /*console.log('[Canonical Debug] After Sort:', componentData.map(c => c.str));*/
 
     // BNG2 convention: Only include molecule compartment when it differs from graph compartment
     const compartmentSuffix = (mol.compartment && mol.compartment !== graph.compartment) ? `@${mol.compartment}` : '';
-    const res = `${mol.name}(${componentData.map((c: any) => c.str).join(',')})${compartmentSuffix}`;
+    const res = `${mol.name}(${componentData.map((c: any) => c.baseStr + c.bondStr).join(',')})${compartmentSuffix}`;
     return res;
   }
 
