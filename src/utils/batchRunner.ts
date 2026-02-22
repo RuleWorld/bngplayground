@@ -78,6 +78,7 @@ async function runSingleBatchItem(modelDef: { name: string, code: string, id?: s
             // Force update just in case Object.assign is flaky with getters/setters (unlikely but possible)
             if (expanded.reactions) model.reactions = expanded.reactions;
             if (expanded.species) model.species = expanded.species;
+            if ((expanded as any).concreteObservables) (model as any).concreteObservables = (expanded as any).concreteObservables;
 
             if (VERBOSE_BATCH_RUNNER) console.timeEnd('NetGen');
         }

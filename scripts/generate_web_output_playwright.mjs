@@ -100,7 +100,8 @@ function resolveModelList(requested, entries) {
 
     const candidates = keyMap.get(key) || keyMap.get(safeKey(trimmed));
     if (!candidates || candidates.size === 0) {
-      missing.push(trimmed);
+      resolvedSet.add(trimmed);
+      resolved.push(trimmed);
       continue;
     }
 
