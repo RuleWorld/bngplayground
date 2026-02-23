@@ -5,7 +5,7 @@
 **BioNetGen Playground** is a state-of-the-art web-based modeling and simulation environment for BioNetGen (BNGL).
  models: edit BNGL, parse, generate networks, run simulations, and analyze results through multiple visualization and analysis tabs.
 
-**Live demo:** <https://RuleWorld.github.io/bngplayground>
+**Live demo:** <https://ruleworld.github.io/bngplayground>
 
 ## Features
 
