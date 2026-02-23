@@ -92,6 +92,7 @@ interface EditorPanelProps {
   onImportSBML?: (file: File) => void;
   onExportSBML?: () => void;
   onExportBNGL?: () => void;
+  onExportNET?: () => void;
   lastResized?: number;
 }
 
@@ -113,6 +114,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   onImportSBML,
   onExportSBML,
   onExportBNGL,
+  onExportNET,
   lastResized,
 }) => {
   const [isGalleryOpen, setIsGalleryOpen] = useState(false);
@@ -260,6 +262,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             }>
               <DropdownItem onClick={() => onExportBNGL?.()} disabled={!code?.trim()}>Export BNGL</DropdownItem>
               <DropdownItem onClick={() => onExportSBML?.()} disabled={!modelExists}>Export SBML</DropdownItem>
+              <DropdownItem onClick={() => onExportNET?.()} disabled={!modelExists}>Export NET</DropdownItem>
             </Dropdown>
 
             <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3">

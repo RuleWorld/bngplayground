@@ -7,6 +7,7 @@ import { exportToSBML } from './services/exportSBML';
 import { StatusMessage } from './components/ui/StatusMessage';
 import { AboutModal } from './components/AboutModal';
 import { bnglService } from './services/bnglService';
+import { exportToNet } from './services/exportNet';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
 import { EXAMPLES, INITIAL_BNGL_CODE } from './constants';
 import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoader';
@@ -799,6 +800,29 @@ function App() {
     }
   };
 
+  const handleExportNET = async () => {
+    if (!model) {
+      setStatus({ type: 'warning', message: 'No model to export. Parse or load a model first.' });
+      return;
+    }
+    setStatus({ type: 'info', message: 'Generating NET file...' });
+    try {
+      const generatedModel = await bnglService.generateNetwork(model);
+      const netString = await exportToNet(generatedModel);
+      const blob = new Blob([netString], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${loadedModelName?.replace(/\s+/g, '_') || 'model'}.net`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus({ type: 'success', message: 'NET export generated.' });
+    } catch (e) {
+      setStatus({ type: 'error', message: 'Failed to export NET file. Check console for details.' });
+      console.error('NET export failed:', e);
+    }
+  };
+
   const handleExportBNGL = () => {
     if (!code?.trim()) {
       setStatus({ type: 'warning', message: 'No BNGL code to export.' });
@@ -866,6 +890,7 @@ function App() {
                   onImportSBML={handleImportSBML}
                   onExportSBML={handleExportSBML}
                   onExportBNGL={handleExportBNGL}
+                  onExportNET={handleExportNET}
                 />
               ) : (
                 <DesignerPanel
