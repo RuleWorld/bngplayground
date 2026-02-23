@@ -5,7 +5,7 @@
 **BioNetGen Playground** is a state-of-the-art web-based modeling and simulation environment for BioNetGen (BNGL).
  models: edit BNGL, parse, generate networks, run simulations, and analyze results through multiple visualization and analysis tabs.
 
-**Live demo:** <https://akutuva21.github.io/bngplayground>
+**Live demo:** <https://RuleWorld.github.io/bngplayground>
 
 ## Features
 
@@ -42,6 +42,27 @@ npm run dev
 | `npm run test:watch` | Run Vitest in watch mode |
 | `npm run generate:gdat` | Regenerate GDAT reference fixtures |
 | `npm run generate:embeddings` | Generate `public/model-embeddings.json` for semantic search |
+
+### Rebuilding WASM artifacts
+
+**CVODE (SUNDIALS)** — stiff ODE solver:
+```bash
+cd wasm-sundials
+./build_wasm.sh        # Linux/macOS
+build_wasm.bat         # Windows
+```
+
+**NFsim** — network-free stochastic simulator:
+```bash
+# Requires NFSIM_SRC env var pointing to the akutuva21/nfsim C++ source
+cd wasm-nfsim
+./build_wasm.sh        # Linux/macOS
+build_wasm.bat         # Windows
+
+# Or fetch the latest pre-built artifacts from CI (requires GitHub CLI):
+./tools/fetch-nfsim-wasm.sh
+```
+Build outputs land in `public/nfsim.js` and `public/nfsim.wasm` automatically.
 
 ## Workflow
 
@@ -124,51 +145,111 @@ The UI exposes a small set of core tabs by default, with additional analysis tab
 
 ```mermaid
 graph TD
-    UI["React Frontend"]
-    BNGL["BNGL Engine (Services)"]
-    Worker["Computational Background (Web Workers)"]
-    Solvers["Mathematical Solvers (WASM)"]
+    UI["React Frontend (App)"]
+    AppSvc["App-level Services\n(services/)"]
+    Engine["Engine Package\n(packages/engine — @bngplayground/engine)"]
+    Worker["Web Workers"]
+    Solvers["WASM Solvers\n(CVODE · NFsim · Nauty)"]
     Analysis["Analysis & Visualization"]
 
-    UI --> BNGL
-    BNGL --> Worker
+    UI --> AppSvc
+    AppSvc --> Engine
+    AppSvc --> Worker
+    Worker --> Engine
     Worker --> Solvers
-    BNGL --> Analysis
+    AppSvc --> Analysis
 ```
+
+The codebase is split into two layers:
+
+| Layer | Location | Purpose |
+|-------|----------|---------|
+| **App** | `App.tsx`, `components/`, `services/`, `hooks/` | React UI, worker communication, visualization |
+| **Engine** | `packages/engine/` (`@bngplayground/engine`) | Core algorithms: parser, graph, solvers, analysis |
+
+Files in `services/` and `src/` that were moved into the engine are kept as thin re-export shims so existing imports continue to work without changes.
 
 ## Directory Structure & Codebase Deep Dive
 
-- **`/services`**: The "brain" of the application. Contains the core logic for:
-  - `bnglService.ts` / `bnglWorker.ts`: The main entry points for BNGL processing and worker-based execution.
-  - `SimulationLoop.ts` / `ODESolver.ts`: Core simulation engines and WASM solver integrations (CVODE).
-  - `parseBNGL.ts`: ANTLR4-based parser implementation.
-  - `semanticSearch.ts`: TensorFlow.js-powered natural language model discovery.
-  - `nauty_loader.js` / `cvode_loader.js`: Glue code for high-performance WASM binaries.
-- **`/components`**: UI modularity and state management.
-  - `/tabs`: Implementation of individual analysis tabs (Flux, Parameter Estimation, Steady State).
-  - `/charts`: Recharts-based time-series and sensitivity visualization.
-  - `EditorPanel.tsx` / `VisualizationPanel.tsx`: Main layout orchestrators.
-- **`/src`**: Core domain logic and shared utilities.
-  - `/services/graph`: Specialized graph-theory logic for molecule patterns and rule-matching.
-- **`/example-models`**: The curated library of 250+ verified models used for search and templates.
-- **`/scripts`**: Build-time and developer utilities.
-  - `generateEmbeddings.mjs`: Pre-computing vectors for semantic search.
-  - `parity_check.ts`: Continuous verification against canonical `BNG2.pl`.
-  - `verify_categorization.ts`: ensuring coverage across all model gallery sections.
-- **`/published-models`**: Reference models from BioNetGen literature and internal validation suites.
+### Top-level layout
 
-- **Concurrency**: Distributed Web Worker pool for parsing, network generation, and simulation, ensuring 0ms UI lag even during stiff ODE solving.
+```
+bionetgen-web-simulator/
+├── App.tsx / index.tsx       # React entry points
+├── types.ts / constants.ts   # Shared app-level types and constants
+├── components/               # React UI components and tabs
+├── hooks/                    # Custom React hooks
+├── services/                 # App-level services (worker comms, UI helpers)
+│   ├── bnglService.ts        # Main worker communication layer
+│   ├── parseBNGL.ts          # Parser API wrapper
+│   ├── visualization/        # UI visualization helpers
+│   ├── grammar/              # Visual Designer grammar parser
+│   └── semanticSearch.ts     # TensorFlow.js semantic search
+├── src/                      # Thin shims re-exporting from @bngplayground/engine
+│   ├── parser/               # BNGLParserWrapper.ts shim
+│   ├── services/             # Shims for graph, ODE, analysis, estimation
+│   └── utils/                # Shims for utility functions
+├── packages/
+│   └── engine/               # @bngplayground/engine — all core algorithms
+│       └── src/
+│           ├── index.ts      # Public barrel export
+│           ├── interfaces/   # SimulationEngine interface + EngineRegistry
+│           ├── parser/       # ANTLR4 BNGL parser implementation
+│           ├── services/
+│           │   ├── graph/    # Network generation, matching, canonicalization (Nauty)
+│           │   ├── simulation/ # ODE/SSA/NFsim solvers + SimulationLoop
+│           │   ├── analysis/ # Network analysis, FIM, steady state
+│           │   ├── parity/   # BNG2.pl regression testing utilities
+│           │   └── debugger/ # Rule-firing diagnostics
+│           └── utils/        # Shared utility functions
+├── wasm-nfsim/               # NFsim WASM build scripts (C++ source in akutuva21/nfsim)
+│   ├── build_wasm.sh         # Linux/macOS build
+│   ├── build_wasm.bat        # Windows build
+│   └── build-wasm.github-actions-template.yml
+├── wasm-sundials/            # CVODE (SUNDIALS) WASM build scripts + C source
+├── tools/
+│   └── fetch-nfsim-wasm.sh   # Fetch pre-built NFsim artifacts from CI
+├── public/
+│   ├── models/               # 250+ BNGL example models
+│   ├── model-embeddings.json # Semantic search vector index
+│   ├── cvode.wasm            # Pre-built CVODE solver
+│   ├── nfsim.js / nfsim.wasm # Pre-built NFsim solver
+│   └── nauty.wasm            # Pre-built Nauty canonical labeler
+├── scripts/                  # Build-time and developer utilities
+│   ├── generateEmbeddings.mjs
+│   ├── parity_check.ts
+│   └── layered_parity_check.ts
+├── tests/                    # Vitest formal test suite (*.spec.ts)
+└── example-models/           # Additional curated model library
+```
+
+### Key entry points
+
+- `App.tsx` — app shell and routing
+- `components/EditorPanel.tsx` — BNGL editor and run controls
+- `components/VisualizationPanel.tsx` — analysis tab container
+- `services/bnglService.ts` — worker communication (parse / simulate)
+- `packages/engine/src/index.ts` — engine public API
+- `scripts/generateEmbeddings.mjs` — build-time semantic search embeddings
+
+### Services organization
+
+**App-level (`services/`)** — interface between React and the engine:
+- `bnglService.ts` / `bnglWorker.ts`: worker lifecycle, parse/simulate requests
+- `semanticSearch.ts`: TensorFlow.js vector search
+- `cvode_loader.js` / `nauty_loader.js`: WASM loader glue
+
+**Engine core (`packages/engine/src/services/`)** — pure algorithmic implementations:
+- `graph/NetworkGenerator.ts`: rule-based network expansion
+- `graph/core/`: Species, Rxn, Matcher, canonical labeling (Nauty)
+- `simulation/ODESolver.ts`: CVODE WASM integration (primary stiff solver)
+- `simulation/nfsim/`: NFsim adapter and result parsing
+- `analysis/`: parameter estimation, FIM, flux analysis, steady-state detection
+
+- **Concurrency**: Distributed Web Worker pool for parsing, network generation, and simulation, ensuring 0 ms UI lag even during stiff ODE solving.
 - **WASM Acceleration**: Native-speed solvers for CVODE, NFsim, and Nauty (canonical labeling).
 - **Semantic Search**: Client-side vector embeddings via TensorFlow.js for natural-language model discovery.
 - **Parallel Trajectories**: Core Comparison Engine for real-time "What-If" parameter perturbation analysis.
-
-Useful entry points:
-
-- `App.tsx` (app shell)
-- `components/EditorPanel.tsx` (editor + run controls)
-- `components/VisualizationPanel.tsx` (tabs)
-- `services/bnglService.ts` and worker code (parse/simulate)
-- `scripts/generateEmbeddings.mjs` (build-time embeddings)
 
 ## License
 
