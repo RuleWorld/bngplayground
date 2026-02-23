@@ -1,0 +1,7 @@
+models:
+  - file: egg.bngl
+    id: egg
+    name: "egg"
+    description: "BioNetGen model: egg"
+    tags: []
+    bng2_compatible: true

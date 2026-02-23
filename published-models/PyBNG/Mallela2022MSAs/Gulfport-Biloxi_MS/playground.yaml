@@ -1,0 +1,7 @@
+models:
+  - file: Gulfport-Biloxi_MS.bngl
+    id: Gulfport-Biloxi_MS
+    name: "Gulfport Biloxi MS"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

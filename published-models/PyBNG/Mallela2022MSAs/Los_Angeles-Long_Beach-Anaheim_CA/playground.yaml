@@ -1,0 +1,7 @@
+models:
+  - file: Los_Angeles-Long_Beach-Anaheim_CA.bngl
+    id: Los_Angeles-Long_Beach-Anaheim_CA
+    name: "Los Angeles Long Beach Anaheim CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

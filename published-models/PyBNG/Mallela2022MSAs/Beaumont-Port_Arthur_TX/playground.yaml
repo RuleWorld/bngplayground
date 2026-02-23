@@ -1,0 +1,7 @@
+models:
+  - file: Beaumont-Port_Arthur_TX.bngl
+    id: Beaumont-Port_Arthur_TX
+    name: "Beaumont Port Arthur TX"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: Kansas_City_MO-KS.bngl
+    id: Kansas_City_MO-KS
+    name: "Kansas City MO KS"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

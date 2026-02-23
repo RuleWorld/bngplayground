@@ -1,0 +1,7 @@
+models:
+  - file: Bakersfield_CA.bngl
+    id: Bakersfield_CA
+    name: "Bakersfield CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,13 @@
+models:
+  - file: egfr_nf.bngl
+    id: egfr_nf
+    name: "egfr nf"
+    description: "Filename: example2_starting_point.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: example2_starting_point.bngl
+    id: example2_starting_point
+    name: "example2 starting point"
+    description: "Filename: example2_starting_point.bngl"
+    tags: []
+    bng2_compatible: true

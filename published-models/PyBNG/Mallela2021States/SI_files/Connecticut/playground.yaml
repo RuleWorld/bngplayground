@@ -1,0 +1,7 @@
+models:
+  - file: Connecticut.bngl
+    id: Connecticut
+    name: "Connecticut"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

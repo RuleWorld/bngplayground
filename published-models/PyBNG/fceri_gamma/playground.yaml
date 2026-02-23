@@ -1,0 +1,13 @@
+models:
+  - file: fceri_gamma2.bngl
+    id: fceri_gamma2
+    name: "fceri gamma2"
+    description: "BioNetGen model: fceri gamma2"
+    tags: []
+    bng2_compatible: true
+  - file: fceri_gamma2_ground_truth.bngl
+    id: fceri_gamma2_ground_truth
+    name: "fceri gamma2 ground truth"
+    description: "BioNetGen model: fceri gamma2 ground truth"
+    tags: []
+    bng2_compatible: true

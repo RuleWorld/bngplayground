@@ -1,0 +1,55 @@
+models:
+  - file: BLBR.bngl
+    id: BLBR
+    name: "BLBR"
+    description: "title: BLBR.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: cBNGL_simple.bngl
+    id: cBNGL_simple
+    name: "cBNGL simple"
+    description: "A simplified signal transduction model including the following processes:"
+    tags: []
+    bng2_compatible: true
+  - file: LR.bngl
+    id: LR
+    name: "LR"
+    description: "title: LR.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: LRR.bngl
+    id: LRR
+    name: "LRR"
+    description: "title: LRR.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: LRR_comp.bngl
+    id: LRR_comp
+    name: "LRR comp"
+    description: "title: LRR_comp.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: LR_comp.bngl
+    id: LR_comp
+    name: "LR comp"
+    description: "title: LR_comp.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: LV_comp.bngl
+    id: LV_comp
+    name: "LV comp"
+    description: "title: LV_comp.bgl"
+    tags: []
+    bng2_compatible: true
+  - file: organelle_transport.bngl
+    id: organelle_transport
+    name: "organelle transport"
+    description: "title: organelle_transport.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: organelle_transport_struct.bngl
+    id: organelle_transport_struct
+    name: "organelle transport struct"
+    description: "title: organelle_transport_abcd.bngl"
+    tags: []
+    bng2_compatible: true

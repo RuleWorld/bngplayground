@@ -1,0 +1,7 @@
+models:
+  - file: Kalamazoo-Portage_MI.bngl
+    id: Kalamazoo-Portage_MI
+    name: "Kalamazoo Portage MI"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

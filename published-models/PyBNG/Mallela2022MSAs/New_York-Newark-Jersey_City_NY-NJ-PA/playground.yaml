@@ -1,0 +1,7 @@
+models:
+  - file: New_York-Newark-Jersey_City_NY-NJ-PA.bngl
+    id: New_York-Newark-Jersey_City_NY-NJ-PA
+    name: "New York Newark Jersey City NY NJ PA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

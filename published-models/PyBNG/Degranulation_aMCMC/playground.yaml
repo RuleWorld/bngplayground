@@ -1,0 +1,7 @@
+models:
+  - file: model.bngl
+    id: model
+    name: "model"
+    description: "A model of IgE receptor signaling"
+    tags: []
+    bng2_compatible: true

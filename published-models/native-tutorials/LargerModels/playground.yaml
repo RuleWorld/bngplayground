@@ -1,0 +1,31 @@
+models:
+  - file: Chylek_library.bngl
+    id: Chylek_library
+    name: "Chylek library"
+    description: "Created by BioNetGen 2.2.6"
+    tags: []
+    bng2_compatible: true
+  - file: Creamer_2012.bngl
+    id: Creamer_2012
+    name: "Creamer 2012"
+    description: "Initial values"
+    tags: []
+    bng2_compatible: true
+  - file: egfr_simple.bngl
+    id: egfr_simple
+    name: "egfr simple"
+    description: "This is a demo model of EGFR signaling."
+    tags: []
+    bng2_compatible: true
+  - file: FceRI_ji.bngl
+    id: FceRI_ji
+    name: "FceRI ji"
+    description: "title: FceRI_ji.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: Suderman_2013.bngl
+    id: Suderman_2013
+    name: "Suderman 2013"
+    description: "Ensemble model translated into BNGL"
+    tags: []
+    bng2_compatible: true

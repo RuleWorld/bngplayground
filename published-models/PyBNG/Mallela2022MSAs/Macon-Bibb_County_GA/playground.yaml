@@ -1,0 +1,7 @@
+models:
+  - file: Macon-Bibb_County_GA.bngl
+    id: Macon-Bibb_County_GA
+    name: "Macon Bibb County GA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

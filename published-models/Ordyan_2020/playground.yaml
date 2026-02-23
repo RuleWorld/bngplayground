@@ -1,0 +1,19 @@
+models:
+  - file: CaMKII_holo.bngl
+    id: CaMKII_holo
+    name: "Ordyan 2020: CaMKII holo"
+    description: "CaMKII holo"
+    tags: [published, neuroscience]
+    bng2_compatible: false
+  - file: extra_CaMKII_Holo.bngl
+    id: extra_CaMKII_Holo
+    name: "Ordyan 2020: extra CaMKII holo"
+    description: "Extra CaMKII holo (supplement)"
+    tags: [published, neuroscience]
+    bng2_compatible: false
+  - file: mCaMKII_Ca_Spike.bngl
+    id: mCaMKII_Ca_Spike
+    name: "Ordyan 2020: mCaMKII Ca Spike"
+    description: "mCaMKII Ca Spike model"
+    tags: [published, neuroscience]
+    bng2_compatible: false

@@ -1,0 +1,7 @@
+models:
+  - file: Grand_Rapids-Kentwood_MI.bngl
+    id: Grand_Rapids-Kentwood_MI
+    name: "Grand Rapids Kentwood MI"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

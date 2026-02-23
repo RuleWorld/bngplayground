@@ -1,0 +1,7 @@
+models:
+  - file: San_Luis_Obispo-Paso_Robles_CA.bngl
+    id: San_Luis_Obispo-Paso_Robles_CA
+    name: "San Luis Obispo Paso Robles CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

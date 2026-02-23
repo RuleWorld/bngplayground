@@ -1,0 +1,7 @@
+models:
+  - file: Omaha-Council_Bluffs_NE-IA.bngl
+    id: Omaha-Council_Bluffs_NE-IA
+    name: "Omaha Council Bluffs NE IA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

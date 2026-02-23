@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "tsx tools/build/generateEmbeddings.mjs && vite build",
+    "build": "tsx tools/build/copy-models-to-public.ts && tsx tools/build/generate-manifest.ts && tsx tools/build/generateEmbeddings.mjs && vite build",
     "build:quick": "vite build",
+    "copy:models": "tsx tools/build/copy-models-to-public.ts",
     "build:verify": "node scripts/check_dist.js",
     "build:full": "npm run build && npm run build:verify",
     "preview": "vite preview",

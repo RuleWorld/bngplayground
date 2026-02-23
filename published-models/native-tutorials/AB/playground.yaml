@@ -1,0 +1,7 @@
+models:
+  - file: AB.bngl
+    id: AB
+    name: "AB"
+    description: "BioNetGen model: AB"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: El_Centro_CA.bngl
+    id: El_Centro_CA
+    name: "El Centro CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

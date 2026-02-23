@@ -1,0 +1,7 @@
+models:
+  - file: Manchester-Nashua_NH.bngl
+    id: Manchester-Nashua_NH
+    name: "Manchester Nashua NH"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

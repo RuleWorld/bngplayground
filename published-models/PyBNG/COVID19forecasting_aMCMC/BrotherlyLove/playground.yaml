@@ -1,0 +1,7 @@
+models:
+  - file: m8.bngl
+    id: m8
+    name: "m8"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

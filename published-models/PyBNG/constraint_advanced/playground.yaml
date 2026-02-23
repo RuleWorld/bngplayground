@@ -1,0 +1,13 @@
+models:
+  - file: polynomial.bngl
+    id: polynomial
+    name: "polynomial"
+    description: "Implementation of the parabola from the Mitra constrained optimization manuscript Fig. 1"
+    tags: []
+    bng2_compatible: true
+  - file: polynomial_ground.bngl
+    id: polynomial_ground
+    name: "polynomial ground"
+    description: "Implementation of the parabola from the Mitra constrained optimization manuscript Fig. 1"
+    tags: []
+    bng2_compatible: true

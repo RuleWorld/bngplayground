@@ -1,0 +1,7 @@
+models:
+  - file: Oxnard-Thousand_Oaks-Ventura_CA.bngl
+    id: Oxnard-Thousand_Oaks-Ventura_CA
+    name: "Oxnard Thousand Oaks Ventura CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

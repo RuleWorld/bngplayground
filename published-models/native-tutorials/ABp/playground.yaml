@@ -1,0 +1,31 @@
+models:
+  - file: ABp.bngl
+    id: ABp
+    name: "ABp"
+    description: "title: ABp.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: ABp_approx.bngl
+    id: ABp_approx
+    name: "ABp approx"
+    description: "title: ABp.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: GK.bngl
+    id: GK
+    name: "GK"
+    description: "title: GK.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: Lisman.bngl
+    id: Lisman
+    name: "Lisman"
+    description: "title: auto.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: Lisman_bifurcate.bngl
+    id: Lisman_bifurcate
+    name: "Lisman bifurcate"
+    description: "title: Lisman_bifurcate.bngl"
+    tags: []
+    bng2_compatible: true

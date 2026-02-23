@@ -1,0 +1,7 @@
+models:
+  - file: Abilene_TX.bngl
+    id: Abilene_TX
+    name: "Abilene TX"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

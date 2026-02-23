@@ -1,0 +1,13 @@
+models:
+  - file: FceRI_viz.bngl
+    id: FceRI_viz
+    name: "FceRI viz"
+    description: "title: FceRI_viz.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: visualize.bngl
+    id: visualize
+    name: "visualize"
+    description: "BioNetGen model: visualize"
+    tags: []
+    bng2_compatible: true

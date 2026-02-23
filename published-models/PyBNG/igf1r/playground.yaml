@@ -1,0 +1,7 @@
+models:
+  - file: IGF1R_Model_receptor_activation_bnf.bngl
+    id: IGF1R_Model_receptor_activation_bnf
+    name: "IGF1R Model receptor activation bnf"
+    description: "Author: William S. Hlavacek"
+    tags: []
+    bng2_compatible: true

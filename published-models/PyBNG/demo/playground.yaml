@@ -1,0 +1,7 @@
+models:
+  - file: parabola.bngl
+    id: parabola
+    name: "parabola"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true

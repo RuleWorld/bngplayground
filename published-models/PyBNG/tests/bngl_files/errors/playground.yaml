@@ -1,0 +1,43 @@
+models:
+  - file: actions_syntax.bngl
+    id: actions_syntax
+    name: "actions syntax"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: bng_error.bngl
+    id: bng_error
+    name: "bng error"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: free_missing.bngl
+    id: free_missing
+    name: "free missing"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: no_frees.bngl
+    id: no_frees
+    name: "no frees"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: no_generate_network.bngl
+    id: no_generate_network
+    name: "no generate network"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: no_suffix.bngl
+    id: no_suffix
+    name: "no suffix"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: simple_nf_seed.bngl
+    id: simple_nf_seed
+    name: "simple nf seed"
+    description: "BioNetGen model: simple nf seed"
+    tags: []
+    bng2_compatible: true

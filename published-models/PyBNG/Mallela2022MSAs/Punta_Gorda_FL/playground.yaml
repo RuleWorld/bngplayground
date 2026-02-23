@@ -1,0 +1,7 @@
+models:
+  - file: Punta_Gorda_FL.bngl
+    id: Punta_Gorda_FL
+    name: "Punta Gorda FL"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

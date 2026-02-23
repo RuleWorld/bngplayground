@@ -1,0 +1,7 @@
+models:
+  - file: Pittsfield_MA.bngl
+    id: Pittsfield_MA
+    name: "Pittsfield MA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

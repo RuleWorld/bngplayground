@@ -1,0 +1,7 @@
+models:
+  - file: parabola2.bngl
+    id: parabola2
+    name: "parabola2"
+    description: "A file for testing behavior with duplicate file names"
+    tags: []
+    bng2_compatible: true

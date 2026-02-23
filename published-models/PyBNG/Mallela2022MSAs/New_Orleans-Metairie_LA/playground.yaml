@@ -1,0 +1,7 @@
+models:
+  - file: New_Orleans-Metairie_LA.bngl
+    id: New_Orleans-Metairie_LA
+    name: "New Orleans Metairie LA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

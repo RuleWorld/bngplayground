@@ -1,0 +1,7 @@
+models:
+  - file: Dalton_GA.bngl
+    id: Dalton_GA
+    name: "Dalton GA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

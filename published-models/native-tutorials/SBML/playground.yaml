@@ -1,0 +1,7 @@
+models:
+  - file: translateSBML.bngl
+    id: translateSBML
+    name: "translateSBML"
+    description: "title: translateSBML.bngl"
+    tags: []
+    bng2_compatible: true

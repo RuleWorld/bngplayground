@@ -1,0 +1,31 @@
+models:
+  - file: MEK1_KO.bngl
+    id: MEK1_KO
+    name: "MEK1 KO"
+    description: "=============================================================================="
+    tags: []
+    bng2_compatible: true
+  - file: MEK1_N78G.bngl
+    id: MEK1_N78G
+    name: "MEK1 N78G"
+    description: "=============================================================================="
+    tags: []
+    bng2_compatible: true
+  - file: MEK1_T292A.bngl
+    id: MEK1_T292A
+    name: "MEK1 T292A"
+    description: "=============================================================================="
+    tags: []
+    bng2_compatible: true
+  - file: MEK1_T292D.bngl
+    id: MEK1_T292D
+    name: "MEK1 T292D"
+    description: "=============================================================================="
+    tags: []
+    bng2_compatible: true
+  - file: MEK1_WT.bngl
+    id: MEK1_WT
+    name: "MEK1 WT"
+    description: "=============================================================================="
+    tags: []
+    bng2_compatible: true

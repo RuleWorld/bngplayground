@@ -1929,185 +1929,186 @@
       "file": "Barua_2013.bngl",
       "id": "Barua_2013",
       "name": "Barua 2013",
-      "description": "BioNetGen model: Barua 2013",
+      "description": "Beta-catenin destruction",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Barua_2013.bngl"
     },
     {
       "file": "Blinov_ran.bngl",
       "id": "Blinov_ran",
       "name": "Blinov ran",
-      "description": "BioNetGen model: Blinov ran",
+      "description": "Ran GTPase cycle",
       "tags": [
-        ""
+        "published",
+        "nfsim"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Blinov_ran.bngl"
     },
     {
       "file": "Hat_2016.bngl",
       "id": "Hat_2016",
       "name": "Hat 2016",
-      "description": "This BioNetGen model code features the article:",
+      "description": "Nuclear transport",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Hat_2016.bngl"
     },
     {
       "file": "Kocieniewski_2012.bngl",
       "id": "Kocieniewski_2012",
       "name": "Kocieniewski 2012",
-      "description": "Molecule Numbers",
+      "description": "Actin dynamics",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Kocieniewski_2012.bngl"
     },
     {
       "file": "notch.bngl",
       "id": "notch",
-      "name": "notch",
-      "description": "This model follows Figure 2 of Grabner et al. (Nat. Rev. Cancer 6:347-359).",
+      "name": "Notch",
+      "description": "Notch signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/notch.bngl"
     },
     {
       "file": "Pekalski_2013.bngl",
       "id": "Pekalski_2013",
       "name": "Pekalski 2013",
-      "description": "# # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #",
+      "description": "Spontaneous signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Pekalski_2013.bngl"
     },
     {
       "file": "Rule_based_Ran_transport.bngl",
       "id": "Rule_based_Ran_transport",
       "name": "Rule based Ran transport",
-      "description": "BioNetGen model: Rule based Ran transport",
+      "description": "Nuclear Ran transport",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Rule_based_Ran_transport.bngl"
     },
     {
       "file": "Rule_based_Ran_transport_draft.bngl",
       "id": "Rule_based_Ran_transport_draft",
       "name": "Rule based Ran transport draft",
-      "description": "BioNetGen model: Rule based Ran transport draft",
+      "description": "Ran transport (draft)",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/Rule_based_Ran_transport_draft.bngl"
     },
     {
       "file": "vilar_2002.bngl",
       "id": "vilar_2002",
-      "name": "vilar 2002",
-      "description": "BioNetGen model: vilar 2002",
+      "name": "Vilar 2002",
+      "description": "Genetic oscillator",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/vilar_2002.bngl"
     },
     {
       "file": "vilar_2002b.bngl",
       "id": "vilar_2002b",
-      "name": "vilar 2002b",
-      "description": "BioNetGen model: vilar 2002b",
+      "name": "Vilar 2002b",
+      "description": "Gene oscillator",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/vilar_2002b.bngl"
     },
     {
       "file": "vilar_2002c.bngl",
       "id": "vilar_2002c",
-      "name": "vilar 2002c",
-      "description": "BNGL simple model -- demonstrate core BNG features",
+      "name": "Vilar 2002c",
+      "description": "Gene oscillator",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/vilar_2002c.bngl"
     },
     {
       "file": "wnt.bngl",
       "id": "wnt",
-      "name": "wnt",
-      "description": "BioNetGen model: wnt",
+      "name": "Wnt Signaling",
+      "description": "Wnt signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/cell-regulation/wnt.bngl"
     },
     {
       "file": "Barua_2007.bngl",
       "id": "Barua_2007",
       "name": "Barua 2007",
-      "description": "Base model of Shp2 regulation from Barua, Faeder, and Haugh (2006).",
+      "description": "Model from Haugh (2006)",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Barua_2007.bngl"
     },
     {
       "file": "Barua_2009.bngl",
       "id": "Barua_2009",
       "name": "Barua 2009",
-      "description": "BioNetGen model: Barua 2009",
+      "description": "JAK2-SH2B signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Barua_2009.bngl"
     },
     {
       "file": "Blinov_2006.bngl",
       "id": "Blinov_2006",
       "name": "Blinov 2006",
-      "description": "BioNetGen model: Blinov 2006",
+      "description": "Phosphotyrosine signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Blinov_2006.bngl"
     },
     {
       "file": "Chattaraj_2021.bngl",
       "id": "Chattaraj_2021",
       "name": "Chattaraj 2021",
-      "description": "Clustering of three signaling molecules - Nephrin, Nck and NWASP",
+      "description": "NFkB oscillations",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Chattaraj_2021.bngl"
     },
     {
       "file": "Dushek_2011.bngl",
       "id": "Dushek_2011",
       "name": "Dushek 2011",
-      "description": "Enzymatic modification of a 20-site substrate using the 2-step binding model.",
+      "description": "TCR signaling",
       "tags": [
-        ""
+        "published"
       ],
       "bng2_compatible": true,
       "path": "published-models/complex-models/Dushek_2011.bngl"
@@ -2116,9 +2117,9 @@
       "file": "Dushek_2014.bngl",
       "id": "Dushek_2014",
       "name": "Dushek 2014",
-      "description": "Model of a kinase (E) and phosphatase (F) actin on a biosensor (B) .",
+      "description": "TCR signaling dynamics",
       "tags": [
-        ""
+        "published"
       ],
       "bng2_compatible": true,
       "path": "published-models/complex-models/Dushek_2014.bngl"
@@ -2127,86 +2128,86 @@
       "file": "Erdem_2021.bngl",
       "id": "Erdem_2021",
       "name": "Erdem 2021",
-      "description": "CMM for MCF7 cell line",
+      "description": "InsR/IGF1R signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Erdem_2021.bngl"
     },
     {
       "file": "Jung_2017.bngl",
       "id": "Jung_2017",
       "name": "Jung 2017",
-      "description": "BioNetGen model: Jung 2017",
+      "description": "M1 receptor signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Jung_2017.bngl"
     },
     {
       "file": "Kesseler_2013.bngl",
       "id": "Kesseler_2013",
       "name": "Kesseler 2013",
-      "description": "G2 checkpoint and transition to mitosis.",
+      "description": "G2/Mitosis transition",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Kesseler_2013.bngl"
     },
     {
       "file": "Kozer_2013.bngl",
       "id": "Kozer_2013",
       "name": "Kozer 2013",
-      "description": "File S1 (a plain-text file)",
+      "description": "EGFR oligomerization",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Kozer_2013.bngl"
     },
     {
       "file": "Kozer_2014.bngl",
       "id": "Kozer_2014",
       "name": "Kozer 2014",
-      "description": "Supplemental file (a plain-text file)",
+      "description": "Grb2-EGFR recruitment",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Kozer_2014.bngl"
     },
     {
       "file": "mapk-dimers.bngl",
       "id": "mapk-dimers",
-      "name": "mapk dimers",
-      "description": "BioNetGen model: mapk dimers",
+      "name": "MAPK Dimers",
+      "description": "MAPK dimerization",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/mapk-dimers.bngl"
     },
     {
       "file": "mapk-monomers.bngl",
       "id": "mapk-monomers",
-      "name": "mapk monomers",
-      "description": "BioNetGen model: mapk monomers",
+      "name": "MAPK Monomers",
+      "description": "MAPK cascade",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/mapk-monomers.bngl"
     },
     {
       "file": "Massole_2023.bngl",
       "id": "Massole_2023",
       "name": "Massole 2023",
-      "description": "BioNetGen model: Massole 2023",
+      "description": "Epo receptor signaling",
       "tags": [
-        ""
+        "published"
       ],
       "bng2_compatible": true,
       "path": "published-models/complex-models/Massole_2023.bngl"
@@ -2215,75 +2216,77 @@
       "file": "McMillan_2021.bngl",
       "id": "McMillan_2021",
       "name": "McMillan 2021",
-      "description": "Reagents Concentration in nM",
+      "description": "TNF signaling",
       "tags": [
-        ""
+        "published",
+        "nfsim"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/McMillan_2021.bngl"
     },
     {
       "file": "Nag_2009.bngl",
       "id": "Nag_2009",
       "name": "Nag 2009",
-      "description": "Nag, Monine, Faeder, Goldstein 2009",
+      "description": "LAT-Grb2-SOS1 signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Nag_2009.bngl"
     },
     {
       "file": "Nosbisch_2022.bngl",
       "id": "Nosbisch_2022",
       "name": "Nosbisch 2022",
-      "description": "BioNetGen model: Nosbisch 2022",
+      "description": "RTK-PLCgamma1 signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Nosbisch_2022.bngl"
     },
     {
       "file": "Zhang_2021.bngl",
       "id": "Zhang_2021",
       "name": "Zhang 2021",
-      "description": "BioNetGen model: Zhang 2021",
+      "description": "CAR-T signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Zhang_2021.bngl"
     },
     {
       "file": "Zhang_2023.bngl",
       "id": "Zhang_2023",
       "name": "Zhang 2023",
-      "description": "BioNetGen model: Zhang 2023",
+      "description": "VEGF signaling",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/complex-models/Zhang_2023.bngl"
     },
     {
       "file": "Blinov_egfr.bngl",
       "id": "Blinov_egfr",
       "name": "Blinov egfr",
-      "description": "BioNetGen model: Blinov egfr",
+      "description": "EGFR signaling model",
       "tags": [
-        ""
+        "published",
+        "nfsim"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/growth-factor-signaling/Blinov_egfr.bngl"
     },
     {
       "file": "Lang_2024.bngl",
       "id": "Lang_2024",
       "name": "Lang 2024",
-      "description": "BioNetGen model: Lang 2024",
+      "description": "Cell cycle regulation",
       "tags": [
-        ""
+        "published"
       ],
       "bng2_compatible": true,
       "path": "published-models/growth-factor-signaling/Lang_2024.bngl"
@@ -2292,42 +2295,43 @@
       "file": "Ligon_2014.bngl",
       "id": "Ligon_2014",
       "name": "Ligon 2014",
-      "description": "BioNetGen model: Ligon 2014",
+      "description": "Lipoplex delivery",
       "tags": [
-        ""
+        "published",
+        "nfsim"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/growth-factor-signaling/Ligon_2014.bngl"
     },
     {
       "file": "Mertins_2023.bngl",
       "id": "Mertins_2023",
       "name": "Mertins 2023",
-      "description": "BioNetGen model: Mertins 2023",
+      "description": "DNA damage response",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/growth-factor-signaling/Mertins_2023.bngl"
     },
     {
       "file": "Rule_based_egfr_compart.bngl",
       "id": "Rule_based_egfr_compart",
       "name": "Rule based egfr compart",
-      "description": "BioNetGen model: Rule based egfr compart",
+      "description": "Compartmental EGFR model",
       "tags": [
-        ""
+        "published"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/growth-factor-signaling/Rule_based_egfr_compart.bngl"
     },
     {
       "file": "Rule_based_egfr_tutorial.bngl",
       "id": "Rule_based_egfr_tutorial",
-      "name": "Rule based egfr tutorial",
-      "description": "BioNetGen model: Rule based egfr tutorial",
+      "name": "Faeder 2009",
+      "description": "EGFR signaling",
       "tags": [
-        ""
+        "published"
       ],
       "bng2_compatible": true,
       "path": "published-models/growth-factor-signaling/Rule_based_egfr_tutorial.bngl"
@@ -2335,93 +2339,212 @@
     {
       "file": "An_2009.bngl",
       "id": "An_2009",
-      "name": "An 2009 - NF-κB Signaling",
-      "description": "Detailed model of NF-κB signaling pathway dynamics",
+      "name": "An 2009",
+      "description": "TLR4 signaling",
       "tags": [
-        "immune-signaling",
-        "nfkb"
+        "published",
+        "immunology"
       ],
       "bng2_compatible": true,
       "path": "published-models/immune-signaling/An_2009.bngl"
     },
     {
-      "file": "Faeder_2003.bngl",
-      "id": "Faeder_2003",
-      "name": "Faeder 2003 - FcεRI Signaling",
-      "description": "Model of early events in FcεRI signaling",
-      "tags": [
-        "immune-signaling",
-        "fceri"
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/immune-signaling/Faeder_2003.bngl"
-    },
-    {
       "file": "BaruaBCR_2012.bngl",
       "id": "BaruaBCR_2012",
-      "name": "Barua 2012 - BCR Signaling",
-      "description": "Model of B-cell receptor signaling",
+      "name": "Barua 2012",
+      "description": "BCR signaling",
       "tags": [
-        "immune-signaling",
-        "bcr"
+        "published",
+        "immunology"
       ],
       "bng2_compatible": true,
       "path": "published-models/immune-signaling/BaruaBCR_2012.bngl"
     },
     {
-      "file": "Cheemalavagu_JAK_STAT.bngl",
-      "id": "Cheemalavagu_JAK_STAT",
-      "name": "Cheemalavagu JAK STAT",
-      "description": "reaction rules: 29",
+      "file": "BaruaFceRI_2012.bngl",
+      "id": "BaruaFceRI_2012",
+      "name": "BaruaFceRI 2012",
+      "description": "FcÃƒÅ½Ã‚ÂµRI signaling",
       "tags": [
-        ""
+        "published",
+        "immunology"
       ],
-      "bng2_compatible": true,
-      "path": "published-models/literature/Cheemalavagu_JAK_STAT.bngl"
+      "bng2_compatible": false,
+      "path": "published-models/immune-signaling/BaruaFceRI_2012.bngl"
     },
     {
-      "file": "Dolan_2015.bngl",
-      "id": "Dolan_2015",
-      "name": "Dolan 2015",
-      "description": "combined model, p53 (Carole) and NHEJ",
+      "file": "ChylekFceRI_2014.bngl",
+      "id": "ChylekFceRI_2014",
+      "name": "Chylek 2014 (FceRI)",
+      "description": "FceRI signaling",
       "tags": [
-        ""
+        "published",
+        "immunology"
       ],
-      "bng2_compatible": true,
-      "path": "published-models/literature/Dolan_2015.bngl"
+      "bng2_compatible": false,
+      "path": "published-models/immune-signaling/ChylekFceRI_2014.bngl"
     },
     {
-      "file": "Lin_ERK_2019.bngl",
-      "id": "Lin_ERK_2019",
-      "name": "Lin ERK 2019",
-      "description": "filename: ERK_model.bngl",
+      "file": "ChylekTCR_2014.bngl",
+      "id": "ChylekTCR_2014",
+      "name": "Chylek 2014 (TCR)",
+      "description": "TCR signaling",
       "tags": [
-        ""
+        "published",
+        "immunology"
       ],
       "bng2_compatible": true,
-      "path": "published-models/literature/Lin_ERK_2019.bngl"
+      "path": "published-models/immune-signaling/ChylekTCR_2014.bngl"
+    },
+    {
+      "file": "Faeder_2003.bngl",
+      "id": "Faeder_2003",
+      "name": "Faeder 2003",
+      "description": "FceRI signaling",
+      "tags": [
+        "published",
+        "immunology"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/immune-signaling/Faeder_2003.bngl"
+    },
+    {
+      "file": "innate_immunity.bngl",
+      "id": "innate_immunity",
+      "name": "Korwek 2023",
+      "description": "Immune response",
+      "tags": [
+        "published",
+        "immunology"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/immune-signaling/innate_immunity.bngl"
+    },
+    {
+      "file": "Jaruszewicz-Blonska_2023.bngl",
+      "id": "Jaruszewicz-Blonska_2023",
+      "name": "Jaruszewicz 2023",
+      "description": "T-cell discrimination",
+      "tags": [
+        "published",
+        "immunology"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/immune-signaling/Jaruszewicz-Blonska_2023.bngl"
+    },
+    {
+      "file": "Model_ZAP.bngl",
+      "id": "Model_ZAP",
+      "name": "Model ZAP",
+      "description": "ZAP-70 recruitment",
+      "tags": [
+        "published",
+        "immunology",
+        "nfsim"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/immune-signaling/Model_ZAP.bngl"
+    },
+    {
+      "file": "Mukhopadhyay_2013.bngl",
+      "id": "Mukhopadhyay_2013",
+      "name": "Mukhopadhyay 2013",
+      "description": "FceRI signaling",
+      "tags": [
+        "published",
+        "immunology"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/immune-signaling/Mukhopadhyay_2013.bngl"
+    },
+    {
+      "file": "fceri_fyn.bngl",
+      "id": "fceri_fyn",
+      "name": "FceRI Fyn",
+      "description": "FceRI signaling",
+      "tags": [
+        "published",
+        "immunology"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/immune-signaling/fceri_fyn.bngl"
+    },
+    {
+      "file": "tlbr.bngl",
+      "id": "tlbr",
+      "name": "TLBR Tutorial",
+      "description": "Ligand binding",
+      "tags": [
+        "published",
+        "immunology"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/immune-signaling/tlbr.bngl"
     },
     {
       "file": "Lin_Prion_2019.bngl",
       "id": "Lin_Prion_2019",
-      "name": "Lin Prion 2019",
-      "description": "filename: prion_model.bngl",
+      "name": "Lin 2019",
+      "description": "Prion replication",
       "tags": [
-        ""
+        "published",
+        "literature",
+        "prion"
       ],
       "bng2_compatible": true,
       "path": "published-models/literature/Lin_Prion_2019.bngl"
     },
     {
+      "file": "Dolan_2015.bngl",
+      "id": "Dolan_2015",
+      "name": "Dolan 2015",
+      "description": "Insulin signaling",
+      "tags": [
+        "published",
+        "literature",
+        "signaling"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/literature/Dolan_2015.bngl"
+    },
+    {
+      "file": "Lin_ERK_2019.bngl",
+      "id": "Lin_ERK_2019",
+      "name": "Lin 2019",
+      "description": "ERK signaling",
+      "tags": [
+        "published",
+        "literature",
+        "signaling"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/literature/Lin_ERK_2019.bngl"
+    },
+    {
       "file": "Lin_TCR_2019.bngl",
       "id": "Lin_TCR_2019",
-      "name": "Lin TCR 2019",
-      "description": "filename: TCR_model.bngl",
+      "name": "Lin 2019",
+      "description": "TCR signaling",
       "tags": [
-        ""
+        "published",
+        "literature",
+        "immune"
       ],
       "bng2_compatible": true,
       "path": "published-models/literature/Lin_TCR_2019.bngl"
+    },
+    {
+      "file": "Cheemalavagu_JAK_STAT.bngl",
+      "id": "Cheemalavagu_JAK_STAT",
+      "name": "Cheemalavagu 2024",
+      "description": "JAK-STAT signaling",
+      "tags": [
+        "published",
+        "literature",
+        "signaling"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/literature/Cheemalavagu_JAK_STAT.bngl"
     },
     {
       "file": "Alabama.bngl",
@@ -2743,6 +2866,460 @@
       "path": "published-models/native-tutorials/LargerModels/Suderman_2013.bngl"
     },
     {
+      "file": "AB.bngl",
+      "id": "AB",
+      "name": "AB",
+      "description": "Bivalent binding",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/AB.bngl"
+    },
+    {
+      "file": "ABC.bngl",
+      "id": "ABC",
+      "name": "ABC",
+      "description": "Cooperative binding",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/ABC.bngl"
+    },
+    {
+      "file": "ABC_scan.bngl",
+      "id": "ABC_scan",
+      "name": "ABC Scan",
+      "description": "Cooperative (scan)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/ABC_scan.bngl"
+    },
+    {
+      "file": "ABC_ssa.bngl",
+      "id": "ABC_ssa",
+      "name": "ABC Ssa",
+      "description": "Cooperative (SSA)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/ABC_ssa.bngl"
+    },
+    {
+      "file": "LV.bngl",
+      "id": "LV",
+      "name": "LV",
+      "description": "Predator-prey",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/LV.bngl"
+    },
+    {
+      "file": "ABp.bngl",
+      "id": "ABp",
+      "name": "ABp",
+      "description": "Phosphorylation logic",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/ABp.bngl"
+    },
+    {
+      "file": "ABp_approx.bngl",
+      "id": "ABp_approx",
+      "name": "ABp Approx",
+      "description": "Phosphorylation (approx)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/ABp_approx.bngl"
+    },
+    {
+      "file": "GK.bngl",
+      "id": "GK",
+      "name": "GK",
+      "description": "Goldbeter-Koshland",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/GK.bngl"
+    },
+    {
+      "file": "Lisman.bngl",
+      "id": "Lisman",
+      "name": "Lisman",
+      "description": "Lisman bistable",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/Lisman.bngl"
+    },
+    {
+      "file": "Lisman_bifurcate.bngl",
+      "id": "Lisman_bifurcate",
+      "name": "Lisman Bifurcate",
+      "description": "Lisman bifurcation",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/Lisman_bifurcate.bngl"
+    },
+    {
+      "file": "BAB.bngl",
+      "id": "BAB",
+      "name": "BAB",
+      "description": "Trivalent binding",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/BAB.bngl"
+    },
+    {
+      "file": "BAB_coop.bngl",
+      "id": "BAB_coop",
+      "name": "BAB Coop",
+      "description": "Trivalent (coop)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/BAB_coop.bngl"
+    },
+    {
+      "file": "BAB_scan.bngl",
+      "id": "BAB_scan",
+      "name": "BAB Scan",
+      "description": "Trivalent (scan)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/BAB_scan.bngl"
+    },
+    {
+      "file": "BLBR.bngl",
+      "id": "blbr",
+      "name": "BLBR Tutorial",
+      "description": "Bivalent ligand/receptor (tutorial)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/BLBR.bngl"
+    },
+    {
+      "file": "cBNGL_simple.bngl",
+      "id": "cBNGL_simple",
+      "name": "CBNGL Simple",
+      "description": "Simple compartmental",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/cBNGL_simple.bngl"
+    },
+    {
+      "file": "LR.bngl",
+      "id": "LR",
+      "name": "LR",
+      "description": "Ligand-receptor",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/LR.bngl"
+    },
+    {
+      "file": "LRR.bngl",
+      "id": "LRR",
+      "name": "LRR",
+      "description": "Receptor recruitment",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/LRR.bngl"
+    },
+    {
+      "file": "LRR_comp.bngl",
+      "id": "LRR_comp",
+      "name": "LRR Comp",
+      "description": "Compartmental LRR",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/LRR_comp.bngl"
+    },
+    {
+      "file": "LR_comp.bngl",
+      "id": "LR_comp",
+      "name": "LR Comp",
+      "description": "Compartmental LR",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/LR_comp.bngl"
+    },
+    {
+      "file": "LV_comp.bngl",
+      "id": "LV_comp",
+      "name": "LV Comp",
+      "description": "Compartmental LV",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/LV_comp.bngl"
+    },
+    {
+      "file": "organelle_transport.bngl",
+      "id": "organelle_transport",
+      "name": "Organelle Transport",
+      "description": "Organelle transport",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/organelle_transport.bngl"
+    },
+    {
+      "file": "organelle_transport_struct.bngl",
+      "id": "organelle_transport_struct",
+      "name": "Organelle Transport Struct",
+      "description": "Transport (struct)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/organelle_transport_struct.bngl"
+    },
+    {
+      "file": "Chylek_library.bngl",
+      "id": "Chylek_library",
+      "name": "Chylek Library",
+      "description": "Signaling library",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/Chylek_library.bngl"
+    },
+    {
+      "file": "Creamer_2012.bngl",
+      "id": "Creamer_2012",
+      "name": "Creamer 2012",
+      "description": "Aggregation model",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/Creamer_2012.bngl"
+    },
+    {
+      "file": "egfr_simple.bngl",
+      "id": "egfr_simple",
+      "name": "Egfr Simple",
+      "description": "Basic EGFR model",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/egfr_simple.bngl"
+    },
+    {
+      "file": "FceRI_ji.bngl",
+      "id": "FceRI_ji",
+      "name": "FceRI Ji",
+      "description": "FcÃƒÅ½Ã‚ÂµRI signaling",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/FceRI_ji.bngl"
+    },
+    {
+      "file": "Suderman_2013.bngl",
+      "id": "Suderman_2013",
+      "name": "Suderman 2013",
+      "description": "Signaling model",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/Suderman_2013.bngl"
+    },
+    {
+      "file": "birth-death.bngl",
+      "id": "birth-death",
+      "name": "Birth-Death",
+      "description": "Stochastic process",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/birth-death.bngl"
+    },
+    {
+      "file": "CircadianOscillator.bngl",
+      "id": "CircadianOscillator",
+      "name": "CircadianOscillator",
+      "description": "Circadian rhythm",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/CircadianOscillator.bngl"
+    },
+    {
+      "file": "ComplexDegradation.bngl",
+      "id": "ComplexDegradation",
+      "name": "ComplexDegradation",
+      "description": "Degradation model",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/ComplexDegradation.bngl"
+    },
+    {
+      "file": "Repressilator.bngl",
+      "id": "Repressilator",
+      "name": "Repressilator",
+      "description": "Repressilator circuit",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/Repressilator.bngl"
+    },
+    {
+      "file": "toggle.bngl",
+      "id": "toggle",
+      "name": "Toggle",
+      "description": "Toggle switch",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/toggle.bngl"
+    },
+    {
+      "file": "FceRI_viz.bngl",
+      "id": "FceRI_viz",
+      "name": "FceRI Viz",
+      "description": "FcÃƒÅ½Ã‚ÂµRI (viz)",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": false,
+      "path": "published-models/native-tutorials/FceRI_viz.bngl"
+    },
+    {
+      "file": "visualize.bngl",
+      "id": "visualize",
+      "name": "Visualize",
+      "description": "Visualization toy",
+      "tags": [
+        "published",
+        "tutorial",
+        "native"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/visualize.bngl"
+    },
+    {
+      "file": "SIR.bngl",
+      "id": "SIR",
+      "name": "SIR",
+      "description": "Epidemic model (tutorial)",
+      "tags": [
+        "published",
+        "epidemiology"
+      ],
+      "bng2_compatible": true,
+      "path": "published-models/native-tutorials/SIR.bngl"
+    },
+    {
       "file": "translateSBML.bngl",
       "id": "translateSBML",
       "name": "translateSBML",
@@ -2833,34 +3410,37 @@
     {
       "file": "CaMKII_holo.bngl",
       "id": "CaMKII_holo",
-      "name": "CaMKII holo",
-      "description": "Rate Constants",
+      "name": "Ordyan 2020: CaMKII holo",
+      "description": "CaMKII holo",
       "tags": [
-        ""
+        "published",
+        "neuroscience"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/Ordyan_2020/CaMKII_holo.bngl"
     },
     {
       "file": "extra_CaMKII_Holo.bngl",
       "id": "extra_CaMKII_Holo",
-      "name": "extra CaMKII Holo",
-      "description": "BioNetGen model: extra CaMKII Holo",
+      "name": "Ordyan 2020: extra CaMKII holo",
+      "description": "Extra CaMKII holo (supplement)",
       "tags": [
-        ""
+        "published",
+        "neuroscience"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/Ordyan_2020/extra_CaMKII_Holo.bngl"
     },
     {
       "file": "mCaMKII_Ca_Spike.bngl",
       "id": "mCaMKII_Ca_Spike",
-      "name": "mCaMKII Ca Spike",
-      "description": "Rate Constants",
+      "name": "Ordyan 2020: mCaMKII Ca Spike",
+      "description": "mCaMKII Ca Spike model",
       "tags": [
-        ""
+        "published",
+        "neuroscience"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/Ordyan_2020/mCaMKII_Ca_Spike.bngl"
     },
     {
@@ -7077,81 +7657,28 @@
       "path": "published-models/PyBNG/Miller2025_MEK_Isoforms/MEK_isoform_optimization_DE/MEK1_WT.bngl"
     },
     {
-      "file": "degranulation_model.bngl",
-      "id": "degranulation_model",
-      "name": "degranulation model",
-      "description": "filename: model.bngl",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/PyBNG/degranulation_model.bngl"
-    },
-    {
-      "file": "degranulation_model_tofit.bngl",
-      "id": "degranulation_model_tofit",
-      "name": "degranulation model tofit",
-      "description": "A model of IgE receptor signaling",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/PyBNG/degranulation_model_tofit.bngl"
-    },
-    {
       "file": "egfr_ode.bngl",
       "id": "egfr_ode",
-      "name": "egfr ode",
-      "description": "Filename: example1.bngl",
+      "name": "PyBNG: EGFR ODE",
+      "description": "EGFR ODE",
       "tags": [
-        ""
+        "published",
+        "PyBNG"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/PyBNG/egfr_ode.bngl"
     },
     {
-      "file": "fceri_gamma2.bngl",
-      "id": "fceri_gamma2",
-      "name": "fceri gamma2",
-      "description": "BioNetGen model: fceri gamma2",
+      "file": "degranulation_model.bngl",
+      "id": "degranulation_model",
+      "name": "PyBNG: Degranulation model",
+      "description": "Degranulation model",
       "tags": [
-        ""
+        "published",
+        "PyBNG"
       ],
       "bng2_compatible": true,
-      "path": "published-models/PyBNG/fceri_gamma2.bngl"
-    },
-    {
-      "file": "fceri_gamma2_ground_truth.bngl",
-      "id": "fceri_gamma2_ground_truth",
-      "name": "fceri gamma2 ground truth",
-      "description": "BioNetGen model: fceri gamma2 ground truth",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/PyBNG/fceri_gamma2_ground_truth.bngl"
-    },
-    {
-      "file": "IGF1R_Model_receptor_activation_bnf.bngl",
-      "id": "IGF1R_Model_receptor_activation_bnf",
-      "name": "IGF1R Model receptor activation bnf",
-      "description": "Author: William S. Hlavacek",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/PyBNG/IGF1R_Model_receptor_activation_bnf.bngl"
-    },
-    {
-      "file": "Myrtle_Beach-Conway-North_Myrtle_Beach_SC-NC.bngl",
-      "id": "Myrtle_Beach-Conway-North_Myrtle_Beach_SC-NC",
-      "name": "Myrtle Beach Conway North Myrtle Beach SC NC",
-      "description": "reporting period (1 d)",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/PyBNG/Myrtle_Beach-Conway-North_Myrtle_Beach_SC-NC.bngl"
+      "path": "published-models/PyBNG/degranulation_model.bngl"
     },
     {
       "file": "receptor.bngl",
@@ -7542,9 +8069,10 @@
       "file": "quasi_equilibrium.bngl",
       "id": "quasi_equilibrium",
       "name": "quasi equilibrium",
-      "description": "quasi_equilibrium.bngl",
+      "description": "Quasi-equilibrium approximation",
       "tags": [
-        ""
+        "published",
+        "toy models"
       ],
       "bng2_compatible": true,
       "path": "published-models/toy-models/quasi_equilibrium.bngl"
@@ -7553,97 +8081,83 @@
       "file": "chemistry.bngl",
       "id": "chemistry",
       "name": "chemistry",
-      "description": "BioNetGen model: chemistry",
+      "description": "Basic chemical reactions",
       "tags": [
-        ""
+        "published",
+        "tutorials"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/tutorials/chemistry.bngl"
     },
     {
       "file": "polymer.bngl",
       "id": "polymer",
       "name": "polymer",
-      "description": "BioNetGen model: polymer",
+      "description": "Polymerization model",
       "tags": [
-        ""
+        "published",
+        "tutorials",
+        "nfsim"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/tutorials/polymer.bngl"
     },
     {
       "file": "polymer_draft.bngl",
       "id": "polymer_draft",
       "name": "polymer draft",
-      "description": "BioNetGen model: polymer draft",
+      "description": "Polymerization (draft)",
       "tags": [
-        ""
+        "published",
+        "tutorials",
+        "nfsim"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/tutorials/polymer_draft.bngl"
-    },
-    {
-      "file": "polymer_fixed.bngl",
-      "id": "polymer_fixed",
-      "name": "polymer fixed",
-      "description": "Fixed Polymer Model - NFsim Compatible Version",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/tutorials/polymer_fixed.bngl"
     },
     {
       "file": "simple.bngl",
       "id": "simple",
       "name": "simple",
-      "description": "BNGL simple model -- demonstrate core BNG features",
+      "description": "Simple binding model",
       "tags": [
-        ""
+        "published",
+        "tutorials"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/tutorials/simple.bngl"
-    },
-    {
-      "file": "simple_nfsim_test.bngl",
-      "id": "simple_nfsim_test",
-      "name": "simple nfsim test",
-      "description": "Multi-site binding with scaffolding - a more complex NFsim test",
-      "tags": [
-        ""
-      ],
-      "bng2_compatible": true,
-      "path": "published-models/tutorials/simple_nfsim_test.bngl"
     },
     {
       "file": "toy1.bngl",
       "id": "toy1",
       "name": "toy1",
-      "description": "All text following the occurence of '#' character in a line is ignored.",
+      "description": "Basic signaling toy",
       "tags": [
-        ""
+        "published",
+        "tutorials"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/tutorials/toy1.bngl"
     },
     {
       "file": "toy2.bngl",
       "id": "toy2",
       "name": "toy2",
-      "description": "This is a test model. A modeler is encouraged to play with this model by changing the file",
+      "description": "Enzymatic reaction toy",
       "tags": [
-        ""
+        "published",
+        "tutorials"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/tutorials/toy2.bngl"
     },
     {
       "file": "CaOscillate_Func.bngl",
       "id": "CaOscillate_Func",
-      "name": "CaOscillate Func",
-      "description": "BioNetGen model: CaOscillate Func",
+      "name": "CaOscillate_Func",
+      "description": "Calcium oscillations (func)",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/CaOscillate_Func.bngl"
@@ -7651,10 +8165,10 @@
     {
       "file": "CaOscillate_Sat.bngl",
       "id": "CaOscillate_Sat",
-      "name": "CaOscillate Sat",
-      "description": "BioNetGen model: CaOscillate Sat",
+      "name": "CaOscillate_Sat",
+      "description": "Calcium oscillations (sat)",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/CaOscillate_Sat.bngl"
@@ -7665,7 +8179,7 @@
       "name": "catalysis",
       "description": "Catalysis in energy BNG",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/catalysis.bngl"
@@ -7676,29 +8190,29 @@
       "name": "continue",
       "description": "Test trajectory continuation",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/continue.bngl"
     },
     {
       "file": "egfr_net.bngl",
       "id": "egfr_net",
-      "name": "egfr net",
-      "description": "BioNetGen model: egfr net",
+      "name": "egfr_net",
+      "description": "check detailed balanced",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/egfr_net.bngl"
     },
     {
       "file": "egfr_net_red.bngl",
       "id": "egfr_net_red",
-      "name": "egfr net red",
+      "name": "egfr_net_red",
       "description": "Reduced state-space version of EGFR_NET.BNGL with equivalent ODE dynamics",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/egfr_net_red.bngl"
@@ -7706,10 +8220,10 @@
     {
       "file": "egfr_path.bngl",
       "id": "egfr_path",
-      "name": "egfr path",
+      "name": "egfr_path",
       "description": "The primary focus of the model developed by Kholodenko",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/egfr_path.bngl"
@@ -7717,10 +8231,10 @@
     {
       "file": "energy_example1.bngl",
       "id": "energy_example1",
-      "name": "energy example1",
+      "name": "energy_example1",
       "description": "Illustration of energy modeling approach w/ a simple protein scaffold model",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/energy_example1.bngl"
@@ -7731,29 +8245,29 @@
       "name": "example1",
       "description": "Example file for BNG2 tutorial.",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/example1.bngl"
     },
     {
       "file": "fceri_ji_comp.bngl",
       "id": "fceri_ji_comp",
-      "name": "fceri ji comp",
-      "description": "BioNetGen model: fceri ji comp",
+      "name": "fceri_ji_comp",
+      "description": "Ligand-receptor binding",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/fceri_ji_comp.bngl"
     },
     {
       "file": "Haugh2b.bngl",
       "id": "Haugh2b",
       "name": "Haugh2b",
-      "description": "BioNetGen model: Haugh2b",
+      "description": "R(KD,Y1~U,Y2~U) 1.00",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/Haugh2b.bngl"
@@ -7764,7 +8278,7 @@
       "name": "heise",
       "description": "Validate state inheritance in a symmetric context",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/heise.bngl"
@@ -7772,10 +8286,10 @@
     {
       "file": "issue_198_short.bngl",
       "id": "issue_198_short",
-      "name": "issue 198 short",
-      "description": "BioNetGen model: issue 198 short",
+      "name": "issue_198_short",
+      "description": "No description available",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/issue_198_short.bngl"
@@ -7783,21 +8297,21 @@
     {
       "file": "Kiefhaber_emodel.bngl",
       "id": "Kiefhaber_emodel",
-      "name": "Kiefhaber emodel",
+      "name": "Kiefhaber_emodel",
       "description": "Allow molar units to be used for bimolecular rate constants",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/Kiefhaber_emodel.bngl"
     },
     {
       "file": "Korwek_2023.bngl",
       "id": "Korwek_2023",
-      "name": "Korwek 2023",
+      "name": "Korwek_2023",
       "description": "This BioNetGen file features the article:",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/Korwek_2023.bngl"
@@ -7808,7 +8322,7 @@
       "name": "localfunc",
       "description": "Test local function expansion",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/localfunc.bngl"
@@ -7817,9 +8331,9 @@
       "file": "michment.bngl",
       "id": "michment",
       "name": "michment",
-      "description": "\\\"michment.bngl\\\" is designed to test the read/write network feature of BNG.",
+      "description": "Michaelis Menten",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/michment.bngl"
@@ -7827,21 +8341,21 @@
     {
       "file": "michment_cont.bngl",
       "id": "michment_cont",
-      "name": "michment cont",
-      "description": "\\\"michment_cont.bngl\\\" is part of a pair of models that tests the",
+      "name": "michment_cont",
+      "description": "Michaelis Menten Continue",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/michment_cont.bngl"
     },
     {
       "file": "Motivating_example.bngl",
       "id": "Motivating_example",
-      "name": "Motivating example",
-      "description": "Signal Transduction with receptor internalization and transcriptional reg.  #",
+      "name": "Motivating_example",
+      "description": "Signal Transduction with receptor internalization",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/Motivating_example.bngl"
@@ -7849,10 +8363,10 @@
     {
       "file": "Motivating_example_cBNGL.bngl",
       "id": "Motivating_example_cBNGL",
-      "name": "Motivating example cBNGL",
-      "description": "Signal transduction with receptor internalization and transcriptional reg.  #",
+      "name": "Motivating_example_cBNGL",
+      "description": "Signal transduction with receptor internalization",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/Motivating_example_cBNGL.bngl"
@@ -7861,9 +8375,9 @@
       "file": "motor.bngl",
       "id": "motor",
       "name": "motor",
-      "description": "Example of global functions by simulating the flagellar motor",
+      "description": "Motor protein",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/motor.bngl"
@@ -7872,9 +8386,9 @@
       "file": "mwc.bngl",
       "id": "mwc",
       "name": "mwc",
-      "description": "fundamental constants",
+      "description": "Monod-Wyman-Changeux model",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/mwc.bngl"
@@ -7883,9 +8397,9 @@
       "file": "nfkb.bngl",
       "id": "nfkb",
       "name": "nfkb",
-      "description": "3 state IKK. A20 acts by inhibiting the activation of IKKK, and accelerating the converstion of active to inactive IKK",
+      "description": "NF-kB signaling pathway",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/nfkb.bngl"
@@ -7893,43 +8407,43 @@
     {
       "file": "nfkb_illustrating_protocols.bngl",
       "id": "nfkb_illustrating_protocols",
-      "name": "nfkb illustrating protocols",
-      "description": "3 state IKK. A20 acts by inhibiting the activation of IKKK, and accelerating the converstion of active to inactive IKK",
+      "name": "nfkb_illustrating_protocols",
+      "description": "NF-kB signaling pathway",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/nfkb_illustrating_protocols.bngl"
     },
     {
       "file": "rec_dim.bngl",
       "id": "rec_dim",
-      "name": "rec dim",
-      "description": "BioNetGen model: rec dim",
+      "name": "rec_dim",
+      "description": "Ligand-receptor binding",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/rec_dim.bngl"
     },
     {
       "file": "rec_dim_comp.bngl",
       "id": "rec_dim_comp",
-      "name": "rec dim comp",
-      "description": "BioNetGen model: rec dim comp",
+      "name": "rec_dim_comp",
+      "description": "name dimension volume contained_by",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/rec_dim_comp.bngl"
     },
     {
       "file": "SHP2_base_model.bngl",
       "id": "SHP2_base_model",
-      "name": "SHP2 base model",
-      "description": "Base model of Shp2 regulation from Barua, Faeder, and Haugh (2006).",
+      "name": "SHP2_base_model",
+      "description": "Base model of Shp2 regulation",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/SHP2_base_model.bngl"
@@ -7937,21 +8451,21 @@
     {
       "file": "simple_sbml_import.bngl",
       "id": "simple_sbml_import",
-      "name": "simple sbml import",
-      "description": "BioNetGen model: simple sbml import",
+      "name": "simple_sbml_import",
+      "description": "SBML import test",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/simple_sbml_import.bngl"
     },
     {
       "file": "simple_system.bngl",
       "id": "simple_system",
-      "name": "simple system",
-      "description": "simple_system.bngl",
+      "name": "simple_system",
+      "description": "Simple binding system",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/simple_system.bngl"
@@ -7959,10 +8473,10 @@
     {
       "file": "test_ANG_synthesis_simple.bngl",
       "id": "test_ANG_synthesis_simple",
-      "name": "test ANG synthesis simple",
-      "description": "Testing automatic  network generation for CVODE",
+      "name": "test_ANG_synthesis_simple",
+      "description": "Synthesis network test",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_ANG_synthesis_simple.bngl"
@@ -7970,10 +8484,10 @@
     {
       "file": "test_fixed.bngl",
       "id": "test_fixed",
-      "name": "test fixed",
-      "description": "BioNetGen model: test fixed",
+      "name": "test_fixed",
+      "description": "# actions ##",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_fixed.bngl"
@@ -7981,10 +8495,10 @@
     {
       "file": "test_MM.bngl",
       "id": "test_MM",
-      "name": "test MM",
+      "name": "test_MM",
       "description": "Kinetic constants",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_MM.bngl"
@@ -7992,10 +8506,10 @@
     {
       "file": "test_mratio.bngl",
       "id": "test_mratio",
-      "name": "test mratio",
-      "description": "BioNetGen model: test mratio",
+      "name": "test_mratio",
+      "description": "Reaction ratio test",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_mratio.bngl"
@@ -8003,21 +8517,21 @@
     {
       "file": "test_network_gen.bngl",
       "id": "test_network_gen",
-      "name": "test network gen",
-      "description": "Testing automatic network generation given the appropriate method, using the fceri.bngl model",
+      "name": "test_network_gen",
+      "description": "fceri model with network generation",
       "tags": [
-        ""
+        "validation"
       ],
-      "bng2_compatible": true,
+      "bng2_compatible": false,
       "path": "published-models/validation/test_network_gen.bngl"
     },
     {
       "file": "test_sat.bngl",
       "id": "test_sat",
-      "name": "test sat",
+      "name": "test_sat",
       "description": "Kinetic constants",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_sat.bngl"
@@ -8025,10 +8539,10 @@
     {
       "file": "test_synthesis_cBNGL_simple.bngl",
       "id": "test_synthesis_cBNGL_simple",
-      "name": "test synthesis cBNGL simple",
-      "description": "BioNetGen model: test synthesis cBNGL simple",
+      "name": "test_synthesis_cBNGL_simple",
+      "description": "Compartmental synthesis",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_synthesis_cBNGL_simple.bngl"
@@ -8036,10 +8550,10 @@
     {
       "file": "test_synthesis_complex.bngl",
       "id": "test_synthesis_complex",
-      "name": "test synthesis complex",
-      "description": "BioNetGen model: test synthesis complex",
+      "name": "test_synthesis_complex",
+      "description": "Complex synthesis test",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_synthesis_complex.bngl"
@@ -8047,10 +8561,10 @@
     {
       "file": "test_synthesis_complex_0_cBNGL.bngl",
       "id": "test_synthesis_complex_0_cBNGL",
-      "name": "test synthesis complex 0 cBNGL",
-      "description": "BioNetGen model: test synthesis complex 0 cBNGL",
+      "name": "test_synthesis_complex_0_cBNGL",
+      "description": "volume-surface",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_synthesis_complex_0_cBNGL.bngl"
@@ -8058,10 +8572,10 @@
     {
       "file": "test_synthesis_complex_source_cBNGL.bngl",
       "id": "test_synthesis_complex_source_cBNGL",
-      "name": "test synthesis complex source cBNGL",
-      "description": "BioNetGen model: test synthesis complex source cBNGL",
+      "name": "test_synthesis_complex_source_cBNGL",
+      "description": "volume-surface",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_synthesis_complex_source_cBNGL.bngl"
@@ -8069,10 +8583,10 @@
     {
       "file": "test_synthesis_simple.bngl",
       "id": "test_synthesis_simple",
-      "name": "test synthesis simple",
-      "description": "BioNetGen model: test synthesis simple",
+      "name": "test_synthesis_simple",
+      "description": "Simple synthesis test",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/test_synthesis_simple.bngl"
@@ -8081,9 +8595,9 @@
       "file": "tlmr.bngl",
       "id": "tlmr",
       "name": "tlmr",
-      "description": "Test whether reaction multiplicities are handled correctly by",
+      "description": "Trivalent ligand monovalent receptor",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/tlmr.bngl"
@@ -8091,10 +8605,10 @@
     {
       "file": "toy-jim.bngl",
       "id": "toy-jim",
-      "name": "toy jim",
+      "name": "toy-jim",
       "description": "The model consists of a monovalent extracellular ligand,",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/toy-jim.bngl"
@@ -8102,14 +8616,14 @@
     {
       "file": "univ_synth.bngl",
       "id": "univ_synth",
-      "name": "univ synth",
+      "name": "univ_synth",
       "description": "example of universal synthesis",
       "tags": [
-        ""
+        "validation"
       ],
       "bng2_compatible": true,
       "path": "published-models/validation/univ_synth.bngl"
     }
   ],
-  "generated": "2026-02-16T15:10:29.585Z"
+  "generated": "2026-02-23T03:48:03.536Z"
 }

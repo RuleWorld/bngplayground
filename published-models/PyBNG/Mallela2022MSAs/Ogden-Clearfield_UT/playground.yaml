@@ -1,0 +1,7 @@
+models:
+  - file: Ogden-Clearfield_UT.bngl
+    id: Ogden-Clearfield_UT
+    name: "Ogden Clearfield UT"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

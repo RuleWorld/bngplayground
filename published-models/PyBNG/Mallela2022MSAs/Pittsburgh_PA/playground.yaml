@@ -1,0 +1,7 @@
+models:
+  - file: Pittsburgh_PA.bngl
+    id: Pittsburgh_PA
+    name: "Pittsburgh PA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

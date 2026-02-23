@@ -1,0 +1,7 @@
+models:
+  - file: Vallejo_CA.bngl
+    id: Vallejo_CA
+    name: "Vallejo CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

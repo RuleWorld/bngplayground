@@ -1,0 +1,7 @@
+models:
+  - file: Provo-Orem_UT.bngl
+    id: Provo-Orem_UT
+    name: "Provo Orem UT"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

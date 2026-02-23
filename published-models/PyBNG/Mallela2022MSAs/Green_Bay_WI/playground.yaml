@@ -1,0 +1,7 @@
+models:
+  - file: Green_Bay_WI.bngl
+    id: Green_Bay_WI
+    name: "Green Bay WI"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

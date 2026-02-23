@@ -1,0 +1,31 @@
+models:
+  - file: Lin_Prion_2019.bngl
+    id: Lin_Prion_2019
+    name: "Lin 2019"
+    description: "Prion replication"
+    tags: [published, literature, prion]
+    bng2_compatible: true
+  - file: Dolan_2015.bngl
+    id: Dolan_2015
+    name: "Dolan 2015"
+    description: "Insulin signaling"
+    tags: [published, literature, signaling]
+    bng2_compatible: false
+  - file: Lin_ERK_2019.bngl
+    id: Lin_ERK_2019
+    name: "Lin 2019"
+    description: "ERK signaling"
+    tags: [published, literature, signaling]
+    bng2_compatible: true
+  - file: Lin_TCR_2019.bngl
+    id: Lin_TCR_2019
+    name: "Lin 2019"
+    description: "TCR signaling"
+    tags: [published, literature, immune]
+    bng2_compatible: true
+  - file: Cheemalavagu_JAK_STAT.bngl
+    id: Cheemalavagu_JAK_STAT
+    name: "Cheemalavagu 2024"
+    description: "JAK-STAT signaling"
+    tags: [published, literature, signaling]
+    bng2_compatible: true

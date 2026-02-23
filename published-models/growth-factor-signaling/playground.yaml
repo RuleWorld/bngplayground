@@ -1,0 +1,37 @@
+models:
+  - file: Blinov_egfr.bngl
+    id: Blinov_egfr
+    name: "Blinov egfr"
+    description: "EGFR signaling model"
+    tags: [published, nfsim]
+    bng2_compatible: false
+  - file: Lang_2024.bngl
+    id: Lang_2024
+    name: "Lang 2024"
+    description: "Cell cycle regulation"
+    tags: [published]
+    bng2_compatible: true
+  - file: Ligon_2014.bngl
+    id: Ligon_2014
+    name: "Ligon 2014"
+    description: "Lipoplex delivery"
+    tags: [published, nfsim]
+    bng2_compatible: false
+  - file: Mertins_2023.bngl
+    id: Mertins_2023
+    name: "Mertins 2023"
+    description: "DNA damage response"
+    tags: [published]
+    bng2_compatible: false
+  - file: Rule_based_egfr_compart.bngl
+    id: Rule_based_egfr_compart
+    name: "Rule based egfr compart"
+    description: "Compartmental EGFR model"
+    tags: [published]
+    bng2_compatible: false
+  - file: Rule_based_egfr_tutorial.bngl
+    id: Rule_based_egfr_tutorial
+    name: "Faeder 2009"
+    description: "EGFR signaling"
+    tags: [published]
+    bng2_compatible: true

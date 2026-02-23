@@ -1,0 +1,73 @@
+models:
+  - file: Barua_2013.bngl
+    id: Barua_2013
+    name: "Barua 2013"
+    description: "Beta-catenin destruction"
+    tags: [published]
+    bng2_compatible: false
+  - file: Blinov_ran.bngl
+    id: Blinov_ran
+    name: "Blinov ran"
+    description: "Ran GTPase cycle"
+    tags: [published, nfsim]
+    bng2_compatible: false
+  - file: Hat_2016.bngl
+    id: Hat_2016
+    name: "Hat 2016"
+    description: "Nuclear transport"
+    tags: [published]
+    bng2_compatible: false
+  - file: Kocieniewski_2012.bngl
+    id: Kocieniewski_2012
+    name: "Kocieniewski 2012"
+    description: "Actin dynamics"
+    tags: [published]
+    bng2_compatible: false
+  - file: notch.bngl
+    id: notch
+    name: "Notch"
+    description: "Notch signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Pekalski_2013.bngl
+    id: Pekalski_2013
+    name: "Pekalski 2013"
+    description: "Spontaneous signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Rule_based_Ran_transport.bngl
+    id: Rule_based_Ran_transport
+    name: "Rule based Ran transport"
+    description: "Nuclear Ran transport"
+    tags: [published]
+    bng2_compatible: false
+  - file: Rule_based_Ran_transport_draft.bngl
+    id: Rule_based_Ran_transport_draft
+    name: "Rule based Ran transport draft"
+    description: "Ran transport (draft)"
+    tags: [published]
+    bng2_compatible: false
+  - file: vilar_2002.bngl
+    id: vilar_2002
+    name: "Vilar 2002"
+    description: "Genetic oscillator"
+    tags: [published]
+    bng2_compatible: false
+  - file: vilar_2002b.bngl
+    id: vilar_2002b
+    name: "Vilar 2002b"
+    description: "Gene oscillator"
+    tags: [published]
+    bng2_compatible: false
+  - file: vilar_2002c.bngl
+    id: vilar_2002c
+    name: "Vilar 2002c"
+    description: "Gene oscillator"
+    tags: [published]
+    bng2_compatible: false
+  - file: wnt.bngl
+    id: wnt
+    name: "Wnt Signaling"
+    description: "Wnt signaling"
+    tags: [published]
+    bng2_compatible: false

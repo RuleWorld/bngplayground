@@ -1,0 +1,7 @@
+models:
+  - file: Chattanooga_TN-GA.bngl
+    id: Chattanooga_TN-GA
+    name: "Chattanooga TN GA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,31 @@
+models:
+  - file: ABC.bngl
+    id: ABC
+    name: "ABC"
+    description: "BioNetGen model: ABC"
+    tags: []
+    bng2_compatible: true
+  - file: ABC_scan.bngl
+    id: ABC_scan
+    name: "ABC scan"
+    description: "BioNetGen model: ABC scan"
+    tags: []
+    bng2_compatible: true
+  - file: ABC_ssa.bngl
+    id: ABC_ssa
+    name: "ABC ssa"
+    description: "BioNetGen model: ABC ssa"
+    tags: []
+    bng2_compatible: true
+  - file: LV.bngl
+    id: LV
+    name: "LV"
+    description: "title: LV.bgl"
+    tags: []
+    bng2_compatible: true
+  - file: SIR.bngl
+    id: SIR
+    name: "SIR"
+    description: "BioNetGen model: SIR"
+    tags: []
+    bng2_compatible: true

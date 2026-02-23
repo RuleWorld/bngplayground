@@ -1,0 +1,7 @@
+models:
+  - file: receptor.bngl
+    id: receptor
+    name: "receptor"
+    description: "A simple model of ligand/receptor binding and receptor phosphorylation."
+    tags: []
+    bng2_compatible: true

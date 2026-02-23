@@ -1,0 +1,259 @@
+models:
+  - file: CaOscillate_Func.bngl
+    id: CaOscillate_Func
+    name: "CaOscillate_Func"
+    description: "Calcium oscillations (func)"
+    tags: [validation]
+    bng2_compatible: true
+  - file: CaOscillate_Sat.bngl
+    id: CaOscillate_Sat
+    name: "CaOscillate_Sat"
+    description: "Calcium oscillations (sat)"
+    tags: [validation]
+    bng2_compatible: true
+  - file: catalysis.bngl
+    id: catalysis
+    name: "catalysis"
+    description: "Catalysis in energy BNG"
+    tags: [validation]
+    bng2_compatible: true
+  - file: continue.bngl
+    id: continue
+    name: "continue"
+    description: "Test trajectory continuation"
+    tags: [validation]
+    bng2_compatible: false
+  - file: egfr_net.bngl
+    id: egfr_net
+    name: "egfr_net"
+    description: "check detailed balanced"
+    tags: [validation]
+    bng2_compatible: false
+  - file: egfr_net_red.bngl
+    id: egfr_net_red
+    name: "egfr_net_red"
+    description: "Reduced state-space version of EGFR_NET.BNGL with equivalent ODE dynamics"
+    tags: [validation]
+    bng2_compatible: true
+  - file: egfr_path.bngl
+    id: egfr_path
+    name: "egfr_path"
+    description: "The primary focus of the model developed by Kholodenko"
+    tags: [validation]
+    bng2_compatible: true
+  - file: energy_example1.bngl
+    id: energy_example1
+    name: "energy_example1"
+    description: "Illustration of energy modeling approach w/ a simple protein scaffold model"
+    tags: [validation]
+    bng2_compatible: true
+  - file: example1.bngl
+    id: example1
+    name: "example1"
+    description: "Example file for BNG2 tutorial."
+    tags: [validation]
+    bng2_compatible: false
+  - file: fceri_ji_comp.bngl
+    id: fceri_ji_comp
+    name: "fceri_ji_comp"
+    description: "Ligand-receptor binding"
+    tags: [validation]
+    bng2_compatible: false
+  - file: Haugh2b.bngl
+    id: Haugh2b
+    name: "Haugh2b"
+    description: "R(KD,Y1~U,Y2~U) 1.00"
+    tags: [validation]
+    bng2_compatible: true
+  - file: heise.bngl
+    id: heise
+    name: "heise"
+    description: "Validate state inheritance in a symmetric context"
+    tags: [validation]
+    bng2_compatible: true
+  - file: issue_198_short.bngl
+    id: issue_198_short
+    name: "issue_198_short"
+    description: "No description available"
+    tags: [validation]
+    bng2_compatible: true
+  - file: Kiefhaber_emodel.bngl
+    id: Kiefhaber_emodel
+    name: "Kiefhaber_emodel"
+    description: "Allow molar units to be used for bimolecular rate constants"
+    tags: [validation]
+    bng2_compatible: false
+  - file: Korwek_2023.bngl
+    id: Korwek_2023
+    name: "Korwek_2023"
+    description: "This BioNetGen file features the article:"
+    tags: [validation]
+    bng2_compatible: true
+  - file: localfunc.bngl
+    id: localfunc
+    name: "localfunc"
+    description: "Test local function expansion"
+    tags: [validation]
+    bng2_compatible: true
+  - file: michment.bngl
+    id: michment
+    name: "michment"
+    description: "Michaelis Menten"
+    tags: [validation]
+    bng2_compatible: true
+  - file: michment_cont.bngl
+    id: michment_cont
+    name: "michment_cont"
+    description: "Michaelis Menten Continue"
+    tags: [validation]
+    bng2_compatible: false
+  - file: Motivating_example.bngl
+    id: Motivating_example
+    name: "Motivating_example"
+    description: "Signal Transduction with receptor internalization"
+    tags: [validation]
+    bng2_compatible: true
+  - file: Motivating_example_cBNGL.bngl
+    id: Motivating_example_cBNGL
+    name: "Motivating_example_cBNGL"
+    description: "Signal transduction with receptor internalization"
+    tags: [validation]
+    bng2_compatible: true
+  - file: motor.bngl
+    id: motor
+    name: "motor"
+    description: "Motor protein"
+    tags: [validation]
+    bng2_compatible: true
+  - file: mwc.bngl
+    id: mwc
+    name: "mwc"
+    description: "Monod-Wyman-Changeux model"
+    tags: [validation]
+    bng2_compatible: true
+  - file: nfkb.bngl
+    id: nfkb
+    name: "nfkb"
+    description: "NF-kB signaling pathway"
+    tags: [validation]
+    bng2_compatible: true
+  - file: nfkb_illustrating_protocols.bngl
+    id: nfkb_illustrating_protocols
+    name: "nfkb_illustrating_protocols"
+    description: "NF-kB signaling pathway"
+    tags: [validation]
+    bng2_compatible: false
+  - file: rec_dim.bngl
+    id: rec_dim
+    name: "rec_dim"
+    description: "Ligand-receptor binding"
+    tags: [validation]
+    bng2_compatible: false
+  - file: rec_dim_comp.bngl
+    id: rec_dim_comp
+    name: "rec_dim_comp"
+    description: "name dimension volume contained_by"
+    tags: [validation]
+    bng2_compatible: false
+  - file: SHP2_base_model.bngl
+    id: SHP2_base_model
+    name: "SHP2_base_model"
+    description: "Base model of Shp2 regulation"
+    tags: [validation]
+    bng2_compatible: true
+  - file: simple_sbml_import.bngl
+    id: simple_sbml_import
+    name: "simple_sbml_import"
+    description: "SBML import test"
+    tags: [validation]
+    bng2_compatible: false
+  - file: simple_system.bngl
+    id: simple_system
+    name: "simple_system"
+    description: "Simple binding system"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_ANG_synthesis_simple.bngl
+    id: test_ANG_synthesis_simple
+    name: "test_ANG_synthesis_simple"
+    description: "Synthesis network test"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_fixed.bngl
+    id: test_fixed
+    name: "test_fixed"
+    description: "# actions ##"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_MM.bngl
+    id: test_MM
+    name: "test_MM"
+    description: "Kinetic constants"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_mratio.bngl
+    id: test_mratio
+    name: "test_mratio"
+    description: "Reaction ratio test"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_network_gen.bngl
+    id: test_network_gen
+    name: "test_network_gen"
+    description: "fceri model with network generation"
+    tags: [validation]
+    bng2_compatible: false
+  - file: test_sat.bngl
+    id: test_sat
+    name: "test_sat"
+    description: "Kinetic constants"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_synthesis_cBNGL_simple.bngl
+    id: test_synthesis_cBNGL_simple
+    name: "test_synthesis_cBNGL_simple"
+    description: "Compartmental synthesis"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_synthesis_complex.bngl
+    id: test_synthesis_complex
+    name: "test_synthesis_complex"
+    description: "Complex synthesis test"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_synthesis_complex_0_cBNGL.bngl
+    id: test_synthesis_complex_0_cBNGL
+    name: "test_synthesis_complex_0_cBNGL"
+    description: "volume-surface"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_synthesis_complex_source_cBNGL.bngl
+    id: test_synthesis_complex_source_cBNGL
+    name: "test_synthesis_complex_source_cBNGL"
+    description: "volume-surface"
+    tags: [validation]
+    bng2_compatible: true
+  - file: test_synthesis_simple.bngl
+    id: test_synthesis_simple
+    name: "test_synthesis_simple"
+    description: "Simple synthesis test"
+    tags: [validation]
+    bng2_compatible: true
+  - file: tlmr.bngl
+    id: tlmr
+    name: "tlmr"
+    description: "Trivalent ligand monovalent receptor"
+    tags: [validation]
+    bng2_compatible: true
+  - file: toy-jim.bngl
+    id: toy-jim
+    name: "toy-jim"
+    description: "The model consists of a monovalent extracellular ligand,"
+    tags: [validation]
+    bng2_compatible: true
+  - file: univ_synth.bngl
+    id: univ_synth
+    name: "univ_synth"
+    description: "example of universal synthesis"
+    tags: [validation]
+    bng2_compatible: true

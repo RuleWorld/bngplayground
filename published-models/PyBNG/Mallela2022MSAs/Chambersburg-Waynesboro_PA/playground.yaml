@@ -1,0 +1,7 @@
+models:
+  - file: Chambersburg-Waynesboro_PA.bngl
+    id: Chambersburg-Waynesboro_PA
+    name: "Chambersburg Waynesboro PA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

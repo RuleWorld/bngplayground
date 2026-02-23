@@ -1,0 +1,7 @@
+models:
+  - file: Elkhart-Goshen_IN.bngl
+    id: Elkhart-Goshen_IN
+    name: "Elkhart Goshen IN"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

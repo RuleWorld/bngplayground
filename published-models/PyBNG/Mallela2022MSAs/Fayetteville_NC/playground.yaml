@@ -1,0 +1,7 @@
+models:
+  - file: Fayetteville_NC.bngl
+    id: Fayetteville_NC
+    name: "Fayetteville NC"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

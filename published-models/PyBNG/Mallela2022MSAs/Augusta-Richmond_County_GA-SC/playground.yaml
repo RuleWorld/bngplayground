@@ -1,0 +1,7 @@
+models:
+  - file: Augusta-Richmond_County_GA-SC.bngl
+    id: Augusta-Richmond_County_GA-SC
+    name: "Augusta Richmond County GA SC"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

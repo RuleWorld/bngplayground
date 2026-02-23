@@ -1,0 +1,7 @@
+models:
+  - file: pt303.bngl
+    id: pt303
+    name: "pt303"
+    description: "c = 0.20 /d t_1/2 = 3.5 d (inferred)"
+    tags: []
+    bng2_compatible: true

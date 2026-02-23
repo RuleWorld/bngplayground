@@ -1,0 +1,7 @@
+models:
+  - file: m12.bngl
+    id: m12
+    name: "m12"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

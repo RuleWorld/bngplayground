@@ -1,0 +1,7 @@
+models:
+  - file: Charleston-North_Charleston_SC.bngl
+    id: Charleston-North_Charleston_SC
+    name: "Charleston North Charleston SC"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,19 @@
+models:
+  - file: BAB.bngl
+    id: BAB
+    name: "BAB"
+    description: "Simple binding model with a bivalent A molecule that has two identical sites"
+    tags: []
+    bng2_compatible: true
+  - file: BAB_coop.bngl
+    id: BAB_coop
+    name: "BAB coop"
+    description: "Simple binding model with a bivalent A molecule that has two identical sites"
+    tags: []
+    bng2_compatible: true
+  - file: BAB_scan.bngl
+    id: BAB_scan
+    name: "BAB scan"
+    description: "Simple binding model with a bivalent A molecule that has two identical sites"
+    tags: []
+    bng2_compatible: true

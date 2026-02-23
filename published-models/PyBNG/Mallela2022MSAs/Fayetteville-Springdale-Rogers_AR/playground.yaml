@@ -1,0 +1,7 @@
+models:
+  - file: Fayetteville-Springdale-Rogers_AR.bngl
+    id: Fayetteville-Springdale-Rogers_AR
+    name: "Fayetteville Springdale Rogers AR"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

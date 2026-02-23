@@ -1,0 +1,7 @@
+models:
+  - file: tlbr.bngl
+    id: tlbr
+    name: "tlbr"
+    description: "A model of trivalent ligand, bivalent receptor"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: Las_Vegas-Henderson-Paradise_NV.bngl
+    id: Las_Vegas-Henderson-Paradise_NV
+    name: "Las Vegas Henderson Paradise NV"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

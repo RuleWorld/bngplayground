@@ -1,0 +1,7 @@
+models:
+  - file: Lake_Havasu_City-Kingman_AZ.bngl
+    id: Lake_Havasu_City-Kingman_AZ
+    name: "Lake Havasu City Kingman AZ"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

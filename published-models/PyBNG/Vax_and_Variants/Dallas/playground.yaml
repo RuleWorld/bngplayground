@@ -1,0 +1,7 @@
+models:
+  - file: Dallas.bngl
+    id: Dallas
+    name: "Dallas"
+    description: "- This model is intended to be consistent with the compartmental model"
+    tags: []
+    bng2_compatible: true

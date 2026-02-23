@@ -1,0 +1,7 @@
+models:
+  - file: Naples-Marco_Island_FL.bngl
+    id: Naples-Marco_Island_FL
+    name: "Naples Marco Island FL"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

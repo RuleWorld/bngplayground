@@ -1,0 +1,7 @@
+models:
+  - file: Philadelphia-Camden-Wilmington_PA-NJ-DE-MD.bngl
+    id: Philadelphia-Camden-Wilmington_PA-NJ-DE-MD
+    name: "Philadelphia Camden Wilmington PA NJ DE MD"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

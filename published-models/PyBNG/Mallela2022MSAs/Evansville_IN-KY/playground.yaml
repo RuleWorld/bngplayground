@@ -1,0 +1,7 @@
+models:
+  - file: Evansville_IN-KY.bngl
+    id: Evansville_IN-KY
+    name: "Evansville IN KY"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

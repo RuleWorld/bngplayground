@@ -1,0 +1,13 @@
+models:
+  - file: egfr.bngl
+    id: egfr
+    name: "egfr"
+    description: "Blinov et al. 2006. Biosystems, 83:136"
+    tags: []
+    bng2_compatible: true
+  - file: egfr_ground.bngl
+    id: egfr_ground
+    name: "egfr ground"
+    description: "Blinov et al. 2006. Biosystems, 83:136"
+    tags: []
+    bng2_compatible: true

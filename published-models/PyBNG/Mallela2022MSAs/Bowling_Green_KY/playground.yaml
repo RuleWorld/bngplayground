@@ -1,0 +1,7 @@
+models:
+  - file: Bowling_Green_KY.bngl
+    id: Bowling_Green_KY
+    name: "Bowling Green KY"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

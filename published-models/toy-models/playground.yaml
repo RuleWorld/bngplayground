@@ -1,0 +1,7 @@
+models:
+  - file: quasi_equilibrium.bngl
+    id: quasi_equilibrium
+    name: "quasi equilibrium"
+    description: "Quasi-equilibrium approximation"
+    tags: [published, toy models]
+    bng2_compatible: true

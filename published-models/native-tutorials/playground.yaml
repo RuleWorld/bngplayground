@@ -1,0 +1,211 @@
+models:
+  - file: AB.bngl
+    id: AB
+    name: "AB"
+    description: "Bivalent binding"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: ABC.bngl
+    id: ABC
+    name: "ABC"
+    description: "Cooperative binding"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: ABC_scan.bngl
+    id: ABC_scan
+    name: "ABC Scan"
+    description: "Cooperative (scan)"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: ABC_ssa.bngl
+    id: ABC_ssa
+    name: "ABC Ssa"
+    description: "Cooperative (SSA)"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: LV.bngl
+    id: LV
+    name: "LV"
+    description: "Predator-prey"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: ABp.bngl
+    id: ABp
+    name: "ABp"
+    description: "Phosphorylation logic"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: ABp_approx.bngl
+    id: ABp_approx
+    name: "ABp Approx"
+    description: "Phosphorylation (approx)"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: GK.bngl
+    id: GK
+    name: "GK"
+    description: "Goldbeter-Koshland"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: Lisman.bngl
+    id: Lisman
+    name: "Lisman"
+    description: "Lisman bistable"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: Lisman_bifurcate.bngl
+    id: Lisman_bifurcate
+    name: "Lisman Bifurcate"
+    description: "Lisman bifurcation"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: BAB.bngl
+    id: BAB
+    name: "BAB"
+    description: "Trivalent binding"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: BAB_coop.bngl
+    id: BAB_coop
+    name: "BAB Coop"
+    description: "Trivalent (coop)"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: BAB_scan.bngl
+    id: BAB_scan
+    name: "BAB Scan"
+    description: "Trivalent (scan)"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: BLBR.bngl
+    id: blbr
+    name: "BLBR Tutorial"
+    description: "Bivalent ligand/receptor (tutorial)"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: cBNGL_simple.bngl
+    id: cBNGL_simple
+    name: "CBNGL Simple"
+    description: "Simple compartmental"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: LR.bngl
+    id: LR
+    name: "LR"
+    description: "Ligand-receptor"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: LRR.bngl
+    id: LRR
+    name: "LRR"
+    description: "Receptor recruitment"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: LRR_comp.bngl
+    id: LRR_comp
+    name: "LRR Comp"
+    description: "Compartmental LRR"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: LR_comp.bngl
+    id: LR_comp
+    name: "LR Comp"
+    description: "Compartmental LR"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: LV_comp.bngl
+    id: LV_comp
+    name: "LV Comp"
+    description: "Compartmental LV"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: organelle_transport.bngl
+    id: organelle_transport
+    name: "Organelle Transport"
+    description: "Organelle transport"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: organelle_transport_struct.bngl
+    id: organelle_transport_struct
+    name: "Organelle Transport Struct"
+    description: "Transport (struct)"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: Chylek_library.bngl
+    id: Chylek_library
+    name: "Chylek Library"
+    description: "Signaling library"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: Creamer_2012.bngl
+    id: Creamer_2012
+    name: "Creamer 2012"
+    description: "Aggregation model"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: egfr_simple.bngl
+    id: egfr_simple
+    name: "Egfr Simple"
+    description: "Basic EGFR model"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: FceRI_ji.bngl
+    id: FceRI_ji
+    name: "FceRI Ji"
+    description: "FcÃƒÅ½Ã‚ÂµRI signaling"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: Suderman_2013.bngl
+    id: Suderman_2013
+    name: "Suderman 2013"
+    description: "Signaling model"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: birth-death.bngl
+    id: birth-death
+    name: "Birth-Death"
+    description: "Stochastic process"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: CircadianOscillator.bngl
+    id: CircadianOscillator
+    name: "CircadianOscillator"
+    description: "Circadian rhythm"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: ComplexDegradation.bngl
+    id: ComplexDegradation
+    name: "ComplexDegradation"
+    description: "Degradation model"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: Repressilator.bngl
+    id: Repressilator
+    name: "Repressilator"
+    description: "Repressilator circuit"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: toggle.bngl
+    id: toggle
+    name: "Toggle"
+    description: "Toggle switch"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: FceRI_viz.bngl
+    id: FceRI_viz
+    name: "FceRI Viz"
+    description: "FcÃƒÅ½Ã‚ÂµRI (viz)"
+    tags: [published, tutorial, native]
+    bng2_compatible: false
+  - file: visualize.bngl
+    id: visualize
+    name: "Visualize"
+    description: "Visualization toy"
+    tags: [published, tutorial, native]
+    bng2_compatible: true
+  - file: SIR.bngl
+    id: SIR
+    name: "SIR"
+    description: "Epidemic model (tutorial)"
+    tags: [published, epidemiology]
+    bng2_compatible: true

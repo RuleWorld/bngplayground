@@ -1,0 +1,7 @@
+models:
+  - file: Virginia_Beach-Norfolk-Newport_News_VA-NC.bngl
+    id: Virginia_Beach-Norfolk-Newport_News_VA-NC
+    name: "Virginia Beach Norfolk Newport News VA NC"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: Portland-Vancouver-Hillsboro_OR-WA.bngl
+    id: Portland-Vancouver-Hillsboro_OR-WA
+    name: "Portland Vancouver Hillsboro OR WA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

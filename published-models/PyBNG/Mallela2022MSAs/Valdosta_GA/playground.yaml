@@ -1,0 +1,7 @@
+models:
+  - file: Valdosta_GA.bngl
+    id: Valdosta_GA
+    name: "Valdosta GA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,13 @@
+models:
+  - file: parabola.bngl
+    id: parabola
+    name: "parabola"
+    description: "Implementation of the parabola from the Mitra constrained optimization manuscript Fig. 1"
+    tags: []
+    bng2_compatible: true
+  - file: parabola_ground.bngl
+    id: parabola_ground
+    name: "parabola ground"
+    description: "Implementation of the parabola from the Mitra constrained optimization manuscript Fig. 1"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,73 @@
+models:
+  - file: ErrNoFrees.bngl
+    id: ErrNoFrees
+    name: "ErrNoFrees"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: LilyIgE.bngl
+    id: LilyIgE
+    name: "LilyIgE"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: NFmodel.bngl
+    id: NFmodel
+    name: "NFmodel"
+    description: "BioNetGen model: NFmodel"
+    tags: []
+    bng2_compatible: true
+  - file: parabola.bngl
+    id: parabola
+    name: "parabola"
+    description: "Original values used to generate parabola.exp"
+    tags: []
+    bng2_compatible: true
+  - file: ParamsEverywhere.bngl
+    id: ParamsEverywhere
+    name: "ParamsEverywhere"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: Simple.bngl
+    id: Simple
+    name: "Simple"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: Simple_AddActions.bngl
+    id: Simple_AddActions
+    name: "Simple AddActions"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: Simple_Answer.bngl
+    id: Simple_Answer
+    name: "Simple Answer"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: Simple_GenOnly.bngl
+    id: Simple_GenOnly
+    name: "Simple GenOnly"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: Simple_nogen.bngl
+    id: Simple_nogen
+    name: "Simple nogen"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: Tricky.bngl
+    id: Tricky
+    name: "Tricky"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true
+  - file: TrickyUS.bngl
+    id: TrickyUS
+    name: "TrickyUS"
+    description: "An example from a real application"
+    tags: []
+    bng2_compatible: true

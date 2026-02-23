@@ -1,0 +1,7 @@
+models:
+  - file: Tampa-St._Petersburg-Clearwater_FL.bngl
+    id: Tampa-St._Petersburg-Clearwater_FL
+    name: "Tampa St. Petersburg Clearwater FL"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

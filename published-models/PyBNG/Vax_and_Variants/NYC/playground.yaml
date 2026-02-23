@@ -1,0 +1,7 @@
+models:
+  - file: NYC.bngl
+    id: NYC
+    name: "NYC"
+    description: "- This model is intended to be consistent with the compartmental model"
+    tags: []
+    bng2_compatible: true

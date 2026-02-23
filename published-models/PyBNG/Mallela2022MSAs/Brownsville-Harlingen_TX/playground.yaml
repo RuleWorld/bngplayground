@@ -1,0 +1,7 @@
+models:
+  - file: Brownsville-Harlingen_TX.bngl
+    id: Brownsville-Harlingen_TX
+    name: "Brownsville Harlingen TX"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

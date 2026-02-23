@@ -1,0 +1,7 @@
+models:
+  - file: Greensboro-High_Point_NC.bngl
+    id: Greensboro-High_Point_NC
+    name: "Greensboro High Point NC"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

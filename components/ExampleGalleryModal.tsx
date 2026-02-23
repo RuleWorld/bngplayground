@@ -7,6 +7,7 @@ import { MODEL_CATEGORIES, EXAMPLES, BNG2_COMPATIBLE_MODELS } from '../constants
 import { SemanticSearchInput, SearchResult } from './SemanticSearchInput';
 import { BioModelsSearch } from './BioModelsSearch';
 import { Tabs, TabList, Tab, TabPanels, TabPanel } from './ui/Tabs';
+import { loadModelCode } from '../services/modelLoader';
 
 // Helper to convert model names to Title Case
 // Handles special acronyms like MAPK, EGFR, etc.
@@ -38,6 +39,7 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
   const [focusedExample, setFocusedExample] = useState<string | null>(null);
   const [semanticResults, setSemanticResults] = useState<SearchResult[] | null>(null);
   const [isSemanticSearching, setIsSemanticSearching] = useState(false);
+  const [loadingId, setLoadingId] = useState<string | null>(null);
 
   const currentCategory = useMemo(() => {
     return MODEL_CATEGORIES.find(cat => cat.id === selectedCategory) || MODEL_CATEGORIES[0];
@@ -244,18 +246,29 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
                       </div>
                     </div>
                     <button
-                      onClick={() => {
-                        console.log('[ExampleGalleryModal] Load Model clicked:', {
-                          id: example.id,
-                          name: example.name,
-                          codeLength: example.code.length,
-                          codePreview: example.code.substring(0, 200)
-                        });
-                        onSelect(example.code, toTitleCase(example.name), example.id);
+                      onClick={async () => {
+                        if (loadingId) return; // prevent double-click
+                        setLoadingId(example.id);
+                        try {
+                          // Use embedded code if present (fastest), otherwise fetch
+                          const code = example.code ?? await loadModelCode(example.id);
+                          console.log('[ExampleGalleryModal] Load Model clicked:', {
+                            id: example.id,
+                            name: example.name,
+                            codeLength: code.length,
+                            codePreview: code.substring(0, 200)
+                          });
+                          onSelect(code, toTitleCase(example.name), example.id);
+                        } catch (err) {
+                          console.error('[ExampleGalleryModal] Failed to load model:', example.id, err);
+                        } finally {
+                          setLoadingId(null);
+                        }
                       }}
-                      className="mt-3 w-full text-center px-4 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-slate-800 dark:text-slate-100"
+                      disabled={loadingId === example.id}
+                      className="mt-3 w-full text-center px-4 py-2 text-sm font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 rounded-md transition-colors text-slate-800 dark:text-slate-100 disabled:opacity-50 disabled:cursor-wait"
                     >
-                      Load Model
+                      {loadingId === example.id ? 'Loading...' : 'Load Model'}
                     </button>
                   </Card>
                 )) : (

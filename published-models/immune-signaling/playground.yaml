@@ -1,19 +1,73 @@
 models:
   - file: An_2009.bngl
     id: An_2009
-    name: "An 2009 - NF-κB Signaling"
-    description: "Detailed model of NF-κB signaling pathway dynamics"
-    tags: [immune-signaling, nfkb]
-    bng2_compatible: true
-  - file: Faeder_2003.bngl
-    id: Faeder_2003
-    name: "Faeder 2003 - FcεRI Signaling"
-    description: "Model of early events in FcεRI signaling"
-    tags: [immune-signaling, fceri]
+    name: "An 2009"
+    description: "TLR4 signaling"
+    tags: [published, immunology]
     bng2_compatible: true
   - file: BaruaBCR_2012.bngl
     id: BaruaBCR_2012
-    name: "Barua 2012 - BCR Signaling"
-    description: "Model of B-cell receptor signaling"
-    tags: [immune-signaling, bcr]
+    name: "Barua 2012"
+    description: "BCR signaling"
+    tags: [published, immunology]
     bng2_compatible: true
+  - file: BaruaFceRI_2012.bngl
+    id: BaruaFceRI_2012
+    name: "BaruaFceRI 2012"
+    description: "FcÃƒÅ½Ã‚ÂµRI signaling"
+    tags: [published, immunology]
+    bng2_compatible: false
+  - file: ChylekFceRI_2014.bngl
+    id: ChylekFceRI_2014
+    name: "Chylek 2014 (FceRI)"
+    description: "FceRI signaling"
+    tags: [published, immunology]
+    bng2_compatible: false
+  - file: ChylekTCR_2014.bngl
+    id: ChylekTCR_2014
+    name: "Chylek 2014 (TCR)"
+    description: "TCR signaling"
+    tags: [published, immunology]
+    bng2_compatible: true
+  - file: Faeder_2003.bngl
+    id: Faeder_2003
+    name: "Faeder 2003"
+    description: "FceRI signaling"
+    tags: [published, immunology]
+    bng2_compatible: false
+  - file: innate_immunity.bngl
+    id: innate_immunity
+    name: "Korwek 2023"
+    description: "Immune response"
+    tags: [published, immunology]
+    bng2_compatible: true
+  - file: Jaruszewicz-Blonska_2023.bngl
+    id: Jaruszewicz-Blonska_2023
+    name: "Jaruszewicz 2023"
+    description: "T-cell discrimination"
+    tags: [published, immunology]
+    bng2_compatible: true
+  - file: Model_ZAP.bngl
+    id: Model_ZAP
+    name: "Model ZAP"
+    description: "ZAP-70 recruitment"
+    tags: [published, immunology, nfsim]
+    bng2_compatible: false
+  - file: Mukhopadhyay_2013.bngl
+    id: Mukhopadhyay_2013
+    name: "Mukhopadhyay 2013"
+    description: "FceRI signaling"
+    tags: [published, immunology]
+    bng2_compatible: true
+  - file: fceri_fyn.bngl
+    id: fceri_fyn
+    name: "FceRI Fyn"
+    description: "FceRI signaling"
+    tags: [published, immunology]
+    bng2_compatible: false
+  - file: tlbr.bngl
+    id: tlbr
+    name: "TLBR Tutorial"
+    description: "Ligand binding"
+    tags: [published, immunology]
+    bng2_compatible: false

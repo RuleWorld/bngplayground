@@ -1,0 +1,115 @@
+models:
+  - file: Barua_2007.bngl
+    id: Barua_2007
+    name: "Barua 2007"
+    description: "Model from Haugh (2006)"
+    tags: [published]
+    bng2_compatible: false
+  - file: Barua_2009.bngl
+    id: Barua_2009
+    name: "Barua 2009"
+    description: "JAK2-SH2B signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Blinov_2006.bngl
+    id: Blinov_2006
+    name: "Blinov 2006"
+    description: "Phosphotyrosine signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Chattaraj_2021.bngl
+    id: Chattaraj_2021
+    name: "Chattaraj 2021"
+    description: "NFkB oscillations"
+    tags: [published]
+    bng2_compatible: false
+  - file: Dushek_2011.bngl
+    id: Dushek_2011
+    name: "Dushek 2011"
+    description: "TCR signaling"
+    tags: [published]
+    bng2_compatible: true
+  - file: Dushek_2014.bngl
+    id: Dushek_2014
+    name: "Dushek 2014"
+    description: "TCR signaling dynamics"
+    tags: [published]
+    bng2_compatible: true
+  - file: Erdem_2021.bngl
+    id: Erdem_2021
+    name: "Erdem 2021"
+    description: "InsR/IGF1R signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Jung_2017.bngl
+    id: Jung_2017
+    name: "Jung 2017"
+    description: "M1 receptor signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Kesseler_2013.bngl
+    id: Kesseler_2013
+    name: "Kesseler 2013"
+    description: "G2/Mitosis transition"
+    tags: [published]
+    bng2_compatible: false
+  - file: Kozer_2013.bngl
+    id: Kozer_2013
+    name: "Kozer 2013"
+    description: "EGFR oligomerization"
+    tags: [published]
+    bng2_compatible: false
+  - file: Kozer_2014.bngl
+    id: Kozer_2014
+    name: "Kozer 2014"
+    description: "Grb2-EGFR recruitment"
+    tags: [published]
+    bng2_compatible: false
+  - file: mapk-dimers.bngl
+    id: mapk-dimers
+    name: "MAPK Dimers"
+    description: "MAPK dimerization"
+    tags: [published]
+    bng2_compatible: false
+  - file: mapk-monomers.bngl
+    id: mapk-monomers
+    name: "MAPK Monomers"
+    description: "MAPK cascade"
+    tags: [published]
+    bng2_compatible: false
+  - file: Massole_2023.bngl
+    id: Massole_2023
+    name: "Massole 2023"
+    description: "Epo receptor signaling"
+    tags: [published]
+    bng2_compatible: true
+  - file: McMillan_2021.bngl
+    id: McMillan_2021
+    name: "McMillan 2021"
+    description: "TNF signaling"
+    tags: [published, nfsim]
+    bng2_compatible: false
+  - file: Nag_2009.bngl
+    id: Nag_2009
+    name: "Nag 2009"
+    description: "LAT-Grb2-SOS1 signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Nosbisch_2022.bngl
+    id: Nosbisch_2022
+    name: "Nosbisch 2022"
+    description: "RTK-PLCgamma1 signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Zhang_2021.bngl
+    id: Zhang_2021
+    name: "Zhang 2021"
+    description: "CAR-T signaling"
+    tags: [published]
+    bng2_compatible: false
+  - file: Zhang_2023.bngl
+    id: Zhang_2023
+    name: "Zhang 2023"
+    description: "VEGF signaling"
+    tags: [published]
+    bng2_compatible: false

@@ -1,0 +1,7 @@
+models:
+  - file: trivial.bngl
+    id: trivial
+    name: "trivial"
+    description: "A trivial model file for testing MCMC distributions."
+    tags: []
+    bng2_compatible: true

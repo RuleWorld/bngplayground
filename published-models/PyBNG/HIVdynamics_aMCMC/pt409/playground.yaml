@@ -1,0 +1,7 @@
+models:
+  - file: pt409.bngl
+    id: pt409
+    name: "pt409"
+    description: "c = 0.39 /d t_1/2 = 1.8 d (inferred)"
+    tags: []
+    bng2_compatible: true

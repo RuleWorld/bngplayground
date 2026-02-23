@@ -1,0 +1,13 @@
+models:
+  - file: RAFi.bngl
+    id: RAFi
+    name: "RAFi"
+    description: "BioNetGen model: RAFi"
+    tags: []
+    bng2_compatible: true
+  - file: RAFi_ground.bngl
+    id: RAFi_ground
+    name: "RAFi ground"
+    description: "BioNetGen model: RAFi ground"
+    tags: []
+    bng2_compatible: true

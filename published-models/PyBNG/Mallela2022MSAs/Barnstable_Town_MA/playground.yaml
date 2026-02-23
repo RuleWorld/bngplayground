@@ -1,0 +1,7 @@
+models:
+  - file: Barnstable_Town_MA.bngl
+    id: Barnstable_Town_MA
+    name: "Barnstable Town MA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

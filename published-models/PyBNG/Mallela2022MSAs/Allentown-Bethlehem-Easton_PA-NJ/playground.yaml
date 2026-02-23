@@ -1,0 +1,7 @@
+models:
+  - file: Allentown-Bethlehem-Easton_PA-NJ.bngl
+    id: Allentown-Bethlehem-Easton_PA-NJ
+    name: "Allentown Bethlehem Easton PA NJ"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

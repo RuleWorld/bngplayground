@@ -1,0 +1,7 @@
+models:
+  - file: Cincinnati_OH-KY-IN.bngl
+    id: Cincinnati_OH-KY-IN
+    name: "Cincinnati OH KY IN"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

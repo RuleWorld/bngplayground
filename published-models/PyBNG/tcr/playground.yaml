@@ -1,0 +1,7 @@
+models:
+  - file: tcr.bngl
+    id: tcr
+    name: "tcr"
+    description: "A model of T cell receptor signaling"
+    tags: []
+    bng2_compatible: true

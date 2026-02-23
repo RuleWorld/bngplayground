@@ -1,0 +1,7 @@
+models:
+  - file: Alabama.bngl
+    id: Alabama
+    name: "Alabama"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

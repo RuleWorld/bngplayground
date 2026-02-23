@@ -1,0 +1,37 @@
+models:
+  - file: chemistry.bngl
+    id: chemistry
+    name: "chemistry"
+    description: "Basic chemical reactions"
+    tags: [published, tutorials]
+    bng2_compatible: false
+  - file: polymer.bngl
+    id: polymer
+    name: "polymer"
+    description: "Polymerization model"
+    tags: [published, tutorials, nfsim]
+    bng2_compatible: false
+  - file: polymer_draft.bngl
+    id: polymer_draft
+    name: "polymer draft"
+    description: "Polymerization (draft)"
+    tags: [published, tutorials, nfsim]
+    bng2_compatible: false
+  - file: simple.bngl
+    id: simple
+    name: "simple"
+    description: "Simple binding model"
+    tags: [published, tutorials]
+    bng2_compatible: false
+  - file: toy1.bngl
+    id: toy1
+    name: "toy1"
+    description: "Basic signaling toy"
+    tags: [published, tutorials]
+    bng2_compatible: false
+  - file: toy2.bngl
+    id: toy2
+    name: "toy2"
+    description: "Enzymatic reaction toy"
+    tags: [published, tutorials]
+    bng2_compatible: false

@@ -1,0 +1,7 @@
+models:
+  - file: Huntington-Ashland_WV-KY-OH.bngl
+    id: Huntington-Ashland_WV-KY-OH
+    name: "Huntington Ashland WV KY OH"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

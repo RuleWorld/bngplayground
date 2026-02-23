@@ -2,7 +2,8 @@ export interface Example {
     id: string;
     name: string;
     description: string;
-    code: string;
+    /** Embedded code (present for bundled models, absent after lazy-loading migration). */
+    code?: string;
     tags: string[];
 }
 

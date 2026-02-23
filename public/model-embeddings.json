@@ -2,8 +2,8 @@
   "version": 2,
   "model": "Xenova/all-MiniLM-L6-v2",
   "dimensions": 384,
-  "count": 254,
-  "generated": "2026-02-13T00:33:06.739Z",
+  "count": 251,
+  "generated": "2026-02-23T03:48:17.291Z",
   "hasUMAP": true,
   "models": [
     {
@@ -411,13 +411,13 @@
       "preview": "akt signaling growthfactor rtk pi3k akt mtorc2 mtorc1 s6k active_rtk active_pi3k pakt_t308 pakt_s473 double_pakt active_mtorc1 growthfactor rtk pi3k akt mtorc2 mtorc1 s6k",
       "simulationMode": "ODE",
       "umap2D": [
-        0.843,
-        -0.625
+        0.323,
+        -0.335
       ],
       "umap3D": [
-        -0.201,
-        -0.02,
-        -0.217
+        0.082,
+        -0.305,
+        -0.497
       ]
     },
     {
@@ -824,13 +824,13 @@
       "preview": "allosteric activation enzyme substrate activator product free_enzyme single_bound double_bound product_count inhibited_enz enzyme substrate activator product",
       "simulationMode": "ODE",
       "umap2D": [
-        0.374,
-        -0.454
+        0.573,
+        -0.515
       ],
       "umap3D": [
-        0.206,
-        0.045,
-        -0.351
+        -0.053,
+        0.057,
+        -0.24
       ]
     },
     {
@@ -1239,13 +1239,13 @@
       "preview": "ampk signaling ampk amp lkb1 ca sik crtc energy_sensor low_energy_sig sik_activity nuclear_crtc calcium_stim active_ampk bound_ampk_amp ampk amp lkb1 ca sik crtc",
       "simulationMode": "ODE",
       "umap2D": [
-        0.969,
-        -0.731
+        0.332,
+        -0.246
       ],
       "umap3D": [
-        -0.121,
-        0.058,
-        -0.448
+        -0.001,
+        -0.194,
+        -0.56
       ]
     },
     {
@@ -1653,13 +1653,13 @@
       "preview": "apoptosis cascade deathligand caspase8 bid mito apaf1 caspase3 xiap smac global_death mitochondrial_fail cytoc_released inhibitor_sequest mitochondria_gate active_bid deathligand caspase8 bid mito apa",
       "simulationMode": "ODE",
       "umap2D": [
-        1.25,
-        -0.083
+        0.115,
+        0.321
       ],
       "umap3D": [
-        -0.666,
-        0.239,
-        -0.622
+        -0.24,
+        -0.377,
+        -1.08
       ]
     },
     {
@@ -2066,13 +2066,13 @@
       "preview": "auto activation loop gene mrna protein rbp active_protein transcript_mass promoter_state sequest_mrna tf_dimers gene mrna protein rbp",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.863,
-        -0.494
+        0.453,
+        -0.201
       ],
       "umap3D": [
-        -0.264,
-        0.128,
-        -0.184
+        0.041,
+        -0.129,
+        -0.602
       ]
     },
     {
@@ -2479,13 +2479,13 @@
       "preview": "autophagy regulation mtor ampk ulk1 lc3 p62 autophagy_drive stress_sensor growth_sensor primed_ulk1 cargo_capture mtor ampk ulk1 lc3 p62",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.945,
-        -0.685
+        0.262,
+        -0.266
       ],
       "umap3D": [
-        -0.202,
-        0.001,
-        -0.388
+        -0.071,
+        -0.288,
+        -0.55
       ]
     },
     {
@@ -2893,13 +2893,13 @@
       "preview": "bcr signaling bcr antigen syk plcg2 cd22 shp1 calcium calcium_signal active_plcg2 active_relay effector_load negative_brake sync_antigen bcr antigen syk plcg2 cd22 shp1 calcium",
       "simulationMode": "ODE",
       "umap2D": [
-        0.95,
-        -0.606
+        0.535,
+        -0.225
       ],
       "umap3D": [
-        -0.17,
-        0.21,
-        -0.172
+        0.269,
+        -0.192,
+        -0.591
       ]
     },
     {
@@ -3307,13 +3307,13 @@
       "preview": "beta adrenergic response epi betar gs ac arr camp signal_peak active_gs surface_availability desensitized_frac sequest_complex active_ac epi betar gs ac arr camp",
       "simulationMode": "ODE",
       "umap2D": [
-        1.406,
-        -1.027
+        -0.308,
+        -0.127
       ],
       "umap3D": [
-        -0.009,
-        0.459,
-        -0.747
+        0.062,
+        0.336,
+        -0.846
       ]
     },
     {
@@ -3720,13 +3720,13 @@
       "preview": "bistable toggle switch proml promr tf_l tf_r ind_l ind_r state_l_level state_r_level active_prom_l active_prom_r locked_tf_l proml promr tf_l tf_r ind_l ind_r",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.417,
-        0.191
+        1.221,
+        0.025
       ],
       "umap3D": [
-        0.177,
-        0.847,
-        -0.253
+        0.538,
+        0.468,
+        -0.751
       ]
     },
     {
@@ -4133,13 +4133,13 @@
       "preview": "blood coagulation thrombin tf factorx factorv prothrombin thrombin fibrinogen at clot_mass active_thrombin proth_complex feedback_factors inhibitor_work tf factorx factorv prothrombin fibrinogen at",
       "simulationMode": "ODE",
       "umap2D": [
-        1.094,
-        0.046
+        -0.273,
+        0.112
       ],
       "umap3D": [
-        -0.872,
-        0.061,
-        -0.357
+        0.075,
+        -0.689,
+        -1.052
       ]
     },
     {
@@ -4547,13 +4547,13 @@
       "preview": "bmp signaling bmp noggin receptor1 receptor2 smad1 smad4 smad6 smad_output active_nuclear_smad1 surface_engage noggin_sink feedback_brake signal_complex bmp noggin receptor1 receptor2 smad1 smad4 smad",
       "simulationMode": "ODE",
       "umap2D": [
-        0.677,
-        -0.798
+        0.423,
+        -0.535
       ],
       "umap3D": [
-        -0.051,
-        -0.075,
-        -0.052
+        0.207,
+        -0.312,
+        -0.297
       ]
     },
     {
@@ -4962,13 +4962,13 @@
       "preview": "brusselator oscillator a b x y activator_x inhibitor_y feed_status drive_force ratio_xy a_level x_level a b x y",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.634,
-        -1.553
+        1.096,
+        -0.902
       ],
       "umap3D": [
-        0.675,
-        0.236,
-        0.123
+        0.18,
+        0.421,
+        0.154
       ]
     },
     {
@@ -5376,13 +5376,13 @@
       "preview": "calcineurin nfat pathway ca cam can nfat rcan1 nuclear_factor active_nfat phospho_nfat active_can feedback_protein nfat_can_binding ca cam can nfat rcan1",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.769,
-        -0.637
+        0.406,
+        -0.351
       ],
       "umap3D": [
-        -0.115,
-        -0.076,
-        -0.373
+        -0.029,
+        -0.352,
+        -0.429
       ]
     },
     {
@@ -5789,13 +5789,13 @@
       "preview": "calcium spike signaling plc ip3 ca stim1 spiking_ca er_reserve ip3_driver soce_sensor total_mass plc ip3 ca ca stim1",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        1.317,
-        -0.875
+        0.372,
+        0.159
       ],
       "umap3D": [
-        -0.164,
-        0.151,
-        -0.811
+        -0.167,
+        -0.042,
+        -0.879
       ]
     },
     {
@@ -6201,13 +6201,13 @@
       "preview": "caspase activation loop deathligand caspase8 caspase3 iap flip active_caspase8 xiap_brake flip_inhibited total_execution deathligand caspase8 caspase3 iap flip",
       "simulationMode": "ODE",
       "umap2D": [
-        0.948,
-        -0.381
+        0.521,
+        -0.078
       ],
       "umap3D": [
-        -0.179,
-        0.303,
-        -0.371
+        0.149,
+        -0.099,
+        -0.725
       ]
     },
     {
@@ -6614,13 +6614,13 @@
       "preview": "cd40 signaling cd40 cd40l traf ikk nik nfkb relb canonical_nfb noncanonical_nfb active_ikk nik_stabilized traf_sequest cd40 cd40l traf ikk nfkb nik relb",
       "simulationMode": "ODE",
       "umap2D": [
-        0.85,
-        -0.325
+        0.473,
+        -0.1
       ],
       "umap3D": [
-        -0.382,
-        0.144,
-        -0.068
+        -0.053,
+        -0.032,
+        -0.672
       ]
     },
     {
@@ -7029,13 +7029,13 @@
       "preview": "cell cycle checkpoint cyclin cdk cdc25 wee1 apc p21 mitotic_engine total_mass exit_signal primed_engine active_cycb active_apc damage_block cyclin cdk cdc25 wee1 apc p21",
       "simulationMode": "ODE",
       "umap2D": [
-        0.847,
-        -0.401
+        0.483,
+        -0.228
       ],
       "umap3D": [
-        -0.198,
-        0.189,
-        -0.289
+        -0.134,
+        -0.046,
+        -0.568
       ]
     },
     {
@@ -7442,13 +7442,13 @@
       "preview": "checkpoint kinase signaling dna atm atr chk1 chk2 p53 cdc25 active_checkpt total_damage dsb_signal replication_stress arrest_status dna atm atr chk1 chk2 p53 cdc25",
       "simulationMode": "ODE",
       "umap2D": [
-        0.959,
-        -0.255
+        0.418,
+        0.046
       ],
       "umap3D": [
-        -0.492,
-        0.183,
-        -0.272
+        -0.217,
+        -0.141,
+        -0.777
       ]
     },
     {
@@ -7856,13 +7856,13 @@
       "preview": "chemotaxis signal transduction attr mcp chea chey cheb motor motor_state methylation_status signaling_effector environmental_bias adaptation_drive active_mcp attr mcp chea chey cheb motor",
       "simulationMode": "ODE",
       "umap2D": [
-        0.787,
-        -0.951
+        0.465,
+        -0.446
       ],
       "umap3D": [
-        0.146,
-        -0.083,
-        -0.49
+        -0.209,
+        0.008,
+        -0.258
       ]
     },
     {
@@ -8268,13 +8268,13 @@
       "preview": "circadian oscillator title: vilar circadian oscillator model author: jim faeder date: 31mar2016 reference: vilar, jmg et al. pnas, 99:5988-5992 (2002) transcription  translation activation-promoter bi",
       "simulationMode": "ODE",
       "umap2D": [
-        0.781,
-        -0.801
+        0.242,
+        -0.488
       ],
       "umap3D": [
-        -0.246,
-        -0.117,
-        0.089
+        -0.262,
+        -0.11,
+        -0.316
       ]
     },
     {
@@ -8682,13 +8682,13 @@
       "preview": "clock bmal1 gene circuit clock bmal1 ror reverb dna activator_comp nuclear_bmal1 reverb_brake ror_accelerator transcription_on bmal1_total_obs clock bmal1 ror reverb dna",
       "simulationMode": "ODE",
       "umap2D": [
-        0.652,
-        -0.447
+        0.785,
+        -0.334
       ],
       "umap3D": [
-        -0.06,
-        0.285,
-        0.083
+        0.292,
+        0.091,
+        -0.482
       ]
     },
     {
@@ -9094,13 +9094,13 @@
       "preview": "compartment endocytosis model: compartment_endocytosis.bngl description: models receptor-mediated endocytosis where a surface receptor binds a ligand and is internalized into an endosome. demonstrates",
       "simulationMode": "ODE",
       "umap2D": [
-        0.29,
-        -0.983
+        0.234,
+        -0.989
       ],
       "umap3D": [
-        0.128,
-        -0.514,
-        0.088
+        0.123,
+        -0.541,
+        0.12
       ]
     },
     {
@@ -9505,13 +9505,13 @@
       "preview": "compartment membrane bound model: compartment_membrane_bound.bngl description: models the adsorption/desorption of a cytosolic protein to the plasma membrane. this highlights the dimensional change fr",
       "simulationMode": "ODE",
       "umap2D": [
-        0.079,
-        -1.059
+        0.26,
+        -1.153
       ],
       "umap3D": [
-        0.278,
-        -0.634,
-        0.073
+        0.111,
+        -0.525,
+        0.304
       ]
     },
     {
@@ -9916,13 +9916,13 @@
       "preview": "compartment nested transport model: compartment_nested_transport.bngl description: models transport through a 3-level nested functionality: cytoplasm (cp) -> nucleus (nu) -> nucleolus (no). demonstrat",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.038,
-        -1.06
+        0.355,
+        -1.259
       ],
       "umap3D": [
-        0.274,
-        -0.622,
-        0.305
+        0.151,
+        -0.577,
+        0.403
       ]
     },
     {
@@ -10326,13 +10326,13 @@
       "preview": "compartment nuclear transport model: compartment_nuclear_transport.bngl description: models the bidirectional transport of a transcription factor (tf) between chemotoplasm and nucleus. demonstrates re",
       "simulationMode": "ODE",
       "umap2D": [
-        0.469,
-        -1.043
+        0.103,
+        -0.944
       ],
       "umap3D": [
-        0.007,
-        -0.563,
-        0.127
+        -0.046,
+        -0.575,
+        0.12
       ]
     },
     {
@@ -10737,13 +10737,13 @@
       "preview": "compartment organelle exchange model: compartment_organelle_exchange.bngl description: models vesicular transport of a protein cargo between endoplasmic reticulum (er) and golgi. demonstrates a pulse-",
       "simulationMode": "ODE",
       "umap2D": [
-        0.303,
-        -1.128
+        0.123,
+        -1.053
       ],
       "umap3D": [
-        0.139,
-        -0.653,
-        0.009
+        -0.027,
+        -0.565,
+        0.211
       ]
     },
     {
@@ -11150,13 +11150,13 @@
       "preview": "competitive enzyme inhibition enzyme substrate1 substrate2 inhibitor product free_enzyme es_complex ei_complex total_product s_remaining enzyme substrate1 substrate2 inhibitor product",
       "simulationMode": "ODE",
       "umap2D": [
-        0.325,
-        -0.178
+        -0.159,
+        -0.539
       ],
       "umap3D": [
-        0.218,
-        0.087,
-        -0.653
+        -0.427,
+        0.076,
+        -0.314
       ]
     },
     {
@@ -11564,13 +11564,13 @@
       "preview": "complement activation cascade c3 fb c5 mac surf opsonization_c3b c5b_active mac_intensity c3_convertase c5_generated fb_consumed c3 fb c5 surf",
       "simulationMode": "ODE",
       "umap2D": [
-        1.11,
-        -0.84
+        0.735,
+        -0.172
       ],
       "umap3D": [
-        -0.14,
-        0.395,
-        -0.048
+        0.47,
+        -0.28,
+        -0.61
       ]
     },
     {
@@ -11978,13 +11978,13 @@
       "preview": "contact inhibition hippo yap contact mst lats yap tead transcript_active yap_sequested active_lats mst_trigger nuclear_yap active_mst contact mst lats yap tead",
       "simulationMode": "ODE",
       "umap2D": [
-        0.944,
-        -0.149
+        0.605,
+        0.105
       ],
       "umap3D": [
-        -0.436,
-        0.409,
-        -0.119
+        0.269,
+        -0.076,
+        -0.902
       ]
     },
     {
@@ -12391,13 +12391,13 @@
       "preview": "cooperative binding receptor ligand competitor free_rec mono_bound fully_occupied total_bound half_life receptor ligand competitor",
       "simulationMode": "ODE",
       "umap2D": [
-        0.749,
-        -1.075
+        -0.19,
+        -0.783
       ],
       "umap3D": [
-        -0.229,
-        -0.672,
-        -0.084
+        0.104,
+        -0.825,
+        -0.13
       ]
     },
     {
@@ -12805,13 +12805,13 @@
       "preview": "cs diffie hellman model: cs_diffie_hellman.bngl description: implements a continuous-approximation of the diffie-hellman key exchange. public base (g) and public modulus (p) are parameters. alice and ",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.049,
-        -1.105
+        0.705,
+        -1.227
       ],
       "umap3D": [
-        0.583,
-        -0.261,
-        0.272
+        0.456,
+        -0.219,
+        0.354
       ]
     },
     {
@@ -13222,13 +13222,13 @@
       "preview": "cs hash function cryptographic hash function in bngl ===================================== input: 4-bit message encoded as initial concentrations of bit molecules. hash: nonlinear mixing of bits via c",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.213,
-        -2.113
+        1.29,
+        -1.869
       ],
       "umap3D": [
-        1.276,
-        -0.131,
-        0.68
+        0.922,
+        0.212,
+        0.915
       ]
     },
     {
@@ -13636,13 +13636,13 @@
       "preview": "cs huffman model: cs_huffman.bngl description: implements huffman encoding tree-building logic. characters (a,b,c,d) start with different concentrations (frequencies). molecular binding represents the",
       "simulationMode": "ODE",
       "umap2D": [
-        0.182,
-        -1.066
+        0.706,
+        -1.017
       ],
       "umap3D": [
-        0.354,
-        -0.131,
-        0.285
+        0.456,
+        -0.19,
+        0.134
       ]
     },
     {
@@ -14046,13 +14046,13 @@
       "preview": "cs monte carlo pi model: cs_monte_carlo_pi.bngl description: estimates the value of pi using a monte carlo method. molecule concentrations represent successful 'hits' inside a circle. total species co",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.004,
-        -1.435
+        0.419,
+        -1.469
       ],
       "umap3D": [
-        0.69,
-        -0.611,
-        0.074
+        0.104,
+        -0.212,
+        0.617
       ]
     },
     {
@@ -14458,13 +14458,13 @@
       "preview": "cs pagerank model: cs_pagerank.bngl description: implements the pagerank algorithm where web pages are molecules. links are represented as catalytic production rules. steady-state concentrations corre",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.016,
-        -1.261
+        0.599,
+        -1.304
       ],
       "umap3D": [
-        0.578,
-        -0.402,
-        0.295
+        0.343,
+        -0.24,
+        0.472
       ]
     },
     {
@@ -14870,13 +14870,13 @@
       "preview": "cs pid controller pid controller in bngl ======================= a proportional-integral-derivative controller where: - \"setpoint\" molecule concentration = desired value - \"sensor\" molecule concentrat",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.515,
-        -1.195
+        0.026,
+        -1.619
       ],
       "umap3D": [
-        0.957,
-        -0.512,
-        -0.448
+        -0.297,
+        0.288,
+        0.599
       ]
     },
     {
@@ -15280,13 +15280,13 @@
       "preview": "cs regex nfa model: cs_regex_nfa.bngl description: implements a regex matcher using a nondeterministic finite automaton (nfa). matches the regex: (a|b)*c nfa states are molecules. input characters (a,",
       "simulationMode": "Multiphase (SSA/Gillespie)",
       "umap2D": [
-        0.486,
-        -1.307
+        0.949,
+        -0.926
       ],
       "umap3D": [
-        0.455,
-        0.091,
-        0.275
+        0.548,
+        0.055,
+        0.074
       ]
     },
     {
@@ -15693,13 +15693,13 @@
       "preview": "dna damage repair dna mrn atm chk2 repaircomplex lesion_load active_sensor kinase_relay repair_in_work final_integrity dna mrn atm chk2 repaircomplex",
       "simulationMode": "ODE",
       "umap2D": [
-        1.093,
-        -0.08
+        0.511,
+        0.278
       ],
       "umap3D": [
-        -0.579,
-        0.414,
-        -0.355
+        -0.12,
+        -0.053,
+        -1.037
       ]
     },
     {
@@ -16109,13 +16109,13 @@
       "preview": "dna methylation dynamics cpg dnmt1 tet silenced_marks maintain_burden methyl_status hemi_cpg methyl_cpg open_chromatin active_eraser dnmt_attached cpg dnmt1 tet",
       "simulationMode": "ODE",
       "umap2D": [
-        0.66,
-        -0.141
+        0.726,
+        -0.062
       ],
       "umap3D": [
-        -0.396,
-        0.223,
-        0.139
+        0.047,
+        0.179,
+        -0.676
       ]
     },
     {
@@ -16522,13 +16522,13 @@
       "preview": "dr5 apoptosis signaling trail dr5 fadd caspase8 flip death_signal apoptotic_drive active_disc surface_dr5 flip_block trimer_dr5 trail dr5 fadd caspase8 flip",
       "simulationMode": "ODE",
       "umap2D": [
-        1.137,
-        -0.455
+        0.357,
+        0.034
       ],
       "umap3D": [
-        -0.431,
-        0.223,
-        -0.385
+        -0.028,
+        -0.257,
+        -0.852
       ]
     },
     {
@@ -16935,13 +16935,13 @@
       "preview": "dual site phosphorylation kinase phosphatase substrate unmodified mono_phos fully_phos kinase_bound phos_level kinase phosphatase substrate",
       "simulationMode": "ODE",
       "umap2D": [
-        0.819,
-        0.199
+        -0.57,
+        -0.115
       ],
       "umap3D": [
-        -0.528,
-        -0.489,
-        -0.934
+        -0.827,
+        -0.546,
+        -0.63
       ]
     },
     {
@@ -17350,13 +17350,13 @@
       "preview": "e2f rb cell cycle switch mitogen rb e2f cycd cyce p27 s_phase_drive cyce_level rb_sequest cki_inhibition cycline_count e2f_active hyperphos_rb mitogen rb e2f cycd cyce p27",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        1.022,
-        -0.456
+        0.058,
+        -0.136
       ],
       "umap3D": [
-        -0.495,
-        -0.091,
-        -0.305
+        -0.372,
+        -0.24,
+        -0.615
       ]
     },
     {
@@ -17762,13 +17762,13 @@
       "preview": "eco coevolution host parasite model: eco_coevolution_host_parasite.bngl description: models the \"red queen\" arms race between a host and a parasite. hosts evolve resistance (res). parasites evolve vir",
       "simulationMode": "ODE",
       "umap2D": [
-        0.073,
-        -1.332
+        0.26,
+        -1.365
       ],
       "umap3D": [
-        0.461,
-        -0.64,
-        0.23
+        0.081,
+        -0.379,
+        0.519
       ]
     },
     {
@@ -18173,13 +18173,13 @@
       "preview": "eco food web chaos 3sp model: eco_food_web_chaos_3sp.bngl description: models a 3-species food chain (resource -> consumer -> predator). demonstrates chaotic dynamics (hastings-powell model equivalent",
       "simulationMode": "SSA/Gillespie",
       "umap2D": [
-        -0.343,
-        -1.647
+        0.367,
+        -1.847
       ],
       "umap3D": [
-        0.935,
-        -0.85,
-        0.233
+        0.078,
+        -0.252,
+        0.985
       ]
     },
     {
@@ -18585,13 +18585,13 @@
       "preview": "eco lotka volterra grid model: eco_lotka_volterra_grid.bngl description: classic lotka-volterra predator-prey dynamics. prey grows exponentially, predator eats prey, predator dies. implemented on a 2-",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.313,
-        -1.819
+        0.229,
+        -1.929
       ],
       "umap3D": [
-        0.865,
-        -1.001,
-        0.326
+        0.04,
+        -0.418,
+        1.04
       ]
     },
     {
@@ -18995,13 +18995,13 @@
       "preview": "eco mutualism obligate model: eco_mutualism_obligate.bngl description: models two species (a and b) that essentially require each other to survive. growth of a depends on b, and vice versa. shows alle",
       "simulationMode": "SSA/Gillespie",
       "umap2D": [
-        -0.16,
-        -1.429
+        0.583,
+        -1.575
       ],
       "umap3D": [
-        0.664,
-        -0.543,
-        0.441
+        0.388,
+        -0.291,
+        0.674
       ]
     },
     {
@@ -19406,13 +19406,13 @@
       "preview": "eco rock paper scissors spatial model: eco_rock_paper_scissors_spatial.bngl description: models cyclic dominance (a beats b, b beats c, c beats a) in a population. demonstrates how spatial interaction",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.352,
-        -1.957
+        0.554,
+        -2.083
       ],
       "umap3D": [
-        1.144,
-        -0.726,
-        0.574
+        0.402,
+        -0.139,
+        1.175
       ]
     },
     {
@@ -19821,13 +19821,13 @@
       "preview": "egfr signaling pathway egf egfr grb2 shc bound_egfr dimers py1068 py1173 total_phos grb2_recruited shc_recruited egf egfr grb2 shc",
       "simulationMode": "ODE",
       "umap2D": [
-        1.306,
-        -0.728
+        -0.282,
+        -0.266
       ],
       "umap3D": [
-        -0.618,
-        -0.45,
-        -0.225
+        -0.29,
+        -0.789,
+        -0.54
       ]
     },
     {
@@ -20234,13 +20234,13 @@
       "preview": "eif2a stress response stress eif2a eif2b perk gadd34 transl_sequest active_gef global_stark signal_sensor feedback_gadd stress eif2a eif2b perk gadd34",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        1.466,
-        -0.793
+        0.347,
+        0.298
       ],
       "umap3D": [
-        -0.3,
-        0.402,
-        -0.709
+        -0.327,
+        0.141,
+        -0.877
       ]
     },
     {
@@ -20649,13 +20649,13 @@
       "preview": "endosomal sorting rab rab5 rab7 effector early_endosome late_endosome conversion_node mem_total cyto_pool rab5_gdp_mem total_rab5_gtp rab5 rab7 effector",
       "simulationMode": "ODE",
       "umap2D": [
-        0.546,
-        -0.214
+        -0.106,
+        -0.445
       ],
       "umap3D": [
-        -0.402,
-        -0.075,
-        0.313
+        -0.204,
+        -0.706,
+        -0.36
       ]
     },
     {
@@ -21062,13 +21062,13 @@
       "preview": "energy allostery mwc model: energy_allostery_mwc.bngl description: implements the classic monod-wyman-changeux (mwc) model of allostery using energy patterns. receptor p exists in t (tense, low affini",
       "simulationMode": "ODE",
       "umap2D": [
-        0.309,
-        -1.036
+        0.345,
+        -0.961
       ],
       "umap3D": [
-        0.303,
-        -0.421,
-        -0.09
+        0.038,
+        -0.309,
+        0.162
       ]
     },
     {
@@ -21474,13 +21474,13 @@
       "preview": "energy catalysis mm model: energy_catalysis_mm.bngl description: implements michaelis-menten enzyme kinetics (e + s <-> es -> e + p) using an explicit energy landscape. defines energies for s, e, es c",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.073,
-        -0.798
+        0.219,
+        -1.189
       ],
       "umap3D": [
-        0.571,
-        -0.375,
-        -0.261
+        -0.161,
+        -0.065,
+        0.315
       ]
     },
     {
@@ -21886,13 +21886,13 @@
       "preview": "energy cooperativity adh model: energy_cooperativity_adh.bngl description: models ligand binding to a receptor with two sites using energy patterns to implement cooperativity. binding of the first lig",
       "simulationMode": "ODE",
       "umap2D": [
-        0.174,
-        -0.976
+        0.381,
+        -1.032
       ],
       "umap3D": [
-        0.303,
-        -0.412,
-        0.056
+        0.25,
+        -0.355,
+        0.159
       ]
     },
     {
@@ -22297,13 +22297,13 @@
       "preview": "energy linear chain model: energy_linear_chain.bngl description: demonstrates a 3-state linear reaction chain (a <-> b <-> c) governed by an energy landscape. the intermediate state b is energetically",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.213,
-        -1.322
+        0.638,
+        -1.52
       ],
       "umap3D": [
-        0.756,
-        -0.48,
-        0.303
+        0.291,
+        -0.112,
+        0.663
       ]
     },
     {
@@ -22708,13 +22708,13 @@
       "preview": "energy transport pump model: energy_transport_pump.bngl description: models an active transport pump (t) that moves substrate a against its chemical potential gradient. the process is driven by the hy",
       "simulationMode": "ODE",
       "umap2D": [
-        0.217,
-        -1.224
+        0.442,
+        -1.15
       ],
       "umap3D": [
-        0.49,
-        -0.442,
-        -0.067
+        0.035,
+        -0.267,
+        0.331
       ]
     },
     {
@@ -23119,13 +23119,13 @@
       "preview": "er stress response unfoldedprotein perk eif2a chaperone active_perk phospho_eif2a induced_chaperone unfoldedprotein perk eif2a chaperone",
       "simulationMode": "ODE",
       "umap2D": [
-        1.515,
-        -0.257
+        -0.152,
+        0.321
       ],
       "umap3D": [
-        -0.717,
-        -0.059,
-        -0.824
+        -0.529,
+        -0.396,
+        -1.041
       ]
     },
     {
@@ -23533,13 +23533,13 @@
       "preview": "erk nuclear translocation erk mek elk1 dusp transcription_signal functional_elk total_perk nuclear_perk cyto_buffer trans_activity elk1_occupancy erk mek elk1 dusp",
       "simulationMode": "ODE",
       "umap2D": [
-        0.817,
-        -0.552
+        0.301,
+        -0.3
       ],
       "umap3D": [
-        -0.263,
-        -0.024,
-        -0.253
+        -0.09,
+        -0.257,
+        -0.508
       ]
     },
     {
@@ -23942,13 +23942,13 @@
       "preview": "feature functional rates volume model: feature_functional_rates_volume.bngl description: demonstrates rate laws that depend on compartment volume or density. rate = k * [a] * [b] / volume (for bimolec",
       "simulationMode": "ODE",
       "umap2D": [
-        0.11,
-        -1.362
+        0.484,
+        -1.34
       ],
       "umap3D": [
-        0.487,
-        -0.543,
-        0.33
+        0.347,
+        -0.408,
+        0.482
       ]
     },
     {
@@ -24352,13 +24352,13 @@
       "preview": "feature global functions scan model: feature_global_functions_scan.bngl description: demonstrates the use of global functions that depend on the built-in 'time' variable. this allows creating dynamic ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.308,
-        -1.766
+        1.035,
+        -1.434
       ],
       "umap3D": [
-        0.979,
-        -0.137,
-        0.251
+        0.634,
+        0.06,
+        0.571
       ]
     },
     {
@@ -24762,13 +24762,13 @@
       "preview": "feature local functions explicit model: feature_local_functions_explicit.bngl description: demonstrates the use of local functions within reaction rules. local functions can access properties of the s",
       "simulationMode": "SSA/Gillespie",
       "umap2D": [
-        0.166,
-        -1.686
+        1.071,
+        -1.362
       ],
       "umap3D": [
-        0.909,
-        -0.055,
-        0.315
+        0.624,
+        0.151,
+        0.5
       ]
     },
     {
@@ -25173,13 +25173,13 @@
       "preview": "feature symmetry factors cyclic model: feature_symmetry_factors_cyclic.bngl description: demonstrates a cyclic reaction network where symmetry factors are important. a <-> b <-> c <-> a checks if deta",
       "simulationMode": "ODE",
       "umap2D": [
-        0.26,
-        -1.204
+        0.654,
+        -1.08
       ],
       "umap3D": [
-        0.436,
-        -0.211,
-        0.23
+        0.356,
+        -0.128,
+        0.232
       ]
     },
     {
@@ -25582,13 +25582,13 @@
       "preview": "feature synthesis degradation ss model: feature_synthesis_degradation_ss.bngl description: demonstrates basic zero-order synthesis (0 -> m) and first-order degradation (m -> 0). shows approach to stea",
       "simulationMode": "ODE",
       "umap2D": [
-        0.265,
-        -1.536
+        0.933,
+        -1.243
       ],
       "umap3D": [
-        0.828,
-        -0.086,
-        0.012
+        0.247,
+        0.256,
+        0.391
       ]
     },
     {
@@ -25995,13 +25995,13 @@
       "preview": "fgf signaling pathway fgf fgfr frs2 spry rasgef internalized_rec active_dimer frs2_hub_status ras_drive_comp total_bound_fgf spry_brake fgf fgfr frs2 spry rasgef",
       "simulationMode": "ODE",
       "umap2D": [
-        1.449,
-        -0.656
+        -0.234,
+        -0.019
       ],
       "umap3D": [
-        -0.792,
-        -0.149,
-        -0.02
+        0.022,
+        -0.818,
+        -0.829
       ]
     },
     {
@@ -26408,13 +26408,13 @@
       "preview": "gas6 axl signaling gas6 axl pi3k akt socs survival_burst survival_relay total_pakt active_platform socs_feedback axl_dimer_pool gas6 axl pi3k akt socs",
       "simulationMode": "ODE",
       "umap2D": [
-        1.073,
-        -0.675
+        0.384,
+        -0.099
       ],
       "umap3D": [
-        -0.215,
-        0.19,
-        -0.433
+        0.168,
+        -0.295,
+        -0.713
       ]
     },
     {
@@ -26820,13 +26820,13 @@
       "preview": "gene expression toggle gene mrna protein promoter_on promoter_off transcripts protein gene",
       "simulationMode": "ODE",
       "umap2D": [
-        1.088,
-        0.192
+        0.619,
+        0.508
       ],
       "umap3D": [
-        -0.768,
-        0.569,
-        -0.148
+        0.068,
+        0.052,
+        -1.255
       ]
     },
     {
@@ -27232,13 +27232,13 @@
       "preview": "genetic bistability energy model: genetic_bistability_energy.bngl description: models a bistable genetic toggle switch where two genes (a and b) repress each other. uses energy patterns to model the c",
       "simulationMode": "ODE",
       "umap2D": [
-        0.357,
-        -1.094
+        0.639,
+        -0.926
       ],
       "umap3D": [
-        0.312,
-        -0.146,
-        0.157
+        0.244,
+        -0.044,
+        0.105
       ]
     },
     {
@@ -27644,13 +27644,13 @@
       "preview": "genetic dna replication stochastic model: genetic_dna_replication_stochastic.bngl description: models the template-directed polymerization of a dna strand. demonstrates linear polymer growth where a p",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.529,
-        -1.002
+        0.188,
+        -1.691
       ],
       "umap3D": [
-        0.595,
-        -1.001,
-        0.168
+        -0.316,
+        -0.205,
+        0.777
       ]
     },
     {
@@ -28055,13 +28055,13 @@
       "preview": "genetic goodwin oscillator model: genetic_goodwin_oscillator.bngl description: implements the classic goodwin oscillator, a negative feedback loop with delay. gene -> mrna -> protein -> repressor -> g",
       "simulationMode": "ODE",
       "umap2D": [
-        0.411,
-        -1.167
+        0.58,
+        -0.951
       ],
       "umap3D": [
-        0.253,
-        -0.207,
-        0.189
+        0.104,
+        0.001,
+        0.143
       ]
     },
     {
@@ -28466,13 +28466,13 @@
       "preview": "genetic translation kinetics model: genetic_translation_kinetics.bngl description: models the steps of protein translation: initiation, elongation, termination. includes mrna degradation which stops p",
       "simulationMode": "ODE",
       "umap2D": [
-        0.273,
-        -1.023
+        0.509,
+        -0.965
       ],
       "umap3D": [
-        0.278,
-        -0.271,
-        0.108
+        0.175,
+        -0.207,
+        0.131
       ]
     },
     {
@@ -28879,13 +28879,13 @@
       "preview": "genetic turing pattern 1d model: genetic_turing_pattern_1d.bngl description: models a 4-compartment 1d reaction-diffusion system (activator-inhibitor). demonstrates how diffusion between adjacent comp",
       "simulationMode": "ODE",
       "umap2D": [
-        0.064,
-        -1.182
+        0.509,
+        -1.219
       ],
       "umap3D": [
-        0.486,
-        -0.412,
-        0.182
+        0.218,
+        -0.217,
+        0.38
       ]
     },
     {
@@ -29293,13 +29293,13 @@
       "preview": "glioblastoma egfrviii signaling egfrviii pi3k akt oncogenic_output survival_burst total_pakt viii_platform mem_viii active_viii viii_substrate egfrviii pi3k akt",
       "simulationMode": "ODE",
       "umap2D": [
-        1.692,
-        -0.413
+        -0.435,
+        0.189
       ],
       "umap3D": [
-        -1.056,
-        -0.213,
-        -0.312
+        -0.307,
+        -0.864,
+        -1.071
       ]
     },
     {
@@ -29704,13 +29704,13 @@
       "preview": "glycolysis branch point glucose atp biomass glucose_pool atp_pool biomass glucose",
       "simulationMode": "ODE",
       "umap2D": [
-        0.919,
-        -1.433
+        1.031,
+        -0.581
       ],
       "umap3D": [
-        0.378,
-        -0.387,
-        -0.787
+        -0.635,
+        -0.298,
+        0.097
       ]
     },
     {
@@ -30122,13 +30122,13 @@
       "preview": "gm game of life model: gm_game_of_life.bngl description: implements conway's game of life on a 3x3 torus. cells are molecules with (x,y) states. demonstrates neighbor-counting and threshold logic in b",
       "simulationMode": "SSA/Gillespie",
       "umap2D": [
-        0.161,
-        -1.439
+        0.776,
+        -1.307
       ],
       "umap3D": [
-        0.568,
-        -0.279,
-        0.421
+        0.505,
+        -0.178,
+        0.435
       ]
     },
     {
@@ -30542,13 +30542,13 @@
       "preview": "gm ray marcher ray marching renderer in bngl =============================== a 1d ray marcher where a \"ray\" molecule advances through space. the ray's position is its concentration. a signed distance ",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.772,
-        -2.836
+        0.668,
+        -3.056
       ],
       "umap3D": [
-        1.77,
-        -1.599,
-        0.681
+        0.153,
+        -0.093,
+        2.194
       ]
     },
     {
@@ -30956,13 +30956,13 @@
       "preview": "gpcr desensitization arrestin ligand gpcr arrestin gprotein g_signal_act desensitized_r arrestin_block internal_rec surface_rec active_rec_mem ligand gpcr arrestin gprotein",
       "simulationMode": "ODE",
       "umap2D": [
-        0.894,
-        -0.859
+        0.117,
+        -0.454
       ],
       "umap3D": [
-        -0.319,
-        -0.22,
-        0.012
+        0.302,
+        -0.533,
+        -0.411
       ]
     },
     {
@@ -31370,13 +31370,13 @@
       "preview": "hedgehog signaling pathway hh ptch smo gli sufu active_output repressor_level ciliary_smo ptch_density gli_sufu_comp hh_signal hh ptch smo gli sufu",
       "simulationMode": "ODE",
       "umap2D": [
-        1.131,
-        -0.738
+        0.093,
+        -0.174
       ],
       "umap3D": [
-        -0.34,
-        -0.13,
-        -0.528
+        -0.298,
+        -0.373,
+        -0.595
       ]
     },
     {
@@ -31781,13 +31781,13 @@
       "preview": "hematopoietic growth factor epo epor jak2 stat5 active_epor active_jak2 nuclear_stat5 epo epor jak2 stat5",
       "simulationMode": "ODE",
       "umap2D": [
-        1.237,
-        -0.452
+        0.02,
+        0.017
       ],
       "umap3D": [
-        -0.584,
-        0.049,
-        -0.409
+        -0.299,
+        -0.307,
+        -0.817
       ]
     },
     {
@@ -32195,13 +32195,13 @@
       "preview": "hif1a degradation loop hif1a vhl arnt hypoxia_factor total_hif oh_hif_mark vhl_captured nuclear_accum hif_substrate hif1a vhl arnt",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        1.046,
-        -0.899
+        0.649,
+        -0.209
       ],
       "umap3D": [
-        -0.037,
-        0.351,
-        -0.3
+        -0.09,
+        0.138,
+        -0.548
       ]
     },
     {
@@ -32606,13 +32606,13 @@
       "preview": "hypoxia response signaling oxygensensor hif1 vegf hypoxic_sensor stable_hif1 vegf_pool oxygensensor hif1",
       "simulationMode": "ODE",
       "umap2D": [
-        1.786,
-        -0.602
+        -0.514,
+        0.261
       ],
       "umap3D": [
-        -1.014,
-        -0.276,
-        -0.676
+        -0.645,
+        -0.705,
+        -1.049
       ]
     },
     {
@@ -33020,13 +33020,13 @@
       "preview": "il1b signaling il1b il1ri myd88 irak nfkb proinflam_nfkb signal_burst active_disc receptor_occ total_bound_l active_clusters il1b il1ri myd88 irak nfkb",
       "simulationMode": "ODE",
       "umap2D": [
-        1.056,
-        -0.484
+        0.245,
+        -0.05
       ],
       "umap3D": [
-        -0.509,
-        -0.032,
-        -0.132
+        0.062,
+        -0.477,
+        -0.726
       ]
     },
     {
@@ -33434,13 +33434,13 @@
       "preview": "il6 jak stat pathway il6 gp130 stat3 socs active_tf pgp130_signals global_pstat3 socs_feedback nuclear_pool active_gp130 il6 gp130 stat3 socs",
       "simulationMode": "ODE",
       "umap2D": [
-        1.047,
-        -0.599
+        0.288,
+        -0.104
       ],
       "umap3D": [
-        -0.285,
-        0.11,
-        -0.464
+        -0.041,
+        -0.243,
+        -0.712
       ]
     },
     {
@@ -33845,13 +33845,13 @@
       "preview": "immune synapse formation tcr pmhc lck zap70 bound_tcr active_tcr phospho_zap70 tcr pmhc lck zap70",
       "simulationMode": "ODE",
       "umap2D": [
-        0.727,
-        -0.23
+        0.021,
+        -0.239
       ],
       "umap3D": [
-        -0.236,
-        -0.169,
-        -0.651
+        0.149,
+        -0.625,
+        -0.59
       ]
     },
     {
@@ -34256,13 +34256,13 @@
       "preview": "inflammasome activation sensor asc caspase1 il1b primed_sensor active_caspase1 mature_il1b sensor asc caspase1 il1b",
       "simulationMode": "ODE",
       "umap2D": [
-        1.307,
-        -0.365
+        0.135,
+        0.184
       ],
       "umap3D": [
-        -0.514,
-        0.201,
-        -0.602
+        0.025,
+        -0.357,
+        -1.017
       ]
     },
     {
@@ -34672,13 +34672,13 @@
       "preview": "inositol phosphate metabolism pip2 ip3 ip4 calcium agonist calcium_signal metabolic_hub pip2_pool late_response plc_output active_agonist ca_level ip3_pool pip2 ip3 ip4 calcium agonist",
       "simulationMode": "ODE",
       "umap2D": [
-        1.045,
-        -0.789
+        0.168,
+        -0.18
       ],
       "umap3D": [
-        -0.075,
-        -0.006,
-        -0.666
+        -0.292,
+        -0.139,
+        -0.547
       ]
     },
     {
@@ -35085,13 +35085,13 @@
       "preview": "insulin glucose homeostasis glucose insulin ir glut4 pancreas blood_glucose cellular_glucose insulin_level surface_glut4 active_ir glucose insulin ir glut4 pancreas",
       "simulationMode": "ODE",
       "umap2D": [
-        1.599,
-        -0.924
+        0.925,
+        0.288
       ],
       "umap3D": [
-        -0.277,
-        0.748,
-        -0.453
+        0.637,
+        -0.488,
+        -0.949
       ]
     },
     {
@@ -35496,13 +35496,13 @@
       "preview": "interferon signaling ifn ifnar tyk2 stat1 active_ifnar active_tyk2 nuclear_stat1 ifn ifnar tyk2 stat1",
       "simulationMode": "ODE",
       "umap2D": [
-        0.792,
-        -0.453
+        0.381,
+        -0.218
       ],
       "umap3D": [
-        -0.313,
-        0.039,
-        -0.145
+        0.133,
+        -0.287,
+        -0.598
       ]
     },
     {
@@ -35910,13 +35910,13 @@
       "preview": "ire1a xbp1 er stress ire1 bip unfolded xbp1 ridd_target prosurvival_xbp1 ridd_drive active_ire1 stress_burden chaperone_bip spliced_xbp1 ire1 bip unfolded xbp1 ridd_target",
       "simulationMode": "ODE",
       "umap2D": [
-        0.934,
-        -0.48
+        0.589,
+        -0.161
       ],
       "umap3D": [
-        -0.232,
-        0.267,
-        -0.11
+        0.182,
+        -0.05,
+        -0.638
       ]
     },
     {
@@ -36321,13 +36321,13 @@
       "preview": "jak stat cytokine signaling cytokine receptor stat cytokine_pool active_receptor nuclear_stat cytokine receptor stat",
       "simulationMode": "ODE",
       "umap2D": [
-        1.301,
-        -0.252
+        -0.15,
+        0.131
       ],
       "umap3D": [
-        -0.771,
-        -0.179,
-        -0.486
+        -0.327,
+        -0.605,
+        -0.899
       ]
     },
     {
@@ -36734,13 +36734,13 @@
       "preview": "jnk mapk signaling jnk mkk7 jip1 active_jnk scaffold_hub mkk7_driver cyto_jnk total_pjnk jnk mkk7 jip1",
       "simulationMode": "ODE",
       "umap2D": [
-        1.102,
-        -0.321
+        0.104,
+        0.044
       ],
       "umap3D": [
-        -0.545,
-        -0.062,
-        -0.503
+        -0.266,
+        -0.435,
+        -0.789
       ]
     },
     {
@@ -37149,13 +37149,13 @@
       "preview": "kir channel regulation kir pip2 gbg conducting_pool fully_modulated lipid_occupancy g_signal_relay lipid_marker free_pip2 g_bound_kir kir pip2 gbg",
       "simulationMode": "ODE",
       "umap2D": [
-        0.775,
-        -0.911
+        0.355,
+        -0.489
       ],
       "umap3D": [
-        0.067,
-        -0.069,
-        -0.401
+        -0.063,
+        -0.155,
+        -0.319
       ]
     },
     {
@@ -37565,13 +37565,13 @@
       "preview": "l type calcium channel dynamics ltcc calcium voltage calcium_inflow conducting_r inactivated_ch potentiated_r surface_ltcc ca_level phospho_ltcc voltage_level ltcc calcium voltage",
       "simulationMode": "ODE",
       "umap2D": [
-        1.495,
-        -1.582
+        -0.773,
+        -0.513
       ],
       "umap3D": [
-        0.355,
-        0.127,
-        -1.232
+        -0.631,
+        0.614,
+        -0.532
       ]
     },
     {
@@ -37977,13 +37977,13 @@
       "preview": "lac operon regulation laci promoter mrna betagal lactose allolactose promoter_active beta_gal lactose_internal allolactose_pool laci promoter lactose",
       "simulationMode": "ODE",
       "umap2D": [
-        0.835,
-        -0.1
+        0.777,
+        0.046
       ],
       "umap3D": [
-        -0.226,
-        0.539,
-        -0.223
+        0.212,
+        0.114,
+        -0.846
       ]
     },
     {
@@ -38388,13 +38388,13 @@
       "preview": "lipid mediated pip3 signaling pi3k pip2 pip3 pten pdk1 active_pi3k pip3_high active_pdk1 pi3k pip2 pip3 pten pdk1",
       "simulationMode": "ODE",
       "umap2D": [
-        1.381,
-        -0.409
+        -0.112,
+        0.113
       ],
       "umap3D": [
-        -0.592,
-        -0.316,
-        -0.678
+        -0.293,
+        -0.769,
+        -0.788
       ]
     },
     {
@@ -38800,13 +38800,13 @@
       "preview": "mapk signaling cascade ligand receptor mapkkk mapkk mapk active_receptor mapkkk_p mapkk_p mapk_p ligand receptor mapkkk mapkk mapk",
       "simulationMode": "ODE",
       "umap2D": [
-        1.147,
-        -0.383
+        -0.039,
+        -0.047
       ],
       "umap3D": [
-        -0.565,
-        -0.23,
-        -0.427
+        -0.064,
+        -0.632,
+        -0.744
       ]
     },
     {
@@ -39210,13 +39210,13 @@
       "preview": "meta formal game theory model: meta_formal_game_theory.bngl description: models the replicator dynamics of a game (e.g., hawk-dove). strategies replicate based on their payoff against the population. ",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.425,
-        -1.647
+        0.63,
+        -1.876
       ],
       "umap3D": [
-        0.956,
-        -0.727,
-        0.474
+        0.373,
+        -0.292,
+        0.987
       ]
     },
     {
@@ -39620,13 +39620,13 @@
       "preview": "meta formal molecular clock model: meta_formal_molecular_clock.bngl description: demonstrates timescale separation with a stiff/fast subsystem and a sloppy/slow subsystem. rapid equilibrium of fast sp",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.122,
-        -1.284
+        0.528,
+        -1.425
       ],
       "umap3D": [
-        0.698,
-        -0.503,
-        0.163
+        0.186,
+        -0.13,
+        0.579
       ]
     },
     {
@@ -40032,13 +40032,13 @@
       "preview": "meta formal petri net model: meta_formal_petri_net.bngl description: explicitly models a place-transition petri net structure using bngl. places are species (token holders). transitions are reaction r",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.15,
-        -1.019
+        0.787,
+        -1.19
       ],
       "umap3D": [
-        0.721,
-        -0.176,
-        -0.063
+        0.342,
+        0.062,
+        0.373
       ]
     },
     {
@@ -40442,13 +40442,13 @@
       "preview": "michaelis menten kinetics e s p obs_product obs_es_complex e s binding catalysis",
       "simulationMode": "ODE",
       "umap2D": [
-        0.014,
-        -0.512
+        -0.086,
+        -0.948
       ],
       "umap3D": [
-        0.408,
-        -0.347,
-        -0.523
+        -0.39,
+        -0.143,
+        0.124
       ]
     },
     {
@@ -40855,13 +40855,13 @@
       "preview": "ml gradient descent gradient descent optimizer in bngl ==================================== molecules represent position in a 2d optimization landscape. the ode dynamics are gradient descent with mome",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.607,
-        -1.356
+        0.063,
+        -1.792
       ],
       "umap3D": [
-        1.022,
-        -0.742,
-        -0.334
+        -0.317,
+        0.183,
+        0.809
       ]
     },
     {
@@ -41266,13 +41266,13 @@
       "preview": "ml hopfield model: ml_hopfield.bngl description: implements a 3-neuron hopfield network (associative memory). weights are encoded in pairwise cross-production rules. initial state is a corrupted patte",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.207,
-        -1.454
+        0.771,
+        -1.515
       ],
       "umap3D": [
-        0.86,
-        -0.358,
-        0.315
+        0.419,
+        -0.048,
+        0.66
       ]
     },
     {
@@ -41678,13 +41678,13 @@
       "preview": "ml kmeans model: ml_kmeans.bngl description: implements k-means clustering logic in bngl. centroids (ax, ay, bx, by) are distinct molecule types. centroids drift toward the mean of assigned data point",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.362,
-        -1.328
+        0.904,
+        -1.567
       ],
       "umap3D": [
-        0.707,
-        -0.363,
-        0.617
+        0.667,
+        -0.253,
+        0.636
       ]
     },
     {
@@ -42091,13 +42091,13 @@
       "preview": "ml q learning q-learning agent in bngl ========================= a reinforcement learning agent navigating a 1d environment. state: position along a line (encoded as concentration of pos molecule) act",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.264,
-        -0.968
+        0.16,
+        -1.401
       ],
       "umap3D": [
-        0.748,
-        -0.325,
-        -0.271
+        -0.091,
+        0.154,
+        0.395
       ]
     },
     {
@@ -42502,13 +42502,13 @@
       "preview": "ml svm model: ml_svm.bngl description: implements a linear support vector machine (svm). hyperplane weights (w1, w2) and bias (b) are distinct molecule types. data points are constant parameters. trai",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.021,
-        -1.672
+        0.964,
+        -1.517
       ],
       "umap3D": [
-        0.55,
-        -0.4,
-        0.708
+        0.71,
+        -0.407,
+        0.568
       ]
     },
     {
@@ -42914,13 +42914,13 @@
       "preview": "mtor signaling rheb mtorc1 s6k ampk active_rheb active_mtorc1 phospho_s6k active_ampk rheb mtorc1 s6k ampk",
       "simulationMode": "ODE",
       "umap2D": [
-        0.86,
-        -0.7
+        0.234,
+        -0.357
       ],
       "umap3D": [
-        -0.205,
-        -0.109,
-        -0.301
+        0.067,
+        -0.375,
+        -0.483
       ]
     },
     {
@@ -43327,13 +43327,13 @@
       "preview": "mtorc2 signaling mtor sin1 rictor akt sgk1 pip3 active_mtorc2 total_pakt total_psgk mtorc2_assembled pip3_sensors mtor sin1 rictor akt sgk1 pip3",
       "simulationMode": "ODE",
       "umap2D": [
-        1.182,
-        -0.843
+        0.174,
+        -0.056
       ],
       "umap3D": [
-        -0.126,
-        0.125,
-        -0.654
+        0.28,
+        -0.373,
+        -0.737
       ]
     },
     {
@@ -43740,13 +43740,13 @@
       "preview": "mt arithmetic compiler model: mt_arithmetic_compiler.bngl description: implements a bottom-up arithmetic expression tree evaluator. input expression: (3 + 4) * 2 molecules represent leaf nodes (values",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.099,
-        -0.759
+        0.931,
+        -1.047
       ],
       "umap3D": [
-        0.638,
-        0.012,
-        0.117
+        0.441,
+        0.135,
+        0.203
       ]
     },
     {
@@ -44151,13 +44151,13 @@
       "preview": "mt bngl interpreter model: mt_bngl_interpreter.bngl description: a self-referential bngl model that parses and executes a subset of bngl rules. the \"program\" is encoded as concentrations of rule molec",
       "simulationMode": "ODE",
       "umap2D": [
-        0.124,
-        -1.11
+        0.636,
+        -1.113
       ],
       "umap3D": [
-        0.52,
-        -0.22,
-        0.108
+        0.29,
+        -0.09,
+        0.265
       ]
     },
     {
@@ -44567,13 +44567,13 @@
       "preview": "mt music sequencer music sequencer / chord synthesizer in bngl ============================================== oscillator molecules whose concentrations trace waveforms. frequencies correspond to music",
       "simulationMode": "ODE",
       "umap2D": [
-        0.762,
-        -1.351
+        -0.151,
+        -1.012
       ],
       "umap3D": [
-        0.533,
-        0.245,
-        -0.123
+        0.319,
+        0.325,
+        -0.092
       ]
     },
     {
@@ -44980,13 +44980,13 @@
       "preview": "mt pascal triangle model: mt_pascal_triangle.bngl description: generates pascal's triangle coefficients using a rule-based approach. demonstrates combinatoric logic and local state updates. row(n) yie",
       "simulationMode": "ODE",
       "umap2D": [
-        0.237,
-        -1.645
+        1.166,
+        -1.224
       ],
       "umap3D": [
-        0.712,
-        0.03,
-        0.522
+        0.783,
+        0.08,
+        0.332
       ]
     },
     {
@@ -45390,13 +45390,13 @@
       "preview": "mt quine model: mt_quine.bngl description: implements a bionetgen quine (self-replicating model logic). a true quine in code prints its own source. in bngl,this model's steady-state concentrations enc",
       "simulationMode": "ODE",
       "umap2D": [
-        0.224,
-        -0.88
+        0.51,
+        -0.887
       ],
       "umap3D": [
-        0.364,
-        -0.228,
-        -0.099
+        0.044,
+        -0.085,
+        0.098
       ]
     },
     {
@@ -45801,13 +45801,13 @@
       "preview": "myogenic differentiation myod myog mef2 high_myod myog_on mef2_on myod myog mef2",
       "simulationMode": "ODE",
       "umap2D": [
-        0.918,
-        0.074
+        0.887,
+        0.176
       ],
       "umap3D": [
-        -0.503,
-        0.533,
-        0.117
+        0.521,
+        -0.159,
+        -0.981
       ]
     },
     {
@@ -46213,13 +46213,13 @@
       "preview": "negative feedback loop gene mrna protein free_gene bound_gene transcript protein gene",
       "simulationMode": "ODE",
       "umap2D": [
-        0.582,
-        -0.313
+        0.644,
+        -0.29
       ],
       "umap3D": [
-        -0.293,
-        0.029,
-        0.168
+        -0.179,
+        0.122,
+        -0.431
       ]
     },
     {
@@ -46625,13 +46625,13 @@
       "preview": "neurotransmitter release calcium snare vesicle postsynaptic high_calcium open_snare fused_vesicle postsynaptic_response calcium snare vesicle postsynaptic",
       "simulationMode": "ODE",
       "umap2D": [
-        0.573,
-        0.222
+        0.751,
+        0.404
       ],
       "umap3D": [
-        -0.022,
-        0.112,
-        -1.091
+        0.492,
+        -0.952,
+        -0.69
       ]
     },
     {
@@ -47038,13 +47038,13 @@
       "preview": "nfkb feedback nfkb ikb ikk a20 nuclear_nfkb active_ikk total_ikb nfkb_complex a20_feedback nfkb ikb ikk a20",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.691,
-        -0.717
+        0.657,
+        -0.469
       ],
       "umap3D": [
-        0.079,
-        0.171,
-        -0.116
+        0.196,
+        0.016,
+        -0.333
       ]
     },
     {
@@ -47449,13 +47449,13 @@
       "preview": "nfsim aggregation gelation model: nfsim_aggregation_gelation.bngl description: models the formation of large aggregates (gelation) from monomers. monomers have multiple binding sites, allowing branchi",
       "simulationMode": "NFsim",
       "umap2D": [
-        -0.119,
-        -1.181
+        0.341,
+        -1.393
       ],
       "umap3D": [
-        0.464,
-        -0.712,
-        0.185
+        0.158,
+        -0.462,
+        0.544
       ]
     },
     {
@@ -47860,13 +47860,13 @@
       "preview": "nfsim coarse graining model: nfsim_coarse_graining.bngl description: models the fusion of droplets (coarse-grained particles). small droplets fuse to form larger ones. demonstrates how to model aggreg",
       "simulationMode": "NFsim",
       "umap2D": [
-        -0.817,
-        -1.922
+        0.728,
+        -2.378
       ],
       "umap3D": [
-        1.179,
-        -1.176,
-        0.633
+        0.338,
+        -0.481,
+        1.469
       ]
     },
     {
@@ -48270,13 +48270,13 @@
       "preview": "nfsim dynamic compartments model: nfsim_dynamic_compartments.bngl description: mocks the growth and division of cells (dynamic compartments). tracks 'cell' molecules that grow in 'volume' (attribute) ",
       "simulationMode": "NFsim",
       "umap2D": [
-        0.134,
-        -1.232
+        0.304,
+        -1.227
       ],
       "umap3D": [
-        0.341,
-        -0.627,
-        0.148
+        0.052,
+        -0.442,
+        0.388
       ]
     },
     {
@@ -48680,13 +48680,13 @@
       "preview": "nfsim hybrid particle field model: nfsim_hybrid_particle_field.bngl description: a pseudo-simulation of a particle moving in a field. the 'field' is represented by a grid of immobile species encoding ",
       "simulationMode": "NFsim",
       "umap2D": [
-        -0.073,
-        -1.443
+        0.395,
+        -1.519
       ],
       "umap3D": [
-        0.666,
-        -0.696,
-        0.135
+        0.066,
+        -0.286,
+        0.664
       ]
     },
     {
@@ -49091,13 +49091,13 @@
       "preview": "nfsim ring closure polymer model: nfsim_ring_closure_polymer.bngl description: models the formation of linear polymers and their cyclization (ring closure). monomers a(x,y) bind linearly x-y. if the t",
       "simulationMode": "NFsim",
       "umap2D": [
-        -0.421,
-        -0.806
+        -0.13,
+        -1.447
       ],
       "umap3D": [
-        0.248,
-        -0.999,
-        0.208
+        -0.179,
+        -0.677,
+        0.616
       ]
     },
     {
@@ -49518,13 +49518,13 @@
       "preview": "nn xor model: nn_xor.bngl description: a multilayer perceptron trained to solve the xor problem using backpropagation logic. demonstrates adaptive learning and gradient descent in bngl. --- actions --",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.572,
-        -1.163
+        0.787,
+        -0.766
       ],
       "umap3D": [
-        0.502,
-        -0.023,
-        -0.25
+        0.077,
+        0.183,
+        0.025
       ]
     },
     {
@@ -49932,13 +49932,13 @@
       "preview": "no cgmp signaling no sgc cgmp pkg vasodilator_sig active_sgc cgmp_pool phospho_drive radical_load total_cyclase no sgc cgmp pkg",
       "simulationMode": "ODE",
       "umap2D": [
-        1.144,
-        -0.962
+        -0.098,
+        -0.276
       ],
       "umap3D": [
-        -0.058,
-        -0.161,
-        -0.765
+        -0.494,
+        -0.115,
+        -0.485
       ]
     },
     {
@@ -50342,13 +50342,13 @@
       "preview": "notch delta lateral inhibition cellnotch celldelta active_notch high_delta cellnotch celldelta",
       "simulationMode": "ODE",
       "umap2D": [
-        0.278,
-        -0.059
+        -0.408,
+        -0.637
       ],
       "umap3D": [
-        -0.545,
-        -0.61,
-        0.06
+        0.045,
+        -1.006,
+        -0.314
       ]
     },
     {
@@ -50754,13 +50754,13 @@
       "preview": "oxidative stress response ros keap1 nrf2 antioxidant elevated_ros released_keap1 nuclear_nrf2 high_antioxidant ros keap1 nrf2 antioxidant",
       "simulationMode": "ODE",
       "umap2D": [
-        1.497,
-        -0.146
+        0.24,
+        0.523
       ],
       "umap3D": [
-        -0.62,
-        0.494,
-        -0.687
+        -0.417,
+        -0.022,
+        -1.138
       ]
     },
     {
@@ -51167,13 +51167,13 @@
       "preview": "p38 mapk signaling p38 mkk3 mapkap2 active_p38 transducer_work upstream_drive complex_states total_workload p38 mkk3 mapkap2",
       "simulationMode": "ODE",
       "umap2D": [
-        1.472,
-        -0.49
+        0.216,
+        0.329
       ],
       "umap3D": [
-        -0.491,
-        0.023,
-        -0.832
+        -0.524,
+        -0.135,
+        -0.875
       ]
     },
     {
@@ -51577,13 +51577,13 @@
       "preview": "p53 mdm2 oscillator p53 mdm2 p53_total mdm2_total p53",
       "simulationMode": "ODE",
       "umap2D": [
-        1.072,
-        -1.231
+        0.964,
+        -0.126
       ],
       "umap3D": [
-        -0.182,
-        0.441,
-        0.235
+        -0.43,
+        0.302,
+        -0.346
       ]
     },
     {
@@ -51990,13 +51990,13 @@
       "preview": "parp1 mediated dna repair dna parp1 par nad damaged_sites bound_parp1 par_chain nad_pool repaired_units dna parp1 nad",
       "simulationMode": "ODE",
       "umap2D": [
-        0.8,
-        0.008
+        0.698,
+        0.197
       ],
       "umap3D": [
-        -0.425,
-        0.54,
-        -0.247
+        -0.054,
+        0.155,
+        -0.928
       ]
     },
     {
@@ -52401,13 +52401,13 @@
       "preview": "phosphorelay chain sensor relay output sensor_p relay_p output_p sensor relay output",
       "simulationMode": "ODE",
       "umap2D": [
-        2.456,
-        -0.423
+        -0.203,
+        1.251
       ],
       "umap3D": [
-        -0.649,
-        0.12,
-        -1.842
+        -1.285,
+        0.128,
+        -1.457
       ]
     },
     {
@@ -52812,13 +52812,13 @@
       "preview": "ph lorenz attractor lorenz attractor in bngl ========================= the classic chaotic system encoded as molecular concentrations. x,y,z molecules are just state variables. the ode system is the l",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.505,
-        -1.457
+        0.308,
+        -1.818
       ],
       "umap3D": [
-        0.948,
-        -0.868,
-        0.057
+        -0.028,
+        -0.122,
+        0.969
       ]
     },
     {
@@ -53224,13 +53224,13 @@
       "preview": "ph nbody gravity model: ph_nbody_gravity.bngl description: simulates the orbital mechanics of n-body gravity. each body (star,planet) has molecules representing x,y,vx,vy. acceleration is computed via",
       "simulationMode": "ODE",
       "umap2D": [
-        0.053,
-        -1.461
+        0.619,
+        -1.422
       ],
       "umap3D": [
-        0.775,
-        -0.449,
-        0.033
+        0.113,
+        -0.029,
+        0.566
       ]
     },
     {
@@ -53642,13 +53642,13 @@
       "preview": "ph schrodinger model: ph_schrodinger.bngl description: simulates the 1d schrödinger equation (particle in a box). wavefunction real and imaginary parts are molecule concentrations. demonstrates quantu",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.42,
-        -1.203
+        0.754,
+        -1.631
       ],
       "umap3D": [
-        1.01,
-        -0.422,
-        -0.077
+        0.102,
+        0.243,
+        0.687
       ]
     },
     {
@@ -54060,13 +54060,13 @@
       "preview": "ph wave equation model: ph_wave_equation.bngl description: simulates 1d longitudinal wave propagation in a discrete-mass spring system. demonstrates physics simulations in a rule-based framework. --- ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.008,
-        -1.329
+        0.618,
+        -1.328
       ],
       "umap3D": [
-        0.723,
-        -0.359,
-        -0.004
+        0.129,
+        0.028,
+        0.462
       ]
     },
     {
@@ -54472,13 +54472,13 @@
       "preview": "platelet activation adp p2y12 integrin thromboxane high_adp active_p2y12 open_integrin elevated_thromboxane adp p2y12 integrin thromboxane",
       "simulationMode": "ODE",
       "umap2D": [
-        1.387,
-        0.024
+        -0.068,
+        0.485
       ],
       "umap3D": [
-        -0.758,
-        0.183,
-        -0.869
+        -0.086,
+        -0.486,
+        -1.308
       ]
     },
     {
@@ -54882,13 +54882,13 @@
       "preview": "predator prey dynamics prey predator prey_count predator_count prey predator",
       "simulationMode": "ODE",
       "umap2D": [
-        0.15,
-        -2.147
+        -0.232,
+        -1.829
       ],
       "umap3D": [
-        0.442,
-        -1.066,
-        0.741
+        0.202,
+        -0.898,
+        0.934
       ]
     },
     {
@@ -55292,13 +55292,13 @@
       "preview": "process actin treadmilling model: process_actin_treadmilling.bngl description: models the treadmilling of an actin filament. monomers add to the barbed (+) end and dissociate from the pointed (-) end.",
       "simulationMode": "SSA/Gillespie",
       "umap2D": [
-        -0.217,
-        -0.936
+        0.072,
+        -1.334
       ],
       "umap3D": [
-        0.541,
-        -0.703,
-        -0.263
+        -0.233,
+        -0.343,
+        0.472
       ]
     },
     {
@@ -55705,13 +55705,13 @@
       "preview": "process autophagy flux model: process_autophagy_flux.bngl description: models the stages of macroautophagy: initiation -> phagophore -> autophagosome -> fusion with lysosome -> degradation. tracks the",
       "simulationMode": "ODE",
       "umap2D": [
-        0.268,
-        -1.314
+        0.067,
+        -1.178
       ],
       "umap3D": [
-        0.191,
-        -0.735,
-        0.134
+        -0.048,
+        -0.593,
+        0.339
       ]
     },
     {
@@ -56116,13 +56116,13 @@
       "preview": "process cell adhesion strength model: process_cell_adhesion_strength.bngl description: models the formation of cell-cell adhesion complexes (e.g.,cadherins). receptors on one cell bind ligands/recepto",
       "simulationMode": "ODE",
       "umap2D": [
-        0.193,
-        -1.143
+        0.363,
+        -1.129
       ],
       "umap3D": [
-        0.3,
-        -0.487,
-        0.168
+        0.221,
+        -0.412,
+        0.271
       ]
     },
     {
@@ -56526,13 +56526,13 @@
       "preview": "process kinetic proofreading tcr model: process_kinetic_proofreading_tcr.bngl description: implements the kinetic proofreading model for t-cell receptor (tcr) discrimination. ligand binding induces a ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.438,
-        -0.88
+        0.282,
+        -0.78
       ],
       "umap3D": [
-        0.112,
-        -0.384,
-        -0.127
+        0.071,
+        -0.39,
+        -0.044
       ]
     },
     {
@@ -56937,13 +56937,13 @@
       "preview": "process quorum sensing switch model: process_quorum_sensing_switch.bngl description: models quorum sensing (autoinduction) where cells secrete a signaling molecule (ai). when ai accumulates to a thres",
       "simulationMode": "ODE",
       "umap2D": [
-        0.509,
-        -1.101
+        0.546,
+        -0.819
       ],
       "umap3D": [
-        0.219,
-        -0.164,
-        0.064
+        0.143,
+        -0.066,
+        0.022
       ]
     },
     {
@@ -57349,13 +57349,13 @@
       "preview": "quorum sensing circuit autoinducer autoinducer_env gene protein autoinducer_pool gene_on protein autoinducer_env_pool gene protein autoinducer_env",
       "simulationMode": "ODE",
       "umap2D": [
-        1.058,
-        -1.119
+        0.821,
+        -0.141
       ],
       "umap3D": [
-        0.169,
-        0.248,
-        -0.65
+        -0.259,
+        0.308,
+        -0.457
       ]
     },
     {
@@ -57761,13 +57761,13 @@
       "preview": "rab gtpase cycle rab gef gap effector rab_gtp active_gef active_gap effector_on rab gef gap effector",
       "simulationMode": "ODE",
       "umap2D": [
-        1.203,
-        -1.114
+        0.964,
+        -0.228
       ],
       "umap3D": [
-        -0.28,
-        0.244,
-        0.368
+        0.58,
+        -0.04,
+        -0.633
       ]
     },
     {
@@ -58174,13 +58174,13 @@
       "preview": "rankl rank signaling rankl rank opg nfat traf6 active_nfat rank_occupancy opg_sequestration traf6_complexes total_rankl rankl rank opg nfat traf6",
       "simulationMode": "ODE",
       "umap2D": [
-        0.82,
-        -0.665
+        0.231,
+        -0.373
       ],
       "umap3D": [
-        -0.267,
-        -0.148,
-        -0.193
+        0.01,
+        -0.45,
+        -0.459
       ]
     },
     {
@@ -58587,13 +58587,13 @@
       "preview": "ras gef gap cycle ras sos rasgap active_ras gef_complexes gap_complexes total_gtp_ras exchange_rate ras sos rasgap",
       "simulationMode": "ODE",
       "umap2D": [
-        1.242,
-        -1.482
+        -0.504,
+        -0.823
       ],
       "umap3D": [
-        -0.254,
-        0.293,
-        0.633
+        0.927,
+        -0.367,
+        -0.511
       ]
     },
     {
@@ -58999,13 +58999,13 @@
       "preview": "repressilator oscillator genea geneb genec mrna_a mrna_b mrna_c proteina proteinb proteinc protein_a protein_b protein_c genea_bound genea geneb genec",
       "simulationMode": "ODE",
       "umap2D": [
-        0.671,
-        -0.608
+        0.746,
+        -0.421
       ],
       "umap3D": [
-        -0.048,
-        0.177,
-        0.088
+        0.285,
+        0.005,
+        -0.408
       ]
     },
     {
@@ -59410,13 +59410,13 @@
       "preview": "retinoic acid signaling ra rarrxr corepressor targetgene active_rarrxr released_corepressor gene_on ra rarrxr corepressor targetgene",
       "simulationMode": "ODE",
       "umap2D": [
-        1.607,
-        -0.653
+        0.342,
+        0.485
       ],
       "umap3D": [
-        -0.883,
-        -0.012,
-        0.156
+        -0.635,
+        -0.33,
+        -0.918
       ]
     },
     {
@@ -59823,13 +59823,13 @@
       "preview": "rho gtpase actin cytoskeleton rhoa rock limk cofilin actin f_actin_mass active_rhoa phospho_limk stabilized_cof membrane_rhoa rhoa rock limk cofilin actin",
       "simulationMode": "ODE",
       "umap2D": [
-        0.797,
-        -0.855
+        0.155,
+        -0.531
       ],
       "umap3D": [
-        -0.099,
-        -0.275,
-        -0.362
+        0.017,
+        -0.518,
+        -0.307
       ]
     },
     {
@@ -60237,13 +60237,13 @@
       "preview": "shp2 phosphatase regulation rtk shp2 substrate active_enzyme recruited_shp2 substrate_state bound_rtk total_inactive active_substrate rtk shp2 substrate",
       "simulationMode": "ODE",
       "umap2D": [
-        0.772,
-        -0.387
+        -0.033,
+        -0.322
       ],
       "umap3D": [
-        -0.207,
-        -0.281,
-        -0.615
+        -0.43,
+        -0.321,
+        -0.44
       ]
     },
     {
@@ -60648,13 +60648,13 @@
       "preview": "signal amplification cascade ligand receptor effector messenger active_receptor active_effector messenger ligand receptor effector",
       "simulationMode": "ODE",
       "umap2D": [
-        0.927,
-        -0.91
+        -0.003,
+        -0.453
       ],
       "umap3D": [
-        -0.345,
-        -0.355,
-        -0.174
+        0.202,
+        -0.644,
+        -0.4
       ]
     },
     {
@@ -61059,13 +61059,13 @@
       "preview": "simple dimerization a b a_free b_free ab a b",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.715,
-        0.047
+        2.05,
+        -0.938
       ],
       "umap3D": [
-        0.161,
-        0.195,
-        1.387
+        1.608,
+        -0.514,
+        0.115
       ]
     },
     {
@@ -61470,13 +61470,13 @@
       "preview": "sir epidemic model human susceptible infected recovered human human",
       "simulationMode": "ODE",
       "umap2D": [
-        -1.474,
-        -1.56
+        -0.486,
+        -2.493
       ],
       "umap3D": [
-        0.728,
-        -1.472,
-        1.286
+        0.498,
+        -1.097,
+        1.623
       ]
     },
     {
@@ -61881,13 +61881,13 @@
       "preview": "smad tgf beta signaling tgfb tgfbr smad2 smad4 active_tgfbr phospho_smad2 smad_complex tgfb tgfbr smad2 smad4",
       "simulationMode": "ODE",
       "umap2D": [
-        1.198,
-        -0.581
+        -0.07,
+        -0.148
       ],
       "umap3D": [
-        -0.605,
-        -0.196,
-        -0.067
+        0.096,
+        -0.726,
+        -0.654
       ]
     },
     {
@@ -62294,13 +62294,13 @@
       "preview": "sonic hedgehog gradient shh ptc1 morphogen_peak morphogen_drive bound_shh ptc1_occupancy total_endo_signal shh shh ptc1",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        1.203,
-        -1.184
+        -0.374,
+        -0.474
       ],
       "umap3D": [
-        -0.083,
-        -0.417,
-        -0.812
+        -0.659,
+        -0.194,
+        -0.351
       ]
     },
     {
@@ -62709,13 +62709,13 @@
       "preview": "sp fourier synthesizer fourier series synthesizer in bngl ==================================== each \"harmonic\" is a molecule whose concentration oscillates at a specific frequency. summing harmonics r",
       "simulationMode": "ODE",
       "umap2D": [
-        0.097,
-        -1.977
+        0.935,
+        -1.867
       ],
       "umap3D": [
-        1.239,
-        -0.466,
-        -0.249
+        -0.096,
+        0.425,
+        0.842
       ]
     },
     {
@@ -63131,13 +63131,13 @@
       "preview": "sp image convolution image convolution filter in bngl ================================== pixels are molecules. brightness is concentration. a 3x3 edge-detection kernel is encoded as bngl functions tha",
       "simulationMode": "ODE",
       "umap2D": [
-        0.056,
-        -1.587
+        0.262,
+        -1.547
       ],
       "umap3D": [
-        0.852,
-        -0.479,
-        -0.233
+        -0.082,
+        0.15,
+        0.571
       ]
     },
     {
@@ -63545,13 +63545,13 @@
       "preview": "sp kalman filter kalman filter in bngl ====================== a 1d kalman filter for tracking position from noisy measurements. state: position (x) and velocity (v) measurement: noisy position reading",
       "simulationMode": "ODE",
       "umap2D": [
-        -1.148,
-        -1.937
+        0.088,
+        -2.588
       ],
       "umap3D": [
-        1.65,
-        -1.155,
-        -0.406
+        -0.534,
+        0.368,
+        1.51
       ]
     },
     {
@@ -63958,13 +63958,13 @@
       "preview": "stat3 mediated transcription stat3 dna pias3 mrna active_dimer total_pstat3 dna_engagement mrna_level pias3_feedback stat3 dna pias3 mrna",
       "simulationMode": "ODE",
       "umap2D": [
-        1.039,
-        -0.249
+        0.527,
+        0.09
       ],
       "umap3D": [
-        -0.344,
-        0.394,
-        -0.344
+        0.119,
+        -0.08,
+        -0.887
       ]
     },
     {
@@ -64369,13 +64369,13 @@
       "preview": "stress response adaptation sensor adapter enzyme active_sensor adapter enzyme sensor",
       "simulationMode": "ODE",
       "umap2D": [
-        0.214,
-        0.376
+        -0.434,
+        0.468
       ],
       "umap3D": [
-        -0.068,
-        -0.246,
-        -1.358
+        -1.022,
+        0.172,
+        -0.596
       ]
     },
     {
@@ -64781,13 +64781,13 @@
       "preview": "synaptic plasticity ltp glutamate nmda calcium camkii ampar glusource open_nmdar cytosolic_ca active_camkii surface_ampar glutamate nmda calcium glusource camkii ampar ampar",
       "simulationMode": "ODE",
       "umap2D": [
-        0.489,
-        -0.057
+        0.658,
+        0.065
       ],
       "umap3D": [
-        0.022,
-        -0.061,
-        -0.858
+        0.415,
+        -0.713,
+        -0.573
       ]
     },
     {
@@ -65191,13 +65191,13 @@
       "preview": "synbio band pass filter model: synbio_band_pass_filter.bngl description: implements a band-pass filter. the output is high only for intermediate levels of input. mechanism: high-pass (activation) + lo",
       "simulationMode": "ODE",
       "umap2D": [
-        0.438,
-        -1.349
+        0.795,
+        -1.004
       ],
       "umap3D": [
-        0.308,
-        -0.147,
-        0.386
+        0.551,
+        -0.285,
+        0.126
       ]
     },
     {
@@ -65604,13 +65604,13 @@
       "preview": "synbio counter molecular model: synbio_counter_molecular.bngl description: models a chemical counter that tallies input pulses. each pulse converts state s_i to s_{i+1}. demonstrates sequential logic.",
       "simulationMode": "ODE",
       "umap2D": [
-        0.418,
-        -1.071
+        0.653,
+        -0.869
       ],
       "umap3D": [
-        0.38,
-        -0.093,
-        0.02
+        0.314,
+        -0.104,
+        0.036
       ]
     },
     {
@@ -66015,13 +66015,13 @@
       "preview": "synbio edge detector model: synbio_edge_detector.bngl description: implements an edge detector using an incoherent feedforward loop (iffl). input x activates both output z and repressor y. y represses",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.461,
-        -1.588
+        1.015,
+        -1.122
       ],
       "umap3D": [
-        0.444,
-        -0.078,
-        0.533
+        0.713,
+        -0.147,
+        0.229
       ]
     },
     {
@@ -66427,13 +66427,13 @@
       "preview": "synbio logic gates enzymatic model: synbio_logic_gates_enzymatic.bngl description: implements and and or logic gates using enzymatic reactions. inputs i1 and i2. and: requires both i1 and i2 to form a",
       "simulationMode": "ODE",
       "umap2D": [
-        0.218,
-        -0.802
+        0.656,
+        -0.832
       ],
       "umap3D": [
-        0.329,
-        -0.066,
-        0.045
+        0.317,
+        -0.139,
+        0.003
       ]
     },
     {
@@ -66838,13 +66838,13 @@
       "preview": "synbio oscillator synchronization model: synbio_oscillator_synchronization.bngl description: models two coupled relaxation oscillators (a-b and c-d). they synchronize phase due to coupling (quorum sen",
       "simulationMode": "ODE",
       "umap2D": [
-        0.421,
-        -1.32
+        0.815,
+        -0.978
       ],
       "umap3D": [
-        0.476,
-        -0.04,
-        0.224
+        0.458,
+        -0.033,
+        0.146
       ]
     },
     {
@@ -67248,13 +67248,13 @@
       "preview": "t cell activation tcr antigen cytokine active_tcr cytokine_pool tcr antigen",
       "simulationMode": "ODE",
       "umap2D": [
-        1.011,
-        0.357
+        -0.249,
+        0.477
       ],
       "umap3D": [
-        -1.124,
-        0.138,
-        -0.281
+        0.266,
+        -0.85,
+        -1.204
       ]
     },
     {
@@ -67662,13 +67662,13 @@
       "preview": "tlr3 dsrna sensing dsrna tlr3 trif irf3 sarm active_tlr3 trif_bound pathogen_sense nucleark_irf3 cyto_irf3 regulator_load dsrna tlr3 trif irf3 sarm",
       "simulationMode": "ODE",
       "umap2D": [
-        1.252,
-        -0.497
+        0.301,
+        0.123
       ],
       "umap3D": [
-        -0.615,
-        0.132,
-        -0.111
+        0.23,
+        -0.453,
+        -0.875
       ]
     },
     {
@@ -68074,13 +68074,13 @@
       "preview": "tnf induced apoptosis tnf tnfr caspase8 bid caspase3 active_tnfr active_caspase8 truncated_bid active_caspase3 tnf tnfr caspase8 bid caspase3",
       "simulationMode": "ODE",
       "umap2D": [
-        1.314,
-        -0.142
+        0.031,
+        0.287
       ],
       "umap3D": [
-        -0.757,
-        0.152,
-        -0.546
+        -0.139,
+        -0.492,
+        -1.086
       ]
     },
     {
@@ -68485,13 +68485,13 @@
       "preview": "two component system kinase regulator target kinase_p reg_p target kinase regulator",
       "simulationMode": "ODE",
       "umap2D": [
-        0.831,
-        -0.486
+        0.13,
+        -0.281
       ],
       "umap3D": [
-        -0.316,
-        -0.179,
-        -0.4
+        -0.224,
+        -0.381,
+        -0.512
       ]
     },
     {
@@ -68898,13 +68898,13 @@
       "preview": "vegf angiogenesis vegf vegfr2 vegfr1 erk endothelial active_signal surface_vegfr2 migratory_pool decoy_occupancy total_complexes vegf vegfr2 vegfr1 erk endothelial",
       "simulationMode": "ODE",
       "umap2D": [
-        1.26,
-        -0.631
+        -0.179,
+        -0.154
       ],
       "umap3D": [
-        -0.64,
-        -0.277,
-        -0.235
+        -0.148,
+        -0.727,
+        -0.656
       ]
     },
     {
@@ -69310,13 +69310,13 @@
       "preview": "viral sensing innate immunity viralrna rigi mavs irf3 ifnb active_rigi active_mavs phospho_irf3 ifnb_on viralrna rigi mavs irf3 ifnb",
       "simulationMode": "ODE",
       "umap2D": [
-        1.143,
-        -0.199
+        0.215,
+        0.175
       ],
       "umap3D": [
-        -0.703,
-        0.143,
-        -0.181
+        0.183,
+        -0.5,
+        -0.956
       ]
     },
     {
@@ -69721,13 +69721,13 @@
       "preview": "wacky alchemy stone model: wacky_alchemy_stone.bngl description: models the alchemical transmutation of lead (pb) into gold (au). requires the presence of the mythical philosopher's stone (catalyst). ",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.232,
-        -0.809
+        0.849,
+        -1.274
       ],
       "umap3D": [
-        0.336,
-        -0.393,
-        0.549
+        0.583,
+        -0.504,
+        0.334
       ]
     },
     {
@@ -70132,13 +70132,13 @@
       "preview": "wacky black hole model: wacky_black_hole.bngl description: models a \"black hole\" in a space of \"mass\" particles. the black hole (bh) grows by consuming mass (m) particles. demonstrates runaway growth ",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.212,
-        -1.824
+        0.548,
+        -1.928
       ],
       "umap3D": [
-        0.814,
-        -0.82,
-        0.578
+        0.405,
+        -0.465,
+        0.969
       ]
     },
     {
@@ -70544,13 +70544,13 @@
       "preview": "wacky bouncing ball model: wacky_bouncing_ball.bngl description: models a particle 'bouncing' in a 1d potential well (gravity). height (h) converts to velocity (v) and back. includes damping (friction",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.587,
-        -2.142
+        0.571,
+        -2.351
       ],
       "umap3D": [
-        1.402,
-        -0.967,
-        0.516
+        0.362,
+        -0.161,
+        1.474
       ]
     },
     {
@@ -70954,13 +70954,13 @@
       "preview": "wacky traffic jam asep model: wacky_traffic_jam_asep.bngl description: models traffic flow as a 1d asymmetric simple exclusion process (asep). cars move forward only if the next site is empty. high de",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.476,
-        -1.756
+        0.784,
+        -1.959
       ],
       "umap3D": [
-        0.916,
-        -0.635,
-        0.733
+        0.605,
+        -0.309,
+        1.003
       ]
     },
     {
@@ -71365,13 +71365,13 @@
       "preview": "wacky zombie infection model: wacky_zombie_infection.bngl description: models a zombie outbreak using an sir-type framework. s (susceptible humans) -> z (zombies) via bite. zombies can be \"removed\" (k",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.233,
-        -1.16
+        0.723,
+        -1.39
       ],
       "umap3D": [
-        0.298,
-        -0.547,
-        0.552
+        0.48,
+        -0.602,
+        0.423
       ]
     },
     {
@@ -71776,13 +71776,13 @@
       "preview": "wnt beta catenin signaling wnt frizzled dvl dest_complex betacatenin tcf active_dvl nuclear_bc transcription_active wnt frizzled dvl dest_complex betacatenin tcf",
       "simulationMode": "ODE",
       "umap2D": [
-        0.724,
-        -0.336
+        0.26,
+        -0.198
       ],
       "umap3D": [
-        -0.431,
-        -0.053,
-        0.049
+        0.274,
+        -0.461,
+        -0.587
       ]
     },
     {
@@ -72187,432 +72187,13 @@
       "preview": "wound healing pdgf signaling pdgf pdgfr stat3 fibroblast active_pdgfr phospho_stat3 migratory_fibroblast pdgf pdgfr stat3 fibroblast",
       "simulationMode": "ODE",
       "umap2D": [
-        2.022,
-        -0.16
+        -0.738,
+        0.546
       ],
       "umap3D": [
-        -1.431,
-        -0.348,
-        -0.541
-      ]
-    },
-    {
-      "id": "published-models/complex-models/Chattaraj_2021",
-      "filename": "Chattaraj_2021.bngl",
-      "path": "published-models/complex-models/Chattaraj_2021.bngl",
-      "tags": [
-        "Metabolism"
-      ],
-      "category": "Metabolism",
-      "embedding": [
-        -0.04972008243203163,
-        -0.09736362844705582,
-        -0.09088659286499023,
-        -0.07256139814853668,
-        0.06724359095096588,
-        -0.022286465391516685,
-        0.0034282647538930178,
-        0.11024133861064911,
-        0.08670312911272049,
-        -0.031101863831281662,
-        0.000670586246997118,
-        -0.013178419321775436,
-        -0.018086634576320648,
-        0.06513182073831558,
-        -0.045509643852710724,
-        0.0460205040872097,
-        -0.07381922006607056,
-        0.008524782955646515,
-        -0.05884675309062004,
-        0.0025232487823814154,
-        0.07032105326652527,
-        0.019278334453701973,
-        -0.011182787828147411,
-        0.008745034225285053,
-        -0.02041243202984333,
-        0.030029311776161194,
-        0.004996669478714466,
-        -0.028810665011405945,
-        -0.018524378538131714,
-        -0.08776547759771347,
-        0.000015644483937649056,
-        0.08446066826581955,
-        -0.006557523738592863,
-        0.002889274852350354,
-        0.06452171504497528,
-        0.02513005957007408,
-        -0.06494495272636414,
-        0.010099825449287891,
-        -0.028791235759854317,
-        -0.02480599284172058,
-        0.05472315475344658,
-        -0.04116550832986832,
-        -0.007212851662188768,
-        -0.041295912116765976,
-        0.018115583807229996,
-        -0.026096021756529808,
-        -0.07098861783742905,
-        0.05064063519239426,
-        -0.00804704800248146,
-        -0.03548499941825867,
-        -0.0022946144454181194,
-        -0.001002394943498075,
-        -0.09627967327833176,
-        0.13025419414043427,
-        0.023456543684005737,
-        -0.031588952988386154,
-        -0.10789768397808075,
-        -0.026772188022732735,
-        0.00800139270722866,
-        -0.02506624348461628,
-        0.021066052839159966,
-        0.0135817751288414,
-        0.0317709781229496,
-        0.013301760889589787,
-        0.0012203841470181942,
-        0.03319447487592697,
-        0.04929421469569206,
-        0.014882128685712814,
-        0.037356726825237274,
-        0.07661131024360657,
-        -0.0786890983581543,
-        -0.004666334018111229,
-        0.011003367602825165,
-        -0.02825126424431801,
-        0.03791957348585129,
-        0.11076706647872925,
-        0.07634828239679337,
-        -0.005812349729239941,
-        0.00900519359856844,
-        -0.116543710231781,
-        -0.021296681836247444,
-        0.04445461556315422,
-        0.09298194944858551,
-        0.09624018520116806,
-        0.031156837940216064,
-        -0.0047569964081048965,
-        -0.013115627691149712,
-        0.023438869044184685,
-        0.04997226223349571,
-        -0.04040913283824921,
-        -0.009962662123143673,
-        0.0987754538655281,
-        -0.04558662325143814,
-        -0.01040941197425127,
-        -0.11090613901615143,
-        0.01345493458211422,
-        0.04659407585859299,
-        0.020546765998005867,
-        0.004122226964682341,
-        0.06174416467547417,
-        0.009157193824648857,
-        0.007098190952092409,
-        -0.046534113585948944,
-        -0.044649600982666016,
-        -0.011825722642242908,
-        0.0044541135430336,
-        0.06523595750331879,
-        0.01624336466193199,
-        0.056397225707769394,
-        0.06334958970546722,
-        -0.05407175421714783,
-        -0.004477376118302345,
-        0.05761103704571724,
-        0.0394144169986248,
-        -0.017900601029396057,
-        0.0692439153790474,
-        0.009472457692027092,
-        -0.017644241452217102,
-        0.05510306358337402,
-        0.025200389325618744,
-        0.007360947318375111,
-        -0.017093069851398468,
-        -0.00999581627547741,
-        0.0482785589993,
-        -0.036849722266197205,
-        0.09796407073736191,
-        -0.05716118961572647,
-        3.6469598358246234e-33,
-        0.0008603579481132329,
-        -0.00731854559853673,
-        0.023351997137069702,
-        0.06415898352861404,
-        -0.01670367829501629,
-        -0.05376133322715759,
-        -0.031622763723134995,
-        -0.07344295084476471,
-        -0.12926675379276276,
-        -0.04777396470308304,
-        -0.050910335034132004,
-        -0.03765222057700157,
-        0.013180174864828587,
-        0.005375349894165993,
-        0.006184173282235861,
-        -0.049452781677246094,
-        -0.027364058420062065,
-        0.08416743576526642,
-        -0.004327716771513224,
-        -0.00971795804798603,
-        0.034474410116672516,
-        0.05131104961037636,
-        -0.055905528366565704,
-        -0.01791953481733799,
-        -0.002090168185532093,
-        -0.06513839215040207,
-        -0.049506451934576035,
-        -0.0041202702559530735,
-        0.006249558180570602,
-        -0.0371539331972599,
-        -0.0005843365215696394,
-        0.00733779976144433,
-        -0.02268705517053604,
-        -0.0007273548399098217,
-        0.034621722996234894,
-        -0.03670552372932434,
-        -0.0657971054315567,
-        -0.02945760264992714,
-        0.027819335460662842,
-        0.006302299443632364,
-        -0.001524391700513661,
-        -0.000026976220397045836,
-        -0.03483586013317108,
-        -0.08290205895900726,
-        0.09960781782865524,
-        -0.040182050317525864,
-        -0.09567675739526749,
-        0.003955795429646969,
-        -0.04162517935037613,
-        -0.026750167831778526,
-        0.0014599935384467244,
-        -0.021366776898503304,
-        0.054173268377780914,
-        0.025466302409768105,
-        -0.027899404987692833,
-        -0.0034167564008384943,
-        -0.05141568183898926,
-        -0.01206110417842865,
-        0.0903903916478157,
-        0.057061027735471725,
-        -0.10741672664880753,
-        -0.03280947729945183,
-        -0.04396330937743187,
-        0.003978951368480921,
-        0.10161305218935013,
-        0.07146327197551727,
-        -0.0988098680973053,
-        0.014600890688598156,
-        0.007736267987638712,
-        0.048068199306726456,
-        -0.03920929133892059,
-        0.05882038176059723,
-        0.09594764560461044,
-        0.06267597526311874,
-        0.03300080448389053,
-        0.019589100033044815,
-        0.029238276183605194,
-        0.00629765959456563,
-        -0.02569570392370224,
-        0.048847511410713196,
-        -0.017629316076636314,
-        -0.016622725874185562,
-        -0.01955590583384037,
-        -0.05991120636463165,
-        -0.1502874344587326,
-        -0.1220349371433258,
-        0.02565605193376541,
-        -0.10870301723480225,
-        -0.07482696324586868,
-        -0.03580401465296745,
-        0.040886323899030685,
-        -0.07337561249732971,
-        -0.06030304729938507,
-        -0.05982546508312225,
-        -0.06255387514829636,
-        -4.7279378286850756e-33,
-        0.07962021231651306,
-        -0.019355246797204018,
-        0.021388692781329155,
-        -0.016093259677290916,
-        -0.05389019846916199,
-        0.07723637670278549,
-        0.058481521904468536,
-        -0.057106733322143555,
-        0.04128896817564964,
-        -0.05762821435928345,
-        0.06839538365602493,
-        0.08992967754602432,
-        0.02817751094698906,
-        -0.041409820318222046,
-        -0.04656834155321121,
-        0.03359797224402428,
-        0.012700721621513367,
-        0.019512347877025604,
-        0.08681567758321762,
-        0.01649053953588009,
-        -0.04789378494024277,
-        0.020848188549280167,
-        0.02067103050649166,
-        0.02060907706618309,
-        0.015891607850790024,
-        0.05567038059234619,
-        0.05047211796045303,
-        0.06060634180903435,
-        -0.07605898380279541,
-        0.06639204174280167,
-        -0.02267385832965374,
-        0.02965507283806801,
-        -0.11895319819450378,
-        -0.025956859812140465,
-        0.033996183425188065,
-        -0.011439759284257889,
-        -0.023735923692584038,
-        -0.05209791287779808,
-        -0.01688326895236969,
-        -0.06316813081502914,
-        0.051108431071043015,
-        0.017525825649499893,
-        -0.08570350706577301,
-        -0.02697308547794819,
-        0.07068121433258057,
-        0.019110774621367455,
-        -0.013974491506814957,
-        -0.0055993953719735146,
-        -0.0537891611456871,
-        -0.04587678238749504,
-        -0.03690915182232857,
-        -0.03293181583285332,
-        -0.007219134364277124,
-        0.03438394516706467,
-        0.05196523666381836,
-        0.07605802267789841,
-        0.059764813631772995,
-        0.04035751149058342,
-        0.0067197224125266075,
-        -0.037247493863105774,
-        -0.026103435084223747,
-        -0.03471730276942253,
-        -0.015488870441913605,
-        -0.07591809332370758,
-        0.01743162050843239,
-        -0.0021824303548783064,
-        0.0017236636485904455,
-        0.04867546632885933,
-        0.08648611605167389,
-        -0.034911010414361954,
-        -0.020151009783148766,
-        0.09859602153301239,
-        0.09384635090827942,
-        0.013570421375334263,
-        0.01625222899019718,
-        0.004422808066010475,
-        0.055513158440589905,
-        -0.094950832426548,
-        -0.08292464166879654,
-        -0.120849609375,
-        -0.0498141273856163,
-        -0.024144316092133522,
-        -0.0284661166369915,
-        -0.024064579978585243,
-        0.0373091958463192,
-        0.023836342617869377,
-        0.03736273571848869,
-        0.07773532718420029,
-        0.045562610030174255,
-        -0.03440549597144127,
-        0.0068259574472904205,
-        -0.012768619693815708,
-        0.02494954690337181,
-        0.08082567155361176,
-        0.03148921579122543,
-        -5.96572036215548e-8,
-        0.1186344176530838,
-        -0.010066620074212551,
-        0.04917633533477783,
-        -0.04172123223543167,
-        -0.018930817022919655,
-        0.053108375519514084,
-        0.008234034292399883,
-        -0.002892538206651807,
-        -0.0057431734167039394,
-        -0.0002876717480830848,
-        0.04153823480010033,
-        0.04061221703886986,
-        -0.03954066336154938,
-        -0.05067138746380806,
-        0.048213470727205276,
-        0.009832889772951603,
-        -0.06821805983781815,
-        -0.060044337064027786,
-        -0.07451339811086655,
-        -0.07712442427873611,
-        -0.024945871904492378,
-        0.002830764977261424,
-        -0.06643816828727722,
-        0.04349792003631592,
-        0.03616420924663544,
-        -0.10654353350400925,
-        0.050534773617982864,
-        -0.059933967888355255,
-        0.022450042888522148,
-        -0.09191329032182693,
-        -0.031155409291386604,
-        -0.029651721939444542,
-        0.04605348780751228,
-        0.024617571383714676,
-        0.14004558324813843,
-        0.06306491792201996,
-        -0.06519665569067001,
-        0.031771622598171234,
-        -0.004001372493803501,
-        0.08000360429286957,
-        -0.00032970300526358187,
-        0.00925938505679369,
-        -0.01611620932817459,
-        -0.03353264182806015,
-        0.048095397651195526,
-        0.04260825738310814,
-        -0.03940169885754585,
-        0.08133809268474579,
-        0.020903820171952248,
-        -0.01921192929148674,
-        0.012121031992137432,
-        0.02877327799797058,
-        -0.03895191475749016,
-        -0.027838371694087982,
-        -0.08916578441858292,
-        -0.009487581439316273,
-        -0.07254357635974884,
-        0.051687970757484436,
-        0.06239069253206253,
-        -0.0364096499979496,
-        -0.05144903436303139,
-        -0.0261809341609478,
-        0.04075887054204941,
-        -0.015074781142175198
-      ],
-      "observables": [
-        "tot_Nck",
-        "free_Nck",
-        "tot_NWASP",
-        "free_NWASP",
-        "tot_Nephrin",
-        "free_Nephrin",
-        "fully_bound_Nephrin",
-        "fully_bound_Nck",
-        "fully_bound_NWASP",
-        "cluster_neph_nck_nw",
-        "cluster_nck_nw"
-      ],
-      "preview": "chattaraj 2021 clustering of three signaling molecules - nephrin, nck and nwasp references: 1. a. chattaraj, m. l. blinov and l. m. loew. \"the solubility product extends the buffering concept  to hete",
-      "simulationMode": "None",
-      "umap2D": [
-        0.381,
-        -0.683
-      ],
-      "umap3D": [
-        0.037,
-        -0.332,
-        -0.197
+        -0.41,
+        -1.212,
+        -1.31
       ]
     },
     {
@@ -73035,13 +72616,13 @@
       "preview": "dushek 2011 enzymatic modification of a 20-site substrate using the 2-step binding model. note: reaction on-rates must be suitably altered for substrates with fewer sites. reaction area. substrate con",
       "simulationMode": "None",
       "umap2D": [
-        0.293,
-        -0.717
+        0.167,
+        -0.784
       ],
       "umap3D": [
-        0.202,
-        -0.388,
-        -0.339
+        -0.218,
+        -0.235,
+        0.005
       ]
     },
     {
@@ -73460,13 +73041,13 @@
       "preview": "dushek 2014 model of a kinase (e) and phosphatase (f) actin on a biosensor (b) . modification module enzymatic reaction ( kinase ) sequestered signaling protein generate network with a maximum oligome",
       "simulationMode": "None",
       "umap2D": [
-        0.533,
-        -0.611
+        0.118,
+        -0.603
       ],
       "umap3D": [
-        -0.013,
-        -0.361,
-        -0.402
+        -0.247,
+        -0.353,
+        -0.198
       ]
     },
     {
@@ -73867,13 +73448,13 @@
       "preview": "massole 2023 _eo_ _eg_ _peryt_ _po_ _peryt_ _eo_ _po_ _eg_",
       "simulationMode": "None",
       "umap2D": [
-        1.39,
-        -1.252
+        1.24,
+        -0.183
       ],
       "umap3D": [
-        0.093,
-        0.794,
-        -0.023
+        0.82,
+        0.023,
+        -0.695
       ]
     },
     {
@@ -74279,13 +73860,13 @@
       "preview": "lang 2024 kphapcb 6.93000693e-05 # iksycb 1.0 jiwee 0.1*1 iwee_0 0 iwee() @cell:iwee() (0*1)  #iwee simulate({method=>\"ode\",t_end=>1e6,n_steps=>1e3,atol=>1e-8,rtol=>1e-8}) e2f rb1 ppp2r2b ccnb_promote",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.374,
-        -0.35
+        0.894,
+        -0.417
       ],
       "umap3D": [
-        0.248,
-        0.341,
-        -0.271
+        0.135,
+        0.293,
+        -0.344
       ]
     },
     {
@@ -74696,13 +74277,13 @@
       "preview": "rule based egfr tutorial egf egfr grb2 shc o0_egf_tot o0_egfr_tot o0_grb2_tot o0_shc_tot dimers dimers_s y1 y2 y_total ligand_bind dimeriz y2_phosph y1_phosph y2_dephosph y1_dephosph r_grb2_interactio",
       "simulationMode": "None",
       "umap2D": [
-        0.893,
-        -0.975
+        -0.049,
+        -0.555
       ],
       "umap3D": [
-        -0.329,
-        -0.442,
-        -0.116
+        -0.073,
+        -0.674,
+        -0.306
       ]
     },
     {
@@ -75123,13 +74704,13 @@
       "preview": "an 2009 nfkb_ikb_bind: nfkb(location~cytoplasm,activation~*)+ikb(phos~no,p65,p50,degrade~no)<->nfkb(activation~*!0!1,location~cytoplasm).ikb(phos~no,p65!0,p50!1,degrade~no) nfkb_ikb_bind,nfkb_ikb_unbi",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.591,
-        -0.584
+        0.434,
+        -0.47
       ],
       "umap3D": [
-        -0.022,
-        -0.023,
-        -0.217
+        0.024,
+        -0.148,
+        -0.345
       ]
     },
     {
@@ -75540,428 +75121,13 @@
       "preview": "baruabcr 2012 parameter values of table 1 see table 1 and methods section for additional information strength of antigen signal c=0, tonic signaling; c>0, antigen-induced signaling protein copy number",
       "simulationMode": "None",
       "umap2D": [
-        0.641,
-        -0.487
+        0.137,
+        -0.416
       ],
       "umap3D": [
-        -0.249,
-        -0.267,
-        -0.298
-      ]
-    },
-    {
-      "id": "published-models/immune-signaling/blbr",
-      "filename": "blbr.bngl",
-      "path": "published-models/immune-signaling/blbr.bngl",
-      "tags": [
-        "Immunology"
-      ],
-      "category": "Immunology",
-      "embedding": [
-        -0.07033601403236389,
-        -0.07828512787818909,
-        -0.044053394347429276,
-        -0.019748568534851074,
-        0.0243045836687088,
-        0.0003127432137262076,
-        0.005679853726178408,
-        0.038878779858350754,
-        0.00782343652099371,
-        -0.10925018787384033,
-        0.022902045398950577,
-        -0.04281773045659065,
-        -0.018413493409752846,
-        -0.003389763878658414,
-        0.01266787014901638,
-        0.12163978070020676,
-        -0.10784761607646942,
-        0.0063682678155601025,
-        -0.04859335720539093,
-        -0.030587835237383842,
-        0.005072138272225857,
-        0.027510903775691986,
-        -0.024750862270593643,
-        0.10508111119270325,
-        0.01691547967493534,
-        0.03872881457209587,
-        -0.00687439227476716,
-        -0.01804756000638008,
-        0.022698145359754562,
-        -0.06289458274841309,
-        0.045563872903585434,
-        -0.003648946527391672,
-        0.03356922045350075,
-        -0.03983399271965027,
-        -0.08212199807167053,
-        0.0016202701954171062,
-        -0.036467257887125015,
-        0.04323359578847885,
-        0.025677461177110672,
-        -0.08782044798135757,
-        0.04647917300462723,
-        0.049342960119247437,
-        0.11176376044750214,
-        -0.06519069522619247,
-        -0.0833277702331543,
-        -0.006391599308699369,
-        -0.058714620769023895,
-        0.005999452900141478,
-        -0.035433828830718994,
-        0.02431810274720192,
-        0.07017834484577179,
-        -0.027902735397219658,
-        -0.05370105803012848,
-        0.08208462595939636,
-        0.09034498780965805,
-        0.09901410341262817,
-        -0.12028594315052032,
-        -0.04714618995785713,
-        0.004055697936564684,
-        -0.006971953436732292,
-        0.04285573586821556,
-        -0.025508945807814598,
-        -0.010913235135376453,
-        -0.02761831320822239,
-        -0.09585784375667572,
-        0.034501541405916214,
-        0.042488258332014084,
-        0.017280109226703644,
-        0.03774452209472656,
-        0.038524314761161804,
-        -0.005031219683587551,
-        -0.028551753610372543,
-        -0.06596378237009048,
-        -0.056629572063684464,
-        0.04522864893078804,
-        0.06624509394168854,
-        -0.00680666184052825,
-        0.007990817539393902,
-        -0.03252502530813217,
-        -0.0075273965485394,
-        -0.03944966942071915,
-        -0.03344448283314705,
-        0.05441635102033615,
-        0.042682163417339325,
-        -0.007695944048464298,
-        0.05292115733027458,
-        0.021525554358959198,
-        -0.09261477738618851,
-        -0.02060920186340809,
-        -0.009175588376820087,
-        0.09215260297060013,
-        -0.02029857225716114,
-        -0.068143330514431,
-        0.010784102603793144,
-        -0.057363711297512054,
-        -0.04690714552998543,
-        0.004414485767483711,
-        -0.033496782183647156,
-        -0.014642277732491493,
-        0.04132576286792755,
-        -0.006523435469716787,
-        -0.015563002787530422,
-        -0.01686427742242813,
-        -0.009242841973900795,
-        -0.03856636583805084,
-        -0.022506900131702423,
-        -0.0263468436896801,
-        0.02425750531256199,
-        0.002474723383784294,
-        -0.05730859935283661,
-        0.07476136088371277,
-        -0.04491996765136719,
-        0.12338905781507492,
-        0.01614074409008026,
-        -0.014676799066364765,
-        0.06397788226604462,
-        -0.000985278864391148,
-        0.023923175409436226,
-        0.05949699506163597,
-        0.029130853712558746,
-        0.04003027454018593,
-        0.06304612755775452,
-        -0.07403741776943207,
-        -0.09099432826042175,
-        -0.05808204412460327,
-        -0.07325908541679382,
-        -0.06480316817760468,
-        5.6770260900672364e-33,
-        -0.010497073642909527,
-        -0.012511450797319412,
-        0.01147477701306343,
-        0.04408339783549309,
-        -0.01569526456296444,
-        0.0006548419478349388,
-        -0.07427450269460678,
-        0.006099410820752382,
-        -0.06532982736825943,
-        -0.07312121987342834,
-        0.023188624531030655,
-        -0.026862245053052902,
-        0.01959109492599964,
-        -0.056006260216236115,
-        -0.019061993807554245,
-        -0.04650479182600975,
-        0.033292919397354126,
-        0.04296266660094261,
-        0.006935549434274435,
-        0.010919473133981228,
-        -0.030330244451761246,
-        0.06548584252595901,
-        -0.05443683639168739,
-        0.04102979972958565,
-        0.07050886750221252,
-        -0.043386127799749374,
-        0.12357603758573532,
-        -0.04134561866521835,
-        0.041355907917022705,
-        0.0008372119627892971,
-        0.0428948774933815,
-        0.07375583052635193,
-        -0.05514398589730263,
-        0.11000397056341171,
-        0.020333735272288322,
-        0.009189789183437824,
-        0.050881970673799515,
-        -0.006932321935892105,
-        -0.0082779536023736,
-        0.010444065555930138,
-        0.08640046417713165,
-        0.03035617806017399,
-        -0.12270231544971466,
-        0.03897074982523918,
-        0.040693506598472595,
-        -0.05901111662387848,
-        0.028630251064896584,
-        0.0743229016661644,
-        -0.0001565311977174133,
-        0.08914753049612045,
-        -0.017684640362858772,
-        0.03346719592809677,
-        -0.000928737223148346,
-        0.024009982123970985,
-        -0.0033546530175954103,
-        0.0014490573666989803,
-        -0.08584572374820709,
-        0.010662377811968327,
-        0.017500633373856544,
-        0.0651477798819542,
-        -0.015907926484942436,
-        0.021099062636494637,
-        -0.04115467891097069,
-        0.017231261357665062,
-        0.03330983594059944,
-        0.024178801104426384,
-        0.0032201590947806835,
-        -0.08214263617992401,
-        -0.032114189118146896,
-        -0.004383469466120005,
-        0.054450493305921555,
-        -0.006754640955477953,
-        0.07764507085084915,
-        0.11360128968954086,
-        0.04459463432431221,
-        0.0012777622323483229,
-        -0.0830397754907608,
-        -0.05716572701931,
-        0.07065416872501373,
-        0.005953413899987936,
-        -0.02498544752597809,
-        0.047641120851039886,
-        -0.005531190428882837,
-        0.0247180312871933,
-        -0.04072762280702591,
-        -0.08674223721027374,
-        0.05531586334109306,
-        -0.06674729287624359,
-        0.036263301968574524,
-        0.03831266984343529,
-        0.0035013568121939898,
-        -0.06931080669164658,
-        0.0072145308367908,
-        0.07247747480869293,
-        -0.07735404372215271,
-        -4.261859828713808e-33,
-        0.036371346563100815,
-        -0.10746122896671295,
-        0.055338967591524124,
-        0.06198250502347946,
-        -0.027860725298523903,
-        -0.010903102345764637,
-        0.09476634860038757,
-        -0.0660175308585167,
-        0.08696851879358292,
-        -0.002532629296183586,
-        0.13351581990718842,
-        0.11121456325054169,
-        -0.05925452336668968,
-        0.03560411557555199,
-        0.07586313784122467,
-        -0.06489890068769455,
-        0.043246813118457794,
-        0.03175428882241249,
-        0.006418720353394747,
-        -0.010148572735488415,
-        0.07189161330461502,
-        -0.0371839813888073,
-        -0.07194776087999344,
-        -0.030286451801657677,
-        -0.0354369580745697,
-        0.0546974316239357,
-        -0.029011473059654236,
-        0.0689370185136795,
-        0.0046030329540371895,
-        0.04069091007113457,
-        0.02557920664548874,
-        -0.013287432491779327,
-        0.008017714135348797,
-        -0.010005536489188671,
-        -0.06848303228616714,
-        0.058993253856897354,
-        0.039026398211717606,
-        0.011673354543745518,
-        0.03843733295798302,
-        -0.0493035726249218,
-        -0.027368074283003807,
-        0.021423809230327606,
-        -0.0560678206384182,
-        -0.004358714446425438,
-        0.07898537069559097,
-        -0.09397367388010025,
-        -0.0028379817958921194,
-        0.06423667818307877,
-        0.010155932046473026,
-        -0.1265939474105835,
-        -0.08633884787559509,
-        -0.007172187324613333,
-        0.047811612486839294,
-        -0.04360896721482277,
-        -0.007785167545080185,
-        -0.008116156794130802,
-        0.022377675399184227,
-        -0.02988860383629799,
-        0.056100085377693176,
-        -0.03340623527765274,
-        -0.007730541285127401,
-        -0.007153711747378111,
-        0.07250382751226425,
-        -0.008120807819068432,
-        -0.002126523060724139,
-        -0.023711979389190674,
-        0.11308586597442627,
-        -0.09846507757902145,
-        0.022235706448554993,
-        -0.04140489920973778,
-        0.04142044484615326,
-        0.031089818105101585,
-        0.06579567492008209,
-        0.001799538847990334,
-        0.033524833619594574,
-        -0.025459012016654015,
-        0.015233635902404785,
-        -0.0824703648686409,
-        -0.057340312749147415,
-        -0.05342802032828331,
-        -0.020910682156682014,
-        -0.07705242931842804,
-        0.05773337557911873,
-        -0.004484795965254307,
-        0.013576907105743885,
-        -0.09082573652267456,
-        0.026842167600989342,
-        0.05153286084532738,
-        0.03016575798392296,
-        -0.02165989577770233,
-        -0.01846609264612198,
-        0.019174402579665184,
-        -0.003994481172412634,
-        0.02605166658759117,
-        0.10942001640796661,
-        -2.9036829829465205e-8,
-        0.06505877524614334,
-        -0.07717528194189072,
-        -0.06904536485671997,
-        -0.03868298605084419,
-        0.024780314415693283,
-        0.04648309573531151,
-        0.01731066219508648,
-        -0.029369933530688286,
-        -0.04063134640455246,
-        -0.001604454475454986,
-        -0.0008846729760989547,
-        0.039103955030441284,
-        -0.05011698976159096,
-        -0.021606339141726494,
-        0.010911417193710804,
-        0.021402766928076744,
-        0.03136076033115387,
-        -0.04346382990479469,
-        -0.0250698309391737,
-        -0.06367459893226624,
-        -0.07210434973239899,
-        0.021177904680371284,
-        0.04620329290628433,
-        -0.09525555372238159,
-        -0.06322075426578522,
-        -0.03524978086352348,
-        0.014505626633763313,
-        0.033631179481744766,
-        0.014105815440416336,
-        -0.02057568170130253,
-        0.0775216817855835,
-        0.04971848428249359,
-        0.06986100971698761,
-        0.049504149705171585,
-        0.022189751267433167,
-        -0.047041844576597214,
-        -0.02598630078136921,
-        0.0889221653342247,
-        0.003040206851437688,
-        0.0670417845249176,
-        0.04798201844096184,
-        -0.03554244339466095,
-        0.026307476684451103,
-        0.010177938267588615,
-        0.09635797142982483,
-        -0.06803110986948013,
-        -0.06543157249689102,
-        0.02939840964972973,
-        -0.038088615983724594,
-        -0.026492387056350708,
-        0.08632167428731918,
-        -0.017770295962691307,
-        -0.006512429565191269,
-        -0.012790466658771038,
-        -0.07949177175760269,
-        -0.01102458406239748,
-        -0.02340383641421795,
-        0.0887693464756012,
-        -0.0006372064235620201,
-        0.017913196235895157,
-        -0.07840728759765625,
-        -0.054612789303064346,
-        -0.019269471988081932,
-        -0.06178503856062889
-      ],
-      "observables": [
-        "R",
-        "L",
-        "R_once",
-        "R_middle",
-        "R_end_1",
-        "R_end_2",
-        "Monomer"
-      ],
-      "preview": "blbr ligand addition chain elongation ring closure r l r_once r_middle r_end_1 r_end_2 monomer r l",
-      "simulationMode": "None",
-      "umap2D": [
-        0.01,
-        -0.339
-      ],
-      "umap3D": [
-        -0.33,
-        -0.456,
-        0.388
+        -0.148,
+        -0.443,
+        -0.393
       ]
     },
     {
@@ -76383,13 +75549,13 @@
       "preview": "chylektcr 2014 supplementary file a in file s1 \"phosphorylation site dynamics of early t-cell receptor signaling\" l.a. chylek, v. akimov, j. dengjel, k.t.g. rigbolt, b. hu, w.s. hlavacek, b. blagoev  ",
       "simulationMode": "None",
       "umap2D": [
-        0.412,
-        -0.884
+        0.436,
+        -0.786
       ],
       "umap3D": [
-        0.179,
-        -0.229,
-        -0.053
+        0.102,
+        -0.226,
+        -0.03
       ]
     },
     {
@@ -76833,13 +75999,13 @@
       "preview": "innate immunity this bionetgen file features the article: ----------------------------------------------------------------------------- \"non-self rna rewires ifn[beta] signaling: a mathematical model ",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.473,
-        -0.746
+        0.42,
+        -0.658
       ],
       "umap3D": [
-        0.092,
-        -0.154,
-        -0.131
+        0.053,
+        -0.191,
+        -0.159
       ]
     },
     {
@@ -77247,13 +76413,13 @@
       "preview": "jaruszewicz blonska 2023 ----------------------------------------------------------------------------- \"a plausible  identifiable model of the canonical nf-kappab signaling pathway\" by  jaruszewicz-bl",
       "simulationMode": "ODE",
       "umap2D": [
-        0.286,
-        -0.876
+        0.449,
+        -0.862
       ],
       "umap3D": [
-        0.314,
-        -0.275,
-        -0.148
+        -0.006,
+        -0.128,
+        0.075
       ]
     },
     {
@@ -77663,13 +76829,13 @@
       "preview": "mukhopadhyay 2013 enzymatic modifications of tcr zeta and zap-70 binding to fully phosphorylate itams. itam 1 itam 2 itam 3 zap70 binding s e f z bound_zap szero sone stwo sthree sfour sfive ssix s e ",
       "simulationMode": "None",
       "umap2D": [
-        0.531,
-        -0.065
+        -0.297,
+        -0.355
       ],
       "umap3D": [
-        -0.327,
-        -0.462,
-        -0.659
+        -0.491,
+        -0.609,
+        -0.445
       ]
     },
     {
@@ -78073,13 +77239,13 @@
       "preview": "cheemalavagu jak stat reaction rules: 29 unknown parameters: 44 actions l1 il6r gp130 l2 il10r1 il10r2 jak1 jak2 socs3 socs1 ptp3 ptp1 s3 s1 total_ps3 total_ps1 l1 il6r gp130 l2 il10r1 il10r2 jak1 jak",
       "simulationMode": "ODE",
       "umap2D": [
-        0.518,
-        -0.395
+        0.689,
+        -0.371
       ],
       "umap3D": [
-        0.186,
-        0.258,
-        -0.42
+        0.162,
+        0.182,
+        -0.441
       ]
     },
     {
@@ -78485,13 +77651,13 @@
       "preview": "lin erk 2019 filename: erk_model.bngl availability: https://github.com/ruleworld/rulehub/tree/master/contributed/lin2019 compatibility: bionetgen version 2.4 or higher contributors: yen ting lin, song",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.223,
-        -1.243
+        0.501,
+        -1.486
       ],
       "umap3D": [
-        0.777,
-        -0.545,
-        -0.063
+        -0.021,
+        -0.018,
+        0.597
       ]
     },
     {
@@ -78897,13 +78063,13 @@
       "preview": "lin prion 2019 filename: prion_model.bngl availability: https://github.com/ruleworld/rulehub/tree/master/contributed/lin2019 compatibility: bionetgen version 2.4 or higher contributors: yen ting lin, ",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.117,
-        -0.898
+        0.26,
+        -1.272
       ],
       "umap3D": [
-        0.542,
-        -0.551,
-        -0.208
+        -0.172,
+        -0.131,
+        0.398
       ]
     },
     {
@@ -79307,13 +78473,13 @@
       "preview": "lin tcr 2019 filename: tcr_model.bngl availability: https://github.com/ruleworld/rulehub/tree/master/contributed/lin2019 compatibility: bionetgen version 2.4 or higher contributors: yen ting lin, song",
       "simulationMode": "ODE",
       "umap2D": [
-        0.24,
-        -0.739
+        0.239,
+        -0.839
       ],
       "umap3D": [
-        0.204,
-        -0.443,
-        -0.253
+        -0.142,
+        -0.311,
+        0.064
       ]
     },
     {
@@ -79718,13 +78884,13 @@
       "preview": "ab a b a b c a b",
       "simulationMode": "ODE",
       "umap2D": [
-        1.769,
-        0.794
+        2.309,
+        -0.122
       ],
       "umap3D": [
-        0.116,
-        1.403,
-        1.007
+        1.817,
+        0.341,
+        -0.73
       ]
     },
     {
@@ -80129,13 +79295,13 @@
       "preview": "abc a b c",
       "simulationMode": "ODE",
       "umap2D": [
-        2.77,
-        1.321
+        3.178,
+        0.539
       ],
       "umap3D": [
-        -0.14,
-        2.393,
-        1.485
+        2.684,
+        0.601,
+        -1.339
       ]
     },
     {
@@ -80540,13 +79706,13 @@
       "preview": "abc ssa a b c",
       "simulationMode": "SSA/Gillespie",
       "umap2D": [
-        2.306,
-        0.855
+        2.546,
+        0.344
       ],
       "umap3D": [
-        -0.074,
-        1.952,
-        0.912
+        1.971,
+        0.583,
+        -1.214
       ]
     },
     {
@@ -80950,13 +80116,13 @@
       "preview": "lv title: lv.bgl description: lotka-volterra predator-prey model. these parameters correspond to the reaction-limited regime, and give rise to regular oscillations when simulated both with ode's and s",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.261,
-        -1.724
+        0.501,
+        -1.842
       ],
       "umap3D": [
-        1.102,
-        -0.651,
-        0.175
+        0.135,
+        0.05,
+        0.966
       ]
     },
     {
@@ -81361,13 +80527,13 @@
       "preview": "sir resetconcentrations() simulate({method=>\"ssa\",suffix=>\"ssa\",t_end=>300,n_steps=>200}) s i r",
       "simulationMode": "ODE",
       "umap2D": [
-        -1.006,
-        -0.762
+        1.87,
+        -1.206
       ],
       "umap3D": [
-        1.361,
-        0.672,
-        -0.209
+        0.247,
+        1.224,
+        0.241
       ]
     },
     {
@@ -81772,13 +80938,13 @@
       "preview": "abp title: abp.bngl description: simple model of enzyme kinetics in which a is a kinase and b is a phosphorylabe substrate. author: jim faeder date: 27feb2018 note: units consistent with um for concen",
       "simulationMode": "ODE",
       "umap2D": [
-        0.316,
-        -0.91
+        0.425,
+        -0.904
       ],
       "umap3D": [
-        0.266,
-        -0.286,
-        -0.025
+        0.102,
+        -0.249,
+        0.078
       ]
     },
     {
@@ -82182,13 +81348,13 @@
       "preview": "abp approx title: abp.bngl description: simple model of enzyme kinetics in which a is a kinase and b is a phosphorylabe substrate simulated using the approximate form of the rate law often called the ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.146,
-        -1.027
+        0.5,
+        -1.085
       ],
       "umap3D": [
-        0.44,
-        -0.337,
-        0.013
+        0.111,
+        -0.178,
+        0.255
       ]
     },
     {
@@ -82592,13 +81758,13 @@
       "preview": "gk title: gk.bngl description: goldebeter-koshland model in dimensionless units. reference: goldbeter, albert, and daniel e. koshland, jr.  “an amplified sensitivity arising from covalent modification",
       "simulationMode": "ODE",
       "umap2D": [
-        0.263,
-        -1.377
+        0.128,
+        -1.241
       ],
       "umap3D": [
-        0.387,
-        -0.718,
-        -0.102
+        0.238,
+        -0.525,
+        0.381
       ]
     },
     {
@@ -83001,13 +82167,13 @@
       "preview": "lisman title: auto.bngl description: autophosphorylating kinase model due to lisman. reference: lisman, j e. “a mechanism for memory storage insensitive to molecular  turnover: a bistable autophosphor",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.565,
-        -1.009
+        0.135,
+        -0.804
       ],
       "umap3D": [
-        -0.048,
-        -0.415,
-        0.049
+        -0.075,
+        -0.495,
+        -0.003
       ]
     },
     {
@@ -83413,13 +82579,13 @@
       "preview": "bab simple binding model with a bivalent a molecule that has two identical sites  for binding of b. binding at each site is not affected by the status of the other site (noncooperative binding). a b f",
       "simulationMode": "ODE",
       "umap2D": [
-        0.049,
-        -0.668
+        0.811,
+        -0.903
       ],
       "umap3D": [
-        0.173,
-        -0.162,
-        0.387
+        0.548,
+        -0.374,
+        0.046
       ]
     },
     {
@@ -83823,427 +82989,13 @@
       "preview": "bab coop bab_coop simple binding model with a bivalent a molecule that has two identical sites  for binding of b. cooperative interactions between b molecules affect the binding  constants for binding",
       "simulationMode": "ODE",
       "umap2D": [
-        0.089,
-        -0.915
+        0.688,
+        -1.019
       ],
       "umap3D": [
-        0.438,
-        -0.165,
-        0.157
-      ]
-    },
-    {
-      "id": "published-models/native-tutorials/CBNGL/BLBR",
-      "filename": "BLBR.bngl",
-      "path": "published-models/native-tutorials/CBNGL/BLBR.bngl",
-      "tags": [
-        "RuleWorld Tutorials"
-      ],
-      "category": "RuleWorld Tutorials",
-      "embedding": [
-        -0.08370912820100784,
-        -0.0782119482755661,
-        -0.019781336188316345,
-        -0.011798175051808357,
-        -0.04200953617691994,
-        -0.038123492151498795,
-        -0.05058297887444496,
-        0.05943138524889946,
-        0.022130941972136497,
-        -0.07311886548995972,
-        -0.010469877161085606,
-        -0.007788740564137697,
-        0.055537667125463486,
-        0.0028078763280063868,
-        0.017110511660575867,
-        0.09339243918657303,
-        -0.05506909266114235,
-        0.01274348795413971,
-        -0.02410414069890976,
-        0.006308851297944784,
-        0.001926266122609377,
-        0.01554989442229271,
-        -0.02577045001089573,
-        0.046869903802871704,
-        -0.07356059551239014,
-        -0.029387295246124268,
-        0.08281509578227997,
-        -0.04949929192662239,
-        -0.01340053416788578,
-        -0.030089974403381348,
-        0.09070194512605667,
-        0.005308919120579958,
-        -0.02946098893880844,
-        -0.05271930620074272,
-        0.00523541821166873,
-        0.0021538480650633574,
-        -0.1529807597398758,
-        0.011741353198885918,
-        -0.006999446079134941,
-        -0.04463855177164078,
-        0.09586106240749359,
-        0.0594603568315506,
-        0.08514267951250076,
-        -0.04228096455335617,
-        0.04850636422634125,
-        -0.05432497709989548,
-        -0.029502425342798233,
-        0.036800019443035126,
-        -0.006924962624907494,
-        -0.0073443129658699036,
-        0.04830355942249298,
-        -0.0483805388212204,
-        -0.018138090148568153,
-        -0.009814374148845673,
-        0.0729832798242569,
-        -0.052687451243400574,
-        -0.10767921060323715,
-        -0.012513784691691399,
-        -0.030334556475281715,
-        -0.0434640571475029,
-        0.05972742661833763,
-        -0.0179757010191679,
-        0.02405192144215107,
-        -0.039750367403030396,
-        -0.009892767295241356,
-        0.07983452081680298,
-        0.054939545691013336,
-        0.09356623142957687,
-        0.0578409768640995,
-        0.05215749144554138,
-        -0.03146497532725334,
-        -0.019045544788241386,
-        -0.03951360657811165,
-        -0.03507803753018379,
-        0.12319313734769821,
-        0.03280406817793846,
-        0.004554952960461378,
-        0.05645454302430153,
-        -0.002737297909334302,
-        -0.04506710544228554,
-        -0.012087804265320301,
-        0.026533782482147217,
-        0.044012460857629776,
-        0.0019549697171896696,
-        -0.07582592219114304,
-        0.03280964121222496,
-        -0.019417816773056984,
-        0.0019404275808483362,
-        -0.0094102518633008,
-        -0.017565539106726646,
-        0.04303492605686188,
-        0.07891035825014114,
-        -0.11998133361339569,
-        -0.058434296399354935,
-        -0.08360513299703598,
-        0.010465665720403194,
-        0.02761208266019821,
-        -0.01872151903808117,
-        -0.01594819501042366,
-        0.03395126014947891,
-        0.0010003012139350176,
-        0.003946160431951284,
-        0.016620144248008728,
-        -0.030806267634034157,
-        0.0260300412774086,
-        0.02184949815273285,
-        -0.000610842602327466,
-        0.022094551473855972,
-        0.028971649706363678,
-        -0.013175704516470432,
-        -0.0017822727095335722,
-        0.012984826229512691,
-        0.13112686574459076,
-        0.05444382503628731,
-        0.06902540475130081,
-        0.014006900601089,
-        0.010231079533696175,
-        -0.014685157686471939,
-        0.04815531522035599,
-        0.06803935766220093,
-        0.015954799950122833,
-        -0.017107969149947166,
-        -0.08776667714118958,
-        -0.06210171431303024,
-        -0.05208420753479004,
-        0.02803906798362732,
-        -0.027283359318971634,
-        4.230449517633883e-33,
-        -0.018708378076553345,
-        0.015297363512217999,
-        0.050341151654720306,
-        0.04260864481329918,
-        0.038479577749967575,
-        -0.047467779368162155,
-        0.021708883345127106,
-        -0.0682288333773613,
-        -0.15867489576339722,
-        -0.051525019109249115,
-        -0.07140272110700607,
-        -0.06495363265275955,
-        0.021859940141439438,
-        0.0316963754594326,
-        -0.022869518026709557,
-        -0.03901710361242294,
-        0.02003472112119198,
-        0.061256736516952515,
-        0.08047240227460861,
-        0.004217531997710466,
-        0.009769143536686897,
-        -0.0001868523977464065,
-        -0.043654222041368484,
-        0.03482351079583168,
-        -0.043982405215501785,
-        0.02107223868370056,
-        0.03798364847898483,
-        0.012361179105937481,
-        0.024699386209249496,
-        -0.033735599368810654,
-        0.03029238060116768,
-        0.08818600326776505,
-        -0.045829929411411285,
-        0.08748755604028702,
-        -0.005337229929864407,
-        0.020549405366182327,
-        0.04328843206167221,
-        -0.010187375359237194,
-        -0.04795880988240242,
-        -0.0064253974705934525,
-        0.01921686716377735,
-        -0.00711459806188941,
-        -0.03403833508491516,
-        0.09026612341403961,
-        0.019219204783439636,
-        0.011102527379989624,
-        -0.0032715003471821547,
-        0.028279736638069153,
-        0.01532581727951765,
-        0.10622140020132065,
-        -0.025590427219867706,
-        0.010348730720579624,
-        -0.001980371540412307,
-        -0.010356714017689228,
-        -0.03102286159992218,
-        0.030363282188773155,
-        0.008375978097319603,
-        0.00531481858342886,
-        0.032541997730731964,
-        0.07158993929624557,
-        -0.0115729458630085,
-        0.01621776819229126,
-        0.014172091148793697,
-        0.027845120057463646,
-        0.12002204358577728,
-        0.08008050173521042,
-        -0.08387300372123718,
-        -0.09338127821683884,
-        0.05692815035581589,
-        -0.04678822681307793,
-        0.05952152982354164,
-        0.01998509280383587,
-        -0.013748928904533386,
-        -0.010824482887983322,
-        0.0477527379989624,
-        -0.01333131268620491,
-        -0.07732268422842026,
-        -0.07078060507774353,
-        -0.017421383410692215,
-        0.02867724746465683,
-        -0.07885701954364777,
-        -0.013582027517259121,
-        0.01171735767275095,
-        0.018895255401730537,
-        -0.029232576489448547,
-        -0.08734671026468277,
-        0.07879266887903214,
-        -0.07382514327764511,
-        -0.017055584117770195,
-        -0.015066367574036121,
-        0.003823737846687436,
-        -0.10109920054674149,
-        0.05287741497159004,
-        0.008338220417499542,
-        0.014931144192814827,
-        -3.7264787225798895e-33,
-        0.08497948199510574,
-        -0.0030633346177637577,
-        0.10564040392637253,
-        0.012087813578546047,
-        -0.020712675526738167,
-        -0.03218606114387512,
-        0.05293899029493332,
-        -0.003973692189902067,
-        0.06532348692417145,
-        0.010883498936891556,
-        0.14066407084465027,
-        0.043473731726408005,
-        0.03241744264960289,
-        0.05045152083039284,
-        0.07323665916919708,
-        -0.04734747111797333,
-        0.03829002007842064,
-        -0.013677897863090038,
-        0.02690483070909977,
-        0.01608317531645298,
-        0.0296991728246212,
-        -0.03243015706539154,
-        -0.08143282681703568,
-        0.030965911224484444,
-        -0.03614621236920357,
-        0.0465582013130188,
-        0.034634701907634735,
-        0.040548767894506454,
-        -0.005339788272976875,
-        0.025351300835609436,
-        -0.04259781911969185,
-        0.04246048256754875,
-        -0.05125239118933678,
-        0.0428253598511219,
-        0.008212696760892868,
-        0.10721800476312637,
-        0.01196149829775095,
-        0.027260351926088333,
-        0.057184748351573944,
-        -0.08100057393312454,
-        -0.026560572907328606,
-        -0.009311724454164505,
-        -0.11571241915225983,
-        -0.018110845237970352,
-        0.051419634371995926,
-        -0.049690697342157364,
-        -0.00004255534440744668,
-        0.04103665426373482,
-        0.021778099238872528,
-        -0.0382072776556015,
-        -0.02650786191225052,
-        0.029600754380226135,
-        0.03937363252043724,
-        -0.08138608932495117,
-        0.014249835163354874,
-        -0.005087444093078375,
-        0.018566759303212166,
-        -0.022768834605813026,
-        0.08493741601705551,
-        -0.0943121612071991,
-        -0.11385071277618408,
-        -0.05800197646021843,
-        0.07644320279359818,
-        -0.04525609314441681,
-        -0.08428303897380829,
-        -0.00749623728916049,
-        0.022404562681913376,
-        -0.05510715767741203,
-        0.07443609088659286,
-        -0.034584686160087585,
-        -0.020374242216348648,
-        0.10460945218801498,
-        0.118777796626091,
-        0.08082955330610275,
-        0.0412055142223835,
-        -0.11433922499418259,
-        -0.012872663326561451,
-        -0.07005394995212555,
-        -0.0611247792840004,
-        -0.060322199016809464,
-        -0.07868026942014694,
-        0.0014573755906894803,
-        0.08072111755609512,
-        -0.06253030896186829,
-        0.03764216974377632,
-        -0.09457119554281235,
-        0.04134881868958473,
-        0.0558103546500206,
-        0.046793531626462936,
-        0.01654862053692341,
-        0.0011138356057927012,
-        0.03087320365011692,
-        0.017164546996355057,
-        0.03579520434141159,
-        0.05198947712779045,
-        -4.711861478767787e-8,
-        0.031932465732097626,
-        -0.019479140639305115,
-        -0.06266993284225464,
-        -0.0200614333152771,
-        0.02528148517012596,
-        0.05443405359983444,
-        -0.01733960583806038,
-        -0.09951448440551758,
-        -0.008092096075415611,
-        0.008764808997511864,
-        0.018849249929189682,
-        0.013928744941949844,
-        -0.06676909327507019,
-        0.0006250199512578547,
-        -0.034582383930683136,
-        0.012184340506792068,
-        0.009539858438074589,
-        -0.06617730110883713,
-        -0.03981207683682442,
-        -0.09294740855693817,
-        -0.08827239274978638,
-        -0.018842041492462158,
-        -0.033891528844833374,
-        -0.04084591194987297,
-        0.08535029739141464,
-        -0.05511372163891792,
-        -0.07259716093540192,
-        -0.06945762783288956,
-        0.032549887895584106,
-        -0.0007404073840007186,
-        0.06409156322479248,
-        -0.0033017557580024004,
-        0.018741274252533913,
-        0.13941605389118195,
-        0.055423714220523834,
-        0.005768338683992624,
-        -0.02732935920357704,
-        0.07969295233488083,
-        0.016494112089276314,
-        0.04584523290395737,
-        -0.015545876696705818,
-        -0.034833673387765884,
-        -0.011369836516678333,
-        -0.038625940680503845,
-        0.0273243710398674,
-        -0.024092288687825203,
-        -0.07828710973262787,
-        0.06620465964078903,
-        0.04801289737224579,
-        0.02223885804414749,
-        0.014634242281317711,
-        -0.006498004775494337,
-        -0.0819215327501297,
-        -0.03702550008893013,
-        -0.00367048685438931,
-        -0.02794637344777584,
-        -0.05043472349643707,
-        0.04407653957605362,
-        0.015840239822864532,
-        -0.0002995255636051297,
-        -0.0634630098938942,
-        -0.0021689962595701218,
-        -0.006832285784184933,
-        -0.09237758070230484
-      ],
-      "observables": [
-        "R1",
-        "R2",
-        "R3",
-        "R4",
-        "R5",
-        "Rbig"
-      ],
-      "preview": "blbr title: blbr.bngl description: bivalent ligand - bivalent receptor (blbr) model, which is a simple model of polymer formation by receptors that can form a chain with infinite length (in the contin",
-      "simulationMode": "NFsim",
-      "umap2D": [
-        -0.032,
-        -0.962
-      ],
-      "umap3D": [
-        0.414,
-        -0.588,
-        -0.023
+        0.38,
+        -0.157,
+        0.166
       ]
     },
     {
@@ -84654,13 +83406,13 @@
       "preview": "cbngl simple a simplified signal transduction model including the following processes: 1) ligand-receptor binding 2) receptor autophosphorylation and constitutive dephosphorylation 3) internalization ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.542,
-        -0.799
+        0.288,
+        -0.655
       ],
       "umap3D": [
-        0.024,
-        -0.255,
-        -0.181
+        -0.058,
+        -0.28,
+        -0.155
       ]
     },
     {
@@ -85064,13 +83816,13 @@
       "preview": "lr title: lr.bngl simple ligand-receptor binding model expressed in cell units: time - seconds concentration - molecule number length - um, area - um^2, volume - um^3 bimolecular association - um^3/s ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.336,
-        -0.978
+        0.271,
+        -0.942
       ],
       "umap3D": [
-        0.136,
-        -0.427,
-        0.07
+        0.222,
+        -0.462,
+        0.053
       ]
     },
     {
@@ -85475,13 +84227,13 @@
       "preview": "lrr title: lrr.bngl ligand-receptor binding and dimerization model expressed in cell units: time - seconds concentration - molecule number length - um, area - um^2, volume - um^3 bimolecular associati",
       "simulationMode": "None",
       "umap2D": [
-        0.226,
-        -0.951
+        0.328,
+        -0.982
       ],
       "umap3D": [
-        0.229,
-        -0.426,
-        0.019
+        0.174,
+        -0.371,
+        0.111
       ]
     },
     {
@@ -85886,13 +84638,13 @@
       "preview": "lrr comp title: lrr_comp.bngl compartmental version of ligand-receptor binding and dimerization model expressed in cell units: time - seconds concentration - molecule number length - um, area - um^2, ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.207,
-        -0.866
+        0.172,
+        -0.959
       ],
       "umap3D": [
-        0.116,
-        -0.542,
-        -0.018
+        0.144,
+        -0.548,
+        0.065
       ]
     },
     {
@@ -86297,13 +85049,13 @@
       "preview": "lr comp title: lr_comp.bngl compartmental version of simple ligand-receptor binding model expressed in cell units: time - seconds concentration - molecule number length - um, area - um^2, volume - um^",
       "simulationMode": "ODE",
       "umap2D": [
-        0.384,
-        -0.977
+        0.203,
+        -0.928
       ],
       "umap3D": [
-        0.062,
-        -0.466,
-        0.104
+        0.237,
+        -0.547,
+        0.032
       ]
     },
     {
@@ -86707,13 +85459,13 @@
       "preview": "lv comp title: lv_comp.bgl description: compartment version fo the lotka-volterra predator-prey model. these  parameters correspond to the reaction-limited regime, and give rise to regular oscillation",
       "simulationMode": "None",
       "umap2D": [
-        -0.084,
-        -1.534
+        0.488,
+        -1.584
       ],
       "umap3D": [
-        0.869,
-        -0.523,
-        0.093
+        0.11,
+        0.002,
+        0.692
       ]
     },
     {
@@ -87119,13 +85871,13 @@
       "preview": "organelle transport title: organelle_transport.bngl description: simple model of transport involving two cell organelles. this is the model that was used in the cellblender tutorial. note: this file i",
       "simulationMode": "ODE",
       "umap2D": [
-        0.122,
-        -0.874
+        0.359,
+        -1.045
       ],
       "umap3D": [
-        0.169,
-        -0.445,
-        0.213
+        0.228,
+        -0.489,
+        0.172
       ]
     },
     {
@@ -87532,13 +86284,13 @@
       "preview": "organelle transport struct title: organelle_transport_abcd.bngl description: simple model of transport involving two cell organelles. this is the model  that was used in the cellblender tutorial. a in",
       "simulationMode": "ODE",
       "umap2D": [
-        0.068,
-        -0.759
+        0.454,
+        -1.016
       ],
       "umap3D": [
-        0.138,
-        -0.393,
-        0.26
+        0.183,
+        -0.504,
+        0.179
       ]
     },
     {
@@ -87942,13 +86694,13 @@
       "preview": "chylek library created by bionetgen 2.2.6 1. run with this line uncommented to generate the opts file. copy this file to the top level project folder (if using rulebender). visualize({type=>\"opts\"}) 2",
       "simulationMode": "None",
       "umap2D": [
-        0.042,
-        -0.237
+        1.157,
+        -0.482
       ],
       "umap3D": [
-        0.564,
-        0.252,
-        -0.521
+        -0.02,
+        0.528,
+        -0.173
       ]
     },
     {
@@ -88425,13 +87177,13 @@
       "preview": "creamer 2012 initial values setting k values each species needs a location tag (outside,membrane,cytoplasms,destroyed etc..) s581 means s551, y619 means y627, y657 means y659 species that are being ob",
       "simulationMode": "None",
       "umap2D": [
-        0.526,
-        -0.349
+        -0.219,
+        -0.485
       ],
       "umap3D": [
-        -0.405,
-        -0.533,
-        -0.274
+        -0.266,
+        -0.747,
+        -0.342
       ]
     },
     {
@@ -88839,13 +87591,13 @@
       "preview": "egfr simple this is a demo model of egfr signaling. the parameters and rules have been modified to keep things as simple as possible. inital amount of ligand (nm) initial amounts of cellular component",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.515,
-        -0.899
+        0.212,
+        -0.743
       ],
       "umap3D": [
-        0.034,
-        -0.38,
-        -0.118
+        -0.059,
+        -0.366,
+        -0.06
       ]
     },
     {
@@ -89279,13 +88031,13 @@
       "preview": "suderman 2013 ensemble model translated into bngl 1. run with this line uncommented to generate the opts file. copy this file to the top level project folder (if using rulebender). visualize({type=>\"o",
       "simulationMode": "None",
       "umap2D": [
-        0.388,
-        -0.772
+        0.55,
+        -0.715
       ],
       "umap3D": [
-        0.261,
-        -0.089,
-        -0.167
+        0.122,
+        -0.066,
+        -0.097
       ]
     },
     {
@@ -89688,13 +88440,13 @@
       "preview": "birth death resetconcentrations() simulate({suffix=>\"ssa\",method=>\"ssa\",t_end=>50,n_steps=>500}) atot a birth death",
       "simulationMode": "ODE",
       "umap2D": [
-        0.62,
-        -2.615
+        2.071,
+        -1.483
       ],
       "umap3D": [
-        1.652,
-        0.747,
-        -0.12
+        0.194,
+        1.462,
+        0.413
       ]
     },
     {
@@ -90095,13 +88847,13 @@
       "preview": "complexdegradation title: complexdegradation.bngl description: demonstrates behavior of various rules specifying degradation of complexes and how this can be controlled by the deletemolecules keyword.",
       "simulationMode": "None",
       "umap2D": [
-        0.435,
-        -1.423
+        -0.028,
+        -1.176
       ],
       "umap3D": [
-        0.084,
-        -0.345,
-        0.496
+        0.535,
+        -0.573,
+        0.133
       ]
     },
     {
@@ -90506,13 +89258,13 @@
       "preview": "repressilator bionetgen implementation of the full repressilator model presented in  table 2 of harris et al., phys. rev. e, 79, 051906 (doi:10.1103/physreve.79.051906). source: models2 folder of the ",
       "simulationMode": "ODE",
       "umap2D": [
-        0.605,
-        -1.37
+        0.784,
+        -0.811
       ],
       "umap3D": [
-        0.353,
-        -0.607,
-        -0.409
+        -0.288,
+        0.132,
+        0.15
       ]
     },
     {
@@ -90913,13 +89665,13 @@
       "preview": "visualize 1. uncomment one of these to try different types of visualization. navigate to the appropriate folder in the results directory and open the corresponding .gml file in yed. visualize({type=>\"",
       "simulationMode": "None",
       "umap2D": [
-        -0.314,
-        -0.612
+        1.202,
+        -1.045
       ],
       "umap3D": [
-        0.556,
-        0.167,
-        0.516
+        0.559,
+        0.368,
+        0.225
       ]
     },
     {
@@ -91336,13 +90088,13 @@
       "preview": "degranulation model filename: model.bngl date of last edit: 25-jul-2017 authors: chylek la, mitra e, hlavacek ws (los alamos national laboratory) software compatibility: rulebender (version 2.1.0.8), ",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.287,
-        -0.53
+        -0.067,
+        -0.738
       ],
       "umap3D": [
-        -0.068,
-        -0.599,
-        -0.341
+        -0.303,
+        -0.561,
+        -0.078
       ]
     },
     {
@@ -91747,13 +90499,13 @@
       "preview": "quasi equilibrium quasi_equilibrium.bngl a minimal three-species model demonstrating the quasi-equilibrium approximation. species a and b rapidly equilibrate while b slowly converts to c irreversibly.",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.361,
-        -1.491
+        0.624,
+        -1.746
       ],
       "umap3D": [
-        0.954,
-        -0.587,
-        0.34
+        0.332,
+        -0.088,
+        0.882
       ]
     },
     {
@@ -92159,13 +90911,13 @@
       "preview": "caoscillate func actions ## simulate({method=>\"ssa\",t_end=>20,n_output_steps=>200,verbose=>1}) simulate({method=>\"pla\",t_end=>20,n_output_steps=>200,verbose=>1,pla_config=>\"feuler|pre-eps:sb|eps=0.03\"",
       "simulationMode": "ODE",
       "umap2D": [
-        0.761,
-        -1.912
+        1.552,
+        -0.921
       ],
       "umap3D": [
-        1.034,
-        0.473,
-        -0.31
+        0.311,
+        0.866,
+        0.092
       ]
     },
     {
@@ -92571,13 +91323,13 @@
       "preview": "caoscillate sat actions ## simulate({method=>\"ssa\",t_end=>20,n_output_steps=>200,verbose=>1}) simulate({method=>\"pla\",t_end=>20,n_output_steps=>200,verbose=>1,pla_config=>\"feuler|pre-eps:sb|eps=0.03\"}",
       "simulationMode": "ODE",
       "umap2D": [
-        0.865,
-        -1.976
+        1.666,
+        -0.83
       ],
       "umap3D": [
-        1.052,
-        0.626,
-        -0.335
+        0.356,
+        0.983,
+        0.009
       ]
     },
     {
@@ -92985,13 +91737,13 @@
       "preview": "catalysis catalysis in energy bng justin.s.hogg@gmail.com, 9 apr 2013 requires bionetgen version >= 2.2.4 quantities have units in moles, so set this to avogadro's number generate reaction network.. s",
       "simulationMode": "ODE",
       "umap2D": [
-        0.153,
-        -0.754
+        0.414,
+        -0.856
       ],
       "umap3D": [
-        0.413,
-        -0.253,
-        -0.291
+        -0.121,
+        -0.036,
+        0.103
       ]
     },
     {
@@ -93407,13 +92159,13 @@
       "preview": "egfr net red reduced state-space version of egfr_net.bngl with equivalent ode dynamics actions ## construct reaction network equilibration kinetics egf egfr_1 egfr_2 egfr_3 grb2 shc sos dimers sos_act",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.346,
-        -1.196
+        0.205,
+        -1.083
       ],
       "umap3D": [
-        0.339,
-        -0.531,
-        -0.133
+        -0.102,
+        -0.265,
+        0.254
       ]
     },
     {
@@ -93826,13 +92578,13 @@
       "preview": "egfr path the primary focus of the model developed by kholodenko is the cascade of signaling events that lead to  recruitment of cytosolic sos to the inner cell membrane.   egf binds to egfr, which le",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.63,
-        -0.893
+        0.06,
+        -0.692
       ],
       "umap3D": [
-        -0.127,
-        -0.467,
-        -0.128
+        -0.072,
+        -0.567,
+        -0.141
       ]
     },
     {
@@ -94245,13 +92997,13 @@
       "preview": "energy example1 illustration of energy modeling approach w/ a simple protein scaffold model author: justin.s.hogg@gmail.com update: 31 march 2013 a free-energy approach to rule-based modeling was intr",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.084,
-        -1.103
+        0.384,
+        -1.294
       ],
       "umap3D": [
-        0.526,
-        -0.617,
-        -0.045
+        -0.062,
+        -0.265,
+        0.456
       ]
     },
     {
@@ -94658,13 +93410,13 @@
       "preview": "haugh2b actions ## s2_p_tot s2_p_mem r_total s1_total s2_total r s1 s2",
       "simulationMode": "ODE",
       "umap2D": [
-        0.282,
-        -0.305
+        1.023,
+        -0.445
       ],
       "umap3D": [
-        0.182,
-        0.449,
-        0.102
+        0.562,
+        0.126,
+        -0.377
       ]
     },
     {
@@ -95068,13 +93820,13 @@
       "preview": "heise validate state inheritance in a symmetric context at equilibrium:  a = sqrt(v/kab) = 1, b = v/(2*kb0) = 1/2 actions ## equilibrate wiht unlabeled models add labels a b a b a",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        -0.776,
-        -1.082
+        1.398,
+        -1.536
       ],
       "umap3D": [
-        1.033,
-        0.174,
-        0.671
+        0.856,
+        0.44,
+        0.6
       ]
     },
     {
@@ -95477,13 +94229,13 @@
       "preview": "issue 198 short a b c afree a",
       "simulationMode": "ODE",
       "umap2D": [
-        1.904,
-        0.6
+        2.046,
+        0.28
       ],
       "umap3D": [
-        -0.21,
-        1.536,
-        0.601
+        1.467,
+        0.427,
+        -1.186
       ]
     },
     {
@@ -95927,13 +94679,13 @@
       "preview": "korwek 2023 this bionetgen file features the article: ----------------------------------------------------------------------------- \"non-self rna rewires ifn[beta] signaling: a mathematical model of t",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.455,
-        -0.767
+        0.436,
+        -0.681
       ],
       "umap3D": [
-        0.137,
+        0.034,
         -0.157,
-        -0.152
+        -0.129
       ]
     },
     {
@@ -96343,13 +95095,13 @@
       "preview": "localfunc test local function expansion actions ## a b c trash atot btot ctot ab0 ab1 ab2 ab3 ab_motif a b c",
       "simulationMode": "ODE",
       "umap2D": [
-        1.101,
-        -1.412
+        1.425,
+        -0.418
       ],
       "umap3D": [
-        0.321,
-        0.737,
-        0.249
+        0.88,
+        0.305,
+        -0.425
       ]
     },
     {
@@ -96757,13 +95509,13 @@
       "preview": "michment \"michment.bngl\" is designed to test the read/write network feature of bng. this model works in conjunction with \"michment_cont.bngl\". this model file defines the rule model, generates the net",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.008,
-        -0.946
+        0.818,
+        -1.06
       ],
       "umap3D": [
-        0.591,
-        -0.084,
-        0.026
+        0.281,
+        0.109,
+        0.207
       ]
     },
     {
@@ -97198,13 +95950,13 @@
       "preview": "motivating example signal transduction with receptor internalization and transcriptional reg.  # vanilla bngl code: justin.s.hogg@gmail.com                                  # conception: leonard a. ha",
       "simulationMode": "ODE",
       "umap2D": [
-        0.515,
-        -0.734
+        0.492,
+        -0.625
       ],
       "umap3D": [
-        0.111,
-        -0.066,
-        -0.126
+        0.124,
+        -0.147,
+        -0.201
       ]
     },
     {
@@ -97639,13 +96391,13 @@
       "preview": "motivating example cbngl signal transduction with receptor internalization and transcriptional reg.  # cbngl code: justin.s.hogg@gmail.com                                         # conception: leonard",
       "simulationMode": "ODE",
       "umap2D": [
-        0.559,
-        -0.744
+        0.504,
+        -0.6
       ],
       "umap3D": [
-        0.065,
-        -0.047,
-        -0.072
+        0.176,
+        -0.188,
+        -0.23
       ]
     },
     {
@@ -98050,13 +96802,13 @@
       "preview": "motor motor.bngl example of global functions by simulating the flagellar motor and cheyp levels.  the rate of switching rotational states of the flagellar motor depends functionally on the concentrati",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.003,
-        -1.86
+        0.973,
+        -1.722
       ],
       "umap3D": [
-        1.197,
-        -0.343,
-        0.173
+        0.402,
+        0.225,
+        0.858
       ]
     },
     {
@@ -98460,13 +97212,13 @@
       "preview": "mwc actions ## writefile({format=>\"net\",suffix=>\"eval\",evaluate_expressions=>1}) setparameter(\"cooprt\",0) setparameter(\"coopb\",0) parameter_scan({method=>\"ode\",t_end=>10,n_steps=>10,print_functions=>1",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.607,
-        -0.809
+        1.411,
+        -1.213
       ],
       "umap3D": [
-        1.129,
-        0.191,
-        -0.138
+        0.25,
+        0.708,
+        0.399
       ]
     },
     {
@@ -98889,13 +97641,13 @@
       "preview": "nfkb 3 state ikk. a20 acts by inhibiting the activation of ikkk, and accelerating the converstion of active to inactive ikk constants h = log10(2) lipniacki parameters robin's parameters c6a = c3a/7 #",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.38,
-        -0.275
+        -0.141,
+        -0.611
       ],
       "umap3D": [
-        -0.196,
-        -0.531,
-        -0.472
+        -0.485,
+        -0.388,
+        -0.237
       ]
     },
     {
@@ -99298,13 +98050,13 @@
       "preview": "shp2 base model base model of shp2 regulation from barua, faeder, and haugh (2006). copyright 2006, north carolina state university and los alamos national laboratory concentration units are in microm",
       "simulationMode": "ODE",
       "umap2D": [
-        0.569,
-        -1.238
+        0.042,
+        -0.995
       ],
       "umap3D": [
-        0.447,
-        -0.353,
-        -0.403
+        -0.262,
+        -0.056,
+        0.154
       ]
     },
     {
@@ -99712,13 +98464,13 @@
       "preview": "simple system simple_system.bngl an example model for running nfsim to get you started. comments in bngl are always preceded with a pound (#) character, so that any text that follows a pound character",
       "simulationMode": "ODE",
       "umap2D": [
-        0.076,
-        -1.125
+        0.585,
+        -1.153
       ],
       "umap3D": [
-        0.54,
-        -0.321,
-        0.038
+        0.154,
+        -0.08,
+        0.32
       ]
     },
     {
@@ -100123,13 +98875,13 @@
       "preview": "test ang synthesis simple testing automatic  network generation for cvode a b c source source2 add_molecule constant_source non_constant_source",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.071,
-        -0.259
+        1.198,
+        -0.586
       ],
       "umap3D": [
-        0.542,
-        0.465,
-        -0.213
+        0.452,
+        0.471,
+        -0.256
       ]
     },
     {
@@ -100530,13 +99282,13 @@
       "preview": "test fixed actions ## a b b",
       "simulationMode": "ODE",
       "umap2D": [
-        0.795,
-        1.229
+        2.502,
+        -0.564
       ],
       "umap3D": [
-        0.687,
-        1.661,
-        0.648
+        1.616,
+        1.051,
+        -0.577
       ]
     },
     {
@@ -100941,13 +99693,13 @@
       "preview": "test mm actions ## e s p st pt et s e p",
       "simulationMode": "ODE",
       "umap2D": [
-        1.294,
-        0.981
+        1.853,
+        0.546
       ],
       "umap3D": [
-        0.089,
-        1.73,
-        -0.121
+        1.001,
+        0.941,
+        -1.277
       ]
     },
     {
@@ -101350,13 +100102,13 @@
       "preview": "test mratio a b c_obs a b",
       "simulationMode": "ODE",
       "umap2D": [
-        1.596,
-        0.735
+        2.125,
+        -0.026
       ],
       "umap3D": [
-        0.235,
-        1.515,
-        0.577
+        1.482,
+        0.673,
+        -0.841
       ]
     },
     {
@@ -101761,13 +100513,13 @@
       "preview": "test sat actions ## e s p st pt et s e p",
       "simulationMode": "ODE",
       "umap2D": [
-        1.426,
-        0.933
+        1.771,
+        0.657
       ],
       "umap3D": [
-        0.054,
-        1.724,
-        -0.322
+        0.856,
+        0.956,
+        -1.376
       ]
     },
     {
@@ -102173,13 +100925,13 @@
       "preview": "test synthesis cbngl simple a a2 b c source source2 compartment_suffix compartment_preffix constant_source non_constant_source",
       "simulationMode": "ODE",
       "umap2D": [
-        0.23,
-        -0.434
+        0.896,
+        -0.573
       ],
       "umap3D": [
-        0.22,
-        0.298,
-        0.068
+        0.573,
+        -0.093,
+        -0.299
       ]
     },
     {
@@ -102585,13 +101337,13 @@
       "preview": "test synthesis complex a b c receptor source source2 add_molecule constant_source non_constant_source receptor",
       "simulationMode": "ODE",
       "umap2D": [
-        0.413,
-        -0.613
+        0.67,
+        -0.622
       ],
       "umap3D": [
-        0.116,
-        0.065,
-        0.089
+        0.405,
+        -0.189,
+        -0.223
       ]
     },
     {
@@ -102999,13 +101751,13 @@
       "preview": "test synthesis complex 0 cbngl volume-surface surface-surface volume-volume volume_molecule1 volume_molecule2 surface_molecule1 surface_molecule2 volume_molecule3 volume_molecule4 volume_receptor surf",
       "simulationMode": "ODE",
       "umap2D": [
-        0.319,
-        -0.584
+        0.742,
+        -0.625
       ],
       "umap3D": [
-        0.244,
-        0.136,
-        -0.051
+        0.45,
+        -0.249,
+        -0.224
       ]
     },
     {
@@ -103413,13 +102165,13 @@
       "preview": "test synthesis complex source cbngl volume-surface surface-surface volume-volume volume_molecule1 volume_molecule2 surface_molecule1 surface_molecule2 volume_molecule3 volume_molecule4 volume_receptor",
       "simulationMode": "ODE",
       "umap2D": [
-        0.413,
-        -0.589
+        0.685,
+        -0.588
       ],
       "umap3D": [
-        0.206,
-        0.119,
-        -0.112
+        0.365,
+        -0.144,
+        -0.258
       ]
     },
     {
@@ -103824,13 +102576,13 @@
       "preview": "test synthesis simple a b c source source2 add_molecule constant_source non_constant_source",
       "simulationMode": "ODE",
       "umap2D": [
-        -0.136,
-        -0.329
+        1.262,
+        -0.715
       ],
       "umap3D": [
-        0.514,
-        0.486,
-        0.185
+        0.708,
+        0.333,
+        -0.144
       ]
     },
     {
@@ -104231,13 +102983,13 @@
       "preview": "tlmr test whether reaction multiplicities are handled correctly by running verify.pl on tlmr_spec.cdat and the cdat file produced by this file. l r",
       "simulationMode": "ODE",
       "umap2D": [
-        1.524,
-        -1.193
+        1.326,
+        -0.066
       ],
       "umap3D": [
-        0.363,
-        0.775,
-        -0.518
+        0.274,
+        0.696,
+        -0.652
       ]
     },
     {
@@ -104648,13 +103400,13 @@
       "preview": "toy jim the model consists of a monovalent extracellular ligand,  a monovalent cell-surface receptor, a bivalent cytosolic adapter protein,  and a cytosolic kinase.  the receptor dimerizes through a  ",
       "simulationMode": "Multiphase (ODE)",
       "umap2D": [
-        0.356,
-        -0.829
+        0.273,
+        -0.808
       ],
       "umap3D": [
-        0.194,
-        -0.372,
-        -0.221
+        -0.099,
+        -0.263,
+        0.02
       ]
     },
     {
@@ -105062,13 +103814,13 @@
       "preview": "univ synth example of universal synthesis a b c b_ec b_pm b_cp c_ec c_pm c_cp a a a",
       "simulationMode": "ODE",
       "umap2D": [
-        0.807,
-        -1.427
+        1.273,
+        -0.674
       ],
       "umap3D": [
-        0.328,
-        0.44,
-        0.424
+        0.88,
+        0.055,
+        -0.182
       ]
     }
   ]

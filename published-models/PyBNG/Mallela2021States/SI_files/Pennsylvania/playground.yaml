@@ -1,0 +1,7 @@
+models:
+  - file: Pennsylvania.bngl
+    id: Pennsylvania
+    name: "Pennsylvania"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

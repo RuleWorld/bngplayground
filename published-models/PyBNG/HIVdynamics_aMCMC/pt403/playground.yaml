@@ -1,0 +1,7 @@
+models:
+  - file: pt403.bngl
+    id: pt403
+    name: "pt403"
+    description: "c = 0.23 /d t_1/2 = 3.0 d (inferred)"
+    tags: []
+    bng2_compatible: true

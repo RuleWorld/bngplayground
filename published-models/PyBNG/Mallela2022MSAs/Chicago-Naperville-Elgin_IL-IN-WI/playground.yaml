@@ -1,0 +1,7 @@
+models:
+  - file: Chicago-Naperville-Elgin_IL-IN-WI.bngl
+    id: Chicago-Naperville-Elgin_IL-IN-WI
+    name: "Chicago Naperville Elgin IL IN WI"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

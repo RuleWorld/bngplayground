@@ -1,0 +1,13 @@
+models:
+  - file: egfr_ode.bngl
+    id: egfr_ode
+    name: "egfr ode"
+    description: "Filename: example1.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: example1.bngl
+    id: example1
+    name: "example1"
+    description: "Filename: example1.bngl"
+    tags: []
+    bng2_compatible: true

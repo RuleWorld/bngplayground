@@ -1,0 +1,7 @@
+models:
+  - file: San_Francisco-Oakland-Berkeley_CA.bngl
+    id: San_Francisco-Oakland-Berkeley_CA
+    name: "San Francisco Oakland Berkeley CA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: Springfield_MA.bngl
+    id: Springfield_MA
+    name: "Springfield MA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

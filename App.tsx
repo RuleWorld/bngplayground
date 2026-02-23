@@ -9,6 +9,10 @@ import { AboutModal } from './components/AboutModal';
 import { bnglService } from './services/bnglService';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
 import { EXAMPLES, INITIAL_BNGL_CODE } from './constants';
+import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoader';
+
+// Pre-warm cache so AB tutorial is always available synchronously
+setCachedCode('AB', INITIAL_BNGL_CODE);
 import SimulationModal from './components/SimulationModal';
 import { BNGLParser } from './src/services/graph/core/BNGLParser.ts';
 import { validateBNGLModel, validationWarningsToMarkers } from './services/modelValidation';
@@ -198,9 +202,8 @@ function App() {
       setCode(shared.code);
 
       const example = findExampleById(shared.modelId);
-      const matchesExample = example && normalizeCode(example.code) === normalizeCode(shared.code);
-
-      if (matchesExample) {
+      // Trust the modelId in the share link for identification; skip code comparison since code may not be embedded
+      if (example) {
         setLoadedModelId(example.id);
         setLoadedModelName(shared.name ?? example.name);
       } else {
@@ -237,12 +240,20 @@ function App() {
 
         if (example) {
           console.log('[App] Found model in EXAMPLES:', example.id);
-          setCode(example.code);
-          setLoadedModelId(example.id);
-          setLoadedModelName(example.name);
-          // Remove the query param so the URL is clean afterwards
-          window.history.replaceState(null, '', window.location.pathname + window.location.hash);
-          setStatus({ type: 'success', message: `Loaded ${example.name} from Model Explorer` });
+          // Load code from cache/fetch (may already be embedded in example.code or pre-cached)
+          (async () => {
+            try {
+              const code = example.code ?? await loadModelCode(example.id);
+              setCode(code);
+              setLoadedModelId(example.id);
+              setLoadedModelName(example.name);
+              // Remove the query param so the URL is clean afterwards
+              window.history.replaceState(null, '', window.location.pathname + window.location.hash);
+              setStatus({ type: 'success', message: `Loaded ${example.name} from Model Explorer` });
+            } catch (e) {
+              console.warn('[App] Failed to load model code for', example.id, e);
+            }
+          })();
         } else {
           console.log('[App] Model not found in EXAMPLES, attempting fetch fallback...');
           // Attempt to fetch BNGL file from likely locations if it's not embedded in EXAMPLES.
@@ -722,7 +733,9 @@ function App() {
 
     if (loadedModelId) {
       const example = findExampleById(loadedModelId);
-      if (!example || normalizeCode(example.code) !== normalizeCode(newCode)) {
+      // Compare against cached/embedded code if available; if absent, keep the loaded model ID
+      const knownCode = example?.code ?? getCachedCode(loadedModelId);
+      if (!example || (knownCode !== undefined && normalizeCode(knownCode) !== normalizeCode(newCode))) {
         setLoadedModelId(null);
       }
     }

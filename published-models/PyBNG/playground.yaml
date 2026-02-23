@@ -1,0 +1,13 @@
+models:
+  - file: egfr_ode.bngl
+    id: egfr_ode
+    name: "PyBNG: EGFR ODE"
+    description: "EGFR ODE"
+    tags: [published, PyBNG]
+    bng2_compatible: false
+  - file: degranulation_model.bngl
+    id: degranulation_model
+    name: "PyBNG: Degranulation model"
+    description: "Degranulation model"
+    tags: [published, PyBNG]
+    bng2_compatible: true

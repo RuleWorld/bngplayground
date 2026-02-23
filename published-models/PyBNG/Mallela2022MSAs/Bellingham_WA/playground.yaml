@@ -1,0 +1,7 @@
+models:
+  - file: Bellingham_WA.bngl
+    id: Bellingham_WA
+    name: "Bellingham WA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: Mississippi.bngl
+    id: Mississippi
+    name: "Mississippi"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

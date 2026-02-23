@@ -3,6 +3,7 @@ import { MODEL_CATEGORIES, BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../cons
 import { BNGLModel, SimulationResults } from '../../types';
 import { getSimulationOptionsFromParsedModel } from './simulationOptions';
 import { downloadCsv } from './download';
+import { loadModelCode } from '../../services/modelLoader';
 
 // If you need extra verbosity for batch runner, flip this to true locally
 const VERBOSE_BATCH_RUNNER = false;
@@ -37,13 +38,16 @@ async function executeMultiPhaseSimulation(model: BNGLModel, seed?: number): Pro
 }
 
 
-async function runSingleBatchItem(modelDef: { name: string, code: string, id?: string }, batchSeed?: number) {
+async function runSingleBatchItem(modelDef: { name: string, code?: string, id?: string }, batchSeed?: number) {
     console.group(`Processing: ${modelDef.name}`);
     try {
+        // Resolve code: use embedded code if present, otherwise fetch via lazy loader
+        const code = modelDef.code ?? (modelDef.id ? await loadModelCode(modelDef.id) : undefined);
+        if (!code) throw new Error(`No code available for model: ${modelDef.name}`);
+
         // 1. Parse
         if (VERBOSE_BATCH_RUNNER) console.time('Parse');
-        const model: BNGLModel = await bnglService.parse(modelDef.code, { description: `Batch Parse: ${modelDef.name}` });
-        if (VERBOSE_BATCH_RUNNER) console.timeEnd('Parse');
+        const model: BNGLModel = await bnglService.parse(code, { description: `Batch Parse: ${modelDef.name}` });
 
         // 1b. Network Generation (Fix for rule-based models)
         const actions = model.actions || [];

@@ -1,0 +1,7 @@
+models:
+  - file: Shreveport-Bossier_City_LA.bngl
+    id: Shreveport-Bossier_City_LA
+    name: "Shreveport Bossier City LA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

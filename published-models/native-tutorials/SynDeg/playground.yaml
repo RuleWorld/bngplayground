@@ -1,0 +1,31 @@
+models:
+  - file: birth-death.bngl
+    id: birth-death
+    name: "birth death"
+    description: "BioNetGen model: birth death"
+    tags: []
+    bng2_compatible: true
+  - file: CircadianOscillator.bngl
+    id: CircadianOscillator
+    name: "CircadianOscillator"
+    description: "title: Vilar Circadian Oscillator Model"
+    tags: []
+    bng2_compatible: true
+  - file: ComplexDegradation.bngl
+    id: ComplexDegradation
+    name: "ComplexDegradation"
+    description: "Title: ComplexDegradation.bngl"
+    tags: []
+    bng2_compatible: true
+  - file: Repressilator.bngl
+    id: Repressilator
+    name: "Repressilator"
+    description: "BioNetGen implementation of the full repressilator model presented in"
+    tags: []
+    bng2_compatible: true
+  - file: toggle.bngl
+    id: toggle
+    name: "toggle"
+    description: "Title: A model of a genetic toggle switch"
+    tags: []
+    bng2_compatible: true

@@ -1,0 +1,7 @@
+models:
+  - file: Lancaster_PA.bngl
+    id: Lancaster_PA
+    name: "Lancaster PA"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true

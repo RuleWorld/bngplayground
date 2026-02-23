@@ -276,6 +276,6 @@ simulate_ode({suffix=>"ode2",t_end=>10*3600,n_steps=>600});
 #
 # resetConcentrations();
 # simulate_ssa({suffix=>"ssa1",t_end=>300*3600,n_steps=>1800}); 
-# #
+#
 # setConcentration("TNF(loc~e)",1); 
 # simulate_ssa({suffix=>"ssa2",t_end=>10*3600,n_steps=>600});

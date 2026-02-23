@@ -1,0 +1,7 @@
+models:
+  - file: McAllen-Edinburg-Mission_TX.bngl
+    id: McAllen-Edinburg-Mission_TX
+    name: "McAllen Edinburg Mission TX"
+    description: "reporting period (1 d)"
+    tags: []
+    bng2_compatible: true
