@@ -219,4 +219,6 @@ public/model-manifest.json
 
 test*.csv
 
+rulebender-RuleBender-2.3.2
+
 # End of .gitignore

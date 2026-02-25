@@ -4,6 +4,10 @@ import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import type { ContactMap } from '../types/visualization';
+import type { RuleOverlay } from '../services/visualization/ruleOverlay';
+import { applyCytoscapeRuleOverlay, ruleOverlayStyles } from '../services/visualization/applyCytoscapeRuleOverlay';
+import type { ContactMapSnapshot } from '../services/visualization/dynamicContactMap';
+import { applyCytoscapeDynamicOverlay, dynamicOverlayStyles } from '../services/visualization/applyCytoscapeDynamicOverlay';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
 
@@ -15,6 +19,10 @@ interface ContactMapViewerProps {
   contactMap: ContactMap;
   selectedRuleId?: string | null;
   onSelectRule?: (ruleId: string) => void;
+  /** When set, highlights center (red) and context (blue) elements for this rule */
+  ruleOverlay?: RuleOverlay | null;
+  /** When set, applies time-varying dynamic overlay (abundance, state, bonds) */
+  dynamicSnapshot?: ContactMapSnapshot | null;
 }
 
 // Layout type options - all built-in Cytoscape layouts plus dagre and fcose
@@ -136,7 +144,7 @@ const LAYOUT_CONFIGS: Record<LayoutType, any> = {
 // Hierarchical layout configuration (yED-like) - used as default
 const BASE_LAYOUT = LAYOUT_CONFIGS.hierarchical;
 
-export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, selectedRuleId, onSelectRule }) => {
+export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, selectedRuleId, onSelectRule, ruleOverlay, dynamicSnapshot }) => {
   const [theme] = useTheme();
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [activeLayout, setActiveLayout] = useState<LayoutType>('hierarchical');
@@ -296,6 +304,9 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
             'transition-duration': 150,
           },
         },
+        // Rule overlay styles (center=red, context=blue, dimmed)
+        ...ruleOverlayStyles,
+        ...dynamicOverlayStyles,
       ],
       layout: { name: 'preset' },
     });
@@ -555,6 +566,20 @@ ${indent}</node>
     });
   }, [selectedRuleId, contactMap]);
 
+  // Apply rule overlay highlighting when ruleOverlay changes
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy) return;
+    applyCytoscapeRuleOverlay(cy, ruleOverlay ?? null);
+  }, [ruleOverlay, contactMap]);
+
+  // Apply dynamic simulation overlay when snapshot changes
+  useEffect(() => {
+    const cy = cyRef.current;
+    if (!cy || cy.destroyed()) return;
+    applyCytoscapeDynamicOverlay(cy, dynamicSnapshot ?? null);
+  }, [dynamicSnapshot, contactMap]);
+
   return (
     <div className="flex flex-col h-full gap-2">
       {/* Toolbar */}
@@ -651,6 +676,19 @@ ${indent}</node>
             <div className="w-6 h-0 border-t border-black" />
             <span className="text-slate-700 dark:text-slate-300">Bond</span>
           </div>
+          {ruleOverlay && (
+            <>
+              <div className="w-px h-4 bg-slate-300 dark:bg-slate-600" />
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-[#fdedec] border-2 border-[#e74c3c]" />
+                <span className="text-slate-700 dark:text-slate-300">Center (changes)</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <div className="w-3 h-3 rounded bg-[#eaf2f8] border-2 border-[#3498db]" />
+                <span className="text-slate-700 dark:text-slate-300">Context (tests)</span>
+              </div>
+            </>
+          )}
         </div>
       </div>
     </div>

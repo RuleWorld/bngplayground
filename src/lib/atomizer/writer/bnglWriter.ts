@@ -43,7 +43,7 @@ const MISSING_KINETIC_LOG_LIMIT = Number(
 const ENABLE_MASS_ACTION_CHECK =
   ((typeof process !== 'undefined' && process.env?.BNGL_ENABLE_MASS_ACTION_CHECK) || '1') !== '0';
 const MASS_ACTION_SKIP_MIN_REACTIONS = Number(
-  (typeof process !== 'undefined' && process.env?.BNGL_SKIP_MASS_ACTION_MIN_REACTIONS) || '1000'
+  (typeof process !== 'undefined' && process.env?.BNGL_SKIP_MASS_ACTION_MIN_REACTIONS) || '500'
 );
 const MASS_ACTION_SKIP_EXPR_LEN = Number(
   (typeof process !== 'undefined' && process.env?.BNGL_SKIP_MASS_ACTION_EXPR_LEN) || '2000'
