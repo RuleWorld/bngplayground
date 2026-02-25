@@ -217,6 +217,7 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       // Check for built-in constants if not caught by literal
       if (name === '_pi' || name === 'pi') return Decimal.acos(-1);
       if (name === '_e' || name === 'e') return new Decimal(1).exp();
+      if (/^na$/i.test(name)) return new Decimal('6.02214076e23');
       // Allow unresolved species amount placeholders to fall back to standard evaluation.
       if (name.endsWith('_amt')) return new Decimal(NaN);
 

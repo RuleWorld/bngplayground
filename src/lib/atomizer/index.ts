@@ -236,7 +236,7 @@ export class Atomizer {
     if (!enabled) return false;
 
     const minSpecies = Number(env?.ATOMIZER_FASTPATH_MIN_SPECIES ?? '1500');
-    const minReactions = Number(env?.ATOMIZER_FASTPATH_MIN_REACTIONS ?? '1000');
+    const minReactions = Number(env?.ATOMIZER_FASTPATH_MIN_REACTIONS ?? '800');
     const minSbmlChars = Number(env?.ATOMIZER_FASTPATH_MIN_SBML_CHARS ?? '5000000');
 
     return (

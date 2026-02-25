@@ -92,6 +92,8 @@ let libsbmlInitPromise: Promise<any> | null = null;
 const SBML_WRITER_INIT_TIMEOUT_MS = Number(
   (typeof process !== 'undefined' && process.env?.SBML_WRITER_INIT_TIMEOUT_MS) || '12000'
 );
+const SBML_WRITER_DEBUG_TIMINGS =
+  ((typeof process !== 'undefined' && process.env?.SBML_WRITER_DEBUG_TIMINGS) || '0') === '1';
 
 const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
   let timer: ReturnType<typeof setTimeout> | null = null;
@@ -110,6 +112,13 @@ const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): P
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function logWriterTiming(label: string, startedMs: number, extra = ''): void {
+  if (!SBML_WRITER_DEBUG_TIMINGS) return;
+  const elapsed = Date.now() - startedMs;
+  const suffix = extra ? ` ${extra}` : '';
+  console.error(`[sbmlWriter][timing] ${label} ${elapsed}ms${suffix}`);
 }
 
 function replaceNames(
@@ -132,6 +141,49 @@ function replaceNames(
   }
 
   return result;
+}
+
+type NameReplacementEntry = {
+  id: string;
+  name: string;
+  pattern: RegExp;
+};
+
+function buildNameReplacementEntries(
+  replacementMap: Map<string, string>,
+  options: { skipFunctionCalls?: boolean } = {}
+): NameReplacementEntry[] {
+  const skipFunctionCalls = options.skipFunctionCalls ?? false;
+  return Array.from(replacementMap.entries())
+    .filter(([name, id]) => !!name && !!id && name !== id)
+    .sort((a, b) => b[0].length - a[0].length)
+    .map(([name, id]) => {
+      const escaped = escapeRegExp(name);
+      const isWord = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+      const pattern = isWord
+        ? new RegExp(`\\b${escaped}\\b${skipFunctionCalls ? '(?!\\s*\\()' : ''}`, 'g')
+        : new RegExp(escaped, 'g');
+      return { id, name, pattern };
+    });
+}
+
+function replaceNamesWithEntries(formula: string, entries: NameReplacementEntry[]): string {
+  let result = formula;
+  for (const entry of entries) {
+    // Fast reject avoids expensive RegExp replace when symbol is absent.
+    if (!result.includes(entry.name)) continue;
+    result = result.replace(entry.pattern, entry.id);
+  }
+  return result;
+}
+
+function createNameReplacer(
+  replacementMap: Map<string, string>,
+  options: { skipFunctionCalls?: boolean } = {}
+): (formula: string) => string {
+  const entries = buildNameReplacementEntries(replacementMap, options);
+  if (entries.length === 0) return (formula: string) => formula;
+  return (formula: string): string => replaceNamesWithEntries(formula, entries);
 }
 
 function replaceSpeciesNames(formula: string, speciesIdByName: Map<string, string>): string {
@@ -460,6 +512,7 @@ function isSymbolReferenced(expressionText: string, symbol: string): boolean {
 }
 
 function generateSBMLPureXml(model: BNGLModel): string {
+  const modelStarted = Date.now();
   const modelId = (model.name?.replace(/\W/g, '_') || 'bngl_model').slice(0, 256);
   const modelName = xmlEscape(model.name || 'BioNetGen Export');
 
@@ -474,6 +527,7 @@ function generateSBMLPureXml(model: BNGLModel): string {
   speciesList.forEach((s, i) => {
     speciesIdByName.set(s.name, `s${i}`);
   });
+  const replaceSpeciesInFormula = createNameReplacer(speciesIdByName);
   const reconstructedRules = reconstructRules(model, speciesIdByName);
   const exportableReactions = buildExportableReactions(model);
   const referenceText = [
@@ -514,6 +568,7 @@ function generateSBMLPureXml(model: BNGLModel): string {
   lines.push('<sbml xmlns="http://www.sbml.org/sbml/level2/version4" level="2" version="4">');
   lines.push(`  <model id="${xmlEscape(modelId)}" name="${modelName}">`);
 
+  const compartmentsStarted = Date.now();
   lines.push('    <listOfCompartments>');
   for (const c of compartments) {
     lines.push(
@@ -521,7 +576,9 @@ function generateSBMLPureXml(model: BNGLModel): string {
     );
   }
   lines.push('    </listOfCompartments>');
+  logWriterTiming('pureXml.compartments', compartmentsStarted, `count=${compartments.length}`);
 
+  const parametersStarted = Date.now();
   const params = Array.from(effectiveParameters.entries());
   if (params.length > 0) {
     lines.push('    <listOfParameters>');
@@ -533,7 +590,9 @@ function generateSBMLPureXml(model: BNGLModel): string {
     }
     lines.push('    </listOfParameters>');
   }
+  logWriterTiming('pureXml.parameters', parametersStarted, `count=${params.length}`);
 
+  const speciesStarted = Date.now();
   lines.push('    <listOfSpecies>');
   speciesList.forEach((s, i) => {
     const sid = `s${i}`;
@@ -548,11 +607,14 @@ function generateSBMLPureXml(model: BNGLModel): string {
     );
   });
   lines.push('    </listOfSpecies>');
+  logWriterTiming('pureXml.species', speciesStarted, `count=${speciesList.length}`);
 
   const reactions = exportableReactions;
   if (reactions.length > 0) {
+    const reactionsStarted = Date.now();
     lines.push('    <listOfReactions>');
-    reactions.forEach((r, i) => {
+    for (let i = 0; i < reactions.length; i++) {
+      const r = reactions[i];
       lines.push(`      <reaction id="r${i}" reversible="false">`);
 
       lines.push('        <listOfReactants>');
@@ -572,16 +634,21 @@ function generateSBMLPureXml(model: BNGLModel): string {
       lines.push('        </listOfProducts>');
 
       let formula = r.rate || '0';
-      formula = replaceSpeciesNames(formula, speciesIdByName);
+      formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, null);
-      formula = replaceSpeciesNames(formula, speciesIdByName);
+      formula = replaceSpeciesInFormula(formula);
       lines.push(`        <kineticLaw formula="${xmlEscape(formula)}"/>`);
       lines.push('      </reaction>');
-    });
+      if (SBML_WRITER_DEBUG_TIMINGS && i > 0 && i % 500 === 0) {
+        logWriterTiming('pureXml.reactions.progress', reactionsStarted, `processed=${i}/${reactions.length}`);
+      }
+    }
     lines.push('    </listOfReactions>');
+    logWriterTiming('pureXml.reactions', reactionsStarted, `count=${reactions.length}`);
   }
 
   if (reconstructedRules.length > 0) {
+    const rulesStarted = Date.now();
     lines.push('    <listOfRules>');
     for (const rule of reconstructedRules) {
       if (!rule.variable) continue;
@@ -596,11 +663,14 @@ function generateSBMLPureXml(model: BNGLModel): string {
       }
     }
     lines.push('    </listOfRules>');
+    logWriterTiming('pureXml.rules', rulesStarted, `count=${reconstructedRules.length}`);
   }
 
   lines.push('  </model>');
   lines.push('</sbml>');
-  return lines.join('\n');
+  const xml = lines.join('\n');
+  logWriterTiming('pureXml.total', modelStarted, `species=${speciesList.length} reactions=${reactions.length}`);
+  return xml;
 }
 
 /**
@@ -735,6 +805,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   );
   const speciesIdByName = new Map<string, string>();
   speciesList.forEach((s, i) => speciesIdByName.set(s.name, `s${i}`));
+  const replaceSpeciesInFormula = createNameReplacer(speciesIdByName);
   const reconstructedRules = reconstructRules(model, speciesIdByName);
   const exportableReactions = buildExportableReactions(model);
   const referenceText = [
@@ -856,33 +927,31 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
 
       // Map reactants
       r.reactants.forEach(reactName => {
-        const sIdx = speciesList.findIndex(s => s.name === reactName);
-        if (sIdx >= 0) {
-          const ref = rxn.createReactant();
-          ref.setSpecies(`s${sIdx}`);
-          ref.setStoichiometry(1);
-          ref.setConstant(true);
-        }
+        const sid = speciesIdByName.get(reactName);
+        if (!sid) return;
+        const ref = rxn.createReactant();
+        ref.setSpecies(sid);
+        ref.setStoichiometry(1);
+        ref.setConstant(true);
       });
 
       // Map products
       r.products.forEach(prodName => {
-        const sIdx = speciesList.findIndex(s => s.name === prodName);
-        if (sIdx >= 0) {
-          const ref = rxn.createProduct();
-          ref.setSpecies(`s${sIdx}`);
-          ref.setStoichiometry(1);
-          ref.setConstant(true);
-        }
+        const sid = speciesIdByName.get(prodName);
+        if (!sid) return;
+        const ref = rxn.createProduct();
+        ref.setSpecies(sid);
+        ref.setStoichiometry(1);
+        ref.setConstant(true);
       });
 
       // Kinetic Law
       const kl = rxn.createKineticLaw();
       // Simple mass action formula for now
       let formula = r.rate || '0';
-      formula = replaceSpeciesNames(formula, speciesIdByName);
+      formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, substrateId);
-      formula = replaceSpeciesNames(formula, speciesIdByName);
+      formula = replaceSpeciesInFormula(formula);
       // If the rate is a parameter name, it's fine. If it's a number, it's fine.
       // For more complex expressions, we should use MathML, but libsbml.setFormula handles infix.
       kl.setFormula(formula);
