@@ -219,4 +219,6 @@ public/model-manifest.json
 
 test*.csv
 
+rulebender*
+
 # End of .gitignore
