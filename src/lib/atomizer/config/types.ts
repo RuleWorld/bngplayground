@@ -19,6 +19,7 @@ export interface BNGLMoleculeType {
 export interface BNGLSpecies {
   name: string;
   initialConcentration: number;
+  initialExpression?: string;
   isConstant?: boolean;
 }
 

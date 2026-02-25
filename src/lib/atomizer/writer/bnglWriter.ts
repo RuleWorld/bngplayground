@@ -241,8 +241,10 @@ export function bnglFunction(
   // Handle assignment rule variables (treat as functions unless converted to observables)
   for (const variable of assignmentRuleVariables) {
     const stdName = standardizeName(variable);
-    const regex = new RegExp(`\\b${variable}\\b`, 'g');
-    if (observableConvertedRules.has(variable)) {
+    // Avoid transforming an existing function call like "foo()" into "foo()()".
+    const escapedVariable = escapeRegExp(variable);
+    const regex = new RegExp(`\\b${escapedVariable}\\b(?!\\s*\\()`, 'g');
+    if (observableConvertedRules.has(variable) || observableConvertedRules.has(stdName)) {
       result = result.replace(regex, stdName);
     } else if (speciesWithConcFunctions.has(stdName)) {
       result = result.replace(regex, `_c_${stdName}()`);  // Has conc function

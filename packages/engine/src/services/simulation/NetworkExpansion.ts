@@ -85,16 +85,53 @@ export async function generateExpandedNetwork(
     // They are parsed from the BNGL string representation into Graph form.
     const __seedSpecies = inputModel.species.map((s) => BNGLParser.parseSpeciesGraph(s.name));
 
+    const evalParameterMap = new Map<string, number>();
+    for (const [name, value] of Object.entries(inputModel.parameters || {})) {
+        const numeric = Number(value);
+        if (Number.isFinite(numeric)) {
+            evalParameterMap.set(name, numeric);
+        }
+    }
+    // BNGL uses Na in seed expressions generated from SBML concentration imports.
+    if (!evalParameterMap.has('Na')) {
+        evalParameterMap.set('Na', 1);
+    }
+    const evalFunctionMap = new Map(
+        (inputModel.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
+    );
+    const resolveSeedConcentration = (species: { initialConcentration: number; initialExpression?: string }): number => {
+        const raw = (species as any).initialConcentration;
+        if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
+        if (typeof raw === 'string' && raw.trim().length > 0) {
+            const parsed = Number(raw);
+            if (Number.isFinite(parsed)) return parsed;
+        }
+        const expression = typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
+        if (!expression) return 0;
+        try {
+            const evaluated = BNGLParser.evaluateExpression(
+                expression,
+                evalParameterMap,
+                new Set(),
+                evalFunctionMap
+            );
+            return Number.isFinite(evaluated) ? evaluated : 0;
+        } catch {
+            return 0;
+        }
+    };
+    const resolvedSeedConcentrations = inputModel.species.map((s) => resolveSeedConcentration(s));
+
     // CRITICAL FIX (Parity Issue 2): Map Canonical Names -> Initial Concentrations
     // BNG2 evaluates species concentrations *after* parameters.
     // In our Visitor, we pre-evaluate them. Here, we build a lookup map.
     // When generating species, we check this map to assign the correct initial value (e.g. "A0" -> 100).
     // Reference: BNG2.pl parameter evaluation order.
     const seedConcentrationMap = new Map<string, number>();
-    inputModel.species.forEach((s) => {
+    inputModel.species.forEach((s, index) => {
         const g = BNGLParser.parseSpeciesGraph(s.name);
         const canonicalName = GraphCanonicalizer.canonicalize(g);
-        seedConcentrationMap.set(canonicalName, s.initialConcentration);
+        seedConcentrationMap.set(canonicalName, resolvedSeedConcentrations[index] ?? 0);
     });
 
     // -------------------------------------------------------------------------
@@ -454,7 +491,7 @@ export async function generateExpandedNetwork(
     type SeedEntry = { graph: ReturnType<typeof BNGLParser.parseSpeciesGraph>; concentration: number; isConstant: boolean };
     const seedEntries = inputModel.species.map((sp, i) => ({
         graph: __seedSpecies[i],
-        concentration: sp.initialConcentration,
+        concentration: resolvedSeedConcentrations[i] ?? 0,
         isConstant: !!sp.isConstant,
     })) as SeedEntry[];
     for (const sp of inputModel.species) {

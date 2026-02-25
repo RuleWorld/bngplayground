@@ -1229,6 +1229,13 @@ const buildObservablePairs = (
     return { pairs: normalizedPairs, alignment: 'normalized' };
   }
 
+  return { pairs: [], alignment: 'none' };
+};
+
+const buildIndexObservablePairs = (
+  originalHeaders: string[],
+  roundtripHeaders: string[]
+): { pairs: ObservablePair[]; alignment: ObservableAlignment } => {
   if (originalHeaders.length > 0 && originalHeaders.length === roundtripHeaders.length) {
     const indexPairs: ObservablePair[] = originalHeaders.map((originalHeader, idx) => {
       const roundtripHeader = roundtripHeaders[idx];
@@ -1243,7 +1250,6 @@ const buildObservablePairs = (
     });
     return { pairs: indexPairs, alignment: 'index' };
   }
-
   return { pairs: [], alignment: 'none' };
 };
 
@@ -1600,17 +1606,23 @@ const runTrajectoryFidelityCheck = async (args: {
         originalDataKeys,
         roundtripDataKeys
       );
-      if (aligned.pairs.length === 0) {
-        const semanticPairs = buildSemanticObservablePairs(
-          originalDataKeys,
-          originalForSim,
-          roundtripDataKeys,
-          roundtripForSim
-        );
-        if (semanticPairs.length > 0) {
-          aligned = { pairs: semanticPairs, alignment: 'semantic' };
-        }
+    }
+    if (aligned.pairs.length === 0) {
+      const semanticPairs = buildSemanticObservablePairs(
+        originalDataKeys,
+        originalForSim,
+        roundtripDataKeys,
+        roundtripForSim
+      );
+      if (semanticPairs.length > 0) {
+        aligned = { pairs: semanticPairs, alignment: 'semantic' };
       }
+    }
+    if (aligned.pairs.length === 0) {
+      aligned = buildIndexObservablePairs(originalHeaders, roundtripHeaders);
+    }
+    if (aligned.pairs.length === 0) {
+      aligned = buildIndexObservablePairs(originalDataKeys, roundtripDataKeys);
     }
     const sharedObservables = aligned.pairs.slice(0, TRAJECTORY_MAX_OBSERVABLES);
     if (sharedObservables.length === 0 || points === 0) {

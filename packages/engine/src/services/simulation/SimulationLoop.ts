@@ -429,13 +429,80 @@ export async function simulate(
     reactionReactingVolumes[idx] = vAnchor;
   });
 
+  const initialEvalParamMap = new Map<string, number>();
+  for (const [name, rawValue] of Object.entries(model.parameters || {})) {
+    const direct = Number(rawValue);
+    if (Number.isFinite(direct)) {
+      initialEvalParamMap.set(name, direct);
+      continue;
+    }
+    if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as any)) {
+      const nested = Number((rawValue as any).value);
+      if (Number.isFinite(nested)) {
+        initialEvalParamMap.set(name, nested);
+      }
+    }
+  }
+  for (const comp of model.compartments || []) {
+    const resolved = Number(comp.resolvedVolume ?? comp.size);
+    if (!Number.isFinite(resolved)) continue;
+    if (!initialEvalParamMap.has(comp.name)) {
+      initialEvalParamMap.set(comp.name, resolved);
+    }
+    const compParam = `__compartment_${comp.name}__`;
+    if (!initialEvalParamMap.has(compParam)) {
+      initialEvalParamMap.set(compParam, resolved);
+    }
+  }
+  if (!initialEvalParamMap.has('Na')) {
+    initialEvalParamMap.set('Na', 1);
+  }
+  const initialEvalFunctionMap = new Map(
+    (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
+  );
+  const resolveInitialAmount = (species: BNGLModel['species'][number]): number => {
+    const rawConcentration = (species as any).initialConcentration;
+    if (typeof rawConcentration === 'number' && Number.isFinite(rawConcentration)) {
+      return rawConcentration;
+    }
+    if (typeof rawConcentration === 'string' && rawConcentration.trim().length > 0) {
+      const parsedConcentration = Number(rawConcentration);
+      if (Number.isFinite(parsedConcentration)) return parsedConcentration;
+    }
+
+    const rawAmount = (species as any).initialAmount;
+    if (typeof rawAmount === 'number' && Number.isFinite(rawAmount)) {
+      return rawAmount;
+    }
+    if (typeof rawAmount === 'string' && rawAmount.trim().length > 0) {
+      const parsedAmount = Number(rawAmount);
+      if (Number.isFinite(parsedAmount)) return parsedAmount;
+    }
+
+    const expression = typeof (species as any).initialExpression === 'string'
+      ? (species as any).initialExpression.trim()
+      : '';
+    if (!expression) return 0;
+    try {
+      const evaluated = BNGLParser.evaluateExpression(
+        expression,
+        initialEvalParamMap,
+        new Set(),
+        initialEvalFunctionMap
+      );
+      return Number.isFinite(evaluated) ? evaluated : 0;
+    } catch {
+      return 0;
+    }
+  };
+
   const isOde = !allSsa && options.method !== 'ssa';
   const state = new Float64Array(numSpecies);
   model.species.forEach((s, i) => {
     // PARITY FIX: Species amount in BNGL is usually a count (integer).
     // For ODE simulation, we must solve for concentrations (Amount/Vol).
     // For SSA simulation, we solve for molecule counts directly.
-    const initAmt = s.initialConcentration ?? (s as any).initialAmount ?? 0;
+    const initAmt = resolveInitialAmount(s);
 
     if (isOde) {
       // Convert initial molecule counts to concentrations for ODE solver parity
@@ -464,7 +531,7 @@ export async function simulate(
   // can restore them (matching BNG2's behavior of reading from SpeciesList when no cache hit)
   const initialSeedConcentrations = new Float64Array(numSpecies);
   model.species.forEach((s, i) => {
-    initialSeedConcentrations[i] = s.initialConcentration ?? (s as any).initialAmount ?? 0;
+    initialSeedConcentrations[i] = resolveInitialAmount(s);
   });
 
 

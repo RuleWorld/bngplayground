@@ -346,6 +346,127 @@ function formulaToMathML(formula: string): string {
   }
 }
 
+function toFiniteNumber(value: unknown): number | null {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
+function evaluateNumericAst(node: any, symbols: Map<string, number>): number | null {
+  if (!node || typeof node !== 'object') return null;
+
+  const nodeType = String(node.type || '');
+  if (nodeType === 'Literal') {
+    return toFiniteNumber(node.value);
+  }
+
+  if (nodeType === 'Identifier') {
+    const name = String(node.name || '').trim();
+    if (!name) return null;
+    if (symbols.has(name)) return symbols.get(name) ?? null;
+    if (name === 'Na') return 1;
+    return null;
+  }
+
+  if (nodeType === 'UnaryExpression') {
+    const arg = evaluateNumericAst(node.argument, symbols);
+    if (arg === null) return null;
+    if (node.operator === '+') return arg;
+    if (node.operator === '-') return -arg;
+    return null;
+  }
+
+  if (nodeType === 'BinaryExpression') {
+    const left = evaluateNumericAst(node.left, symbols);
+    const right = evaluateNumericAst(node.right, symbols);
+    if (left === null || right === null) return null;
+
+    switch (node.operator) {
+      case '+': return left + right;
+      case '-': return left - right;
+      case '*': return left * right;
+      case '/': return right === 0 ? null : left / right;
+      case '^': return Math.pow(left, right);
+      default: return null;
+    }
+  }
+
+  if (nodeType === 'CallExpression') {
+    const calleeName =
+      node.callee?.type === 'Identifier' ? String(node.callee.name || '').toLowerCase() : '';
+    const args = (Array.isArray(node.arguments) ? node.arguments : [])
+      .map((arg: any) => evaluateNumericAst(arg, symbols));
+    if (args.some((arg) => arg === null)) return null;
+    const values = args as number[];
+    switch (calleeName) {
+      case 'pow': return values.length >= 2 ? Math.pow(values[0], values[1]) : null;
+      case 'exp': return values.length >= 1 ? Math.exp(values[0]) : null;
+      case 'ln':
+      case 'log': return values.length >= 1 ? Math.log(values[0]) : null;
+      case 'sqrt': return values.length >= 1 ? Math.sqrt(values[0]) : null;
+      case 'abs': return values.length >= 1 ? Math.abs(values[0]) : null;
+      case 'min': return values.length > 0 ? Math.min(...values) : null;
+      case 'max': return values.length > 0 ? Math.max(...values) : null;
+      default: return null;
+    }
+  }
+
+  return null;
+}
+
+function evaluateNumericExpression(expression: string, symbols: Map<string, number>): number | null {
+  const text = String(expression || '').trim();
+  if (!text) return null;
+  const direct = toFiniteNumber(text);
+  if (direct !== null) return direct;
+  try {
+    const ast = jsep(text) as any;
+    return evaluateNumericAst(ast, symbols);
+  } catch {
+    return null;
+  }
+}
+
+function buildInitialExpressionSymbolMap(
+  model: BNGLModel,
+  parameterValues: Map<string, number>
+): Map<string, number> {
+  const symbols = new Map<string, number>(parameterValues);
+
+  for (const [name, value] of Object.entries(model.parameters || {})) {
+    const numeric = toFiniteNumber(value);
+    if (numeric !== null) symbols.set(name, numeric);
+  }
+
+  for (const compartment of model.compartments || []) {
+    const compartmentParam = `__compartment_${compartment.name}__`;
+    const size = toFiniteNumber(compartment.size);
+    if (size !== null && !symbols.has(compartmentParam)) {
+      symbols.set(compartmentParam, size);
+    }
+  }
+
+  if (!symbols.has('Na')) {
+    symbols.set('Na', 1);
+  }
+
+  return symbols;
+}
+
+function resolveSpeciesInitialConcentration(
+  species: { initialConcentration?: unknown; initialExpression?: unknown },
+  symbols: Map<string, number>
+): number {
+  const direct = toFiniteNumber(species.initialConcentration);
+  if (direct !== null) return direct;
+
+  const expression =
+    typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
+  if (!expression) return 0;
+
+  const evaluated = evaluateNumericExpression(expression, symbols);
+  return evaluated !== null ? evaluated : 0;
+}
+
 type ReconstructedRule = {
   type: 'assignment' | 'rate';
   variable: string;
@@ -686,6 +807,7 @@ function generateSBMLPureXml(model: BNGLModel): string {
       .filter((r) => compartments.some((c) => c.name === r.variable))
       .map((r) => r.variable)
   );
+  const initialExpressionSymbols = buildInitialExpressionSymbolMap(model, effectiveParameters);
 
   const lines: string[] = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
@@ -727,7 +849,10 @@ function generateSBMLPureXml(model: BNGLModel): string {
       const match = s.name.match(/^@([^:]+):/);
       if (match) compId = match[1];
     }
-    const init = Number.isFinite(Number(s.initialConcentration)) ? Number(s.initialConcentration) : 0;
+    const init = resolveSpeciesInitialConcentration(
+      s as unknown as { initialConcentration?: unknown; initialExpression?: unknown },
+      initialExpressionSymbols
+    );
     lines.push(
       `      <species id="${xmlEscape(sid)}" name="${xmlEscape(s.name)}" compartment="${xmlEscape(compId)}" initialConcentration="${init}" hasOnlySubstanceUnits="false" boundaryCondition="${boolAttr(!!s.isConstant)}" constant="false"/>`
     );
@@ -964,6 +1089,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       .filter((r) => (model.compartments || []).some((c) => c.name === r.variable))
       .map((r) => r.variable)
   );
+  const initialExpressionSymbols = buildInitialExpressionSymbolMap(model, effectiveParameters);
 
   // 1. Compartments
   logger.info('SBMW013', `generateSBML compartments count=${model.compartments?.length ?? 0}`);
@@ -1022,7 +1148,12 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
     }
     
     spec.setCompartment(compId);
-    spec.setInitialConcentration(s.initialConcentration || 0);
+    spec.setInitialConcentration(
+      resolveSpeciesInitialConcentration(
+        s as unknown as { initialConcentration?: unknown; initialExpression?: unknown },
+        initialExpressionSymbols
+      )
+    );
     spec.setBoundaryCondition(!!s.isConstant);
     spec.setConstant(false);
     spec.setHasOnlySubstanceUnits(false);

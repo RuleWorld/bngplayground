@@ -616,7 +616,7 @@ const COMPLEX_MODELS: Example[] = [
   {
     id: 'Barua_2007',
     name: 'Barua 2007',
-    description: 'Model from Haugh (2006)',
+    description: 'Model from Haugh',
     tags: ['published'],
   },
   {
@@ -907,13 +907,13 @@ const ORDYAN_2020: Example[] = [
   {
     id: 'extra_CaMKII_Holo',
     name: 'Ordyan 2020: extra CaMKII holo',
-    description: 'Extra CaMKII holo (supplement)',
+    description: 'Extra CaMKII holo',
     tags: ['published', 'neuroscience'],
   },
   {
     id: 'mCaMKII_Ca_Spike',
     name: 'Ordyan 2020: mCaMKII Ca Spike',
-    description: 'mCaMKII Ca Spike model',
+    description: 'mCaMKII Ca Spike',
     tags: ['published', 'neuroscience'],
   },
 ];
@@ -1098,7 +1098,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'clock-bmal1-gene-circuit',
     name: 'clock bmal1 gene circuit',
-    description: 'Clock Bmal1 Gene Circuit',
+    description: 'Clock Bmal1 Gene',
     tags: ['example model'],
   },
   {
@@ -1146,7 +1146,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'contact-inhibition-hippo-yap',
     name: 'contact inhibition hippo yap',
-    description: 'Contact Inhibition Hippo Yap',
+    description: 'Contact Inhibition Hippo',
     tags: ['example model'],
   },
   {
@@ -1176,7 +1176,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'cs_monte_carlo_pi',
     name: 'Monte Carlo Pi',
-    description: 'Monte Carlo Pi Estimation',
+    description: 'Monte Carlo Pi',
     tags: ['example model'],
   },
   {
@@ -1224,7 +1224,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'e2f-rb-cell-cycle-switch',
     name: 'e2f rb cell cycle switch',
-    description: 'E2f Rb Cell Cycle Switch',
+    description: 'E2f Rb Cell',
     tags: ['example model'],
   },
   {
@@ -1236,7 +1236,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'eco_food_web_chaos_3sp',
     name: 'Food Web Chaos (3 Species)',
-    description: 'Food Web Chaos (3 Species)',
+    description: 'Food Web Chaos',
     tags: ['example model'],
   },
   {
@@ -1320,7 +1320,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'feature_functional_rates_volume',
     name: 'Functional Rates (Volume)',
-    description: 'Functional Rates with Volume',
+    description: 'Functional Rates with',
     tags: ['example model'],
   },
   {
@@ -1458,7 +1458,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'il6-jak-stat-pathway',
     name: 'il6 jak stat pathway',
-    description: 'Il6 Jak Stat Pathway',
+    description: 'Il6 Jak Stat',
     tags: ['example model'],
   },
   {
@@ -1494,13 +1494,13 @@ const TEST_MODELS: Example[] = [
   {
     id: 'ire1a-xbp1-er-stress',
     name: 'ire1a xbp1 er stress',
-    description: 'Ire1a Xbp1 Er Stress',
+    description: 'Ire1a Xbp1 Er',
     tags: ['example model'],
   },
   {
     id: 'jak-stat-cytokine-signaling',
     name: 'jak stat cytokine signaling',
-    description: 'Jak Stat Cytokine Signaling',
+    description: 'Jak Stat Cytokine',
     tags: ['example model'],
   },
   {
@@ -1518,7 +1518,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'l-type-calcium-channel-dynamics',
     name: 'l type calcium channel dynamics',
-    description: 'L Type Calcium Channel Dynamics',
+    description: 'L Type Calcium',
     tags: ['example model'],
   },
   {
@@ -1530,7 +1530,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'lipid-mediated-pip3-signaling',
     name: 'lipid mediated pip3 signaling',
-    description: 'Lipid Mediated Pip3 Signaling',
+    description: 'Lipid Mediated Pip3',
     tags: ['example model'],
   },
   {
@@ -1704,7 +1704,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'notch-delta-lateral-inhibition',
     name: 'notch delta lateral inhibition',
-    description: 'Notch Delta Lateral Inhibition',
+    description: 'Notch Delta Lateral',
     tags: ['example model'],
   },
   {
@@ -1728,7 +1728,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'parp1-mediated-dna-repair',
     name: 'parp1 mediated dna repair',
-    description: 'Parp1 Mediated Dna Repair',
+    description: 'Parp1 Mediated Dna',
     tags: ['example model'],
   },
   {
@@ -1824,7 +1824,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'ras-gef-gap-cycle',
     name: 'ras gef gap cycle',
-    description: 'Ras Gef Gap Cycle',
+    description: 'Ras Gef Gap',
     tags: ['example model'],
   },
   {
@@ -1842,7 +1842,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'rho-gtpase-actin-cytoskeleton',
     name: 'rho gtpase actin cytoskeleton',
-    description: 'Rho Gtpase Actin Cytoskeleton',
+    description: 'Rho Gtpase Actin',
     tags: ['example model'],
   },
   {
@@ -1872,7 +1872,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'smad-tgf-beta-signaling',
     name: 'smad tgf beta signaling',
-    description: 'Smad Tgf Beta Signaling',
+    description: 'Smad Tgf Beta',
     tags: ['example model'],
   },
   {
@@ -1980,7 +1980,7 @@ const TEST_MODELS: Example[] = [
   {
     id: 'viral-sensing-innate-immunity',
     name: 'viral sensing innate immunity',
-    description: 'Viral Sensing Innate Immunity',
+    description: 'Viral Sensing Innate',
     tags: ['example model'],
   },
   {
@@ -2016,13 +2016,13 @@ const TEST_MODELS: Example[] = [
   {
     id: 'wnt-beta-catenin-signaling',
     name: 'wnt beta catenin signaling',
-    description: 'Wnt Beta Catenin Signaling',
+    description: 'Wnt Beta Catenin',
     tags: ['example model'],
   },
   {
     id: 'wound-healing-pdgf-signaling',
     name: 'wound healing pdgf signaling',
-    description: 'Wound Healing Pdgf Signaling',
+    description: 'Wound Healing Pdgf',
     tags: ['example model'],
   }
 ];
@@ -2274,7 +2274,7 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'catalysis',
     name: 'catalysis',
-    description: 'Catalysis in energy BNG',
+    description: 'Catalysis in energy',
     tags: ['validation'],
   },
   {
@@ -2292,25 +2292,25 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'egfr_net_red',
     name: 'egfr_net_red',
-    description: 'Reduced state-space version of EGFR_NET.BNGL with equivalent ODE dynamics',
+    description: 'Reduced state-space version',
     tags: ['validation'],
   },
   {
     id: 'egfr_path',
     name: 'egfr_path',
-    description: 'The primary focus of the model developed by Kholodenko',
+    description: 'The primary focus',
     tags: ['validation'],
   },
   {
     id: 'energy_example1',
     name: 'energy_example1',
-    description: 'Illustration of energy modeling approach w/ a simple protein scaffold model',
+    description: 'Illustration of energy',
     tags: ['validation'],
   },
   {
     id: 'example1',
     name: 'example1',
-    description: 'Example file for BNG2 tutorial.',
+    description: 'Example file for',
     tags: ['validation'],
   },
   {
@@ -2328,7 +2328,7 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'heise',
     name: 'heise',
-    description: 'Validate state inheritance in a symmetric context',
+    description: 'Validate state inheritance',
     tags: ['validation'],
   },
   {
@@ -2340,19 +2340,19 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'Kiefhaber_emodel',
     name: 'Kiefhaber_emodel',
-    description: 'Allow molar units to be used for bimolecular rate constants',
+    description: 'Allow molar units',
     tags: ['validation'],
   },
   {
     id: 'Korwek_2023',
     name: 'Korwek_2023',
-    description: 'This BioNetGen file features the article:',
+    description: 'This BioNetGen file',
     tags: ['validation'],
   },
   {
     id: 'localfunc',
     name: 'localfunc',
-    description: 'Test local function expansion',
+    description: 'Test local function',
     tags: ['validation'],
   },
   {
@@ -2370,13 +2370,13 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'Motivating_example',
     name: 'Motivating_example',
-    description: 'Signal Transduction with receptor internalization',
+    description: 'Signal Transduction with',
     tags: ['validation'],
   },
   {
     id: 'Motivating_example_cBNGL',
     name: 'Motivating_example_cBNGL',
-    description: 'Signal transduction with receptor internalization',
+    description: 'Signal transduction with',
     tags: ['validation'],
   },
   {
@@ -2412,13 +2412,13 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'rec_dim_comp',
     name: 'rec_dim_comp',
-    description: 'name dimension volume contained_by',
+    description: 'name dimension volume',
     tags: ['validation'],
   },
   {
     id: 'SHP2_base_model',
     name: 'SHP2_base_model',
-    description: 'Base model of Shp2 regulation',
+    description: 'Base model of',
     tags: ['validation'],
   },
   {
@@ -2460,7 +2460,7 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'test_network_gen',
     name: 'test_network_gen',
-    description: 'fceri model with network generation',
+    description: 'fceri model with',
     tags: ['validation'],
   },
   {
@@ -2502,19 +2502,19 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
   {
     id: 'tlmr',
     name: 'tlmr',
-    description: 'Trivalent ligand monovalent receptor',
+    description: 'Trivalent ligand monovalent',
     tags: ['validation'],
   },
   {
     id: 'toy-jim',
     name: 'toy-jim',
-    description: 'The model consists of a monovalent extracellular ligand,',
+    description: 'The model consists',
     tags: ['validation'],
   },
   {
     id: 'univ_synth',
     name: 'univ_synth',
-    description: 'example of universal synthesis',
+    description: 'example of universal',
     tags: ['validation'],
   },
 ];
@@ -2522,15 +2522,13 @@ export const INTERNAL_VALIDATION_MODELS: Example[] = [
 const CANCER_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["egfr-signaling-pathway", "glioblastoma-egfrviii-signaling", "hif1a-degradation-loop", "hypoxia-response-signaling", "vegf-angiogenesis", "dna-damage-repair", "checkpoint-kinase-signaling", "ras-gef-gap-cycle", "p38-mapk-signaling", "mapk-signaling-cascade"].includes(m.id)),
   ...COMPLEX_MODELS.filter(m => ["Barua_2007", "Barua_2009", "Nag_2009", "Nosbisch_2022", "Kozer_2013", "Kozer_2014", "mapk-dimers", "mapk-monomers"].includes(m.id)),
-  ...GROWTH_FACTOR_SIGNALING.filter(m => ["Blinov_egfr", "egfr_ode", "Ligon_2014", "Mertins_2023"].includes(m.id)),
-  ...INTERNAL_VALIDATION_MODELS.filter(m => ["egfr_net", "egfr_path"].includes(m.id)),
+  ...GROWTH_FACTOR_SIGNALING.filter(m => ["Blinov_egfr", "egfr_ode", "Ligon_2014", "Mertins_2023", "Rule_based_egfr_tutorial"].includes(m.id)),
 ];
 
 const IMMUNOLOGY_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["bcr-signaling", "cd40-signaling", "complement-activation-cascade", "immune-synapse-formation", "inflammasome-activation", "interferon-signaling", "jak-stat-cytokine-signaling", "t-cell-activation", "tlr3-dsrna-sensing", "viral-sensing-innate-immunity", "platelet-activation", "blood-coagulation-thrombin"].includes(m.id)),
-  ...IMMUNE_SIGNALING.filter(m => ["An_2009", "BaruaBCR_2012", "BaruaFceRI_2012", "ChylekTCR_2014", "Lin_TCR_2019", "Cheemalavagu_JAK_STAT", "Model_ZAP", "degranulation_model", "Dushek_2011", "Dushek_2014", "Faeder_2003", "Mukhopadhyay_2013", "fceri_fyn", "tlbr"].includes(m.id)),
+  ...IMMUNE_SIGNALING.filter(m => ["An_2009", "BaruaBCR_2012", "BaruaFceRI_2012", "ChylekTCR_2014", "Lin_TCR_2019", "Cheemalavagu_JAK_STAT", "Model_ZAP", "degranulation_model", "Dushek_2011", "Dushek_2014", "Faeder_2003", "Mukhopadhyay_2013", "fceri_fyn", "tlbr", "Jaruszewicz-Blonska_2023", "innate_immunity"].includes(m.id)),
   ...COMPLEX_MODELS.filter(m => ["McMillan_2021"].includes(m.id)),
-  ...INTERNAL_VALIDATION_MODELS.filter(m => ["fceri_ji_comp"].includes(m.id)),
 ];
 
 const NEUROSCIENCE_MODELS: Example[] = [
@@ -2538,7 +2536,6 @@ const NEUROSCIENCE_MODELS: Example[] = [
   ...COMPLEX_MODELS.filter(m => ["Chattaraj_2021", "Lin_Prion_2019", "Jung_2017"].includes(m.id)),
   ...NATIVE_TUTORIALS.filter(m => ["Lisman", "Lisman_bifurcate"].includes(m.id)),
   ...ORDYAN_2020,
-  ...INTERNAL_VALIDATION_MODELS.filter(m => ["motor", "mwc"].includes(m.id)),
 ];
 
 const CELL_CYCLE_MODELS: Example[] = [
@@ -2547,12 +2544,10 @@ const CELL_CYCLE_MODELS: Example[] = [
   ...GROWTH_FACTOR_SIGNALING.filter(m => ["Lang_2024"].includes(m.id)),
   ...COMPLEX_MODELS.filter(m => ["Blinov_2006", "Kesseler_2013"].includes(m.id)),
   ...NATIVE_TUTORIALS.filter(m => ["Repressilator", "CircadianOscillator"].includes(m.id)),
-  ...INTERNAL_VALIDATION_MODELS.filter(m => ["Kiefhaber_emodel"].includes(m.id)),
 ];
 
 const METABOLISM_MODELS: Example[] = [
   ...TEST_MODELS.filter(m => ["allosteric-activation", "auto-activation-loop", "autophagy-regulation", "glycolysis-branch-point", "insulin-glucose-homeostasis", "lac-operon-regulation", "no-cgmp-signaling", "michaelis-menten-kinetics", "competitive-enzyme-inhibition"].includes(m.id)),
-  ...INTERNAL_VALIDATION_MODELS.filter(m => ["toy-jim", "michment", "michment_cont", "Haugh2b", "CaOscillate_Func", "CaOscillate_Sat", "heise", "SHP2_base_model", "catalysis"].includes(m.id)),
   ...NATIVE_TUTORIALS.filter(m => ["ABC", "ABp", "GK"].includes(m.id)),
   ...COMPLEX_MODELS.filter(m => ["Erdem_2021"].includes(m.id)),
   ...GROWTH_FACTOR_SIGNALING.filter(m => ["Dolan_2015"].includes(m.id)),
@@ -2606,74 +2601,90 @@ const RAW_MODEL_CATEGORIES: ModelCategory[] = [
   {
     id: 'cancer',
     name: 'Cancer Biology',
-    description: 'Models related to oncogenic signaling and tumor suppression',
+    description: 'Oncogenic signaling pathways',
     models: CANCER_MODELS,
   },
   {
     id: 'immunology',
     name: 'Immunology',
-    description: 'Specialized models of immune response and cytokine signaling',
+    description: 'Immune signaling models',
     models: IMMUNOLOGY_MODELS,
   },
   {
     id: 'neuroscience',
     name: 'Neuroscience',
-    description: 'Models of synaptic plasticity, ion channels, and neuronal signaling',
+    description: 'Synaptic plasticity models',
     models: NEUROSCIENCE_MODELS,
   },
   {
     id: 'cell-cycle',
     name: 'Cell Cycle & Death',
-    description: 'Models of mitosis, apoptosis, and cell cycle checkpoints',
+    description: 'Mitosis and apoptosis',
     models: CELL_CYCLE_MODELS,
   },
   {
     id: 'metabolism',
     name: 'Metabolism',
-    description: 'Models of metabolic pathways and homeostasis',
+    description: 'Metabolic pathway models',
     models: METABOLISM_MODELS,
   },
   {
     id: 'developmental',
     name: 'Developmental Biology',
-    description: 'Models of morphogens, differentiation, and tissue patterning',
+    description: 'Morphogens and patterning',
     models: DEVELOPMENTAL_MODELS,
   },
   {
     id: 'ecology',
     name: 'Ecology & Evolution',
-    description: 'Predator-prey dynamics, food webs, and spatial niche models',
+    description: 'Predator-prey dynamics',
     models: ECOLOGY_MODELS,
   },
   {
     id: 'physics',
     name: 'Mathematics & Physics',
-    description: 'Strange attractors, N-body gravity, wave equations, and quantum circuits',
+    description: 'Mathematical physics models',
     models: PHYSICS_MODELS,
   },
   {
     id: 'cs',
     name: 'Computer Science & Algorithms',
-    description: 'Encryption, compression, logic engines, and interpreters',
+    description: 'Algorithms and logic',
     models: COMPUTER_SCIENCE_MODELS,
   },
   {
     id: 'ml-signal',
     name: 'Machine Learning & Signal Processing',
-    description: 'Bio-inspired ML algorithms and digital signal filters',
+    description: 'Bio-inspired ML algorithms',
     models: ML_SIGNAL_MODELS,
   },
   {
     id: 'synbio',
     name: 'Synthetic Biology',
-    description: 'Pulse generators, molecular counters, and logic gates',
+    description: 'Synthetic genetic circuits',
     models: SYNBIO_MODELS,
+  },
+
+  {
+    id: 'published-models',
+    name: 'Published Models',
+    description: 'Peer-reviewed research models',
+    models: [
+      ...CELL_REGULATION,
+      ...COMPLEX_MODELS,
+      ...GROWTH_FACTOR_SIGNALING,
+      ...IMMUNE_SIGNALING,
+      ...ORDYAN_2020,
+      ...NATIVE_TUTORIALS,
+      ...TUTORIALS
+    ].filter(m => m.tags?.includes('published'))
+      .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i), // deduplicate
   },
 
   {
     id: 'multistage',
     name: 'Multistage',
-    description: 'Models with distinct simulation phases or protocol shifts',
+    description: 'Multi-phase simulation protocols',
     models: [
       ...CELL_REGULATION.filter(m => ["Hat_2016"].includes(m.id)),
       ...GROWTH_FACTOR_SIGNALING.filter(m => ["Lang_2024"].includes(m.id)),
@@ -2690,29 +2701,37 @@ const RAW_MODEL_CATEGORIES: ModelCategory[] = [
   {
     id: 'tutorials',
     name: 'Tutorials & Simple Examples',
-    description: 'Educational models and basic BNGL syntax examples',
+    description: 'Introductory BNGL examples',
     models: TUTORIALS,
   },
   {
     id: 'native-tutorials',
     name: 'RuleWorld Tutorials',
-    description: 'Models from the official BioNetGen tutorial',
+    description: 'RuleWorld interactive tutorials',
     models: NATIVE_TUTORIALS,
   },
   {
     id: 'test-models',
     name: 'Example Models',
-    description: 'Complete list of example models generated for demonstration',
+    description: 'A Wide Collection of Curated AI-Generated Examples',
     models: TEST_MODELS,
   },
 ];
+
+// Helper to sort models: published models first, then alphabetical
+const sortPublishedFirst = (a: Example, b: Example) => {
+  const aPub = a.tags?.includes('published') ? 1 : 0;
+  const bPub = b.tags?.includes('published') ? 1 : 0;
+  if (aPub !== bPub) return bPub - aPub;
+  return a.name.localeCompare(b.name);
+};
 
 // Filtered categories with only BNG2.pl compatible models (ODE/SSA)
 // Categories with no compatible models are excluded
 export const MODEL_CATEGORIES: ModelCategory[] = RAW_MODEL_CATEGORIES
   .map(cat => ({
     ...cat,
-    models: filterCompatibleModels(cat.models),
+    models: filterCompatibleModels(cat.models).sort(sortPublishedFirst),
   }))
   .filter(cat => cat.models.length > 0);
 
