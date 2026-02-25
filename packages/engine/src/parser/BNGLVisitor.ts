@@ -853,8 +853,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     // Build simulation phase
     visitorDebugLog(`[BNGLVisitor] visitSimulate_cmd: ${cmdText}, raw args:`, args);
+    // PARITY FIX: BNG2 treats any non-zero continue value as truthy (Perl: `if ($continue)`)
+    // continue=>0 means start fresh, continue=>1 means continue+append, continue=>2 means continue+no-append-header
     const parsedContinue = args.continue !== undefined
-      ? (String(args.continue).trim() === '1' || String(args.continue).trim().toLowerCase() === 'true')
+      ? (Number(String(args.continue).trim()) !== 0 || String(args.continue).trim().toLowerCase() === 'true')
       : undefined;
     const phase: SimulationPhase = {
       method,
@@ -1014,25 +1016,37 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     if (ctx.SAVECONCENTRATIONS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
+      // Parse optional label: saveConcentrations("label")
+      const saveText = ctx.text;
+      const saveLabelMatch = saveText.match(/saveConcentrations\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) || 
+                             saveText.match(/saveConcentrations\s*\(\s*["']([^"']+)["']\s*\)/i);
+      const saveLabel = saveLabelMatch ? saveLabelMatch[1] : undefined;
       this.concentrationChanges.push({
         species: '',
         value: 0,
         mode: 'save',
         afterPhaseIndex,
+        label: saveLabel,
       });
-      this.actions.push({ type: 'saveConcentrations', args: {} });
+      this.actions.push({ type: 'saveConcentrations', args: { label: saveLabel } });
       return;
     }
 
     if (ctx.RESETCONCENTRATIONS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
+      // Parse optional label: resetConcentrations("label")
+      const resetText = ctx.text;
+      const resetLabelMatch = resetText.match(/resetConcentrations\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) || 
+                              resetText.match(/resetConcentrations\s*\(\s*["']([^"']+)["']\s*\)/i);
+      const resetLabel = resetLabelMatch ? resetLabelMatch[1] : undefined;
       this.concentrationChanges.push({
         species: '',
         value: 0,
         mode: 'reset',
         afterPhaseIndex,
+        label: resetLabel,
       });
-      this.actions.push({ type: 'resetConcentrations', args: {} });
+      this.actions.push({ type: 'resetConcentrations', args: { label: resetLabel } });
       return;
     }
 

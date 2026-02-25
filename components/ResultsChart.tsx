@@ -99,68 +99,85 @@ const CustomLegend = (props: any) => {
 // Helper: Export chart data as CSV
 import { downloadCsv } from '../src/utils/download';
 
-function exportAsCSV(data: Record<string, any>[], headers: string[]) {
-  const filename = `simulation_results_${new Date().toISOString().slice(0, 10)}.csv`;
+function exportAsCSV(data: Record<string, any>[], headers: string[], suffixName?: string) {
+  const sfx = !suffixName || suffixName === '__default__' ? '' : `_${suffixName}`;
+  const filename = `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.csv`;
   downloadCsv(data, headers, filename);
 }
 
 // Helper: Export chart data as GDAT (BioNetGen format - observables)
-function exportAsGDAT(data: Record<string, any>[], headers: string[]) {
-  if (!data || data.length === 0) return;
-
+function exportAsGDAT(results: SimulationResults | null) {
+  if (!results) return;
+  const dataMap = (results.dataBySuffix && Object.keys(results.dataBySuffix).length > 0)
+    ? results.dataBySuffix
+    : { '__default__': results.data };
+  
+  const headers = results.headers || [];
   const gdatHeaders = ['time', ...headers.filter(h => h !== 'time')];
-  // GDAT format: # header line with column names, then space-separated numeric values
   const headerLine = '#' + gdatHeaders.map(h => h.padStart(20)).join('');
 
-  const dataRows = data.map(row =>
-    gdatHeaders.map(h => {
-      const val = row[h] ?? 0;
-      // Format as scientific notation for consistency with BNG2.pl
-      return typeof val === 'number' ? val.toExponential(12).padStart(22) : String(val).padStart(22);
-    }).join('')
-  );
+  for (const [suffix, data] of Object.entries(dataMap)) {
+    if (!data || data.length === 0) continue;
 
-  const gdat = [headerLine, ...dataRows].join('\n');
+    const dataRows = data.map(row =>
+      gdatHeaders.map(h => {
+        const val = row[h] ?? 0;
+        return typeof val === 'number' ? val.toExponential(12).padStart(22) : String(val).padStart(22);
+      }).join('')
+    );
 
-  const blob = new Blob([gdat], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `simulation_results_${new Date().toISOString().slice(0, 10)}.gdat`;
-  a.click();
-  URL.revokeObjectURL(url);
+    const gdat = [headerLine, ...dataRows].join('\n');
+    const blob = new Blob([gdat], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const sfx = suffix === '__default__' ? '' : `_${suffix}`;
+    a.download = `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.gdat`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
 // Helper: Export species concentration data as CDAT (BioNetGen format - all species)
-function exportAsCDAT(speciesData: Record<string, number>[] | undefined, speciesHeaders: string[] | undefined, timeData: Record<string, any>[]) {
-  if (!speciesData || !speciesHeaders || speciesData.length === 0) {
+function exportAsCDAT(results: SimulationResults | null) {
+  if (!results || !results.speciesHeaders) {
     alert('Species concentration data not available. CDAT export requires species-level simulation data.');
     return;
   }
+  const speciesDataMap = (results.speciesDataBySuffix && Object.keys(results.speciesDataBySuffix).length > 0)
+    ? results.speciesDataBySuffix
+    : { '__default__': results.speciesData };
+  const timeDataMap = (results.dataBySuffix && Object.keys(results.dataBySuffix).length > 0)
+    ? results.dataBySuffix
+    : { '__default__': results.data };
 
-  const cdatHeaders = ['time', ...speciesHeaders];
-  // CDAT format: # header line with column names, then space-separated numeric values
+  const cdatHeaders = ['time', ...results.speciesHeaders];
   const headerLine = '#' + cdatHeaders.map((h, i) => i === 0 ? h.padStart(20) : `S${i}`.padStart(20)).join('');
 
-  const dataRows = speciesData.map((row, idx) => {
-    const time = timeData[idx]?.time ?? (idx * (timeData[1]?.time ?? 1));
-    const timeStr = (typeof time === 'number' ? time.toExponential(12) : String(time)).padStart(22);
-    const speciesStr = speciesHeaders.map(name => {
-      const val = row[name] ?? 0;
-      return typeof val === 'number' ? val.toExponential(12).padStart(22) : String(val).padStart(22);
-    }).join('');
-    return timeStr + speciesStr;
-  });
+  for (const [suffix, speciesData] of Object.entries(speciesDataMap)) {
+    if (!speciesData || speciesData.length === 0) continue;
+    const timeData = timeDataMap[suffix] || timeDataMap['__default__'] || [];
 
-  const cdat = [headerLine, ...dataRows].join('\n');
+    const dataRows = speciesData.map((row, idx) => {
+      const time = timeData[idx]?.time ?? (idx * (timeData[1]?.time ?? 1));
+      const timeStr = (typeof time === 'number' ? time.toExponential(12) : String(time)).padStart(22);
+      const speciesStr = results.speciesHeaders!.map(name => {
+        const val = row[name] ?? 0;
+        return typeof val === 'number' ? val.toExponential(12).padStart(22) : String(val).padStart(22);
+      }).join('');
+      return timeStr + speciesStr;
+    });
 
-  const blob = new Blob([cdat], { type: 'text/plain' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a');
-  a.href = url;
-  a.download = `simulation_species_${new Date().toISOString().slice(0, 10)}.cdat`;
-  a.click();
-  URL.revokeObjectURL(url);
+    const cdat = [headerLine, ...dataRows].join('\n');
+    const blob = new Blob([cdat], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const sfx = suffix === '__default__' ? '' : `_${suffix}`;
+    a.download = `simulation_species_${new Date().toISOString().slice(0, 10)}${sfx}.cdat`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
 }
 
 export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNFsim, visibleSpecies, onVisibleSpeciesChange, highlightedSeries = [], expressions = [] }) => {
@@ -172,6 +189,13 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   const [dimensions, setDimensions] = useState({ width: 0, height: 0 });
   const [xAxisScale, setXAxisScale] = useState<'linear' | 'log'>('linear');
   const [yAxisScale, setYAxisScale] = useState<'linear' | 'log'>('linear');
+  const [selectedSuffix, setSelectedSuffix] = useState<string>('__default__');
+
+  const availableSuffixes = useMemo(() => {
+    if (!results?.dataBySuffix) return ['__default__'];
+    const keys = Object.keys(results.dataBySuffix);
+    return keys.length > 0 ? keys : ['__default__'];
+  }, [results]);
 
   const isNFsimMode = useMemo(() => {
     if (typeof isNFsim === 'boolean') return isNFsim;
@@ -222,12 +246,16 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   useEffect(() => {
     setZoomHistory([]);
     setSelection(null);
-  }, [results]);
+    setSelectedSuffix(availableSuffixes[0] || '__default__');
+  }, [results, availableSuffixes]);
 
   // Compute chart data with expression values
   const chartData = useMemo(() => {
-    if (!results || !results.data) return [];
-    if (expressions.length === 0) return results.data;
+    if (!results) return [];
+    const sourceData = (results.dataBySuffix && results.dataBySuffix[selectedSuffix]) 
+      || results.data;
+    if (!sourceData) return [];
+    if (expressions.length === 0) return sourceData;
 
     // Pre-compute BNGL expression values (once for all time points)
     const bnglExpressionValues: Map<string, number[]> = new Map();
@@ -260,7 +288,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
         } catch (e) {
           console.warn(`Failed to compute BNGL expression "${expr.name}":`, e);
           // Fill with zeros on error
-          bnglExpressionValues.set(expr.name, new Array(results.data.length).fill(0));
+          bnglExpressionValues.set(expr.name, new Array(sourceData.length).fill(0));
         }
       }
     } else if (bnglExpressions.length > 0) {
@@ -284,7 +312,9 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       });
 
       // Add species concentration data if available
-      const speciesPoint = results.speciesData?.[index];
+      const sourceSpeciesData = (results.speciesDataBySuffix && results.speciesDataBySuffix[selectedSuffix]) 
+        || results.speciesData;
+      const speciesPoint = sourceSpeciesData?.[index];
       if (speciesPoint) {
         Object.keys(speciesPoint).forEach(sName => {
           variables[sName] = speciesPoint[sName];
@@ -306,7 +336,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
 
       return newPoint;
     });
-  }, [results, expressions]);
+  }, [results, expressions, selectedSuffix]);
 
   const speciesToPlot = (results?.headers ?? []).filter(h => h !== 'time');
 
@@ -446,11 +476,18 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       return Number.isFinite(value) ? value.toFixed(3) : String(value);
     }
     const abs = Math.abs(value);
+    if (abs === 0) return '0';
     if (abs >= 1e9) return (value / 1e9).toFixed(1) + 'B';
     if (abs >= 1e6) return (value / 1e6).toFixed(1) + 'M';
     if (abs >= 1e3) return (value / 1e3).toFixed(1) + 'K';
-    if (abs < 0.01) return value.toExponential(1);
-    return value.toFixed(2).replace(/\.00$/, '');
+    if (abs < 0.01) return value.toPrecision(2);
+    
+    // Check if it's an integer to avoid 1.00 or 2.00, but keep 1.50
+    if (Number.isInteger(value)) return value.toString();
+    
+    // For values between 0.01 and 1000, use up to 2 decimal places but trim unnecessary zeros
+    const formatted = value.toFixed(2);
+    return formatted.replace(/\.?0+$/, '');
   };
 
 
@@ -524,6 +561,25 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
 
   return (
     <Card className="max-w-full flex flex-col h-auto min-h-full">
+      {/* Suffix Tabs (if multiple available) */}
+      {availableSuffixes.length > 1 && (
+        <div className="flex gap-2 p-2 px-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/10">
+          {availableSuffixes.map(sfx => (
+            <button
+              key={sfx}
+              onClick={() => { setSelectedSuffix(sfx); setZoomHistory([]); setSelection(null); }}
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+                selectedSuffix === sfx
+                  ? 'bg-white border-blue-200 text-blue-700 shadow-sm dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300'
+                  : 'bg-transparent border-transparent text-slate-600 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-800/50'
+              }`}
+            >
+              {sfx === '__default__' ? 'Default Context' : sfx}
+            </button>
+          ))}
+        </div>
+      )}
+
       <div 
         ref={setWrapperRef}
         className="h-[500px] w-full relative" 
@@ -649,6 +705,8 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
         />
       )}
 
+
+
       {/* Toolbar */}
       <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 shrink-0">
         <div className="flex items-center gap-2">
@@ -715,13 +773,13 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             }
           >
             <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Download Data</div>
-            <DropdownItem onClick={() => exportAsCSV(chartData, speciesToPlot)}>
-              Export as CSV
+            <DropdownItem onClick={() => exportAsCSV(chartData, speciesToPlot, selectedSuffix)}>
+              Export as CSV (Current Plot)
             </DropdownItem>
-            <DropdownItem onClick={() => exportAsCDAT(results?.speciesData, results?.speciesHeaders, chartData)}>
+            <DropdownItem onClick={() => exportAsCDAT(results)}>
               Export as CDAT (Species)
             </DropdownItem>
-            <DropdownItem onClick={() => exportAsGDAT(chartData, speciesToPlot)}>
+            <DropdownItem onClick={() => exportAsGDAT(results)}>
               Export as GDAT (Observables)
             </DropdownItem>
           </Dropdown>

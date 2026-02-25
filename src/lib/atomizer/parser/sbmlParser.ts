@@ -708,6 +708,8 @@ export class SBMLParser {
   private initialized: boolean = false;
   private currentSbml: string = '';
   private nativeFormulaToStringDisabled: boolean = false;
+  private parameterAliasToId: Map<string, string> = new Map();
+  private reactionKineticFormulaById: Map<string, string> = new Map();
 
   /**
    * Initialize the parser by loading libsbmljs
@@ -900,6 +902,7 @@ export class SBMLParser {
 
     debugSbml(`!!! [SBMLParser] _parseInternal: Length: ${sbmlString.length}`);
     this.currentSbml = sbmlString;
+    this.reactionKineticFormulaById = this.buildReactionKineticFormulaFallbackMap(sbmlString);
     debugSbml(`!!! [SBMLParser] SBML Snippet: ${sbmlString.substring(0, 200)}`);
     let document: any;
     let reader: any;
@@ -1006,6 +1009,9 @@ export class SBMLParser {
       unitDefinitions: new Map(),
     };
 
+    // Reset per-model parameter alias cache used for math normalization.
+    this.parameterAliasToId = new Map();
+
     // Extract compartments
     debugSbml('!!! [SBMLParser] extractModel: getNumCompartments');
     const numComps = model.getNumCompartments();
@@ -1046,7 +1052,24 @@ export class SBMLParser {
       const paramRaw = model.getParameter(i);
       if (!paramRaw) continue;
       const param = this.extractParameter(paramRaw, 'global');
+      const existing = result.parameters.get(param.id);
+      if (existing) {
+        const valuesMatch =
+          (Number.isFinite(existing.value) && Number.isFinite(param.value))
+            ? Math.abs(existing.value - param.value) <= 1e-12
+            : existing.value === param.value;
+        if (valuesMatch) {
+          this.registerGlobalParameterAliases(existing.id, param.name);
+          continue;
+        }
+        const baseId = param.id;
+        let suffix = 2;
+        while (result.parameters.has(`${baseId}_${suffix}`)) suffix += 1;
+        param.id = `${baseId}_${suffix}`;
+        logger.warning('SBM010', `Duplicate parameter id "${baseId}" remapped to "${param.id}"`);
+      }
       result.parameters.set(param.id, param);
+      this.registerGlobalParameterAliases(param.id, param.name);
     }
     const paramTime = performance.now() - t;
 
@@ -1056,10 +1079,21 @@ export class SBMLParser {
     debugSbml(`!!! [SBMLParser] Extracting ${numRxns} reactions...`);
     t = performance.now();
     for (let i = 0; i < model.getNumReactions(); i++) {
-      const rxnRaw = model.getReaction(i);
-      if (!rxnRaw) continue;
-      const rxn = this.extractReaction(rxnRaw);
-      result.reactions.set(rxn.id, rxn);
+      try {
+        const rxnRaw = model.getReaction(i);
+        if (!rxnRaw) continue;
+        const rxn = this.extractReaction(rxnRaw);
+        result.reactions.set(rxn.id, rxn);
+      } catch (e) {
+        logger.warning('SBM005', `Skipping reaction #${i}: ${String(e)}`);
+        if (isAbortLikeError(e)) {
+          logger.warning(
+            'SBM006',
+            'libSBML aborted while parsing reactions; continuing with successfully extracted reactions only.'
+          );
+          break;
+        }
+      }
     }
     const rxnTime = performance.now() - t;
 
@@ -1269,15 +1303,126 @@ export class SBMLParser {
       return fallback;
     };
 
-    const id = String(get<string>(param?.getId?.bind(param), ''));
+    const rawId = String(get<string>(param?.getId?.bind(param), '') || '').trim();
+    const rawName = String(get<string>(param?.getName?.bind(param), '') || '').trim();
+    const baseId = rawId || rawName || `${scope}_parameter`;
+    const id = standardizeName(baseId);
     return {
       id,
-      name: String(get<string>(param?.getName?.bind(param), '') || id),
+      name: rawName || rawId || id,
       value: Number(get<number>(param?.getValue?.bind(param), 0)) || 0,
       units: String(get<string>(param?.getUnits?.bind(param), '')),
       constant: Boolean(get<boolean>(param?.getConstant?.bind(param), true)),
       scope,
     };
+  }
+
+  private registerAlias(target: Map<string, string>, aliasRaw: string, canonicalId: string): void {
+    const direct = String(aliasRaw || '').trim();
+    if (!direct) return;
+    const collapsed = direct.replace(/\s+/g, ' ');
+    const aliases = new Set<string>([direct, collapsed, standardizeName(direct)]);
+    for (const alias of aliases) {
+      const key = String(alias || '').trim();
+      if (!key) continue;
+      const existing = target.get(key);
+      if (!existing || existing === canonicalId) {
+        target.set(key, canonicalId);
+      }
+    }
+  }
+
+  private registerGlobalParameterAliases(id: string, name: string): void {
+    this.registerAlias(this.parameterAliasToId, id, id);
+    this.registerAlias(this.parameterAliasToId, name, id);
+  }
+
+  private normalizeFormulaIdentifiers(formula: string, localAliases?: Map<string, string>): string {
+    let normalized = String(formula || '');
+    if (!normalized) return normalized;
+
+    const orderedAliases: Array<[string, string]> = [];
+    const pushAliases = (source?: Map<string, string>) => {
+      if (!source) return;
+      for (const [alias, canonicalId] of source.entries()) {
+        const key = String(alias || '').trim();
+        const value = String(canonicalId || '').trim();
+        if (!key || !value || key === value) continue;
+        orderedAliases.push([key, value]);
+      }
+    };
+
+    // Local aliases first so local-parameter substitutions win when names overlap globals.
+    pushAliases(localAliases);
+    pushAliases(this.parameterAliasToId);
+    orderedAliases.sort((a, b) => b[0].length - a[0].length);
+
+    for (const [alias, canonicalId] of orderedAliases) {
+      const escaped = alias.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const pattern = new RegExp(`(^|[^A-Za-z0-9_])${escaped}(?=$|[^A-Za-z0-9_])`, 'g');
+      normalized = normalized.replace(pattern, (_match, prefix: string) => `${prefix}${canonicalId}`);
+    }
+
+    return normalized;
+  }
+
+  private getXmlAttribute(tagAttributes: string, attributeName: string): string | null {
+    const escaped = attributeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const attrRe = new RegExp(`${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i');
+    const match = tagAttributes.match(attrRe);
+    if (!match) return null;
+    return (match[1] ?? match[2] ?? '').trim();
+  }
+
+  private decodeXmlEntities(value: string): string {
+    if (!value || value.indexOf('&') === -1) return value;
+    return value
+      .replace(/&#x([0-9a-f]+);/gi, (full, hex) => {
+        const code = Number.parseInt(hex, 16);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : full;
+      })
+      .replace(/&#([0-9]+);/g, (full, dec) => {
+        const code = Number.parseInt(dec, 10);
+        return Number.isFinite(code) ? String.fromCodePoint(code) : full;
+      })
+      .replace(/&quot;/g, '"')
+      .replace(/&apos;/g, "'")
+      .replace(/&lt;/g, '<')
+      .replace(/&gt;/g, '>')
+      .replace(/&amp;/g, '&');
+  }
+
+  private buildReactionKineticFormulaFallbackMap(sbmlString: string): Map<string, string> {
+    const formulaByReactionId = new Map<string, string>();
+    if (!sbmlString) return formulaByReactionId;
+
+    const reactionRe = /<reaction\b([^>]*)>([\s\S]*?)<\/reaction>/gi;
+    let reactionMatch: RegExpExecArray | null;
+    while ((reactionMatch = reactionRe.exec(sbmlString)) !== null) {
+      const reactionAttrs = reactionMatch[1] ?? '';
+      const reactionBody = reactionMatch[2] ?? '';
+      const reactionId = this.getXmlAttribute(reactionAttrs, 'id');
+      if (!reactionId) continue;
+
+      const kineticLawTag = reactionBody.match(/<kineticLaw\b([^>]*?)(?:\/>|>)/i);
+      if (!kineticLawTag) continue;
+      const formulaRaw = this.getXmlAttribute(kineticLawTag[1] ?? '', 'formula');
+      if (!formulaRaw) continue;
+
+      const formula = this.decodeXmlEntities(formulaRaw).trim();
+      if (!formula) continue;
+      formulaByReactionId.set(reactionId, formula);
+    }
+
+    return formulaByReactionId;
+  }
+
+  private getFallbackKineticLawFormula(reactionId: string): string | null {
+    if (!reactionId) return null;
+    const formula = this.reactionKineticFormulaById.get(reactionId);
+    if (!formula) return null;
+    const trimmed = formula.trim();
+    return trimmed.length > 0 ? trimmed : null;
   }
 
   private safeFormulaToString(math: any): string {
@@ -1373,6 +1518,7 @@ export class SBMLParser {
   }
 
   private extractReaction(rxn: any): SBMLReaction {
+    const reactionId = typeof rxn.getId === 'function' ? rxn.getId() : '';
     const reactants: SBMLSpeciesReference[] = [];
     for (let i = 0; i < rxn.getNumReactants(); i++) {
       const ref = rxn.getReactant(i);
@@ -1402,32 +1548,86 @@ export class SBMLParser {
     }
 
     let kineticLaw: SBMLKineticLaw | null = null;
-    const kl = rxn.getKineticLaw();
+    let localAliases: Map<string, string> | undefined;
+    let localParams: SBMLParameter[] = [];
+    let kl: any = null;
+    try {
+      kl = rxn.getKineticLaw();
+    } catch {
+      kl = null;
+    }
     if (kl && (typeof kl.ptr === 'undefined' || kl.ptr !== 0)) {
-      const localParams: SBMLParameter[] = [];
+      localParams = [];
+      localAliases = new Map<string, string>();
 
-      const numParams = kl.getNumLocalParameters?.() ?? kl.getNumParameters?.() ?? 0;
+      let numParams = 0;
+      try {
+        numParams = kl.getNumLocalParameters?.() ?? kl.getNumParameters?.() ?? 0;
+      } catch {
+        numParams = 0;
+      }
       for (let i = 0; i < numParams; i++) {
-        const param = kl.getLocalParameter?.(i) ?? kl.getParameter?.(i);
+        let param: any = null;
+        try {
+          param = kl.getLocalParameter?.(i) ?? kl.getParameter?.(i);
+        } catch {
+          param = null;
+        }
         if (param) {
-          localParams.push(this.extractParameter(param, 'local'));
+          try {
+            const localParam = this.extractParameter(param, 'local');
+            if (localAliases.has(localParam.id)) {
+              localParam.id = `${localParam.id}_${i + 1}`;
+            }
+            localParams.push(localParam);
+            this.registerAlias(localAliases, localParam.id, localParam.id);
+            this.registerAlias(localAliases, localParam.name, localParam.id);
+          } catch {
+            // Ignore malformed local parameter entries and keep parsing reaction.
+          }
         }
       }
 
-      const math = kl.getMath();
       let mathExpr = '';
       let mathML = '';
+      let math: any = null;
 
       if (typeof kl.getFormula === 'function') {
-        mathExpr = kl.getFormula() || '';
+        try {
+          mathExpr = kl.getFormula() || '';
+        } catch {
+          mathExpr = '';
+        }
       }
 
-      if (math && !mathExpr) {
-        mathExpr = this.safeFormulaToString(math);
+      if (!mathExpr && typeof kl.getMath === 'function') {
+        try {
+          math = kl.getMath();
+        } catch {
+          math = null;
+        }
       }
+      if (math && !mathExpr) {
+        try {
+          mathExpr = this.safeFormulaToString(math);
+        } catch {
+          mathExpr = '';
+        }
+      }
+      if (!mathExpr) {
+        const fallbackFormula = this.getFallbackKineticLawFormula(reactionId);
+        if (fallbackFormula) {
+          mathExpr = fallbackFormula;
+        }
+      }
+      mathExpr = this.normalizeFormulaIdentifiers(mathExpr, localAliases);
 
       if (math && typeof (math as any).toMathML === 'function') {
-        mathML = (math as any).toMathML() || '';
+        try {
+          mathML = (math as any).toMathML() || '';
+        } catch {
+          mathML = '';
+        }
       }
 
       kineticLaw = {
@@ -1437,9 +1637,20 @@ export class SBMLParser {
       };
     }
 
+    if (!kineticLaw || !kineticLaw.math || kineticLaw.math.trim().length === 0) {
+      const fallbackFormula = this.getFallbackKineticLawFormula(reactionId);
+      if (fallbackFormula) {
+        kineticLaw = {
+          math: this.normalizeFormulaIdentifiers(fallbackFormula, localAliases),
+          mathML: kineticLaw?.mathML || '',
+          localParameters: kineticLaw?.localParameters || localParams,
+        };
+      }
+    }
+
     return {
-      id: rxn.getId(),
-      name: rxn.getName() || rxn.getId(),
+      id: reactionId,
+      name: rxn.getName() || reactionId,
       reversible: rxn.getReversible(),
       fast: rxn.getFast?.() || false,
       reactants,
@@ -1474,6 +1685,7 @@ export class SBMLParser {
         formula = '';
       }
     }
+    formula = this.normalizeFormulaIdentifiers(formula);
 
     if (rule.isAlgebraic()) {
       return {
@@ -1516,13 +1728,23 @@ export class SBMLParser {
     }
 
     // Try getBody() first (standard SBML with <lambda>), fall back to getMath() (BNG-XML without <lambda>)
-    let body = func.getBody();
     let mathStr = '';
+    let body: any = null;
+    try {
+      body = func.getBody();
+    } catch {
+      body = null;
+    }
     if (body) {
       mathStr = this.safeFormulaToString(body);
     } else {
       // BNG-XML format: use getMath() directly, skipping <lambda> wrapper if present
-      const math = func.getMath();
+      let math: any = null;
+      try {
+        math = func.getMath();
+      } catch {
+        math = null;
+      }
       if (math) {
         const mathStrRaw = this.safeFormulaToString(math);
         // If the result looks like it's wrapped in lambda (starts with lambda or has bvar),
@@ -1540,6 +1762,7 @@ export class SBMLParser {
         }
       }
     }
+    mathStr = this.normalizeFormulaIdentifiers(mathStr);
 
     return {
       id: func.getId(),
@@ -1561,15 +1784,15 @@ export class SBMLParser {
       const math = ea.getMath();
       assignments.push({
         variable: ea.getVariable(),
-        math: math ? this.safeFormulaToString(math) : '',
+        math: math ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(math)) : '',
       });
     }
 
     return {
       id: event.getId(),
       name: event.getName() || event.getId(),
-      trigger: triggerMath ? this.safeFormulaToString(triggerMath) : '',
-      delay: delayMath ? this.safeFormulaToString(delayMath) : undefined,
+      trigger: triggerMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(triggerMath)) : '',
+      delay: delayMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(delayMath)) : undefined,
       useValuesFromTriggerTime: event.getUseValuesFromTriggerTime?.() || true,
       assignments,
     };
@@ -1581,7 +1804,7 @@ export class SBMLParser {
 
     return {
       symbol: ia.getSymbol(),
-      math: this.safeFormulaToString(math),
+      math: this.normalizeFormulaIdentifiers(this.safeFormulaToString(math)),
     };
   }
 }

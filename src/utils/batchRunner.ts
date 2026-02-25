@@ -127,7 +127,16 @@ async function runSingleBatchItem(modelDef: { name: string, code?: string, id?: 
         // 4. Export
         const headers = results.headers || [];
         const safeName = safeModelName(modelDef.id || modelDef.name);
-        downloadCsv(results.data, headers, `results_${safeName}.csv`);
+
+        if (results.dataBySuffix && Object.keys(results.dataBySuffix).length > 0) {
+            for (const [suffix, suffixData] of Object.entries(results.dataBySuffix)) {
+                if (suffixData.length === 0) continue;
+                const sfx = suffix === '__default__' ? '' : `_${suffix}`;
+                downloadCsv(suffixData, headers, `results_${safeName}${sfx}.csv`);
+            }
+        } else {
+            downloadCsv(results.data, headers, `results_${safeName}.csv`);
+        }
 
         console.log('✅ Exported CSV');
         console.groupEnd();

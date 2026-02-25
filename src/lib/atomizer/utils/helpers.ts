@@ -379,6 +379,16 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
   '\\': '_',
 };
 
+const BNGL_RESERVED_IDENTIFIERS = new Set([
+  'species',
+  'molecules',
+  'functions',
+  'if',
+  'time',
+  'true',
+  'false',
+]);
+
 /**
  * Standardize a species name for BNGL compatibility
  */
@@ -400,6 +410,11 @@ export function standardizeName(name: string): string {
   // Handle empty result
   if (result === '') {
     result = 'unnamed';
+  }
+
+  // Avoid strict-parser keyword collisions for generated identifiers.
+  if (BNGL_RESERVED_IDENTIFIERS.has(result.toLowerCase())) {
+    result = `${result}_id`;
   }
 
   return result;
@@ -491,6 +506,10 @@ export function convertMathFunction(mathStr: string): string {
 
   // Reserved keyword: e (Euler's number)
   result = result.replace(/\be\b(?!\s*\^)/g, '2.71828182845905');
+
+  // Normalize boolean literals used by some SBML function/rule exports.
+  result = result.replace(/\btrue\b/gi, '1');
+  result = result.replace(/\bfalse\b/gi, '0');
 
   return result;
 }

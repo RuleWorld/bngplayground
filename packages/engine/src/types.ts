@@ -154,6 +154,8 @@ export interface ConcentrationChange {
     value: number | string;
     mode?: 'set' | 'add' | 'save' | 'reset';
     afterPhaseIndex: number;
+    /** Optional label for saveConcentrations/resetConcentrations (BNG2 Cache semantics) */
+    label?: string;
 }
 
 export interface ParameterChange {
@@ -165,8 +167,10 @@ export interface ParameterChange {
 export interface SimulationResults {
     headers: string[];
     data: Record<string, number>[];
+    dataBySuffix?: Record<string, Record<string, number>[]>;
     speciesHeaders?: string[];
     speciesData?: Record<string, number>[];
+    speciesDataBySuffix?: Record<string, Record<string, number>[]>;
     expandedReactions?: BNGLReaction[];
     expandedSpecies?: BNGLSpecies[];
     ssaInfluence?: SSAInfluenceTimeSeries;

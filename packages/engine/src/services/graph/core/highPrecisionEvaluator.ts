@@ -218,6 +218,9 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       if (name === '_pi' || name === 'pi') return Decimal.acos(-1);
       if (name === '_e' || name === 'e') return new Decimal(1).exp();
       if (/^na$/i.test(name)) return new Decimal('6.02214076e23');
+      if (/^inf(inity)?$/i.test(name)) return new Decimal(Infinity);
+      if (/^-inf(inity)?$/i.test(name)) return new Decimal(-Infinity);
+      if (/^nan$/i.test(name)) return new Decimal(NaN);
       // Allow unresolved species amount placeholders to fall back to standard evaluation.
       if (name.endsWith('_amt')) return new Decimal(NaN);
 
@@ -415,9 +418,22 @@ export function evaluateAllParametersHighPrecision(
     if (typeof value === 'number') {
       numeric.set(name, value);
     } else {
-      const parsed = parseFloat(value);
+      const trimmed = value.trim();
+      if (/^[+]?(inf|infinity)$/i.test(trimmed)) {
+        numeric.set(name, Infinity);
+        continue;
+      }
+      if (/^-(inf|infinity)$/i.test(trimmed)) {
+        numeric.set(name, -Infinity);
+        continue;
+      }
+      if (/^nan$/i.test(trimmed)) {
+        numeric.set(name, NaN);
+        continue;
+      }
+      const parsed = parseFloat(trimmed);
       // Ensure specific float checks
-      if (!isNaN(parsed) && /^-?[0-9.e+-]+$/i.test(value.trim())) {
+      if (!isNaN(parsed) && /^-?[0-9.e+-]+$/i.test(trimmed)) {
         numeric.set(name, parsed);
       } else {
         expressions.set(name, value);

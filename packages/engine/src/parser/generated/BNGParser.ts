@@ -1,4 +1,4 @@
-// Generated from src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
+// Generated from packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
 import { ATN } from "antlr4ts/atn/ATN";
@@ -23,7 +23,6 @@ import { VocabularyImpl } from "antlr4ts/VocabularyImpl";
 
 import * as Utils from "antlr4ts/misc/Utils";
 
-import { BNGParserListener } from "./BNGParserListener";
 import { BNGParserVisitor } from "./BNGParserVisitor";
 
 
@@ -5498,10 +5497,10 @@ export class BNGParser extends Parser {
 			this.state = 1226;
 			this._errHandler.sync(this);
 			_la = this._input.LA(1);
-			if (_la === BNGParser.LBRACKET) {
+			if (((((_la - 41)) & ~0x1F) === 0 && ((1 << (_la - 41)) & ((1 << (BNGParser.PREFIX - 41)) | (1 << (BNGParser.SUFFIX - 41)) | (1 << (BNGParser.OVERWRITE - 41)) | (1 << (BNGParser.MAX_AGG - 41)) | (1 << (BNGParser.MAX_ITER - 41)) | (1 << (BNGParser.MAX_STOICH - 41)) | (1 << (BNGParser.PRINT_ITER - 41)) | (1 << (BNGParser.CHECK_ISO - 41)) | (1 << (BNGParser.SAFE - 41)) | (1 << (BNGParser.EXECUTE - 41)) | (1 << (BNGParser.METHOD - 41)) | (1 << (BNGParser.ODE - 41)) | (1 << (BNGParser.SSA - 41)) | (1 << (BNGParser.PLA - 41)) | (1 << (BNGParser.NF - 41)) | (1 << (BNGParser.VERBOSE - 41)) | (1 << (BNGParser.NETFILE - 41)) | (1 << (BNGParser.CONTINUE - 41)) | (1 << (BNGParser.T_START - 41)) | (1 << (BNGParser.T_END - 41)) | (1 << (BNGParser.N_STEPS - 41)) | (1 << (BNGParser.N_OUTPUT_STEPS - 41)) | (1 << (BNGParser.MAX_SIM_STEPS - 41)) | (1 << (BNGParser.OUTPUT_STEP_INTERVAL - 41)) | (1 << (BNGParser.SAMPLE_TIMES - 41)) | (1 << (BNGParser.SAVE_PROGRESS - 41)) | (1 << (BNGParser.PRINT_CDAT - 41)) | (1 << (BNGParser.PRINT_FUNCTIONS - 41)))) !== 0) || ((((_la - 73)) & ~0x1F) === 0 && ((1 << (_la - 73)) & ((1 << (BNGParser.PRINT_NET - 73)) | (1 << (BNGParser.PRINT_END - 73)) | (1 << (BNGParser.STOP_IF - 73)) | (1 << (BNGParser.PRINT_ON_STOP - 73)) | (1 << (BNGParser.ATOL - 73)) | (1 << (BNGParser.RTOL - 73)) | (1 << (BNGParser.STEADY_STATE - 73)) | (1 << (BNGParser.SPARSE - 73)) | (1 << (BNGParser.PLA_CONFIG - 73)) | (1 << (BNGParser.PLA_OUTPUT - 73)) | (1 << (BNGParser.PARAM - 73)) | (1 << (BNGParser.COMPLEX - 73)) | (1 << (BNGParser.GET_FINAL_STATE - 73)) | (1 << (BNGParser.GML - 73)) | (1 << (BNGParser.NOCSLF - 73)) | (1 << (BNGParser.NOTF - 73)) | (1 << (BNGParser.BINARY_OUTPUT - 73)) | (1 << (BNGParser.UTL - 73)) | (1 << (BNGParser.EQUIL - 73)) | (1 << (BNGParser.PARAMETER - 73)) | (1 << (BNGParser.PAR_MIN - 73)) | (1 << (BNGParser.PAR_MAX - 73)) | (1 << (BNGParser.N_SCAN_PTS - 73)) | (1 << (BNGParser.LOG_SCALE - 73)) | (1 << (BNGParser.RESET_CONC - 73)))) !== 0) || ((((_la - 106)) & ~0x1F) === 0 && ((1 << (_la - 106)) & ((1 << (BNGParser.FILE - 106)) | (1 << (BNGParser.ATOMIZE - 106)) | (1 << (BNGParser.BLOCKS - 106)) | (1 << (BNGParser.SKIPACTIONS - 106)) | (1 << (BNGParser.TYPE - 106)) | (1 << (BNGParser.BACKGROUND - 106)) | (1 << (BNGParser.COLLAPSE - 106)) | (1 << (BNGParser.OPTS - 106)) | (1 << (BNGParser.FORMAT - 106)) | (1 << (BNGParser.INCLUDE_MODEL - 106)) | (1 << (BNGParser.INCLUDE_NETWORK - 106)) | (1 << (BNGParser.PRETTY_FORMATTING - 106)) | (1 << (BNGParser.EVALUATE_EXPRESSIONS - 106)) | (1 << (BNGParser.TEXTREACTION - 106)) | (1 << (BNGParser.TEXTSPECIES - 106)) | (1 << (BNGParser.BDF - 106)) | (1 << (BNGParser.MAX_STEP - 106)) | (1 << (BNGParser.MAXORDER - 106)) | (1 << (BNGParser.STATS - 106)) | (1 << (BNGParser.MAX_NUM_STEPS - 106)))) !== 0) || ((((_la - 138)) & ~0x1F) === 0 && ((1 << (_la - 138)) & ((1 << (BNGParser.MAX_ERR_TEST_FAILS - 138)) | (1 << (BNGParser.MAX_CONV_FAILS - 138)) | (1 << (BNGParser.STIFF - 138)) | (1 << (BNGParser.TRUE - 138)) | (1 << (BNGParser.FALSE - 138)) | (1 << (BNGParser.SAT - 138)) | (1 << (BNGParser.MM - 138)) | (1 << (BNGParser.HILL - 138)) | (1 << (BNGParser.ARRHENIUS - 138)) | (1 << (BNGParser.MRATIO - 138)) | (1 << (BNGParser.TFUN - 138)) | (1 << (BNGParser.FUNCTIONPRODUCT - 138)) | (1 << (BNGParser.IF - 138)) | (1 << (BNGParser.EXP - 138)) | (1 << (BNGParser.LN - 138)) | (1 << (BNGParser.LOG10 - 138)) | (1 << (BNGParser.LOG2 - 138)) | (1 << (BNGParser.SQRT - 138)) | (1 << (BNGParser.RINT - 138)) | (1 << (BNGParser.ABS - 138)) | (1 << (BNGParser.SIN - 138)) | (1 << (BNGParser.COS - 138)) | (1 << (BNGParser.TAN - 138)))) !== 0) || ((((_la - 170)) & ~0x1F) === 0 && ((1 << (_la - 170)) & ((1 << (BNGParser.ASIN - 170)) | (1 << (BNGParser.ACOS - 170)) | (1 << (BNGParser.ATAN - 170)) | (1 << (BNGParser.SINH - 170)) | (1 << (BNGParser.COSH - 170)) | (1 << (BNGParser.TANH - 170)) | (1 << (BNGParser.ASINH - 170)) | (1 << (BNGParser.ACOSH - 170)) | (1 << (BNGParser.ATANH - 170)) | (1 << (BNGParser.PI - 170)) | (1 << (BNGParser.EULERIAN - 170)) | (1 << (BNGParser.MIN - 170)) | (1 << (BNGParser.MAX - 170)) | (1 << (BNGParser.SUM - 170)) | (1 << (BNGParser.AVG - 170)) | (1 << (BNGParser.TIME - 170)) | (1 << (BNGParser.FLOAT - 170)) | (1 << (BNGParser.INT - 170)) | (1 << (BNGParser.STRING - 170)) | (1 << (BNGParser.LSBRACKET - 170)) | (1 << (BNGParser.LBRACKET - 170)) | (1 << (BNGParser.LPAREN - 170)))) !== 0) || ((((_la - 202)) & ~0x1F) === 0 && ((1 << (_la - 202)) & ((1 << (BNGParser.TILDE - 202)) | (1 << (BNGParser.MINUS - 202)) | (1 << (BNGParser.PLUS - 202)) | (1 << (BNGParser.EMARK - 202)) | (1 << (BNGParser.DBQUOTES - 202)) | (1 << (BNGParser.SQUOTE - 202)))) !== 0)) {
 				{
 				this.state = 1225;
-				this.action_args();
+				this.action_arg_value();
 				}
 			}
 
@@ -7256,7 +7255,7 @@ export class BNGParser extends Parser {
 		"\u04C3\x03\x02\x02\x02\u04C5\u04C8\x03\x02\x02\x02\u04C6\u04C4\x03\x02" +
 		"\x02\x02\u04C6\u04C7\x03\x02\x02\x02\u04C7\x7F\x03\x02\x02\x02\u04C8\u04C6" +
 		"\x03\x02\x02\x02\u04C9\u04CA\t\f\x02\x02\u04CA\u04CC\x07\xC7\x02\x02\u04CB" +
-		"\u04CD\x05\x82B\x02\u04CC\u04CB\x03\x02\x02\x02\u04CC\u04CD\x03\x02\x02" +
+		"\u04CD\x05\x88E\x02\u04CC\u04CB\x03\x02\x02\x02\u04CC\u04CD\x03\x02\x02" +
 		"\x02\u04CD\u04CE\x03\x02\x02\x02\u04CE\u04D0\x07\xC8\x02\x02\u04CF\u04D1" +
 		"\x07\xBF\x02\x02\u04D0\u04CF\x03\x02\x02\x02\u04D0\u04D1\x03\x02\x02\x02" +
 		"\u04D1\u04D5\x03\x02\x02\x02\u04D2\u04D4\x07\x04\x02\x02\u04D3\u04D2\x03" +
@@ -7420,18 +7419,6 @@ export class ProgContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_prog; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterProg) {
-			listener.enterProg(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitProg) {
-			listener.exitProg(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitProg) {
 			return visitor.visitProg(this);
@@ -7460,18 +7447,6 @@ export class Header_blockContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_header_block; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterHeader_block) {
-			listener.enterHeader_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitHeader_block) {
-			listener.exitHeader_block(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitHeader_block) {
@@ -7514,18 +7489,6 @@ export class Version_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_version_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterVersion_def) {
-			listener.enterVersion_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitVersion_def) {
-			listener.exitVersion_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitVersion_def) {
 			return visitor.visitVersion_def(this);
@@ -7565,18 +7528,6 @@ export class Substance_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_substance_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSubstance_def) {
-			listener.enterSubstance_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSubstance_def) {
-			listener.exitSubstance_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSubstance_def) {
@@ -7626,18 +7577,6 @@ export class Set_optionContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_set_option; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSet_option) {
-			listener.enterSet_option(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSet_option) {
-			listener.exitSet_option(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSet_option) {
 			return visitor.visitSet_option(this);
@@ -7677,18 +7616,6 @@ export class Set_model_nameContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_set_model_name; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSet_model_name) {
-			listener.enterSet_model_name(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSet_model_name) {
-			listener.exitSet_model_name(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSet_model_name) {
@@ -7740,18 +7667,6 @@ export class Program_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_program_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterProgram_block) {
-			listener.enterProgram_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitProgram_block) {
-			listener.exitProgram_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitProgram_block) {
 			return visitor.visitProgram_block(this);
@@ -7798,18 +7713,6 @@ export class Parameters_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_parameters_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterParameters_block) {
-			listener.enterParameters_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitParameters_block) {
-			listener.exitParameters_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitParameters_block) {
 			return visitor.visitParameters_block(this);
@@ -7842,18 +7745,6 @@ export class Parameter_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_parameter_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterParameter_def) {
-			listener.enterParameter_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitParameter_def) {
-			listener.exitParameter_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitParameter_def) {
 			return visitor.visitParameter_def(this);
@@ -7874,18 +7765,6 @@ export class Param_nameContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_param_name; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterParam_name) {
-			listener.enterParam_name(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitParam_name) {
-			listener.exitParam_name(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitParam_name) {
@@ -7951,18 +7830,6 @@ export class Molecule_types_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_types_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_types_block) {
-			listener.enterMolecule_types_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_types_block) {
-			listener.exitMolecule_types_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_types_block) {
 			return visitor.visitMolecule_types_block(this);
@@ -7985,18 +7852,6 @@ export class Molecule_type_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_type_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_type_def) {
-			listener.enterMolecule_type_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_type_def) {
-			listener.exitMolecule_type_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_type_def) {
@@ -8027,18 +7882,6 @@ export class Molecule_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_def) {
-			listener.enterMolecule_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_def) {
-			listener.exitMolecule_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_def) {
 			return visitor.visitMolecule_def(this);
@@ -8060,18 +7903,6 @@ export class Molecule_attributesContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_attributes; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_attributes) {
-			listener.enterMolecule_attributes(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_attributes) {
-			listener.exitMolecule_attributes(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_attributes) {
@@ -8108,18 +7939,6 @@ export class Component_def_listContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_component_def_list; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterComponent_def_list) {
-			listener.enterComponent_def_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitComponent_def_list) {
-			listener.exitComponent_def_list(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitComponent_def_list) {
 			return visitor.visitComponent_def_list(this);
@@ -8145,18 +7964,6 @@ export class Component_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_component_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterComponent_def) {
-			listener.enterComponent_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitComponent_def) {
-			listener.exitComponent_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitComponent_def) {
@@ -8213,18 +8020,6 @@ export class Keyword_as_component_nameContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_keyword_as_component_name; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterKeyword_as_component_name) {
-			listener.enterKeyword_as_component_name(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitKeyword_as_component_name) {
-			listener.exitKeyword_as_component_name(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitKeyword_as_component_name) {
 			return visitor.visitKeyword_as_component_name(this);
@@ -8258,18 +8053,6 @@ export class Keyword_as_mol_nameContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_keyword_as_mol_name; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterKeyword_as_mol_name) {
-			listener.enterKeyword_as_mol_name(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitKeyword_as_mol_name) {
-			listener.exitKeyword_as_mol_name(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitKeyword_as_mol_name) {
@@ -8306,18 +8089,6 @@ export class State_listContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_state_list; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterState_list) {
-			listener.enterState_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitState_list) {
-			listener.exitState_list(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitState_list) {
 			return visitor.visitState_list(this);
@@ -8336,18 +8107,6 @@ export class State_nameContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_state_name; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterState_name) {
-			listener.enterState_name(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitState_name) {
-			listener.exitState_name(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitState_name) {
@@ -8404,18 +8163,6 @@ export class Seed_species_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_seed_species_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSeed_species_block) {
-			listener.enterSeed_species_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSeed_species_block) {
-			listener.exitSeed_species_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSeed_species_block) {
 			return visitor.visitSeed_species_block(this);
@@ -8459,18 +8206,6 @@ export class Seed_species_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_seed_species_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSeed_species_def) {
-			listener.enterSeed_species_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSeed_species_def) {
-			listener.exitSeed_species_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSeed_species_def) {
@@ -8535,18 +8270,6 @@ export class Species_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_species_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSpecies_def) {
-			listener.enterSpecies_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSpecies_def) {
-			listener.exitSpecies_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSpecies_def) {
 			return visitor.visitSpecies_def(this);
@@ -8565,18 +8288,6 @@ export class Molecule_compartmentContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_compartment; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_compartment) {
-			listener.enterMolecule_compartment(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_compartment) {
-			listener.exitMolecule_compartment(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_compartment) {
@@ -8613,18 +8324,6 @@ export class Molecule_patternContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_pattern; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_pattern) {
-			listener.enterMolecule_pattern(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_pattern) {
-			listener.exitMolecule_pattern(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_pattern) {
 			return visitor.visitMolecule_pattern(this);
@@ -8645,18 +8344,6 @@ export class Pattern_bond_wildcardContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_pattern_bond_wildcard; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterPattern_bond_wildcard) {
-			listener.enterPattern_bond_wildcard(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitPattern_bond_wildcard) {
-			listener.exitPattern_bond_wildcard(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitPattern_bond_wildcard) {
 			return visitor.visitPattern_bond_wildcard(this);
@@ -8676,18 +8363,6 @@ export class Molecule_tagContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_molecule_tag; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMolecule_tag) {
-			listener.enterMolecule_tag(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMolecule_tag) {
-			listener.exitMolecule_tag(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMolecule_tag) {
@@ -8723,18 +8398,6 @@ export class Component_pattern_listContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_component_pattern_list; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterComponent_pattern_list) {
-			listener.enterComponent_pattern_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitComponent_pattern_list) {
-			listener.exitComponent_pattern_list(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitComponent_pattern_list) {
@@ -8794,18 +8457,6 @@ export class Component_patternContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_component_pattern; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterComponent_pattern) {
-			listener.enterComponent_pattern(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitComponent_pattern) {
-			listener.exitComponent_pattern(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitComponent_pattern) {
 			return visitor.visitComponent_pattern(this);
@@ -8825,18 +8476,6 @@ export class State_valueContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_state_value; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterState_value) {
-			listener.enterState_value(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitState_value) {
-			listener.exitState_value(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitState_value) {
@@ -8862,18 +8501,6 @@ export class Bond_specContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_bond_spec; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterBond_spec) {
-			listener.enterBond_spec(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitBond_spec) {
-			listener.exitBond_spec(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitBond_spec) {
 			return visitor.visitBond_spec(this);
@@ -8892,18 +8519,6 @@ export class Bond_idContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_bond_id; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterBond_id) {
-			listener.enterBond_id(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitBond_id) {
-			listener.exitBond_id(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitBond_id) {
@@ -8951,18 +8566,6 @@ export class Observables_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_observables_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterObservables_block) {
-			listener.enterObservables_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitObservables_block) {
-			listener.exitObservables_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitObservables_block) {
 			return visitor.visitObservables_block(this);
@@ -8996,18 +8599,6 @@ export class Observable_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_observable_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterObservable_def) {
-			listener.enterObservable_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitObservable_def) {
-			listener.exitObservable_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitObservable_def) {
 			return visitor.visitObservable_def(this);
@@ -9028,18 +8619,6 @@ export class Observable_typeContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_observable_type; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterObservable_type) {
-			listener.enterObservable_type(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitObservable_type) {
-			listener.exitObservable_type(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitObservable_type) {
@@ -9076,18 +8655,6 @@ export class Observable_pattern_listContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_observable_pattern_list; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterObservable_pattern_list) {
-			listener.enterObservable_pattern_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitObservable_pattern_list) {
-			listener.exitObservable_pattern_list(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitObservable_pattern_list) {
 			return visitor.visitObservable_pattern_list(this);
@@ -9114,18 +8681,6 @@ export class Observable_patternContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_observable_pattern; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterObservable_pattern) {
-			listener.enterObservable_pattern(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitObservable_pattern) {
-			listener.exitObservable_pattern(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitObservable_pattern) {
@@ -9200,18 +8755,6 @@ export class Reaction_rules_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_reaction_rules_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterReaction_rules_block) {
-			listener.enterReaction_rules_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitReaction_rules_block) {
-			listener.exitReaction_rules_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitReaction_rules_block) {
 			return visitor.visitReaction_rules_block(this);
@@ -9263,18 +8806,6 @@ export class Reaction_rule_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_reaction_rule_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterReaction_rule_def) {
-			listener.enterReaction_rule_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitReaction_rule_def) {
-			listener.exitReaction_rule_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitReaction_rule_def) {
@@ -9330,18 +8861,6 @@ export class Label_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_label_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterLabel_def) {
-			listener.enterLabel_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitLabel_def) {
-			listener.exitLabel_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitLabel_def) {
 			return visitor.visitLabel_def(this);
@@ -9385,18 +8904,6 @@ export class Reactant_patternsContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_reactant_patterns; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterReactant_patterns) {
-			listener.enterReactant_patterns(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitReactant_patterns) {
-			listener.exitReactant_patterns(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitReactant_patterns) {
@@ -9442,18 +8949,6 @@ export class Product_patternsContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_product_patterns; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterProduct_patterns) {
-			listener.enterProduct_patterns(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitProduct_patterns) {
-			listener.exitProduct_patterns(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitProduct_patterns) {
 			return visitor.visitProduct_patterns(this);
@@ -9472,18 +8967,6 @@ export class Reaction_signContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_reaction_sign; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterReaction_sign) {
-			listener.enterReaction_sign(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitReaction_sign) {
-			listener.exitReaction_sign(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitReaction_sign) {
@@ -9511,18 +8994,6 @@ export class Rate_lawContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_rate_law; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterRate_law) {
-			listener.enterRate_law(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitRate_law) {
-			listener.exitRate_law(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitRate_law) {
@@ -9561,18 +9032,6 @@ export class Rule_modifiersContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_rule_modifiers; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterRule_modifiers) {
-			listener.enterRule_modifiers(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitRule_modifiers) {
-			listener.exitRule_modifiers(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitRule_modifiers) {
 			return visitor.visitRule_modifiers(this);
@@ -9607,18 +9066,6 @@ export class Pattern_listContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_pattern_list; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterPattern_list) {
-			listener.enterPattern_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitPattern_list) {
-			listener.exitPattern_list(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitPattern_list) {
@@ -9666,18 +9113,6 @@ export class Functions_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_functions_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterFunctions_block) {
-			listener.enterFunctions_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitFunctions_block) {
-			listener.exitFunctions_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitFunctions_block) {
 			return visitor.visitFunctions_block(this);
@@ -9714,18 +9149,6 @@ export class Function_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_function_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterFunction_def) {
-			listener.enterFunction_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitFunction_def) {
-			listener.exitFunction_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitFunction_def) {
 			return visitor.visitFunction_def(this);
@@ -9760,18 +9183,6 @@ export class Param_listContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_param_list; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterParam_list) {
-			listener.enterParam_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitParam_list) {
-			listener.exitParam_list(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitParam_list) {
@@ -9819,18 +9230,6 @@ export class Compartments_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_compartments_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterCompartments_block) {
-			listener.enterCompartments_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitCompartments_block) {
-			listener.exitCompartments_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitCompartments_block) {
 			return visitor.visitCompartments_block(this);
@@ -9861,18 +9260,6 @@ export class Compartment_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_compartment_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterCompartment_def) {
-			listener.enterCompartment_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitCompartment_def) {
-			listener.exitCompartment_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitCompartment_def) {
@@ -9929,18 +9316,6 @@ export class Energy_patterns_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_energy_patterns_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterEnergy_patterns_block) {
-			listener.enterEnergy_patterns_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitEnergy_patterns_block) {
-			listener.exitEnergy_patterns_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitEnergy_patterns_block) {
 			return visitor.visitEnergy_patterns_block(this);
@@ -9965,18 +9340,6 @@ export class Energy_pattern_defContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_energy_pattern_def; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterEnergy_pattern_def) {
-			listener.enterEnergy_pattern_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitEnergy_pattern_def) {
-			listener.exitEnergy_pattern_def(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitEnergy_pattern_def) {
@@ -10033,18 +9396,6 @@ export class Population_maps_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_population_maps_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterPopulation_maps_block) {
-			listener.enterPopulation_maps_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitPopulation_maps_block) {
-			listener.exitPopulation_maps_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitPopulation_maps_block) {
 			return visitor.visitPopulation_maps_block(this);
@@ -10081,18 +9432,6 @@ export class Population_map_defContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_population_map_def; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterPopulation_map_def) {
-			listener.enterPopulation_map_def(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitPopulation_map_def) {
-			listener.exitPopulation_map_def(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitPopulation_map_def) {
 			return visitor.visitPopulation_map_def(this);
@@ -10118,18 +9457,6 @@ export class Actions_blockContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_actions_block; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterActions_block) {
-			listener.enterActions_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitActions_block) {
-			listener.exitActions_block(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitActions_block) {
@@ -10177,18 +9504,6 @@ export class Wrapped_actions_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_wrapped_actions_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterWrapped_actions_block) {
-			listener.enterWrapped_actions_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitWrapped_actions_block) {
-			listener.exitWrapped_actions_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitWrapped_actions_block) {
 			return visitor.visitWrapped_actions_block(this);
@@ -10235,18 +9550,6 @@ export class Begin_actions_blockContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_begin_actions_block; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterBegin_actions_block) {
-			listener.enterBegin_actions_block(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitBegin_actions_block) {
-			listener.exitBegin_actions_block(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitBegin_actions_block) {
 			return visitor.visitBegin_actions_block(this);
@@ -10278,18 +9581,6 @@ export class Action_commandContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_action_command; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAction_command) {
-			listener.enterAction_command(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAction_command) {
-			listener.exitAction_command(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAction_command) {
@@ -10323,18 +9614,6 @@ export class Generate_network_cmdContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_generate_network_cmd; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterGenerate_network_cmd) {
-			listener.enterGenerate_network_cmd(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitGenerate_network_cmd) {
-			listener.exitGenerate_network_cmd(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitGenerate_network_cmd) {
@@ -10373,18 +9652,6 @@ export class Simulate_cmdContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_simulate_cmd; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSimulate_cmd) {
-			listener.enterSimulate_cmd(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSimulate_cmd) {
-			listener.exitSimulate_cmd(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSimulate_cmd) {
@@ -10425,18 +9692,6 @@ export class Write_cmdContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_write_cmd; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterWrite_cmd) {
-			listener.enterWrite_cmd(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitWrite_cmd) {
-			listener.exitWrite_cmd(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitWrite_cmd) {
@@ -10486,18 +9741,6 @@ export class Set_cmdContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_set_cmd; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterSet_cmd) {
-			listener.enterSet_cmd(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitSet_cmd) {
-			listener.exitSet_cmd(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitSet_cmd) {
 			return visitor.visitSet_cmd(this);
@@ -10521,8 +9764,8 @@ export class Other_action_cmdContext extends ParserRuleContext {
 	public VISUALIZE(): TerminalNode | undefined { return this.tryGetToken(BNGParser.VISUALIZE, 0); }
 	public GENERATEHYBRIDMODEL(): TerminalNode | undefined { return this.tryGetToken(BNGParser.GENERATEHYBRIDMODEL, 0); }
 	public READFILE(): TerminalNode | undefined { return this.tryGetToken(BNGParser.READFILE, 0); }
-	public action_args(): Action_argsContext | undefined {
-		return this.tryGetRuleContext(0, Action_argsContext);
+	public action_arg_value(): Action_arg_valueContext | undefined {
+		return this.tryGetRuleContext(0, Action_arg_valueContext);
 	}
 	public SEMI(): TerminalNode | undefined { return this.tryGetToken(BNGParser.SEMI, 0); }
 	public LB(): TerminalNode[];
@@ -10539,18 +9782,6 @@ export class Other_action_cmdContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_other_action_cmd; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterOther_action_cmd) {
-			listener.enterOther_action_cmd(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitOther_action_cmd) {
-			listener.exitOther_action_cmd(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitOther_action_cmd) {
@@ -10573,18 +9804,6 @@ export class Action_argsContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_action_args; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAction_args) {
-			listener.enterAction_args(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAction_args) {
-			listener.exitAction_args(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAction_args) {
@@ -10621,18 +9840,6 @@ export class Action_arg_listContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_action_arg_list; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAction_arg_list) {
-			listener.enterAction_arg_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAction_arg_list) {
-			listener.exitAction_arg_list(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAction_arg_list) {
 			return visitor.visitAction_arg_list(this);
@@ -10656,18 +9863,6 @@ export class Action_argContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_action_arg; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAction_arg) {
-			listener.enterAction_arg(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAction_arg) {
-			listener.exitAction_arg(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAction_arg) {
@@ -10720,18 +9915,6 @@ export class Action_arg_valueContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_action_arg_value; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAction_arg_value) {
-			listener.enterAction_arg_value(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAction_arg_value) {
-			listener.exitAction_arg_value(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAction_arg_value) {
 			return visitor.visitAction_arg_value(this);
@@ -10765,18 +9948,6 @@ export class Keyword_as_valueContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_keyword_as_value; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterKeyword_as_value) {
-			listener.enterKeyword_as_value(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitKeyword_as_value) {
-			listener.exitKeyword_as_value(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitKeyword_as_value) {
@@ -10813,18 +9984,6 @@ export class Nested_hash_listContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_nested_hash_list; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterNested_hash_list) {
-			listener.enterNested_hash_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitNested_hash_list) {
-			listener.exitNested_hash_list(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitNested_hash_list) {
 			return visitor.visitNested_hash_list(this);
@@ -10849,18 +10008,6 @@ export class Nested_hash_itemContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_nested_hash_item; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterNested_hash_item) {
-			listener.enterNested_hash_item(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitNested_hash_item) {
-			listener.exitNested_hash_item(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitNested_hash_item) {
@@ -10953,18 +10100,6 @@ export class Arg_nameContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_arg_name; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterArg_name) {
-			listener.enterArg_name(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitArg_name) {
-			listener.exitArg_name(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitArg_name) {
 			return visitor.visitArg_name(this);
@@ -11000,18 +10135,6 @@ export class Expression_listContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_expression_list; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterExpression_list) {
-			listener.enterExpression_list(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitExpression_list) {
-			listener.exitExpression_list(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitExpression_list) {
 			return visitor.visitExpression_list(this);
@@ -11032,18 +10155,6 @@ export class ExpressionContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_expression; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterExpression) {
-			listener.enterExpression(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitExpression) {
-			listener.exitExpression(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitExpression) {
 			return visitor.visitExpression(this);
@@ -11063,18 +10174,6 @@ export class Conditional_exprContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_conditional_expr; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterConditional_expr) {
-			listener.enterConditional_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitConditional_expr) {
-			listener.exitConditional_expr(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitConditional_expr) {
@@ -11111,18 +10210,6 @@ export class Or_exprContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_or_expr; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterOr_expr) {
-			listener.enterOr_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitOr_expr) {
-			listener.exitOr_expr(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitOr_expr) {
 			return visitor.visitOr_expr(this);
@@ -11157,18 +10244,6 @@ export class And_exprContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_and_expr; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAnd_expr) {
-			listener.enterAnd_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAnd_expr) {
-			listener.exitAnd_expr(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAnd_expr) {
@@ -11250,18 +10325,6 @@ export class Equality_exprContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_equality_expr; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterEquality_expr) {
-			listener.enterEquality_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitEquality_expr) {
-			listener.exitEquality_expr(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitEquality_expr) {
 			return visitor.visitEquality_expr(this);
@@ -11281,18 +10344,6 @@ export class Relational_exprContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_relational_expr; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterRelational_expr) {
-			listener.enterRelational_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitRelational_expr) {
-			listener.exitRelational_expr(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitRelational_expr) {
@@ -11337,18 +10388,6 @@ export class Additive_exprContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_additive_expr; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterAdditive_expr) {
-			listener.enterAdditive_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitAdditive_expr) {
-			listener.exitAdditive_expr(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitAdditive_expr) {
@@ -11403,18 +10442,6 @@ export class Multiplicative_exprContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_multiplicative_expr; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterMultiplicative_expr) {
-			listener.enterMultiplicative_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitMultiplicative_expr) {
-			listener.exitMultiplicative_expr(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitMultiplicative_expr) {
 			return visitor.visitMultiplicative_expr(this);
@@ -11450,18 +10477,6 @@ export class Power_exprContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_power_expr; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterPower_expr) {
-			listener.enterPower_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitPower_expr) {
-			listener.exitPower_expr(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitPower_expr) {
 			return visitor.visitPower_expr(this);
@@ -11485,18 +10500,6 @@ export class Unary_exprContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_unary_expr; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterUnary_expr) {
-			listener.enterUnary_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitUnary_expr) {
-			listener.exitUnary_expr(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitUnary_expr) {
@@ -11531,18 +10534,6 @@ export class Primary_exprContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_primary_expr; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterPrimary_expr) {
-			listener.enterPrimary_expr(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitPrimary_expr) {
-			listener.exitPrimary_expr(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitPrimary_expr) {
@@ -11598,18 +10589,6 @@ export class Function_callContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_function_call; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterFunction_call) {
-			listener.enterFunction_call(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitFunction_call) {
-			listener.exitFunction_call(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitFunction_call) {
 			return visitor.visitFunction_call(this);
@@ -11633,18 +10612,6 @@ export class Observable_refContext extends ParserRuleContext {
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_observable_ref; }
 	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterObservable_ref) {
-			listener.enterObservable_ref(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitObservable_ref) {
-			listener.exitObservable_ref(this);
-		}
-	}
-	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitObservable_ref) {
 			return visitor.visitObservable_ref(this);
@@ -11665,18 +10632,6 @@ export class LiteralContext extends ParserRuleContext {
 	}
 	// @Override
 	public get ruleIndex(): number { return BNGParser.RULE_literal; }
-	// @Override
-	public enterRule(listener: BNGParserListener): void {
-		if (listener.enterLiteral) {
-			listener.enterLiteral(this);
-		}
-	}
-	// @Override
-	public exitRule(listener: BNGParserListener): void {
-		if (listener.exitLiteral) {
-			listener.exitLiteral(this);
-		}
-	}
 	// @Override
 	public accept<Result>(visitor: BNGParserVisitor<Result>): Result {
 		if (visitor.visitLiteral) {

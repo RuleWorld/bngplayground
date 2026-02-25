@@ -230,6 +230,14 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             markers={editorMarkers}
             selection={selection}
             lastResized={lastResized}
+            onRun={() => {
+              // Ctrl+Enter: parse first, then simulate with model-default options
+              onParse(code);
+              if (model) {
+                const opts = getSimulationOptionsFromParsedModel(model);
+                onSimulate(opts);
+              }
+            }}
           />
         </div>
 

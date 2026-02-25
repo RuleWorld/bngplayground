@@ -41,6 +41,8 @@ export interface BNGLReaction {
   products: string[];
   rate: string;
   rateConstant: number;
+  reversible?: boolean;
+  reverseRate?: string;
 }
 
 export interface ReactionRule {

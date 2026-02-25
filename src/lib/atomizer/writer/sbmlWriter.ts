@@ -40,6 +40,7 @@ declare namespace LibSBML {
     setSize(size: number): void;
     setConstant(constant: boolean): void;
     setSpatialDimensions(dims: number): void;
+    setOutside?(outside: string): void;
   }
   
   interface Species {
@@ -221,6 +222,18 @@ function xmlEscape(value: string): string {
 
 function boolAttr(value: boolean): string {
   return value ? 'true' : 'false';
+}
+
+function getCompartmentOutside(
+  compartment: { name?: string; parent?: string },
+  knownCompartmentNames: Set<string>
+): string | null {
+  const parent = typeof compartment.parent === 'string' ? compartment.parent.trim() : '';
+  if (!parent) return null;
+  const name = typeof compartment.name === 'string' ? compartment.name.trim() : '';
+  if (!name || parent === name) return null;
+  if (!knownCompartmentNames.has(parent)) return null;
+  return parent;
 }
 
 function operatorToMathTag(op: string): string | null {
@@ -452,46 +465,159 @@ function ruleRateToFormula(rule: any, reverse: boolean): string {
   return text || '0';
 }
 
+function normalizeSpeciesAlias(name: string): string {
+  return name.replace(/\s+/g, '').replace(/\(\)/g, '');
+}
+
+function toAltCompartmentNotation(name: string): string | null {
+  const suffix = name.match(/^(.+)@([^@]+)$/);
+  if (suffix?.[1] && suffix?.[2]) {
+    return `@${suffix[2]}:${suffix[1]}`;
+  }
+  const prefix = name.match(/^@([^:]+):(.+)$/);
+  if (prefix?.[1] && prefix?.[2]) {
+    return `${prefix[2]}@${prefix[1]}`;
+  }
+  return null;
+}
+
+function addSpeciesAlias(
+  map: Map<string, string>,
+  alias: string,
+  canonical: string
+): void {
+  const normalized = alias.trim();
+  if (!normalized) return;
+  if (!map.has(normalized)) {
+    map.set(normalized, canonical);
+  }
+}
+
+function buildSpeciesNameResolver(speciesNames: string[]): Map<string, string> {
+  const resolver = new Map<string, string>();
+  for (const name of speciesNames) {
+    addSpeciesAlias(resolver, name, name);
+    const noEmptyParens = normalizeSpeciesAlias(name);
+    addSpeciesAlias(resolver, noEmptyParens, name);
+    const alt = toAltCompartmentNotation(name);
+    if (alt) {
+      addSpeciesAlias(resolver, alt, name);
+      addSpeciesAlias(resolver, normalizeSpeciesAlias(alt), name);
+    }
+  }
+  return resolver;
+}
+
+function buildSpeciesIdLookup(speciesList: Array<{ name: string }>): Map<string, string> {
+  const byName = new Map<string, string>();
+  speciesList.forEach((s, i) => {
+    byName.set(s.name, `s${i}`);
+  });
+
+  const resolver = buildSpeciesNameResolver(speciesList.map((s) => s.name));
+  const byAlias = new Map<string, string>();
+  for (const [alias, canonicalName] of resolver.entries()) {
+    const sid = byName.get(canonicalName);
+    if (!sid) continue;
+    if (!byAlias.has(alias)) byAlias.set(alias, sid);
+  }
+  return byAlias;
+}
+
 function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
+  const speciesResolver = buildSpeciesNameResolver((model.species || []).map((s: any) => String(s.name)));
+  const resolveTerms = (terms: string[]): string[] | null => {
+    const resolved: string[] = [];
+    for (const raw of terms) {
+      const token = String(raw ?? '').trim();
+      if (!token || token === '0' || token.toLowerCase() === 'null') continue;
+      const match =
+        speciesResolver.get(token) ??
+        speciesResolver.get(normalizeSpeciesAlias(token)) ??
+        (() => {
+          const alt = toAltCompartmentNotation(token);
+          if (!alt) return undefined;
+          return speciesResolver.get(alt) ?? speciesResolver.get(normalizeSpeciesAlias(alt));
+        })();
+      if (!match) return null;
+      resolved.push(match);
+    }
+    return resolved;
+  };
+
   const explicitReactions = Array.isArray(model.reactions) ? model.reactions : [];
   if (explicitReactions.length > 0) {
-    return explicitReactions.filter(
-      (rxn) =>
-        !rxn.reactants.some((name) => isSyntheticRateRuleSpeciesName(String(name))) &&
-        !rxn.products.some((name) => isSyntheticRateRuleSpeciesName(String(name)))
-    );
+    let unresolvedExplicit = 0;
+    const normalizedExplicit: BNGLReaction[] = [];
+    for (const rxn of explicitReactions) {
+      const reactantsRaw = (rxn.reactants || []).map((x) => String(x));
+      const productsRaw = (rxn.products || []).map((x) => String(x));
+      if (
+        reactantsRaw.some((name) => isSyntheticRateRuleSpeciesName(String(name))) ||
+        productsRaw.some((name) => isSyntheticRateRuleSpeciesName(String(name)))
+      ) {
+        continue;
+      }
+      const reactants = resolveTerms(reactantsRaw);
+      const products = resolveTerms(productsRaw);
+      if (!reactants || !products) {
+        unresolvedExplicit += 1;
+        continue;
+      }
+      normalizedExplicit.push({
+        ...rxn,
+        reactants,
+        products,
+        reversible: Boolean((rxn as any)?.reversible),
+        reverseRate: typeof (rxn as any)?.reverseRate === 'string' ? String((rxn as any).reverseRate) : undefined,
+      });
+    }
+    if (unresolvedExplicit > 0) {
+      logger.warning(
+        'SBMW016E',
+        `Skipped ${unresolvedExplicit} explicit reactions with unresolved species terms`
+      );
+    }
+    return normalizedExplicit;
   }
 
   const rules: any[] = Array.isArray((model as any).reactionRules) ? (model as any).reactionRules : [];
   if (rules.length === 0) return [];
 
-  const speciesNames = new Set((model.species || []).map((s: any) => s.name));
-  const areConcreteSpecies = (terms: string[]): boolean =>
-    terms.every((name) => speciesNames.has(name));
-
   const derived: BNGLReaction[] = [];
+  let unresolvedDerived = 0;
   for (const rule of rules) {
     const reactants = Array.isArray(rule?.reactants) ? rule.reactants.map((x: any) => String(x)) : [];
     const products = Array.isArray(rule?.products) ? rule.products.map((x: any) => String(x)) : [];
     if (reactants.some((name) => isSyntheticRateRuleSpeciesName(name))) continue;
     if (products.some((name) => isSyntheticRateRuleSpeciesName(name))) continue;
-    if (!areConcreteSpecies(reactants) || !areConcreteSpecies(products)) continue;
+    const resolvedReactants = resolveTerms(reactants);
+    const resolvedProducts = resolveTerms(products);
+    if (!resolvedReactants || !resolvedProducts) {
+      unresolvedDerived += 1;
+      continue;
+    }
+
+    const forwardRate = ruleRateToFormula(rule, false);
+    const reverseRate = ruleRateToFormula(rule, true);
+    const netRate = rule?.isBidirectional
+      ? `((${forwardRate || '0'}) - (${reverseRate || '0'}))`
+      : (forwardRate || '0');
 
     derived.push({
-      reactants: [...reactants],
-      products: [...products],
-      rate: ruleRateToFormula(rule, false),
+      reactants: [...resolvedReactants],
+      products: [...resolvedProducts],
+      rate: netRate,
       rateConstant: 0,
+      reversible: Boolean(rule?.isBidirectional),
+      reverseRate: rule?.isBidirectional ? reverseRate : undefined,
     });
-
-    if (rule?.isBidirectional) {
-      derived.push({
-        reactants: [...products],
-        products: [...reactants],
-        rate: ruleRateToFormula(rule, true),
-        rateConstant: 0,
-      });
-    }
+  }
+  if (unresolvedDerived > 0) {
+    logger.warning(
+      'SBMW016E',
+      `Skipped ${unresolvedDerived} derived reactions with unresolved rule terms`
+    );
   }
 
   return derived;
@@ -519,14 +645,12 @@ function generateSBMLPureXml(model: BNGLModel): string {
   const compartments = model.compartments && model.compartments.length > 0
     ? model.compartments
     : [{ name: 'default', dimension: 3, size: 1 } as any];
+  const compartmentNames = new Set(compartments.map((c) => String(c.name || '')));
 
   const speciesList = (model.species || []).filter(
     (species) => !isSyntheticRateRuleSpeciesName(species.name)
   );
-  const speciesIdByName = new Map<string, string>();
-  speciesList.forEach((s, i) => {
-    speciesIdByName.set(s.name, `s${i}`);
-  });
+  const speciesIdByName = buildSpeciesIdLookup(speciesList as Array<{ name: string }>);
   const replaceSpeciesInFormula = createNameReplacer(speciesIdByName);
   const reconstructedRules = reconstructRules(model, speciesIdByName);
   const exportableReactions = buildExportableReactions(model);
@@ -571,8 +695,10 @@ function generateSBMLPureXml(model: BNGLModel): string {
   const compartmentsStarted = Date.now();
   lines.push('    <listOfCompartments>');
   for (const c of compartments) {
+    const outside = getCompartmentOutside(c as any, compartmentNames);
+    const outsideAttr = outside ? ` outside="${xmlEscape(outside)}"` : '';
     lines.push(
-      `      <compartment id="${xmlEscape(c.name)}" name="${xmlEscape(c.name)}" spatialDimensions="${Number.isFinite(c.dimension) ? c.dimension : 3}" size="${Number.isFinite(c.size) ? c.size : 1}" constant="${boolAttr(!compartmentRuleTargets.has(c.name))}"/>`
+      `      <compartment id="${xmlEscape(c.name)}" name="${xmlEscape(c.name)}" spatialDimensions="${Number.isFinite(c.dimension) ? c.dimension : 3}" size="${Number.isFinite(c.size) ? c.size : 1}" constant="${boolAttr(!compartmentRuleTargets.has(c.name))}"${outsideAttr}/>`
     );
   }
   lines.push('    </listOfCompartments>');
@@ -615,7 +741,7 @@ function generateSBMLPureXml(model: BNGLModel): string {
     lines.push('    <listOfReactions>');
     for (let i = 0; i < reactions.length; i++) {
       const r = reactions[i];
-      lines.push(`      <reaction id="r${i}" reversible="false">`);
+      lines.push(`      <reaction id="r${i}" reversible="${boolAttr(!!(r as any).reversible)}">`);
 
       lines.push('        <listOfReactants>');
       r.reactants.forEach((name) => {
@@ -803,8 +929,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   const speciesList = (model.species || []).filter(
     (species) => !isSyntheticRateRuleSpeciesName(species.name)
   );
-  const speciesIdByName = new Map<string, string>();
-  speciesList.forEach((s, i) => speciesIdByName.set(s.name, `s${i}`));
+  const speciesIdByName = buildSpeciesIdLookup(speciesList as Array<{ name: string }>);
   const replaceSpeciesInFormula = createNameReplacer(speciesIdByName);
   const reconstructedRules = reconstructRules(model, speciesIdByName);
   const exportableReactions = buildExportableReactions(model);
@@ -843,12 +968,18 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   // 1. Compartments
   logger.info('SBMW013', `generateSBML compartments count=${model.compartments?.length ?? 0}`);
   if (model.compartments && model.compartments.length > 0) {
+    const compartmentNames = new Set(model.compartments.map((c) => String(c.name || '')));
     for (const c of model.compartments) {
       const comp = sbmlModel.createCompartment();
       comp.setId(c.name);
+      comp.setName(c.name);
       comp.setSpatialDimensions(c.dimension);
       comp.setSize(c.size);
       comp.setConstant(!compartmentRuleTargets.has(c.name));
+      const outside = getCompartmentOutside(c as any, compartmentNames);
+      if (outside && typeof comp.setOutside === 'function') {
+        comp.setOutside(outside);
+      }
     }
   } else {
     // Default compartment
@@ -904,7 +1035,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       const rxn = sbmlModel.createReaction();
       const rid = `r${i}`;
       rxn.setId(rid);
-      rxn.setReversible(false);
+      rxn.setReversible(!!(r as any).reversible);
 
       const reactantCounts = new Map<string, number>();
       const productCounts = new Map<string, number>();

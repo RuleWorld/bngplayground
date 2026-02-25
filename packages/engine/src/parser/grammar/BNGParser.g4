@@ -363,7 +363,7 @@ set_cmd
 other_action_cmd
     : (SAVECONCENTRATIONS | RESETCONCENTRATIONS | SAVEPARAMETERS | RESETPARAMETERS | QUIT
        | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE)
-      LPAREN action_args? RPAREN SEMI? LB*
+      LPAREN action_arg_value? RPAREN SEMI? LB*
     ;
 
 // Action arguments can be: {key=>val,...} or simple quoted string

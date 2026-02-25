@@ -1174,7 +1174,7 @@ export class CVODESolver {
         } else if (isNode) {
           console.log('[ODESolver] Loading CVODE via cvode_node');
           // Use dynamic import with string template to avoid Vite static analysis
-          const modulePath = './cvode_node';
+          const modulePath = './cvode_node.ts';
           loader = resolveLoader(await import(/* @vite-ignore */ modulePath));
         } else {
           console.log('[ODESolver] Loading CVODE via cvode_loader (default)');
@@ -1185,9 +1185,18 @@ export class CVODESolver {
           locateFile: (path: string) => {
             if (path.endsWith('.wasm')) {
               if (isNode) {
-                const nodePath = require('path');
-                const p = nodePath.resolve(__dirname, '..', '..', 'public', 'cvode.wasm');
-                return p;
+                try {
+                  const nodePath = typeof require === 'function' ? require('path') : null;
+                  if (nodePath && typeof process !== 'undefined' && typeof process.cwd === 'function') {
+                    return nodePath.resolve(process.cwd(), 'public', 'cvode.wasm');
+                  }
+                } catch {
+                  // Fall through to cwd-based string path.
+                }
+                if (typeof process !== 'undefined' && typeof process.cwd === 'function') {
+                  return `${process.cwd()}/public/cvode.wasm`;
+                }
+                return './public/cvode.wasm';
               }
               // In browser/worker, detect base URL from self.location
               let baseUrl = '/';

@@ -432,6 +432,8 @@ function convertMathFunctions(expr: string): string {
   // Special constants
   result = result.replace(/\bpi\b/g, '3.14159265358979');
   result = result.replace(/\bexponentiale\b/gi, '2.71828182845905');
+  result = result.replace(/\btrue\b/gi, '1');
+  result = result.replace(/\bfalse\b/gi, '0');
 
   // Normalize double negatives (e.g. --ln(x) -> +ln(x))
   result = result.replace(/--/g, '+');

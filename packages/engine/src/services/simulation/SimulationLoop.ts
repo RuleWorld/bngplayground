@@ -456,6 +456,17 @@ export async function simulate(
   const maxVol = Math.max(...Array.from(speciesVolumes));
   console.log(`[Worker] Scaling Check: Species Vol Range [${minVol}, ${maxVol}]. Count 1.0s: ${Array.from(speciesVolumes).filter(v => v === 1.0).length}`);
 
+  // PARITY FIX: Concentration cache for saveConcentrations/resetConcentrations (BNG2 Cache semantics)
+  // BNG2 uses a label-based cache. Default label resets to initial seed species values.
+  const DEFAULT_CONC_LABEL = '__DEFAULT__';
+  const concentrationCache = new Map<string, Float64Array>();
+  // Store initial seed species concentrations so that resetConcentrations() (no label)
+  // can restore them (matching BNG2's behavior of reading from SpeciesList when no cache hit)
+  const initialSeedConcentrations = new Float64Array(numSpecies);
+  model.species.forEach((s, i) => {
+    initialSeedConcentrations[i] = s.initialConcentration ?? (s as any).initialAmount ?? 0;
+  });
+
 
   // Minimal runtime debug to avoid noisy console output
   try {
@@ -488,14 +499,33 @@ export async function simulate(
       }
     }
 
-    const data: Record<string, number>[] = [];
-    const speciesData: Record<string, number>[] = [];
+    const dataBySuffix: Record<string, Record<string, number>[]> = {};
+    const speciesDataBySuffix: Record<string, Record<string, number>[]> = {};
     const includeSpeciesData = options.includeSpeciesData ?? true;
-    const appendSpeciesSnapshot = (snapshot: Record<string, number>) => {
+    
+    const getSuffixDataArray = (suffix?: string) => {
+      const key = suffix ?? '__default__';
+      if (!dataBySuffix[key]) dataBySuffix[key] = [];
+      return dataBySuffix[key];
+    };
+
+    const getSuffixSpeciesDataArray = (suffix?: string) => {
+      const key = suffix ?? '__default__';
+      if (!speciesDataBySuffix[key]) speciesDataBySuffix[key] = [];
+      return speciesDataBySuffix[key];
+    };
+
+    const appendDataRow = (suffix: string | undefined, row: Record<string, number>) => {
+      getSuffixDataArray(suffix).push(row);
+    };
+
+    const appendSpeciesSnapshot = (suffix: string | undefined, snapshot: Record<string, number>) => {
       if (includeSpeciesData) {
-        speciesData.push(snapshot);
+        getSuffixSpeciesDataArray(suffix).push(snapshot);
       }
     };
+
+    const getTotalDataLength = () => Object.values(dataBySuffix).reduce((sum, arr) => sum + arr.length, 0);
 
     const evaluateObservablesFast = (currentState: Float64Array) => {
       const obsValues: Record<string, number> = {};
@@ -749,7 +779,34 @@ export async function simulate(
         for (const change of concentrationChanges) {
           if (change.afterPhaseIndex !== phaseIdx - 1) continue;
           const mode = change.mode ?? 'set';
-          if (mode === 'save' || mode === 'reset') continue;
+
+          // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
+          if (mode === 'save') {
+            const label = change.label ?? DEFAULT_CONC_LABEL;
+            concentrationCache.set(label, new Float64Array(state));
+            console.log(`[Worker] SSA: Saved concentrations with label "${label}"`);
+            continue;
+          }
+          if (mode === 'reset') {
+            const label = change.label ?? DEFAULT_CONC_LABEL;
+            const saved = concentrationCache.get(label);
+            if (saved) {
+              // Restore from cached saved state
+              state.set(saved);
+              console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
+            } else {
+              // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
+              if (label === DEFAULT_CONC_LABEL) {
+                for (let k = 0; k < numSpecies; k++) {
+                  state[k] = initialSeedConcentrations[k]; // SSA uses raw counts
+                }
+                console.log(`[Worker] SSA: Reset concentrations to initial seed species (no saved state)`);
+              } else {
+                console.warn(`[Worker] SSA: resetConcentrations label "${label}" not found in cache`);
+              }
+            }
+            continue;
+          }
 
           let resolvedValue: number;
           if (typeof change.value === 'number') resolvedValue = change.value;
@@ -792,10 +849,10 @@ export async function simulate(
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
           const obsValues = evaluateObservablesFast(state);
-          data.push({ time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+          appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
           const speciesPoint0: Record<string, number> = { time: outT0 };
           for (let i = 0; i < numSpecies; i++) speciesPoint0[speciesHeaders[i]] = state[i];
-          appendSpeciesSnapshot(speciesPoint0);
+          appendSpeciesSnapshot(phase.suffix, speciesPoint0);
         }
         let totalEvents = 0;
         const maxEvents = options.maxEvents ?? 100_000_000; // 100 million events safeguard
@@ -981,24 +1038,24 @@ export async function simulate(
               } catch (e: unknown) {
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
-              data.push({ time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+            if (outT >= nextTOut || i === maxEvents - 1) {
+              appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
               const sp: Record<string, number> = { time: outT };
               for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
-              appendSpeciesSnapshot(sp);
+              appendSpeciesSnapshot(phase.suffix, sp);
             }
             nextOutIdx += 1;
             nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
           }
         }
 
-        while (nextTOut <= phaseTEnd + 1e-12) {
-          if (recordThisPhase) {
-            const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
+          if (!hasPushedFinalResult && phaseNSteps > 0 && nEventsThisPhase > 0) {
+            const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, phaseNSteps);
             const obsValues = evaluateObservablesFast(state);
-            data.push({ time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
-            appendSpeciesSnapshot(sp);
+            appendSpeciesSnapshot(phase.suffix, sp);
           }
           nextOutIdx += 1;
           nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
@@ -1019,19 +1076,21 @@ export async function simulate(
         }
       } : undefined;
 
-      console.log(`[Worker] SSA simulation complete: ${data.length} data points, globalTime=${globalTime}`);
+      console.log(`[Worker] SSA simulation complete: ${getTotalDataLength()} data points, globalTime=${globalTime}`);
 
+      const defaultSuffix = Object.keys(dataBySuffix)[0] || '__default__';
       return {
         headers,
-        data,
+        data: dataBySuffix[defaultSuffix] || [],
+        dataBySuffix,
         speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
-        speciesData: includeSpeciesData ? speciesData : undefined,
+        speciesData: includeSpeciesData ? speciesDataBySuffix[defaultSuffix] || [] : undefined,
+        speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
         expandedReactions: model.reactions,
         expandedSpecies: model.species,
         ssaInfluence
       } satisfies SimulationResults;
     }
-
 
     // Debug: trace ODESolver loading
     if (VERBOSE_SIM_DEBUG) console.log('[Worker Debug] SimulationLoop: About to import ODESolver');
@@ -1688,16 +1747,20 @@ export async function simulate(
             const time = i < outputTimes.length ? outputTimes[i] : gpuResult.times[i];
             const y64 = new Float64Array(conc);
             const obsValues = evaluateObservablesFast(y64);
-            data.push({ time, ...obsValues });
+            const wgpuSuffix = phases[0]?.suffix;
+            appendDataRow(wgpuSuffix, { time, ...obsValues });
             const sp: Record<string, number> = { time };
             for (let j = 0; j < numSpecies; j++) sp[speciesHeaders[j]] = conc[j];
-            appendSpeciesSnapshot(sp);
+            appendSpeciesSnapshot(wgpuSuffix, sp);
           }
+          const defaultWgpuSuffix = Object.keys(dataBySuffix)[0] || '__default__';
           const results = {
             headers,
-            data,
+            data: dataBySuffix[defaultWgpuSuffix] || [],
+            dataBySuffix,
             speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
-            speciesData: includeSpeciesData ? speciesData : undefined,
+            speciesData: includeSpeciesData ? speciesDataBySuffix[defaultWgpuSuffix] || [] : undefined,
+            speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
             expandedReactions: model.reactions,
             expandedSpecies: model.species
           } satisfies SimulationResults;
@@ -1755,7 +1818,37 @@ export async function simulate(
       for (const change of concentrationChanges) {
         if (change.afterPhaseIndex !== phaseIdx - 1) continue;
         const mode = change.mode ?? 'set';
-        if (mode === 'save' || mode === 'reset') continue;
+
+        // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
+        if (mode === 'save') {
+          const label = change.label ?? DEFAULT_CONC_LABEL;
+          concentrationCache.set(label, new Float64Array(y));
+          console.log(`[Worker] ODE: Saved concentrations with label "${label}"`);
+          continue;
+        }
+        if (mode === 'reset') {
+          const label = change.label ?? DEFAULT_CONC_LABEL;
+          const saved = concentrationCache.get(label);
+          if (saved) {
+            // Restore from cached saved state
+            y.set(saved);
+            state.set(saved);
+            console.log(`[Worker] ODE: Reset concentrations to saved label "${label}"`);
+          } else {
+            // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
+            if (label === DEFAULT_CONC_LABEL) {
+              for (let k = 0; k < numSpecies; k++) {
+                // ODE uses concentrations (amount / volume)
+                y[k] = initialSeedConcentrations[k] / speciesVolumes[k];
+                state[k] = y[k];
+              }
+              console.log(`[Worker] ODE: Reset concentrations to initial seed species (no saved state)`);
+            } else {
+              console.warn(`[Worker] ODE: resetConcentrations label "${label}" not found in cache`);
+            }
+          }
+          continue;
+        }
 
         let resolvedValue: number;
         if (typeof change.value === 'number') resolvedValue = change.value;
@@ -1862,7 +1955,7 @@ export async function simulate(
                   adjustedRow[key] = value;
                 }
               }
-              data.push(adjustedRow);
+              appendDataRow(phase.suffix, adjustedRow);
             }
           }
 
@@ -1921,10 +2014,10 @@ export async function simulate(
       if (shouldEmitPhaseStart) {
         const outT0 = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, 0);
         const obsValues = evaluateObservablesFast(y);
-        data.push({ time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
+        appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
         const s0: Record<string, number> = { time: outT0 };
         for (let i = 0; i < numSpecies; i++) s0[speciesHeaders[i]] = y[i];
-        appendSpeciesSnapshot(s0);
+        appendSpeciesSnapshot(phase.suffix, s0);
       }
 
       try {
@@ -1958,10 +2051,10 @@ export async function simulate(
           if (recordThisPhase) {
             const outT = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i);
             const obsValues = evaluateObservablesFast(y);
-            data.push({ time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
+            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = y[k];
-            appendSpeciesSnapshot(sp);
+            appendSpeciesSnapshot(phase.suffix, sp);
 
             if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
               const tfCpAmt = tfCpIdx >= 0 ? (y[tfCpIdx] * speciesVolumes[tfCpIdx]) : NaN;
@@ -2046,15 +2139,16 @@ export async function simulate(
 
       // Always output final species state for multi-phase propagation support
       // This ensures batchRunner can capture the equilibrated state even when recordThisPhase=false
-      if (includeSpeciesData && recordThisPhase && (speciesData.length === 0 || t > 0)) {
+      const suffixSpeciesArray = getSuffixSpeciesDataArray(phase.suffix);
+      if (includeSpeciesData && recordThisPhase && (suffixSpeciesArray.length === 0 || t > 0)) {
         // Check if final state was already recorded (last speciesData row has matching time)
         const finalT = modelTime;
-        const lastRecordedT = speciesData.length > 0 ? speciesData[speciesData.length - 1].time : -1;
+        const lastRecordedT = suffixSpeciesArray.length > 0 ? suffixSpeciesArray[suffixSpeciesArray.length - 1].time : -1;
         if (lastRecordedT !== finalT) {
           // Record final species state for multi-phase propagation
           const spFinal: Record<string, number> = { time: finalT };
           for (let k = 0; k < numSpecies; k++) spFinal[speciesHeaders[k]] = y[k];
-          appendSpeciesSnapshot(spFinal);
+          appendSpeciesSnapshot(phase.suffix, spFinal);
         }
       }
 
@@ -2073,11 +2167,14 @@ export async function simulate(
     const totalTime = performance.now() - simulationStartTime;
     if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: ODE integration took', odeTime.toFixed(0), 'ms');
     if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: Total simulation time', totalTime.toFixed(0), 'ms');
+    const defaultOdeSuffix = Object.keys(dataBySuffix)[0] || '__default__';
     return {
       headers,
-      data,
+      data: dataBySuffix[defaultOdeSuffix] || [],
+      dataBySuffix,
       speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
-      speciesData: includeSpeciesData ? speciesData : undefined,
+      speciesData: includeSpeciesData ? speciesDataBySuffix[defaultOdeSuffix] || [] : undefined,
+      speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
       expandedReactions: model.reactions,
       expandedSpecies: model.species
     } satisfies SimulationResults;

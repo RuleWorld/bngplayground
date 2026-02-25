@@ -1,4 +1,4 @@
-// Generated from src/parser/grammar/BNGLexer.g4 by ANTLR 4.9.0-SNAPSHOT
+// Generated from packages/engine/src/parser/grammar/BNGLexer.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
 import { ATN } from "antlr4ts/atn/ATN";
