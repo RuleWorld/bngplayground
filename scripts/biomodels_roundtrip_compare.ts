@@ -63,7 +63,8 @@ type RoundtripResult = {
       expandedNetwork: boolean;
       expansionTimedOut: boolean;
       exportUsedUnexpandedFallback: boolean;
-      parserUsed: 'strict' | 'legacy';
+      exportUsedOriginalSbmlFallback: boolean;
+      parserUsed: 'strict' | 'legacy' | 'none';
       parserStrictError?: string;
     };
     parseCompareFallback?: {
@@ -109,69 +110,278 @@ const BIOMODELS_SEARCH_PAGE_SIZE = Math.max(
   Math.min(200, Number(process.env.BIOMODELS_SEARCH_PAGE_SIZE || '100'))
 );
 const ROUNDTRIP_VERBOSE = (process.env.BIOMODELS_ROUNDTRIP_VERBOSE ?? '0') === '1';
+const ROUNDTRIP_INFO_LOGS = (process.env.BIOMODELS_ROUNDTRIP_INFO_LOGS ?? '1') !== '0';
 const OUT_DIR = path.resolve('artifacts', 'biomodels-roundtrip');
-const PER_MODEL_TIMEOUT_MS = Number(process.env.BIOMODELS_ROUNDTRIP_MODEL_TIMEOUT_MS || '30000');
-const BATCH_TIMEOUT_MS = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_MS || '900000');
-const PHASE_TIMEOUT_MS = Number(process.env.BIOMODELS_ROUNDTRIP_PHASE_TIMEOUT_MS || '15000');
-const FETCH_SBML_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_FETCH_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 12000))
+const HARD_MODEL_TIMEOUT_MS = 60000;
+const MODEL_TIMEOUT_MIN_MS = 1000;
+const PHASE_TIMEOUT_MIN_MS = 250;
+const MODEL_TIMEOUT_RESERVE_MS = 250;
+
+const parseFiniteNumber = (raw: string | null | undefined, fallback: number): number => {
+  const n = Number(raw ?? '');
+  return Number.isFinite(n) ? n : fallback;
+};
+const positiveOrFallback = (value: number, fallback: number): number =>
+  Number.isFinite(value) && value > 0 ? value : fallback;
+
+const clampMs = (value: number, min: number, max: number): number =>
+  Math.max(min, Math.min(max, value));
+
+const PER_MODEL_TIMEOUT_MS_RAW = parseFiniteNumber(
+  process.env.BIOMODELS_ROUNDTRIP_MODEL_TIMEOUT_MS,
+  HARD_MODEL_TIMEOUT_MS
 );
-const ATOMIZER_INIT_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_ATOMIZER_INIT_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 10000))
+const PER_MODEL_TIMEOUT_MS_REQUESTED = positiveOrFallback(
+  PER_MODEL_TIMEOUT_MS_RAW,
+  HARD_MODEL_TIMEOUT_MS
 );
-const ATOMIZE_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_ATOMIZE_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 12000))
+const PER_MODEL_TIMEOUT_MS = clampMs(PER_MODEL_TIMEOUT_MS_REQUESTED, MODEL_TIMEOUT_MIN_MS, HARD_MODEL_TIMEOUT_MS);
+const MAX_PHASE_TIMEOUT_CAP_MS = Math.max(
+  PHASE_TIMEOUT_MIN_MS,
+  PER_MODEL_TIMEOUT_MS - MODEL_TIMEOUT_RESERVE_MS
 );
-const PARSE_BNGL_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_PARSE_BNGL_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 10000))
+const BATCH_TIMEOUT_MS = Math.max(
+  PER_MODEL_TIMEOUT_MS,
+  positiveOrFallback(parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_MS, 900000), 900000)
 );
-const PARSE_COMPARE_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_PARSE_COMPARE_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 8000))
+const PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_PHASE_TIMEOUT_MS, 15000), 15000),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
 );
-const NETWORK_EXPANSION_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_NETWORK_EXPANSION_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 15000))
+const FETCH_SBML_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_FETCH_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 12000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 12000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
 );
-const EXPORT_SBML_PHASE_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_EXPORT_TIMEOUT_MS || String(Math.min(PHASE_TIMEOUT_MS, 12000))
+const ATOMIZER_INIT_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_ATOMIZER_INIT_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 10000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 10000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
 );
-const PHASE_HEARTBEAT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_HEARTBEAT_MS || (ROUNDTRIP_VERBOSE ? '2000' : '0')
+const ATOMIZE_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_ATOMIZE_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 12000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 12000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
 );
-const MAX_SPECIES_FOR_EXPANSION = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_SPECIES || '4000');
-const MAX_REACTIONS_FOR_EXPANSION = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_REACTIONS || '20000');
-const MAX_ITER_FOR_EXPANSION = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_ITER || '1500');
-const MAX_AGG_FOR_EXPANSION = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_AGG || '100');
+const PARSE_BNGL_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_PARSE_BNGL_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 10000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 10000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
+);
+const PARSE_COMPARE_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_PARSE_COMPARE_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 8000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 8000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
+);
+const NETWORK_EXPANSION_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_NETWORK_EXPANSION_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 15000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 15000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
+);
+const EXPORT_SBML_PHASE_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(
+      process.env.BIOMODELS_ROUNDTRIP_EXPORT_TIMEOUT_MS,
+      Math.min(PHASE_TIMEOUT_MS, 12000)
+    ),
+    Math.min(PHASE_TIMEOUT_MS, 12000)
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
+);
+const PHASE_HEARTBEAT_MS = Math.max(
+  0,
+  parseFiniteNumber(
+    process.env.BIOMODELS_ROUNDTRIP_HEARTBEAT_MS,
+    ROUNDTRIP_VERBOSE ? 2000 : 0
+  )
+);
+const MAX_SPECIES_FOR_EXPANSION = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_SPECIES, 4000),
+  4000
+);
+const MAX_REACTIONS_FOR_EXPANSION = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_REACTIONS, 20000),
+  20000
+);
+const MAX_ITER_FOR_EXPANSION = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_ITER, 1500),
+  1500
+);
+const MAX_AGG_FOR_EXPANSION = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_AGG, 100),
+  100
+);
 const ALLOW_EXPORT_WITHOUT_EXPANSION = (process.env.BIOMODELS_ROUNDTRIP_ALLOW_UNEXPANDED_EXPORT ?? '1') !== '0';
-const MAX_RULES_FOR_EXPANSION = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_RULES || '2200');
-const MAX_BNGL_LEN_FOR_EXPANSION = Number(process.env.BIOMODELS_ROUNDTRIP_MAX_BNGL_LEN_FOR_EXPANSION || '500000');
-const RULES_TIMEOUT_BUMP_THRESHOLD = Number(process.env.BIOMODELS_ROUNDTRIP_TIMEOUT_BUMP_RULES || '1200');
-const LARGE_NETWORK_EXPANSION_TIMEOUT_MS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_NETWORK_EXPANSION_TIMEOUT_LARGE_MS || '30000'
+const MAX_RULES_FOR_EXPANSION = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_RULES, 2200),
+  2200
+);
+const MAX_BNGL_LEN_FOR_EXPANSION = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_MAX_BNGL_LEN_FOR_EXPANSION, 500000),
+  500000
+);
+const RULES_TIMEOUT_BUMP_THRESHOLD = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_TIMEOUT_BUMP_RULES, 1200),
+  1200
+);
+const LARGE_NETWORK_EXPANSION_TIMEOUT_MS = clampMs(
+  positiveOrFallback(
+    parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_NETWORK_EXPANSION_TIMEOUT_LARGE_MS, 30000),
+    30000
+  ),
+  PHASE_TIMEOUT_MIN_MS,
+  MAX_PHASE_TIMEOUT_CAP_MS
+);
+const BUDGET_AWARE_EXPANSION_SKIP =
+  (process.env.BIOMODELS_ROUNDTRIP_BUDGET_AWARE_EXPANSION_SKIP ?? '1') !== '0';
+const BUDGET_AWARE_EXPANSION_MODEL_TIMEOUT_MAX_MS = positiveOrFallback(
+  parseFiniteNumber(
+    process.env.BIOMODELS_ROUNDTRIP_BUDGET_AWARE_EXPANSION_MODEL_TIMEOUT_MAX_MS,
+    60000
+  ),
+  60000
+);
+const BUDGET_AWARE_EXPANSION_REMAINING_MS = positiveOrFallback(
+  parseFiniteNumber(
+    process.env.BIOMODELS_ROUNDTRIP_BUDGET_AWARE_EXPANSION_REMAINING_MS,
+    60000
+  ),
+  60000
+);
+const BUDGET_AWARE_EXPANSION_MIN_RULES = positiveOrFallback(
+  parseFiniteNumber(
+    process.env.BIOMODELS_ROUNDTRIP_BUDGET_AWARE_EXPANSION_MIN_RULES,
+    50
+  ),
+  50
+);
+const BUDGET_AWARE_EXPANSION_MIN_SPECIES = positiveOrFallback(
+  parseFiniteNumber(
+    process.env.BIOMODELS_ROUNDTRIP_BUDGET_AWARE_EXPANSION_MIN_SPECIES,
+    1400
+  ),
+  1400
+);
+const BUDGET_AWARE_EXPANSION_MIN_FUNCTIONS = positiveOrFallback(
+  parseFiniteNumber(
+    process.env.BIOMODELS_ROUNDTRIP_BUDGET_AWARE_EXPANSION_MIN_FUNCTIONS,
+    1400
+  ),
+  1400
+);
+const CONCURRENCY_CAP_TIGHT_TIMEOUT = Math.max(
+  1,
+  Math.trunc(
+    positiveOrFallback(
+      parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_CONCURRENCY_CAP_TIGHT_TIMEOUT, 4),
+      4
+    )
+  )
 );
 const SKIP_COMPARE_ON_LARGE_BNGL = (process.env.BIOMODELS_ROUNDTRIP_SKIP_LARGE_PARSE_COMPARE ?? '1') !== '0';
-const LARGE_COMPARE_BNGL_LEN = Number(process.env.BIOMODELS_ROUNDTRIP_LARGE_BNGL_LEN || '500000');
-const LARGE_COMPARE_SPECIES = Number(process.env.BIOMODELS_ROUNDTRIP_LARGE_SPECIES || '1200');
-const LARGE_COMPARE_REACTION_RULES = Number(process.env.BIOMODELS_ROUNDTRIP_LARGE_REACTION_RULES || '2000');
-const LARGE_COMPARE_REACTIONS = Number(process.env.BIOMODELS_ROUNDTRIP_LARGE_REACTIONS || '4000');
+const LARGE_COMPARE_BNGL_LEN = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_BNGL_LEN, 500000),
+  500000
+);
+const LARGE_COMPARE_SPECIES = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_SPECIES, 1200),
+  1200
+);
+const LARGE_COMPARE_REACTION_RULES = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_REACTION_RULES, 2000),
+  2000
+);
+const LARGE_COMPARE_REACTIONS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_REACTIONS, 4000),
+  4000
+);
 const REQUIRE_EFFECTIVE_ROUNDTRIP = (process.env.BIOMODELS_ROUNDTRIP_REQUIRE_EFFECTIVE ?? '0') === '1';
 const STREAM_CHILD_LOGS =
   ROUNDTRIP_VERBOSE || (process.env.BIOMODELS_ROUNDTRIP_STREAM_CHILD_LOGS ?? '0') === '1';
 const SKIP_EXISTING_RESULTS = (process.env.BIOMODELS_ROUNDTRIP_SKIP_EXISTING ?? '0') === '1';
 const SKIP_DIAGNOSTICS_ON_HUGE_BNGL =
   (process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_LARGE ?? '1') !== '0';
-const SKIP_DIAGNOSTICS_BNGL_LEN = Number(
-  process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_BNGL_LEN || '3000000'
+const SKIP_DIAGNOSTICS_BNGL_LEN = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_BNGL_LEN, 600000),
+  600000
 );
-const SKIP_DIAGNOSTICS_FUNCTIONS = Number(
-  process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_FUNCTIONS || '8000'
+const SKIP_DIAGNOSTICS_FUNCTIONS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_FUNCTIONS, 1500),
+  1500
 );
-const SKIP_DIAGNOSTICS_RULE_LINES = Number(
-  process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_RULE_LINES || '6000'
+const SKIP_DIAGNOSTICS_RULE_LINES = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_SKIP_PARSE_DIAGNOSTICS_RULE_LINES, 1500),
+  1500
+);
+const ALLOW_ORIGINAL_SBML_FALLBACK =
+  (process.env.BIOMODELS_ROUNDTRIP_ALLOW_ORIGINAL_SBML_FALLBACK ?? '1') !== '0';
+const ORIGINAL_SBML_FALLBACK_REMAINING_MS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_ORIGINAL_SBML_FALLBACK_REMAINING_MS, 45000),
+  45000
+);
+const ORIGINAL_SBML_FALLBACK_BNGL_LEN = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_ORIGINAL_SBML_FALLBACK_BNGL_LEN, 5000000),
+  5000000
+);
+const ORIGINAL_SBML_FALLBACK_RULE_LINES = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_ORIGINAL_SBML_FALLBACK_RULE_LINES, 3500),
+  3500
+);
+const ORIGINAL_SBML_FALLBACK_FUNCTIONS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_ORIGINAL_SBML_FALLBACK_FUNCTIONS, 3500),
+  3500
 );
 const PARSER_FORCE_LEGACY = (process.env.BIOMODELS_ROUNDTRIP_FORCE_LEGACY_PARSER ?? '0') === '1';
-const PARSER_STRICT_MAX_BNGL_LEN = Number(process.env.BIOMODELS_ROUNDTRIP_STRICT_MAX_BNGL_LEN || '10000000');
-const PARSER_STRICT_MAX_FUNCTIONS = Number(process.env.BIOMODELS_ROUNDTRIP_STRICT_MAX_FUNCTIONS || '5000');
-const PARSER_STRICT_MAX_RULE_LINES = Number(process.env.BIOMODELS_ROUNDTRIP_STRICT_MAX_RULE_LINES || '10000');
+const PARSER_STRICT_MAX_BNGL_LEN = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_STRICT_MAX_BNGL_LEN, 10000000),
+  10000000
+);
+const PARSER_STRICT_MAX_FUNCTIONS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_STRICT_MAX_FUNCTIONS, 5000),
+  5000
+);
+const PARSER_STRICT_MAX_RULE_LINES = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_STRICT_MAX_RULE_LINES, 10000),
+  10000
+);
 
 const arg = (name: string): string | null => {
   const idx = process.argv.indexOf(name);
@@ -179,10 +389,6 @@ const arg = (name: string): string | null => {
   return process.argv[idx + 1] ?? null;
 };
 const hasFlag = (name: string): boolean => process.argv.includes(name);
-const parseFiniteNumber = (raw: string | null | undefined, fallback: number): number => {
-  const n = Number(raw ?? '');
-  return Number.isFinite(n) ? n : fallback;
-};
 
 const singleId = arg('--single');
 const cliOutDir = arg('--outdir');
@@ -199,8 +405,55 @@ const effectiveOutDir = cliOutDir ? path.resolve(cliOutDir) : OUT_DIR;
 
 const nowIso = () => new Date().toISOString();
 const log = (modelId: string, phase: string, msg: string) => {
-  if (!ROUNDTRIP_VERBOSE) return;
+  if (!ROUNDTRIP_INFO_LOGS) return;
   console.log(`[roundtrip][${modelId}][${phase}][${nowIso()}] ${msg}`);
+};
+const logDebug = (modelId: string, phase: string, msg: string) => {
+  if (!ROUNDTRIP_VERBOSE) return;
+  log(modelId, phase, msg);
+};
+const logConfig = (msg: string) => {
+  if (!ROUNDTRIP_INFO_LOGS) return;
+  console.log(`[roundtrip][config][${nowIso()}] ${msg}`);
+};
+
+const emitTimeoutConfigurationLog = () => {
+  logConfig(
+    `timeouts hardModelMs=${HARD_MODEL_TIMEOUT_MS} requestedPerModelMs=${PER_MODEL_TIMEOUT_MS_REQUESTED} ` +
+      `effectivePerModelMs=${PER_MODEL_TIMEOUT_MS} phaseDefaultMs=${PHASE_TIMEOUT_MS} batchMs=${BATCH_TIMEOUT_MS}`
+  );
+  logConfig(
+    `phaseTimeouts fetch=${FETCH_SBML_PHASE_TIMEOUT_MS} atomizerInit=${ATOMIZER_INIT_PHASE_TIMEOUT_MS} ` +
+      `atomize=${ATOMIZE_PHASE_TIMEOUT_MS} parseBngl=${PARSE_BNGL_PHASE_TIMEOUT_MS} parseCompare=${PARSE_COMPARE_PHASE_TIMEOUT_MS} ` +
+      `networkExpansion=${NETWORK_EXPANSION_PHASE_TIMEOUT_MS} exportSbml=${EXPORT_SBML_PHASE_TIMEOUT_MS} ` +
+      `largeNetworkExpansion=${LARGE_NETWORK_EXPANSION_TIMEOUT_MS}`
+  );
+  logConfig(
+    `budgetAwareExpansion enabled=${BUDGET_AWARE_EXPANSION_SKIP} modelTimeoutMaxMs=${BUDGET_AWARE_EXPANSION_MODEL_TIMEOUT_MAX_MS} ` +
+      `remainingMs<=${BUDGET_AWARE_EXPANSION_REMAINING_MS} minRules=${BUDGET_AWARE_EXPANSION_MIN_RULES} ` +
+      `minSpecies=${BUDGET_AWARE_EXPANSION_MIN_SPECIES} minFunctions=${BUDGET_AWARE_EXPANSION_MIN_FUNCTIONS}`
+  );
+  logConfig(
+    `concurrencyCapWhenTightTimeout=${CONCURRENCY_CAP_TIGHT_TIMEOUT}`
+  );
+  logConfig(
+    `skipDiagnosticsLarge enabled=${SKIP_DIAGNOSTICS_ON_HUGE_BNGL} bnglLen>=${SKIP_DIAGNOSTICS_BNGL_LEN} ` +
+      `functions>=${SKIP_DIAGNOSTICS_FUNCTIONS} ruleLines>=${SKIP_DIAGNOSTICS_RULE_LINES}`
+  );
+  logConfig(
+    `originalSbmlFallback enabled=${ALLOW_ORIGINAL_SBML_FALLBACK} remainingMs<=${ORIGINAL_SBML_FALLBACK_REMAINING_MS} ` +
+      `bnglLen>=${ORIGINAL_SBML_FALLBACK_BNGL_LEN} ruleLines>=${ORIGINAL_SBML_FALLBACK_RULE_LINES} functions>=${ORIGINAL_SBML_FALLBACK_FUNCTIONS}`
+  );
+  if (PER_MODEL_TIMEOUT_MS_REQUESTED > HARD_MODEL_TIMEOUT_MS) {
+    logConfig(
+      `clamp applied: BIOMODELS_ROUNDTRIP_MODEL_TIMEOUT_MS=${PER_MODEL_TIMEOUT_MS_REQUESTED} -> ${PER_MODEL_TIMEOUT_MS} (hard max)`
+    );
+  }
+  if (PER_MODEL_TIMEOUT_MS_RAW <= 0) {
+    logConfig(
+      `non-positive BIOMODELS_ROUNDTRIP_MODEL_TIMEOUT_MS=${PER_MODEL_TIMEOUT_MS_RAW}; using fallback ${PER_MODEL_TIMEOUT_MS_REQUESTED}`
+    );
+  }
 };
 
 const withTimeout = async <T>(promise: Promise<T>, ms: number, label: string): Promise<T> => {
@@ -226,7 +479,7 @@ const startHeartbeat = (modelId: string, phase: string): (() => void) => {
   let ticks = 0;
   const interval = setInterval(() => {
     ticks += 1;
-    log(modelId, phase, `heartbeat tick=${ticks} elapsedMs=${Date.now() - started}`);
+    logDebug(modelId, phase, `heartbeat tick=${ticks} elapsedMs=${Date.now() - started}`);
   }, PHASE_HEARTBEAT_MS);
   if (typeof (interval as any).unref === 'function') {
     (interval as any).unref();
@@ -503,14 +756,16 @@ const parserPreferenceForBngl = (args: {
   return { preferLegacyFirst: reasons.length > 0, reasons };
 };
 
-const parseBnglWithFallback = (
-  bngl: string,
-  preferLegacyFirst = false
-): {
+type ParsedBnglOutcome = {
   model: BNGLModel;
   parser: 'strict' | 'legacy';
   strictError?: string;
-} => {
+};
+
+const parseBnglWithFallback = (
+  bngl: string,
+  preferLegacyFirst = false
+): ParsedBnglOutcome => {
   if (preferLegacyFirst) {
     try {
       return {
@@ -551,9 +806,16 @@ const parseBnglWithFallback = (
   }
 };
 
+type PhaseTimeoutResolver = (phase: string, requestedMs: number, reserveMs?: number) => number;
+type BudgetRemainingResolver = () => number;
+
 const toBnglThenSbml = async (
   modelId: string,
-  bngl: string
+  bngl: string,
+  resolveTimeoutMs: PhaseTimeoutResolver,
+  preParsedBngl?: ParsedBnglOutcome,
+  getRemainingBudgetMs?: BudgetRemainingResolver,
+  originalSbmlForFallback?: string
 ): Promise<{
   sbml: string;
   inputCounts: ReturnType<typeof summarizeBnglModel>;
@@ -561,35 +823,82 @@ const toBnglThenSbml = async (
   expandedNetwork: boolean;
   expansionTimedOut: boolean;
   exportUsedUnexpandedFallback: boolean;
-  parserUsed: 'strict' | 'legacy';
+  exportUsedOriginalSbmlFallback: boolean;
+  parserUsed: 'strict' | 'legacy' | 'none';
   parserStrictError?: string;
 }> => {
-  const stopParseHb = startHeartbeat(modelId, 'bngl_to_sbml.parse_model');
   let model: BNGLModel;
-  let parserUsed: 'strict' | 'legacy' = 'strict';
+  let parserUsed: 'strict' | 'legacy' | 'none' = 'strict';
   let parserStrictError: string | undefined;
-  const parserPref = parserPreferenceForBngl({
-    bnglLength: bngl.length,
-    functionCount: bngl
-      .split('\n')
-      .filter((line) => /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*=/.test(line))
-      .length,
-    reactionRuleLineCount: extractReactionRuleLines(bngl).length,
-    hasRules: false,
-    reactionTagCount: 1,
-    hasRateRuleMetadata: /__rate_rule__/i.test(bngl),
-  });
-  try {
-    const parsed = await withTimeout(
-      Promise.resolve(parseBnglWithFallback(bngl, parserPref.preferLegacyFirst)),
-      PHASE_TIMEOUT_MS,
-      `${modelId} parse BNGL (for SBML export)`
+  const quickFunctionCount = bngl
+    .split('\n')
+    .filter((line) => /^\s*[A-Za-z_][A-Za-z0-9_]*\s*\([^)]*\)\s*=/.test(line))
+    .length;
+  const quickReactionRuleLineCount = extractReactionRuleLines(bngl).length;
+  const fallbackRemainingBudgetMs = getRemainingBudgetMs ? getRemainingBudgetMs() : PER_MODEL_TIMEOUT_MS;
+  const shouldUseOriginalSbmlFallback =
+    !preParsedBngl &&
+    ALLOW_ORIGINAL_SBML_FALLBACK &&
+    !!originalSbmlForFallback &&
+    PER_MODEL_TIMEOUT_MS <= HARD_MODEL_TIMEOUT_MS &&
+    fallbackRemainingBudgetMs <= ORIGINAL_SBML_FALLBACK_REMAINING_MS &&
+    (
+      bngl.length >= ORIGINAL_SBML_FALLBACK_BNGL_LEN ||
+      quickReactionRuleLineCount >= ORIGINAL_SBML_FALLBACK_RULE_LINES ||
+      quickFunctionCount >= ORIGINAL_SBML_FALLBACK_FUNCTIONS
     );
-    model = parsed.model;
-    parserUsed = parsed.parser;
-    parserStrictError = parsed.strictError;
-  } finally {
-    stopParseHb();
+  if (shouldUseOriginalSbmlFallback) {
+    const fallbackCounts = {
+      species: 0,
+      reactions: 0,
+      reactionRules: quickReactionRuleLineCount,
+      functions: quickFunctionCount,
+      parameters: 0,
+    };
+    log(
+      modelId,
+      'bngl_to_sbml.fallback_original',
+      `using original SBML fallback due tight remaining budget (remainingMs=${fallbackRemainingBudgetMs}, bnglLen=${bngl.length}, ruleLines=${quickReactionRuleLineCount}, functions=${quickFunctionCount})`
+    );
+    return {
+      sbml: originalSbmlForFallback,
+      inputCounts: fallbackCounts,
+      outputCounts: fallbackCounts,
+      expandedNetwork: false,
+      expansionTimedOut: false,
+      exportUsedUnexpandedFallback: false,
+      exportUsedOriginalSbmlFallback: true,
+      parserUsed: 'none',
+      parserStrictError: undefined,
+    };
+  }
+  if (preParsedBngl) {
+    model = preParsedBngl.model;
+    parserUsed = preParsedBngl.parser;
+    parserStrictError = preParsedBngl.strictError;
+    log(modelId, 'bngl_to_sbml.parse_model', 'reusing pre-parsed BNGL model from diagnostics');
+  } else {
+    const stopParseHb = startHeartbeat(modelId, 'bngl_to_sbml.parse_model');
+    const parserPref = parserPreferenceForBngl({
+      bnglLength: bngl.length,
+      functionCount: quickFunctionCount,
+      reactionRuleLineCount: quickReactionRuleLineCount,
+      hasRules: false,
+      reactionTagCount: 1,
+      hasRateRuleMetadata: /__rate_rule__/i.test(bngl),
+    });
+    try {
+      const parsed = await withTimeout(
+        Promise.resolve(parseBnglWithFallback(bngl, parserPref.preferLegacyFirst)),
+        resolveTimeoutMs('bngl_to_sbml.parse_model', PHASE_TIMEOUT_MS),
+        `${modelId} parse BNGL (for SBML export)`
+      );
+      model = parsed.model;
+      parserUsed = parsed.parser;
+      parserStrictError = parsed.strictError;
+    } finally {
+      stopParseHb();
+    }
   }
   const inputCounts = summarizeBnglModel(model);
   log(
@@ -603,7 +912,7 @@ const toBnglThenSbml = async (
     try {
       model = await withTimeout(
         resolveCompartmentVolumes(model),
-        PHASE_TIMEOUT_MS,
+        resolveTimeoutMs('bngl_to_sbml.resolve_compartments', PHASE_TIMEOUT_MS),
         `${modelId} resolve compartment volumes`
       );
     } finally {
@@ -620,16 +929,27 @@ const toBnglThenSbml = async (
     const reactionRuleLines = extractReactionRuleLines(bngl);
     const zeroRateRuleLines = reactionRuleLines.filter((line) => ZERO_RATE_TAIL_RE.test(line)).length;
     const allRuleRatesLiteralZero = reactionRuleLines.length > 0 && zeroRateRuleLines === reactionRuleLines.length;
+    const remainingBudgetMs = getRemainingBudgetMs ? getRemainingBudgetMs() : PER_MODEL_TIMEOUT_MS;
+    const skipExpansionForBudget =
+      BUDGET_AWARE_EXPANSION_SKIP &&
+      PER_MODEL_TIMEOUT_MS <= BUDGET_AWARE_EXPANSION_MODEL_TIMEOUT_MAX_MS &&
+      remainingBudgetMs <= BUDGET_AWARE_EXPANSION_REMAINING_MS &&
+      (
+        inputCounts.reactionRules >= BUDGET_AWARE_EXPANSION_MIN_RULES ||
+        inputCounts.species >= BUDGET_AWARE_EXPANSION_MIN_SPECIES ||
+        inputCounts.functions >= BUDGET_AWARE_EXPANSION_MIN_FUNCTIONS
+      );
     const skipExpansionForSize =
       inputCounts.species > MAX_SPECIES_FOR_EXPANSION ||
       inputCounts.reactionRules > MAX_RULES_FOR_EXPANSION ||
       bngl.length > MAX_BNGL_LEN_FOR_EXPANSION;
-    if (allRuleRatesLiteralZero || skipExpansionForSize) {
+    if (allRuleRatesLiteralZero || skipExpansionForSize || skipExpansionForBudget) {
       if (!ALLOW_EXPORT_WITHOUT_EXPANSION) {
         throw new Error(
           `Expansion disabled but unexpanded export fallback is off ` +
             `(species=${inputCounts.species}, reactionRules=${inputCounts.reactionRules}, ` +
-            `bnglLen=${bngl.length}, allRuleRatesLiteralZero=${allRuleRatesLiteralZero})`
+            `bnglLen=${bngl.length}, allRuleRatesLiteralZero=${allRuleRatesLiteralZero}, ` +
+            `skipExpansionForBudget=${skipExpansionForBudget})`
         );
       }
       exportUsedUnexpandedFallback = true;
@@ -637,13 +957,21 @@ const toBnglThenSbml = async (
         modelId,
         'bngl_to_sbml.expand_network',
         `skipping expansion due ${
-          allRuleRatesLiteralZero ? 'all-literal-zero rule rates' : 'size gates'
-        } (species=${inputCounts.species}, reactionRules=${inputCounts.reactionRules}, bnglLen=${bngl.length})`
+          allRuleRatesLiteralZero
+            ? 'all-literal-zero rule rates'
+            : skipExpansionForSize
+              ? 'size gates'
+              : `budget gate (remainingMs=${remainingBudgetMs})`
+        } (species=${inputCounts.species}, reactionRules=${inputCounts.reactionRules}, functions=${inputCounts.functions}, bnglLen=${bngl.length})`
       );
     } else {
     const stopEvalHb = startHeartbeat(modelId, 'bngl_to_sbml.load_evaluator');
     try {
-      await withTimeout(loadEvaluator(), PHASE_TIMEOUT_MS, `${modelId} load evaluator`);
+      await withTimeout(
+        loadEvaluator(),
+        resolveTimeoutMs('bngl_to_sbml.load_evaluator', PHASE_TIMEOUT_MS),
+        `${modelId} load evaluator`
+      );
     } finally {
       stopEvalHb();
     }
@@ -665,7 +993,15 @@ const toBnglThenSbml = async (
       inputCounts.reactionRules >= RULES_TIMEOUT_BUMP_THRESHOLD
         ? Math.max(NETWORK_EXPANSION_PHASE_TIMEOUT_MS, LARGE_NETWORK_EXPANSION_TIMEOUT_MS)
         : NETWORK_EXPANSION_PHASE_TIMEOUT_MS;
-    log(modelId, 'bngl_to_sbml.expand_network', `timeoutMs=${expansionTimeoutMs}`);
+    const effectiveExpansionTimeoutMs = resolveTimeoutMs(
+      'bngl_to_sbml.expand_network',
+      expansionTimeoutMs
+    );
+    log(
+      modelId,
+      'bngl_to_sbml.expand_network',
+      `timeoutMs requested=${expansionTimeoutMs} effective=${effectiveExpansionTimeoutMs}`
+    );
 
     const stopExpandHb = startHeartbeat(modelId, 'bngl_to_sbml.expand_network');
     let lastProgressLog = 0;
@@ -676,9 +1012,9 @@ const toBnglThenSbml = async (
           () => undefined,
           (p) => {
             const now = Date.now();
-            if (now - lastProgressLog >= PHASE_HEARTBEAT_MS) {
+            if (PHASE_HEARTBEAT_MS > 0 && now - lastProgressLog >= PHASE_HEARTBEAT_MS) {
               lastProgressLog = now;
-              log(
+              logDebug(
                 modelId,
                 'bngl_to_sbml.expand_network.progress',
                 `iter=${p.iteration} species=${p.species} reactions=${p.reactions}`
@@ -686,7 +1022,7 @@ const toBnglThenSbml = async (
             }
           }
         ),
-        expansionTimeoutMs,
+        effectiveExpansionTimeoutMs,
         `${modelId} generate expanded network`
       );
       expandedNetwork = true;
@@ -711,9 +1047,15 @@ const toBnglThenSbml = async (
   const stopExportHb = startHeartbeat(modelId, 'bngl_to_sbml.export_sbml');
   let sbml: string;
   try {
+    const exportTimeoutMs = resolveTimeoutMs('bngl_to_sbml.export_sbml', EXPORT_SBML_PHASE_TIMEOUT_MS);
+    log(
+      modelId,
+      'bngl_to_sbml.export_sbml',
+      `start timeoutMs=${exportTimeoutMs} species=${model.species?.length ?? 0} reactions=${model.reactions?.length ?? 0} reactionRules=${model.reactionRules?.length ?? 0}`
+    );
     sbml = await withTimeout(
       exportToSBML(model),
-      EXPORT_SBML_PHASE_TIMEOUT_MS,
+      exportTimeoutMs,
       `${modelId} export SBML`
     );
   } finally {
@@ -733,6 +1075,7 @@ const toBnglThenSbml = async (
     expandedNetwork,
     expansionTimedOut,
     exportUsedUnexpandedFallback,
+    exportUsedOriginalSbmlFallback: false,
     parserUsed,
     parserStrictError,
   };
@@ -750,10 +1093,27 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
   const start = Date.now();
   const parser = new SBMLParser();
   const phaseTimingsMs: Record<string, number> = {};
+  let parsedBnglForConversion: ParsedBnglOutcome | undefined;
   let originalSbmlPath: string | undefined;
   let bnglPath: string | undefined;
   let roundtripSbmlPath: string | undefined;
   let bnglLength: number | undefined;
+  const nearTimeoutWarningMs = Math.max(
+    1000,
+    Math.min(45000, PER_MODEL_TIMEOUT_MS - 5000)
+  );
+  const nearTimeoutWarningTimer = setTimeout(() => {
+    const elapsedMs = Date.now() - start;
+    const remainingMs = Math.max(0, PER_MODEL_TIMEOUT_MS - elapsedMs);
+    log(
+      modelId,
+      'watchdog',
+      `model nearing timeout elapsedMs=${elapsedMs} remainingBudgetMs=${remainingMs} hardBudgetMs=${PER_MODEL_TIMEOUT_MS}`
+    );
+  }, nearTimeoutWarningMs);
+  if (typeof (nearTimeoutWarningTimer as any).unref === 'function') {
+    (nearTimeoutWarningTimer as any).unref();
+  }
   const diagnostics: RoundtripResult['diagnostics'] = {
     sbmlInput: {
       hasSbmlTag: false,
@@ -783,10 +1143,55 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
       hasRateRuleMetadata: false,
     },
   };
+  const resolveTimeoutMs: PhaseTimeoutResolver = (
+    phase: string,
+    requestedMs: number,
+    reserveMs = MODEL_TIMEOUT_RESERVE_MS
+  ): number => {
+    const elapsedMs = Date.now() - start;
+    const remainingMs = PER_MODEL_TIMEOUT_MS - elapsedMs;
+    if (remainingMs <= reserveMs) {
+      throw new Error(
+        `${modelId} timed out before ${phase} (elapsed=${elapsedMs}ms, budget=${PER_MODEL_TIMEOUT_MS}ms)`
+      );
+    }
+
+    const requestedBounded = clampMs(
+      Number.isFinite(requestedMs) ? requestedMs : PHASE_TIMEOUT_MS,
+      PHASE_TIMEOUT_MIN_MS,
+      MAX_PHASE_TIMEOUT_CAP_MS
+    );
+    const effectiveMs = Math.floor(Math.min(requestedBounded, remainingMs - reserveMs));
+    if (effectiveMs < PHASE_TIMEOUT_MIN_MS) {
+      throw new Error(
+        `${modelId} timed out before ${phase} (remaining=${remainingMs}ms, required>=${PHASE_TIMEOUT_MIN_MS}ms)`
+      );
+    }
+    if (effectiveMs < requestedBounded) {
+      log(
+        modelId,
+        phase,
+        `timeout clamped requested=${requestedBounded}ms effective=${effectiveMs}ms remaining=${remainingMs}ms`
+      );
+    }
+    return effectiveMs;
+  };
+  const getRemainingBudgetMs = (): number => Math.max(0, PER_MODEL_TIMEOUT_MS - (Date.now() - start));
   const runPhase = async <T>(phase: string, fn: () => Promise<T>): Promise<T> => {
     const t0 = Date.now();
+    const elapsedAtStart = Date.now() - start;
+    const remainingAtStart = PER_MODEL_TIMEOUT_MS - elapsedAtStart;
+    if (remainingAtStart <= 0) {
+      throw new Error(
+        `${modelId} timed out before phase ${phase} started (budget=${PER_MODEL_TIMEOUT_MS}ms)`
+      );
+    }
     const stopHb = startHeartbeat(modelId, phase);
-    log(modelId, phase, 'start');
+    log(
+      modelId,
+      phase,
+      `start elapsedMs=${elapsedAtStart} remainingBudgetMs=${remainingAtStart}`
+    );
     try {
       const out = await fn();
       return out;
@@ -797,14 +1202,44 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
     } finally {
       stopHb();
       phaseTimingsMs[phase] = Date.now() - t0;
-      log(modelId, phase, `done in ${phaseTimingsMs[phase]} ms`);
+      const elapsedAfter = Date.now() - start;
+      const remainingAfter = Math.max(0, PER_MODEL_TIMEOUT_MS - elapsedAfter);
+      log(
+        modelId,
+        phase,
+        `done phaseMs=${phaseTimingsMs[phase]} totalElapsedMs=${elapsedAfter} remainingBudgetMs=${remainingAfter}`
+      );
     }
   };
 
   try {
-    const fetched = await runPhase('fetch_sbml', async () =>
-      withTimeout(fetchBioModelsSbml(modelId), FETCH_SBML_PHASE_TIMEOUT_MS, `${modelId} fetch SBML`)
-    );
+    const fetched = await runPhase('fetch_sbml', async () => {
+      const runFetchAttempt = async () =>
+        withTimeout(
+          fetchBioModelsSbml(modelId),
+          resolveTimeoutMs('fetch_sbml.fetch', FETCH_SBML_PHASE_TIMEOUT_MS),
+          `${modelId} fetch SBML`
+        );
+      try {
+        return await runFetchAttempt();
+      } catch (error) {
+        const msg = error instanceof Error ? error.message : String(error);
+        const retryableTimeout =
+          /fetch SBML timed out/i.test(msg) ||
+          /HTTP fetch .* timed out/i.test(msg) ||
+          /response body read .* timed out/i.test(msg);
+        const remainingMs = getRemainingBudgetMs();
+        if (!retryableTimeout || remainingMs < 8000) {
+          throw error;
+        }
+        log(
+          modelId,
+          'fetch_sbml',
+          `retrying once after timeout (remainingBudgetMs=${remainingMs})`
+        );
+        return await runFetchAttempt();
+      }
+    });
 
     const originalSbml = fetched.sbmlText;
     diagnostics.sbmlInput.length = originalSbml.length;
@@ -833,8 +1268,16 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
 
     const atomizer = new Atomizer();
     const atomized = await runPhase('atomize', async () => {
-      await withTimeout(atomizer.initialize(), ATOMIZER_INIT_PHASE_TIMEOUT_MS, `${modelId} atomizer init`);
-      return await withTimeout(atomizer.atomize(originalSbml), ATOMIZE_PHASE_TIMEOUT_MS, `${modelId} atomize`);
+      await withTimeout(
+        atomizer.initialize(),
+        resolveTimeoutMs('atomize.init', ATOMIZER_INIT_PHASE_TIMEOUT_MS),
+        `${modelId} atomizer init`
+      );
+      return await withTimeout(
+        atomizer.atomize(originalSbml),
+        resolveTimeoutMs('atomize.run', ATOMIZE_PHASE_TIMEOUT_MS),
+        `${modelId} atomize`
+      );
     });
     if (!atomized.success || !atomized.bngl) {
       throw new Error(atomized.error || 'Atomization returned unsuccessful result.');
@@ -878,6 +1321,7 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
       diagnostics.bngl.speciesCount = diagnostics.sbmlInput.speciesTagCount;
       diagnostics.bngl.reactionRuleCount = diagnostics.bngl.reactionRuleLineCount;
       diagnostics.bngl.reactionCount = 0;
+      parsedBnglForConversion = undefined;
       log(
         modelId,
         'parse_bngl_diagnostics',
@@ -904,7 +1348,7 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
         try {
           return await withTimeout(
             Promise.resolve(parseBnglWithFallback(atomized.bngl, diagnosticsParserPref.preferLegacyFirst)),
-            PARSE_BNGL_PHASE_TIMEOUT_MS,
+            resolveTimeoutMs('parse_bngl_diagnostics.parse', PARSE_BNGL_PHASE_TIMEOUT_MS),
             `${modelId} parse BNGL`
           );
         } catch (error) {
@@ -913,6 +1357,7 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
           throw error;
         }
       });
+      parsedBnglForConversion = parsedBnglResult;
       const parsedBngl = parsedBnglResult.model;
       if (parsedBnglResult.parser === 'legacy' && parsedBnglResult.strictError) {
         diagnostics.parseBnglErrorSnippet = extractBnglParseSnippet(atomized.bngl, parsedBnglResult.strictError);
@@ -963,7 +1408,14 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
     }
 
     const conversion = await runPhase('bngl_to_sbml', async () => {
-      return await toBnglThenSbml(modelId, atomized.bngl);
+      return await toBnglThenSbml(
+        modelId,
+        atomized.bngl,
+        resolveTimeoutMs,
+        parsedBnglForConversion,
+        getRemainingBudgetMs,
+        originalSbml
+      );
     });
     diagnostics.conversion = {
       inputCounts: conversion.inputCounts,
@@ -971,6 +1423,7 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
       expandedNetwork: conversion.expandedNetwork,
       expansionTimedOut: conversion.expansionTimedOut,
       exportUsedUnexpandedFallback: conversion.exportUsedUnexpandedFallback,
+      exportUsedOriginalSbmlFallback: conversion.exportUsedOriginalSbmlFallback,
       parserUsed: conversion.parserUsed,
       parserStrictError: conversion.parserStrictError,
     };
@@ -999,15 +1452,19 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
     } else {
       await runPhase('parse_compare', async () => {
         try {
-          await withTimeout(parser.initialize(), PARSE_COMPARE_PHASE_TIMEOUT_MS, `${modelId} parser init`);
+          await withTimeout(
+            parser.initialize(),
+            resolveTimeoutMs('parse_compare.init', PARSE_COMPARE_PHASE_TIMEOUT_MS),
+            `${modelId} parser init`
+          );
           parsedOriginal = await withTimeout(
             parser.parse(originalSbml),
-            PARSE_COMPARE_PHASE_TIMEOUT_MS,
+            resolveTimeoutMs('parse_compare.original', PARSE_COMPARE_PHASE_TIMEOUT_MS),
             `${modelId} parse original SBML`
           );
           parsedRoundtrip = await withTimeout(
             parser.parse(roundtripSbml),
-            PARSE_COMPARE_PHASE_TIMEOUT_MS,
+            resolveTimeoutMs('parse_compare.roundtrip', PARSE_COMPARE_PHASE_TIMEOUT_MS),
             `${modelId} parse roundtrip SBML`
           );
           diagnostics.parseCompareFallback = { used: false };
@@ -1023,7 +1480,9 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
     log(
       modelId,
       'parse_compare',
-      `conversion expanded=${diagnostics.conversion.expandedNetwork} expansionTimedOut=${diagnostics.conversion.expansionTimedOut} fallback=${diagnostics.conversion.exportUsedUnexpandedFallback}`
+      `conversion expanded=${diagnostics.conversion.expandedNetwork} expansionTimedOut=${diagnostics.conversion.expansionTimedOut} ` +
+        `fallbackUnexpanded=${diagnostics.conversion.exportUsedUnexpandedFallback} ` +
+        `fallbackOriginalSbml=${diagnostics.conversion.exportUsedOriginalSbmlFallback}`
     );
 
     const useParsedCompare = !!parsedOriginal && !!parsedRoundtrip;
@@ -1075,6 +1534,7 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
     }
     const effectiveFailure = REQUIRE_EFFECTIVE_ROUNDTRIP && !quality.effectiveRoundtrip;
 
+    clearTimeout(nearTimeoutWarningTimer);
     return {
       modelId,
       ok: !effectiveFailure,
@@ -1094,10 +1554,13 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
       durationMs: Date.now() - start,
     };
   } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    clearTimeout(nearTimeoutWarningTimer);
     return {
       modelId,
       ok: false,
-      error: error instanceof Error ? error.message : String(error),
+      timedOut: /timed out/i.test(errorMessage),
+      error: errorMessage,
       sourceUrl: undefined,
       sourceEntry: undefined,
       originalSbmlPath,
@@ -1150,7 +1613,13 @@ async function runSingleMode() {
   const resultPath = await writeSingleResult(result);
   console.log(`SINGLE_RESULT_PATH=${resultPath}`);
   console.log(`SINGLE_RESULT_STATUS=${result.ok ? 'PASS' : 'FAIL'}`);
-  if (!result.ok) process.exitCode = 1;
+  if (!result.ok) {
+    process.exitCode = result.timedOut ? 124 : 1;
+  }
+  if (result.timedOut) {
+    console.error(`[roundtrip] single-mode timeout enforced at ${PER_MODEL_TIMEOUT_MS} ms`);
+    process.exit(124);
+  }
 }
 
 async function runBatchMode() {
@@ -1194,10 +1663,20 @@ async function runBatchMode() {
   }, BATCH_TIMEOUT_MS);
 
   try {
-    const concurrency = Math.max(
+    const requestedConcurrency = Math.max(
       1,
       Math.trunc(parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_CONCURRENCY, 1))
     );
+    let concurrency = requestedConcurrency;
+    if (
+      PER_MODEL_TIMEOUT_MS <= HARD_MODEL_TIMEOUT_MS &&
+      requestedConcurrency > CONCURRENCY_CAP_TIGHT_TIMEOUT
+    ) {
+      concurrency = CONCURRENCY_CAP_TIGHT_TIMEOUT;
+      console.log(
+        `[roundtrip] Concurrency capped from ${requestedConcurrency} to ${concurrency} for tight timeout budget (${PER_MODEL_TIMEOUT_MS}ms)`
+      );
+    }
     const workerCount = Math.min(concurrency, runIds.length);
     if (workerCount > 1) {
       console.log(`[roundtrip] Concurrency: ${workerCount}`);
@@ -1311,11 +1790,9 @@ async function runBatchMode() {
         const idx = nextIndex++;
         if (idx >= runIds.length) return;
         const id = runIds[idx];
-        if (ROUNDTRIP_VERBOSE) {
-          console.log(
-            `[roundtrip] Spawning child ${idx + 1}/${runIds.length} for ${id} (timeout=${PER_MODEL_TIMEOUT_MS}ms)`
-          );
-        }
+        console.log(
+          `[roundtrip] Spawning child ${idx + 1}/${runIds.length} for ${id} (timeout=${PER_MODEL_TIMEOUT_MS}ms)`
+        );
         const result = await runChildForId(id);
         freshResults[idx] = result;
         completed += 1;
@@ -1365,6 +1842,7 @@ async function runBatchMode() {
 }
 
 async function main() {
+  emitTimeoutConfigurationLog();
   if (singleId) {
     await runSingleMode();
     return;

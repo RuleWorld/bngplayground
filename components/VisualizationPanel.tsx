@@ -2,6 +2,9 @@ import React, { useState, useRef, useEffect } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../types';
 import { ResultsChart } from './ResultsChart';
 import { ContactMapTab } from './tabs/ContactMapTab';
+import { InfluenceGraphViewer } from './InfluenceGraphViewer';
+import { buildRuleOverlays } from '../services/visualization/buildRuleOverlays';
+import { computeInfluenceGraph } from '../services/visualization/computeInfluence';
 import { SteadyStateTab } from './tabs/SteadyStateTab';
 import { FIMTab } from './tabs/FIMTab';
 import { CartoonTab } from './tabs/CartoonTab';
@@ -75,7 +78,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     onActiveTabIndexChange?.(idx);
   };
 
-  const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact'>('regulatory');
+  const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact' | 'influence'>('regulatory');
 
   React.useEffect(() => {
     if (model) {
@@ -156,6 +159,12 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     return BNGLParser.getSeedParameters(bnglCode);
   }, [bnglCode]);
 
+  const influenceGraphData = React.useMemo(() => {
+    if (!model || model.reactionRules.length === 0) return { nodes: [], edges: [] };
+    const overlays = buildRuleOverlays(model.reactionRules, model.moleculeTypes);
+    return computeInfluenceGraph(overlays, model.reactionRules);
+  }, [model]);
+
   return (
     <div className="flex h-full min-h-0 flex-col gap-0 border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
       {/* Header / Tabs */}
@@ -235,6 +244,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             >
               Rules
             </button>
+
+            <button
+              onClick={() => setNetworkViewMode('influence')}
+              className={`px-2 py-0.5 text-xs font-medium rounded ${networkViewMode === 'influence'
+                ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+            >
+              Influence
+            </button>
           </div>
         )}
       </div>
@@ -313,7 +332,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Shapes represent molecules, and internal port-dots represent sites. Lines between sites indicate that those two molecules can physically bind to each other."
             />
-            <ContactMapTab model={model} onSelectRule={setSelectedRuleId} />
+            <ContactMapTab model={model} results={results} onSelectRule={setSelectedRuleId} />
           </div>
         )}
 
@@ -336,6 +355,25 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               selectedRuleId={selectedRuleId}
               onSelectRule={setSelectedRuleId}
               simulationMethod={simulationMethod}
+            />
+          </div>
+        )}
+
+        {activeTab === 1 && networkViewMode === 'influence' && (
+          <div className="h-full flex flex-col">
+            <HelpSection
+              title="Structural Influence Graph"
+              description="Shows rule-to-rule causal relationships. An edge from rule A to rule B means A's structural changes can affect B's ability to fire."
+              features={[
+                "Green edges: activation (A creates what B needs)",
+                "Magenta edges: inhibition (A destroys what B needs)",
+                "Solid: definite, Dashed: possible",
+                "Click a node to filter its connections"
+              ]}
+              plotDescription="Based on structural overlap between rule centers (changes) and contexts (requirements), ported from RuleBender's influence graph algorithm."
+            />
+            <InfluenceGraphViewer
+              graphData={influenceGraphData}
             />
           </div>
         )}

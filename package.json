@@ -44,7 +44,7 @@
     "es-toolkit": "^1.43.0",
     "html2canvas": "^1.4.1",
     "jsep": "^1.4.0",
-    "jspdf": "4.0.0",
+    "jspdf": "4.2.0",
     "jszip": "^3.10.1",
     "libsbmljs_stable": "latest",
     "ml-matrix": "^6.8.0",
