@@ -1,5 +1,4 @@
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
-import type { SpeciesGraph } from '../../src/services/graph/core/SpeciesGraph';
+import { BNGLParser, type SpeciesGraph } from '@bngplayground/engine';
 import type {
   VisualizationComponent,
   VisualizationMolecule,
@@ -115,17 +114,17 @@ export const buildVisualizationMolecule = (
     return visualComponent;
   });
 
-    // set a molecule color and derive text color for good contrast
-    const color = colorFromName(molecule.name);
-    const fg = foregroundForBackground(color);
+  // set a molecule color and derive text color for good contrast
+  const color = colorFromName(molecule.name);
+  const fg = foregroundForBackground(color);
 
-    return {
-      name: molecule.name,
-      components,
-      color,
-      // expose a human readable text color so svg/cytoscape can pick readable labels
-      textColor: fg,
-    } as VisualizationMolecule & { textColor?: string };
+  return {
+    name: molecule.name,
+    components,
+    color,
+    // expose a human readable text color so svg/cytoscape can pick readable labels
+    textColor: fg,
+  } as VisualizationMolecule & { textColor?: string };
 };
 
 export const convertSpeciesGraph = (graph: SpeciesGraph): VisualizationMolecule[] => {
@@ -303,7 +302,7 @@ export const detectStateChanges = (
 
   // Match molecules by name and position
   const usedProductIdx = new Set<number>();
-  
+
   reactantMolecules.forEach((reactantMol) => {
     // Find matching product molecule by name (first unused one)
     const productIdx = productMolecules.findIndex((prodMol, idx) => {
@@ -311,14 +310,14 @@ export const detectStateChanges = (
     });
 
     if (productIdx === -1) return; // Molecule was deleted
-    
+
     usedProductIdx.add(productIdx);
     const productMol = productMolecules[productIdx];
 
     // Compare components between matched molecules
     reactantMol.components.forEach((reactantState, compName) => {
       const productState = productMol.components.get(compName);
-      
+
       const fromState = reactantState ?? 'unspecified';
       const toState = productState ?? 'unspecified';
 

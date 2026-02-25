@@ -154,7 +154,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       onModelNameChange?.(file.name.replace(/\.bngl$/i, ''));
       onModelIdChange?.(null);
       // automatically parse newly loaded file
-      onParse(newCode);
+      onParse();
     };
     reader.readAsText(file);
   };
@@ -171,7 +171,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
     onModelIdChange?.(modelId ?? null);
     setIsGalleryOpen(false);
     // automatically parse after loading an example
-    onParse(exampleCode);
+    onParse();
   };
 
   return (
@@ -232,9 +232,9 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             lastResized={lastResized}
             onRun={() => {
               // Ctrl+Enter: parse first, then simulate with model-default options
-              onParse(code);
+              onParse();
               if (model) {
-                const opts = getSimulationOptionsFromParsedModel(model);
+                const opts = getSimulationOptionsFromParsedModel(model, 'default');
                 onSimulate(opts);
               }
             }}

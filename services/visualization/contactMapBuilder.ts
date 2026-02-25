@@ -54,8 +54,8 @@ export const buildContactMap = (
   rules.forEach((rule, ruleIndex) => {
     const ruleId = options.getRuleId?.(rule, ruleIndex) ?? rule.name ?? `rule_${ruleIndex + 1}`;
     const ruleLabel = options.getRuleLabel?.(rule, ruleIndex) ?? rule.name ?? `Rule ${ruleIndex + 1}`;
-    const reactantGraphs = parseSpeciesGraphs(rule.reactants);
-    const productGraphs = parseSpeciesGraphs(rule.products);
+    const reactantGraphs = parseSpeciesGraphs(rule.reactants as string[]);
+    const productGraphs = parseSpeciesGraphs(rule.products as string[]);
 
     const collectStructure = (graphs: any[]) => {
       graphs.forEach((graph) => {
@@ -90,8 +90,8 @@ export const buildContactMap = (
 
     // (colors are chosen at render-time by viewers using colorFromName)
 
-    const reactantBonds = extractBonds(reactantGraphs, sanitizeName);
-    const productBonds = extractBonds(productGraphs, sanitizeName);
+    const reactantBonds = extractBonds(reactantGraphs);
+    const productBonds = extractBonds(productGraphs);
 
     // Collect all unique bonds seen in this rule (union of reactants and products)
     // BioNetGen contact maps show any bond that *can* exist in the model.
@@ -135,7 +135,7 @@ export const buildContactMap = (
 
   // scan rules again to collect molecule compartments
   rules.forEach((rule) => {
-    const graphs = parseSpeciesGraphs([...rule.reactants, ...rule.products]);
+    const graphs = parseSpeciesGraphs([...rule.reactants, ...rule.products] as string[]);
     graphs.forEach((g) => {
       g.molecules.forEach((m) => {
         if (m.compartment) {

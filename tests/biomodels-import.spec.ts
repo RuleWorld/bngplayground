@@ -30,7 +30,7 @@ describe('BioModels import service', () => {
     );
   });
 
-  it('falls back to OMEX download and extracts SBML instead of manifest/metadata XML', async () => {
+  it('extracts SBML from OMEX when response is explicitly marked as archive payload', async () => {
     const zip = new JSZip();
     zip.file(
       'manifest.xml',
@@ -58,7 +58,7 @@ describe('BioModels import service', () => {
       .mockResolvedValueOnce(
         new Response(Buffer.from(zipBytes), {
           status: 200,
-          headers: { 'content-type': 'application/x-troff-man' },
+          headers: { 'content-type': 'application/octet-stream' },
         })
       );
 
@@ -67,5 +67,31 @@ describe('BioModels import service', () => {
     expect(result.sourceEntry).toBe('models/model.xml');
     expect(result.sbmlText).toContain('<sbml');
     expect(result.sbmlText).toContain('id="m2"');
+  });
+
+  it('does not fall back to arrayBuffer when non-archive text read fails', async () => {
+    const textSpy = vi.fn(async () => {
+      throw new Error('text read failed');
+    });
+    const arrayBufferSpy = vi.fn(async () => new ArrayBuffer(8));
+
+    const mockFetch = vi.fn(async () => {
+      const response = {
+        ok: true,
+        status: 200,
+        url: 'https://example.org/model.xml',
+        headers: new Headers({ 'content-type': 'text/xml' }),
+        bodyUsed: false,
+        text: textSpy,
+        arrayBuffer: arrayBufferSpy,
+      };
+      return response as unknown as Response;
+    });
+
+    await expect(
+      fetchBioModelsSbml('BIOMD0000000001', mockFetch as unknown as typeof fetch)
+    ).rejects.toThrow(/text read failed/);
+    expect(textSpy).toHaveBeenCalledTimes(2);
+    expect(arrayBufferSpy).not.toHaveBeenCalled();
   });
 });

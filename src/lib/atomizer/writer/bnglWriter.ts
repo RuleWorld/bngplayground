@@ -2784,8 +2784,9 @@ function processOneDirection(
 
   // Clean up: remove residual "* 1" and "1 *" factors
   modifiedRate = modifiedRate
-    .replace(/\b1\b\s*\*\s*/g, '')
-    .replace(/\s*\*\s*\b1\b/g, '')
+    // Only strip standalone "1" factors, not decimal literals like "1.4".
+    .replace(/\b1\b(?!\.\d)\s*\*\s*/g, '')
+    .replace(/\s*\*\s*\b1\b(?!\.\d)/g, '')
     .trim();
 
   if (!modifiedRate || modifiedRate === '') modifiedRate = '1';

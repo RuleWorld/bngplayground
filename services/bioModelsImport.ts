@@ -248,22 +248,15 @@ const fetchAttempt = async (
   );
 
   if (!archiveHint) {
-    let text: string;
-    try {
-      text = await withTimeout(
-        response.text(),
-        BODY_READ_TIMEOUT_MS,
-        `BioModels response body read (text) ${normalizedId}`,
-        () => controller?.abort()
-      );
-      debugLog('text read ok', `chars=${text.length}`);
-    } catch (textErr) {
-      const textMsg = textErr instanceof Error ? textErr.message : String(textErr);
-      debugLog('text read failed', textMsg, 'falling back to binary probe');
-      text = '';
-    }
+    const text = await withTimeout(
+      response.text(),
+      BODY_READ_TIMEOUT_MS,
+      `BioModels response body read (text) ${normalizedId}`,
+      () => controller?.abort()
+    );
+    debugLog('text read ok', `chars=${text.length}`);
 
-    if (text && isLikelySbml(text)) {
+    if (isLikelySbml(text)) {
       debugLog('payload identified as SBML text');
       return {
         normalizedId,
@@ -272,9 +265,11 @@ const fetchAttempt = async (
       };
     }
 
-    if (text && isLikelyHtml(text)) {
+    if (isLikelyHtml(text)) {
       throw new Error('Received HTML instead of SBML.');
     }
+
+    throw new Error('Response did not contain SBML content.');
   }
 
   const binaryController = typeof AbortController !== 'undefined' ? new AbortController() : null;

@@ -280,6 +280,12 @@ const debugSbml = (...args: unknown[]): void => {
   console.log(...args);
 };
 
+type SimpleXmlNode = {
+  name: string;
+  children: SimpleXmlNode[];
+  text: string;
+};
+
 // =============================================================================
 // SBML Parser Class
 // =============================================================================
@@ -710,6 +716,8 @@ export class SBMLParser {
   private nativeFormulaToStringDisabled: boolean = false;
   private parameterAliasToId: Map<string, string> = new Map();
   private reactionKineticFormulaById: Map<string, string> = new Map();
+  private ruleFormulaByKey: Map<string, string[]> = new Map();
+  private ruleFormulaCursorByKey: Map<string, number> = new Map();
 
   /**
    * Initialize the parser by loading libsbmljs
@@ -903,6 +911,8 @@ export class SBMLParser {
     debugSbml(`!!! [SBMLParser] _parseInternal: Length: ${sbmlString.length}`);
     this.currentSbml = sbmlString;
     this.reactionKineticFormulaById = this.buildReactionKineticFormulaFallbackMap(sbmlString);
+    this.ruleFormulaByKey = this.buildRuleFormulaFallbackMap(sbmlString);
+    this.ruleFormulaCursorByKey = new Map();
     debugSbml(`!!! [SBMLParser] SBML Snippet: ${sbmlString.substring(0, 200)}`);
     let document: any;
     let reader: any;
@@ -1366,6 +1376,25 @@ export class SBMLParser {
     return normalized;
   }
 
+  private sanitizeMathExpression(formula: string): string {
+    let sanitized = String(formula || '').trim();
+    if (!sanitized) return '';
+
+    // Some malformed extraction paths leak a standalone '=' token.
+    sanitized = sanitized.replace(/^\s*=\s*/, '').trim();
+    if (!sanitized) return '';
+
+    // Keep valid function/operator expressions, but reject punctuation-only artifacts.
+    if (/^[=(){}\[\],;\s]+$/.test(sanitized)) {
+      return '';
+    }
+    return sanitized;
+  }
+
+  private makeRuleFormulaKey(ruleType: SBMLRule['type'], variable?: string): string {
+    return `${ruleType}:${String(variable || '').trim()}`;
+  }
+
   private getXmlAttribute(tagAttributes: string, attributeName: string): string | null {
     const escaped = attributeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const attrRe = new RegExp(`${escaped}\\s*=\\s*(?:"([^"]*)"|'([^']*)')`, 'i');
@@ -1423,6 +1452,235 @@ export class SBMLParser {
     if (!formula) return null;
     const trimmed = formula.trim();
     return trimmed.length > 0 ? trimmed : null;
+  }
+
+  private buildRuleFormulaFallbackMap(sbmlString: string): Map<string, string[]> {
+    const formulaByRuleKey = new Map<string, string[]>();
+    if (!sbmlString) return formulaByRuleKey;
+
+    const ruleRe = /<(assignmentRule|rateRule|algebraicRule)\b([^>]*)>([\s\S]*?)<\/\1>/gi;
+    let ruleMatch: RegExpExecArray | null;
+    while ((ruleMatch = ruleRe.exec(sbmlString)) !== null) {
+      const tagName = String(ruleMatch[1] || '').toLowerCase();
+      const attrs = ruleMatch[2] ?? '';
+      const body = ruleMatch[3] ?? '';
+      const ruleType: SBMLRule['type'] =
+        tagName === 'assignmentrule' ? 'assignment' : tagName === 'raterule' ? 'rate' : 'algebraic';
+      const variable = this.getXmlAttribute(attrs, 'variable') || '';
+
+      let formula = '';
+      const formulaRaw = this.getXmlAttribute(attrs, 'formula');
+      if (formulaRaw) {
+        formula = this.decodeXmlEntities(formulaRaw);
+      }
+      if (!formula) {
+        const mathTag = body.match(/<math\b[\s\S]*?<\/math>/i);
+        if (mathTag?.[0]) {
+          formula = this.mathMlToFormula(mathTag[0]);
+        }
+      }
+
+      formula = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(formula));
+      if (!formula) continue;
+
+      const key = this.makeRuleFormulaKey(ruleType, variable);
+      const existing = formulaByRuleKey.get(key);
+      if (existing) {
+        existing.push(formula);
+      } else {
+        formulaByRuleKey.set(key, [formula]);
+      }
+    }
+
+    return formulaByRuleKey;
+  }
+
+  private getFallbackRuleFormula(ruleType: SBMLRule['type'], variable?: string): string | null {
+    const key = this.makeRuleFormulaKey(ruleType, variable);
+    const formulas = this.ruleFormulaByKey.get(key);
+    if (!formulas || formulas.length === 0) return null;
+
+    const cursor = this.ruleFormulaCursorByKey.get(key) ?? 0;
+    this.ruleFormulaCursorByKey.set(key, cursor + 1);
+    const formula = formulas[Math.min(cursor, formulas.length - 1)] || '';
+    const sanitized = this.sanitizeMathExpression(formula);
+    return sanitized || null;
+  }
+
+  private parseSimpleXml(xml: string): SimpleXmlNode | null {
+    const source = String(xml || '').trim();
+    if (!source) return null;
+
+    const tokens = source.match(/<[^>]+>|[^<]+/g);
+    if (!tokens) return null;
+
+    const root: SimpleXmlNode = { name: '#root', children: [], text: '' };
+    const stack: SimpleXmlNode[] = [root];
+
+    for (const token of tokens) {
+      if (!token) continue;
+      if (token.startsWith('<?') || token.startsWith('<!--') || token.startsWith('<!')) continue;
+
+      if (token.startsWith('</')) {
+        const closeNameRaw = token.replace(/^<\s*\/\s*/, '').replace(/\s*>$/, '').trim();
+        const closeName = closeNameRaw.split(':').pop()?.toLowerCase() || '';
+        while (stack.length > 1) {
+          const popped = stack.pop();
+          if (popped?.name === closeName) break;
+        }
+        continue;
+      }
+
+      if (token.startsWith('<')) {
+        const openNameMatch = token.match(/^<\s*([^\s/>]+)/);
+        if (!openNameMatch) continue;
+        const rawName = openNameMatch[1];
+        const name = rawName.split(':').pop()?.toLowerCase() || rawName.toLowerCase();
+        const node: SimpleXmlNode = { name, children: [], text: '' };
+        const parent = stack[stack.length - 1];
+        parent.children.push(node);
+
+        if (!/\/\s*>$/.test(token)) {
+          stack.push(node);
+        }
+        continue;
+      }
+
+      const text = token.replace(/\s+/g, ' ').trim();
+      if (!text) continue;
+      stack[stack.length - 1].children.push({ name: '#text', children: [], text });
+    }
+
+    return root.children[0] || null;
+  }
+
+  private simpleXmlText(node: SimpleXmlNode | null): string {
+    if (!node) return '';
+    if (node.name === '#text') return node.text.trim();
+    const parts: string[] = [];
+    for (const child of node.children) {
+      const text = this.simpleXmlText(child);
+      if (text) parts.push(text);
+    }
+    return parts.join(' ').trim();
+  }
+
+  private mathMlToFormula(mathMl: string): string {
+    const parsed = this.parseSimpleXml(mathMl);
+    if (!parsed) return '';
+    const expression = this.mathMlNodeToFormula(parsed);
+    return this.sanitizeMathExpression(expression);
+  }
+
+  private mathMlNodeToFormula(node: SimpleXmlNode | null): string {
+    if (!node) return '';
+    if (node.name === '#text') return node.text.trim();
+
+    const elementChildren = node.children.filter((child) => child.name !== '#text');
+    const childExprs = elementChildren
+      .map((child) => this.mathMlNodeToFormula(child))
+      .map((expr) => expr.trim())
+      .filter(Boolean);
+
+    switch (node.name) {
+      case 'math':
+      case 'semantics':
+      case 'annotation-xml':
+      case 'condition':
+      case 'piece':
+      case 'otherwise':
+        return childExprs[0] || '';
+      case 'ci':
+      case 'cn':
+      case 'csymbol':
+        return this.simpleXmlText(node);
+      case 'true':
+        return '1';
+      case 'false':
+        return '0';
+      case 'piecewise': {
+        const args: string[] = [];
+        for (const child of elementChildren) {
+          if (child.name === 'piece') {
+            const pieceChildren = child.children.filter((c) => c.name !== '#text');
+            const conditionNode = pieceChildren.find((c) => c.name === 'condition') || null;
+            const valueNode = pieceChildren.find((c) => c.name !== 'condition') || null;
+            const valueExpr = this.mathMlNodeToFormula(valueNode);
+            const conditionExpr = this.mathMlNodeToFormula(conditionNode);
+            if (valueExpr && conditionExpr) {
+              args.push(valueExpr, conditionExpr);
+            } else if (valueExpr) {
+              args.push(valueExpr);
+            }
+          } else if (child.name === 'otherwise') {
+            const otherwiseExpr = this.mathMlNodeToFormula(child);
+            if (otherwiseExpr) args.push(otherwiseExpr);
+          }
+        }
+        if (args.length === 0) return '';
+        return `piecewise(${args.join(', ')})`;
+      }
+      case 'apply': {
+        if (elementChildren.length === 0) return '';
+        const opNode = elementChildren[0];
+        const opArgs = elementChildren
+          .slice(1)
+          .map((child) => this.mathMlNodeToFormula(child))
+          .map((expr) => expr.trim())
+          .filter(Boolean);
+        const opName = opNode.name;
+
+        if (opName === 'ci' || opName === 'csymbol') {
+          const fnName = this.simpleXmlText(opNode);
+          return fnName ? `${fnName}(${opArgs.join(', ')})` : opArgs.join(', ');
+        }
+
+        switch (opName) {
+          case 'plus':
+            return `(${opArgs.join(' + ')})`;
+          case 'times':
+            return `(${opArgs.join(' * ')})`;
+          case 'minus':
+            return opArgs.length === 1 ? `(-${opArgs[0]})` : `(${opArgs.join(' - ')})`;
+          case 'divide':
+            return opArgs.length >= 2 ? `(${opArgs[0]} / ${opArgs[1]})` : `(${opArgs.join(' / ')})`;
+          case 'power':
+            return opArgs.length >= 2 ? `pow(${opArgs[0]}, ${opArgs[1]})` : `pow(${opArgs.join(', ')})`;
+          case 'root':
+            return opArgs.length === 1 ? `sqrt(${opArgs[0]})` : `root(${opArgs.join(', ')})`;
+          case 'eq':
+          case 'neq':
+          case 'gt':
+          case 'lt':
+          case 'geq':
+          case 'leq':
+          case 'and':
+          case 'or':
+          case 'not':
+            return `${opName}(${opArgs.join(', ')})`;
+          case 'exp':
+          case 'ln':
+          case 'log':
+          case 'abs':
+          case 'floor':
+          case 'ceiling':
+          case 'sin':
+          case 'cos':
+          case 'tan':
+          case 'asin':
+          case 'acos':
+          case 'atan':
+          case 'piecewise':
+            return `${opName}(${opArgs.join(', ')})`;
+          default: {
+            const fallbackName = this.simpleXmlText(opNode) || opName;
+            return fallbackName ? `${fallbackName}(${opArgs.join(', ')})` : opArgs.join(', ');
+          }
+        }
+      }
+      default:
+        return childExprs[0] || this.simpleXmlText(node);
+    }
   }
 
   private safeFormulaToString(math: any): string {
@@ -1620,7 +1878,7 @@ export class SBMLParser {
           mathExpr = fallbackFormula;
         }
       }
-      mathExpr = this.normalizeFormulaIdentifiers(mathExpr, localAliases);
+      mathExpr = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(mathExpr, localAliases));
 
       if (math && typeof (math as any).toMathML === 'function') {
         try {
@@ -1641,7 +1899,7 @@ export class SBMLParser {
       const fallbackFormula = this.getFallbackKineticLawFormula(reactionId);
       if (fallbackFormula) {
         kineticLaw = {
-          math: this.normalizeFormulaIdentifiers(fallbackFormula, localAliases),
+          math: this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(fallbackFormula, localAliases)),
           mathML: kineticLaw?.mathML || '',
           localParameters: kineticLaw?.localParameters || localParams,
         };
@@ -1662,6 +1920,18 @@ export class SBMLParser {
   }
 
   private extractRule(rule: any): SBMLRule | null {
+    const ruleType: SBMLRule['type'] | null = rule.isAlgebraic()
+      ? 'algebraic'
+      : rule.isAssignment()
+        ? 'assignment'
+        : rule.isRate()
+          ? 'rate'
+          : null;
+    if (!ruleType) return null;
+    const variable = ruleType === 'algebraic'
+      ? undefined
+      : (typeof rule.getVariable === 'function' ? rule.getVariable() : undefined);
+
     let formula = '';
 
     // Some generated SBML may encode rule formulas in the formula attribute.
@@ -1685,23 +1955,30 @@ export class SBMLParser {
         formula = '';
       }
     }
-    formula = this.normalizeFormulaIdentifiers(formula);
+    formula = this.sanitizeMathExpression(formula);
+    if (!formula) {
+      const fallbackFormula = this.getFallbackRuleFormula(ruleType, variable);
+      if (fallbackFormula) {
+        formula = fallbackFormula;
+      }
+    }
+    formula = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(formula));
 
-    if (rule.isAlgebraic()) {
+    if (ruleType === 'algebraic') {
       return {
         type: 'algebraic',
         math: formula,
       };
-    } else if (rule.isAssignment()) {
+    } else if (ruleType === 'assignment') {
       return {
         type: 'assignment',
-        variable: rule.getVariable(),
+        variable: variable || '',
         math: formula,
       };
-    } else if (rule.isRate()) {
+    } else if (ruleType === 'rate') {
       return {
         type: 'rate',
-        variable: rule.getVariable(),
+        variable: variable || '',
         math: formula,
       };
     }
@@ -1762,7 +2039,7 @@ export class SBMLParser {
         }
       }
     }
-    mathStr = this.normalizeFormulaIdentifiers(mathStr);
+    mathStr = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(mathStr));
 
     return {
       id: func.getId(),
