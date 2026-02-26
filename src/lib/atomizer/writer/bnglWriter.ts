@@ -70,6 +70,31 @@ const logMissingKinetic = (message: string): void => {
 };
 
 const escapeRegExp = (value: string): string => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const BNGL_FUNCTION_IDENTIFIER_RESERVED = new Set<string>([
+  'function',
+  'functions',
+  'parameter',
+  'param',
+  'modifier',
+  'mod',
+  'substrate',
+  'model',
+  'begin',
+  'end',
+  'reaction',
+  'reactions',
+  'rule',
+  'rules',
+]);
+
+const sanitizeFunctionIdentifier = (value: string): string => {
+  const standardized = standardizeName(value);
+  if (!standardized) return 'unnamed';
+  if (BNGL_FUNCTION_IDENTIFIER_RESERVED.has(standardized.toLowerCase())) {
+    return `${standardized}_id`;
+  }
+  return standardized;
+};
 
 
 /**
@@ -716,9 +741,13 @@ export function writeSeedSpecies(
   compartments: Map<string, SBMLCompartment>,
   sct: SpeciesCompositionTable,
   speciesToCompartment: Map<string, string>,
-  isAtomized: boolean = false
+  isAtomized: boolean = false,
+  constantSpeciesIds: Set<string> = new Set()
 ): { section: string, patternToId: Map<string, string>, sbmlToBnglId: Map<string, string>, idToPattern: Map<string, string> } {
-  const patterns = new Map<string, { concentration: number | string; names: string[] }>();
+  const patterns = new Map<
+    string,
+    { pattern: string; concentration: number | string; names: string[]; isConstant: boolean }
+  >();
   const sbmlToBnglId = new Map<string, string>();
   const idToPattern = new Map<string, string>();
 
@@ -726,24 +755,32 @@ export function writeSeedSpecies(
   for (const s of seedSpecies) {
     const pattern = getBnglPatternHelper(s.sbmlId, sct, speciesToCompartment);
     const concentration = s.concentration;
+    const isConstant = constantSpeciesIds.has(s.sbmlId);
+    const groupingKey = `${isConstant ? '$' : ''}${pattern}`;
 
-    if (!patterns.has(pattern)) {
-      patterns.set(pattern, { concentration, names: [s.sbmlId] });
+    if (!patterns.has(groupingKey)) {
+      patterns.set(groupingKey, { pattern, concentration, names: [s.sbmlId], isConstant });
     } else {
-      patterns.get(pattern)!.names.push(s.sbmlId);
+      patterns.get(groupingKey)!.names.push(s.sbmlId);
     }
   }
 
   const patternToId = new Map<string, string>();
-  const lines = Array.from(patterns.entries()).map(([pattern, data], index) => {
+  const lines = Array.from(patterns.values()).map((data, index) => {
     const id = `S${index + 1}`;
-    patternToId.set(pattern, id);
-    idToPattern.set(id, pattern);
+    const finalPattern = data.isConstant ? `$${data.pattern}` : data.pattern;
+    // Keep '$' only in seed-species declarations. Observables/reaction patterns
+    // should use the canonical non-$ pattern so strict ANTLR parsing remains stable.
+    patternToId.set(data.pattern, id);
+    if (data.isConstant) {
+      patternToId.set(finalPattern, id);
+    }
+    idToPattern.set(id, data.pattern);
     // Link each SBML ID that maps to this pattern to the BNGL ID
     for (const sbmlId of data.names) {
       sbmlToBnglId.set(sbmlId, id);
     }
-    return `  ${pattern} ${data.concentration}`;
+    return `  ${finalPattern} ${data.concentration}`;
   });
 
   return {
@@ -902,6 +939,10 @@ export function writeFunctions(
   forceRuleOnlyFastPath: boolean = false
 ): string {
   const lines: string[] = [];
+  const functionNameMap = new Map<string, string>();
+  for (const [id] of functions) {
+    functionNameMap.set(id, sanitizeFunctionIdentifier(id));
+  }
 
   // Avoid O(n^2) lookups for large species sets (genome-scale reconstructions).
   const standardizedSpeciesInfo = new Map<string, { compId: string; isAmountOnly: boolean }>();
@@ -935,15 +976,31 @@ export function writeFunctions(
 
   // Write Function Definitions
   for (const [id, func] of functions) {
-    const name = standardizeName(id);
-    const args = func.arguments.map(a => standardizeName(a)).join(', ');
+    const name = functionNameMap.get(id) || sanitizeFunctionIdentifier(id);
+    const argumentMap = new Map<string, string>();
+    const args = (func.arguments || []).map((arg, idx) => {
+      const safe = sanitizeFunctionIdentifier(arg || `arg${idx + 1}`);
+      argumentMap.set(arg, safe);
+      return safe;
+    });
     let body = func.math;
+
+    for (const [rawFunctionName, safeFunctionName] of functionNameMap) {
+      if (rawFunctionName === safeFunctionName) continue;
+      const fnRegex = new RegExp(`\\b${escapeRegExp(rawFunctionName)}\\b(?=\\s*\\()`, 'g');
+      body = body.replace(fnRegex, safeFunctionName);
+    }
+    for (const [rawArg, safeArg] of argumentMap) {
+      if (!rawArg || rawArg === safeArg) continue;
+      const argRegex = new RegExp(`\\b${escapeRegExp(rawArg)}\\b`, 'g');
+      body = body.replace(argRegex, safeArg);
+    }
 
     body = convertMathFunctions(body);
     body = convertComparisonOperators(body);
     body = convertPiecewise(body);
 
-    lines.push(`${name}(${args}) = ${body}`);
+    lines.push(`${name}(${args.join(', ')}) = ${body}`);
   }
 
   // Fast path for rule-only SBML (no species/reactions): avoid heavy bnglFunction transforms
@@ -1765,7 +1822,12 @@ export function generateBNGL(
     model.compartments,
     augmentedSct,
     speciesToCompartment,
-    options.atomize
+    options.atomize,
+    new Set(
+      Array.from(model.species.entries())
+        .filter(([, sp]) => !!(sp.boundaryCondition || sp.constant))
+        .map(([id]) => id)
+    )
   );
   if (speciesSection) sections.push(speciesSection);
   mark('writeSeedSpecies', t);

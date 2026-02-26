@@ -10,7 +10,12 @@ import jsep from 'jsep';
 
 const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
 const RATE_RULE_META_PREFIX = '__rate_rule__';
+const AVOGADRO_FALLBACK = 6.02214076e23;
+const DIRECT_DESCALE_MIN_CONCENTRATION = 1e-9;
+const DIRECT_DESCALE_MAX_CONCENTRATION = 1e12;
 const SYNTH_RATE_RULE_SPECIES_PREFIX = '__rate_rule_state__';
+const NA_LIKE_SEED_TOKEN_RE = /\b(?:Na|quantity_to_number_factor)\b/;
+const NUMERIC_LITERAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 // LibSBML type declarations for the writer
 declare namespace LibSBML {
@@ -445,26 +450,339 @@ function buildInitialExpressionSymbolMap(
     }
   }
 
-  if (!symbols.has('Na')) {
-    symbols.set('Na', 1);
+  // Seed expressions are interpreted as concentrations for SBML export.
+  // Neutralize number-conversion symbols to avoid amount double-scaling.
+  symbols.set('Na', 1);
+  if (symbols.has('quantity_to_number_factor')) {
+    symbols.set('quantity_to_number_factor', 1);
   }
 
   return symbols;
 }
 
-function resolveSpeciesInitialConcentration(
-  species: { initialConcentration?: unknown; initialExpression?: unknown },
+function inferSpeciesCompartmentName(speciesName: unknown): string {
+  const rawName = typeof speciesName === 'string' ? speciesName : '';
+  const prefixedCompartment = rawName.match(/^@([^:]+)::?/);
+  if (prefixedCompartment?.[1]) return prefixedCompartment[1];
+  const atPrefix = rawName.match(/^@([^:]+):/);
+  if (atPrefix?.[1]) return atPrefix[1];
+  const atSuffix = rawName.match(/@([^@:\s]+)$/);
+  return atSuffix?.[1] || '';
+}
+
+function normalizeAmountLikeSeedExpressionValue(
+  expression: string,
+  evaluated: number,
+  speciesName: unknown,
   symbols: Map<string, number>
 ): number {
-  const direct = toFiniteNumber(species.initialConcentration);
-  if (direct !== null) return direct;
+  if (!Number.isFinite(evaluated)) return evaluated;
+  const compartment = inferSpeciesCompartmentName(speciesName);
+  if (!compartment) return evaluated;
+  const volumeKey = `__compartment_${compartment}__`;
+  const volume = toFiniteNumber(symbols.get(volumeKey));
+  if (volume === null || volume <= 0 || Math.abs(volume - 1) < 1e-12) {
+    return evaluated;
+  }
+  const hasNaLikeToken = /\bNa\b/.test(expression) || /\bquantity_to_number_factor\b/.test(expression);
+  if (!hasNaLikeToken) return evaluated;
+  const compactExpression = expression.replace(/\s+/g, '');
+  const hasVolumeToken = compactExpression.includes(volumeKey);
+  const hasVolumeInDenominator = compactExpression.includes(`/${volumeKey}`);
+  if (!hasVolumeToken || hasVolumeInDenominator) return evaluated;
+  const normalized = evaluated / volume;
+  return Number.isFinite(normalized) && normalized >= 0 ? normalized : evaluated;
+}
 
+function resolveSpeciesInitialConcentration(
+  species: { name?: unknown; initialConcentration?: unknown; initialExpression?: unknown },
+  symbols: Map<string, number>,
+  rawParameters?: Map<string, number>
+): number {
   const expression =
     typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
-  if (!expression) return 0;
+  if (expression) {
+    // Prefer expression-derived concentration when present. Parsed BNGL seeds
+    // often carry amount-scaled numeric caches (e.g., includes Na*V), while
+    // the expression can be evaluated with Na=1 to recover concentration.
+    const evaluated = evaluateNumericExpression(expression, symbols);
+    if (evaluated !== null) {
+      return normalizeAmountLikeSeedExpressionValue(expression, evaluated, species.name, symbols);
+    }
+  }
 
-  const evaluated = evaluateNumericExpression(expression, symbols);
-  return evaluated !== null ? evaluated : 0;
+  const direct = toFiniteNumber(species.initialConcentration);
+  if (direct !== null) {
+    const naLike = (rawParameters && toFiniteNumber(rawParameters.get('Na'))) ?? AVOGADRO_FALLBACK;
+
+    // Expanded-network models may drop initialExpression and leave amount-scaled
+    // numeric caches. Detect obvious amount-scale magnitudes and convert back
+    // to concentration using Na*V.
+    if (naLike > 1e6 && direct > 1e9) {
+      const compartment = inferSpeciesCompartmentName(species.name);
+      const volumeKey = compartment ? `__compartment_${compartment}__` : '';
+      const volume =
+        (volumeKey && rawParameters && toFiniteNumber(rawParameters.get(volumeKey))) ??
+        (volumeKey && toFiniteNumber(symbols.get(volumeKey))) ??
+        1;
+      const denom = naLike * (volume && volume > 0 ? volume : 1);
+      if (denom > 0) {
+        const normalized = direct / denom;
+        if (
+          Number.isFinite(normalized) &&
+          normalized >= DIRECT_DESCALE_MIN_CONCENTRATION &&
+          normalized < direct &&
+          normalized <= DIRECT_DESCALE_MAX_CONCENTRATION
+        ) {
+          return normalized;
+        }
+      }
+    }
+
+    return direct;
+  }
+
+  return 0;
+}
+
+function resolveSpeciesInitialAmount(
+  species: { initialConcentration?: unknown; initialExpression?: unknown },
+  symbols: Map<string, number>,
+  rawParameters?: Map<string, number>
+): number {
+  const expression =
+    typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
+  if (expression) {
+    const evalSymbols = new Map<string, number>(symbols);
+    const rawNa = rawParameters ? toFiniteNumber(rawParameters.get('Na')) : null;
+    if (rawNa !== null) {
+      evalSymbols.set('Na', rawNa);
+    }
+    const rawQtnf = rawParameters ? toFiniteNumber(rawParameters.get('quantity_to_number_factor')) : null;
+    if (rawQtnf !== null) {
+      evalSymbols.set('quantity_to_number_factor', rawQtnf);
+    }
+    const evaluated = evaluateNumericExpression(expression, evalSymbols);
+    if (evaluated !== null) return evaluated;
+  }
+
+  const direct = toFiniteNumber(species.initialConcentration);
+  if (direct !== null) return direct;
+  return 0;
+}
+
+function extractSpeciesSymbolFromName(speciesName: unknown): string | null {
+  const raw = typeof speciesName === 'string' ? speciesName.trim() : '';
+  if (!raw) return null;
+
+  let normalized = raw.replace(/^\$/, '');
+  normalized = normalized.replace(/^@[^:]+::?/, '');
+  const suffixCompartmentIdx = normalized.lastIndexOf('@');
+  if (suffixCompartmentIdx > 0) {
+    normalized = normalized.slice(0, suffixCompartmentIdx);
+  }
+  normalized = normalized.trim();
+  if (!normalized) return null;
+
+  const prefixed = normalized.match(/^M_([A-Za-z_][A-Za-z0-9_]*)(?:\(\))?$/);
+  if (prefixed?.[1]) return prefixed[1];
+
+  const direct = normalized.match(/^([A-Za-z_][A-Za-z0-9_]*)(?:\(\))?$/);
+  if (direct?.[1]) return direct[1];
+
+  return null;
+}
+
+function normalizeExpressionForMatch(expression: string): string {
+  let next = String(expression || '').replace(/\s+/g, '').trim();
+  if (!next) return next;
+
+  // Drop harmless wrapper parens for direct symbol comparisons.
+  while (next.startsWith('(') && next.endsWith(')')) {
+    let depth = 0;
+    let balanced = true;
+    for (let i = 0; i < next.length; i++) {
+      const ch = next[i];
+      if (ch === '(') depth += 1;
+      else if (ch === ')') {
+        depth -= 1;
+        if (depth < 0) {
+          balanced = false;
+          break;
+        }
+      }
+      if (depth === 0 && i < next.length - 1) {
+        balanced = false;
+        break;
+      }
+    }
+    if (!balanced || depth !== 0) break;
+    next = next.slice(1, -1).trim();
+  }
+
+  return next;
+}
+
+function isVolumeNormalizedConcentrationExpression(expression: string, symbol: string): boolean {
+  if (!expression || !symbol) return false;
+  const escapedSymbol = escapeRegExp(symbol);
+  return new RegExp(`^${escapedSymbol}/__compartment_[A-Za-z_][A-Za-z0-9_]*__$`).test(expression);
+}
+
+function normalizeSpeciesPatternForLookup(value: string): string {
+  let raw = String(value || '')
+    .trim()
+    .replace(/\s+/g, '')
+    .replace(/^\$/, '');
+  if (!raw) return '';
+
+  let speciesPart = raw;
+  let compartmentPart = '';
+  const prefixedCompartment = raw.match(/^@([^:]+)::?(.+)$/);
+  if (prefixedCompartment) {
+    compartmentPart = prefixedCompartment[1] || '';
+    speciesPart = prefixedCompartment[2] || '';
+  } else {
+    const atIdx = raw.lastIndexOf('@');
+    if (atIdx > 0 && atIdx < raw.length - 1) {
+      speciesPart = raw.slice(0, atIdx);
+      compartmentPart = raw.slice(atIdx + 1);
+    }
+  }
+
+  speciesPart = speciesPart.replace(/\(\)/g, '');
+  if (!speciesPart) return '';
+  return compartmentPart
+    ? `${speciesPart}@${compartmentPart}`.toLowerCase()
+    : speciesPart.toLowerCase();
+}
+
+function addSpeciesSymbolAlias(
+  symbolToSpeciesNames: Map<string, Set<string>>,
+  symbol: string,
+  speciesName: string
+): void {
+  const raw = String(symbol || '').trim();
+  if (!raw || !speciesName) return;
+  for (const key of new Set([raw, raw.toLowerCase()])) {
+    if (!key) continue;
+    if (!symbolToSpeciesNames.has(key)) {
+      symbolToSpeciesNames.set(key, new Set());
+    }
+    symbolToSpeciesNames.get(key)!.add(speciesName);
+  }
+}
+
+function buildSpeciesNamesBySeedSymbol(model: BNGLModel): Map<string, Set<string>> {
+  const symbolToSpeciesNames = new Map<string, Set<string>>();
+  const speciesNameByNormalizedPattern = new Map<string, string>();
+
+  for (const species of model.species || []) {
+    const speciesName = String(species?.name || '');
+    if (!speciesName) continue;
+    const normalized = normalizeSpeciesPatternForLookup(speciesName);
+    if (normalized && !speciesNameByNormalizedPattern.has(normalized)) {
+      speciesNameByNormalizedPattern.set(normalized, speciesName);
+    }
+    const symbol = extractSpeciesSymbolFromName(speciesName);
+    if (symbol) {
+      addSpeciesSymbolAlias(symbolToSpeciesNames, symbol, speciesName);
+    }
+  }
+
+  for (const observable of model.observables || []) {
+    const obsName = String(observable?.name || '').trim();
+    if (!obsName) continue;
+    const primaryPattern = String(observable?.pattern || '')
+      .split(',')
+      .map((s) => s.trim())
+      .filter(Boolean)[0];
+    if (!primaryPattern) continue;
+    const normalizedPattern = normalizeSpeciesPatternForLookup(primaryPattern);
+    if (!normalizedPattern) continue;
+    const speciesName = speciesNameByNormalizedPattern.get(normalizedPattern);
+    if (!speciesName) continue;
+
+    addSpeciesSymbolAlias(symbolToSpeciesNames, obsName, speciesName);
+    if (obsName.toLowerCase().endsWith('_amt')) {
+      addSpeciesSymbolAlias(symbolToSpeciesNames, obsName.slice(0, -4), speciesName);
+    }
+  }
+
+  return symbolToSpeciesNames;
+}
+
+function resolveSpeciesNamesForSeedSymbol(
+  symbolToSpeciesNames: Map<string, Set<string>>,
+  symbol: string
+): Set<string> {
+  const raw = String(symbol || '').trim();
+  if (!raw) return new Set<string>();
+  return (
+    symbolToSpeciesNames.get(raw) ||
+    symbolToSpeciesNames.get(raw.toLowerCase()) ||
+    new Set<string>()
+  );
+}
+
+function buildSeedExportSemantics(model: BNGLModel): {
+  amountOnlySpeciesNames: Set<string>;
+  preferInitialAmountSpeciesNames: Set<string>;
+} {
+  const symbolToSpeciesNames = buildSpeciesNamesBySeedSymbol(model);
+  const speciesByName = new Map(
+    (model.species || []).map((species) => [String(species?.name || ''), species])
+  );
+
+  const amountOnlySymbols = new Set<string>();
+  const concentrationSymbolsWithVolumeDivision = new Set<string>();
+  for (const fn of model.functions || []) {
+    const fnName = String(fn?.name || '').trim();
+    if (!fnName.startsWith('_c_')) continue;
+    const symbol = fnName.slice(3).trim();
+    if (!symbol) continue;
+    const expression = normalizeExpressionForMatch(fn?.expression || '');
+    if (expression === symbol) {
+      amountOnlySymbols.add(symbol);
+      continue;
+    }
+    if (isVolumeNormalizedConcentrationExpression(expression, symbol)) {
+      concentrationSymbolsWithVolumeDivision.add(symbol);
+    }
+  }
+
+  const amountOnlySpeciesNames = new Set<string>();
+  for (const symbol of amountOnlySymbols) {
+    const names = resolveSpeciesNamesForSeedSymbol(symbolToSpeciesNames, symbol);
+    for (const speciesName of names) {
+      amountOnlySpeciesNames.add(speciesName);
+    }
+  }
+
+  const preferInitialAmountSpeciesNames = new Set<string>();
+  for (const symbol of concentrationSymbolsWithVolumeDivision) {
+    const names = resolveSpeciesNamesForSeedSymbol(symbolToSpeciesNames, symbol);
+    for (const speciesName of names) {
+      if (amountOnlySpeciesNames.has(speciesName)) continue;
+      const species = speciesByName.get(speciesName) as
+        | { initialConcentration?: unknown; initialExpression?: unknown }
+        | undefined;
+      if (!species) continue;
+    // Preserve amount-style seeds for mixed-unit species where atomizer produced
+    // literal numeric seeds and concentration functions divide by compartment.
+    // Exporting these as initialConcentration triggers Na inflation on re-parse.
+      const expression =
+        typeof species.initialExpression === 'string'
+          ? normalizeExpressionForMatch(species.initialExpression)
+          : '';
+      if (!expression) continue;
+      if (NA_LIKE_SEED_TOKEN_RE.test(expression)) continue;
+      if (!NUMERIC_LITERAL_RE.test(expression)) continue;
+      preferInitialAmountSpeciesNames.add(speciesName);
+    }
+  }
+
+  return { amountOnlySpeciesNames, preferInitialAmountSpeciesNames };
 }
 
 type ReconstructedRule = {
@@ -475,9 +793,23 @@ type ReconstructedRule = {
 
 function buildSpeciesAliasMap(model: BNGLModel, speciesIdByName: Map<string, string>): Map<string, string> {
   const aliasToSpeciesId = new Map<string, string>();
+  const speciesResolver = buildSpeciesNameResolver(Array.from(speciesIdByName.keys()));
+  const speciesIdByNormalizedPattern = new Map<string, string>();
 
   for (const [name, id] of speciesIdByName.entries()) {
     aliasToSpeciesId.set(name, id);
+    const noDollar = name.replace(/^\$/, '');
+    if (noDollar && noDollar !== name) {
+      aliasToSpeciesId.set(noDollar, id);
+    }
+    const normalized = normalizeSpeciesPatternForLookup(name);
+    if (normalized && !speciesIdByNormalizedPattern.has(normalized)) {
+      speciesIdByNormalizedPattern.set(normalized, id);
+    }
+    const symbol = extractSpeciesSymbolFromName(noDollar);
+    if (symbol && !aliasToSpeciesId.has(symbol)) {
+      aliasToSpeciesId.set(symbol, id);
+    }
   }
 
   for (const observable of model.observables || []) {
@@ -488,9 +820,31 @@ function buildSpeciesAliasMap(model: BNGLModel, speciesIdByName: Map<string, str
       .map((s) => s.trim())
       .filter(Boolean)[0];
     if (!primaryPattern) continue;
-    const sid = speciesIdByName.get(primaryPattern);
+    let sid = speciesIdByName.get(primaryPattern);
+    if (!sid) {
+      const resolvedName =
+        speciesResolver.get(primaryPattern) ??
+        speciesResolver.get(normalizeSpeciesAlias(primaryPattern)) ??
+        (() => {
+          const alt = toAltCompartmentNotation(primaryPattern);
+          if (!alt) return undefined;
+          return speciesResolver.get(alt) ?? speciesResolver.get(normalizeSpeciesAlias(alt));
+        })();
+      if (resolvedName) {
+        sid = speciesIdByName.get(resolvedName);
+      }
+    }
+    if (!sid) {
+      const normalizedPattern = normalizeSpeciesPatternForLookup(primaryPattern);
+      if (normalizedPattern) {
+        sid = speciesIdByNormalizedPattern.get(normalizedPattern);
+      }
+    }
     if (!sid) continue;
     aliasToSpeciesId.set(obsName, sid);
+    if (/_amt$/i.test(obsName)) {
+      aliasToSpeciesId.set(obsName.replace(/_amt$/i, ''), sid);
+    }
   }
 
   for (const [speciesName, sid] of speciesIdByName.entries()) {
@@ -586,6 +940,13 @@ function ruleRateToFormula(rule: any, reverse: boolean): string {
   return text || '0';
 }
 
+function replaceIndexedAmountRefsWithSpeciesIds(formula: string): string {
+  return String(formula || '').replace(/\bS(\d+)_amt\b/g, (_match, idxStr: string) => {
+    const idx = Number(idxStr) - 1;
+    return Number.isFinite(idx) && idx >= 0 ? `s${idx}` : `S${idxStr}_amt`;
+  });
+}
+
 function normalizeSpeciesAlias(name: string): string {
   return name.replace(/\s+/g, '').replace(/\(\)/g, '');
 }
@@ -671,6 +1032,9 @@ function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
     let unresolvedExplicit = 0;
     const normalizedExplicit: BNGLReaction[] = [];
     for (const rxn of explicitReactions) {
+      if (isSyntheticRateRuleReaction(rxn as unknown as Record<string, unknown>)) {
+        continue;
+      }
       const reactantsRaw = (rxn.reactants || []).map((x) => String(x));
       const productsRaw = (rxn.products || []).map((x) => String(x));
       if (
@@ -708,6 +1072,7 @@ function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
   const derived: BNGLReaction[] = [];
   let unresolvedDerived = 0;
   for (const rule of rules) {
+    if (isSyntheticRateRuleReaction(rule as Record<string, unknown>)) continue;
     const reactants = Array.isArray(rule?.reactants) ? rule.reactants.map((x: any) => String(x)) : [];
     const products = Array.isArray(rule?.products) ? rule.products.map((x: any) => String(x)) : [];
     if (reactants.some((name) => isSyntheticRateRuleSpeciesName(name))) continue;
@@ -750,6 +1115,20 @@ function isSyntheticCompartmentParameter(name: string): boolean {
 
 function isSyntheticRateRuleSpeciesName(name: string): boolean {
   return (name || '').toLowerCase().includes(SYNTH_RATE_RULE_SPECIES_PREFIX.toLowerCase());
+}
+
+function isSyntheticRateRuleReaction(reaction: Record<string, unknown>): boolean {
+  const candidates: unknown[] = [
+    reaction.rate,
+    reaction.rateExpression,
+    reaction.reverseRate,
+    reaction.name,
+    reaction.label,
+    reaction.id,
+  ];
+  return candidates.some(
+    (value) => typeof value === 'string' && /__rate_rule_/i.test(value)
+  );
 }
 
 function isSymbolReferenced(expressionText: string, symbol: string): boolean {
@@ -802,12 +1181,20 @@ function generateSBMLPureXml(model: BNGLModel): string {
       .filter((r) => effectiveParameters.has(r.variable))
       .map((r) => r.variable)
   );
+  const speciesRuleTargets = new Set(
+    reconstructedRules
+      .filter((r) => speciesIds.has(r.variable))
+      .map((r) => r.variable)
+  );
   const compartmentRuleTargets = new Set(
     reconstructedRules
       .filter((r) => compartments.some((c) => c.name === r.variable))
       .map((r) => r.variable)
   );
   const initialExpressionSymbols = buildInitialExpressionSymbolMap(model, effectiveParameters);
+  const seedExportSemantics = buildSeedExportSemantics(model);
+  const amountOnlySpeciesNames = seedExportSemantics.amountOnlySpeciesNames;
+  const preferInitialAmountSpeciesNames = seedExportSemantics.preferInitialAmountSpeciesNames;
 
   const lines: string[] = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
@@ -844,18 +1231,43 @@ function generateSBMLPureXml(model: BNGLModel): string {
   lines.push('    <listOfSpecies>');
   speciesList.forEach((s, i) => {
     const sid = `s${i}`;
-    let compId = compartments[0].name || 'default';
-    if (s.name.startsWith('@')) {
-      const match = s.name.match(/^@([^:]+):/);
-      if (match) compId = match[1];
+    const speciesName = String(s.name || '');
+    let compId = inferSpeciesCompartmentName(s.name);
+    if (!compId || !compartmentNames.has(compId)) {
+      compId = compartments[0].name || 'default';
     }
-    const init = resolveSpeciesInitialConcentration(
-      s as unknown as { initialConcentration?: unknown; initialExpression?: unknown },
-      initialExpressionSymbols
-    );
-    lines.push(
-      `      <species id="${xmlEscape(sid)}" name="${xmlEscape(s.name)}" compartment="${xmlEscape(compId)}" initialConcentration="${init}" hasOnlySubstanceUnits="false" boundaryCondition="${boolAttr(!!s.isConstant)}" constant="false"/>`
-    );
+    const isBoundarySpecies = !!s.isConstant;
+    const isConstantSpecies = isBoundarySpecies && !speciesRuleTargets.has(sid);
+    const amountOnly = amountOnlySpeciesNames.has(speciesName);
+    const preferInitialAmount = !amountOnly && preferInitialAmountSpeciesNames.has(speciesName);
+    if (amountOnly) {
+      const initAmount = resolveSpeciesInitialAmount(
+        s as unknown as { initialConcentration?: unknown; initialExpression?: unknown },
+        initialExpressionSymbols,
+        effectiveParameters
+      );
+      lines.push(
+        `      <species id="${xmlEscape(sid)}" name="${xmlEscape(speciesName)}" compartment="${xmlEscape(compId)}" initialAmount="${initAmount}" hasOnlySubstanceUnits="true" boundaryCondition="${boolAttr(isBoundarySpecies)}" constant="${boolAttr(isConstantSpecies)}"/>`
+      );
+    } else if (preferInitialAmount) {
+      const initAmount = resolveSpeciesInitialConcentration(
+        s as unknown as { name?: unknown; initialConcentration?: unknown; initialExpression?: unknown },
+        initialExpressionSymbols,
+        effectiveParameters
+      );
+      lines.push(
+        `      <species id="${xmlEscape(sid)}" name="${xmlEscape(speciesName)}" compartment="${xmlEscape(compId)}" initialAmount="${initAmount}" hasOnlySubstanceUnits="false" boundaryCondition="${boolAttr(isBoundarySpecies)}" constant="${boolAttr(isConstantSpecies)}"/>`
+      );
+    } else {
+      const initConcentration = resolveSpeciesInitialConcentration(
+        s as unknown as { name?: unknown; initialConcentration?: unknown; initialExpression?: unknown },
+        initialExpressionSymbols,
+        effectiveParameters
+      );
+      lines.push(
+        `      <species id="${xmlEscape(sid)}" name="${xmlEscape(speciesName)}" compartment="${xmlEscape(compId)}" initialConcentration="${initConcentration}" hasOnlySubstanceUnits="false" boundaryCondition="${boolAttr(isBoundarySpecies)}" constant="${boolAttr(isConstantSpecies)}"/>`
+      );
+    }
   });
   lines.push('    </listOfSpecies>');
   logWriterTiming('pureXml.species', speciesStarted, `count=${speciesList.length}`);
@@ -885,6 +1297,7 @@ function generateSBMLPureXml(model: BNGLModel): string {
       lines.push('        </listOfProducts>');
 
       let formula = r.rate || '0';
+      formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
       formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, null);
       formula = replaceSpeciesInFormula(formula);
@@ -1084,12 +1497,26 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       .filter((r) => effectiveParameters.has(r.variable))
       .map((r) => r.variable)
   );
+  const speciesRuleTargets = new Set(
+    reconstructedRules
+      .filter((r) => speciesIds.has(r.variable))
+      .map((r) => r.variable)
+  );
   const compartmentRuleTargets = new Set(
     reconstructedRules
       .filter((r) => (model.compartments || []).some((c) => c.name === r.variable))
       .map((r) => r.variable)
   );
   const initialExpressionSymbols = buildInitialExpressionSymbolMap(model, effectiveParameters);
+  const seedExportSemantics = buildSeedExportSemantics(model);
+  const amountOnlySpeciesNames = seedExportSemantics.amountOnlySpeciesNames;
+  const preferInitialAmountSpeciesNames = seedExportSemantics.preferInitialAmountSpeciesNames;
+  const availableCompartmentNames = new Set(
+    (model.compartments || []).map((c) => String(c.name || '')).filter(Boolean)
+  );
+  if (availableCompartmentNames.size === 0) {
+    availableCompartmentNames.add('default');
+  }
 
   // 1. Compartments
   logger.info('SBMW013', `generateSBML compartments count=${model.compartments?.length ?? 0}`);
@@ -1132,31 +1559,55 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   speciesList.forEach((s, i) => {
     const spec = sbmlModel.createSpecies();
     const sid = `s${i}`;
+    const speciesName = String(s.name || '');
     spec.setId(sid);
-    spec.setName(s.name);
-    speciesIdByName.set(s.name, sid);
+    spec.setName(speciesName);
+    speciesIdByName.set(speciesName, sid);
     
-    // Determine compartment from name (e.g., @c0:A) or use first available/default
-    let compId = 'default';
-    if (s.name.startsWith('@')) {
-      const match = s.name.match(/^@([^:]+):/);
-      if (match) {
-        compId = match[1];
-      }
-    } else if (model.compartments && model.compartments.length > 0) {
+    // Determine compartment from species naming, then validate against declared compartments.
+    let compId = inferSpeciesCompartmentName(s.name);
+    if (!compId || !availableCompartmentNames.has(compId)) {
+      compId = 'default';
+    }
+    if ((compId === 'default' || !availableCompartmentNames.has(compId)) && model.compartments && model.compartments.length > 0) {
       compId = model.compartments[0].name;
     }
     
+    const isBoundarySpecies = !!s.isConstant;
+    const isConstantSpecies = isBoundarySpecies && !speciesRuleTargets.has(sid);
+    const amountOnly = amountOnlySpeciesNames.has(speciesName);
+    const preferInitialAmount = !amountOnly && preferInitialAmountSpeciesNames.has(speciesName);
     spec.setCompartment(compId);
-    spec.setInitialConcentration(
-      resolveSpeciesInitialConcentration(
-        s as unknown as { initialConcentration?: unknown; initialExpression?: unknown },
-        initialExpressionSymbols
-      )
-    );
-    spec.setBoundaryCondition(!!s.isConstant);
-    spec.setConstant(false);
-    spec.setHasOnlySubstanceUnits(false);
+    if (amountOnly) {
+      spec.setInitialAmount(
+        resolveSpeciesInitialAmount(
+          s as unknown as { initialConcentration?: unknown; initialExpression?: unknown },
+          initialExpressionSymbols,
+          effectiveParameters
+        )
+      );
+      spec.setHasOnlySubstanceUnits(true);
+    } else if (preferInitialAmount) {
+      spec.setInitialAmount(
+        resolveSpeciesInitialConcentration(
+          s as unknown as { name?: unknown; initialConcentration?: unknown; initialExpression?: unknown },
+          initialExpressionSymbols,
+          effectiveParameters
+        )
+      );
+      spec.setHasOnlySubstanceUnits(false);
+    } else {
+      spec.setInitialConcentration(
+        resolveSpeciesInitialConcentration(
+          s as unknown as { name?: unknown; initialConcentration?: unknown; initialExpression?: unknown },
+          initialExpressionSymbols,
+          effectiveParameters
+        )
+      );
+      spec.setHasOnlySubstanceUnits(false);
+    }
+    spec.setBoundaryCondition(isBoundarySpecies);
+    spec.setConstant(isConstantSpecies);
   });
 
   // 4. Reactions
@@ -1211,6 +1662,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       const kl = rxn.createKineticLaw();
       // Simple mass action formula for now
       let formula = r.rate || '0';
+      formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
       formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, substrateId);
       formula = replaceSpeciesInFormula(formula);

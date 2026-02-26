@@ -96,10 +96,36 @@ export async function generateExpandedNetwork(
     if (!evalParameterMap.has('Na')) {
         evalParameterMap.set('Na', 1);
     }
+    const inferSeedCompartment = (speciesName: string): string => {
+        const prefixedCompartment = speciesName.match(/^@([^:]+)::?/);
+        if (prefixedCompartment?.[1]) return prefixedCompartment[1];
+        const atSuffix = speciesName.match(/@([^@:\s]+)$/);
+        return atSuffix?.[1] || '';
+    };
+    const normalizeAmountLikeSeedExpression = (
+        expression: string,
+        evaluated: number,
+        speciesName: string
+    ): number => {
+        if (!Number.isFinite(evaluated)) return 0;
+        const compartment = inferSeedCompartment(speciesName);
+        if (!compartment) return evaluated;
+        const volumeKey = `__compartment_${compartment}__`;
+        const volume = Number(evalParameterMap.get(volumeKey));
+        if (!Number.isFinite(volume) || volume <= 0 || Math.abs(volume - 1) < 1e-12) return evaluated;
+        const hasNaLikeToken = /\bNa\b/.test(expression) || /\bquantity_to_number_factor\b/.test(expression);
+        if (!hasNaLikeToken) return evaluated;
+        const compact = expression.replace(/\s+/g, '');
+        const hasVolumeToken = compact.includes(volumeKey);
+        const hasVolumeInDenominator = compact.includes(`/${volumeKey}`);
+        if (!hasVolumeToken || hasVolumeInDenominator) return evaluated;
+        const normalized = evaluated / volume;
+        return Number.isFinite(normalized) && normalized >= 0 ? normalized : evaluated;
+    };
     const evalFunctionMap = new Map(
         (inputModel.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
     );
-    const resolveSeedConcentration = (species: { initialConcentration: number; initialExpression?: string }): number => {
+    const resolveSeedConcentration = (species: { name?: string; initialConcentration: number; initialExpression?: string }): number => {
         const raw = (species as any).initialConcentration;
         if (typeof raw === 'number' && Number.isFinite(raw)) return raw;
         if (typeof raw === 'string' && raw.trim().length > 0) {
@@ -115,7 +141,8 @@ export async function generateExpandedNetwork(
                 new Set(),
                 evalFunctionMap
             );
-            return Number.isFinite(evaluated) ? evaluated : 0;
+            if (!Number.isFinite(evaluated)) return 0;
+            return normalizeAmountLikeSeedExpression(expression, evaluated, String(species.name || ''));
         } catch {
             return 0;
         }

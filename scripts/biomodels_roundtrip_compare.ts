@@ -879,6 +879,20 @@ const extractReactionRuleLines = (bngl: string): string[] =>
     .map((line) => line.trim())
     .filter((line) => line.length > 0 && !line.startsWith('#') && (line.includes('->') || line.includes('<->')));
 
+const isExpectedNoKineticOriginalFallback = (
+  diagnostics: NonNullable<RoundtripResult['diagnostics']>,
+  compare: NonNullable<RoundtripResult['compare']>
+): boolean => {
+  const src = diagnostics.sbmlInput;
+  const conversion = diagnostics.conversion;
+  return (
+    src.reactionTagCount > 0 &&
+    src.kineticLawTagCount === 0 &&
+    conversion?.exportUsedOriginalSbmlFallback === true &&
+    compare.normalizedXmlMatch
+  );
+};
+
 const buildRoundtripQuality = (
   diagnostics: NonNullable<RoundtripResult['diagnostics']>,
   compare: NonNullable<RoundtripResult['compare']>
@@ -887,6 +901,7 @@ const buildRoundtripQuality = (
   const src = diagnostics.sbmlInput;
   const bngl = diagnostics.bngl;
   const conversion = diagnostics.conversion;
+  const expectedNoKineticOriginalFallback = isExpectedNoKineticOriginalFallback(diagnostics, compare);
 
   if (src.reactionTagCount > 0 && src.kineticLawTagCount === 0) {
     const hasUsableRoundtripReactions =
@@ -894,7 +909,7 @@ const buildRoundtripQuality = (
       (conversion?.outputCounts?.reactions ?? 0) > 0;
     const hasAnyNonZeroBnglRules =
       bngl.reactionRuleLineCount > 0 && bngl.nonZeroRateRuleLineCount > 0;
-    if (!hasUsableRoundtripReactions || !hasAnyNonZeroBnglRules) {
+    if ((!hasUsableRoundtripReactions || !hasAnyNonZeroBnglRules) && !expectedNoKineticOriginalFallback) {
       reasons.push('Source SBML has reactions but no kineticLaw tags (likely constraint/FBC model).');
     }
   }
@@ -1130,6 +1145,11 @@ const resolveObservableHeaderSemanticKey = (header: string, model: BNGLModel): s
 const semanticHeaderRank = (header: string): number =>
   /_amt$/i.test(String(header || '').trim()) ? 2 : 1;
 
+const GENERIC_OBSERVABLE_HEADER_RE = /^s\d+(?:_amt)?$/;
+
+const hasGenericObservableHeaders = (headers: string[]): boolean =>
+  headers.some((header) => GENERIC_OBSERVABLE_HEADER_RE.test(String(header || '').trim()));
+
 const selectPreferredHeadersBySemanticKey = (
   headers: string[],
   model: BNGLModel
@@ -1251,6 +1271,40 @@ const buildIndexObservablePairs = (
     return { pairs: indexPairs, alignment: 'index' };
   }
   return { pairs: [], alignment: 'none' };
+};
+
+const shouldPreferExportModelForTrajectory = (
+  atomizedRoundtripModel: BNGLModel,
+  exportModel: BNGLModel
+): boolean => {
+  const countFunctionalFns = (model: BNGLModel): number =>
+    (model.functions || []).filter((fn) => {
+      const name = String(fn?.name || '').trim();
+      return !!name && !name.startsWith('_c_');
+    }).length;
+
+  const atomizedFunctions = countFunctionalFns(atomizedRoundtripModel);
+  const exportFunctions = countFunctionalFns(exportModel);
+  if (exportFunctions >= 3 && atomizedFunctions === 0) {
+    return true;
+  }
+  if (exportFunctions >= 20 && atomizedFunctions <= Math.floor(exportFunctions * 0.7)) {
+    return true;
+  }
+  if (exportFunctions >= 40 && atomizedFunctions <= exportFunctions - 5) {
+    return true;
+  }
+
+  const atomizedRules = atomizedRoundtripModel.reactionRules?.length ?? 0;
+  const exportRules = exportModel.reactionRules?.length ?? 0;
+  if (exportRules >= 3 && atomizedRules === 0) {
+    return true;
+  }
+  if (exportRules >= 6 && atomizedRules <= Math.floor(exportRules * 0.7)) {
+    return true;
+  }
+
+  return false;
 };
 
 const normalizeSpeciesTokenForLookup = (token: string): string => {
@@ -1455,6 +1509,15 @@ const runTrajectoryFidelityCheck = async (args: {
         );
         roundtripCandidateModel = roundtripParsed.model;
         roundtripModelSource = 'roundtrip_sbml_atomize';
+        if (
+          args.roundtripBnglModel &&
+          shouldPreferExportModelForTrajectory(roundtripParsed.model, args.roundtripBnglModel)
+        ) {
+          roundtripCandidateModel = args.roundtripBnglModel;
+          roundtripModelSource = 'export_model_fallback';
+          roundtripModelSourceReason =
+            'roundtrip atomization dropped functional/rule structure; using export-model fallback';
+        }
       }
     } catch (error) {
       const msg = error instanceof Error ? error.message : String(error);
@@ -1589,33 +1652,43 @@ const runTrajectoryFidelityCheck = async (args: {
     const roundtripHeaders = collectObservableHeaders(roundtripSim);
     const originalDataKeys = collectFirstRowKeys(originalSim);
     const roundtripDataKeys = collectFirstRowKeys(roundtripSim);
-    let aligned = buildObservablePairs(originalHeaders, roundtripHeaders);
-    if (aligned.pairs.length === 0) {
-      const semanticPairs = buildSemanticObservablePairs(
-        originalHeaders,
-        originalForSim,
-        roundtripHeaders,
-        roundtripForSim
-      );
-      if (semanticPairs.length > 0) {
-        aligned = { pairs: semanticPairs, alignment: 'semantic' };
-      }
+    const semanticHeaderPairs = buildSemanticObservablePairs(
+      originalHeaders,
+      originalForSim,
+      roundtripHeaders,
+      roundtripForSim
+    );
+    const preferSemanticHeaders =
+      semanticHeaderPairs.length > 0 &&
+      hasGenericObservableHeaders(originalHeaders) &&
+      hasGenericObservableHeaders(roundtripHeaders);
+
+    let aligned = preferSemanticHeaders
+      ? { pairs: semanticHeaderPairs, alignment: 'semantic' as ObservableAlignment }
+      : buildObservablePairs(originalHeaders, roundtripHeaders);
+    if (aligned.pairs.length === 0 && semanticHeaderPairs.length > 0) {
+      aligned = { pairs: semanticHeaderPairs, alignment: 'semantic' };
     }
+
     if (aligned.pairs.length === 0) {
-      aligned = buildObservablePairs(
-        originalDataKeys,
-        roundtripDataKeys
-      );
-    }
-    if (aligned.pairs.length === 0) {
-      const semanticPairs = buildSemanticObservablePairs(
+      const semanticDataPairs = buildSemanticObservablePairs(
         originalDataKeys,
         originalForSim,
         roundtripDataKeys,
         roundtripForSim
       );
-      if (semanticPairs.length > 0) {
-        aligned = { pairs: semanticPairs, alignment: 'semantic' };
+      const preferSemanticData =
+        semanticDataPairs.length > 0 &&
+        hasGenericObservableHeaders(originalDataKeys) &&
+        hasGenericObservableHeaders(roundtripDataKeys);
+      aligned = preferSemanticData
+        ? { pairs: semanticDataPairs, alignment: 'semantic' as ObservableAlignment }
+        : buildObservablePairs(
+            originalDataKeys,
+            roundtripDataKeys
+          );
+      if (aligned.pairs.length === 0 && semanticDataPairs.length > 0) {
+        aligned = { pairs: semanticDataPairs, alignment: 'semantic' };
       }
     }
     if (aligned.pairs.length === 0) {
