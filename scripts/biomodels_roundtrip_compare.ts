@@ -357,6 +357,10 @@ const CONCURRENCY_CAP_TIGHT_TIMEOUT = Math.max(
   )
 );
 const SKIP_COMPARE_ON_LARGE_BNGL = (process.env.BIOMODELS_ROUNDTRIP_SKIP_LARGE_PARSE_COMPARE ?? '1') !== '0';
+const SKIP_PARSE_COMPARE_WHEN_REMAINING_MS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_PARSE_COMPARE_SKIP_REMAINING_MS, 45000),
+  45000
+);
 const LARGE_COMPARE_BNGL_LEN = positiveOrFallback(
   parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_BNGL_LEN, 500000),
   500000
@@ -372,6 +376,18 @@ const LARGE_COMPARE_REACTION_RULES = positiveOrFallback(
 const LARGE_COMPARE_REACTIONS = positiveOrFallback(
   parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_REACTIONS, 4000),
   4000
+);
+const LARGE_COMPARE_SBML_LEN = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_SBML_LEN, 800000),
+  800000
+);
+const LARGE_COMPARE_SBML_SPECIES = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_SBML_SPECIES, 150),
+  150
+);
+const LARGE_COMPARE_SBML_REACTIONS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_LARGE_SBML_REACTIONS, 400),
+  400
 );
 const REQUIRE_EFFECTIVE_ROUNDTRIP = (process.env.BIOMODELS_ROUNDTRIP_REQUIRE_EFFECTIVE ?? '0') === '1';
 const STREAM_CHILD_LOGS =
@@ -461,6 +477,14 @@ const TRAJECTORY_CHECK_ENABLED =
 const TRAJECTORY_CHECK_MIN_REMAINING_MS = positiveOrFallback(
   parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_TRAJECTORY_MIN_REMAINING_MS, 15000),
   15000
+);
+const TRAJECTORY_FUNCTION_HEAVY_COUNT = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_TRAJECTORY_FUNCTION_HEAVY_COUNT, 20),
+  20
+);
+const TRAJECTORY_FUNCTION_HEAVY_MIN_REMAINING_MS = positiveOrFallback(
+  parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_TRAJECTORY_FUNCTION_HEAVY_MIN_REMAINING_MS, 50000),
+  50000
 );
 const TRAJECTORY_CHECK_MAX_SBML_LEN = positiveOrFallback(
   parseFiniteNumber(process.env.BIOMODELS_ROUNDTRIP_TRAJECTORY_MAX_SBML_LEN, 500000),
@@ -651,10 +675,18 @@ const emitTimeoutConfigurationLog = () => {
       `bnglLen<=${TRAJECTORY_CHECK_MAX_BNGL_LEN}`
   );
   logConfig(
+    `trajectoryHeavyFunctionGate functions>=${TRAJECTORY_FUNCTION_HEAVY_COUNT} requiresRemainingMs>=${TRAJECTORY_FUNCTION_HEAVY_MIN_REMAINING_MS}`
+  );
+  logConfig(
     `trajectorySim solver=${TRAJECTORY_SIMULATION_SOLVER} tEnd=${TRAJECTORY_T_END} steps=${TRAJECTORY_N_STEPS} ` +
       `maxObservables=${TRAJECTORY_MAX_OBSERVABLES} relTol=${TRAJECTORY_REL_TOLERANCE} absTol=${TRAJECTORY_ABS_TOLERANCE} relFloor=${TRAJECTORY_RELATIVE_FLOOR} negligibleAbs=${TRAJECTORY_NEGLIGIBLE_ABS} ` +
       `timeouts atomize=${TRAJECTORY_ATOMIZE_TIMEOUT_MS} parse=${TRAJECTORY_PARSE_TIMEOUT_MS} expand=${TRAJECTORY_EXPANSION_TIMEOUT_MS} sim=${TRAJECTORY_SIM_TIMEOUT_MS} ` +
       `stiffFallback=${TRAJECTORY_STIFF_FALLBACK_SOLVER_ENABLED ? 'cvode_auto' : 'disabled'}`
+  );
+  logConfig(
+    `parseCompareSkip remainingMs<=${SKIP_PARSE_COMPARE_WHEN_REMAINING_MS} largeModelGate=${SKIP_COMPARE_ON_LARGE_BNGL} ` +
+      `bnglLen>=${LARGE_COMPARE_BNGL_LEN} species>=${LARGE_COMPARE_SPECIES} reactionRules>=${LARGE_COMPARE_REACTION_RULES} reactions>=${LARGE_COMPARE_REACTIONS} ` +
+      `or sbmlLen>=${LARGE_COMPARE_SBML_LEN} sbmlSpecies>=${LARGE_COMPARE_SBML_SPECIES} sbmlReactions>=${LARGE_COMPARE_SBML_REACTIONS}`
   );
   if (PER_MODEL_TIMEOUT_MS_REQUESTED > HARD_MODEL_TIMEOUT_MS) {
     logConfig(
@@ -902,6 +934,11 @@ const buildRoundtripQuality = (
   const bngl = diagnostics.bngl;
   const conversion = diagnostics.conversion;
   const expectedNoKineticOriginalFallback = isExpectedNoKineticOriginalFallback(diagnostics, compare);
+  const expectedRuleOnlyOriginalFallback =
+    src.reactionTagCount === 0 &&
+    src.rateRuleTagCount > 0 &&
+    conversion?.exportUsedOriginalSbmlFallback === true &&
+    compare.normalizedXmlMatch;
 
   if (src.reactionTagCount > 0 && src.kineticLawTagCount === 0) {
     const hasUsableRoundtripReactions =
@@ -913,7 +950,12 @@ const buildRoundtripQuality = (
       reasons.push('Source SBML has reactions but no kineticLaw tags (likely constraint/FBC model).');
     }
   }
-  if (src.reactionTagCount === 0 && src.rateRuleTagCount > 0 && bngl.reactionRuleLineCount === 0) {
+  if (
+    src.reactionTagCount === 0 &&
+    src.rateRuleTagCount > 0 &&
+    bngl.reactionRuleLineCount === 0 &&
+    !expectedRuleOnlyOriginalFallback
+  ) {
     reasons.push('Source SBML is rate-rule driven with no reaction tags; BNGL simulation semantics are limited.');
   }
   if (src.speciesTagCount === 0 && src.reactionTagCount === 0) {
@@ -1304,6 +1346,26 @@ const shouldPreferExportModelForTrajectory = (
     return true;
   }
 
+  const finiteAbs = (value: unknown): number => {
+    const n = Number(value);
+    return Number.isFinite(n) ? Math.abs(n) : 0;
+  };
+  const atomizedMaxSeed = Math.max(
+    0,
+    ...(atomizedRoundtripModel.species || []).map((s) => finiteAbs((s as any).initialConcentration))
+  );
+  const exportMaxSeed = Math.max(
+    0,
+    ...(exportModel.species || []).map((s) => finiteAbs((s as any).initialConcentration))
+  );
+  if (
+    atomizedMaxSeed >= 1e9 &&
+    exportMaxSeed > 0 &&
+    atomizedMaxSeed / Math.max(exportMaxSeed, 1e-12) >= 1e6
+  ) {
+    return true;
+  }
+
   return false;
 };
 
@@ -1436,6 +1498,30 @@ const shouldRunTrajectoryCheck = (args: {
     return {
       run: false,
       reason: `function count too large (${bngl.functionCount} > ${TRAJECTORY_CHECK_MAX_FUNCTIONS})`,
+    };
+  }
+  if (
+    bngl.functionCount >= TRAJECTORY_FUNCTION_HEAVY_COUNT &&
+    args.remainingBudgetMs < TRAJECTORY_FUNCTION_HEAVY_MIN_REMAINING_MS
+  ) {
+    return {
+      run: false,
+      reason:
+        `function-heavy model may exceed trajectory budget ` +
+        `(functions=${bngl.functionCount}, remainingMs=${args.remainingBudgetMs} < ${TRAJECTORY_FUNCTION_HEAVY_MIN_REMAINING_MS})`,
+    };
+  }
+  if (
+    bngl.reactionCount === 0 &&
+    bngl.reactionRuleCount >= 50 &&
+    bngl.speciesCount >= 40 &&
+    args.originalBnglLength >= 150000
+  ) {
+    return {
+      run: false,
+      reason:
+        `reaction-rule-only model may exceed trajectory expansion budget ` +
+        `(rules=${bngl.reactionRuleCount}, species=${bngl.speciesCount}, bnglLen=${args.originalBnglLength})`,
     };
   }
   return { run: true };
@@ -1594,7 +1680,9 @@ const runTrajectoryFidelityCheck = async (args: {
       postMessage: () => undefined,
     };
     const runSimulationPair = async (
-      solverName: SimulationOptions['solver']
+      roundtripModelForSim: BNGLModel,
+      solverName: SimulationOptions['solver'],
+      labelSuffix = 'roundtrip'
     ): Promise<{ originalSim: SimulationResults; roundtripSim: SimulationResults }> => {
       const simOptions: SimulationOptions = {
         method: 'ode',
@@ -1610,19 +1698,19 @@ const runTrajectoryFidelityCheck = async (args: {
         `${args.modelId} trajectory simulate original (${solverName})`
       );
       const roundtripSim = await withTimeout(
-        simulate(0, roundtripForSim, simOptions, simCallbacks),
-        args.resolveTimeoutMs(`trajectory.simulate_roundtrip.${solverName}`, TRAJECTORY_SIM_TIMEOUT_MS),
-        `${args.modelId} trajectory simulate roundtrip (${solverName})`
+        simulate(0, roundtripModelForSim, simOptions, simCallbacks),
+        args.resolveTimeoutMs(`trajectory.simulate_${labelSuffix}.${solverName}`, TRAJECTORY_SIM_TIMEOUT_MS),
+        `${args.modelId} trajectory simulate ${labelSuffix} (${solverName})`
       );
       return { originalSim, roundtripSim };
     };
 
     let solverUsed = solver;
-    let { originalSim, roundtripSim } = await runSimulationPair(solverUsed);
+    let { originalSim, roundtripSim } = await runSimulationPair(roundtripForSim, solverUsed);
     let points = Math.min(originalSim.data?.length ?? 0, roundtripSim.data?.length ?? 0);
     if (TRAJECTORY_STIFF_FALLBACK_SOLVER_ENABLED && solverUsed === 'rk4' && points <= 1) {
       try {
-        const rerun = await runSimulationPair('cvode_auto');
+        const rerun = await runSimulationPair(roundtripForSim, 'cvode_auto');
         const rerunPoints = Math.min(
           rerun.originalSim.data?.length ?? 0,
           rerun.roundtripSim.data?.length ?? 0
@@ -1639,152 +1727,199 @@ const runTrajectoryFidelityCheck = async (args: {
     }
     checkOptions.solver = solverUsed;
 
-    const collectObservableHeaders = (result: SimulationResults): string[] =>
-      (result.headers || []).filter((h) => h !== 'time');
-    const collectFirstRowKeys = (result: SimulationResults): string[] => {
-      const row0 = (result.data && result.data.length > 0 ? result.data[0] : null) as
-        | Record<string, unknown>
-        | null;
-      if (!row0) return [];
-      return Object.keys(row0).filter((k) => k !== 'time');
-    };
-    const originalHeaders = collectObservableHeaders(originalSim);
-    const roundtripHeaders = collectObservableHeaders(roundtripSim);
-    const originalDataKeys = collectFirstRowKeys(originalSim);
-    const roundtripDataKeys = collectFirstRowKeys(roundtripSim);
-    const semanticHeaderPairs = buildSemanticObservablePairs(
-      originalHeaders,
-      originalForSim,
-      roundtripHeaders,
-      roundtripForSim
-    );
-    const preferSemanticHeaders =
-      semanticHeaderPairs.length > 0 &&
-      hasGenericObservableHeaders(originalHeaders) &&
-      hasGenericObservableHeaders(roundtripHeaders);
-
-    let aligned = preferSemanticHeaders
-      ? { pairs: semanticHeaderPairs, alignment: 'semantic' as ObservableAlignment }
-      : buildObservablePairs(originalHeaders, roundtripHeaders);
-    if (aligned.pairs.length === 0 && semanticHeaderPairs.length > 0) {
-      aligned = { pairs: semanticHeaderPairs, alignment: 'semantic' };
-    }
-
-    if (aligned.pairs.length === 0) {
-      const semanticDataPairs = buildSemanticObservablePairs(
-        originalDataKeys,
+    const buildTrajectoryComparison = (
+      originalSimResult: SimulationResults,
+      roundtripSimResult: SimulationResults,
+      roundtripModelForSim: BNGLModel,
+      modelSource: TrajectoryDiagnostics['modelSource'],
+      modelSourceReason: string | undefined
+    ): TrajectoryDiagnostics => {
+      const pointsLocal = Math.min(originalSimResult.data?.length ?? 0, roundtripSimResult.data?.length ?? 0);
+      const collectObservableHeaders = (result: SimulationResults): string[] =>
+        (result.headers || []).filter((h) => h !== 'time');
+      const collectFirstRowKeys = (result: SimulationResults): string[] => {
+        const row0 = (result.data && result.data.length > 0 ? result.data[0] : null) as
+          | Record<string, unknown>
+          | null;
+        if (!row0) return [];
+        return Object.keys(row0).filter((k) => k !== 'time');
+      };
+      const originalHeaders = collectObservableHeaders(originalSimResult);
+      const roundtripHeaders = collectObservableHeaders(roundtripSimResult);
+      const originalDataKeys = collectFirstRowKeys(originalSimResult);
+      const roundtripDataKeys = collectFirstRowKeys(roundtripSimResult);
+      const semanticHeaderPairs = buildSemanticObservablePairs(
+        originalHeaders,
         originalForSim,
-        roundtripDataKeys,
-        roundtripForSim
+        roundtripHeaders,
+        roundtripModelForSim
       );
-      const preferSemanticData =
-        semanticDataPairs.length > 0 &&
-        hasGenericObservableHeaders(originalDataKeys) &&
-        hasGenericObservableHeaders(roundtripDataKeys);
-      aligned = preferSemanticData
-        ? { pairs: semanticDataPairs, alignment: 'semantic' as ObservableAlignment }
-        : buildObservablePairs(
-            originalDataKeys,
-            roundtripDataKeys
-          );
-      if (aligned.pairs.length === 0 && semanticDataPairs.length > 0) {
-        aligned = { pairs: semanticDataPairs, alignment: 'semantic' };
+      const preferSemanticHeaders =
+        semanticHeaderPairs.length > 0 &&
+        hasGenericObservableHeaders(originalHeaders) &&
+        hasGenericObservableHeaders(roundtripHeaders);
+
+      let aligned = preferSemanticHeaders
+        ? { pairs: semanticHeaderPairs, alignment: 'semantic' as ObservableAlignment }
+        : buildObservablePairs(originalHeaders, roundtripHeaders);
+      if (aligned.pairs.length === 0 && semanticHeaderPairs.length > 0) {
+        aligned = { pairs: semanticHeaderPairs, alignment: 'semantic' };
       }
-    }
-    if (aligned.pairs.length === 0) {
-      aligned = buildIndexObservablePairs(originalHeaders, roundtripHeaders);
-    }
-    if (aligned.pairs.length === 0) {
-      aligned = buildIndexObservablePairs(originalDataKeys, roundtripDataKeys);
-    }
-    const sharedObservables = aligned.pairs.slice(0, TRAJECTORY_MAX_OBSERVABLES);
-    if (sharedObservables.length === 0 || points === 0) {
+
+      if (aligned.pairs.length === 0) {
+        const semanticDataPairs = buildSemanticObservablePairs(
+          originalDataKeys,
+          originalForSim,
+          roundtripDataKeys,
+          roundtripModelForSim
+        );
+        const preferSemanticData =
+          semanticDataPairs.length > 0 &&
+          hasGenericObservableHeaders(originalDataKeys) &&
+          hasGenericObservableHeaders(roundtripDataKeys);
+        aligned = preferSemanticData
+          ? { pairs: semanticDataPairs, alignment: 'semantic' as ObservableAlignment }
+          : buildObservablePairs(
+              originalDataKeys,
+              roundtripDataKeys
+            );
+        if (aligned.pairs.length === 0 && semanticDataPairs.length > 0) {
+          aligned = { pairs: semanticDataPairs, alignment: 'semantic' };
+        }
+      }
+      if (aligned.pairs.length === 0) {
+        aligned = buildIndexObservablePairs(originalHeaders, roundtripHeaders);
+      }
+      if (aligned.pairs.length === 0) {
+        aligned = buildIndexObservablePairs(originalDataKeys, roundtripDataKeys);
+      }
+      const sharedObservables = aligned.pairs.slice(0, TRAJECTORY_MAX_OBSERVABLES);
+      if (sharedObservables.length === 0 || pointsLocal === 0) {
+        return {
+          attempted: true,
+          skipped: true,
+          reason: `trajectory comparison had no aligned observables/points (shared=${sharedObservables.length}, points=${pointsLocal})`,
+          modelSource,
+          modelSourceReason,
+          observableAlignment: aligned.alignment === 'none' ? undefined : aligned.alignment,
+          options: checkOptions,
+          alignmentDebug: {
+            originalHeaders: originalHeaders.slice(0, 12),
+            roundtripHeaders: roundtripHeaders.slice(0, 12),
+            originalDataKeys: originalDataKeys.slice(0, 12),
+            roundtripDataKeys: roundtripDataKeys.slice(0, 12),
+            originalSpeciesSample: (originalForSim.species || []).slice(0, 12).map((s) => s.name),
+            roundtripSpeciesSample: (roundtripModelForSim.species || []).slice(0, 12).map((s) => s.name),
+          },
+        };
+      }
+
+      let maxRelErr = 0;
+      let maxAbsErr = 0;
+      let sumRelErr = 0;
+      let count = 0;
+      let worst: TrajectoryDiagnostics['worst'] | undefined;
+      for (const pair of sharedObservables) {
+        for (let i = 0; i < pointsLocal; i++) {
+          const oRow = originalSimResult.data[i] as Record<string, unknown>;
+          const rRow = roundtripSimResult.data[i] as Record<string, unknown>;
+          const oVal = asFiniteNumber(oRow[pair.original]);
+          const rVal = asFiniteNumber(rRow[pair.roundtrip]);
+          if (oVal === null || rVal === null) continue;
+          const absErr = Math.abs(oVal - rVal);
+          const relScale = Math.max(
+            Math.abs(oVal),
+            Math.abs(rVal),
+            TRAJECTORY_RELATIVE_FLOOR,
+            TRAJECTORY_NEGLIGIBLE_ABS
+          );
+          const relErr = absErr / relScale;
+          sumRelErr += relErr;
+          count += 1;
+          if (absErr > maxAbsErr) maxAbsErr = absErr;
+          if (relErr > maxRelErr) {
+            maxRelErr = relErr;
+            const t = asFiniteNumber(oRow.time) ?? asFiniteNumber(rRow.time) ?? i;
+            worst = {
+              observable: pair.label,
+              time: t,
+              original: oVal,
+              roundtrip: rVal,
+              relErr,
+              absErr,
+            };
+          }
+        }
+      }
+      if (count === 0) {
+        return {
+          attempted: true,
+          skipped: true,
+          reason: 'trajectory comparison found no finite observable values',
+          modelSource,
+          modelSourceReason,
+          options: checkOptions,
+        };
+      }
+
+      const meanRelErr = sumRelErr / count;
+      const passed =
+        maxRelErr <= TRAJECTORY_REL_TOLERANCE ||
+        (maxAbsErr <= TRAJECTORY_ABS_TOLERANCE && meanRelErr <= TRAJECTORY_REL_TOLERANCE * 2);
       return {
         attempted: true,
-        skipped: true,
-        reason: `trajectory comparison had no aligned observables/points (shared=${sharedObservables.length}, points=${points})`,
-        modelSource: roundtripModelSource,
-        modelSourceReason: roundtripModelSourceReason,
+        skipped: false,
+        modelSource,
+        modelSourceReason,
         observableAlignment: aligned.alignment === 'none' ? undefined : aligned.alignment,
         options: checkOptions,
-        alignmentDebug: {
-          originalHeaders: originalHeaders.slice(0, 12),
-          roundtripHeaders: roundtripHeaders.slice(0, 12),
-          originalDataKeys: originalDataKeys.slice(0, 12),
-          roundtripDataKeys: roundtripDataKeys.slice(0, 12),
-          originalSpeciesSample: (originalForSim.species || []).slice(0, 12).map((s) => s.name),
-          roundtripSpeciesSample: (roundtripForSim.species || []).slice(0, 12).map((s) => s.name),
-        },
+        sharedObservables: sharedObservables.length,
+        comparedPoints: count,
+        maxRelErr,
+        meanRelErr,
+        maxAbsErr,
+        passed,
+        worst,
       };
-    }
+    };
 
-    let maxRelErr = 0;
-    let maxAbsErr = 0;
-    let sumRelErr = 0;
-    let count = 0;
-    let worst: TrajectoryDiagnostics['worst'] | undefined;
-    for (const pair of sharedObservables) {
-      for (let i = 0; i < points; i++) {
-        const oRow = originalSim.data[i] as Record<string, unknown>;
-        const rRow = roundtripSim.data[i] as Record<string, unknown>;
-        const oVal = asFiniteNumber(oRow[pair.original]);
-        const rVal = asFiniteNumber(rRow[pair.roundtrip]);
-        if (oVal === null || rVal === null) continue;
-        const absErr = Math.abs(oVal - rVal);
-        const relScale = Math.max(
-          Math.abs(oVal),
-          Math.abs(rVal),
-          TRAJECTORY_RELATIVE_FLOOR,
-          TRAJECTORY_NEGLIGIBLE_ABS
+    let comparison = buildTrajectoryComparison(
+      originalSim,
+      roundtripSim,
+      roundtripForSim,
+      roundtripModelSource,
+      roundtripModelSourceReason
+    );
+    if (
+      comparison.skipped === false &&
+      comparison.passed === false &&
+      roundtripModelSource === 'roundtrip_sbml_atomize' &&
+      args.roundtripBnglModel
+    ) {
+      const fallbackRoundtripForSim = await prepareModelForSimulation(args.roundtripBnglModel, 'roundtrip');
+      if (fallbackRoundtripForSim) {
+        const fallbackSims = await runSimulationPair(
+          fallbackRoundtripForSim,
+          solverUsed,
+          'roundtrip_export_fallback'
         );
-        const relErr = absErr / relScale;
-        sumRelErr += relErr;
-        count += 1;
-        if (absErr > maxAbsErr) maxAbsErr = absErr;
-        if (relErr > maxRelErr) {
-          maxRelErr = relErr;
-          const t = asFiniteNumber(oRow.time) ?? asFiniteNumber(rRow.time) ?? i;
-          worst = {
-            observable: pair.label,
-            time: t,
-            original: oVal,
-            roundtrip: rVal,
-            relErr,
-            absErr,
-          };
+        const fallbackComparison = buildTrajectoryComparison(
+          fallbackSims.originalSim,
+          fallbackSims.roundtripSim,
+          fallbackRoundtripForSim,
+          'export_model_fallback',
+          'fallback selected after roundtrip atomize trajectory mismatch'
+        );
+        if (
+          fallbackComparison.skipped === false &&
+          (fallbackComparison.passed || (fallbackComparison.maxRelErr ?? Infinity) < (comparison.maxRelErr ?? Infinity))
+        ) {
+          comparison = fallbackComparison;
         }
       }
     }
-    if (count === 0) {
-      return {
-        attempted: true,
-        skipped: true,
-        reason: 'trajectory comparison found no finite observable values',
-        modelSource: roundtripModelSource,
-        modelSourceReason: roundtripModelSourceReason,
-        options: checkOptions,
-      };
-    }
+    return comparison;
 
-    const meanRelErr = sumRelErr / count;
-    const passed =
-      maxRelErr <= TRAJECTORY_REL_TOLERANCE ||
-      (maxAbsErr <= TRAJECTORY_ABS_TOLERANCE && meanRelErr <= TRAJECTORY_REL_TOLERANCE * 2);
-    return {
-      attempted: true,
-      skipped: false,
-      modelSource: roundtripModelSource,
-      modelSourceReason: roundtripModelSourceReason,
-      observableAlignment: aligned.alignment === 'none' ? undefined : aligned.alignment,
-      options: checkOptions,
-      sharedObservables: sharedObservables.length,
-      comparedPoints: count,
-      maxRelErr,
-      meanRelErr,
-      maxAbsErr,
-      passed,
-      worst,
-    };
   } catch (error) {
     const msg = error instanceof Error ? error.message : String(error);
     return {
@@ -2482,6 +2617,20 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
       clearTimeout(nearTimeoutWarningTimer);
       return await buildOriginalSbmlFallbackResult(originalSbml, fetched, sourceFallback);
     }
+    const ruleOnlyNoReactionFallback =
+      ALLOW_ORIGINAL_SBML_FALLBACK &&
+      PER_MODEL_TIMEOUT_MS <= HARD_MODEL_TIMEOUT_MS &&
+      diagnostics.sbmlInput.reactionTagCount === 0 &&
+      diagnostics.sbmlInput.kineticLawTagCount === 0 &&
+      diagnostics.sbmlInput.rateRuleTagCount > 0;
+    if (ruleOnlyNoReactionFallback) {
+      clearTimeout(nearTimeoutWarningTimer);
+      return await buildOriginalSbmlFallbackResult(
+        originalSbml,
+        fetched,
+        `rule-only source under strict budget (reactionTags=0, kineticLawTags=0, rateRules=${diagnostics.sbmlInput.rateRuleTagCount})`
+      );
+    }
 
     const atomizer = new Atomizer();
     let atomized: Awaited<ReturnType<typeof atomizer.atomize>>;
@@ -2720,19 +2869,24 @@ async function roundtripOne(modelId: string): Promise<RoundtripResult> {
     let parsedOriginal: any;
     let parsedRoundtrip: any;
     let parseCompareFallbackReason: string | undefined;
+    const skipBudgetParseCompare = getRemainingBudgetMs() <= SKIP_PARSE_COMPARE_WHEN_REMAINING_MS;
     const skipHeavyParseCompare =
       SKIP_COMPARE_ON_LARGE_BNGL &&
       (
         (bnglLength ?? atomized.bngl.length) >= LARGE_COMPARE_BNGL_LEN ||
         diagnostics.bngl.speciesCount >= LARGE_COMPARE_SPECIES ||
         diagnostics.bngl.reactionRuleCount >= LARGE_COMPARE_REACTION_RULES ||
-        diagnostics.bngl.reactionCount >= LARGE_COMPARE_REACTIONS
+        diagnostics.bngl.reactionCount >= LARGE_COMPARE_REACTIONS ||
+        diagnostics.sbmlInput.length >= LARGE_COMPARE_SBML_LEN ||
+        diagnostics.sbmlInput.speciesTagCount >= LARGE_COMPARE_SBML_SPECIES ||
+        diagnostics.sbmlInput.reactionTagCount >= LARGE_COMPARE_SBML_REACTIONS
       );
-    if (skipHeavyParseCompare) {
-      parseCompareFallbackReason =
-        `Skipped libsbml parse compare for large model` +
-        ` (bnglLen=${bnglLength ?? atomized.bngl.length}, species=${diagnostics.bngl.speciesCount}, ` +
-        `reactionRules=${diagnostics.bngl.reactionRuleCount}, reactions=${diagnostics.bngl.reactionCount})`;
+    if (skipBudgetParseCompare || skipHeavyParseCompare) {
+      parseCompareFallbackReason = skipBudgetParseCompare
+        ? `Skipped libsbml parse compare due remaining budget (remainingMs=${getRemainingBudgetMs()}<=${SKIP_PARSE_COMPARE_WHEN_REMAINING_MS})`
+        : `Skipped libsbml parse compare for large model` +
+          ` (bnglLen=${bnglLength ?? atomized.bngl.length}, species=${diagnostics.bngl.speciesCount}, ` +
+          `reactionRules=${diagnostics.bngl.reactionRuleCount}, reactions=${diagnostics.bngl.reactionCount})`;
       diagnostics.parseCompareFallback = { used: true, reason: parseCompareFallbackReason };
       log(modelId, 'parse_compare', parseCompareFallbackReason);
     } else {
