@@ -9,6 +9,7 @@ import type {
   SerializedWorkerError,
   NetworkGeneratorOptions,
   SimulationResults,
+  NetworkAnalysisPayload,
 } from '../types';
 
 import { generateExpandedNetwork as generateExpandedNetworkService } from './simulation/NetworkExpansion';
@@ -31,6 +32,7 @@ import {
 // Using official ANTLR parser for bng2.pl parity (util polyfill added in vite.config.ts)
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import { Atomizer } from '../src/lib/atomizer';
+import { analyseGraph } from './igraphLoader';
 
 const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
   ? (self as unknown as DedicatedWorkerGlobalScope)
@@ -824,6 +826,27 @@ if (typeof ctx.addEventListener === 'function') {
           markJobComplete(id);
         }
       })();
+      return;
+    }
+
+    if (type === 'analyse_network') {
+      workerVerboseLog(`[Worker] Received analyse_network request ${id}`);
+      registerJob(id);
+      try {
+        const analysisPayload = payload as NetworkAnalysisPayload;
+        if (!analysisPayload || !Array.isArray(analysisPayload.nodeLabels)) {
+          throw new Error('analyse_network: invalid or missing NetworkAnalysisPayload');
+        }
+        const result = await analyseGraph(analysisPayload);
+        const response: WorkerResponse = { id, type: 'analyse_network_success', payload: result };
+        safePostMessage(response);
+      } catch (error) {
+        console.error(`[Worker] Analyse network error for job ${id}:`, error);
+        const response: WorkerResponse = { id, type: 'analyse_network_error', payload: serializeError(error) };
+        safePostMessage(response);
+      } finally {
+        markJobComplete(id);
+      }
       return;
     }
 

@@ -20,6 +20,7 @@ import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 import { ExpressionInputPanel, CustomExpression } from './ExpressionInputPanel';
 import { ComparisonPanel } from './ComparisonPanel';
 import { JupyterExportTab } from './tabs/JupyterExportTab';
+import { NetworkAnalysisTab } from './tabs/NetworkAnalysisTab';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { EmptyState } from './ui/EmptyState';
@@ -78,7 +79,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     onActiveTabIndexChange?.(idx);
   };
 
-  const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact' | 'influence'>('regulatory');
+  const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact' | 'influence' | 'analysis'>('regulatory');
 
   React.useEffect(() => {
     if (model) {
@@ -136,7 +137,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   // Tab definitions:
   // 0: Time Courses
-  // 1: Network (Regulatory / Contact / Dynamics)
+  // 1: Network (Regulatory / Contact / Rules / Influence / Analysis)
   // Analysis Group:
   // 2: Parameter Scan
   // 3: Steady State
@@ -151,7 +152,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   // 12: Jupyter Export
 
   // Map activeTab to a group for UI highlighting
-  const isAnalysisTab = activeTab >= 2 && activeTab <= 11;
+  const isAnalysisTab = activeTab >= 2 && activeTab <= 12;
 
   // Filter parameter names to only those used in seed species (as requested by user)
   const seedParameterNames = React.useMemo(() => {
@@ -253,6 +254,15 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 }`}
             >
               Influence
+            </button>
+            <button
+              onClick={() => setNetworkViewMode('analysis')}
+              className={`px-2 py-0.5 text-xs font-medium rounded ${networkViewMode === 'analysis'
+                ? 'bg-slate-100 dark:bg-slate-700 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 hover:text-slate-700 dark:hover:text-slate-300'
+                }`}
+            >
+              Analysis
             </button>
           </div>
         )}
@@ -571,6 +581,37 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               plotDescription="The preview window shows the exact code that will be generated. Once exported, you can run this in VS Code, Google Colab, or locally."
             />
             <JupyterExportTab model={model} bnglCode={bnglCode} />
+          </div>
+        )}
+
+        {activeTab === 1 && networkViewMode === 'analysis' && (
+          <div className="h-full flex flex-col">
+            <HelpSection
+              title="Network Analysis"
+              description="Apply graph-theory algorithms to your reaction network. Compute centrality metrics (betweenness, PageRank, closeness), detect communities, and measure network connectivity."
+              features={[
+                "Community detection via label propagation",
+                "Centrality: betweenness, closeness, PageRank",
+                "Global/local clustering coefficients",
+                "Three graph types: molecular, reaction, regulatory",
+              ]}
+              plotDescription="Nodes are colored by community and sized by PageRank. The degree distribution chart shows connectivity across the network."
+            />
+            <NetworkAnalysisTab model={model} />
+          </div>
+        )}
+
+        {activeTab === 13 && (
+          // Legacy tab — redirect user to Network → Analysis view
+          <div className="h-full flex items-center justify-center text-sm text-slate-500">
+            Network Analysis has moved to the
+            <button
+              className="mx-1 underline text-teal-600 dark:text-teal-400"
+              onClick={() => { setActiveTab(1); setNetworkViewMode('analysis'); }}
+            >
+              Network → Analysis
+            </button>
+            tab.
           </div>
         )}
 

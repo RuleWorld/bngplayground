@@ -245,7 +245,8 @@ export type WorkerRequest =
     | { id: number; type: 'simulate'; payload: { modelId: number; parameterOverrides?: Record<string, number>; options: SimulationOptions } }
     | { id: number; type: 'generate_network'; payload: { model: BNGLModel; options?: NetworkGeneratorOptions } }
     | { id: number; type: 'atomize'; payload: string }
-    | { id: number; type: 'cancel'; payload: { targetId: number } };
+    | { id: number; type: 'cancel'; payload: { targetId: number } }
+    | { id: number; type: 'analyse_network'; payload: NetworkAnalysisPayload };
 
 export type WorkerResponse =
     | { id: number; type: 'parse_success'; payload: BNGLModel }
@@ -261,7 +262,9 @@ export type WorkerResponse =
     | { id: number; type: 'simulate_error'; payload: SerializedWorkerError }
     | { id: number; type: 'generate_network_success'; payload: BNGLModel }
     | { id: number; type: 'generate_network_error'; payload: SerializedWorkerError }
-    | { id: number; type: 'generate_network_progress'; payload: GeneratorProgress };
+    | { id: number; type: 'generate_network_progress'; payload: GeneratorProgress }
+    | { id: number; type: 'analyse_network_success'; payload: IgraphAnalysisResult }
+    | { id: number; type: 'analyse_network_error'; payload: SerializedWorkerError };
 
 export interface AtomizerResult {
     bngl: string;
@@ -293,4 +296,33 @@ export interface GeneratorProgress {
     iteration: number;
     memoryUsed: number;
     timeElapsed: number;
+}
+
+export interface NetworkAnalysisPayload {
+    edges: Array<{ from: number; to: number }>;
+    nodeLabels: string[];
+    directed: boolean;
+    graphType: 'reaction' | 'molecular' | 'regulatory';
+}
+
+export interface IgraphAnalysisResult {
+    nodeCount: number;
+    edgeCount: number;
+    nodeLabels: string[];
+    graphType: 'reaction' | 'molecular' | 'regulatory';
+    degree: number[];
+    inDegree: number[];
+    outDegree: number[];
+    betweenness: number[];
+    closeness: number[];
+    pagerank: number[];
+    localClustering: number[];
+    communityIds: number[];
+    communityCount: number;
+    modularity: number;
+    globalClustering: number;
+    diameter: number;
+    avgPathLength: number;
+    components: number;
+    isConnected: boolean;
 }

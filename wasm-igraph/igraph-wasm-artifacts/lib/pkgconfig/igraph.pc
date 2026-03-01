@@ -1,0 +1,13 @@
+prefix=/__w/igraph-wasm/igraph-wasm/release-0.10.13
+exec_prefix=/__w/igraph-wasm/igraph-wasm/release-0.10.13
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libigraph
+Description: A library for creating and manipulating graphs
+Version: 0.10.13
+URL: https://igraph.org
+Libs: -L${libdir} -ligraph
+Libs.private:  -lc++
+Requires.private: 
+Cflags: -I${includedir}/igraph

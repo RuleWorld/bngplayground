@@ -6,6 +6,8 @@ import type {
   WorkerResponse,
   SerializedWorkerError,
   NetworkGeneratorOptions,
+  NetworkAnalysisPayload,
+  IgraphAnalysisResult,
 } from '../types';
 
 type RequestOptions = {
@@ -160,7 +162,7 @@ class BnglService {
       this.promises.delete(id);
       pending.cleanup();
 
-      if (type === 'parse_success' || type === 'simulate_success' || type === 'generate_network_success' || type === 'atomize_success') {
+      if (type === 'parse_success' || type === 'simulate_success' || type === 'generate_network_success' || type === 'atomize_success' || type === 'analyse_network_success') {
         pending.resolve(payload);
         return;
       }
@@ -170,7 +172,7 @@ class BnglService {
         return;
       }
 
-      if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'generate_network_error' || type === 'atomize_error') {
+      if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'generate_network_error' || type === 'atomize_error' || type === 'analyse_network_error') {
         const errType = type === 'parse_error' ? 'parse' : type === 'simulate_error' ? 'simulate' : type === 'atomize_error' ? 'atomize' : 'cache_model';
         const err = toError(errType === 'parse' ? 'parse' : 'simulate', payload);
         pending.reject(err);
@@ -355,6 +357,13 @@ class BnglService {
     return this.postMessage<BNGLModel>('generate_network', { model, options }, {
       ...requestOptions,
       description: requestOptions?.description ?? 'Network Generation'
+    });
+  }
+
+  public analyseNetwork(payload: NetworkAnalysisPayload, requestOptions?: RequestOptions): Promise<IgraphAnalysisResult> {
+    return this.postMessage<IgraphAnalysisResult>('analyse_network', payload, {
+      ...requestOptions,
+      description: requestOptions?.description ?? `Network Analysis (${payload.graphType})`,
     });
   }
 

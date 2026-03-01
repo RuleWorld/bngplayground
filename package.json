@@ -1,7 +1,9 @@
 {
   "name": "bionetgen-web-simulator",
   "private": true,
-  "workspaces": ["packages/*"],
+  "workspaces": [
+    "packages/*"
+  ],
   "version": "0.0.0",
   "type": "module",
   "scripts": {
@@ -48,6 +50,7 @@
     "jszip": "^3.10.1",
     "libsbmljs_stable": "latest",
     "ml-matrix": "^6.8.0",
+    "nlopt-js": "^0.1.1",
     "node-abi": "^4.26.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -58,6 +61,7 @@
   },
   "devDependencies": {
     "@playwright/test": "^1.58.1",
+    "@tailwindcss/postcss": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.1",
     "@types/chai": "^5.2.3",
@@ -73,7 +77,6 @@
     "antlr4ts-cli": "^0.5.0-alpha.4",
     "assert": "^2.1.0",
     "autoprefixer": "^10.4.19",
-    "@tailwindcss/postcss": "^4.2.0",
     "baseline-browser-mapping": "^2.9.11",
     "chai": "^6.2.2",
     "fast-check": "^4.5.3",

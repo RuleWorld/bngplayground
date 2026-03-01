@@ -1,15 +1,15 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Cell, Scatter } from 'recharts';
-import { bnglService } from '../../services/bnglService';
+import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Scatter } from 'recharts';
 import { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
-import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { Card } from '../ui/Card';
 import { DataTable } from '../ui/DataTable';
 import { CHART_COLORS } from '../../constants';
 import { parseExperimentalData, ExperimentalDataPoint } from '../../src/services/data/experimentalData';
+import { fitParameters, FitAlgorithm } from '../../services/optimization/paramFitter';
+import { bnglService } from '../../services/bnglService';
 
 interface ParameterEstimationTabProps {
   model: BNGLModel | null;
@@ -27,8 +27,11 @@ interface ParameterPrior {
 
 interface EstimationResult {
   parameters: string[];
+  /** Best-estimate parameter values from optimizer. */
   posteriorMean: number[];
+  /** Half-width of 95% confidence interval. */
   posteriorStd: number[];
+  /** SSE history (one entry per progress report, ~every 5 iters). */
   elbo: number[];
   convergence: boolean;
   iterations: number;
@@ -39,6 +42,7 @@ interface EstimationResult {
   credibleIntervals: { lower: number; upper: number }[];
   percentiles: { q1: number; q3: number; median: number }[];
   priorMeans: number[];
+  algorithm?: string;
 }
 
 const EXAMPLE_DATA = `# Example experimental data format:
@@ -75,8 +79,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
 
   // Estimation settings
   const [nIterations, setNIterations] = useState('500');
-  const [learningRate, setLearningRate] = useState('0.01');
-  const [nSamples, setNSamples] = useState('5');
+  const [algorithm, setAlgorithm] = useState<FitAlgorithm>('nelder-mead');
 
   // Results
   const [result, setResult] = useState<EstimationResult | null>(null);
@@ -192,122 +195,74 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
     const controller = new AbortController();
     abortControllerRef.current = controller;
 
-    // Snapshot the selected parameters (and prior means) used for this run.
-    // This avoids UI crashes if the user changes selections after estimation finishes.
     const paramsSnapshot = [...selectedParams];
     const priorMeansSnapshot = paramsSnapshot.map(
       (name) => priors.find((p) => p.name === name)?.mean ?? 0
     );
 
     try {
-      // Dynamically import TensorFlow.js and estimation module
-      const [tf, { VariationalParameterEstimator }] = await Promise.all([
-        import('@tensorflow/tfjs'),
-        import('../../src/services/ParameterEstimation')
-      ]);
+      const maxEval = parseInt(nIterations);
+      setProgress({ current: 0, total: maxEval, elbo: 0 });
 
-      // Prepare data
-      const timePoints = parsedData.map(d => d.time);
-      const observables = new Map<string, number[]>();
-
-      // Get observable names from data
-      const obsNames = Object.keys(parsedData[0]?.values || {});
-      for (const obsName of obsNames) {
-        observables.set(obsName, parsedData.map(d => d.values[obsName] || 0));
-      }
-
-      const simulationData = { timePoints, observables };
-
-      // Prepare priors
-      const priorsMap = new Map<string, { mean: number; std: number; min?: number; max?: number }>();
-      for (const prior of priors) {
-        priorsMap.set(prior.name, {
-          mean: prior.mean,
-          std: prior.std,
-          min: prior.min,
-          max: prior.max
-        });
-      }
-
-      const iterations = parseInt(nIterations);
-      setProgress({ current: 0, total: iterations, elbo: 0 });
-
-      // Step 1: Prepare model in worker for efficient parameter overrides
+      // Prepare cached model in worker to avoid re-parsing on every eval.
       const modelId = await bnglService.prepareModel(model);
 
-      // Create estimator with real simulation integration
-      const estimator = new VariationalParameterEstimator(
+      const paramBounds = priors.map(p => ({
+        name:    p.name,
+        initial: p.mean,
+        min:     p.min,
+        max:     p.max,
+      }));
+
+      const fitResult = await fitParameters({
         model,
-        simulationData,
-        paramsSnapshot,
-        priorsMap,
-        async (overrides) => {
-          // Use simulateCached for high-performance iteration
-          const simOptions = {
-            method: 'ode' as const,
-            t_end: timePoints[timePoints.length - 1],
-            n_steps: timePoints.length - 1,
-            atol: 1e-6,
-            rtol: 1e-4,
-          };
-
-          const simResults = await bnglService.simulateCached(modelId, overrides, simOptions);
-
-          // Map results to the Map<string, number[]> format
-          const resMap = new Map<string, number[]>();
-          for (const obs of model.observables) {
-            resMap.set(obs.name, simResults.data.map(d => d[obs.name] || 0));
-          }
-          return resMap;
-        }
-      );
-
-      // Run estimation
-      const lr = parseFloat(learningRate);
-
-      const fitResult = await estimator.fit({
-        nIterations: iterations,
-        learningRate: lr,
-        batchSize: 4, // Smaller batch size for real ODE simulations
-        verbose: false,
+        modelId,
+        paramBounds,
+        experimentalData: parsedData,
+        algorithm,
+        maxEval,
+        signal: controller.signal,
         onProgress: (p) => {
           if (isMountedRef.current) {
-            setProgress(p);
+            setProgress({ current: p.nEval, total: maxEval, elbo: p.sse });
           }
-        }
-      });
-
-      // Compute percentiles and credible intervals from posterior
-      const posteriorSamples = await estimator.samplePosterior(100); // Fewer samples for speed
-      const credibleIntervals = paramsSnapshot.map((_, i) => {
-        const values = posteriorSamples.map(s => s[i]).sort((a, b) => a - b);
-        return {
-          lower: values[Math.floor(0.025 * values.length)] ?? 0,
-          upper: values[Math.floor(0.975 * values.length)] ?? 0
-        };
-      });
-
-      const percentiles = paramsSnapshot.map((_, i) => {
-        const values = posteriorSamples.map(s => s[i]).sort((a, b) => a - b);
-        return {
-          q1: values[Math.floor(0.25 * values.length)] ?? 0,
-          median: values[Math.floor(0.50 * values.length)] ?? 0,
-          q3: values[Math.floor(0.75 * values.length)] ?? 0
-        };
+        },
       });
 
       if (isMountedRef.current) {
+        const credibleIntervals = fitResult.confidenceIntervals;
+        const posteriorStd = credibleIntervals.map(ci =>
+          (ci.upper - ci.lower) / 2
+        );
+        // Derive percentile-like ranges from CI for the boxplot.
+        const percentiles = credibleIntervals.map(ci => ({
+          q1:     fitResult.params[0] + (ci.lower - fitResult.params[0]) * 0.5,
+          median: fitResult.params[0],
+          q3:     fitResult.params[0] + (ci.upper - fitResult.params[0]) * 0.5,
+        }));
+        const percentilesPerParam = fitResult.params.map((v, i) => ({
+          q1:     v - posteriorStd[i] * 0.675,
+          median: v,
+          q3:     v + posteriorStd[i] * 0.675,
+        }));
+
         setResult({
-          ...fitResult,
-          parameters: paramsSnapshot,
-          priorMeans: priorMeansSnapshot,
+          parameters:        fitResult.paramNames,
+          posteriorMean:     fitResult.params,
+          posteriorStd,
+          elbo:              fitResult.sseHistory,
+          convergence:       fitResult.converged,
+          iterations:        fitResult.iterations,
+          rmse:              fitResult.rmse,
+          sse:               fitResult.sse,
+          rSquared:          fitResult.rSquared,
+          bestPredictions:   fitResult.bestPredictions,
           credibleIntervals,
-          percentiles
+          percentiles:       percentilesPerParam,
+          priorMeans:        priorMeansSnapshot,
+          algorithm:         fitResult.algorithm,
         });
       }
-
-      // Cleanup
-      estimator.dispose();
 
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
@@ -341,35 +296,21 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
   const posteriorChartData = useMemo(() => {
     if (!result) return [];
 
-    const clampPositive = (value: unknown, fallback: number): number => {
-      const n = typeof value === 'number' ? value : Number.NaN;
-      if (!Number.isFinite(n) || n <= 0) return fallback;
-      return n;
-    };
-
     return result.parameters.map((name, i) => {
-      const mean = clampPositive(result.posteriorMean[i], 1e-12);
-      const lower = clampPositive(result.credibleIntervals[i]?.lower, mean);
-      const upper = clampPositive(result.credibleIntervals[i]?.upper, mean);
-      const q1 = clampPositive(result.percentiles[i]?.q1, mean);
-      const q3 = clampPositive(result.percentiles[i]?.q3, mean);
-      const median = clampPositive(result.percentiles[i]?.median, mean);
-
+      const mean  = result.posteriorMean[i] ?? 0;
+      const lower = result.credibleIntervals[i]?.lower ?? mean;
+      const upper = result.credibleIntervals[i]?.upper ?? mean;
+      // For log-scale bar chart, bars must be positive
+      const safeMean = Math.max(mean, 1e-15);
       return {
         name,
-        mean,
-        median,
-        lower,
-        upper,
-        q1,
-        q3,
-        // Bar as IQR Box: [q1, q3]
-        box: [q1, q3] as [number, number],
-        // Whisker range for ErrorBar: [lower, upper]
-        ci: [lower, upper] as [number, number],
-        // For median scatter
-        medianData: [{ name, median }],
-        prior: result.priorMeans[i] ?? 0
+        mean: safeMean,
+        prior: Math.max(result.priorMeans[i] ?? safeMean, 1e-15),
+        // Recharts ErrorBar asymmetric format: { plus, minus }
+        ciError: {
+          plus:  Math.max(0, upper - mean),
+          minus: Math.max(0, mean - Math.max(lower, 1e-15)),
+        },
       };
     });
   }, [result]);
@@ -549,15 +490,15 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               Estimation Settings
             </h3>
 
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Iterations
+                  Max Evaluations
                 </label>
                 <Input
                   type="number"
-                  min={100}
-                  max={10000}
+                  min={50}
+                  max={5000}
                   value={nIterations}
                   onChange={e => setNIterations(e.target.value)}
                 />
@@ -565,29 +506,20 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
 
               <div className="space-y-1">
                 <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  Learning Rate
+                  Algorithm
                 </label>
-                <Input
-                  type="number"
-                  step="0.001"
-                  min={0.0001}
-                  max={1}
-                  value={learningRate}
-                  onChange={e => setLearningRate(e.target.value)}
-                />
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
-                  MC Samples
-                </label>
-                <Input
-                  type="number"
-                  min={1}
-                  max={20}
-                  value={nSamples}
-                  onChange={e => setNSamples(e.target.value)}
-                />
+                <div className="flex gap-2 flex-wrap">
+                  {(['nelder-mead', 'sbplx', 'cobyla'] as FitAlgorithm[]).map(alg => (
+                    <Button
+                      key={alg}
+                      variant={algorithm === alg ? 'primary' : 'subtle'}
+                      className="text-xs h-7 px-3"
+                      onClick={() => setAlgorithm(alg)}
+                    >
+                      {alg}
+                    </Button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -608,7 +540,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
             <div className="w-full">
               <div className="flex items-center gap-3 text-sm text-slate-600 dark:text-slate-300">
                 <LoadingSpinner className="w-5 h-5" />
-                <span>Running variational inference... {progress.current} / {progress.total}</span>
+                <span>Optimizing parameters ({algorithm})... eval {progress.current} / {progress.total}</span>
               </div>
               <div className="w-full bg-slate-200 rounded-full h-2.5 dark:bg-slate-700 mt-3">
                 <div
@@ -655,18 +587,18 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 <div className="text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 rounded-md p-3 space-y-1">
                   <div className="font-medium text-slate-700 dark:text-slate-200">What this means</div>
                   <div>
-                    <span className="font-medium">Posterior mean/std</span>: estimated parameter value and uncertainty after fitting the time-course data.
+                    <span className="font-medium">Best estimate / CI half-width</span>: optimized parameter value and approximate 95% confidence interval half-width from finite-difference Hessian.
                   </div>
                   <div>
                     <span className="font-medium">95% credible interval</span>: range that contains ~95% of the posterior probability (Bayesian uncertainty interval).
                   </div>
                   <div>
-                    <span className="font-medium">ELBO</span>: a training objective; it should generally improve and then stabilize. “May not have converged” usually means it’s still noisy or drifting.
+                    <span className="font-medium">SSE history</span>: sum-of-squared-errors at each function evaluation. Should decrease and then plateau when the optimizer converges. "May not have converged" means the maximum evaluations was reached before the tolerance was met.
                   </div>
                 </div>
 
                 <DataTable
-                  headers={['Parameter', 'Posterior Mean', 'Posterior Std', '95% CI Lower', '95% CI Upper', 'Prior Mean']}
+                  headers={['Parameter', 'Best Estimate', 'CI Half-Width (±)', '95% CI Lower', '95% CI Upper', 'Initial Value']}
                   rows={result.parameters.map((name, i) => [
                     name,
                     formatNumber(result.posteriorMean[i]),
@@ -681,99 +613,71 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               {/* Posterior Visualization */}
               <Card className="space-y-4">
                 <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                  Posterior Estimates (Boxplot: Median, IQR, 95% CI)
+                  Posterior Estimates (Best Estimate ± 95% CI)
                 </h3>
+                <div className="text-xs text-slate-500">
+                  Blue bars: optimized value. Error bars: 95% confidence interval from finite-difference Hessian.
+                  Gray triangles: initial (prior) value.
+                </div>
 
-                <ResponsiveContainer width="100%" height={400}>
-                  <ComposedChart data={posteriorChartData} margin={{ top: 20, right: 10, left: 35, bottom: 35 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128, 128, 128, 0.1)" vertical={false} />
+                <ResponsiveContainer width="100%" height={Math.max(250, posteriorChartData.length * 60 + 80)}>
+                  <BarChart
+                    data={posteriorChartData}
+                    layout="vertical"
+                    margin={{ top: 10, right: 60, left: 80, bottom: 10 }}
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(128,128,128,0.15)" horizontal={false} />
                     <XAxis
-                      dataKey="name"
-                      angle={-45}
-                      textAnchor="end"
-                      height={50}
-                      tick={{ fontSize: 11, fill: '#1e293b' }}
-                      tickLine={{ stroke: '#1e293b' }}
-                      axisLine={{ stroke: '#1e293b' }}
-                      label={{ value: 'Parameter', position: 'bottom', offset: -10, fill: '#1e293b', fontSize: 12, fontWeight: 'bold' }}
-                    />
-                    <YAxis
+                      type="number"
                       scale="log"
                       domain={['auto', 'auto']}
-                      padding={{ top: 30, bottom: 30 }}
-                      tickFormatter={(v) => v.toExponential(1)}
+                      tickFormatter={(v: number) => v.toExponential(1)}
+                      tick={{ fontSize: 10, fill: '#334155' }}
+                      tickLine={{ stroke: '#334155' }}
+                      axisLine={{ stroke: '#334155' }}
+                      label={{ value: 'Estimated Value (log scale)', position: 'insideBottom', offset: -5, fill: '#334155', fontSize: 12 }}
+                    />
+                    <YAxis
+                      type="category"
+                      dataKey="name"
+                      width={75}
                       tick={{ fontSize: 11, fill: '#1e293b' }}
                       tickLine={{ stroke: '#1e293b' }}
                       axisLine={{ stroke: '#1e293b' }}
-                      width={50}
-                      label={{
-                        value: 'Estimated Value',
-                        angle: -90,
-                        position: 'insideLeft',
-                        offset: -25,
-                        fill: '#1e293b',
-                        fontSize: 13,
-                        fontWeight: 'bold',
-                        style: { textAnchor: 'middle' }
-                      }}
                     />
                     <Tooltip
-                      formatter={(value: any, name: string) => {
-                        if (name === 'IQR' && Array.isArray(value)) {
-                          return [`${formatNumber(value[0])} - ${formatNumber(value[1])}`, 'IQR'];
-                        }
-                        if (name === '95% CI' && Array.isArray(value)) {
-                          return [`${formatNumber(value[0])} - ${formatNumber(value[1])}`, '95% CI'];
-                        }
-                        if (name === 'Median' || name === 'Posterior Mean') {
-                          return [formatNumber(value), name];
-                        }
-                        return null; // Hide other entries
-                      }}
-                      itemSorter={(item) => (item.name === 'Posterior Mean' ? -1 : 1)}
+                      formatter={(value: number, name: string) => [
+                        formatNumber(value),
+                        name === 'mean' ? 'Best Estimate' : name === 'prior' ? 'Initial Value' : name,
+                      ]}
                     />
-                    <Bar
-                      dataKey="box"
-                      fill="#64748b"
-                      name="IQR"
-                      barSize={40}
-                    >
+                    <Legend />
+                    {/* Prior value as a secondary bar */}
+                    <Bar dataKey="prior" fill="#cbd5e1" barSize={8} name="Initial Value" />
+                    {/* Best estimate with asymmetric CI error bars */}
+                    <Bar dataKey="mean" fill="#3b82f6" barSize={18} name="Best Estimate">
                       <ErrorBar
-                        dataKey="ci"
-                        width={10}
+                        dataKey="ciError"
+                        width={6}
                         strokeWidth={2}
-                        stroke="#0f172a"
-                        name="95% CI"
+                        stroke="#1e3a5f"
                       />
                     </Bar>
-                    <Scatter
-                      dataKey="prior"
-                      fill="#94a3b8"
-                      shape="triangle"
-                      name="Prior Mean"
-                      stroke="#475569"
-                      strokeWidth={1}
-                    />
-                    <Scatter
-                      dataKey="median"
-                      fill="#ffffff"
-                      shape="diamond"
-                      name="Median"
-                      stroke="#0f172a"
-                      strokeWidth={1}
-                    />
-                    <Scatter
-                      dataKey="mean"
-                      fill="#ef4444"
-                      shape="circle"
-                      name="Posterior Mean"
-                    />
-                  </ComposedChart>
+                  </BarChart>
                 </ResponsiveContainer>
               </Card>
 
               {/* Fit Comparison Plot */}
-              {fitComparisonData.length > 0 && (
+              {result.bestPredictions?.size === 0 && (
+                <div className="rounded-lg border border-amber-200 dark:border-amber-700 bg-amber-50 dark:bg-amber-900/20 px-3 py-2 text-xs text-amber-700 dark:text-amber-300 flex items-start gap-2">
+                  <span className="shrink-0 mt-0.5">⚠️</span>
+                  <span>
+                    <strong>No matching observables.</strong> The data column headers ({Object.keys(parsedData[0]?.values ?? {}).join(', ')}) don’t match any model observable names ({observableNames.join(', ') || 'none defined'}).
+                    Rename your data headers to match observable names exactly, or add observables to your model.
+                  </span>
+                </div>
+              )}
+              {fitComparisonData.length > 0 && result.bestPredictions && result.bestPredictions.size > 0 && (
                 <Card className="space-y-4">
                   <div className="flex items-center justify-between">
                     <div className="flex flex-col">
@@ -851,7 +755,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               {elboChartData.length > 0 && (
                 <Card className="space-y-4">
                   <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-                    ELBO Convergence
+                    SSE Convergence (Optimization Progress)
                   </h3>
 
                   <ResponsiveContainer width="100%" height={220}>
@@ -870,7 +774,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                         tickLine={{ stroke: 'black' }}
                         axisLine={{ stroke: 'black' }}
                         label={{ 
-                          value: 'ELBO', 
+                          value: 'SSE', 
                           angle: -90, 
                           position: 'insideLeft', 
                           offset: -20, 

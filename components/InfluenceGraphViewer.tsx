@@ -14,7 +14,7 @@ interface InfluenceGraphViewerProps {
   graphData: InfluenceGraphData;
 }
 
-type LayoutType = 'circle' | 'cose' | 'fcose' | 'hierarchical' | 'grid';
+type LayoutType = 'circle' | 'cose' | 'fcose' | 'hierarchical' | 'grid' | 'concentric' | 'breadthfirst';
 
 const LAYOUT_CONFIGS: Record<LayoutType, any> = {
   circle: {
@@ -67,6 +67,26 @@ const LAYOUT_CONFIGS: Record<LayoutType, any> = {
     padding: 50,
     fit: true,
     avoidOverlap: true,
+    nodeDimensionsIncludeLabels: true,
+  },
+  concentric: {
+    name: 'concentric',
+    animate: true,
+    animationDuration: 400,
+    padding: 50,
+    fit: true,
+    startAngle: Math.PI,
+    spacingFactor: 1.5,
+    nodeDimensionsIncludeLabels: true,
+  },
+  breadthfirst: {
+    name: 'breadthfirst',
+    animate: true,
+    animationDuration: 400,
+    padding: 50,
+    fit: true,
+    directed: true,
+    spacingFactor: 1.5,
     nodeDimensionsIncludeLabels: true,
   },
 };
@@ -332,8 +352,12 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
           </Button>
           <Button variant={activeLayout === 'grid' ? 'primary' : 'subtle'} onClick={() => runLayout('grid')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Grid Layout">
             {isLayoutRunning && activeLayout === 'grid' ? <LoadingSpinner className="w-3 h-3" /> : '▦ Grid'}
+          </Button>          <Button variant={activeLayout === 'concentric' ? 'primary' : 'subtle'} onClick={() => runLayout('concentric')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Concentric Rings">
+            {isLayoutRunning && activeLayout === 'concentric' ? <LoadingSpinner className="w-3 h-3" /> : '\u25ce Rings'}
           </Button>
-          <Button variant={activeLayout === 'circle' ? 'primary' : 'subtle'} onClick={() => runLayout('circle')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Circle Layout">
+          <Button variant={activeLayout === 'breadthfirst' ? 'primary' : 'subtle'} onClick={() => runLayout('breadthfirst')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Breadth-first Tree">
+            {isLayoutRunning && activeLayout === 'breadthfirst' ? <LoadingSpinner className="w-3 h-3" /> : '\u22a2 Tree'}
+          </Button>          <Button variant={activeLayout === 'circle' ? 'primary' : 'subtle'} onClick={() => runLayout('circle')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Circle Layout">
             {isLayoutRunning && activeLayout === 'circle' ? <LoadingSpinner className="w-3 h-3" /> : '○ Circle'}
           </Button>
         </div>
@@ -356,6 +380,20 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
             a.click();
             URL.revokeObjectURL(url);
           }} className="text-xs h-6 px-2">PNG</Button>
+          <Button variant="subtle" onClick={() => {
+            const nodes = graphData.nodes.map((n, i) =>
+              `  <node id="n${i}"><data key="label">${n.label.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</data></node>`
+            ).join('\n');
+            const edges = graphData.edges.map((e, i) => {
+              const type = getEdgeType(e.activation, e.inhibition);
+              return `  <edge id="e${i}" source="n${e.source}" target="n${e.target}"><data key="type">${type}</data></edge>`;
+            }).join('\n');
+            const graphml = `<?xml version="1.0" encoding="UTF-8"?>\n<graphml xmlns="http://graphml.graphdrawing.org/graphml">\n  <key id="label" for="node" attr.name="label" attr.type="string"/>\n  <key id="type" for="edge" attr.name="type" attr.type="string"/>\n  <graph id="influence" edgedefault="directed">\n${nodes}\n${edges}\n  </graph>\n</graphml>`;
+            const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'influence_graph.graphml'; a.click();
+            URL.revokeObjectURL(url);
+          }} className="text-xs h-6 px-2" title="Export for yED Graph Editor">yED</Button>
           <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
           <div className="flex items-center gap-2 ml-auto text-[10px] text-slate-400 uppercase tracking-tighter">
             <span>{graphData.nodes.length} rules, {graphData.edges.length} edges</span>
