@@ -1,5 +1,4 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { useTheme } from '../hooks/useTheme';
 import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
@@ -27,6 +26,7 @@ const LAYOUT_CONFIGS: Record<LayoutType, any> = {
     padding: 50,
     fit: true,
     spacingFactor: 1.5,
+    nodeDimensionsIncludeLabels: true, // Fix tiny collision boxes
   },
   cose: {
     name: 'cose',
@@ -117,14 +117,8 @@ interface ARGraphViewerProps {
   arGraph: AtomRuleGraph;
   selectedRuleId?: string | null;
   selectedAtomId?: string | null;
-  onSelectRule?: (ruleId: string) => void;
-  onSelectAtom?: (atomId: string) => void;
-  /**
-   * Arbitrary value that, when changed, triggers an additional fit attempt.
-   * Pass the current active tab or visibility flag from the parent so that
-   * the graph is fitted whenever the viewer becomes visible or the tab
-   * changes.
-   */
+  onSelectRule?: (ruleId: string | null) => void;
+  onSelectAtom?: (atomId: string | null) => void;
   forceFitTrigger?: any;
 }
 
@@ -136,7 +130,6 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
   onSelectAtom,
   forceFitTrigger,
 }) => {
-  const [theme] = useTheme();
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [layoutDone, setLayoutDone] = useState(false);
   const [activeLayout, setActiveLayout] = useState<LayoutType>('hierarchical');
@@ -147,59 +140,36 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
   onSelectRuleRef.current = onSelectRule;
   onSelectAtomRef.current = onSelectAtom;
 
-  // global raf id used by ensureFit; stored in a ref so multiple callers can
-  // cancel the same pending frame when necessary.
-  const fitRafRef = useRef<number | null>(null);
-
-  const ensureFit = () => {
-    // don't fit while a layout is still running - the positions will still be
-    // changing and the bounding box may be garbage.  schedule another pass
-    // until the layout completes.
-    if (isLayoutRunning) {
-      fitRafRef.current = requestAnimationFrame(ensureFit);
-      return;
-    }
-
-    const cy = cyRef.current;
-    const el = containerRef.current;
-    if (!cy || !el) return;
-    const rect = el.getBoundingClientRect();
-    const w = Math.round(rect.width);
-    const h = Math.round(rect.height);
-    if (w > 0 && h > 0 && cy.elements().length > 0) {
-      cy.resize();
-      // reassert arrow style on resize (sometimes lost during internal redraws)
-      cy.edges().style({
-        'target-arrow-shape': 'triangle',
-        'arrow-scale': 1.2,
-        'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#888888',
-      });
-      cy.fit(undefined, 30);
-    } else {
-      fitRafRef.current = requestAnimationFrame(ensureFit);
-    }
+  const getThemeColors = () => {
+    const isDark = document.documentElement.classList.contains('dark');
+    return {
+      edgeColor: isDark ? '#94a3b8' : '#000000',
+      textColor: isDark ? '#ffffff' : '#000000',
+      contextEdgeColor: isDark ? '#64748b' : '#AAAAAA',
+    };
   };
 
+  const colors = getThemeColors(); // Added here for use in render
+
   useEffect(() => {
-    // extra effect: whenever parent wants us to refit (e.g. after tab switch)
     if (forceFitTrigger !== undefined) {
-      ensureFit();
+      cyRef.current?.fit(undefined, 30);
     }
   }, [forceFitTrigger]);
 
   useEffect(() => {
     if (!containerRef.current) return undefined;
 
+    const colors = getThemeColors();
 
     const elements = [
       ...arGraph.nodes.map((node) => ({
         data: {
           id: node.id,
           label: node.label,
+          bngLabel: node.label,
           type: node.type,
           details: node.details,
-          color: node.type === 'atom' ? colorFromName(node.label) : undefined,
-          fgColor: node.type === 'atom' ? foregroundForBackground(colorFromName(node.label)) : undefined,
         },
       })),
       ...arGraph.edges.map((edge, index) => ({
@@ -219,246 +189,165 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
       elements,
       style: [
         {
-          // Rule nodes – BioNetGen canonical: #CC99FF ellipse, #999999 outline
-          selector: 'node[type = "rule"]',
+          selector: 'node',
           style: {
-            shape: 'ellipse',
-            width: 'label',
-            height: 'label',
-            padding: '8px 16px',
-            label: 'data(label)',
             'text-halign': 'center',
-            'text-valign': 'center',
+            'text-valign': 'center', // Center labels inside nodes
             'font-size': 14,
-            'font-style': 'normal',
-            'background-color': '#CC99FF',
-            'border-color': '#999999',
-            'border-width': 1,
-            color: '#000000',
+            color: '#000000', // Black text since backgrounds are light
+            'text-wrap': 'none', // DO NOT WRAP OR CLIP
+            'text-max-width': '10000px', // Prevent internal Cytoscape word-wrap checks from truncating width measurements at punctuation like dots
+            padding: '10px',
           },
         },
         {
-          // Atom/pattern nodes – BioNetGen canonical: #FFE9C7 roundrectangle, #999999 outline
+          selector: 'node[type = "rule"]',
+          style: {
+            shape: 'ellipse',
+            width: ((ele: any) => Math.max((ele.data('label') || '').length * 8.5 + 24, 40)) as any,
+            height: 35,
+            padding: '4px',
+            label: 'data(label)',
+            'background-color': '#CC99FF',
+            'border-color': '#999999',
+            'border-width': 1,
+          },
+        },
+        {
           selector: 'node[type = "atom"]',
           style: {
             shape: 'round-rectangle',
-            width: 'label',
-            height: 'label',
-            padding: '6px 10px',
+            width: ((ele: any) => Math.max((ele.data('label') || '').length * 8.5 + 24, 40)) as any,
+            height: 30,
+            padding: '4px',
             label: 'data(label)',
-            'text-wrap': 'wrap',
-            'text-max-width': '120px',
-            'text-halign': 'center',
-            'text-valign': 'center',
-            'font-size': 14,
-            'font-style': 'normal',
             'background-color': '#FFE9C7',
             'border-color': '#999999',
             'border-width': 1,
-            color: '#000000',
           },
         },
         {
           selector: 'edge',
           style: {
-            width: 2,
+            width: 1,
             'curve-style': 'bezier',
             'target-arrow-shape': 'triangle',
             'arrow-scale': 1.2,
             'font-size': 9,
-            'line-color': theme === 'dark' ? '#9ca3af' : '#888888',
-            'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#888888',
+            'line-color': colors.edgeColor,
+            'target-arrow-color': colors.edgeColor,
           },
         },
         {
-          // Reactant edge (consumes) – BioNetGen: #000000 standard arrow
-          selector: 'edge[edgeType = "consumes"]',
-          style: {
-            'line-color': theme === 'dark' ? '#f3f4f6' : '#000000',
-            'target-arrow-color': theme === 'dark' ? '#f3f4f6' : '#000000',
-            'target-arrow-shape': 'triangle',
-            'arrow-scale': 1.2,
-          },
-        },
-        {
-          // Product edge (produces) – BioNetGen: #000000 standard arrow
-          selector: 'edge[edgeType = "produces"]',
-          style: {
-            'line-color': theme === 'dark' ? '#f3f4f6' : '#000000',
-            'target-arrow-color': theme === 'dark' ? '#f3f4f6' : '#000000',
-            'target-arrow-shape': 'triangle',
-            'arrow-scale': 1.2,
-          },
-        },
-        {
-          // Context edge (modifies) – BioNetGen: #AAAAAA standard arrow
           selector: 'edge[edgeType = "modifies"]',
           style: {
-            'line-color': theme === 'dark' ? '#9ca3af' : '#AAAAAA',
-            'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#AAAAAA',
-            'target-arrow-shape': 'triangle',
-            'arrow-scale': 1.2,
+            'line-color': colors.contextEdgeColor,
+            'target-arrow-color': colors.contextEdgeColor,
           },
         },
         {
-          selector: '.highlighted',
+          selector: 'node.highlighted',
           style: {
-            // no blue outlines; only tint edges slightly so the selected
-            // connection is easier to track without overwhelming the node
-            // shapes themselves.
-            'line-color': theme === 'dark' ? '#9ca3af' : '#888888',
-            'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#888888',
-            'target-arrow-shape': 'triangle',
-            'arrow-scale': 1.2,
+            'border-color': '#000000',
+            'border-width': 3,
+          },
+        },
+        {
+          selector: 'edge.highlighted',
+          style: {
+            'line-color': '#000000',
+            'target-arrow-color': '#000000',
+            'width': 2,
           },
         },
       ],
       layout: { name: 'preset' },
     });
 
-    cy.on('tap', 'node[type = "rule"]', (event) => {
-      onSelectRuleRef.current?.(event.target.id());
+    cy.ready(() => {
+      // Execute true layout algorithm once Cytoscape is natively attached.
+      const initialLayout = cy.layout({ ...LAYOUT_CONFIGS.hierarchical, animate: false });
+      initialLayout.on('layoutstop', () => {
+        // Guarantee fit across React rendering paints and container resizing 
+        const forceViewport = () => {
+          cyRef.current?.resize();
+          cyRef.current?.fit(undefined, 30);
+        };
+        
+        requestAnimationFrame(() => {
+          forceViewport();
+          setTimeout(forceViewport, 50);
+          setTimeout(forceViewport, 150);
+          setTimeout(forceViewport, 300);
+          // Wait for 300ms layout-settling tick to fade canvas in, hiding layout pop
+          setTimeout(() => {
+            setLayoutDone(true);
+            setIsLayoutRunning(false);
+          }, 50);
+        });
+      });
+      initialLayout.run();
     });
-    cy.on('tap', 'node[type = "atom"]', (event) => {
-      onSelectAtomRef.current?.(event.target.id());
+
+    cy.on('tap', 'node[type = "rule"]', (e) => onSelectRuleRef.current?.(e.target.id()));
+    cy.on('tap', 'node[type = "atom"]', (e) => onSelectAtomRef.current?.(e.target.id()));
+    cy.on('tap', (e) => {
+      // If clicking the background container, unselect
+      if (e.target === cy) {
+        onSelectRuleRef.current?.(null);
+        onSelectAtomRef.current?.(null);
+      }
     });
 
     cyRef.current = cy;
 
-    // make sure any leftover stylesheet markers from a previous instance are
-    // cleared and the current style takes effect; this is important when the
-    // component is unmounted and remounted repeatedly (regulatory ⇄ contact).
-    cy.style().update();
-
-    // ensure arrowheads are styled immediately (dagre/preset sometimes delay)
-    const applyArrows = () => {
-      cy.edges().style({
-        'target-arrow-shape': 'triangle',
-        'arrow-scale': 1.2,
-        'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#888888',
-      });
-    };
-    applyArrows();
-    // second pass on next frame in case cytoscape is still adding elements.
-    requestAnimationFrame(applyArrows);
-
-    // Run default hierarchical layout
-    setIsLayoutRunning(true);
-    const layout = cy.layout({ ...LAYOUT_CONFIGS.hierarchical });
-    layout.on('layoutstop', () => {
-      // ensureFit handles both the “paint hasn’t happened yet” case and the
-      // hidden-tab case by polling until the container has a real size.
-      if (fitRafRef.current !== null) cancelAnimationFrame(fitRafRef.current);
-      fitRafRef.current = requestAnimationFrame(ensureFit);
-      setIsLayoutRunning(false);
-      setLayoutDone(true); // allow highlights/center animations now that positions exist
-
-      // reapply style and refresh the stylesheet; some plugins temporarily
-      // drop arrowheads and/or markers, especially across unmounts.
-      cy.edges().style({
-        'target-arrow-shape': 'triangle',
-        'arrow-scale': 1.2,
-        'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#888888',
-      });
-      cy.style().update();
-    });
-    layout.run();
-
-    // ResizeObserver – re-fit when container gains its real dimensions
-    let lastW = 0;
-    let lastH = 0;
-    const ro = new ResizeObserver((entries) => {
-      const rect = entries[0]?.contentRect;
-      if (!rect) return;
-      const w = Math.round(rect.width);
-      const h = Math.round(rect.height);
-      if (w === lastW && h === lastH) return;
-      lastW = w;
-      lastH = h;
+    const ro = new ResizeObserver(() => {
       const c = cyRef.current;
-      if (!c || w === 0 || h === 0) return;
+      if (!c) return;
       c.resize();
-      // use ensureFit so we respect the layout-running guard
-      ensureFit();
+      // Debounced or throttled fit could go here, but for now we just resize
+      // to avoid the jitter reported earlier. Manual 'Fit' is available.
     });
     ro.observe(containerRef.current);
 
     return () => {
-      if (fitRafRef.current !== null) cancelAnimationFrame(fitRafRef.current);
       ro.disconnect();
       cy.off('tap');
       cyRef.current?.destroy();
       cyRef.current = null;
     };
-  }, [arGraph, theme]);
-
-  // update edge colour when theme changes after initialization
-  useEffect(() => {
-    const cy = cyRef.current;
-    if (!cy) return;
-    cy.edges().style({
-      'target-arrow-color': theme === 'dark' ? '#9ca3af' : '#888888',
-    });
-  }, [theme]);
-
-  // When the atom-rule graph object changes we schedule another ensureFit
-  // pass.  Certain edge cases (empty graph, layout plugin quirk, first-time
-  // parse) can result in the layoutstop handler not being invoked or the
-  // polling loop never reaching a positive size; this effect acts as a
-  // safety net by kicking the same ensureFit logic on the next animation
-  // frame whenever the data changes.
-  useEffect(() => {
-    if (fitRafRef.current !== null) cancelAnimationFrame(fitRafRef.current);
-    fitRafRef.current = requestAnimationFrame(ensureFit);
   }, [arGraph]);
 
-  // Highlight selected nodes without rebuilding the graph.  we delay both
-  // the automatic centering animation and the class toggles until after the
-  // first layoutstop; that guarantees nodes have real coordinates and avoids
-  // the ``floating away`` behaviour when the graph initially appears.
+  // Selected state effect
   useEffect(() => {
-    if (!layoutDone) {
-      return; // nothing to do until we have computed one layout
-    }
-
+    if (!layoutDone) return;
     const cy = cyRef.current;
     if (!cy) return;
-
     cy.elements().removeClass('highlighted');
-
-    if (selectedRuleId) {
-      const node = cy.getElementById(selectedRuleId);
-      if (node?.nonempty()) {
-        node.addClass('highlighted');
-        node.connectedEdges().addClass('highlighted');
-        node.connectedEdges().connectedNodes().addClass('highlighted');
-        try { cy.animate({ center: { eles: node }, duration: 350 }); } catch (_) { /* noop */ }
+    const highlight = (id: string | null | undefined) => {
+      if (!id) return;
+      const el = cy.getElementById(id);
+      if (el.nonempty()) {
+        el.addClass('highlighted');
+        el.connectedEdges().addClass('highlighted');
+        el.connectedEdges().connectedNodes().addClass('highlighted');
       }
-    }
-
-    if (selectedAtomId) {
-      const node = cy.getElementById(selectedAtomId);
-      if (node?.nonempty()) {
-        node.addClass('highlighted');
-        node.connectedEdges().addClass('highlighted');
-        node.connectedEdges().connectedNodes().addClass('highlighted');
-        try { cy.animate({ center: { eles: node }, duration: 350 }); } catch (_) { /* noop */ }
-      }
-    }
+    };
+    highlight(selectedRuleId);
+    highlight(selectedAtomId);
   }, [selectedRuleId, selectedAtomId, layoutDone]);
 
-  const runLayout = (layoutType: LayoutType = activeLayout) => {
+  const runLayout = (type: LayoutType = activeLayout) => {
     const cy = cyRef.current;
     if (!cy) return;
     setIsLayoutRunning(true);
-    setActiveLayout(layoutType);
+    setActiveLayout(type);
     try {
-      const layout = cy.layout(LAYOUT_CONFIGS[layoutType]);
-      layout.run();
-      layout.on('layoutstop', () => {
-        if (fitRafRef.current !== null) cancelAnimationFrame(fitRafRef.current);
-        fitRafRef.current = requestAnimationFrame(ensureFit);
+      const l = cy.layout(LAYOUT_CONFIGS[type]);
+      l.run();
+      l.on('layoutstop', () => {
         setIsLayoutRunning(false);
+        cy.fit(undefined, 30);
       });
     } catch (err) {
       console.error('Layout failed', err);
@@ -466,71 +355,9 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
     }
   };
 
-  const handleFit = () => cyRef.current?.fit(undefined, 30);
-
-  const handleExportPNG = () => {
-    const cy = cyRef.current;
-    if (!cy) return;
-    try {
-      const blob = cy.png({ output: 'blob', scale: 2, full: true }) as Blob;
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'regulatory_graph.png';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch (err) {
-      console.error('Export PNG failed', err);
-    }
-  };
-
-  const handleExportSVG = async () => {
-    const cy = cyRef.current;
-    if (!cy) return;
-    try {
-      const cySvg = await import('cytoscape-svg');
-      const plugin = (cySvg as any).default ?? cySvg;
-      if (plugin) cytoscape.use(plugin);
-      // @ts-ignore extension injects svg()
-      const svgContent: string = cy.svg({ scale: 1, full: true });
-      const blob = new Blob([svgContent], { type: 'image/svg+xml;charset=utf-8' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'regulatory_graph.svg';
-      a.click();
-      URL.revokeObjectURL(url);
-    } catch {
-      handleExportPNG();
-    }
-  };
-
-  // Export yED-compatible GraphML matching BioNetGen GML.pm style
-  const handleExportGraphML = () => {
-    const cy = cyRef.current;
-    let positions: Record<string,{x:number,y:number}> | undefined;
-    if (cy) {
-      positions = {};
-      cy.nodes().forEach(n => {
-        const pos = n.position();
-        positions![n.id()] = { x: pos.x, y: pos.y };
-      });
-    }
-    const graphml = exportArGraphToGraphML(arGraph, { positions });
-    const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = 'regulatory_graph.graphml';
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <div className="flex flex-col h-full gap-2">
-      {/* Toolbar */}
-      <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700">
-        {/* Row 1: Layout buttons */}
+      <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-1">
           <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Layout:</span>
           <Button variant={activeLayout === 'hierarchical' ? 'primary' : 'subtle'} onClick={() => runLayout('hierarchical')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Hierarchical (yED-like)">
@@ -555,27 +382,35 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
             {isLayoutRunning && activeLayout === 'circle' ? <LoadingSpinner className="w-3 h-3" /> : '○ Circle'}
           </Button>
         </div>
-        {/* Row 2: Actions */}
         <div className="flex items-center gap-1">
-          <Button variant="subtle" onClick={handleFit} className="text-xs h-6 px-2">Fit</Button>
-          <Button variant="subtle" onClick={() => runLayout()} disabled={isLayoutRunning} className="text-xs h-6 px-2">
-            {isLayoutRunning ? <LoadingSpinner className="w-3 h-3" /> : 'Redo'}
-          </Button>
+          <Button variant="subtle" onClick={() => cyRef.current?.fit()} className="text-xs h-6 px-2">Fit</Button>
+          <Button variant="subtle" onClick={() => runLayout()} disabled={isLayoutRunning} className="text-xs h-6 px-2">Redo</Button>
           <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
           <span className="text-xs text-slate-500 dark:text-slate-400">Export:</span>
-          <Button variant="subtle" onClick={handleExportPNG} className="text-xs h-6 px-2">PNG</Button>
-          <Button variant="subtle" onClick={handleExportSVG} className="text-xs h-6 px-2">SVG</Button>
-          <Button variant="subtle" onClick={handleExportGraphML} className="text-xs h-6 px-2" title="Export for yED Graph Editor">yED</Button>
+          <Button variant="subtle" onClick={() => {
+            const blob = cyRef.current?.png({ output: 'blob', scale: 2, full: true }) as Blob;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a'); a.href = url; a.download = 'regulatory_graph.png'; a.click();
+          }} className="text-xs h-6 px-2">PNG</Button>
+          <Button variant="subtle" onClick={() => {
+             const graphml = exportArGraphToGraphML(arGraph);
+             const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });
+             const url = URL.createObjectURL(blob);
+             const a = document.createElement('a'); a.href = url; a.download = 'regulatory_graph.graphml'; a.click();
+          }} className="text-xs h-6 px-2" title="Export for yED Graph Editor">yED</Button>
         </div>
       </div>
+      
+      <div className="relative w-full border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg shadow-sm">
+        {!layoutDone && (
+          <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white/70 dark:bg-slate-900/70 rounded-lg">
+            <LoadingSpinner className="w-8 h-8 text-[#CC99FF]" />
+            <span className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-400 animate-pulse">Computing Layout...</span>
+          </div>
+        )}
+        <div ref={containerRef} className={`h-[600px] w-full rounded-lg transition-opacity duration-300 ${layoutDone ? 'opacity-100' : 'opacity-0'}`} />
+      </div>
 
-      {/* Graph container */}
-      <div
-        ref={containerRef}
-        className="h-[600px] w-full rounded-lg border border-stone-200 bg-white dark:border-slate-700 dark:bg-slate-900"
-      />
-
-      {/* Legend */}
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700">
         <h4 className="text-xs font-semibold text-slate-500 uppercase">Legend</h4>
         <div className="flex items-center gap-4 text-xs flex-wrap">
@@ -588,8 +423,12 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
             <span className="text-slate-700 dark:text-slate-300">AtomicPattern</span>
           </div>
           <div className="flex items-center gap-2">
-            <span className="px-1 rounded" style={{ background: '#000000', color: '#fff' }}>→</span>
-            <span className="text-slate-700 dark:text-slate-300">produces / consumes</span>
+            <span className="px-1 rounded" style={{ background: colors.edgeColor, color: '#fff' }}>→</span>
+            <span className="text-slate-700 dark:text-slate-300">Interaction</span>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="px-1 rounded" style={{ background: colors.contextEdgeColor, color: '#fff' }}>→</span>
+            <span className="text-slate-700 dark:text-slate-300">Context</span>
           </div>
         </div>
       </div>

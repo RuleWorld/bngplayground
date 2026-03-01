@@ -6,7 +6,7 @@ import { buildAtomRuleGraph } from '../../services/visualization/arGraphBuilder'
 interface RegulatoryTabProps {
   model: BNGLModel | null;
   selectedRuleId?: string | null;
-  onSelectRule?: (ruleId: string) => void;
+  onSelectRule?: (ruleId: string | null) => void;
   /**
    * Value forwarded to internal ARGraphViewer to force a fit when changed.
    */
@@ -21,8 +21,8 @@ export const RegulatoryTab: React.FC<RegulatoryTabProps> = ({ model, selectedRul
     if (!model) {
       return { nodes: [], edges: [] };
     }
-    return buildAtomRuleGraph(model.reactionRules, { 
-      getRuleId, 
+    return buildAtomRuleGraph(model.reactionRules, {
+      getRuleId,
       getRuleLabel,
       observables: model.observables.map(o => ({ name: o.name, pattern: o.pattern })),
       functions: model.functions?.map(f => ({ name: f.name, expression: f.expression })),
@@ -40,18 +40,14 @@ export const RegulatoryTab: React.FC<RegulatoryTabProps> = ({ model, selectedRul
   }
 
   return (
-    <div className="flex h-full flex-col gap-6">
-      <section className="h-full flex flex-col">
-        <div className="flex-1 min-h-[500px] border border-slate-200 dark:border-slate-700 rounded-lg overflow-hidden relative">
-          {arGraph.nodes.length > 0 ? (
-            <ARGraphViewer arGraph={arGraph} selectedRuleId={selectedRuleId} onSelectRule={onSelectRule} forceFitTrigger={forceFitTrigger} />
-          ) : (
-            <div className="flex h-full items-center justify-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900">
-              No graph nodes generated. Check if rules are parsed correctly.
-            </div>
-          )}
+    <div className="flex flex-col h-full gap-2">
+      {arGraph.nodes.length > 0 ? (
+        <ARGraphViewer arGraph={arGraph} selectedRuleId={selectedRuleId} onSelectRule={onSelectRule} forceFitTrigger={forceFitTrigger} />
+      ) : (
+        <div className="flex h-full items-center justify-center text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg min-h-[500px]">
+          No graph nodes generated. Check if rules are parsed correctly.
         </div>
-      </section>
+      )}
     </div>
   );
 };

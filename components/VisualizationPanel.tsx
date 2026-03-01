@@ -122,7 +122,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
     setSelectedRuleId((prev) => {
       if (!prev) {
-        return model.reactionRules[0].name ?? 'rule_1';
+        return null;
       }
 
       const hasRule = model.reactionRules.some((rule, index) => {
@@ -130,7 +130,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         return ruleId === prev;
       });
 
-      return hasRule ? prev : model.reactionRules[0].name ?? 'rule_1';
+      return hasRule ? prev : null;
     });
   }, [model]);
 

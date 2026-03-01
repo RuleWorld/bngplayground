@@ -70,7 +70,7 @@ export const exportArGraphToGraphML = (
       <data key="d0">
         <y:ShapeNode>
           <y:Fill color="${fillColor}"/>
-          <y:BorderStyle color="#999999" type="line" width="1.0"/>
+          <y:BorderStyle color="#999999" type="line" width="1"/>
           <y:Shape type="${shape}"/>
 `;
     // insert geometry if provided
@@ -79,7 +79,7 @@ export const exportArGraphToGraphML = (
       xml += `          <y:Geometry x="${pos.x.toFixed(1)}" y="${pos.y.toFixed(1)}" width="0" height="0"/>
 `;
     }
-    xml += `          <y:NodeLabel alignment="center" fontFamily="Dialog" fontSize="14" fontStyle="plain" textColor="#000000">${label}</y:NodeLabel>
+    xml += `          <y:NodeLabel alignment="c" autoSizePolicy="content" fontFamily="Dialog" fontSize="14" fontStyle="plain" hasBackgroundColor="false" hasLineColor="false" horizontalTextPosition="center" iconTextGap="4" modelName="internal" modelPosition="t" textColor="#000000" verticalTextPosition="bottom" visible="true">${label}</y:NodeLabel>
         </y:ShapeNode>
       </data>
     </node>
@@ -105,7 +105,7 @@ export const exportArGraphToGraphML = (
     xml += `    <edge id="${eid}" source="${src}" target="${tgt}">
       <data key="d1">
         <y:PolyLineEdge>
-          <y:LineStyle color="${lineColor}" type="line" width="1.0"/>
+          <y:LineStyle color="${lineColor}" type="line" width="1"/>
           <y:Arrows source="none" target="standard"/>
           <y:BendStyle smoothed="false"/>
         </y:PolyLineEdge>
