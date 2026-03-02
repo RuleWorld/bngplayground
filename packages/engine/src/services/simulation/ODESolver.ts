@@ -12,6 +12,10 @@
 // It is now dynamically imported in init() based on environment.
 
 
+import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
+import type { NetworkByteCode } from '../analysis/JITCompiler';
+
+
 export interface SolverOptions {
   atol: number;           // Absolute tolerance
   rtol: number;           // Relative tolerance
@@ -29,10 +33,12 @@ export interface SolverOptions {
   nonlinConvCoef?: number;// Nonlinear convergence coefficient
   maxErrTestFails?: number;// Max error test failures
   maxConvFails?: number;  // Max convergence failures
+  useAdams?: boolean;     // Use Adams-Moulton method for non-stiff systems
 
   // Root-finding (for discontinuity detection)
   rootFunction?: (t: number, y: Float64Array, gout: Float64Array) => void;
   numRoots?: number;
+  networkByteCode?: NetworkByteCode;
 }
 
 export interface SolverResult {
@@ -1084,6 +1090,19 @@ interface CVodeModule {
   _get_solver_stats?: (mem: number, nsteps: number, nfevals: number, nlinsetups: number, netfails: number) => void;
   _init_roots?: (mem: number, nroots: number) => number;
   _get_root_info?: (mem: number, rootsfound: number) => number;
+  _load_network?: (
+    nReactions: number, nSpecies: number,
+    rateConstants: number, nReactantsPerRxn: number,
+    reactantOffsets: number, reactantIdx: number,
+    reactantStoich: number, scalingVolumes: number,
+    speciesOffsets: number, speciesRxnIdx: number,
+    speciesStoich: number, speciesVolumes: number,
+    jacRowPtr: number, jacColIdx: number,
+    jacContribOffsets: number, jacContribRxnIdx: number,
+    jacContribCoeffs: number
+  ) => number;
+  _destroy_network?: (handle: number) => void;
+  _update_rate_constants?: (handle: number, rateConstants: number, nReactions: number) => void;
 }
 
 // Type for Jacobian function: fills column-major matrix J[i + j*neq] = df_i/dy_j
@@ -1096,6 +1115,8 @@ export class CVODESolver {
   private useSparse: boolean;
   private useAdams: boolean;
   private jacobian?: JacobianFunction;
+  private networkByteCode?: NetworkByteCode;
+  private networkHandle: number = 0;
 
   private solverMem: number | null = null;
   private yPtr: number = 0;
@@ -1139,6 +1160,7 @@ export class CVODESolver {
     this.useSparse = useSparse;
     this.jacobian = jacobian;
     this.useAdams = useAdams;
+    this.networkByteCode = this.options.networkByteCode;
   }
 
   static async init() {
@@ -1251,6 +1273,92 @@ export class CVODESolver {
     }
     this.currentT = NaN;
     this.yOut = null;
+    if (m && m._unload_network && this.networkHandle) {
+      m._unload_network(this.networkHandle);
+      this.networkHandle = 0;
+    }
+  }
+
+  private uploadNetworkByteCode(bc: NetworkByteCode): boolean {
+    const m = CVODESolver.module;
+    if (!m || !m._load_network) return false;
+
+    // Allocate WASM heap memory
+    const rateConstPtr = m._malloc(bc.nReactions * 8);
+    const nReactantsPtr = m._malloc(bc.nReactions * 4);
+    const reactantOffsetsPtr = m._malloc((bc.nReactions + 1) * 4);
+    const reactantIdxPtr = m._malloc(bc.reactantIdx.length * 4);
+    const reactantStoichPtr = m._malloc(bc.reactantStoich.length * 4);
+    const scalingVolsPtr = m._malloc(bc.nReactions * 8);
+    const speciesOffsetsPtr = m._malloc((bc.nSpecies + 1) * 4);
+    const speciesRxnIdxPtr = m._malloc(bc.speciesRxnIdx.length * 4);
+    const speciesStoichPtr = m._malloc(bc.speciesStoich.length * 8);
+    const speciesVolsPtr = m._malloc(bc.nSpecies * 8);
+
+    // Optional Jacobian Bytecode
+    const hasJac = bc.jacRowPtr && bc.jacColIdx && bc.jacContribOffsets && bc.jacContribRxnIdx && bc.jacContribCoeffs;
+    let jacRowPtrPtr = 0, jacColIdxPtr = 0, jacContribOffsetsPtr = 0, jacContribRxnIdxPtr = 0, jacContribCoeffsPtr = 0;
+
+    if (hasJac) {
+      jacRowPtrPtr = m._malloc((bc.nSpecies + 1) * 4);
+      jacColIdxPtr = m._malloc(bc.jacColIdx!.length * 4);
+      jacContribOffsetsPtr = m._malloc(bc.jacContribOffsets!.length * 4);
+      jacContribRxnIdxPtr = m._malloc(bc.jacContribRxnIdx!.length * 4);
+      jacContribCoeffsPtr = m._malloc(bc.jacContribCoeffs!.length * 8);
+    }
+
+    if (!rateConstPtr || !nReactantsPtr || !reactantOffsetsPtr || !reactantIdxPtr || !reactantStoichPtr ||
+      !scalingVolsPtr || !speciesOffsetsPtr || !speciesRxnIdxPtr || !speciesStoichPtr || !speciesVolsPtr ||
+      (hasJac && (!jacRowPtrPtr || !jacColIdxPtr || !jacContribOffsetsPtr || !jacContribRxnIdxPtr || !jacContribCoeffsPtr))) {
+      console.error('[CVODESolver] malloc failed for bytecode');
+      // Cleanup (basic approach)
+      [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr].forEach(p => p && m._free(p));
+      return false;
+    }
+
+    // Copy to heap
+    m.HEAPF64.set(bc.rateConstants, rateConstPtr >> 3);
+    new Int32Array(m.HEAPF64.buffer, nReactantsPtr, bc.nReactions).set(bc.nReactantsPerRxn);
+    new Int32Array(m.HEAPF64.buffer, reactantOffsetsPtr, bc.nReactions + 1).set(bc.reactantOffsets);
+    new Int32Array(m.HEAPF64.buffer, reactantIdxPtr, bc.reactantIdx.length).set(bc.reactantIdx);
+    new Int32Array(m.HEAPF64.buffer, reactantStoichPtr, bc.reactantStoich.length).set(bc.reactantStoich);
+    m.HEAPF64.set(bc.scalingVolumes, scalingVolsPtr >> 3);
+    new Int32Array(m.HEAPF64.buffer, speciesOffsetsPtr, bc.nSpecies + 1).set(bc.speciesOffsets);
+    new Int32Array(m.HEAPF64.buffer, speciesRxnIdxPtr, bc.speciesRxnIdx.length).set(bc.speciesRxnIdx);
+    m.HEAPF64.set(bc.speciesStoich, speciesStoichPtr >> 3);
+    m.HEAPF64.set(bc.speciesVolumes, speciesVolsPtr >> 3);
+
+    if (hasJac) {
+      new Int32Array(m.HEAPF64.buffer, jacRowPtrPtr, bc.nSpecies + 1).set(bc.jacRowPtr!);
+      new Int32Array(m.HEAPF64.buffer, jacColIdxPtr, bc.jacColIdx!.length).set(bc.jacColIdx!);
+      new Int32Array(m.HEAPF64.buffer, jacContribOffsetsPtr, bc.jacContribOffsets!.length).set(bc.jacContribOffsets!);
+      new Int32Array(m.HEAPF64.buffer, jacContribRxnIdxPtr, bc.jacContribRxnIdx!.length).set(bc.jacContribRxnIdx!);
+      m.HEAPF64.set(bc.jacContribCoeffs!, jacContribCoeffsPtr >> 3);
+    }
+
+    const handle = m._load_network(
+      bc.nReactions, bc.nSpecies,
+      rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr,
+      scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr,
+      jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr
+    );
+    this.networkHandle = handle;
+
+    // Free temp pointers (C side copies to its own arrays)
+    [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr].forEach(p => p && m._free(p));
+
+    return true;
+  }
+
+  updateRateConstants(newRates: Float64Array): void {
+    const m = CVODESolver.module;
+    if (!m || !m._update_rate_constants || !this.networkHandle) return;
+
+    const ptr = m._malloc(newRates.length * 8);
+    if (!ptr) return;
+    m.HEAPF64.set(newRates, ptr >> 3);
+    m._update_rate_constants(this.networkHandle, ptr, newRates.length);
+    m._free(ptr);
   }
 
   private ensureInitialized(y0: Float64Array, t0: number): { success: true } | { success: false; errorMessage: string } {
@@ -1288,18 +1396,29 @@ export class CVODESolver {
       this.destroy();
     }
 
-    // Set callback once per initialization.
-    m.derivativeCallback = (_t: number, yPtr: number, ydotPtr: number) => {
-      const buf = m.HEAPF64.buffer;
-      if (!this.yView || !this.dydtView || this.cachedDerivBuffer !== buf || this.cachedYPtr !== yPtr || this.cachedYdotPtr !== ydotPtr) {
-        this.cachedDerivBuffer = buf;
-        this.cachedYPtr = yPtr;
-        this.cachedYdotPtr = ydotPtr;
-        this.yView = new Float64Array(buf, yPtr, neq);
-        this.dydtView = new Float64Array(buf, ydotPtr, neq);
+    // Try bytecode path first if available
+    let bcLoaded = false;
+    if (this.networkByteCode && m._load_network) {
+      bcLoaded = this.uploadNetworkByteCode(this.networkByteCode);
+      if (bcLoaded) {
+        console.log('[CVODESolver] Using native WASM bytecode RHS (no JS callback crossings)');
       }
-      this.f(this.yView, this.dydtView);
-    };
+    }
+
+    if (!bcLoaded) {
+      // Fallback: Set callback once per initialization.
+      m.derivativeCallback = (_t: number, yPtr: number, ydotPtr: number) => {
+        const buf = m.HEAPF64.buffer;
+        if (!this.yView || !this.dydtView || this.cachedDerivBuffer !== buf || this.cachedYPtr !== yPtr || this.cachedYdotPtr !== ydotPtr) {
+          this.cachedDerivBuffer = buf;
+          this.cachedYPtr = yPtr;
+          this.cachedYdotPtr = ydotPtr;
+          this.yView = new Float64Array(buf, yPtr, neq);
+          this.dydtView = new Float64Array(buf, ydotPtr, neq);
+        }
+        this.f(this.yView, this.dydtView);
+      };
+    }
 
     if (this.options.rootFunction && this.options.numRoots) {
       const nroots = this.options.numRoots;
@@ -1369,6 +1488,10 @@ export class CVODESolver {
       this.yPtr = 0;
       this.tretPtr = 0;
       return { success: false as const, errorMessage: 'CVODE initialization failed' };
+    }
+
+    if (this.networkHandle && m._bind_network) {
+      m._bind_network(solverMem, this.networkHandle);
     }
 
     this.solverMem = solverMem;
@@ -1531,13 +1654,13 @@ export class CVODESolver {
         m._get_y(solverMem, yPtr);
         yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
         this.currentT = t;
-        
+
         let errorMessage = `CVODE failed with flag ${flag}`;
         if (flag === -4 && this.useAdams) {
           console.warn('ODE Solver: CVODE Adams-Moulton FixedPoint iteration failed to converge (flag -4). Stiff system detected.');
           errorMessage = 'STIFF_DETECTED';
         }
-        
+
         return { success: false, t, y: yOut, steps, errorMessage };
       }
 
@@ -1625,7 +1748,7 @@ export async function createSolver(
     case 'cvode_auto':
       // Try CVODE first, fallback to Rosenbrock23 on failure
       await CVODESolver.init();
-      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false));
+      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false, undefined, opts.useAdams));
     case 'sparse_implicit':
       // Sparse implicit solver with ILU preconditioning - for extremely stiff systems
       // Requires reactions and speciesNames in options
@@ -1641,7 +1764,9 @@ export async function createSolver(
       // Use CVODE as the primary solver (matches BNG2 behavior)
       // Falls back to Rosenbrock23 only if CVODE fails
       await CVODESolver.init();
-      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false));
+      // Use Adams-Moulton if specifically requested or if stiffness profile suggests it's non-stiff
+      const useAdams = opts.useAdams ?? false;
+      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false, undefined, useAdams));
   }
 }
 

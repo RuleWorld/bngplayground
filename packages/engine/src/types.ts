@@ -147,6 +147,7 @@ export interface SimulationPhase {
     utl?: number;
     gml?: number;
     equilibrate?: number;
+    useAdams?: boolean;
 }
 
 export interface ConcentrationChange {
@@ -223,6 +224,7 @@ export interface SimulationOptions {
     includeInfluence?: boolean;
     includeSpeciesData?: boolean;
     maxEvents?: number;
+    useAdams?: boolean;
 }
 
 export interface SerializedWorkerError {

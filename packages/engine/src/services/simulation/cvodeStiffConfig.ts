@@ -109,6 +109,9 @@ export interface CVODEStiffConfig {
   /** Use analytical Jacobian if available */
   useAnalyticalJacobian: boolean;
 
+  /** Use Adams-Moulton method for non-stiff systems (requires WASM build with _init_solver_adams) */
+  useAdams: boolean;
+
   /** Explanation of why these settings were chosen */
   rationale: string;
 }
@@ -227,13 +230,15 @@ export function getOptimalCVODEConfig(profile: StiffnessProfile): CVODEStiffConf
     initialStep: 0,
     useSparse: false,
     useAnalyticalJacobian: false,
+    useAdams: false,
     rationale: 'Default BNG2-compatible settings'
   };
 
   // Adjust based on stiffness category
   switch (profile.category) {
     case 'mild':
-      config.rationale = 'Mild stiffness: standard settings sufficient';
+      config.useAdams = true; // Adams-Moulton is superior for non-stiff systems
+      config.rationale = 'Mild stiffness: Adams-Moulton solver enabled for improved performance';
       break;
 
     case 'moderate':

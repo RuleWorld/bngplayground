@@ -14,6 +14,26 @@
 import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 
+export interface NetworkByteCode {
+    nReactions: number;
+    nSpecies: number;
+    rateConstants: Float64Array;
+    nReactantsPerRxn: Int32Array;
+    reactantOffsets: Int32Array;
+    reactantIdx: Int32Array;
+    reactantStoich: Int32Array;
+    scalingVolumes: Float64Array;
+    speciesOffsets: Int32Array;
+    speciesRxnIdx: Int32Array;
+    speciesStoich: Float64Array;
+    speciesVolumes: Float64Array;
+    jacRowPtr: Int32Array;
+    jacColIdx: Int32Array;
+    jacContribOffsets: Int32Array;
+    jacContribRxnIdx: Int32Array;
+    jacContribCoeffs: Float64Array;
+}
+
 /**
  * Compiled RHS function type
  */
@@ -101,6 +121,10 @@ export class JITCompiler {
         // Initialize dydt to zero
         source += `for (let i = 0; i < ${nSpecies}; i++) dydt[i] = 0.0;\n\n`;
 
+        // If speciesVolumes are missing, we default all to 1.0 (non-compartmental legacy)
+        // This handles cases where the simulator doesn't pass a second vector.
+        source += `if (!speciesVolumes) { speciesVolumes = new Float64Array(${nSpecies}); speciesVolumes.fill(1.0); }\n\n`;
+
         // Generate reaction rate calculations
         for (let i = 0; i < reactions.length; i++) {
             const rxn = reactions[i];
@@ -117,6 +141,7 @@ export class JITCompiler {
                 // PARITY FIX: BNG2 mass-action assumes rates are scaled by V_anchor.
                 // Reactant concentrations must be converted from native (N/Vi) to anchor-relative (N/Vanchor).
                 const vAnchor = rxn.scalingVolume || 1.0;
+                // Use bracket notation for y and speciesVolumes to handle non-numeric/complex species names properly in source
                 const scale = `(speciesVolumes[${idx}] / ${vAnchor})`;
 
                 if (stoich === 1) {
@@ -204,8 +229,9 @@ export class JITCompiler {
         }
 
         // Generate dydt assignments
-        for (const [speciesIdx, contributions] of speciesContributions) {
-            if (contributions.length === 0) continue;
+        for (let i = 0; i < nSpecies; i++) {
+            const contributions = speciesContributions.get(i);
+            if (!contributions || contributions.length === 0) continue;
 
             // Check if species is constant (volume = 0 or specific flag)
             // If speciesVolumes[idx] is provided, we use it for scaling
@@ -218,8 +244,8 @@ export class JITCompiler {
 
             // Apply species-specific volume scaling: d[C]/dt = Flux_Amount / Vol_Species
             // Parity: matches BNG2 compartmental ODE semantics
-            source += `dydt[${speciesIdx}] = (${expr})`;
-            source += ` / speciesVolumes[${speciesIdx}];\n`;
+            source += `dydt[${i}] = (${expr})`;
+            source += ` / speciesVolumes[${i}];\n`;
         }
 
         // Create the function
@@ -307,6 +333,229 @@ export class JITCompiler {
         });
 
         return this.compile(simpleReactions, nSpecies, parameters);
+    }
+
+    /**
+     * Compile a reaction network into a compact bytecode representation for WASM interpretation.
+     * Returns null if any reaction uses a complex rate expression that cannot be pre-evaluated.
+     */
+    compileToByteCode(
+        reactions: Array<{
+            reactantIndices: number[];
+            reactantStoich: number[];
+            productIndices: number[];
+            productStoich: number[];
+            rateConstant: number | string;
+            scalingVolume?: number;
+            statisticalFactor?: number;
+        }>,
+        nSpecies: number,
+        parameters?: Record<string, number>,
+        speciesVolumes?: Float64Array
+    ): NetworkByteCode | null {
+        try {
+            const nReactions = reactions.length;
+            const rateConstants = new Float64Array(nReactions);
+            const nReactantsPerRxn = new Int32Array(nReactions);
+            const scalingVolumes = new Float64Array(nReactions);
+
+            let totalReactantEntries = 0;
+            for (const rxn of reactions) {
+                totalReactantEntries += rxn.reactantIndices.length;
+            }
+
+            const reactantOffsets = new Int32Array(nReactions + 1);
+            const reactantIdx = new Int32Array(totalReactantEntries);
+            const reactantStoich = new Int32Array(totalReactantEntries);
+
+            let currentReactantOffset = 0;
+            for (let i = 0; i < nReactions; i++) {
+                const rxn = reactions[i];
+                
+                // Pre-evaluate rate constant
+                let k: number;
+                if (typeof rxn.rateConstant === 'number') {
+                    k = rxn.rateConstant;
+                } else {
+                    // Try to evaluate expression
+                    const translated = ExpressionTranslator.translate(rxn.rateConstant.toString());
+                    // Simple evaluation for parameters
+                    try {
+                        // eslint-disable-next-line no-new-func
+                        const evaluator = new Function('params', `const {${Object.keys(parameters || {}).join(',')}} = params; return ${translated};`);
+                        k = evaluator(parameters || {});
+                        if (isNaN(k) || !isFinite(k)) return null;
+                    } catch {
+                        return null; // Contains y[i] or other non-constant terms
+                    }
+                }
+
+                if (rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                    k *= rxn.statisticalFactor;
+                }
+
+                rateConstants[i] = k;
+                nReactantsPerRxn[i] = rxn.reactantIndices.length;
+                scalingVolumes[i] = rxn.scalingVolume || 1.0;
+                reactantOffsets[i] = currentReactantOffset;
+
+                for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    reactantIdx[currentReactantOffset] = rxn.reactantIndices[j];
+                    reactantStoich[currentReactantOffset] = rxn.reactantStoich[j];
+                    currentReactantOffset++;
+                }
+            }
+            reactantOffsets[nReactions] = currentReactantOffset;
+
+            // Stoichiometry matrix conversion (CSC-like)
+            const speciesRxnEntries: Array<{ rxnIdx: number; stoich: number }>[] = Array.from({ length: nSpecies }, () => []);
+            for (let r = 0; r < nReactions; r++) {
+                const rxn = reactions[r];
+                // Reactants
+                for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    const s = rxn.reactantIndices[j];
+                    const st = rxn.reactantStoich[j];
+                    const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
+                    if (existing) {
+                        existing.stoich -= st;
+                    } else {
+                        speciesRxnEntries[s].push({ rxnIdx: r, stoich: -st });
+                    }
+                }
+                // Products
+                for (let j = 0; j < rxn.productIndices.length; j++) {
+                    const s = rxn.productIndices[j];
+                    const st = rxn.productStoich[j];
+                    const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
+                    if (existing) {
+                        existing.stoich += st;
+                    } else {
+                        speciesRxnEntries[s].push({ rxnIdx: r, stoich: st });
+                    }
+                }
+            }
+
+            const speciesOffsets = new Int32Array(nSpecies + 1);
+            let totalStoichEntries = 0;
+            for (let s = 0; s < nSpecies; s++) {
+                speciesOffsets[s] = totalStoichEntries;
+                totalStoichEntries += speciesRxnEntries[s].length;
+            }
+            speciesOffsets[nSpecies] = totalStoichEntries;
+
+            const speciesRxnIdx = new Int32Array(totalStoichEntries);
+            const speciesStoich = new Float64Array(totalStoichEntries);
+
+            let currentStoichOffset = 0;
+            for (let s = 0; s < nSpecies; s++) {
+                for (const entry of speciesRxnEntries[s]) {
+                    speciesRxnIdx[currentStoichOffset] = entry.rxnIdx;
+                    speciesStoich[currentStoichOffset] = entry.stoich;
+                    currentStoichOffset++;
+                }
+            }
+
+            // Analytical Jacobian Bytecode Generation
+            // d(dydt[i])/dy[j] = sum_r (speciesStoich[i,r] * d(rate[r])/dy[j]) / speciesVolumes[i]
+            // d(rate[r])/dy[j] = (rate[r] * reactantStoich[r,j]) / y[j] -- for mass action
+            const jacRows = Array.from({ length: nSpecies }, () => new Map<number, { rxnIdx: number; coeff: number }[]>());
+            
+            // Map: reaction index -> species affected (non-zero net stoichiometry)
+            const rxnToAffectedSpecies: number[][] = reactions.map((_, r) => {
+                const affected: number[] = [];
+                for (let s = 0; s < nSpecies; s++) {
+                    const entries = speciesRxnEntries[s];
+                    if (!entries) continue;
+                    const entry = entries.find(e => e.rxnIdx === r);
+                    if (entry && entry.stoich !== 0) affected.push(s);
+                }
+                return affected;
+            });
+
+            for (let r = 0; r < nReactions; r++) {
+                const rxn = reactions[r];
+                const affectedSpecies = rxnToAffectedSpecies[r];
+                
+                for (let i_r = 0; i_r < rxn.reactantIndices.length; i_r++) {
+                    const j = rxn.reactantIndices[i_r]; // Species the rate depends on
+                    const reactantStoichJ = rxn.reactantStoich[i_r];
+                    
+                    for (const s of affectedSpecies) {
+                        if (!jacRows[s].has(j)) {
+                            jacRows[s].set(j, []);
+                        }
+                        // We store the contribution from reaction r to J[s][j]
+                        const netStoichI = speciesRxnEntries[s].find(e => e.rxnIdx === r)!.stoich;
+                        jacRows[s].get(j)!.push({ rxnIdx: r, coeff: netStoichI * reactantStoichJ });
+                    }
+                }
+            }
+
+            const jacRowPtr = new Int32Array(nSpecies + 1);
+            let totalJacEntries = 0;
+            for (let i = 0; i < nSpecies; i++) {
+                jacRowPtr[i] = totalJacEntries;
+                totalJacEntries += jacRows[i].size;
+            }
+            jacRowPtr[nSpecies] = totalJacEntries;
+
+            const jacColIdx = new Int32Array(totalJacEntries);
+            const jacContribOffsets = new Int32Array(totalJacEntries + 1);
+            
+            let totalContribEntries = 0;
+            for (let i = 0; i < nSpecies; i++) {
+                const rowMap = jacRows[i];
+                totalContribEntries += Array.from(rowMap.values()).reduce((sum, list) => sum + list.length, 0);
+            }
+
+            const jacContribRxnIdx = new Int32Array(totalContribEntries);
+            const jacContribCoeffs = new Float64Array(totalContribEntries);
+
+            let currentJacEntry = 0;
+            let currentContribOffset = 0;
+
+            for (let i = 0; i < nSpecies; i++) {
+                const rowMap = jacRows[i];
+                const sortedCols = Array.from(rowMap.keys()).sort((a, b) => a - b);
+                
+                for (const j of sortedCols) {
+                    jacColIdx[currentJacEntry] = j;
+                    jacContribOffsets[currentJacEntry] = currentContribOffset;
+                    
+                    const contribs = rowMap.get(j)!;
+                    for (const contrib of contribs) {
+                        jacContribRxnIdx[currentContribOffset] = contrib.rxnIdx;
+                        jacContribCoeffs[currentContribOffset] = contrib.coeff;
+                        currentContribOffset++;
+                    }
+                    currentJacEntry++;
+                }
+            }
+            jacContribOffsets[totalJacEntries] = currentContribOffset;
+
+            return {
+                nReactions,
+                nSpecies,
+                rateConstants,
+                nReactantsPerRxn,
+                reactantOffsets,
+                reactantIdx,
+                reactantStoich,
+                scalingVolumes,
+                speciesOffsets,
+                speciesRxnIdx,
+                speciesStoich,
+                speciesVolumes: speciesVolumes || new Float64Array(nSpecies).fill(1.0),
+                jacRowPtr,
+                jacColIdx,
+                jacContribOffsets,
+                jacContribRxnIdx,
+                jacContribCoeffs
+            };
+        } catch (error) {
+            console.error('[JITCompiler] Failed to compile bytecode:', error);
+            return null;
+        }
     }
 
     /**

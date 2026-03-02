@@ -12,6 +12,7 @@
 
 import { BNGLModel, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
 import type { SolverResult } from './ODESolver';
+import { CVODESolver } from './ODESolver';
 import { BNGLParser } from '../graph/core/BNGLParser';
 import { toBngGridTime } from '../parity/ParityService';
 import { countPatternMatches, isSpeciesMatch, isFunctionalRateExpr } from '../parity/PatternMatcher';
@@ -922,7 +923,9 @@ export async function simulate(
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
         }
         let totalEvents = 0;
-        const maxEvents = options.maxEvents ?? 100_000_000; // 100 million events safeguard
+        let nEventsThisPhase = 0;
+        let hasPushedFinalResult = false;
+        const maxEvents = options.maxEvents ?? 100_000_000;
 
         while (t < phaseTEnd) {
           if (totalEvents >= maxEvents) {
@@ -1013,6 +1016,7 @@ export async function simulate(
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
+          nEventsThisPhase++;
 
           // === DIN INFLUENCE TRACKING: Capture old propensities BEFORE state change ===
           let numAffected = 0;
@@ -1105,12 +1109,13 @@ export async function simulate(
               } catch (e: unknown) {
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
-            if (outT >= nextTOut || i === maxEvents - 1) {
-              appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
-              const sp: Record<string, number> = { time: outT };
-              for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
-              appendSpeciesSnapshot(phase.suffix, sp);
-            }
+              if (outT >= nextTOut || totalEvents >= maxEvents) {
+                appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+                const sp: Record<string, number> = { time: outT };
+                for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
+                appendSpeciesSnapshot(phase.suffix, sp);
+                if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
+              }
             nextOutIdx += 1;
             nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
           }
@@ -1124,8 +1129,6 @@ export async function simulate(
             for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
             appendSpeciesSnapshot(phase.suffix, sp);
           }
-          nextOutIdx += 1;
-          nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
         }
 
         globalTime += phaseTEnd;
@@ -1615,7 +1618,8 @@ export async function simulate(
       maxNonlinIters: options.maxNonlinIters ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.maxNonlinIters : 3),
       nonlinConvCoef: options.nonlinConvCoef ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.nonlinConvCoef : 0.1),
       maxErrTestFails: options.maxErrTestFails ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.maxErrTestFails : 7),
-      maxConvFails: options.maxConvFails ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.maxConvFails : 10)
+      maxConvFails: options.maxConvFails ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.maxConvFails : 10),
+      useAdams: options.useAdams ?? ((useAdaptiveCvodeTuning || usePresetCvodeTuning) ? stiffConfig.useAdams : false)
     };
 
     const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
@@ -1771,6 +1775,43 @@ export async function simulate(
     if (jacobianColMajor && solverType === 'cvode_jac') solverOptions.jacobian = jacobianColMajor;
     if (jacobianRowMajor && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
 
+    // Try generating bytecode for native path
+    if (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') {
+      const byteCodeReactions = concreteReactions.map(r => ({
+        reactantIndices: Array.from(r.reactants),
+        reactantStoich: Array.from({ length: r.reactants.length }, () => 1), // Each entry in reactants is 1 stoich
+        productIndices: Array.from(r.products),
+        productStoich: Array.from({ length: r.products.length }, (_, j) => r.productStoichiometries ? r.productStoichiometries[j] : 1),
+        rateConstant: r.isFunctionalRate ? (r.rateExpression || 0) : r.rateConstant,
+        scalingVolume: r.scalingVolume,
+        statisticalFactor: r.degeneracy
+      }));
+
+      // In BNG2, a reaction can have multiple Reactants/Products of same species listed separately
+      // compileToByteCode handles this via duplication, but we should consolidate stoich for bytecode compactness
+      const consolidatedBCReactions = byteCodeReactions.map(r => {
+        const rMap = new Map<number, number>();
+        r.reactantIndices.forEach((idx, i) => rMap.set(idx, (rMap.get(idx) || 0) + r.reactantStoich[i]));
+        const pMap = new Map<number, number>();
+        r.productIndices.forEach((idx, i) => pMap.set(idx, (pMap.get(idx) || 0) + r.productStoich[i]));
+
+        return {
+          reactantIndices: Array.from(rMap.keys()),
+          reactantStoich: Array.from(rMap.values()),
+          productIndices: Array.from(pMap.keys()),
+          productStoich: Array.from(pMap.values()),
+          rateConstant: r.rateConstant,
+          scalingVolume: r.scalingVolume,
+          statisticalFactor: r.statisticalFactor
+        };
+      });
+
+      const bc = jitCompiler.compileToByteCode(consolidatedBCReactions, numSpecies, model.parameters, speciesVolumes);
+      if (bc) {
+        solverOptions.networkByteCode = bc;
+        // console.log('[SimulationLoop] Bytecode generated successfully for native path');
+      }
+    }
 
     // WebGPU Path
     if (solverType === 'webgpu_rk4') {
