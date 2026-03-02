@@ -69,9 +69,9 @@ describe('Massive JIT/Bytecode Parity Test', () => {
             // 3. JIT Compilation
             // We map from expanded network structure to JIT expectation
             const simpleRxns = reactions.map(r => ({
-                reactantIndices: r.reactants as number[],
+                reactantIndices: r.reactants as unknown as number[],
                 reactantStoich: r.reactants.map(() => 1),
-                productIndices: r.products as number[],
+                productIndices: r.products as unknown as number[],
                 productStoich: r.products.map((_, i) => (r as any).productStoich?.[i] ?? 1) as number[],
                 rateConstant: r.rate || 0,
                 scalingVolume: (r as any).scalingVolume || 1.0

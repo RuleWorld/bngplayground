@@ -1103,6 +1103,8 @@ interface CVodeModule {
   ) => number;
   _destroy_network?: (handle: number) => void;
   _update_rate_constants?: (handle: number, rateConstants: number, nReactions: number) => void;
+  _unload_network?: (handle: number) => void;
+  _bind_network?: (mem: number, handle: number) => void;
 }
 
 // Type for Jacobian function: fills column-major matrix J[i + j*neq] = df_i/dy_j
@@ -1203,7 +1205,13 @@ export class CVODESolver {
           loader = resolveLoader(await import(/* @vite-ignore */ modulePath));
         } else {
           console.log('[ODESolver] Loading CVODE via cvode_loader (default)');
-          loader = resolveLoader(await import(/* @vite-ignore */ '@/services/cvode_loader.js'));
+          // Use Function constructor to avoid TypeScript compile-time path checking
+          const importDynamic = new Function('path', 'return import(path)');
+          try {
+            loader = resolveLoader(await importDynamic('../../../../services/cvode_loader.js'));
+          } catch {
+            loader = resolveLoader(await importDynamic('@/services/cvode_loader.js'));
+          }
         }
 
         this.module = await loader({
