@@ -13,6 +13,7 @@ typedef double realtype;
 #include <sunlinsol/sunlinsol_spgmr.h>
 #include <sundials/sundials_context.h>
 #include <sunnonlinsol/sunnonlinsol_newton.h>
+#include <sunnonlinsol/sunnonlinsol_fixedpoint.h>
 
 // Global callback to JS: f(t, y_ptr, ydot_ptr)
 // Emscripten will link this to a JS function provided at library initialization
@@ -116,6 +117,53 @@ void* init_solver(int neq, double t0, double* y0_data, double reltol, double abs
     CVodeSetMaxConvFails(mem->cvode_mem, 10);
     CVodeSetMaxStep(mem->cvode_mem, 0.0);
     
+    return (void*)mem;
+}
+
+// Adams-Moulton method for NON-STIFF systems (much better than BDF for non-stiff).
+// CV_ADAMS uses lower-order polynomial interpolation, less computational work per step,
+// and better stability for mildly oscillatory non-stiff systems.
+// Uses functional (fixed-point) iteration — no matrix or linear solver needed.
+void* init_solver_adams(int neq, double t0, double* y0_data, double reltol, double abstol, int max_steps) {
+    CvodeWrapper* mem = (CvodeWrapper*)malloc(sizeof(CvodeWrapper));
+    if (!mem) return NULL;
+
+    mem->use_sparse = 0;
+    mem->use_analytical_jac = 0;
+    mem->A = NULL;
+    mem->LS = NULL;
+    mem->NLS = NULL;
+
+    // Create SUNDIALS context
+    if (SUNContext_Create(0, &mem->sunctx) != 0) {
+        free(mem);
+        return NULL;
+    }
+
+    // Create vector
+    mem->y = N_VNew_Serial(neq, mem->sunctx);
+    for (int i=0; i<neq; i++) NV_Ith_S(mem->y, i) = y0_data[i];
+
+    // Create CVODE with Adams-Moulton method (CV_ADAMS = 1)
+    mem->cvode_mem = CVodeCreate(CV_ADAMS, mem->sunctx);
+    
+    // Adams-Moulton with functional (fixed-point) iteration is the standard non-stiff configuration.
+    // Skip CVodeSetLinearSolver entirely — no matrix or LS needed.
+    mem->NLS = SUNNonlinSol_FixedPoint(mem->y, 0, mem->sunctx);
+
+    // Init and Attach
+    CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
+    CVodeSStolerances(mem->cvode_mem, reltol, abstol);
+    CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
+
+    // For Adams, use higher max order (default is 12, but CVODE caps at 12 for Adams)
+    // Match BNG2 defaults for max_num_steps
+    mem->max_num_steps = (max_steps > 0) ? (long int)max_steps : 2000;
+    CVodeSetMaxNumSteps(mem->cvode_mem, mem->max_num_steps);
+    CVodeSetMaxErrTestFails(mem->cvode_mem, 7);
+    CVodeSetMaxConvFails(mem->cvode_mem, 10);
+    CVodeSetMaxStep(mem->cvode_mem, 0.0);
+
     return (void*)mem;
 }
 

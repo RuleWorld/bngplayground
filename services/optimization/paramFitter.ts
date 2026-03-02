@@ -3,29 +3,29 @@
  *
  * Direct least-squares parameter fitting for BNG Playground.
  *
- * Replaces the VI/ELBO approach with standard derivative-free optimization
- * using the async Nelder-Mead implementation.  Each forward simulation is
- * delegated to the existing bnglService worker pool.
+ * Replaces the VI/ELBO approach with standard derivative-free optimization.
+ * Each forward simulation is delegated to the existing bnglService worker pool.
  *
  * Algorithm selection:
  *   'nelder-mead'  (default) – robust, derivative-free, good for 2–15 params
- *   'sbplx'        – Subplex (Nelder-Mead on subspaces, better for ≥10 params)
- *   'cobyla'       – constrained variant (future: via nlopt-js)
- *
- * For 'sbplx' and 'cobyla' we transparently fall back to standard Nelder-Mead
- * until a synchronous solver bridge is implemented.
+ *   'sbplx'        – Subplex (NM on rotating subspaces, 2–3× fewer evals for ≥5 params)
+ *   'cobyla'       – bound-constrained NM with projected simplex and barrier penalty
+ *   'bobyqa'       – Bound Optimization BY Quadratic Approximation (uses SBPLX until
+ *                    synchronous solver bridge enables NLopt-js integration)
  */
 
 import { BNGLModel } from '../../types';
 import { bnglService } from '../bnglService';
 import { ExperimentalDataPoint } from '../../src/services/data/experimentalData';
 import { nelderMead, NelderMeadProgress } from './nelderMead';
+import { sbplx } from './sbplx';
+import { projectedNM, ProjectedNMOptions } from './projectedNM';
 
 // ---------------------------------------------------------------------------
 // Public types
 // ---------------------------------------------------------------------------
 
-export type FitAlgorithm = 'nelder-mead' | 'sbplx' | 'cobyla';
+export type FitAlgorithm = 'nelder-mead' | 'sbplx' | 'projected-nm' | 'bobyqa';
 
 export interface ParamBounds {
   name: string;
@@ -130,7 +130,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
   let nEval = 0;
 
   // Log-transform parameters so optimizer works in unconstrained space (avoids
-  // hitting bounds with Nelder-Mead).  Only applied when lower bound > 0.
+  // hitting bounds with Nelder-Mead). Only applied when lower bound > 0.
   const useLog: boolean[] = paramBounds.map(b => b.min > 0);
 
   const encode = (p: number[]): number[] =>
@@ -185,23 +185,65 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
   }
 
   // ---------------------------------------------------------------------------
-  // Run optimizer
+  // Run optimizer – dispatch to selected algorithm
   // ---------------------------------------------------------------------------
-  const nmResult = await nelderMead(objective, x0encoded, {
-    maxEval,
-    ftol,
-    signal,
-    onProgress: (info: NelderMeadProgress) => {
-      sseHistory.push(info.bestValue);
-      const params = decode([...info.bestX]);
-      onProgress?.({
-        nEval: info.nEval,
-        sse:   info.bestValue,
-        params,
-        iteration: info.iteration,
+  const progressCallback = (info: { nEval: number; bestValue: number; bestX: Float64Array; iteration: number }) => {
+    sseHistory.push(info.bestValue);
+    const params = decode([...info.bestX]);
+    onProgress?.({
+      nEval: info.nEval,
+      sse:   info.bestValue,
+      params,
+      iteration: info.iteration,
+    });
+  };
+
+  let nmResult: { x: number[]; value: number; nEval: number; iterations: number; converged: boolean };
+
+  switch (algorithm) {
+    case 'sbplx':
+    case 'bobyqa': {
+      // SBPLX: Subplex algorithm – NM on rotating subspaces.
+      // BOBYQA: Uses SBPLX until synchronous solver enables NLopt-js.
+      const sbResult = await sbplx(objective, x0encoded, {
+        maxEval,
+        ftol,
+        signal,
+        onProgress: (info) => progressCallback(info),
+        minSubspaceDim: Math.min(2, n),
+        maxSubspaceDim: Math.min(5, n),
       });
-    },
-  });
+      nmResult = sbResult;
+      break;
+    }
+    case 'projected-nm': {
+      // Projected NM can handle bounds natively, but we still apply log transformation
+      // to the bounded space if requested for step scaling logic.
+      const opts: ProjectedNMOptions = {
+        maxEval,
+        ftol,
+        signal,
+        lowerBounds: paramBounds.map((b, i) => useLog[i] ? Math.log(Math.max(b.min, 1e-30)) : b.min),
+        upperBounds: paramBounds.map((b, i) => useLog[i] ? Math.log(b.max) : b.max),
+        barrierStrength: 0.001,
+        onProgress: (info) => progressCallback(info),
+      };
+      const coResult = await projectedNM(objective, x0encoded, opts);
+      nmResult = coResult;
+      break;
+    }
+    case 'nelder-mead':
+    default: {
+      const nmRes = await nelderMead(objective, x0encoded, {
+        maxEval,
+        ftol,
+        signal,
+        onProgress: (info: NelderMeadProgress) => progressCallback(info),
+      });
+      nmResult = nmRes;
+      break;
+    }
+  }
 
   const bestParams = decode(nmResult.x);
 

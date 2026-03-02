@@ -19,7 +19,7 @@ export interface SolverOptions {
   minStep: number;        // Minimum step size before failure
   maxStep: number;        // Maximum step size
   initialStep?: number;   // Initial step size (if not provided, computed automatically)
-  solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse_implicit' | 'webgpu_rk4';
+  solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse_implicit' | 'webgpu_rk4';
   jacobianRowMajor?: (y: Float64Array, J: Float64Array) => void;  // Row-major Jacobian for Rosenbrock
 
   // Advanced CVODE options for stiff systems
@@ -1057,6 +1057,7 @@ export class FastRK4Solver {
  */
 interface CVodeModule {
   _init_solver(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
+  _init_solver_adams?(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
   _init_solver_sparse(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
   _solve_step(mem: number, tout: number, tret: number): number;
   _get_y(mem: number, dest: number): void;
@@ -1093,6 +1094,7 @@ export class CVODESolver {
   private f: DerivativeFunction;
   private options: SolverOptions;
   private useSparse: boolean;
+  private useAdams: boolean;
   private jacobian?: JacobianFunction;
 
   private solverMem: number | null = null;
@@ -1130,12 +1132,13 @@ export class CVODESolver {
     CVODESolver.cvodeModuleFactory = factory;
   }
 
-  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false, jacobian?: JacobianFunction) {
+  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false, jacobian?: JacobianFunction, useAdams: boolean = false) {
     this.n = n;
     this.f = f;
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.useSparse = useSparse;
     this.jacobian = jacobian;
+    this.useAdams = useAdams;
   }
 
   static async init() {
@@ -1347,6 +1350,9 @@ export class CVODESolver {
         this.jacobian!(this.jacYView, this.jacJView);
       };
       solverMem = m._init_solver_jac(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
+    } else if (this.useAdams && m._init_solver_adams) {
+      // Adams-Moulton for non-stiff systems (requires WASM rebuild to activate)
+      solverMem = m._init_solver_adams(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
     } else if (this.useSparse) {
       solverMem = m._init_solver_sparse(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
     } else {
@@ -1525,7 +1531,14 @@ export class CVODESolver {
         m._get_y(solverMem, yPtr);
         yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
         this.currentT = t;
-        return { success: false, t, y: yOut, steps, errorMessage: `CVODE failed with flag ${flag}` };
+        
+        let errorMessage = `CVODE failed with flag ${flag}`;
+        if (flag === -4 && this.useAdams) {
+          console.warn('ODE Solver: CVODE Adams-Moulton FixedPoint iteration failed to converge (flag -4). Stiff system detected.');
+          errorMessage = 'STIFF_DETECTED';
+        }
+        
+        return { success: false, t, y: yOut, steps, errorMessage };
       }
 
       const currentHeap = m.HEAPF64;
@@ -1598,6 +1611,11 @@ export async function createSolver(
       // CVODE with analytical Jacobian - requires jacobian function in options
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, false, (options as any).jacobian);
+    case 'cvode_adams':
+      // CVODE with Adams-Moulton method for non-stiff systems
+      // Requires WASM rebuild to activate; falls back to BDF if _init_solver_adams not available
+      await CVODESolver.init();
+      return new CVODESolver(n, f, opts, false, undefined, true);
     case 'rosenbrock23':
       return new Rosenbrock23Solver(n, f, opts);
     case 'rk45':

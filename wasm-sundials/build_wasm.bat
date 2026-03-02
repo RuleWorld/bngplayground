@@ -41,7 +41,7 @@ emcc -I%SUNDIALS_INC% -I%BUILD_INC% -O3 ^
  %LIBS% ^
  -o cvode_loader.js ^
  --js-library library_cvode.js ^
- -s EXPORTED_FUNCTIONS="['_init_solver', '_init_solver_jac', '_init_solver_sparse', '_solve_step', '_get_y', '_destroy_solver', '_set_init_step', '_set_max_step', '_set_min_step', '_set_max_ord', '_set_stab_lim_det', '_set_max_nonlin_iters', '_set_nonlin_conv_coef', '_set_max_err_test_fails', '_set_max_conv_fails', '_set_max_num_steps', '_reinit_solver', '_get_solver_stats', '_init_roots', '_get_root_info', '_malloc', '_free']" ^
+ -s EXPORTED_FUNCTIONS="['_init_solver', '_init_solver_adams', '_init_solver_jac', '_init_solver_sparse', '_solve_step', '_get_y', '_destroy_solver', '_set_init_step', '_set_max_step', '_set_min_step', '_set_max_ord', '_set_stab_lim_det', '_set_max_nonlin_iters', '_set_nonlin_conv_coef', '_set_max_err_test_fails', '_set_max_conv_fails', '_set_max_num_steps', '_reinit_solver', '_get_solver_stats', '_init_roots', '_get_root_info', '_malloc', '_free']" ^
  -s EXPORTED_RUNTIME_METHODS="['cwrap', 'getValue', 'setValue', 'HEAPF64']" ^
  -s MODULARIZE=1 ^
  -s EXPORT_NAME="createCVodeModule" ^

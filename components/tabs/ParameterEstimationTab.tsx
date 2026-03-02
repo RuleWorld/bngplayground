@@ -509,14 +509,14 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                   Algorithm
                 </label>
                 <div className="flex gap-2 flex-wrap">
-                  {(['nelder-mead', 'sbplx', 'cobyla'] as FitAlgorithm[]).map(alg => (
+                  {(['nelder-mead', 'sbplx', 'projected-nm', 'bobyqa'] as FitAlgorithm[]).map(alg => (
                     <Button
                       key={alg}
                       variant={algorithm === alg ? 'primary' : 'subtle'}
                       className="text-xs h-7 px-3"
                       onClick={() => setAlgorithm(alg)}
                     >
-                      {alg}
+                      {alg === 'bobyqa' ? 'bobyqa (uses sbplx)' : alg === 'projected-nm' ? 'projected-nm' : alg}
                     </Button>
                   ))}
                 </div>
