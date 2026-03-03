@@ -9,9 +9,9 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { parseBNGL } from '../services/parseBNGL';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
 import type { BNGLModel } from '../types';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
@@ -20,7 +20,7 @@ const projectRoot = resolve(thisDir, '..');
 const formatSpeciesList = (list: string[]) => (list.length > 0 ? list.join(' + ') : '0');
 
 describe('cBNGL_simple Volume Scaling', () => {
-  const modelPath = resolve(projectRoot, 'bng_test_output', 'cBNGL_simple.bngl');
+  const modelPath = resolve(projectRoot, 'published-models', 'native-tutorials', 'CBNGL', 'cBNGL_simple.bngl');
   const netPath = resolve(projectRoot, 'bng_test_output', 'cBNGL_simple.net');
   
   it('should have correct volume scaling for L_R_bind reactions', async () => {
@@ -205,17 +205,21 @@ describe('cBNGL_simple Volume Scaling', () => {
       console.log(`  ${name}: ${count} reactions`);
     }
     
-    // Parse BNG2 .net file for comparison
-    console.log('=== BNG2 L_R_bind Reactions (from .net file) ===');
-    const netContent = readFileSync(netPath, 'utf8');
-    const rxnMatch = netContent.match(/begin reactions\n([\s\S]*?)end reactions/);
-    if (rxnMatch) {
-      const rxnLines = rxnMatch[1].trim().split('\n');
-      rxnLines.forEach(line => {
-        if (line.includes('L_R_bind')) {
-          console.log(`  ${line.trim()}`);
+    // Parse BNG2 .net file for comparison if it exists
+    if (existsSync(netPath)) {
+        console.log('=== BNG2 L_R_bind Reactions (from .net file) ===');
+        const netContent = readFileSync(netPath, 'utf8');
+        const rxnMatch = netContent.match(/begin reactions\n([\s\S]*?)end reactions/);
+        if (rxnMatch) {
+        const rxnLines = rxnMatch[1].trim().split('\n');
+        rxnLines.forEach(line => {
+            if (line.includes('L_R_bind')) {
+            console.log(`  ${line.trim()}`);
+            }
+        });
         }
-      });
+    } else {
+        console.log('=== BNG2 .net file not found, skipping comparison ===');
     }
     
     // Check volume scaling

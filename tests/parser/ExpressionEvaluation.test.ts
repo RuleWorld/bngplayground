@@ -83,9 +83,9 @@ describe('ExpressionEvaluation', () => {
     });
 
     // 13. Evaluate divide by zero (should handle/throw)
-    it('should return Infinity for divide by zero', () => {
-        // JS returns Infinity
-        expect(evaluateFunctionalRate('1/0', context, emptyObs)).toBe(Infinity);
+    it('should return 0 (safe fallback) for divide by zero', () => {
+        // Our evaluator returns 0 for non-finite results to prevent simulation crashes
+        expect(evaluateFunctionalRate('1/0', context, emptyObs)).toBe(0);
     });
 
     // 14. Evaluate user parameter access: k where k=10

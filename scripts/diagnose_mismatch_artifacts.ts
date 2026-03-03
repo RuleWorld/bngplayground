@@ -3,7 +3,7 @@ import path from 'node:path';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion.ts';
 import { simulate } from '../services/simulation/SimulationLoop.ts';
-import { getSimulationOptionsFromParsedModel } from '../src/utils/simulationOptions.ts';
+import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
 
 const ROOT = process.cwd();
 const MODELS: Array<{ id: string; bngl: string; refGdat: string; refNet: string; refCdat?: string }> = [

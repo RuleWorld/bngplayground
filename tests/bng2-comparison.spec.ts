@@ -16,13 +16,13 @@ import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseBNGL } from '../services/parseBNGL';
 import { createSolver } from '../services/ODESolver';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { NetworkGenerator, GeneratorProgress } from '../src/services/graph/NetworkGenerator';
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { NetworkGenerator, GeneratorProgress } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
 import type { BNGLModel } from '../types';
 
 // Import BNG2 path defaults
-import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../scripts/bngDefaults.js';
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../tools/bngDefaults.js';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');

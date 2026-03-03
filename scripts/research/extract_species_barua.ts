@@ -2,7 +2,7 @@
 import fs from 'fs';
 import path from 'path';
 import { parseBNGL } from '../services/parseBNGL';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 
 const MODEL_PATH = path.join(process.cwd(), 'published-models/cell-regulation/Barua_2013.bngl');
 const OUTPUT_FILE = path.join(process.cwd(), 'barua_sim_species.txt');

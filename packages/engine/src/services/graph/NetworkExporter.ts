@@ -1,4 +1,4 @@
-import type { BNGLModel, BNGLObservable } from '../../../types.ts';
+import type { BNGLModel, BNGLObservable } from '../../types.ts';
 import { Species } from './core/Species.ts';
 import { Rxn } from './core/Rxn.ts';
 import { BNGLParser } from './core/BNGLParser.ts';

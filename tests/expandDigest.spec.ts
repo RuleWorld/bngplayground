@@ -1,6 +1,6 @@
 // @ts-nocheck
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { describe, it, expect } from 'vitest';
 
 const digestBNGL = `

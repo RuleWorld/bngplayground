@@ -6,8 +6,8 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { parseBNGL } from '../services/parseBNGL.ts';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator.ts';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
 import { createSolver } from '../services/ODESolver.ts';
 
 const __filename = fileURLToPath(import.meta.url);

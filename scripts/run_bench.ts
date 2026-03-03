@@ -2,9 +2,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { parseBNGL } from '../services/parseBNGL';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
-import { NautyService } from '../src/services/graph/core/NautyService';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { NautyService } from '../packages/engine/src/services/graph/core/NautyService';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 
 interface BenchmarkResult {
     model: string;

@@ -1,9 +1,9 @@
 
-import { parseBNGLStrict } from '../src/parser/BNGLParserWrapper';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { EnergyService } from '../src/services/graph/core/EnergyService';
-import { RxnRule } from '../src/services/graph/core/RxnRule';
+import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { EnergyService } from '../packages/engine/src/services/graph/core/EnergyService';
+import { RxnRule } from '../packages/engine/src/services/graph/core/RxnRule';
 import * as fs from 'fs';
 import * as path from 'path';
 import { describe, test, expect, beforeAll } from 'vitest';

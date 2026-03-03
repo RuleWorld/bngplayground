@@ -1,10 +1,10 @@
-import { Component } from './Component.ts';
-import { Molecule } from './Molecule.ts';
-import { SpeciesGraph } from './SpeciesGraph.ts';
-import { ExpressionTranslator } from './ExpressionTranslator.ts';
+import { Component } from './Component';
+import { Molecule } from './Molecule';
+import { SpeciesGraph } from './SpeciesGraph';
+import { ExpressionTranslator } from './ExpressionTranslator';
 
-import { evaluateExpressionHighPrecision, needsHighPrecision } from './highPrecisionEvaluator.ts';
-import { RxnRule } from './RxnRule.ts';
+import { evaluateExpressionHighPrecision, needsHighPrecision } from './highPrecisionEvaluator';
+import { RxnRule } from './RxnRule';
 
 const shouldLogParser = false;
 
@@ -65,6 +65,13 @@ export class BNGLParser {
 
     for (const molStr of moleculeStrings) {
       const molecule = this.parseMolecule(molStr.trim());
+      // Handle molecule-level compartment suffix if not already handled globally
+      if (!globalCompartment) {
+        const molMatch = molStr.trim().match(/^(.+)@([A-Za-z0-9_]+)$/);
+        if (molMatch) {
+          molecule.compartment = molMatch[2];
+        }
+      }
       graph.molecules.push(molecule);
     }
 
@@ -196,10 +203,15 @@ export class BNGLParser {
         return `Molecule-level specific bonds like "${trimmedMol}" are not supported. Use molecule-level wildcards (!+, !?) instead.`;
       }
 
-      // Validate molecule name (must start with letter, underscore, or wildcard *)
+      // Validate molecule name (must start with letter or underscore)
       const nameMatch = trimmedMol.match(/^([A-Za-z_][A-Za-z0-9_]*|\*)/);
-      if (!nameMatch) {
+      if (!nameMatch || /^\d/.test(trimmedMol) || /^\d/.test(trimmedMol.replace(/^\*/, ''))) {
         return `Invalid molecule name "${trimmedMol}": must start with a letter, underscore, or wildcard (*)`;
+      }
+
+      // Ensure name contains at least one letter or underscore if it doesn't have components or wildcards
+      if (/^\d+$/.test(trimmedMol) || (/^\d+(@[A-Za-z_][A-Za-z0-9_]*)?$/.test(trimmedMol))) {
+        return `Invalid molecule name "${trimmedMol}": name cannot consist only of numbers`;
       }
 
       // Validate characters in molecule string
@@ -225,8 +237,8 @@ export class BNGLParser {
           if (bondLabel === '+' || bondLabel === '?' || bondLabel === '-') continue;
           // Check if it's a valid positive integer
           const bondNum = parseInt(bondLabel);
-          if (isNaN(bondNum) || bondNum < 0) {
-            return `Invalid bond label "${bondLabel}" in molecule "${trimmedMol}": must be a non-negative integer`;
+          if (isNaN(bondNum) || bondNum <= 0) {
+            return `Invalid bond label "${bondLabel}" in molecule "${trimmedMol}": must be a positive integer`;
           }
         }
       }
@@ -325,9 +337,10 @@ export class BNGLParser {
       compartment = suffixCompartment;
     }
 
-    if (!componentStr.trim()) {
-      const molecule = new Molecule(name, [], compartment, true);
+    if (!componentStr || !componentStr.trim()) {
+      const molecule = new Molecule(name, [], compartment);
       if (label) molecule.label = label;
+      if (moleculeWildcard) molecule.wildcard = moleculeWildcard;
       return molecule;
     }
 

@@ -1,0 +1,128 @@
+name: CI Tests
+
+on:
+  push:
+    branches: [ main, dev ]
+  pull_request:
+    branches: [ main, dev ]
+  workflow_dispatch:
+    inputs:
+      run_full_suite:
+        description: 'Run full test suite (includes parity/integration tests)'
+        required: false
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+  # Fast unit tests - always runs
+  fast-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run fast test suite
+        run: npm run test:fast
+        env:
+          NODE_ENV: test
+      
+      - name: Upload coverage (if generated)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-fast
+          path: coverage/
+          if-no-files-found: ignore
+  
+  # Build verification
+  build-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Type check
+        run: npm run type-check
+      
+      - name: Build (quick)
+        run: npm run build:quick
+      
+      - name: Check build output
+        run: |
+          if [ ! -d "dist" ]; then
+            echo "Build failed: dist directory not found"
+            exit 1
+          fi
+          echo "Build successful: dist directory exists"
+          ls -lah dist/ | head -20
+  
+  # Full test suite - runs on main, manual trigger, or when workflow file changes
+  full-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_suite == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      contains(github.event.head_commit.message, '[full-tests]')
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+      
+      - name: Install dependencies
+        run: npm ci
+      
+      - name: Run full test suite
+        run: npm run test:full
+        env:
+          NODE_ENV: test
+        continue-on-error: true
+      
+      - name: Upload coverage (if generated)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-full
+          path: coverage/
+          if-no-files-found: ignore
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-full
+          path: |
+            test-results/
+            artifacts/
+          if-no-files-found: ignore

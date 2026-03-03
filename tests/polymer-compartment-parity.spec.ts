@@ -1,10 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
 
-import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../scripts/bngDefaults.js';
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../tools/bngDefaults.js';
 
 /**
  * Parity tests for polymer models with compartments

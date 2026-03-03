@@ -195,13 +195,15 @@ export class BNGXMLWriter {
             deleteMolecules: Boolean(r.deleteMolecules)
           });
 
+          const opsTag = operationsXml ? `\n      <ListOfOperations>\n${operationsXml}      </ListOfOperations>` : '';
+
           return `\n    <ReactionRule id="${ruleId}" name="${ruleName}" symmetry_factor="1">\n` +
             `      <ListOfReactantPatterns>${reactantPatterns}\n      </ListOfReactantPatterns>\n` +
             `      <ListOfProductPatterns>${productPatterns}\n      </ListOfProductPatterns>\n` +
             `      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n` +
             `        <ListOfRateConstants>\n            <RateConstant value="${escapeXml(finalRateValue)}"/>\n        </ListOfRateConstants>\n` +
             `      </RateLaw>\n` +
-            `      ${mapXml}${operationsXml}\n` +
+            `      ${mapXml}${opsTag}\n` +
             `    </ReactionRule>\n`;
         });
       })
@@ -390,22 +392,24 @@ export class BNGXMLWriter {
 
     const moleculesXml = graph.molecules
       .map((mol, molIdx) => {
-        const components = mol.components;
-
+        // Fix: populate moleculeIdMap BEFORE component loop
         const moleculeId = `${prefix}_M${molIdx + 1}`;
         moleculeIdMap.set(molIdx, moleculeId);
 
+        const components = mol.components;
         const componentsXml = components
           .map((comp, compIdx) => {
+            const componentId = `${prefix}_M${molIdx + 1}_C${compIdx + 1}`;
+            componentIdMap.set(`${molIdx}.${compIdx}`, componentId);
+
             const numberOfBonds = this.getNumberOfBonds(comp, isPattern);
             const attrs = [
-              `id="${prefix}_M${molIdx + 1}_C${compIdx + 1}"`,
+              `id="${componentId}"`,
               `name="${escapeXml(comp.name)}"`,
               `numberOfBonds="${numberOfBonds}"`
             ];
             if (comp.state) attrs.push(`state="${escapeXml(comp.state)}"`);
 
-            componentIdMap.set(`${molIdx}.${compIdx}`, `${prefix}_M${molIdx + 1}_C${compIdx + 1}`);
             return `<Component ${attrs.join(' ')} />`;
           })
           .join('');
@@ -503,8 +507,8 @@ export class BNGXMLWriter {
     const mapItems: string[] = [];
 
     const addComponentMapItems = (
-      reactantPattern: typeof reactantPatterns[number],
-      productPattern: typeof productPatterns[number] | null,
+      reactantPattern: (typeof reactantPatterns)[number],
+      productPattern: (typeof productPatterns)[number] | null,
       reactMolIdx: number,
       productMolIdx?: number
     ) => {
@@ -523,17 +527,17 @@ export class BNGXMLWriter {
             }
           }
         }
+        // If no product equivalent, map to self as placeholder (prevents missing sourceID errors)
         mapItems.push(`<MapItem sourceID="${sourceId}" targetID="${sourceId}"/>`);
       });
     };
 
     reactantPatterns.forEach((pattern, patternIdx) => {
       pattern.graph.molecules.forEach((_, molIdx) => {
-        const reactKey = `${patternIdx}.${molIdx}`;
-        const reactRef = reactantRefs.find((r) => r.patternIdx === patternIdx && r.molIdx === molIdx);
-        const prodRef = reactRef ? reactantToProduct.get(reactKey) : undefined;
+        const prodRef = reactantToProduct.get(`${patternIdx}.${molIdx}`);
         const sourceId = pattern.moleculeIdMap.get(molIdx);
         if (!sourceId) return;
+
         if (prodRef) {
           const prodPattern = productPatterns[prodRef.patternIdx];
           const targetId = prodPattern?.moleculeIdMap.get(prodRef.molIdx);
@@ -686,8 +690,8 @@ export class BNGXMLWriter {
           const prodMol = prodPattern?.graph.molecules[prodRef.molIdx];
           if (!prodMol) return;
 
-          const reactCompartment = mol.compartment ?? '';
-          const prodCompartment = prodMol.compartment ?? '';
+          const reactCompartment = mol.compartment || pattern.graph.compartment || '';
+          const prodCompartment = prodMol.compartment || prodPattern.graph.compartment || '';
 
           if (reactCompartment !== prodCompartment && prodCompartment) {
             const molId = pattern.moleculeIdMap.get(molIdx);

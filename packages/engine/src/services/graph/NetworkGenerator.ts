@@ -1,17 +1,17 @@
 // graph/NetworkGenerator.ts
-import { SpeciesGraph } from './core/SpeciesGraph.ts';
-import { Species } from './core/Species.ts';
-import { RxnRule } from './core/RxnRule.ts';
-import { Rxn } from './core/Rxn.ts';
-import { GraphCanonicalizer } from './core/Canonical.ts';
-import { GraphMatcher, clearMatchCache } from './core/Matcher.ts';
-import type { MatchMap } from './core/Matcher.ts';
-import { countEmbeddingDegeneracy } from './core/degeneracy.ts';
-import { Component } from './core/Component.ts';
-import { EnergyService } from './core/EnergyService.ts';
-import type { BNGLEnergyPattern } from '../../types.ts';
-import { Molecule } from './core/Molecule.ts';
-import { BNGLParser } from './core/BNGLParser.ts';
+import { SpeciesGraph } from './core/SpeciesGraph';
+import { Species } from './core/Species';
+import { RxnRule } from './core/RxnRule';
+import { Rxn } from './core/Rxn';
+import { GraphCanonicalizer } from './core/Canonical';
+import { GraphMatcher, clearMatchCache } from './core/Matcher';
+import type { MatchMap } from './core/Matcher';
+import { countEmbeddingDegeneracy } from './core/degeneracy';
+import { Component } from './core/Component';
+import { EnergyService } from './core/EnergyService';
+import type { BNGLEnergyPattern } from '../../types';
+import { Molecule } from './core/Molecule';
+import { BNGLParser } from './core/BNGLParser';
 
 function factorial(n: number): number {
   if (n <= 1) return 1;
@@ -2992,12 +2992,17 @@ export class NetworkGenerator {
     const hasCarryThroughReactant = currentSpeciesIndices.some((reactantIdx) => productIndices.includes(reactantIdx));
 
     // 5. Volume Scaling
-    const { scalingVolume } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
+    const { scalingVolume, scale } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
 
     const hasRateExpression = !!rule.rateExpression;
     const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
 
     let effectiveRate = baseRateConstant * multiplicity;
+
+    // Apply volume scaling for bimolecular+ reactions in compartments
+    if (reactantSpeciesList.length > 1 && scale !== 1) {
+      effectiveRate *= scale;
+    }
 
     // Arrhenius rate law calculation for N-ary rule
     if (rule.isArrhenius && this.energyService) {

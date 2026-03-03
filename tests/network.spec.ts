@@ -1,9 +1,9 @@
 // @ts-nocheck
 // tests/network.spec.ts
 import { describe, it, expect } from 'vitest';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
 
 // Simplified parseBNGL for testing
 function parseBNGLTest(code: string): any {

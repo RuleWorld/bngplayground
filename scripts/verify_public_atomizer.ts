@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { execSync } from 'child_process';
-import { Atomizer } from '../src/lib/atomizer/index.ts';
+import { Atomizer } from '../atomizer-ts/src/index';
 
 // libsbmljs uses 'self', which is not defined in Node.js
 if (typeof self === 'undefined') {

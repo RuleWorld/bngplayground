@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { computeObservableValue, parseObservablePattern } from '../src/utils/dynamicObservable';
+import { computeObservableValue, parseObservablePattern } from '../packages/engine/src/utils/dynamicObservable';
 import { evaluateExpression } from '../components/ExpressionInputPanel';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { SpeciesGraph } from '../src/services/graph/core/SpeciesGraph';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { SpeciesGraph } from '../packages/engine/src/services/graph/core/SpeciesGraph';
 
 describe('Dynamic Observable Pattern Matching', () => {
   const speciesGraphs = new Map<string, SpeciesGraph>();
@@ -133,8 +133,8 @@ describe('Dynamic Observable Pattern Matching', () => {
       // At some time point, 40 complexes have formed
       const counts = [60, 60, 40];
 
-      const obsA = testMatch('A(b)', species, counts);
-      const obsB = testMatch('B(a)', species, counts);
+      const obsA = testMatch('A()', species, counts);
+      const obsB = testMatch('B()', species, counts);
       const obsC = testMatch('A(b!1).B(a!1)', species, counts);
 
       // Molecules A should be 60 (free) + 40 (complex) = 100

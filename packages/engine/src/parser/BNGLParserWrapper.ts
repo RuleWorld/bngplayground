@@ -5,9 +5,9 @@
  * Provides BNG2.pl-compatible parsing for maximum parity.
  */
 import { CharStreams, CommonTokenStream } from 'antlr4ts';
-import { BNGLexer } from './generated/BNGLexer.ts';
-import { BNGParser } from './generated/BNGParser.ts';
-import { BNGLVisitor } from './BNGLVisitor.ts';
+import { BNGLexer } from './generated/BNGLexer';
+import { BNGParser } from './generated/BNGParser';
+import { BNGLVisitor } from './BNGLVisitor';
 import type { BNGLModel } from '../types';
 
 export interface ParseError {
@@ -29,6 +29,30 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
   try {
+    if (!input) {
+      return { 
+        success: true, 
+        errors: [], 
+        model: {
+          name: 'default',
+          parameters: {},
+          moleculeTypes: [],
+          species: [],
+          observables: [],
+          reactionRules: [],
+          reactions: [],
+          compartments: [],
+          functions: [],
+          networkOptions: {},
+          simulationOptions: {},
+          simulationPhases: [],
+          concentrationChanges: [],
+          parameterChanges: [],
+          actions: [],
+          paramExpressions: {}
+        }
+      };
+    }
     // Create lexer and parser
     // Some published BNGL files can start with a UTF-8 BOM (U+FEFF). BNG2.pl
     // accepts this; our lexer should too.

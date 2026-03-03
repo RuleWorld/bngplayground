@@ -1,8 +1,8 @@
 // @ts-nocheck
 import { describe, expect, it } from 'vitest';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
 
 const canon = (g: any) => GraphCanonicalizer.canonicalize(g);
 

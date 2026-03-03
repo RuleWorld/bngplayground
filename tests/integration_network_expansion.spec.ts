@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { parseBNGLStrict } from '../src/parser/BNGLParserWrapper';
+import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion';
 import { loadEvaluator, _setEvaluatorRefForTests } from '../services/simulation/ExpressionEvaluator';
 import { SafeExpressionEvaluator } from '../services/safeExpressionEvaluator';

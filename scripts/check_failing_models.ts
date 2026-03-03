@@ -4,7 +4,7 @@
  */
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseBNGLWithANTLR } from '../src/parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '../packages/engine/src/parser/BNGLParserWrapper';
 
 const MODEL_NAMES = [
     // 20 models that pass BNG2.pl but fail ANTLR (as of 2024-12-20)

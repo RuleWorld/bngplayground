@@ -1,7 +1,7 @@
 import fs from 'fs';
 import path from 'path';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 
 const root = path.resolve(__dirname, '..');
 const digestPath = path.join(root, 'digest.txt');

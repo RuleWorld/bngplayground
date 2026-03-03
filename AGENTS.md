@@ -52,19 +52,19 @@ Notes:
 
 ### Imports
 - Components in root (`App.tsx`, `index.tsx`): Use `./` for same-level imports
-- Components in `components/`: Use `../` for root services, `../../src/` for src/ modules
-- Services in `services/`: Use `../src/` for src/ modules
+- Components in `components/`: Use `../` for root services, `../../packages/engine/src/` for engine modules
+- Services in `services/`: Use `../packages/engine/src/` for engine modules`n- Scripts in `scripts/`: Use `../packages/engine/src/` for engine modules
 - Examples:
   ```typescript
   // From root App.tsx:
   import { bnglService } from './services/bnglService';         // root/services
-  import { getModelFromUrl } from './src/utils/shareUrl';         // src/utils
+  import { getModelFromUrl } from './src/utils/shareUrl';         // src/utils (legacy)
   import { types } from './types';                               // root
 
   // From components/ directory:
   import { bnglService } from '../services/bnglService';         // root/services
   import { types } from '../../types';                          // root
-  import { NetworkGenerator } from '../../src/services/graph/NetworkGenerator'; // src/services
+  import { NetworkGenerator } from '../../packages/engine/src/services/graph/NetworkGenerator'; // engine package`n`n  // From scripts/ directory:`n  import type { BNGLModel } from '../types.ts';                // root`n  import { parseBNGL } from '../services/parseBNGL.ts';         // root/services`n  import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts'; // engine package
   ```
 - Group imports: React/core first, third-party libraries, local modules
 - ES module syntax only (type: "module" in package.json)
@@ -140,7 +140,29 @@ Notes:
 ## Repository Structure
 
 ### Root vs `src/` Split
-The codebase intentionally separates files between root and `src/` directories:
+The codebase uses a **monorepo structure** with core engine code in `packages/engine/`:
+
+**Root Directory (app-level code):**
+- `App.tsx`, `index.tsx` - Application entry point
+- `types.ts` - Central type definitions used across the app
+- `constants.ts` - App-wide constants
+- `components/` - React components (UI layer)
+- `hooks/` - Custom React hooks
+- `services/` - **App-level services** (worker communication, parsing APIs, UI helpers)
+- `public/` - Static assets, model gallery, WASM files
+
+**packages/engine/ (core BioNetGen engine):**
+- `packages/engine/src/parser/` - ANTLR-based BNGL parser implementation
+- `packages/engine/src/services/` - **Core algorithmic services** (graph generation, solvers, analysis)
+  - `simulation/` - ODE/SSA/NFsim solvers, network expansion
+  - `graph/` - Graph algorithms (network generation, matching, canonicalization)
+  - `parity/` - Parity checking utilities
+- `packages/engine/src/utils/` - Utility functions for core algorithms
+- `packages/engine/src/interfaces/` - Engine interfaces
+- `packages/engine/src/types.ts` - Engine-specific types
+
+**src/ Directory (legacy - being migrated):**
+- Some files remain in root `src/` directories:
 
 **Root Directory (app-level code):**
 - `App.tsx`, `index.tsx` - Application entry point

@@ -16,11 +16,11 @@ import {
   GPUReaction,
   convertToGPUReactions,
   isWebGPUODESolverAvailable
-} from '../src/services/WebGPUODESolver';
+} from '../packages/engine/src/services/WebGPUODESolver';
 import {
   isWebGPUSupported,
   isWebGPUReady
-} from '../src/services/WebGPUContext';
+} from '../packages/engine/src/services/WebGPUContext';
 
 describe('WebGPU ODE Solver', () => {
   describe('Availability Detection', () => {

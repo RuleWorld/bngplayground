@@ -27,10 +27,11 @@ export interface ComputedObservableResult {
  * This regex is designed to avoid capturing standalone mathematical operators like '*' as molecules.
  * - Captures identifiers starting with letters or underscores.
  * - Allows molecule wildcards '*' ONLY IF followed by '(', '.', or '@' (to distinguish from multiplication).
+ * - Allows prefix compartment notation '@' followed by identifier and optional ':' or '::'.
  * - Captures complex dot-separated patterns whole.
  * - Captures scientific notation numbers.
  */
-const TOKEN_CANDIDATE_REGEX = /(?:[A-Za-z_][A-Za-z0-9_*]*|\*(?=\()|\*(?=\.)|\*(?=@))(?:\([^)]*\))?(?:@[A-Za-z0-9_]+)?(?:\s*\.\s*[A-Za-z_*][A-Za-z0-9_*]*(?:\([^)]*\))?(?:@[A-Za-z0-9_]+)?)*|[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?/g;
+const TOKEN_CANDIDATE_REGEX = /(?:@[A-Za-z0-9_]+(?::|::))?(?:[A-Za-z_][A-Za-z0-9_*]*|\*(?=\()|\*(?=\.)|\*(?=@))(?:\([^)]*\))?(?:@[A-Za-z0-9_]+)?(?:\s*\.\s*[A-Za-z_*][A-Za-z0-9_*]*(?:\([^)]*\))?(?:@[A-Za-z0-9_]+)?)*|[-+]?[0-9]*\.?[0-9]+(?:[eE][-+]?[0-9]+)?/g;
 
 /**
  * Parse and validate a BNGL observable pattern
@@ -210,6 +211,14 @@ export function validateObservablePattern(pattern: string): string | null {
     let lastIndex = 0;
     let match;
     const mathFuncs = new Set(['exp', 'log', 'log10', 'sqrt', 'abs', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'min', 'max', 'floor', 'ceil']);
+
+    // Pre-check for basic syntax errors before tokenizing
+    if (/[().!~@*]/.test(pattern) && !/[+\-*/^]/.test(pattern)) {
+      const parenCheck = BNGLParser.validatePattern(pattern);
+      if (parenCheck && (parenCheck.includes('parenthesis') || parenCheck.includes('molecule name'))) {
+        return parenCheck;
+      }
+    }
 
     TOKEN_CANDIDATE_REGEX.lastIndex = 0;
     while ((match = TOKEN_CANDIDATE_REGEX.exec(pattern)) !== null) {

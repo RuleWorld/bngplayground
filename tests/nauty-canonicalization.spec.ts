@@ -1,11 +1,11 @@
 // @ts-nocheck
 import { beforeAll, describe, expect, it } from 'vitest';
 
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
-import { Component } from '../src/services/graph/core/Component';
-import { Molecule } from '../src/services/graph/core/Molecule';
-import { NautyService } from '../src/services/graph/core/NautyService';
-import { SpeciesGraph } from '../src/services/graph/core/SpeciesGraph';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
+import { Component } from '../packages/engine/src/services/graph/core/Component';
+import { Molecule } from '../packages/engine/src/services/graph/core/Molecule';
+import { NautyService } from '../packages/engine/src/services/graph/core/NautyService';
+import { SpeciesGraph } from '../packages/engine/src/services/graph/core/SpeciesGraph';
 
 function buildDoubleBondWithTail(order: 'order1' | 'order2'): SpeciesGraph {
   // R has 3 sites; two are used to double-bond to the other R, and one binds an S tail.

@@ -5,7 +5,7 @@ import { join, dirname, resolve, basename } from 'node:path';
 import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD, DEFAULT_PERL5LIB, DEFAULT_BNG_BIN } from '../scripts/bngDefaults.js';
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD, DEFAULT_PERL5LIB, DEFAULT_BNG_BIN } from '../tools/bngDefaults.js';
 
 const ABS_TOL = 1e-6;
 const REL_TOL = 1e-4;

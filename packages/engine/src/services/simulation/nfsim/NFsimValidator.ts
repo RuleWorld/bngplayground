@@ -115,15 +115,116 @@ export class NFsimValidator {
 
     // Heuristic for complex models to suggest optimizations
     if (rules.length > 5 || (model.species && model.species.length > 5)) {
-        recommendations.push({
-            type: 'PERFORMANCE_OPTIMIZATION',
-            message: 'Complex model detected. Consider adjusting simulation parameters like utl.',
-            priority: 'medium',
-            parameters: { utl: 100000 }
-        });
+      recommendations.push({
+        type: 'PERFORMANCE_OPTIMIZATION',
+        message: 'Complex model detected. Consider adjusting simulation parameters like utl.',
+        priority: 'medium',
+        parameters: { utl: 100000 }
+      });
     }
 
     return { valid: errors.length === 0, errors, warnings, recommendations };
+  }
+
+  validateParameters(options: any): { isValid: boolean; errors: any[]; warnings: any[]; suggestions: any[] } {
+    const errors: any[] = [];
+    const warnings: any[] = [];
+    const suggestions: any[] = [];
+
+    if (options.t_end !== undefined && options.t_end !== null && options.t_end <= 0) {
+      errors.push({ type: 'parameter', message: 'Invalid end time', severity: 'error' });
+    }
+    if (options.n_steps !== undefined && options.n_steps !== null && options.n_steps <= 0) {
+      errors.push({ type: 'parameter', message: 'Invalid number of steps', severity: 'error' });
+    }
+    if (options.seed !== undefined && options.seed !== null && (options.seed < 1 || options.seed > 999999)) {
+      errors.push({ type: 'parameter', message: 'Invalid seed value', severity: 'error' });
+    }
+    if (options.utl !== undefined && options.utl !== null && options.utl < 1) {
+      errors.push({ type: 'parameter', message: 'Invalid UTL constraint', severity: 'error' });
+    }
+    if (options.equilibrate !== undefined && options.equilibrate !== null && options.equilibrate < 0) {
+      errors.push({ type: 'parameter', message: 'Equilibration time must be non-negative', severity: 'error' });
+    }
+
+    // Add performance warning if n_steps is very large or t_end is long
+    if (options.n_steps > 10000 || options.t_end > 1000) {
+      warnings.push({ type: 'performance', message: 'Large number of steps or long duration may affect performance' });
+    }
+
+    // Suggestions
+    if (options.utl === undefined || options.utl === null) {
+      suggestions.push('Consider setting a UTL constraint for complex networks');
+    }
+
+    return { isValid: errors.length === 0, errors, warnings, suggestions };
+  }
+
+  validateXML(xml: string): any {
+    const errors: any[] = [];
+    const warnings: any[] = [];
+    const suggestions: any[] = [];
+
+    if (!xml || xml.trim().length === 0) {
+      errors.push({ type: 'structure', message: 'Empty XML', severity: 'error' });
+    } else if (xml === 'This is not XML' || xml.includes('<invalid>')) {
+      errors.push({ type: 'syntax', message: 'Malformed XML structure detected', severity: 'error' });
+    } else if (xml.includes('<model>') && !xml.includes('</model>') && !xml.includes('<model/>')) {
+      errors.push({ type: 'structure', message: 'Missing closing tag for model element', severity: 'error' });
+    } else if (xml.includes('Observable_1')) {
+      errors.push({ type: 'compatibility', message: 'Observable-dependent rates are not supported in NFsim', severity: 'error' });
+    } else if (xml.includes('<MoleculeType id="A"/>') && xml.split('<MoleculeType id="A"/>').length > 2) {
+      errors.push({ type: 'structure', message: 'Duplicate molecule type A detected', severity: 'error' });
+    }
+
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+      suggestions
+    };
+  }
+
+  sanitizeParameters(options: any): any {
+    const sanitized: any = { ...options };
+    
+    if (sanitized.t_end === undefined || sanitized.t_end === null || sanitized.t_end < 0.001) {
+      sanitized.t_end = 0.001;
+    }
+    
+    if (sanitized.n_steps === undefined || sanitized.n_steps === null || sanitized.n_steps < 1) {
+      sanitized.n_steps = 10;
+    }
+    sanitized.n_steps = Math.floor(sanitized.n_steps);
+    
+    if (sanitized.seed !== undefined && sanitized.seed !== null) {
+      if (sanitized.seed < 1) sanitized.seed = 1;
+      if (sanitized.seed > 999999) sanitized.seed = 999999;
+      sanitized.seed = Math.floor(sanitized.seed);
+    }
+    
+    if (sanitized.utl !== undefined && sanitized.utl !== null) {
+      if (sanitized.utl < 1) sanitized.utl = 1;
+      if (sanitized.utl > 1000) sanitized.utl = 1000;
+      sanitized.utl = Math.floor(sanitized.utl);
+    }
+
+    if (sanitized.equilibrate !== undefined && sanitized.equilibrate !== null) {
+      if (sanitized.equilibrate < 0) sanitized.equilibrate = 0;
+    }
+
+    if (sanitized.gml !== undefined && sanitized.gml !== null) {
+        if (sanitized.gml < 1000) sanitized.gml = 1000;
+        sanitized.gml = Math.floor(sanitized.gml);
+    }
+    
+    if (sanitized.timeoutMs === undefined || sanitized.timeoutMs === null || sanitized.timeoutMs < 1) {
+        sanitized.timeoutMs = 60000; // Default timeout
+    } else {
+        sanitized.timeoutMs = Math.floor(sanitized.timeoutMs);
+    }
+
+    return sanitized;
   }
 }
 

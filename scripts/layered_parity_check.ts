@@ -5,10 +5,10 @@ import { execSync } from 'child_process';
 import type { BNGLModel, GeneratorProgress } from '../types.ts';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion.ts';
-import { getSimulationOptionsFromParsedModel } from '../src/utils/simulationOptions.ts';
+import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
 import { simulate } from '../services/simulation/SimulationLoop.ts';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical.ts';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical.ts';
 
 interface ParsedParameter {
   index: number;

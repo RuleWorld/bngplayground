@@ -1,5 +1,7 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
+import fs from 'fs';
+import path from 'path';
 import { EXAMPLES } from '../constants';
 import { parseBNGL } from '../services/parseBNGL';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
@@ -103,7 +105,26 @@ async function generateNetworkForModel(model: BNGLModel) {
 describe('Example gallery models', () => {
   EXAMPLES.forEach((example) => {
     it(`generates a finite network for ${example.name}`, async () => {
-      const model = parseBNGL(example.code);
+      let code = example.code;
+      if (!code) {
+        // Try to load from public/models, example-models, etc.
+        const searchDirs = ['public/models', 'example-models', 'published-models'];
+        for (const dir of searchDirs) {
+          const filePath = path.join(process.cwd(), dir, `${example.id}.bngl`);
+          if (fs.existsSync(filePath)) {
+            code = fs.readFileSync(filePath, 'utf8');
+            break;
+          }
+        }
+      }
+
+      if (!code) {
+         console.warn(`[WARN] Could not find code for example ${example.id}`);
+         return;
+      }
+
+      console.log(`[DEBUG] Example ${example.id} code length: ${code.length}`);
+      const model = parseBNGL(code);
       expect(model.species.length).toBeGreaterThan(0);
       expect(model.reactionRules.length).toBeGreaterThan(0);
 

@@ -1,0 +1,28 @@
+[
+  {
+    "filename": "Barua_2007.bngl",
+    "bng": {
+      "speciesCount": 149,
+      "rxnCount": 1032
+    },
+    "local": {
+      "speciesCount": 149,
+      "rxnCount": 1031
+    },
+    "match": false,
+    "error": null
+  },
+  {
+    "filename": "Barua_2007.bngl",
+    "bng": {
+      "speciesCount": 149,
+      "rxnCount": 1032
+    },
+    "local": {
+      "speciesCount": 149,
+      "rxnCount": 1031
+    },
+    "match": false,
+    "error": null
+  }
+]

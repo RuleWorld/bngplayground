@@ -341,12 +341,10 @@ export function evaluateFunctionalRate(
   try {
     // console.log("[evaluateFunctionalRate] Executing fn:", fn.toString());
     const result = fn(context);
-    if (expression.includes('rate_transcribe')) {
-      // Debug logging preserved logic
-      // const tfNuc = context['TF_nuc'] ?? context['@NU:TF()'] ?? context['TF_nuc()'];
-      // if (Math.random() < 0.01) console.log(`[Debug] rate_transcribe result: ${result} (TF_nuc value: ${tfNuc})`);
+    if (!isFinite(result)) {
+      console.warn(`[SafeExpressionEvaluator] Expression evaluated to non-finite: ${expression} => ${result}`);
     }
-    if (typeof result !== 'number' || !isFinite(result)) {
+    if (typeof result !== 'number' || isNaN(result)) {
       console.error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
       return 0;
     }

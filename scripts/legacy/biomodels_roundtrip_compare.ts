@@ -3,16 +3,16 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import { spawn } from 'node:child_process';
 
-import { fetchBioModelsSbml } from '../services/bioModelsImport';
-import { Atomizer, SBMLParser } from '../src/lib/atomizer';
-import { parseBNGLStrict } from '../src/parser/BNGLParserWrapper';
-import { parseBNGLRegexDeprecated } from '../services/parseBNGL';
-import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion';
-import { loadEvaluator } from '../services/simulation/ExpressionEvaluator';
-import { requiresCompartmentResolution, resolveCompartmentVolumes } from '../services/simulation/CompartmentResolver';
-import { simulate } from '../services/simulation/SimulationLoop';
-import { exportToSBML } from '../services/exportSBML';
-import type { BNGLModel, SimulationOptions, SimulationResults } from '../types';
+import { fetchBioModelsSbml } from '../../services/bioModelsImport';
+import { Atomizer, SBMLParser } from '../../src/lib/atomizer';
+import { parseBNGLStrict } from '../../packages/engine/src/parser/BNGLParserWrapper';
+import { parseBNGLRegexDeprecated } from '../../services/parseBNGL';
+import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
+import { loadEvaluator } from '../../services/simulation/ExpressionEvaluator';
+import { requiresCompartmentResolution, resolveCompartmentVolumes } from '../../services/simulation/CompartmentResolver';
+import { simulate } from '../../services/simulation/SimulationLoop';
+import { exportToSBML } from '../../services/exportSBML';
+import type { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 
 type RoundtripResult = {
   modelId: string;

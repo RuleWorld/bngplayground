@@ -1,6 +1,6 @@
 
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { GraphMatcher as Matcher } from '../src/services/graph/core/Matcher';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { GraphMatcher as Matcher } from '../packages/engine/src/services/graph/core/Matcher';
 import { describe, it } from 'vitest';
 
 describe('Matcher Strict Unbound Checks', () => {

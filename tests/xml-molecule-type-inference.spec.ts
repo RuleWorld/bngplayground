@@ -26,7 +26,7 @@ describe('BNGXMLWriter Molecule Type Inference', () => {
         { name: 'L(l,l)', initialConcentration: 1000 }
       ],
       observables: [
-        { type: 'Species', name: 'R1', pattern: 'R==1' }
+        { type: 'Species', name: 'R1', pattern: 'R()' }
       ],
       reactionRules: [
         {

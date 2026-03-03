@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../../scripts/bngDefaults.js';
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../../tools/bngDefaults.js';
 import { BNGLModel, SimulationOptions } from '../../types';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '../../services/simulation/SimulationLoop';

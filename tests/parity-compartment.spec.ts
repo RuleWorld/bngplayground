@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
-import { parseBNGLStrict } from '../src/parser/BNGLParserWrapper';
+import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import * as fs from 'fs';
 import { execSync } from 'child_process';
 import * as path from 'path';

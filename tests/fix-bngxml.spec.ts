@@ -1,7 +1,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import * as fs from 'fs';
 
 describe('BNGXMLWriter Fixes', () => {

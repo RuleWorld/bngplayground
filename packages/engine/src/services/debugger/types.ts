@@ -1,4 +1,4 @@
-import type { BNGLModel } from '../../../types';
+import type { BNGLModel } from '../../types';
 
 export type RuleMultiplicity = 'unimolecular' | 'bimolecular' | 'multimolecular';
 

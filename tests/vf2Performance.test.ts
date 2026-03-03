@@ -1,10 +1,10 @@
 // @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import { performance } from 'perf_hooks';
-import { GraphMatcher } from '../src/services/graph/core/Matcher';
-import { SpeciesGraph } from '../src/services/graph/core/SpeciesGraph';
-import { Molecule } from '../src/services/graph/core/Molecule';
-import { Component } from '../src/services/graph/core/Component';
+import { GraphMatcher } from '../packages/engine/src/services/graph/core/Matcher';
+import { SpeciesGraph } from '../packages/engine/src/services/graph/core/SpeciesGraph';
+import { Molecule } from '../packages/engine/src/services/graph/core/Molecule';
+import { Component } from '../packages/engine/src/services/graph/core/Component';
 
 const makeComponent = (name: string) => new Component(name);
 

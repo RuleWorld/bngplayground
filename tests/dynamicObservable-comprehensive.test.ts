@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { computeDynamicObservable, validateObservablePattern } from '../src/utils/dynamicObservable';
+import { computeDynamicObservable, validateObservablePattern } from '../packages/engine/src/utils/dynamicObservable';
 import { SimulationResults } from '../types';
 
 describe('Dynamic Observable Category - Comprehensive Testing', () => {
@@ -64,7 +64,7 @@ describe('Dynamic Observable Category - Comprehensive Testing', () => {
         it('should match everything with no bond annotation (standard observable behavior)', () => {
             const results = createMockResults(speciesNames, [10, 20, 30]);
             const result = computeDynamicObservable(
-                { name: 'anyA', pattern: 'A(b)', type: 'molecules' },
+                { name: 'anyA', pattern: 'A()', type: 'molecules' },
                 results,
                 speciesNames
             );

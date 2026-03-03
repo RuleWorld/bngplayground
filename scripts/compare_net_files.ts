@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
-import { GraphCanonicalizer } from '../src/services/graph/core/Canonical.ts';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
+import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical.ts';
 
 type CliArgs = {
   webNet: string;

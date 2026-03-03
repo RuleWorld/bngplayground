@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, copyFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, basename } from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../../scripts/bngDefaults.js';
+import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../../tools/bngDefaults.js';
 import { parseBNGL } from '../../services/parseBNGL';
 
 import fs from 'node:fs';

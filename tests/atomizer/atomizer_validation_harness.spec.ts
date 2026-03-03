@@ -7,7 +7,7 @@ import {
   compareTimeCourses,
   generateReport,
   validateModel,
-} from '../../atomizer_validation_harness';
+} from './validation_harness';
 
 describe('atomizer validation harness', () => {
   afterEach(() => {

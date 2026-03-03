@@ -4,8 +4,8 @@
  * Tests for BNGL pattern matching accuracy and edge cases
  */
 import { describe, it, expect } from 'vitest';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
-import { GraphMatcher } from '../src/services/graph/core/Matcher';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
+import { GraphMatcher } from '../packages/engine/src/services/graph/core/Matcher';
 import { countPatternMatches } from '../services/parity/PatternMatcher';
 
 describe('Pattern Matching - Simple Patterns', () => {
