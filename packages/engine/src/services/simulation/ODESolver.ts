@@ -1101,10 +1101,24 @@ interface CVodeModule {
     jacContribOffsets: number, jacContribRxnIdx: number,
     jacContribCoeffs: number
   ) => number;
+  _cvode_load_network?: (
+    nReactions: number, nSpecies: number,
+    rateConstants: number, nReactantsPerRxn: number,
+    reactantOffsets: number, reactantIdx: number,
+    reactantStoich: number, scalingVolumes: number,
+    speciesOffsets: number, speciesRxnIdx: number,
+    speciesStoich: number, speciesVolumes: number,
+    jacRowPtr: number, jacColIdx: number,
+    jacContribOffsets: number, jacContribRxnIdx: number,
+    jacContribCoeffs: number
+  ) => number;
   _destroy_network?: (handle: number) => void;
   _update_rate_constants?: (handle: number, rateConstants: number, nReactions: number) => void;
+  _cvode_update_rate_constants?: (handle: number, rateConstants: number, nReactions: number) => void;
   _unload_network?: (handle: number) => void;
+  _cvode_unload_network?: (handle: number) => void;
   _bind_network?: (mem: number, handle: number) => void;
+  _cvode_bind_network?: (mem: number, handle: number) => void;
 }
 
 // Type for Jacobian function: fills column-major matrix J[i + j*neq] = df_i/dy_j
@@ -1281,15 +1295,20 @@ export class CVODESolver {
     }
     this.currentT = NaN;
     this.yOut = null;
-    if (m && m._unload_network && this.networkHandle) {
-      m._unload_network(this.networkHandle);
+    const unloadNetwork = m?._cvode_unload_network ?? m?._unload_network;
+    if (m && unloadNetwork && this.networkHandle) {
+      unloadNetwork(this.networkHandle);
       this.networkHandle = 0;
     }
   }
 
   private uploadNetworkByteCode(bc: NetworkByteCode): boolean {
     const m = CVODESolver.module;
-    if (!m || !m._load_network) return false;
+    if (!m) return false;
+    const loadNetwork = m._cvode_load_network ?? m._load_network;
+    const unloadNetwork = m._cvode_unload_network ?? m._unload_network;
+    const bindNetwork = m._cvode_bind_network ?? m._bind_network;
+    if (!loadNetwork) return false;
 
     // Allocate WASM heap memory
     const rateConstPtr = m._malloc(bc.nReactions * 8);
@@ -1344,28 +1363,43 @@ export class CVODESolver {
       m.HEAPF64.set(bc.jacContribCoeffs!, jacContribCoeffsPtr >> 3);
     }
 
-    const handle = m._load_network(
+    const handle = loadNetwork(
       bc.nReactions, bc.nSpecies,
       rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr,
       scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr,
       jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr
     );
-    this.networkHandle = handle;
 
     // Free temp pointers (C side copies to its own arrays)
     [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr].forEach(p => p && m._free(p));
 
+    if (!handle) {
+      console.warn('[CVODESolver] Failed to load native bytecode network handle; falling back to JS RHS callback.');
+      return false;
+    }
+
+    // Bytecode path requires bind_network support to attach the loaded network to solver memory.
+    // Older checked-in loader builds can expose load/unload but not bind_network.
+    if (!bindNetwork) {
+      console.warn('[CVODESolver] Native bytecode network loaded but bind_network export is unavailable; falling back to JS RHS callback.');
+      if (unloadNetwork) unloadNetwork(handle);
+      return false;
+    }
+
+    this.networkHandle = handle;
     return true;
   }
 
   updateRateConstants(newRates: Float64Array): void {
     const m = CVODESolver.module;
-    if (!m || !m._update_rate_constants || !this.networkHandle) return;
+    if (!m || !this.networkHandle) return;
+    const updateRateConstants = m._cvode_update_rate_constants ?? m._update_rate_constants;
+    if (!updateRateConstants) return;
 
     const ptr = m._malloc(newRates.length * 8);
     if (!ptr) return;
     m.HEAPF64.set(newRates, ptr >> 3);
-    m._update_rate_constants(this.networkHandle, ptr, newRates.length);
+    updateRateConstants(this.networkHandle, ptr, newRates.length);
     m._free(ptr);
   }
 
@@ -1406,26 +1440,28 @@ export class CVODESolver {
 
     // Try bytecode path first if available
     let bcLoaded = false;
-    if (this.networkByteCode && m._load_network) {
+    if (this.networkByteCode && (m._cvode_load_network || m._load_network)) {
       bcLoaded = this.uploadNetworkByteCode(this.networkByteCode);
-      if (bcLoaded) {
-        console.log('[CVODESolver] Using native WASM bytecode RHS (no JS callback crossings)');
-      }
     }
 
+    // Always set JS callback for safety; native bytecode path bypasses it once bound.
+    // This prevents stale callback usage when loader exports differ across builds.
+    m.derivativeCallback = (_t: number, yPtr: number, ydotPtr: number) => {
+      const buf = m.HEAPF64.buffer;
+      if (!this.yView || !this.dydtView || this.cachedDerivBuffer !== buf || this.cachedYPtr !== yPtr || this.cachedYdotPtr !== ydotPtr) {
+        this.cachedDerivBuffer = buf;
+        this.cachedYPtr = yPtr;
+        this.cachedYdotPtr = ydotPtr;
+        this.yView = new Float64Array(buf, yPtr, neq);
+        this.dydtView = new Float64Array(buf, ydotPtr, neq);
+      }
+      this.f(this.yView, this.dydtView);
+    };
+
     if (!bcLoaded) {
-      // Fallback: Set callback once per initialization.
-      m.derivativeCallback = (_t: number, yPtr: number, ydotPtr: number) => {
-        const buf = m.HEAPF64.buffer;
-        if (!this.yView || !this.dydtView || this.cachedDerivBuffer !== buf || this.cachedYPtr !== yPtr || this.cachedYdotPtr !== ydotPtr) {
-          this.cachedDerivBuffer = buf;
-          this.cachedYPtr = yPtr;
-          this.cachedYdotPtr = ydotPtr;
-          this.yView = new Float64Array(buf, yPtr, neq);
-          this.dydtView = new Float64Array(buf, ydotPtr, neq);
-        }
-        this.f(this.yView, this.dydtView);
-      };
+      // No native bytecode binding available; JS callback path is active.
+    } else {
+      console.log('[CVODESolver] Using native WASM bytecode RHS (no JS callback crossings)');
     }
 
     if (this.options.rootFunction && this.options.numRoots) {
@@ -1498,8 +1534,16 @@ export class CVODESolver {
       return { success: false as const, errorMessage: 'CVODE initialization failed' };
     }
 
-    if (this.networkHandle && m._bind_network) {
-      m._bind_network(solverMem, this.networkHandle);
+    const bindNetwork = m._cvode_bind_network ?? m._bind_network;
+    const unloadNetwork = m._cvode_unload_network ?? m._unload_network;
+    if (this.networkHandle && bindNetwork) {
+      try {
+        bindNetwork(solverMem, this.networkHandle);
+      } catch (e) {
+        console.warn('[CVODESolver] Failed to bind native network to solver; using JS RHS callback.', e);
+        if (unloadNetwork) unloadNetwork(this.networkHandle);
+        this.networkHandle = 0;
+      }
     }
 
     this.solverMem = solverMem;

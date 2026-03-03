@@ -137,6 +137,7 @@ interface CliOptions {
   generateWebNet: boolean;
   generateWebCdat: boolean;
   verbose: boolean;
+  failOnSolverFallback: boolean;
   explicit?: Partial<ModelFiles>;
   limit?: number;
   timeoutMs?: number;
@@ -1129,10 +1130,13 @@ async function ensureGeneratedArtifacts(modelName: string, files: ModelFiles, op
 
       let run = await runSimulation('cvode');
       if (!run.hasRows || !run.hasObs) {
+        if (opts.failOnSolverFallback) {
+          throw new Error('CVODE produced incomplete trajectories; failing fast (solver fallback disabled).');
+        }
         log(`    [Artifacts] CVODE produced incomplete trajectories for ${modelName}; retrying with cvode_auto...`, 'warn');
         run = await runSimulation('cvode_auto');
       }
-      if (!run.hasRows || !run.hasObs) {
+      if ((!run.hasRows || !run.hasObs) && !opts.failOnSolverFallback) {
         log(`    [Artifacts] cvode_auto still incomplete for ${modelName}; retrying with rk4 fallback...`, 'warn');
         run = await runSimulation('rk4');
       }
@@ -1419,6 +1423,7 @@ function parseCli(argv: string[]): CliOptions {
   let generateWebNet = true;
   let generateWebCdat = true;
   let verbose = true;
+  let failOnSolverFallback = true;
   let limit: number | undefined;
   let timeoutMs: number | undefined;
   const explicit: Partial<ModelFiles> = {};
@@ -1457,6 +1462,14 @@ function parseCli(argv: string[]): CliOptions {
       verbose = false;
       continue;
     }
+    if (a === '--fail-on-solver-fallback') {
+      failOnSolverFallback = true;
+      continue;
+    }
+    if (a === '--allow-solver-fallback') {
+      failOnSolverFallback = false;
+      continue;
+    }
     if (a === '--bng2-net') { explicit.bng2Net = argv[++i]; continue; }
     if (a === '--web-net') { explicit.webNet = argv[++i]; continue; }
     if (a === '--bng2-cdat') { explicit.bng2Cdat = argv[++i]; continue; }
@@ -1474,6 +1487,7 @@ function parseCli(argv: string[]): CliOptions {
     generateWebNet,
     generateWebCdat,
     verbose,
+    failOnSolverFallback,
     explicit: hasExplicit ? explicit : undefined,
     limit,
     timeoutMs,
@@ -1523,7 +1537,7 @@ function discoverAllModelsFromConstants(): string[] {
 async function main() {
   const opts = parseCli(process.argv.slice(2));
   VERBOSE = opts.verbose;
-  log(`[Main] Options: models=[${opts.models.join(', ')}], all=${opts.all}, out=${opts.outPath}, genNet=${opts.generateWebNet}, genCdat=${opts.generateWebCdat}, limit=${opts.limit}, timeoutMs=${opts.timeoutMs ?? 180000}`);
+  log(`[Main] Options: models=[${opts.models.join(', ')}], all=${opts.all}, out=${opts.outPath}, genNet=${opts.generateWebNet}, genCdat=${opts.generateWebCdat}, failOnSolverFallback=${opts.failOnSolverFallback}, limit=${opts.limit}, timeoutMs=${opts.timeoutMs ?? 180000}`);
   if (opts.explicit) log(`       Explicit overrides: ${JSON.stringify(opts.explicit, null, 2)}`);
 
   let models = [...opts.models];
@@ -1549,7 +1563,7 @@ async function main() {
 
   if (models.length === 0) {
     console.log('Usage: npx tsx scripts/layered_parity_check.ts <model...> | --all [--out path]');
-    console.log('       Optional: --no-generate-web-net --no-generate-web-cdat');
+    console.log('       Optional: --no-generate-web-net --no-generate-web-cdat --allow-solver-fallback');
     process.exit(1);
   }
 

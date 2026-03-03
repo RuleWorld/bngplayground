@@ -7,8 +7,8 @@ import { buildContactMap } from '../../services/visualization/contactMapBuilder'
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-// Use a repository fixture so CI does not depend on local absolute paths.
-const MODEL_PATH = resolve(__dirname, '..', 'pac', 'atomized', 'il6-jak-stat-pathway.bngl');
+// Use a tracked fixture so CI does not depend on locally generated PAC files.
+const MODEL_PATH = resolve(__dirname, '..', '..', 'example-models', 'il6-jak-stat-pathway.bngl');
 
 describe('Contact map reproduction', () => {
     it('should not produce edges with full-complex names', () => {

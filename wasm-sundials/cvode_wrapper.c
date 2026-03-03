@@ -1,6 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <math.h>
+#include <stdint.h>
 
 // Ensure realtype is defined
 typedef double realtype;
@@ -71,7 +72,14 @@ int f_bridge(realtype t, N_Vector y, N_Vector ydot, void *user_data) {
     CvodeWrapper* mem = (CvodeWrapper*)user_data;
     double* y_data = N_VGetArrayPointer(y);
     double* ydot_data = N_VGetArrayPointer(ydot);
-    
+
+    // If user_data is not yet attached, fall back to JS RHS callback.
+    // This prevents null-deref traps when native network bytecode is unavailable.
+    if (!mem) {
+        js_f((double)t, y_data, ydot_data);
+        return 0;
+    }
+
     if (mem->network_bc) {
         // Fast path: interpret bytecode entirely in WASM
         network_dydt(mem->network_bc, (int)N_VGetLength(y), y_data, ydot_data);
@@ -254,6 +262,7 @@ void* init_solver(int neq, double t0, double* y0_data, double reltol, double abs
     
     // Init and Attach
     CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
+    CVodeSetUserData(mem->cvode_mem, mem);
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
     CVodeSetLinearSolver(mem->cvode_mem, mem->LS, mem->A);
@@ -307,6 +316,7 @@ void* init_solver_adams(int neq, double t0, double* y0_data, double reltol, doub
 
     // Init and Attach
     CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
+    CVodeSetUserData(mem->cvode_mem, mem);
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     // CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
 
@@ -353,6 +363,7 @@ void* init_solver_jac(int neq, double t0, double* y0_data, double reltol, double
     
     // Init and Attach
     CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
+    CVodeSetUserData(mem->cvode_mem, mem);
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
     CVodeSetLinearSolver(mem->cvode_mem, mem->LS, mem->A);
@@ -401,6 +412,7 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     
     // Init and Attach
     CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
+    CVodeSetUserData(mem->cvode_mem, mem);
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
     
@@ -571,7 +583,7 @@ int get_root_info(void* ptr, int* rootsfound) {
 
 // ---- Network Bytecode API ----
 
-void unload_network(void* handle) {
+void unload_network(uintptr_t handle) {
     if (!handle) return;
     NetworkByteCode* bc = (NetworkByteCode*)handle;
     if (bc->rateConstants) free(bc->rateConstants);
@@ -593,7 +605,7 @@ void unload_network(void* handle) {
     free(bc);
 }
 
-void* load_network(
+uintptr_t load_network(
     int nReactions, int nSpecies,
     double* rateConstants,     // [nReactions]
     int* nReactantsPerRxn,     // [nReactions]
@@ -612,7 +624,7 @@ void* load_network(
     double* jacContribCoeffs   // [totalContribEntries]
 ) {
     NetworkByteCode* bc = (NetworkByteCode*)malloc(sizeof(NetworkByteCode));
-    if (!bc) return NULL;
+    if (!bc) return 0;
 
     bc->nReactions = nReactions;
     bc->nSpecies = nSpecies;
@@ -676,10 +688,10 @@ void* load_network(
     }
     bc->rates_cache = (double*)malloc(nReactions * sizeof(double));
 
-    return (void*)bc;
+    return (uintptr_t)bc;
 }
 
-void bind_network(void* solver_ptr, void* network_ptr) {
+void bind_network(uintptr_t solver_ptr, uintptr_t network_ptr) {
     if (!solver_ptr || !network_ptr) return;
     CvodeWrapper* mem = (CvodeWrapper*)solver_ptr;
     NetworkByteCode* bc = (NetworkByteCode*)network_ptr;
@@ -694,11 +706,51 @@ void bind_network(void* solver_ptr, void* network_ptr) {
     }
 }
 
-void update_rate_constants(void* handle, double* rateConstants, int nReactions) {
+void update_rate_constants(uintptr_t handle, double* rateConstants, int nReactions) {
     if (!handle) return;
     NetworkByteCode* bc = (NetworkByteCode*)handle;
     if (nReactions != bc->nReactions) return;
     for (int i = 0; i < nReactions; i++) bc->rateConstants[i] = rateConstants[i];
+}
+
+// Stable, uniquely-prefixed wrappers for JS/WASM interop.
+// These avoid potential symbol/signature ambiguity with generic names.
+uintptr_t cvode_load_network(
+    int nReactions, int nSpecies,
+    double* rateConstants,
+    int* nReactantsPerRxn,
+    int* reactantOffsets,
+    int* reactantIdx,
+    int* reactantStoich,
+    double* scalingVolumes,
+    int* speciesOffsets,
+    int* speciesRxnIdx,
+    double* speciesStoich,
+    double* speciesVolumes,
+    int* jacRowPtr,
+    int* jacColIdx,
+    int* jacContribOffsets,
+    int* jacContribRxnIdx,
+    double* jacContribCoeffs
+) {
+    return load_network(
+        nReactions, nSpecies,
+        rateConstants, nReactantsPerRxn, reactantOffsets, reactantIdx, reactantStoich,
+        scalingVolumes, speciesOffsets, speciesRxnIdx, speciesStoich, speciesVolumes,
+        jacRowPtr, jacColIdx, jacContribOffsets, jacContribRxnIdx, jacContribCoeffs
+    );
+}
+
+void cvode_unload_network(uintptr_t handle) {
+    unload_network(handle);
+}
+
+void cvode_bind_network(uintptr_t solver_ptr, uintptr_t network_ptr) {
+    bind_network(solver_ptr, network_ptr);
+}
+
+void cvode_update_rate_constants(uintptr_t handle, double* rateConstants, int nReactions) {
+    update_rate_constants(handle, rateConstants, nReactions);
 }
 
 #ifdef __cplusplus
