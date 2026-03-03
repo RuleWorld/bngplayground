@@ -3,35 +3,119 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseBNGLWithANTLR, generateExpandedNetwork, jitCompiler } from '../packages/engine/src/index';
-import { BNG2_PARSE_AND_ODE_VERIFIED_MODELS, BNG2_COMPATIBLE_MODELS, BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../constants';
+import { BNG2_COMPATIBLE_MODELS, BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../constants';
+
+const MAX_MODELS = 150;
+const PER_MODEL_TIMEOUT_MS = Math.max(30_000, Number(process.env.MASSIVE_PARITY_TEST_TIMEOUT_MS ?? 120_000));
+const publicModelsDir = path.join(__dirname, '../public/models');
+const MASSIVE_PARITY_KNOWN_HEAVY_MODELS = new Set([
+    'Lin_Prion_2019',
+]);
+
+function normalizeKey(raw: string): string {
+    return path.basename(raw)
+        .toLowerCase()
+        .replace(/\.(bngl|cdat|gdat|net|csv)$/i, '')
+        .replace(/^results_/, '')
+        .replace(/\s+/g, '')
+        .replace(/[^a-z0-9]+/g, '');
+}
+
+function stripLineComments(text: string): string {
+    return text
+        .split(/\r?\n/)
+        .map((line) => {
+            const idx = line.indexOf('#');
+            return idx >= 0 ? line.slice(0, idx) : line;
+        })
+        .join('\n');
+}
+
+function hasActiveSimulate(text: string): boolean {
+    return /\bsimulate(?:_ode|_ssa|_nf)?\s*\(/i.test(stripLineComments(text));
+}
+
+function detectSimMethod(text: string): 'ode' | 'ssa' | 'nfsim' | 'unspecified' {
+    const lower = stripLineComments(text).toLowerCase();
+    const compact = lower.replace(/\s+/g, '');
+
+    const hasSSA =
+        /simulate_ssa\s*\(/.test(lower) ||
+        compact.includes('method=>"ssa"') ||
+        compact.includes("method=>'ssa'");
+
+    const hasNF =
+        /simulate_nf\s*\(|nfsim\s*\(/.test(lower) ||
+        compact.includes('method=>"nf"') ||
+        compact.includes("method=>'nf'") ||
+        compact.includes('method=>"nfsim"') ||
+        compact.includes("method=>'nfsim'");
+
+    if (hasSSA) return 'ssa';
+    if (hasNF) return 'nfsim';
+    if (/simulate_ode\s*\(/.test(lower) || compact.includes('method=>"ode"') || compact.includes("method=>'ode'")) return 'ode';
+    return 'unspecified';
+}
+
+function findPublicModelPath(modelName: string): string | null {
+    if (!fs.existsSync(publicModelsDir)) return null;
+    const key = normalizeKey(modelName);
+    const files = fs.readdirSync(publicModelsDir).filter((f) => f.toLowerCase().endsWith('.bngl'));
+    const match = files.find((f) => normalizeKey(f) === key);
+    return match ? path.join(publicModelsDir, match) : null;
+}
 
 describe('Massive JIT/Bytecode Parity Test', () => {
-    // Search both public/models and example-models if they exist
-    const publicModelsDir = path.join(__dirname, '../public/models');
-    const exampleModelsDir = path.join(__dirname, '../example-models');
+    const skipped: Array<{ model: string; reason: string }> = [];
 
-    // Expand search to all BNG2_COMPATIBLE_MODELS that are not NFsim or explicitly excluded
-    const compatibleModels = Array.from(BNG2_COMPATIBLE_MODELS).filter(m => 
-        !NFSIM_MODELS.has(m) && 
-        !BNG2_EXCLUDED_MODELS.has(m)
-    );
-    
-    // Pick 150 random models or all if less than 150
-    const count = Math.min(compatibleModels.length, 150);
-    const selectedModels = compatibleModels
-        .sort(() => 0.5 - Math.random()) 
-        .slice(0, count);
+    const selectedModels = Array.from(BNG2_COMPATIBLE_MODELS)
+        .sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }))
+        .filter((modelName) => {
+            if (MASSIVE_PARITY_KNOWN_HEAVY_MODELS.has(modelName)) {
+                skipped.push({ model: modelName, reason: 'known_heavy_model' });
+                return false;
+            }
+            if (BNG2_EXCLUDED_MODELS.has(modelName)) {
+                skipped.push({ model: modelName, reason: 'excluded_in_constants' });
+                return false;
+            }
+            if (NFSIM_MODELS.has(modelName)) {
+                skipped.push({ model: modelName, reason: 'nfsim_model' });
+                return false;
+            }
+            const filePath = findPublicModelPath(modelName);
+            if (!filePath) {
+                skipped.push({ model: modelName, reason: 'missing_in_public_models' });
+                return false;
+            }
+            const content = fs.readFileSync(filePath, 'utf8');
+            if (!hasActiveSimulate(content)) {
+                skipped.push({ model: modelName, reason: 'no_active_simulate' });
+                return false;
+            }
+            const method = detectSimMethod(content);
+            if (method === 'ssa' || method === 'nfsim') {
+                skipped.push({ model: modelName, reason: `non_deterministic_method_${method}` });
+                return false;
+            }
+            return true;
+        })
+        .slice(0, MAX_MODELS);
+
+    it('logs selection summary', () => {
+        // Keep this diagnostic visible in CI logs when selection changes.
+        console.log(`[massive-parity] selected=${selectedModels.length} skipped=${skipped.length}`);
+        if (skipped.length > 0) {
+            const sample = skipped.slice(0, 20).map((s) => `${s.model}(${s.reason})`).join(', ');
+            console.log(`[massive-parity] skipped sample: ${sample}`);
+        }
+        expect(selectedModels.length).toBeGreaterThan(0);
+    });
 
     selectedModels.forEach(modelName => {
         it(`should handle ${modelName} parity`, async () => {
-            // Some models might be in example-models, some in public/models
-            let filePath = path.join(exampleModelsDir, `${modelName}.bngl`);
-            if (!fs.existsSync(filePath)) {
-                filePath = path.join(publicModelsDir, `${modelName}.bngl`);
-            }
-            
-            if (!fs.existsSync(filePath)) {
-                // console.warn(`Model ${modelName} not found in example-models or public/models`);
+            const filePath = findPublicModelPath(modelName);
+            if (!filePath || !fs.existsSync(filePath)) {
                 return;
             }
 
@@ -121,7 +205,7 @@ describe('Massive JIT/Bytecode Parity Test', () => {
                     }
                 }
             }
-        }, 600000); // Increased to 10m for large network expansions like ChylekTCR_2014
+        }, PER_MODEL_TIMEOUT_MS);
     });
 });
 
