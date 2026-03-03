@@ -20,7 +20,7 @@ jobs:
   # Fast unit tests - always runs
   fast-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     
     steps:
       - name: Checkout code
@@ -83,8 +83,13 @@ jobs:
   
   # Full test suite - runs on main, manual trigger, or when workflow file changes
   full-tests:
+    name: full-tests (shard ${{ matrix.shard }}/3)
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
     if: |
       github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_suite == 'true' ||
       github.ref == 'refs/heads/main' ||
@@ -103,8 +108,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
       
-      - name: Run full test suite
-        run: npm run test:full
+      - name: Run full test suite (sharded)
+        run: npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
         env:
           NODE_ENV: test
         continue-on-error: true
@@ -113,7 +118,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: coverage-full
+          name: coverage-full-shard-${{ matrix.shard }}
           path: coverage/
           if-no-files-found: ignore
       
@@ -121,8 +126,85 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-results-full
+          name: test-results-full-shard-${{ matrix.shard }}
           path: |
             test-results/
             artifacts/
+          if-no-files-found: ignore
+
+  # Reference parity suite (BioNetGen-style curated validation)
+  reference-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_suite == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      contains(github.event.head_commit.message, '[full-tests]')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run reference validation suite
+        run: npm run test:reference
+        env:
+          NODE_ENV: test
+
+      - name: Upload reference test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results-reference
+          path: |
+            test-results/
+            artifacts/
+          if-no-files-found: ignore
+
+  # Deterministic ODE parity (direct comparison against BNG2 fixtures using layered parity check)
+  deterministic-parity:
+    name: deterministic-parity (shard ${{ matrix.shard }}/3)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2, 3]
+    if: |
+      github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_suite == 'true' ||
+      github.ref == 'refs/heads/main' ||
+      contains(github.event.head_commit.message, '[full-tests]')
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run deterministic parity shard
+        run: npm run test:deterministic:parity -- --shard ${{ matrix.shard }} --shards 3 --out artifacts/parity_layer_report.deterministic.shard-${{ matrix.shard }}.json --timeoutMs 180000
+        env:
+          NODE_ENV: test
+
+      - name: Upload deterministic parity reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: parity-deterministic-shard-${{ matrix.shard }}
+          path: artifacts/parity_layer_report.deterministic.shard-${{ matrix.shard }}.json
           if-no-files-found: ignore

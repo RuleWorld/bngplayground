@@ -207,7 +207,7 @@ export function getAnnotationsByQualifier(
  * This is used to identify species that represent the same biological entity
  */
 export function findEquivalentSpecies(model: SBMLModel): Map<string, string[]> {
-  const annotationGroups = new DefaultDict<string[]>(() => []);
+  const annotationGroups = new DefaultDict<string, string[]>(() => []);
   
   for (const [id, species] of model.species) {
     const annotations = parseSpeciesAnnotations(species);
@@ -384,7 +384,9 @@ export function computeAnnotationStats(model: SBMLModel): AnnotationStats {
 // Delegate UniProt network access to the dedicated service implementation
 import { fetchUniProtEntry as fetchUniProtEntryService, UniProtEntry } from '../services/uniprot';
 
-export { UniProtEntry, fetchUniProtEntryService as fetchUniProtEntry };
+// UniProtEntry is a type-only export; use export type to satisfy isolatedModules
+export type { UniProtEntry };
+export { fetchUniProtEntryService as fetchUniProtEntry };
 
 
 /**

@@ -33,7 +33,7 @@ interface VisualizationPanelProps {
   onSimulate: (options: SimulationOptions) => void;
   isSimulating: boolean;
   onCancelSimulation: () => void;
-  simulationMethod?: 'ode' | 'ssa' | 'nf';
+  simulationMethod?: 'ode' | 'ssa' | 'nf' | 'nfsim';
   activeTabIndex?: number;
   onActiveTabIndexChange?: (idx: number) => void;
   bnglCode?: string;

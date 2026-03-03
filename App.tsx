@@ -41,7 +41,7 @@ function App() {
   const [status, setStatus] = useState<Status | null>(null);
 
   const [isSimulating, setIsSimulating] = useState(false);
-  const [currentMethod, setCurrentMethod] = useState<'ode' | 'ssa' | 'nf'>('ode');
+  const [currentMethod, setCurrentMethod] = useState<'ode' | 'ssa' | 'nf' | 'nfsim'>('ode');
   const [generationProgress, setGenerationProgress] = useState<string>('');
   const [progressStats, setProgressStats] = useState<{ species: number; reactions: number; iteration: number }>({ species: 0, reactions: 0, iteration: 0 });
   const [simulationProgress, setSimulationProgress] = useState<number | undefined>(0);

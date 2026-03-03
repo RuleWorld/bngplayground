@@ -12,7 +12,7 @@ interface RulesTabProps {
   results: SimulationResults | null;
   selectedRuleId?: string | null;
   onSelectRule?: (ruleId: string) => void;
-  simulationMethod?: 'ode' | 'ssa' | 'nf';
+  simulationMethod?: 'ode' | 'ssa' | 'nf' | 'nfsim';
 }
 
 const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;

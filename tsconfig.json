@@ -4,6 +4,7 @@
     "experimentalDecorators": true,
     "useDefineForClassFields": false,
     "module": "ESNext",
+    "baseUrl": ".",
     "lib": [
       "ES2022",
       "DOM",
@@ -25,6 +26,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "@bngplayground/engine": [
+        "packages/engine/src/index.ts"
+      ],
+      "@bngplayground/engine/*": [
+        "packages/engine/src/*"
       ]
     },
     "allowImportingTsExtensions": true,
@@ -51,6 +58,9 @@
     "debug_cbngl_simple2.ts",
     "src/parser/generated",
     "src/wasm",
-    "nfsim"
+    "nfsim",
+    "artifacts",
+    "tests/**",
+    "tools/**"
   ]
 }

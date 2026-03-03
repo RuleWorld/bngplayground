@@ -187,10 +187,10 @@ function highlightContext(
 }
 
 /** Cytoscape stylesheet entries for rule overlay classes */
-export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
+export const ruleOverlayStyles: cytoscape.StylesheetCSS[] = [
   {
     selector: 'node.rule-center',
-    style: {
+    css: {
       'border-color': '#e74c3c',
       'border-width': 3,
       'background-color': '#fdedec',
@@ -199,7 +199,7 @@ export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
   },
   {
     selector: 'node.rule-center:parent',
-    style: {
+    css: {
       'border-color': '#e74c3c',
       'border-width': 3,
       'background-color': '#fcf0f0',
@@ -208,7 +208,7 @@ export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
   },
   {
     selector: 'edge.rule-center',
-    style: {
+    css: {
       'line-color': '#e74c3c',
       'width': 3,
       'z-index': 10,
@@ -216,7 +216,7 @@ export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
   },
   {
     selector: 'node.rule-context',
-    style: {
+    css: {
       'border-color': '#3498db',
       'border-width': 2,
       'background-color': '#eaf2f8',
@@ -225,7 +225,7 @@ export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
   },
   {
     selector: 'node.rule-context:parent',
-    style: {
+    css: {
       'border-color': '#3498db',
       'border-width': 2,
       'background-color': '#eef6fc',
@@ -234,7 +234,7 @@ export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
   },
   {
     selector: 'edge.rule-context',
-    style: {
+    css: {
       'line-color': '#3498db',
       'width': 2,
       'line-style': 'dashed',
@@ -243,7 +243,7 @@ export const ruleOverlayStyles: cytoscape.Stylesheet[] = [
   },
   {
     selector: '.rule-dimmed',
-    style: {
+    css: {
       'opacity': 0.15,
     },
   },

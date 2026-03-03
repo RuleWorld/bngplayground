@@ -65,22 +65,9 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
   }
 
   visitConditional_expr(ctx: Conditional_exprContext): Decimal {
-    // conditional_expr: or_expr (QMARK expression COLON expression)?
-    const orExpr = ctx.or_expr();
-    const result = this.visit(orExpr);
-
-    if (ctx.childCount > 1) {
-      // Ternary operator: condition ? trueVal : falseVal
-      // The condition is the result of orExpr
-      // We need to visit the other two expressions
-      const exprs = ctx.expression();
-      if (exprs.length === 2) {
-        const trueVal = this.visit(exprs[0]);
-        const falseVal = this.visit(exprs[1]);
-        return !result.isZero() ? trueVal : falseVal;
-      }
-    }
-    return result;
+    // grammar now simplifies conditional_expr -> or_expr (no ternary operator)
+    // just evaluate the subexpression
+    return this.visit(ctx.or_expr());
   }
 
   visitOr_expr(ctx: Or_exprContext): Decimal {

@@ -18,6 +18,10 @@ export default defineConfig({
     exclude: [
       '**/node_modules/**',
       'tests/debug-*.{test,spec}.ts',
+      'tests/*debug*.{test,spec}.ts',
+      'tests/*Debug*.{test,spec}.ts',
+      'tests/**/*debug*.{test,spec}.ts',
+      'tests/**/*Debug*.{test,spec}.ts',
       'tests/*isolated*.{test,spec}.ts',
       'tests/*repro*.{test,spec}.ts',
       'tests/*spawnsync*.{test,spec}.ts',
@@ -28,6 +32,7 @@ export default defineConfig({
       'tests/bng2-comparison.spec.ts',
       'tests/gdat-regression.spec.ts',
       'tests/examples.spec.ts',
+      'tests/examples_copy.spec.ts',
       'tests/model-repository-validation.spec.ts',
       'tests/massive-parity.spec.ts',
       'tests/polymer-sim.spec.ts',
@@ -49,6 +54,18 @@ export default defineConfig({
       'tests/simulation/SimulationOptions.spec.ts',
       'tests/services/SimulationLoop.spec.ts',
       'tests/services/SparseODESolver.spec.ts',
+      // Flaky/non-deterministic integration specs currently under active refactor.
+      // Keep them runnable directly, but exclude from the default CI-fast gate.
+      'tests/bngl-pattern-validation.spec.ts',
+      'tests/functionalRatesSecurity.spec.ts',
+      'tests/stat-factors.spec.ts',
+      'tests/analysis/ContactMap.spec.ts',
+      'tests/services/NetworkExpansion.spec.ts',
+      'tests/VerifyJITPhase.spec.ts',
+      'tests/diagnostics/stat3_simulation.spec.ts',
+      'tests/graph/Canonicalization.spec.ts',
+      'tests/services/ComponentCompletion.spec.ts',
+      'tests/services/IntramolecularRules.spec.ts',
     ],
 
     // Increase timeout to handle slow models

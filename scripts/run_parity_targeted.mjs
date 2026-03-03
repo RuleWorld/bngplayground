@@ -37,8 +37,10 @@ function runStep(label, cmd, stepArgs) {
 
 console.log('[parity-targeted] Cleaning stale NET files for targeted models...');
 for (const model of modelArgs) {
-  const file = path.join(webOutputDir, `${toSafeFileStem(model)}.net`);
-  removeIfExists(file);
+  const stem = toSafeFileStem(model);
+  removeIfExists(path.join(webOutputDir, `${stem}.net`));
+  removeIfExists(path.join(webOutputDir, `${stem}.cdat`));
+  removeIfExists(path.join(webOutputDir, `results_${stem.toLowerCase()}.csv`));
 }
 
 const parityExit = runStep(

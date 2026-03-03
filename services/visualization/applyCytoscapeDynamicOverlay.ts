@@ -104,10 +104,10 @@ export function applyCytoscapeDynamicOverlay(
 }
 
 /** Cytoscape styles for dynamic overlay (added to stylesheet) */
-export const dynamicOverlayStyles: cytoscape.Stylesheet[] = [
+export const dynamicOverlayStyles: cytoscape.StylesheetCSS[] = [
   {
     selector: '.dynamic-active',
-    style: {
+    css: {
       'transition-property': 'background-opacity, border-width, width, opacity',
       'transition-duration': 200,
     },

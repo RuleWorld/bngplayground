@@ -109,8 +109,15 @@ interface LayeredReport {
   netFilesCompared: boolean;
   cdatFilesCompared: boolean;
   gdatFilesCompared: boolean;
+  cdatComparable: boolean;
+  gdatComparable: boolean;
   firstDivergingLayer: 'none' | 'parameters' | 'species' | 'reactions' | 'groups' | 'cdat' | 'gdat';
   summary: string;
+}
+
+interface TimeSeriesComparison {
+  diffs: TrajectoryDiff[];
+  comparable: boolean;
 }
 
 interface ModelFiles {
@@ -672,8 +679,10 @@ function compareGroups(bng2: ParsedNet, web: ParsedNet): GroupDiff[] {
   return out;
 }
 
-function compareTimeSeries(bng2Points: DatPoint[], webPoints: DatPoint[]): TrajectoryDiff[] {
-  if (bng2Points.length === 0 || webPoints.length === 0) return [];
+function compareTimeSeries(bng2Points: DatPoint[], webPoints: DatPoint[]): TimeSeriesComparison {
+  if (bng2Points.length === 0 || webPoints.length === 0) {
+    return { diffs: [], comparable: false };
+  }
 
   const bNames = new Set([...bng2Points[0].values.keys()].filter((k) => k.toLowerCase() !== 'time'));
   const wNames = new Set([...webPoints[0].values.keys()].filter((k) => k.toLowerCase() !== 'time'));
@@ -697,11 +706,13 @@ function compareTimeSeries(bng2Points: DatPoint[], webPoints: DatPoint[]): Traje
   };
 
   const out: TrajectoryDiff[] = [];
+  let anyObservableComparable = false;
 
   for (const obs of common) {
     let maxRelErr = 0;
     let maxAbsErr = 0;
     let firstBad = Infinity;
+    let matchedPoints = 0;
 
     for (const bp of bng2Points) {
       const wp = findClosestWeb(bp.time);
@@ -709,6 +720,7 @@ function compareTimeSeries(bng2Points: DatPoint[], webPoints: DatPoint[]): Traje
       const bv = bp.values.get(obs);
       const wv = wp.values.get(obs);
       if (bv === undefined || wv === undefined) continue;
+      matchedPoints++;
 
       const abs = Math.abs(bv - wv);
       const rel = relErr(bv, wv);
@@ -733,9 +745,14 @@ function compareTimeSeries(bng2Points: DatPoint[], webPoints: DatPoint[]): Traje
       firstBadTime: firstBad === Infinity ? -1 : firstBad,
       tier,
     });
+
+    if (matchedPoints >= 2) anyObservableComparable = true;
   }
 
-  return out.sort((a, b) => b.maxRelErr - a.maxRelErr);
+  return {
+    diffs: out.sort((a, b) => b.maxRelErr - a.maxRelErr),
+    comparable: common.length > 0 && anyObservableComparable,
+  };
 }
 
 function classifyRootCause(
@@ -743,6 +760,26 @@ function classifyRootCause(
   opts?: { simMethod?: 'ode' | 'ssa' | 'nfsim' | 'unspecified' | 'missing'; model?: string }
 ): { rootCause: RootCause; firstDivergingLayer: LayeredReport['firstDivergingLayer'] } {
   const deterministicLike = (opts?.simMethod ?? 'unspecified') === 'ode' || (opts?.simMethod ?? 'unspecified') === 'unspecified';
+
+  if (deterministicLike) {
+    const hasStaticEvidence = partial.netFilesCompared;
+    const hasDynamicEvidence = partial.cdatComparable || partial.gdatComparable;
+    if (!hasStaticEvidence && !hasDynamicEvidence) {
+      return {
+        rootCause: 'unknown',
+        firstDivergingLayer: partial.gdatFilesCompared ? 'gdat' : (partial.cdatFilesCompared ? 'cdat' : 'none'),
+      };
+    }
+
+    const hadTrajectoryFiles = partial.cdatFilesCompared || partial.gdatFilesCompared;
+    const hasComparableTrajectory = partial.cdatComparable || partial.gdatComparable;
+    if (hadTrajectoryFiles && !hasComparableTrajectory) {
+      return {
+        rootCause: 'unknown',
+        firstDivergingLayer: partial.gdatFilesCompared ? 'gdat' : 'cdat',
+      };
+    }
+  }
 
   if (partial.parameterDiffs.some((d) => d.relErr > REL_TOL_SOLVER)) return { rootCause: 'parameter_mismatch', firstDivergingLayer: 'parameters' };
 
@@ -857,7 +894,7 @@ function buildSummary(report: LayeredReport): string {
     `Simulation method: ${report.simulationMethod}`,
     `Root cause: ${report.rootCause}`,
     `First diverging layer: ${report.firstDivergingLayer}`,
-    `NET compared: ${report.netFilesCompared} | CDAT compared: ${report.cdatFilesCompared} | GDAT compared: ${report.gdatFilesCompared}`,
+    `NET compared: ${report.netFilesCompared} | CDAT compared: ${report.cdatFilesCompared} (comparable=${report.cdatComparable}) | GDAT compared: ${report.gdatFilesCompared} (comparable=${report.gdatComparable})`,
     `Diffs: param=${report.parameterDiffs.length}, species=${report.speciesDiffs.length}, rxn=${report.reactionDiffs.length}, groups=${report.groupDiffs.length}`,
     `Worst trajectory error: ${worstAny ? worstAny.maxRelErr.toExponential(3) : 'n/a'}`,
   ].join('\n');
@@ -1049,6 +1086,7 @@ async function ensureGeneratedArtifacts(modelName: string, files: ModelFiles, op
       const expanded = await generateExpandedNetwork(parsed, () => {}, () => {});
       log(`    Expansion complete: ${expanded.species.length} species, ${expanded.reactions.length} reactions.`);
       const simOptions = getSimulationOptionsFromParsedModel(expanded, 'ode', {
+        // Deterministic parity must use CVODE to stay aligned with stiff-system reference behavior.
         solver: 'cvode',
       });
       log(`    Starting simulation with solver=${simOptions.solver}, t_end=${simOptions.t_end}, n_steps=${simOptions.n_steps}`);
@@ -1179,6 +1217,8 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
   let webNet: ParsedNet | undefined;
   let cdatDiffs: TrajectoryDiff[] = [];
   let gdatDiffs: TrajectoryDiff[] = [];
+  let cdatComparable = false;
+  let gdatComparable = false;
 
   let netFilesCompared = !!(preparedFiles.bng2Net && preparedFiles.webNet);
   let cdatFilesCompared = !!(preparedFiles.bng2Cdat && preparedFiles.webCdat);
@@ -1244,9 +1284,9 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
       webCdat = alignCdat(webCdat, webNet, bng2Net);
       const hasCompartments = bng2Net.species.some((s) => s.name.trim().startsWith('@'));
       if (hasCompartments) {
-        const rawWorst = (compareTimeSeries(bng2Cdat, webCdat)[0]?.maxRelErr ?? 0);
+        const rawWorst = (compareTimeSeries(bng2Cdat, webCdat).diffs[0]?.maxRelErr ?? 0);
         const rescaled = rescaleCdatForCompartments(bng2Cdat, webCdat, bng2Net);
-        const rescaledWorst = (compareTimeSeries(bng2Cdat, rescaled)[0]?.maxRelErr ?? 0);
+        const rescaledWorst = (compareTimeSeries(bng2Cdat, rescaled).diffs[0]?.maxRelErr ?? 0);
         if (rescaledWorst < rawWorst) {
           log(`      [Compartment] Rescaling CDAT unit-space: worst error ${rawWorst.toExponential(3)} -> ${rescaledWorst.toExponential(3)}`);
           webCdat = rescaled;   // ← this line was missing
@@ -1254,8 +1294,13 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
       }
     }
 
-    cdatDiffs = compareTimeSeries(bng2Cdat, webCdat);
+    const cdatComparison = compareTimeSeries(bng2Cdat, webCdat);
+    cdatDiffs = cdatComparison.diffs;
+    cdatComparable = cdatComparison.comparable;
     log(`      CDAT Diff: ${cdatDiffs.length} trajectories compared`);
+    if (!cdatComparable) {
+      log(`      CDAT files exist but do not have enough comparable trajectory data.`, 'warn');
+    }
   } else if (cdatFilesCompared && !deterministicLike) {
     log(`    [Parity] Skipping CDAT trajectory comparison for ${modelName} (method=${simulationMethod})`);
     cdatFilesCompared = false;
@@ -1272,8 +1317,13 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
     const webSeries = preparedFiles.webGdat!.toLowerCase().endsWith('.csv') ? parseCsv(webGdatRaw) : parseDat(webGdatRaw);
     log(`      BNG2 Gdat: ${bng2Gdat.length} timepoints, Web series: ${webSeries.length} timepoints`);
     
-    gdatDiffs = compareTimeSeries(bng2Gdat, webSeries);
+    const gdatComparison = compareTimeSeries(bng2Gdat, webSeries);
+    gdatDiffs = gdatComparison.diffs;
+    gdatComparable = gdatComparison.comparable;
     log(`      GDAT Diff: ${gdatDiffs.length} trajectories compared`);
+    if (!gdatComparable) {
+      log(`      GDAT files exist but do not have enough comparable trajectory data.`, 'warn');
+    }
   } else if (gdatFilesCompared && !deterministicLike) {
     log(`    [Parity] Skipping GDAT trajectory comparison for ${modelName} (method=${simulationMethod})`);
     gdatFilesCompared = false;
@@ -1291,6 +1341,8 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
     netFilesCompared,
     cdatFilesCompared,
     gdatFilesCompared,
+    cdatComparable,
+    gdatComparable,
   };
 
   const { rootCause, firstDivergingLayer } = classifyRootCause(partial, { simMethod: simulationMethod, model: modelName });
@@ -1477,6 +1529,8 @@ async function main() {
         netFilesCompared: false,
         cdatFilesCompared: false,
         gdatFilesCompared: false,
+        cdatComparable: false,
+        gdatComparable: false,
         firstDivergingLayer: 'none',
         summary: `Error or Timeout: ${e.message}`
       });

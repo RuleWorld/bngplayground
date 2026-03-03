@@ -67,8 +67,8 @@ function pickPhase(model: BNGLModel, method: SimulationOptions['method']): Simul
  * If model has multiple phases, returns the method of the first phase.
  * If no phases, defaults to 'ode'.
  */
-export function resolveAutoMethod(model: BNGLModel, method: SimulationOptions['method']): 'ode' | 'ssa' | 'nf' {
-  if (method !== 'default') return method;
+export function resolveAutoMethod(model: BNGLModel, method: SimulationOptions['method']): 'ode' | 'ssa' | 'nf' | 'nfsim' {
+  if (method !== 'default') return method as any; // caller is responsible for passing valid string
 
   const phases = model.simulationPhases ?? [];
   if (phases.length > 0) {

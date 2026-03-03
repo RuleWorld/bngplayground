@@ -66,8 +66,8 @@ export interface BNGLModel {
   moleculeTypes: BNGLMoleculeType[];
   species: BNGLSpecies[];
   observables: BNGLObservable[];
-  reactions: BNGLReaction[];
-  reactionRules: ReactionRule[];
+  reactions?: BNGLReaction[];
+  reactionRules?: ReactionRule[];
   compartments?: BNGLCompartment[];
   functions?: BNGLFunction[];
 }

@@ -32,6 +32,7 @@ export { NetworkExporter } from './services/graph/NetworkExporter';
 
 // ── Feature Flags ──────────────────────────────────────────────────
 export { getFeatureFlags, setFeatureFlags, registerCacheClearCallback } from './featureFlags';
+export type { FeatureFlags } from './featureFlags';
 
 // ── Simulation ─────────────────────────────────────────────────────
 export { generateExpandedNetwork } from './services/simulation/NetworkExpansion';
