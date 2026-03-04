@@ -107,6 +107,8 @@ const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   max: Math.max,
   min: Math.min,
   mratio: mratio, // BioNetGen special function for Kummer hypergeometric ratio
+  FunctionProduct: (a: number, b: number) => a * b, // BNG2 compatibility
+  functionproduct: (a: number, b: number) => a * b, // case-insensitive fallback
   sign: Math.sign ?? ((x: number) => (x > 0 ? 1 : x < 0 ? -1 : 0)),
   trunc: Math.trunc ?? ((x: number) => (x < 0 ? Math.ceil(x) : Math.floor(x))),
   hypot: Math.hypot ?? ((...xs: number[]) => Math.sqrt(xs.reduce((s, v) => s + v * v, 0))),

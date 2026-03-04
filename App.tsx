@@ -56,6 +56,34 @@ function App() {
   const [loadedModelName, setLoadedModelName] = useState<string | null>(null);
   const [loadedModelId, setLoadedModelId] = useState<string | null>(null);
 
+  useEffect(() => {
+    const unsub = bnglService.onProgress((payload) => {
+      if (payload.message) setGenerationProgress(payload.message);
+      if (payload.species !== undefined) {
+        setProgressStats(prev => ({ ...prev, species: payload.species }));
+      }
+      if (payload.reactions !== undefined) {
+        setProgressStats(prev => ({ ...prev, reactions: payload.reactions }));
+      }
+      if (payload.iteration !== undefined) {
+        setProgressStats(prev => ({ ...prev, iteration: payload.iteration }));
+      }
+      if (payload.simulationProgress !== undefined) {
+        setSimulationProgress(payload.simulationProgress);
+      }
+      if (payload.simulationTime !== undefined) {
+        setSimulationTime(payload.simulationTime);
+      }
+      if (payload.message && (payload.source === 'nfsim-progress' || payload.source === 'nfsim-console')) {
+        // Try to extract time label for display
+        const tm = payload.message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||
+                   payload.message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
+        if (tm) setSimulationTimeLabel(tm[1]);
+      }
+    });
+    return unsub;
+  }, []);
+
   const [editorSelection] = useState<{ startLineNumber: number; endLineNumber: number } | undefined>(undefined);
   const [viewMode, setViewMode] = useState<'code' | 'design'>('code');
   // Store designer text separately so switching modes doesn't lose content

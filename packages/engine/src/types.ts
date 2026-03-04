@@ -50,9 +50,13 @@ export interface BNGLReaction {
     products: string[];
     rate: string;
     rateConstant: number;
+    name?: string;
     rateExpression?: string;
     isFunctionalRate?: boolean;
     propensityFactor?: number;
+    degeneracy?: number;
+    statFactor?: number;
+    totalRate?: boolean;
     productStoichiometries?: number[];
     scalingVolume?: number;
     isArrhenius?: boolean;

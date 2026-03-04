@@ -31,6 +31,53 @@ const getRuntimeHints = () => {
 const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
   if (!module) return null;
 
+  // Priority 1: runNFsim wrapper (provided by nfsim.js – includes all arg handling,
+  // ExitStatus wrapping, -utl, error checks, etc.).  Use this before falling back to
+  // raw FS + callMain so we don't re-implement the same logic with missing pieces.
+  if (typeof module.runNFsim === 'function') {
+    const run = (xml: string, options: Record<string, unknown> = {}) => {
+      if (typeof xml !== 'string') {
+        throw new Error('NFsim run expects XML text input.');
+      }
+      const opts = options ?? {};
+      const progressCb = typeof (opts as any).progressCallback === 'function'
+        ? (opts as any).progressCallback as (msg: string) => void
+        : undefined;
+
+      // Wire module.print/printErr to the progress callback so NFsim stdout is forwarded.
+      let oldPrint: ((s: string) => void) | undefined;
+      let oldPrintErr: ((s: string) => void) | undefined;
+      if (progressCb && module) {
+        if (typeof module.print === 'function') {
+          oldPrint = module.print.bind(module);
+          module.print = (s: any) => { try { progressCb(String(s)); } catch {} try { oldPrint?.(s); } catch {} };
+        }
+        if (typeof module.printErr === 'function') {
+          oldPrintErr = module.printErr.bind(module);
+          module.printErr = (s: any) => { try { progressCb(String(s)); } catch {} try { oldPrintErr?.(s); } catch {} };
+        }
+      }
+
+      try {
+        // Reset ABORT/EXITSTATUS so the module can be reused across multiple simulations.
+        if (module) {
+          module.ABORT = false;
+          module.EXITSTATUS = 0;
+        }
+        return module.runNFsim(xml, opts);
+      } finally {
+        if (progressCb) {
+          if (oldPrint) module.print = oldPrint;
+          if (oldPrintErr) module.printErr = oldPrintErr;
+        }
+      }
+    };
+    const reset = typeof module.resetNFsim === 'function'
+      ? module.resetNFsim.bind(module)
+      : module.reset?.bind(module);
+    return { run, reset };
+  }
+
   const hasFs = module.FS && typeof module.FS.writeFile === 'function' && typeof module.FS.readFile === 'function';
   const hasCallMain = typeof module.callMain === 'function';
 
@@ -125,8 +172,38 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         args.push('-v');
       }
 
+      // Reset ABORT flag and EXITSTATUS before each callMain to allow reuse of the same Emscripten module
+      // if it was previously halted or exited.
+      if (module) {
+        module.ABORT = false;
+        module.EXITSTATUS = 0;
+        // Some Emscripten versions use NO_EXIT_RUNTIME but may still set this
+        if (typeof module.reset === 'function') {
+          try {
+            module.reset();
+          } catch (e) {
+            console.warn('[NFsimRuntimeLoader] module.reset() failed', e);
+          }
+        }
+      }
+
+      let callMainError: unknown = null;
       try {
         module.callMain(args);
+      } catch (e: unknown) {
+        // Emscripten throws ExitStatus (an object with a `status` property) when the
+        // process exits – even on clean exit (status 0).  Treat status-0 as success and
+        // fall through so we can read the output file.  Any other value is a real error.
+        const isExitStatus = e != null && typeof (e as any).status === 'number';
+        if (isExitStatus) {
+          const code = (e as any).status as number;
+          if (code !== 0) {
+            callMainError = new Error(`NFsim exited with code ${code}`);
+          }
+          // code === 0 → successful exit, callMainError stays null
+        } else {
+          callMainError = e;
+        }
       } finally {
         // restore wrapped functions
         if (progressCb) {
@@ -135,6 +212,10 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
           if (origConsoleLog) console.log = origConsoleLog;
           if (origConsoleError) console.error = origConsoleError;
         }
+      }
+
+      if (callMainError != null) {
+        throw callMainError;
       }
 
       const output = module.FS.readFile(outPath, { encoding: 'utf8' });
@@ -254,6 +335,7 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
       }
 
       const url = moduleUrl || `${normalizedBase}nfsim.js`;
+      console.log(`[NFsimRuntimeLoader] Loading NFsim from ${url}`);
       try {
         const mod = await importModuleFromUrl(url);
         const factoryFn = (mod?.default ?? mod?.createNFsimModule ?? mod?.NFsimModule) as NFsimModuleFactory | undefined;

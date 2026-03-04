@@ -195,16 +195,14 @@ export class BNGXMLWriter {
             deleteMolecules: Boolean(r.deleteMolecules)
           });
 
-          const opsTag = operationsXml ? `\n      <ListOfOperations>\n${operationsXml}      </ListOfOperations>` : '';
+          const rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+
+          // operationsXml from buildRuleOperations already includes the <ListOfOperations> wrapper — use it directly
+          const opsTag = operationsXml;
 
           return `\n    <ReactionRule id="${ruleId}" name="${ruleName}" symmetry_factor="1">\n` +
             `      <ListOfReactantPatterns>${reactantPatterns}\n      </ListOfReactantPatterns>\n` +
-            `      <ListOfProductPatterns>${productPatterns}\n      </ListOfProductPatterns>\n` +
-            `      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n` +
-            `        <ListOfRateConstants>\n            <RateConstant value="${escapeXml(finalRateValue)}"/>\n        </ListOfRateConstants>\n` +
-            `      </RateLaw>\n` +
-            `      ${mapXml}${opsTag}\n` +
-            `    </ReactionRule>\n`;
+            `      <ListOfProductPatterns>${productPatterns}\n      </ListOfProductPatterns>${mapXml}${rateLawXml}${opsTag}\n    </ReactionRule>`;
         });
       })
       .join('');
@@ -490,11 +488,15 @@ export class BNGXMLWriter {
       const matchIdx = prodRef.label
         ? reactantRefs.findIndex((reactRef, rIdx) => {
           if (reactantUsed.has(rIdx)) return false;
+          // When label is present, it MUST match for the molecule to be the same identity
           return reactRef.name === prodRef.name && reactRef.label === prodRef.label;
         })
         : reactantRefs.findIndex((reactRef, rIdx) => {
           if (reactantUsed.has(rIdx)) return false;
-          return signature(reactRef) === signature(prodRef);
+          // Heuristic: same name and same set of components (names) usually implies same molecule
+          // across the transformation, especially in simple BioNetGen rules.
+          // Note: NFsim requires a complete mapping; if components differ, this heuristic might fail.
+          return reactRef.name === prodRef.name && reactRef.componentNames.join(',') === prodRef.componentNames.join(',');
         });
       if (matchIdx >= 0) {
         const reactRef = reactantRefs[matchIdx];
@@ -543,11 +545,11 @@ export class BNGXMLWriter {
           const targetId = prodPattern?.moleculeIdMap.get(prodRef.molIdx);
           if (targetId) {
             mapItems.push(`<MapItem sourceID="${sourceId}" targetID="${targetId}"/>`);
-          } else {
-            mapItems.push(`<MapItem sourceID="${sourceId}" targetID="${sourceId}"/>`);
+            addComponentMapItems(pattern, prodPattern, molIdx, prodRef.molIdx);
           }
-          addComponentMapItems(pattern, prodPattern ?? null, molIdx, prodRef.molIdx);
         } else {
+          // Molecule is deleted/consumed. NFsim requires a complete <Map> where every
+          // source item is accounted for. Map to self as a placeholder.
           mapItems.push(`<MapItem sourceID="${sourceId}" targetID="${sourceId}"/>`);
           addComponentMapItems(pattern, null, molIdx);
         }

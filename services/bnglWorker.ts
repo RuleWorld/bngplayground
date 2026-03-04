@@ -30,9 +30,22 @@ import {
 
 // SafeExpressionEvaluator will be dynamically imported only when functional rates are enabled to avoid bundling vulnerable libs
 // Using official ANTLR parser for bng2.pl parity (util polyfill added in vite.config.ts)
-import { parseBNGLWithANTLR } from '@bngplayground/engine';
+import { parseBNGLWithANTLR, CVODESolver } from '@bngplayground/engine';
 import { Atomizer } from '../src/lib/atomizer';
 import { analyseGraph } from './igraphLoader';
+
+// Wire up the CVODE factory with a lazy dynamic import so:
+//   1. The worker doesn't crash at init time — a static import of the Emscripten CJS file
+//      fails immediately in an ESM worker because the file has no top-level ES exports
+//      until our appended `export default` is processed by Vite's CJS→ESM transform.
+//   2. Vite emits cvode_loader.js as a separate chunk instead of inlining the entire
+//      ~1 MB WASM-glue file into the worker bundle.
+//
+// NOTE: return the *constructor function* (not the result of calling it) so that
+// ODESolver.init() can invoke it with { locateFile } options that redirect the
+// .wasm fetch from services/cvode_loader.wasm → /bngplayground/cvode.wasm.
+CVODESolver.cvodeModuleFactory = () =>
+  import('./cvode_loader.js').then((m: any) => m.default ?? m);
 
 const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
   ? (self as unknown as DedicatedWorkerGlobalScope)

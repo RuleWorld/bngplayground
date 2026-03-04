@@ -84,4 +84,10 @@ describe('Rate Law Parity Audit', () => {
 
         expect(rate).toBeCloseTo(manualRate, 4);
     });
+
+    it('should expand quoted FunctionProduct and evaluate product', () => {
+        const expr = expandRateLawMacros('FunctionProduct("k1", "k2")');
+        const result = evaluateFunctionalRate(expr, { k1: 2, k2: 3 }, {});
+        expect(result).toBeCloseTo(6, 10);
+    });
 });

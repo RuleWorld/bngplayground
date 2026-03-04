@@ -75,5 +75,10 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     expect(fn({ x: 5 })).toBe(5);
     expect(fn({ x: -5 })).toBe(5);
   });
+
+  it('supports FunctionProduct(a,b) for BNG2 parity', () => {
+    const fn = compile('FunctionProduct(k1, k2)', ['k1', 'k2']);
+    expect(fn({ k1: 2, k2: 3 })).toBe(6);
+  });
 });
 

@@ -1218,14 +1218,12 @@ export class CVODESolver {
           const modulePath = './cvode_node.ts';
           loader = resolveLoader(await import(/* @vite-ignore */ modulePath));
         } else {
-          console.log('[ODESolver] Loading CVODE via cvode_loader (default)');
-          // Use Function constructor to avoid TypeScript compile-time path checking
-          const importDynamic = new Function('path', 'return import(path)');
-          try {
-            loader = resolveLoader(await importDynamic('../../../../services/cvode_loader.js'));
-          } catch {
-            loader = resolveLoader(await importDynamic('@/services/cvode_loader.js'));
-          }
+          // In browser/worker context, cvodeModuleFactory must be injected by the app layer
+          // (see bnglWorker.ts). If we reach here without a factory, it's a setup error.
+          throw new Error(
+            '[ODESolver] CVODESolver.cvodeModuleFactory is not set. ' +
+            'The app must inject the CVODE loader before simulating.'
+          );
         }
 
         this.module = await loader({

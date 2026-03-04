@@ -19,7 +19,7 @@ export interface ExpressionEvaluator {
 }
 
 /**
- * Expand BNG2 built-in rate law macros (Sat, MM, Hill, Arrhenius).
+ * Expand BNG2 built-in rate law macros (Sat, MM, Hill, FunctionProduct).
  *
  * PARITY NOTE: This logic replicates BNG2's pre-processing of rate laws (defined in `BNGAction.pm` / `RateLaw.cpp`).
  * 
@@ -44,6 +44,13 @@ export function expandRateLawMacros(
   const S = firstReactantName || 'ridx0';
   const E = secondReactantName || 'ridx1';
   let expr = rateExpr.trim();
+
+  // FunctionProduct("f1(...)","f2(...)") -> (f1(...)) * (f2(...))
+  // BNG2 emits quoted argument strings for FunctionProduct in some formats.
+  expr = expr.replace(
+    /\bFunctionProduct\s*\(\s*"([^"]+)"\s*,\s*"([^"]+)"\s*\)/gi,
+    (_, lhs, rhs) => `((${lhs.trim()}) * (${rhs.trim()}))`
+  );
 
   // Sat(k, K) -> k / (K + S)
   // BNG2: Saturation kinetics (single substrate)
@@ -97,7 +104,7 @@ export function expandRateLawMacros(
  * Check if expression contains BNG2 rate law macros.
  */
 export function containsRateLawMacro(expr: string): boolean {
-  return /\b(Sat|MM|Hill)\s*\(/i.test(expr);
+  return /\b(Sat|MM|Hill|FunctionProduct)\s*\(/i.test(expr);
 }
 
 // PERFORMANCE OPTIMIZATION: Cache for pre-expanded expressions

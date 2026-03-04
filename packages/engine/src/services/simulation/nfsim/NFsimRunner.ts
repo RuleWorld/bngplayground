@@ -67,7 +67,7 @@ export async function runNFsimSimulation(
 
   try {
     const xml = BNGXMLWriter.write(inputModel);
-    const VERBOSE_NFSIM_DEBUG = false; // set true to enable NFsim runner debug
+    const VERBOSE_NFSIM_DEBUG = true; // Enabled to help investigate why iteration isn't showing
     if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] Generated XML:\n', xml);
     const hasSpeciesObservables = (inputModel.observables || [])
       .some((obs) => String(obs.type ?? '').toLowerCase() === 'species');
@@ -107,6 +107,7 @@ export async function runNFsimSimulation(
     };
 
     const gdat = await runNFsim(xml, { ...runOptions, progressCallback });
+    if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] gdat output (first 800 chars):\n', gdat.slice(0, 800));
 
     // Ensure final progress update shows completed time
     (globalThis as any).postMessage({ id: jobId ?? -1, type: 'progress', payload: { message: 'Simulation complete', simulationProgress: 100, simulationTime: runOptions.t_end } });

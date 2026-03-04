@@ -20,3 +20,8 @@ if (typeof exports === 'object' && typeof module === 'object') {
   module.exports.default = createCVodeModule;
 } else if (typeof define === 'function' && define['amd'])
   define([], () => createCVodeModule);
+
+// ESM default export so this file can be statically/dynamically imported as an ES module.
+// The CJS/AMD blocks above only execute when `module`/`define` are present (e.g., Node.js);
+// in an ESM browser context they are unreachable, so this export is the sole export.
+export default createCVodeModule;

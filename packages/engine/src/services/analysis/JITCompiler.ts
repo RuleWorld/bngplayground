@@ -328,7 +328,7 @@ export class JITCompiler {
                 rateConstant: rxn.rateExpression || rxn.rate,
                 scalingVolume: rxn.scalingVolume, // Extract scaling volume
                 totalRate: rxn.totalRate, // Handle total rate
-                statisticalFactor: rxn.degeneracy // Pass degeneracy for symbolic expressions
+                statisticalFactor: rxn.statFactor // BNG2 parity: symbolic rates scale by statFactor
             };
         });
 

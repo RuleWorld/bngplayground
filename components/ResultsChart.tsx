@@ -17,6 +17,7 @@ interface ResultsChartProps {
   highlightedSeries?: string[];
   expressions?: CustomExpression[];
   isNFsim?: boolean; // Flag to indicate if this is NFsim data (counts vs concentrations)
+  isSSA?: boolean;   // Flag for SSA (Gillespie)
 }
 
 type ZoomDomain = {
@@ -642,7 +643,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             {speciesToPlot.filter(filterVisibleSpecies).map((speciesName, i) => (
               <Line
                 key={speciesName}
-                type="monotone"
+                type='monotone'
                 dataKey={yAxisScale === 'log' ? `__${speciesName}` : speciesName}
                 name={speciesName}
                 stroke={CHART_COLORS[i % CHART_COLORS.length]}
@@ -659,7 +660,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             {expressions.map((expr) => (
               <Line
                 key={expr.id}
-                type="monotone"
+                type='monotone'
                 dataKey={yAxisScale === 'log' ? `__${expr.name}` : expr.name}
                 name={expr.name}
                 stroke={expr.color}

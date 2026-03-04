@@ -638,6 +638,7 @@ export async function generateExpandedNetwork(
                 isFunctionalRate,
                 rateExpression: foldedRateExpression,
                 degeneracy,
+                statFactor,
                 totalRate,
                 // Preserve the rule name so NetworkExporter can look up pre-assigned _rateLawN names
                 name: rxnName,

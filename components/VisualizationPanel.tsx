@@ -289,6 +289,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 results={results}
                 model={model}
                 isNFsim={simulationMethod === 'nf'}
+                isSSA={simulationMethod === 'ssa'}
                 visibleSpecies={visibleSpecies}
                 onVisibleSpeciesChange={setVisibleSpecies}
                 expressions={expressions}

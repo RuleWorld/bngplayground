@@ -79,6 +79,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       } catch (e: any) {
         console.error('Error visiting program block:', e.message);
         console.error(e.stack);
+        throw e;
       }
     }
 
@@ -500,6 +501,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
     } catch (e: any) {
       console.error('Error in visitReaction_rules_block:', e.message);
+      throw e;
     }
   }
 
@@ -654,6 +656,28 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     if (modifiersList && modifiersList.length > 0) {
       modifiersList.forEach(m => processModifiers(m));
+    }
+
+    // BNG2 parity: TotalRate is incompatible with typed non-elementary rate laws.
+    // Reference: bionetgen/bng2/Perl2/RateLaw.pm (newRateLaw).
+    const detectTypedRateLaw = (expr?: string): 'Sat' | 'MM' | 'Hill' | 'Arrhenius' | null => {
+      if (!expr) return null;
+      const trimmed = expr.trim();
+      if (/^Sat\s*\(/i.test(trimmed)) return 'Sat';
+      if (/^MM\s*\(/i.test(trimmed)) return 'MM';
+      if (/^Hill\s*\(/i.test(trimmed)) return 'Hill';
+      if (/^Arrhenius\s*\(/i.test(trimmed)) return 'Arrhenius';
+      return null;
+    };
+    if (totalRate) {
+      const forwardType = detectTypedRateLaw(rate);
+      if (forwardType) {
+        throw new Error(`TotalRate keyword is not compatible with ${forwardType} type RateLaw.`);
+      }
+      const reverseType = detectTypedRateLaw(reverseRate);
+      if (reverseType) {
+        throw new Error(`TotalRate keyword is not compatible with ${reverseType} type RateLaw.`);
+      }
     }
 
     this.reactionRules.push({

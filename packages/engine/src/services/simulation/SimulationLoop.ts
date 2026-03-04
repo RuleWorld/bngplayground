@@ -10,7 +10,7 @@
  * Reference: bionetgen/bng2/Network3/src/run_network.cpp
  */
 
-import { BNGLModel, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
+import { BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
 import type { SolverResult } from './ODESolver';
 import { CVODESolver } from './ODESolver';
 import { BNGLParser } from '../graph/core/BNGLParser';
@@ -23,21 +23,29 @@ import { jitCompiler } from '../analysis/JITCompiler';
 import { SeededRandom } from '../../utils/random';
 // import * as fs from 'node:fs';
 
+interface ConcreteReaction {
+  reactants: Int32Array;
+  products: Int32Array;
+  rateConstant: number;
+  rateExpression: string | null;
+  rate: string;
+  isFunctionalRate: boolean;
+  propensityFactor: number;
+  productStoichiometries?: number[];
+  scalingVolume?: number;
+  degeneracy: number;
+  statFactor: number;
+  totalRate?: boolean;
+  ruleName?: string;
+}
+
 /**
  * Helper: Convert concrete reactions to WebGPU-friendly format.
  * Why? WebGPU requires flat arrays (Int32Array/Float32Array) for structured data mapping.
  * Parity: N/A (WebGPU specific optimization, not present in standard BNG2).
  */
 async function convertReactionsToGPU(
-  concreteReactions: Array<{
-    reactants: Int32Array;
-    products: Int32Array;
-    rateConstant: number;
-    propensityFactor: number;
-    reactantIndices?: number[];
-    isFunctionalRate?: boolean;
-    rateExpression?: string | null;
-  }>
+  concreteReactions: ConcreteReaction[]
 ): Promise<{ gpuReactions: any[]; rateConstants: number[] }> {
   const gpuReactions: any[] = [];
   const rateConstants: number[] = [];
@@ -172,7 +180,7 @@ export async function simulate(
 
   const functionNames = new Set((model.functions || []).map(f => f.name));
 
-  const concreteReactions = model.reactions.map((r) => {
+  const concreteReactions: ConcreteReaction[] = model.reactions.map((r: BNGLReaction) => {
     // Map string names to integer indices.
     const reactantIndices = r.reactants.map(name => {
       const idx = speciesMap.get(name);
@@ -227,11 +235,12 @@ export async function simulate(
       propensityFactor: r.propensityFactor ?? 1,
       productStoichiometries: r.productStoichiometries,
       scalingVolume: r.scalingVolume,
-      degeneracy: (r as any).degeneracy ?? 1,
-      totalRate: (r as any).totalRate,
-      ruleName: (r as any).ruleName || (r as any).name
+      degeneracy: r.degeneracy ?? 1,
+      statFactor: r.statFactor ?? 1,
+      totalRate: r.totalRate,
+      ruleName: r.name
     };
-  }).filter(r => r !== null);
+  });
 
   // fs.appendFileSync(debugLog, `[SimulationLoop] Concrete Reactions (${concreteReactions.length}):\n`);
   // concreteReactions.forEach((r, idx) => {
@@ -387,7 +396,7 @@ export async function simulate(
   const compartmentMapForDim = new Map((inputModel.compartments ?? []).map(c => [c.name, c]));
 
   model.reactions.forEach((r, idx) => {
-    const declaredScalingVolume = (r as any).scalingVolume;
+    const declaredScalingVolume = r.scalingVolume;
     if (typeof declaredScalingVolume === 'number' && Number.isFinite(declaredScalingVolume) && declaredScalingVolume > 0) {
       reactionReactingVolumes[idx] = declaredScalingVolume;
       return;
@@ -1116,18 +1125,31 @@ export async function simulate(
                 appendSpeciesSnapshot(phase.suffix, sp);
                 if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
               }
+            }
+            // Always advance the output index regardless of recordThisPhase to prevent
+            // an infinite loop when recordThisPhase is false (e.g. warmup phases).
             nextOutIdx += 1;
             nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
           }
         }
 
-          if (!hasPushedFinalResult && phaseNSteps > 0 && nEventsThisPhase > 0) {
-            const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, phaseNSteps);
+        // Flush any remaining output grid points not reached by the main event loop.
+        // This happens when:
+        //   (a) last tau overshoots phaseTEnd  →  t = phaseTEnd; break
+        //   (b) propensity collapses to 0       →  break before reaching phaseTEnd
+        //   (c) maxEvents limit is hit
+        // Fill every remaining slot with the current (final) state so the chart
+        // always has a complete, evenly-spaced time grid with no missing tail.
+        if (recordThisPhase) {
+          while (nextOutIdx <= phaseNSteps) {
+            const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
             const obsValues = evaluateObservablesFast(state);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
             appendSpeciesSnapshot(phase.suffix, sp);
+            if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
+            nextOutIdx++;
           }
         }
 
@@ -1691,7 +1713,7 @@ export async function simulate(
           const reactantCounts = reactantCountMaps[r];
           const volR = reactionReactingVolumes[r] || 1.0;
           const propensity = rxn.propensityFactor ?? 1;
-          const degeneracy = (rxn as any).degeneracy ?? 1;
+          const degeneracy = rxn.degeneracy ?? 1;
 
           // Velocity base: k * volR * propensity * degeneracy
           const base = k * propensity * degeneracy * volR;
@@ -1784,7 +1806,7 @@ export async function simulate(
         productStoich: Array.from({ length: r.products.length }, (_, j) => r.productStoichiometries ? r.productStoichiometries[j] : 1),
         rateConstant: r.isFunctionalRate ? (r.rateExpression || 0) : r.rateConstant,
         scalingVolume: r.scalingVolume,
-        statisticalFactor: r.degeneracy
+        statisticalFactor: r.statFactor
       }));
 
       // In BNG2, a reaction can have multiple Reactants/Products of same species listed separately
