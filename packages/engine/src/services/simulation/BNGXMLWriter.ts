@@ -77,12 +77,43 @@ export class BNGXMLWriter {
       })
       .join('');
 
-    const moleculeTypesXml = Array.from(moleculeTypeDefs.entries())
-      .map(([molName, compMap]) => {
-        if (compMap.size === 0) {
+    const explicitMoleculeTypes = new Map<string, string[]>();
+    (model.moleculeTypes || []).forEach((mt) => {
+      explicitMoleculeTypes.set(mt.name, [...(mt.components || [])]);
+    });
+
+    const orderedMoleculeTypeNames: string[] = [
+      ...(model.moleculeTypes || []).map((mt) => mt.name),
+      ...Array.from(moleculeTypeDefs.keys()).filter((name) => !explicitMoleculeTypes.has(name))
+    ];
+
+    const moleculeTypesXml = orderedMoleculeTypeNames
+      .map((molName) => {
+        const inferredCompMap = moleculeTypeDefs.get(molName) ?? new Map<string, Set<string>>();
+        const explicitComponents = explicitMoleculeTypes.get(molName);
+
+        if (explicitComponents && explicitComponents.length > 0) {
+          const componentTypesXml = explicitComponents
+            .map((compRaw) => {
+              const parts = compRaw.split('~').map((s) => s.trim()).filter(Boolean);
+              const compName = parts[0];
+              const states = new Set<string>(parts.slice(1));
+              const inferredStates = inferredCompMap.get(compName);
+              inferredStates?.forEach((s) => states.add(s));
+              const allowedStatesXml = states.size > 0
+                ? `\n            <ListOfAllowedStates>${Array.from(states).map((s) => `<AllowedState id="${escapeXml(s)}"/>`).join('')}</ListOfAllowedStates>`
+                : '';
+              return `\n          <ComponentType id="${escapeXml(compName)}">${allowedStatesXml}</ComponentType>`;
+            })
+            .join('');
+          return `      <MoleculeType id="${escapeXml(molName)}">\n        <ListOfComponentTypes>${componentTypesXml}\n        </ListOfComponentTypes>\n      </MoleculeType>\n`;
+        }
+
+        if (inferredCompMap.size === 0) {
           return `      <MoleculeType id="${escapeXml(molName)}"/>\n`;
         }
-        const componentTypesXml = Array.from(compMap.entries())
+
+        const componentTypesXml = Array.from(inferredCompMap.entries())
           .map(([compName, states]) => {
             const allowedStatesXml = states.size > 0
               ? `\n            <ListOfAllowedStates>${Array.from(states).map((s) => `<AllowedState id="${escapeXml(s)}"/>`).join('')}</ListOfAllowedStates>`
@@ -230,17 +261,18 @@ export class BNGXMLWriter {
               }
               const graph = BNGLParser.parseSpeciesGraph(cleanPattern);
               const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `O${idx + 1}_P${pIdx + 1}`, moleculeTypeDefs, true);
-              return `<Pattern id="O${idx + 1}_P${pIdx + 1}"${constraintAttrs}>${moleculesXml}${bondsXml}</Pattern>`;
+              return `          <Pattern id="O${idx + 1}_P${pIdx + 1}"${constraintAttrs}>${moleculesXml}${bondsXml}</Pattern>`;
             } else {
               const graph = BNGLParser.parseSpeciesGraph(pattern);
               const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `O${idx + 1}_P${pIdx + 1}`, moleculeTypeDefs, true);
-              return `<Pattern id="O${idx + 1}_P${pIdx + 1}">${moleculesXml}${bondsXml}</Pattern>`;
+              return `          <Pattern id="O${idx + 1}_P${pIdx + 1}">${moleculesXml}${bondsXml}</Pattern>`;
             }
           })
-          .join('');
-        return `<Observable id="O${idx + 1}" name="${escapeXml(obs.name)}" type="${escapeXml(obsType)}">` +
-          `<ListOfPatterns>${patternsXml}</ListOfPatterns>` +
-          `</Observable>`;
+          .join('\n');
+        return `      <Observable id="O${idx + 1}" name="${escapeXml(obs.name)}" type="${escapeXml(obsType)}">\n` +
+          `        <ListOfPatterns>\n${patternsXml}\n` +
+          `        </ListOfPatterns>\n` +
+          `      </Observable>\n`;
       })
       .join('');
 
@@ -394,18 +426,27 @@ export class BNGXMLWriter {
         const moleculeId = `${prefix}_M${molIdx + 1}`;
         moleculeIdMap.set(molIdx, moleculeId);
 
-        const components = mol.components;
+        const components = (isPattern
+          ? mol.components
+            .map((comp, sourceCompIdx) => ({ comp, sourceCompIdx }))
+            .filter(({ comp }) => !(comp as any).syntheticWildcard)
+          : mol.components.map((comp, sourceCompIdx) => ({ comp, sourceCompIdx })));
+
         const componentsXml = components
-          .map((comp, compIdx) => {
-            const componentId = `${prefix}_M${molIdx + 1}_C${compIdx + 1}`;
-            componentIdMap.set(`${molIdx}.${compIdx}`, componentId);
+          .map(({ comp, sourceCompIdx }, localCompIdx) => {
+            const componentId = `${prefix}_M${molIdx + 1}_C${localCompIdx + 1}`;
+            componentIdMap.set(`${molIdx}.${sourceCompIdx}`, componentId);
 
             const numberOfBonds = this.getNumberOfBonds(comp, isPattern);
             const attrs = [
               `id="${componentId}"`,
-              `name="${escapeXml(comp.name)}"`,
-              `numberOfBonds="${numberOfBonds}"`
+              `name="${escapeXml(comp.name)}"`
             ];
+            if (numberOfBonds !== '?') {
+              attrs.push(`numberOfBonds="${numberOfBonds}"`);
+            } else if (!isPattern) {
+              attrs.push(`numberOfBonds="0"`);
+            }
             if (comp.state) attrs.push(`state="${escapeXml(comp.state)}"`);
 
             return `<Component ${attrs.join(' ')} />`;
@@ -481,6 +522,10 @@ export class BNGXMLWriter {
     const reactantUsed = new Set<number>();
     const productToReactant = new Map<string, MolRef>();
     const reactantToProduct = new Map<string, MolRef>();
+    const moleculeComponentIndexMaps = new Map<
+      string,
+      { reactToProd: Map<number, number>; prodToReact: Map<number, number> }
+    >();
 
     const signature = (ref: MolRef) => `${ref.name}|${ref.componentNames.join(',')}`;
 
@@ -506,10 +551,44 @@ export class BNGXMLWriter {
       }
     });
 
+    reactantPatterns.forEach((reactPattern, reactPatternIdx) => {
+      reactPattern.graph.molecules.forEach((reactMol, reactMolIdx) => {
+        const prodRef = reactantToProduct.get(`${reactPatternIdx}.${reactMolIdx}`);
+        if (!prodRef) return;
+        const prodPattern = productPatterns[prodRef.patternIdx];
+        const prodMol = prodPattern?.graph.molecules[prodRef.molIdx];
+        if (!prodMol) return;
+
+        const productCompQueuesByName = new Map<string, number[]>();
+        prodMol.components.forEach((comp, prodCompIdx) => {
+          const queue = productCompQueuesByName.get(comp.name);
+          if (queue) queue.push(prodCompIdx);
+          else productCompQueuesByName.set(comp.name, [prodCompIdx]);
+        });
+
+        const reactToProd = new Map<number, number>();
+        const prodToReact = new Map<number, number>();
+        reactMol.components.forEach((comp, reactCompIdx) => {
+          const queue = productCompQueuesByName.get(comp.name);
+          if (queue && queue.length > 0) {
+            const prodCompIdx = queue.shift()!;
+            reactToProd.set(reactCompIdx, prodCompIdx);
+            prodToReact.set(prodCompIdx, reactCompIdx);
+          }
+        });
+
+        moleculeComponentIndexMaps.set(`${reactPatternIdx}.${reactMolIdx}`, {
+          reactToProd,
+          prodToReact
+        });
+      });
+    });
+
     const mapItems: string[] = [];
 
     const addComponentMapItems = (
       reactantPattern: (typeof reactantPatterns)[number],
+      reactantPatternIdx: number,
       productPattern: (typeof productPatterns)[number] | null,
       reactMolIdx: number,
       productMolIdx?: number
@@ -520,7 +599,10 @@ export class BNGXMLWriter {
         const sourceId = reactantPattern.componentIdMap.get(`${reactMolIdx}.${compIdx}`);
         if (!sourceId) return;
         if (prodMol) {
-          const prodCompIdx = prodMol.components.findIndex((c) => c.name === comp.name);
+          const compIndexMap = moleculeComponentIndexMaps
+            .get(`${reactantPatternIdx}.${reactMolIdx}`)
+            ?.reactToProd;
+          const prodCompIdx = compIndexMap?.get(compIdx) ?? prodMol.components.findIndex((c) => c.name === comp.name);
           if (prodCompIdx >= 0) {
             const targetId = productPattern?.componentIdMap.get(`${productMolIdx}.${prodCompIdx}`);
             if (targetId) {
@@ -545,13 +627,13 @@ export class BNGXMLWriter {
           const targetId = prodPattern?.moleculeIdMap.get(prodRef.molIdx);
           if (targetId) {
             mapItems.push(`<MapItem sourceID="${sourceId}" targetID="${targetId}"/>`);
-            addComponentMapItems(pattern, prodPattern, molIdx, prodRef.molIdx);
+            addComponentMapItems(pattern, patternIdx, prodPattern, molIdx, prodRef.molIdx);
           }
         } else {
           // Molecule is deleted/consumed. NFsim requires a complete <Map> where every
           // source item is accounted for. Map to self as a placeholder.
           mapItems.push(`<MapItem sourceID="${sourceId}" targetID="${sourceId}"/>`);
-          addComponentMapItems(pattern, null, molIdx);
+          addComponentMapItems(pattern, patternIdx, null, molIdx);
         }
       });
     });
@@ -619,15 +701,11 @@ export class BNGXMLWriter {
 
               const reactPatternA = reactantPatterns[reactA.patternIdx];
               const reactPatternB = reactantPatterns[reactB.patternIdx];
-              const reactMolA = reactPatternA.graph.molecules[reactA.molIdx];
-              const reactMolB = reactPatternB.graph.molecules[reactB.molIdx];
-              const compNameA = mol.components[compIdx]?.name;
-              const compNameB = pattern.graph.molecules[pMolIdx].components[pCompIdx]?.name;
-              if (!compNameA || !compNameB) return;
-
-              const reactCompIdxA = reactMolA.components.findIndex((c) => c.name === compNameA);
-              const reactCompIdxB = reactMolB.components.findIndex((c) => c.name === compNameB);
-              if (reactCompIdxA < 0 || reactCompIdxB < 0) return;
+              const reactCompMapA = moleculeComponentIndexMaps.get(`${reactA.patternIdx}.${reactA.molIdx}`)?.prodToReact;
+              const reactCompMapB = moleculeComponentIndexMaps.get(`${reactB.patternIdx}.${reactB.molIdx}`)?.prodToReact;
+              const reactCompIdxA = reactCompMapA?.get(compIdx);
+              const reactCompIdxB = reactCompMapB?.get(pCompIdx);
+              if (reactCompIdxA === undefined || reactCompIdxB === undefined) return;
 
               const site1 = reactPatternA.componentIdMap.get(`${reactA.molIdx}.${reactCompIdxA}`);
               const site2 = reactPatternB.componentIdMap.get(`${reactB.molIdx}.${reactCompIdxB}`);
@@ -666,8 +744,11 @@ export class BNGXMLWriter {
           const prodPattern = productPatterns[prodRef.patternIdx];
           const prodMol = prodPattern?.graph.molecules[prodRef.molIdx];
           if (!prodMol) return;
+          const compIndexMap = moleculeComponentIndexMaps.get(`${patternIdx}.${molIdx}`)?.reactToProd;
           mol.components.forEach((comp, compIdx) => {
-            const prodComp = prodMol.components.find((c) => c.name === comp.name);
+            const prodCompIdx = compIndexMap?.get(compIdx);
+            if (prodCompIdx === undefined) return;
+            const prodComp = prodMol.components[prodCompIdx];
             if (!prodComp) return;
             const reactState = comp.state ?? '';
             const prodState = prodComp.state ?? '';
@@ -745,13 +826,14 @@ export class BNGXMLWriter {
   }
 
   private static getNumberOfBonds(
-    comp: { edges: Map<number, number>; wildcard?: '+' | '?' | '-' },
+    comp: { name: string; edges: Map<number, number>; wildcard?: string },
     isPattern: boolean
   ): string {
     if (comp.edges.size > 0) return String(comp.edges.size);
     if (comp.wildcard === '+') return '+';
-    if (comp.wildcard === '?') return '?';
-    if (comp.wildcard === '-') return '0';
+    // For wildcard '?' patterns, omit numberOfBonds (caller skips '?').
+    if (isPattern && comp.wildcard === '?') return '?';
+    // Otherwise emit explicit zero, matching BNG2 XML conventions.
     return '0';
   }
 
