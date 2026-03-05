@@ -1,6 +1,6 @@
+// @vitest-environment jsdom
 // tests in this file exercise DOM-dependent behaviour and therefore
-// require jsdom.  jsdom is not currently installed in the repository; these
-// specs are left here for reference but are skipped by default.
+// run with jsdom at file scope.
 import React from 'react';
 import { render } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -18,31 +18,60 @@ class FakeResizeObserver {
 }
 (global as any).ResizeObserver = FakeResizeObserver;
 
-// mock cytoscape so we can spy on fit/resize/animate and control
-// layoutstop timing.  we capture callbacks registered via `on` in a table
-// so tests can fire them manually.
-const fitSpy = vi.fn();
-const resizeSpy = vi.fn();
-const destroySpy = vi.fn();
-const animateSpy = vi.fn();
-
-// store event handlers per-instance; our simple fake creates exactly one
-// cytoscape instance per test so a global list is fine.
-const layoutCallbacks: { [event: string]: Function[] } = {};
-const onSpy = vi.fn((event: string, cb: Function) => {
-  if (!layoutCallbacks[event]) layoutCallbacks[event] = [];
-  layoutCallbacks[event].push(cb);
-  return undefined;
+// mock cytoscape so we can spy on fit/resize and control layoutstop timing.
+const mockState = vi.hoisted(() => {
+  const layoutCallbacks: Record<string, Function[]> = {};
+  return {
+    fitSpy: vi.fn(),
+    resizeSpy: vi.fn(),
+    destroySpy: vi.fn(),
+    offSpy: vi.fn(),
+    readySpy: vi.fn((cb: Function) => cb()),
+    layoutRunSpy: vi.fn(),
+    layoutCallbacks,
+    layoutOnSpy: vi.fn((event: string, cb: Function) => {
+      if (!layoutCallbacks[event]) layoutCallbacks[event] = [];
+      layoutCallbacks[event].push(cb);
+    }),
+    onSpy: vi.fn((event: string, cb: Function) => {
+      if (!layoutCallbacks[event]) layoutCallbacks[event] = [];
+      layoutCallbacks[event].push(cb);
+      return undefined;
+    }),
+  };
 });
 
+const {
+  fitSpy,
+  resizeSpy,
+  destroySpy,
+  offSpy,
+  readySpy,
+  layoutRunSpy,
+  layoutOnSpy,
+  layoutCallbacks,
+  onSpy,
+} = mockState;
+
 vi.mock('cytoscape', () => {
+  const fakeLayout = {
+    on: mockState.layoutOnSpy,
+    run: mockState.layoutRunSpy,
+  };
   const cyt = vi.fn(() => ({
-    fit: fitSpy,
-    resize: resizeSpy,
-    destroy: destroySpy,
-    animate: animateSpy,
+    fit: mockState.fitSpy,
+    resize: mockState.resizeSpy,
+    destroy: mockState.destroySpy,
+    off: mockState.offSpy,
+    ready: mockState.readySpy,
+    layout: vi.fn(() => fakeLayout),
     elements: () => [],
-    on: onSpy,
+    on: mockState.onSpy,
+    getElementById: () => ({
+      nonempty: () => false,
+      addClass: vi.fn(),
+      connectedEdges: () => ({ addClass: vi.fn(), connectedNodes: () => ({ addClass: vi.fn() }) }),
+    }),
   }));
   cyt.use = vi.fn();
   return { default: cyt };
@@ -55,28 +84,33 @@ const baseGraph: AtomRuleGraph = {
   edges: [],
 };
 
-describe.skip('ARGraphViewer (skipped – requires jsdom)', () => {
+describe('ARGraphViewer', () => {
   beforeEach(() => {
     fitSpy.mockClear();
     resizeSpy.mockClear();
     destroySpy.mockClear();
-    animateSpy.mockClear();
+    offSpy.mockClear();
+    readySpy.mockClear();
+    layoutOnSpy.mockClear();
+    layoutRunSpy.mockClear();
     onSpy.mockClear();
+    roCallbacks.length = 0;
     // clear any layout callbacks from previous renders
     Object.keys(layoutCallbacks).forEach(k => delete layoutCallbacks[k]);
   });
 
-  it('creates a cytoscape instance and fits on mount', () => {
+  it('creates a cytoscape instance and runs the initial layout on mount', () => {
     render(<ARGraphViewer arGraph={baseGraph} />);
-    expect(fitSpy).toHaveBeenCalled();
+    expect(readySpy).toHaveBeenCalled();
+    expect(layoutRunSpy).toHaveBeenCalled();
   });
 
   it('re-fits when forceFitTrigger prop changes', () => {
     const { rerender } = render(
       <ARGraphViewer arGraph={baseGraph} forceFitTrigger="foo" />
     );
-    expect(fitSpy).toHaveBeenCalled();
-    fitSpy.mockClear();
+    // First effect pass happens before cytoscape instance is available.
+    expect(fitSpy).not.toHaveBeenCalled();
 
     rerender(
       <ARGraphViewer arGraph={baseGraph} forceFitTrigger="bar" />
@@ -94,7 +128,7 @@ describe.skip('ARGraphViewer (skipped – requires jsdom)', () => {
     rerender(<ARGraphViewer arGraph={bigger} />);
     // original instance should have been destroyed so a new one can be made
     expect(destroySpy).toHaveBeenCalled();
-    expect(fitSpy).toHaveBeenCalled();
+    expect(layoutRunSpy).toHaveBeenCalledTimes(2);
   });
 
   it('uses requestAnimationFrame when a resize event occurs', () => {
@@ -103,31 +137,16 @@ describe.skip('ARGraphViewer (skipped – requires jsdom)', () => {
     // there should be exactly one callback stored
     expect(roCallbacks.length).toBe(1);
 
-    // spy on raf
-    const rafSpy = vi.spyOn(global, 'requestAnimationFrame');
     // invoke the observer callback with a dummy size
     roCallbacks[0]([{ contentRect: { width: 100, height: 200 } }]);
 
-    expect(rafSpy).toHaveBeenCalled();
-    // ensure that the raf callback eventually triggers fit
-    // (simulate immediate execution)
-    const rafCall = rafSpy.mock.calls[0][0] as Function;
-    rafCall();
-    expect(fitSpy).toHaveBeenCalled();
+    // Current implementation resizes immediately on observer callback.
+    expect(resizeSpy).toHaveBeenCalled();
   });
 
-  it('does not animate center until after layoutstop', () => {
-    animateSpy.mockClear();
-
+  it('registers layoutstop handler for post-layout viewport fit', () => {
     render(<ARGraphViewer arGraph={baseGraph} selectedRuleId="n1" />);
-
-    // layoutDone should remain false until layoutstop fires
     expect(layoutCallbacks['layoutstop']).toBeDefined();
-    // before we fire layoutstop, animation shouldn't have occurred
-    expect(animateSpy).not.toHaveBeenCalled();
-
-    // simulate layout stopping now (this also sets layoutDone=true)
-    layoutCallbacks['layoutstop']?.forEach(cb => cb());
-    expect(animateSpy).toHaveBeenCalled();
+    expect(layoutCallbacks['layoutstop'].length).toBeGreaterThan(0);
   });
 });

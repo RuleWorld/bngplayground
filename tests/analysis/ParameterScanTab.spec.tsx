@@ -1,4 +1,5 @@
-// DOM-dependent tests require jsdom, which isn't installed; file is skipped instead.
+// @vitest-environment jsdom
+// DOM-dependent tests run with jsdom via file-level vitest environment.
 import React from 'react';
 import { render, fireEvent, screen, within, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -14,9 +15,7 @@ vi.mock('../../services/bnglService', () => ({
     }
 }));
 
-// DOM-dependent tests require jsdom, which isn't installed in the repo.  Skip
-// them by default just like other similar UI specs.
-describe.skip('ParameterScanTab component (skipped – requires jsdom)', () => {
+describe('ParameterScanTab component', () => {
     beforeEach(() => {
         vi.clearAllMocks();
     });
@@ -94,8 +93,10 @@ describe.skip('ParameterScanTab component (skipped – requires jsdom)', () => {
         });
 
         // results table should show formatted parameter values
-        expect(await screen.findByText('1.000')).toBeTruthy();
-        expect(await screen.findByText('2.000')).toBeTruthy();
+        const ones = await screen.findAllByText('1.000');
+        const twos = await screen.findAllByText('2.000');
+        expect(ones.length).toBeGreaterThan(0);
+        expect(twos.length).toBeGreaterThan(0);
 
     });
 

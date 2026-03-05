@@ -239,14 +239,15 @@ describe('cBNGL_simple Volume Scaling', () => {
       return s1.includes('@EN') || s2.includes('@EN');
     });
     
+    const ecScalingVolume = (ecReaction as any)?.scalingVolume;
+    const enScalingVolume = (enReaction as any)?.scalingVolume;
+
     if (ecReaction) {
-      // kp_LR = 0.1, so rate should be 0.1 * 0.05 = 0.005
-      console.log(`EC reaction rate: ${ecReaction.rate} (expected: kp_LR * 0.05 = 0.1 * 0.05 = 0.005)`);
+      console.log(`EC reaction rate: ${ecReaction.rate}, scalingVolume: ${ecScalingVolume}`);
     }
     
     if (enReaction) {
-      // kp_LR = 0.1, so rate should be 0.1 * 2.0 = 0.2
-      console.log(`EN reaction rate: ${enReaction.rate} (expected: kp_LR * 2.0 = 0.1 * 2.0 = 0.2)`);
+      console.log(`EN reaction rate: ${enReaction.rate}, scalingVolume: ${enScalingVolume}`);
     }
     
     // Assertions
@@ -254,15 +255,26 @@ describe('cBNGL_simple Volume Scaling', () => {
     expect(reactions.length).toBeGreaterThan(0);
     expect(lrBindReactions.length).toBeGreaterThan(0);
     
-    // Volume scale check: EN reactions should have 40x higher scale than EC reactions
-    // (2.0 / 0.05 = 40)
+    // Volume scale check contract (current implementation):
+    // - mixed-compartment bimolecular rates remain unscaled in NetworkGenerator
+    // - compartment scaling is carried via scalingVolume and applied in simulation code
     if (ecReaction && enReaction) {
       const ecRate = ecReaction.rate;
       const enRate = enReaction.rate;
-      console.log(`\nRatio EN/EC: ${enRate / ecRate} (expected: 40)`);
-      
-      // The ratio should be approximately 40
-      expect(enRate / ecRate).toBeCloseTo(40, 1);
+      const ecVol = Number(ecScalingVolume);
+      const enVol = Number(enScalingVolume);
+
+      expect(ecVol).toBeGreaterThan(0);
+      expect(enVol).toBeGreaterThan(0);
+
+      console.log(`\nRaw rate ratio EN/EC: ${enRate / ecRate} (expected: 1)`);
+      console.log(`Scaling volume ratio EC/EN: ${ecVol / enVol} (expected: 40)`);
+      console.log(`Effective bimolecular ratio (EN/EC) via 1/scalingVolume: ${(enRate / enVol) / (ecRate / ecVol)} (expected: 40)`);
+
+      // Current generator behavior: same base rate, scaling deferred to simulation via scalingVolume.
+      expect(enRate / ecRate).toBeCloseTo(1, 8);
+      expect(ecVol / enVol).toBeCloseTo(40, 8);
+      expect((enRate / enVol) / (ecRate / ecVol)).toBeCloseTo(40, 8);
     }
   });
 });
