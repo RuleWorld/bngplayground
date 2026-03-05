@@ -693,7 +693,7 @@ export class BNGLParser {
           }
         }
 
-        const result = evaluateExpressionHighPrecision(expr, evalParams);
+        const result = evaluateExpressionHighPrecision(expr, evalParams, functions);
         if (!isNaN(result)) {
           return result;
         }

@@ -384,14 +384,9 @@ export async function simulate(
   });
 
   // PARITY FIX: Pre-calculate reacting volumes for each reaction.
-  // BioNetGen scales ODE rates by the volume of the anchor compartment.
-  // For inter-compartment reactions (e.g., 3D + 2D -> 2D), the anchor is typically
-  // the lower-dimensional compartment (the surface). We use Math.min to heuristically
-  // select the correct anchor volume, matching BNG2's inter-compartment scaling.
-  // PARITY FIX: Pre-calculate reacting volumes for each reaction.
-  // BioNetGen scales ODE rates by the volume of the anchor compartment.
-  // Highest Dimension Rule: The anchor volume is determined by the reactant
-  // with the highest compartment dimension (typically 3D vol over 2D surface).
+  // BioNetGen scales ODE rates by an anchor compartment volume. For mixed-dimension
+  // reactants (e.g. 3D + 2D), anchoring to the lower-dimensional compartment yields
+  // closer parity with cBNGL transport/binding models.
   const reactionReactingVolumes = new Float64Array(model.reactions.length);
   const compartmentMapForDim = new Map((inputModel.compartments ?? []).map(c => [c.name, c]));
 
@@ -403,7 +398,7 @@ export async function simulate(
     }
 
     let vAnchor = 1.0;
-    let maxDim = -1;
+    let minDim = Number.POSITIVE_INFINITY;
     
     const candidates = r.reactants.length > 0 ? r.reactants : r.products;
 
@@ -423,14 +418,14 @@ export async function simulate(
       if (comp) {
         const dim = comp.dimension ?? 3;
         const vol = compartmentMap.get(compName!) ?? 1.0;
-        if (dim > maxDim) {
-          maxDim = dim;
+        if (dim < minDim) {
+          minDim = dim;
           vAnchor = vol;
         }
       } else {
         // Fallback for no compartment: default to 1.0 and dim 3
-        if (3 > maxDim) {
-          maxDim = 3;
+        if (3 < minDim) {
+          minDim = 3;
           vAnchor = 1.0;
         }
       }
@@ -1170,7 +1165,7 @@ export async function simulate(
 
       console.log(`[Worker] SSA simulation complete: ${getTotalDataLength()} data points, globalTime=${globalTime}`);
 
-      const defaultSuffix = Object.keys(dataBySuffix)[0] || '__default__';
+      const defaultSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
       return {
         headers,
         data: dataBySuffix[defaultSuffix] || [],
@@ -1798,16 +1793,34 @@ export async function simulate(
     if (jacobianRowMajor && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
 
     // Try generating bytecode for native path
-    if (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') {
-      const byteCodeReactions = concreteReactions.map(r => ({
-        reactantIndices: Array.from(r.reactants),
-        reactantStoich: Array.from({ length: r.reactants.length }, () => 1), // Each entry in reactants is 1 stoich
-        productIndices: Array.from(r.products),
-        productStoich: Array.from({ length: r.products.length }, (_, j) => r.productStoichiometries ? r.productStoichiometries[j] : 1),
-        rateConstant: r.isFunctionalRate ? (r.rateExpression || 0) : r.rateConstant,
-        scalingVolume: r.scalingVolume,
-        statisticalFactor: r.statFactor
-      }));
+    const hasLocalFunctions = (model.functions || []).some((f) => Array.isArray(f.args) && f.args.length > 0);
+    const disableNativeBytecode =
+      ((typeof process !== 'undefined') && process?.env?.BNG_DISABLE_NATIVE_BYTECODE === '1') ||
+      ((options as any)?.disableNativeBytecode === true);
+    const enableNativeBytecode = !disableNativeBytecode;
+    if (enableNativeBytecode && (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') && !hasLocalFunctions) {
+      const byteCodeReactions = concreteReactions.map((r, i) => {
+        const multiplicativeFactor = (r.propensityFactor ?? 1) * (r.degeneracy ?? 1);
+        const scaledRateConstant = r.isFunctionalRate
+          ? (
+            multiplicativeFactor !== 1
+              ? `(${multiplicativeFactor})*(${r.rateExpression || '0'})`
+              : (r.rateExpression || 0)
+          )
+          : (r.rateConstant * multiplicativeFactor);
+
+        return {
+          reactantIndices: Array.from(r.reactants),
+          reactantStoich: Array.from({ length: r.reactants.length }, () => 1), // Each entry in reactants is 1 stoich
+          productIndices: Array.from(r.products),
+          productStoich: Array.from({ length: r.products.length }, (_, j) => r.productStoichiometries ? r.productStoichiometries[j] : 1),
+          rateConstant: scaledRateConstant,
+          // Must match JS/JIT derivative path anchor volume semantics for parity.
+          scalingVolume: reactionReactingVolumes[i] || r.scalingVolume || 1,
+          // Keep native bytecode equivalent to JS RHS (which applies propensity/degeneracy explicitly).
+          statisticalFactor: undefined
+        };
+      });
 
       // In BNG2, a reaction can have multiple Reactants/Products of same species listed separately
       // compileToByteCode handles this via duplication, but we should consolidate stoich for bytecode compactness
@@ -1828,7 +1841,14 @@ export async function simulate(
         };
       });
 
-      const bc = jitCompiler.compileToByteCode(consolidatedBCReactions, numSpecies, model.parameters, speciesVolumes);
+      const constantSpeciesMask = model.species.map((s) => !!s.isConstant);
+      const bc = jitCompiler.compileToByteCode(
+        consolidatedBCReactions,
+        numSpecies,
+        model.parameters,
+        speciesVolumes,
+        constantSpeciesMask
+      );
       if (bc) {
         solverOptions.networkByteCode = bc;
         // console.log('[SimulationLoop] Bytecode generated successfully for native path');
@@ -1883,7 +1903,7 @@ export async function simulate(
             for (let j = 0; j < numSpecies; j++) sp[speciesHeaders[j]] = conc[j];
             appendSpeciesSnapshot(wgpuSuffix, sp);
           }
-          const defaultWgpuSuffix = Object.keys(dataBySuffix)[0] || '__default__';
+          const defaultWgpuSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
           const results = {
             headers,
             data: dataBySuffix[defaultWgpuSuffix] || [],
@@ -2297,7 +2317,7 @@ export async function simulate(
     const totalTime = performance.now() - simulationStartTime;
     if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: ODE integration took', odeTime.toFixed(0), 'ms');
     if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: Total simulation time', totalTime.toFixed(0), 'ms');
-    const defaultOdeSuffix = Object.keys(dataBySuffix)[0] || '__default__';
+    const defaultOdeSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
     return {
       headers,
       data: dataBySuffix[defaultOdeSuffix] || [],

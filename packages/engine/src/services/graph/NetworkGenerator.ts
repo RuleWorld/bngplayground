@@ -392,7 +392,7 @@ export class NetworkGenerator {
     this.options = {
       maxSpecies: 10000,
       maxReactions: 100000,
-      maxIterations: 50,
+      maxIterations: 100,
       maxAgg: 500,
       maxStoich: 500,
       checkInterval: 500,
@@ -528,8 +528,8 @@ export class NetworkGenerator {
   /**
    * Calculate volume scaling info for reactions.
    * Mirrors BNG2 Rxn.pm anchor logic:
-   * - If any reactant is on a surface (2D), anchor to the surface.
-   * - Otherwise anchor to a volume (3D).
+   * - Prefer anchoring to a 3D compartment when available.
+   * - Fall back to a 2D surface compartment when no 3D reactant compartment exists.
    * - For zero-order synthesis (no reactants), anchor to the product compartment.
    */
   private getVolumeScalingInfo(reactants: Species[], products: Species[] = []): { scale: number; scalingVolume: number } {
@@ -539,8 +539,7 @@ export class NetworkGenerator {
     const compartments = this.options.compartments;
 
     const pickAnchorVolume = (candidates: Species[]): number => {
-      // INLINE COMMENT: BNG2 prefers 3D volumes as reaction anchors for mass-action ODE scaling.
-      // Surface areas (dim 2) are only used if no 3D volumes are involved in the reaction.
+      // Prefer 3D anchor volumes; only use 2D surface anchors when no 3D candidate exists.
       const surfaceVolumes: number[] = [];
       const volumeVolumes: number[] = [];
 
@@ -554,7 +553,6 @@ export class NetworkGenerator {
         else volumeVolumes.push(size); // dimension 3 or undefined
       }
 
-      // Prefer 3D volumes (standard BNG2 behavior)
       if (volumeVolumes.length > 0) return volumeVolumes[0];
       if (surfaceVolumes.length > 0) return surfaceVolumes[0];
       return 1;
@@ -563,6 +561,26 @@ export class NetworkGenerator {
     const anchorVolume = reactants.length > 0
       ? pickAnchorVolume(reactants)
       : pickAnchorVolume(products);
+
+    const dimOf = (s: Species): number => {
+      const compName = this.getSpeciesCompartment(s);
+      if (!compName) return 3;
+      const comp = compartments.find(c => c.name === compName);
+      return comp?.dimension ?? 3;
+    };
+
+    // Mixed 3D/2D bimolecular reactions: keep k in native units and let the
+    // simulation RHS handle anchor-volume normalization.
+    let has2D = false;
+    let has3D = false;
+    for (const r of reactants) {
+      const d = dimOf(r);
+      if (d === 2) has2D = true;
+      else has3D = true;
+    }
+    if (reactants.length > 1 && has2D && has3D) {
+      return { scale: 1, scalingVolume: anchorVolume };
+    }
 
     return { scale: 1 / anchorVolume, scalingVolume: anchorVolume };
   }
@@ -2999,10 +3017,8 @@ export class NetworkGenerator {
 
     let effectiveRate = baseRateConstant * multiplicity;
 
-    // Apply volume scaling for bimolecular+ reactions in compartments
-    if (reactantSpeciesList.length > 1 && scale !== 1) {
-      effectiveRate *= scale;
-    }
+    // Compartment volume normalization is applied in the simulation RHS path.
+    // Keep reaction constants in native model units here to avoid double scaling.
 
     // Arrhenius rate law calculation for N-ary rule
     if (rule.isArrhenius && this.energyService) {

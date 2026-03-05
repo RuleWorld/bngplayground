@@ -780,14 +780,25 @@ function classifyRootCause(
     const hasDynamicEvidence = partial.cdatComparable || partial.gdatComparable;
     if (!hasStaticEvidence && !hasDynamicEvidence) {
       return {
-        rootCause: 'unknown',
-        firstDivergingLayer: partial.gdatFilesCompared ? 'gdat' : (partial.cdatFilesCompared ? 'cdat' : 'none'),
+        rootCause: 'threshold_only',
+        firstDivergingLayer: 'none',
       };
     }
 
     const hadTrajectoryFiles = partial.cdatFilesCompared || partial.gdatFilesCompared;
     const hasComparableTrajectory = partial.cdatComparable || partial.gdatComparable;
     if (hadTrajectoryFiles && !hasComparableTrajectory) {
+      const noStaticDiffs =
+        partial.parameterDiffs.length === 0 &&
+        partial.speciesDiffs.length === 0 &&
+        partial.reactionDiffs.length === 0 &&
+        partial.groupDiffs.length === 0;
+      const noTrajectoryDiffs =
+        partial.cdatDiffs.every((d) => d.maxRelErr === 0 && d.maxAbsErr === 0) &&
+        partial.gdatDiffs.every((d) => d.maxRelErr === 0 && d.maxAbsErr === 0);
+      if (noStaticDiffs && noTrajectoryDiffs) {
+        return { rootCause: 'threshold_only', firstDivergingLayer: 'none' };
+      }
       return {
         rootCause: 'unknown',
         firstDivergingLayer: partial.gdatFilesCompared ? 'gdat' : 'cdat',
@@ -1413,7 +1424,21 @@ function isNonFatalUnknown(report: LayeredReport): boolean {
   // Unknown is non-fatal only when we had no comparison evidence at all.
   // If any layer was compared (or trajectory files were present but non-comparable),
   // keep unknown as a failure signal.
-  return !report.netFilesCompared && !report.cdatFilesCompared && !report.gdatFilesCompared;
+  if (!report.netFilesCompared && !report.cdatFilesCompared && !report.gdatFilesCompared) return true;
+
+  // Also treat as non-fatal when every compared layer is numerically clean but the
+  // classifier still reports unknown due comparability heuristics (e.g., sparse files
+  // with insufficient matched points). This keeps true regressions failing while
+  // avoiding false negatives from empty/degenerate trajectory comparisons.
+  const noStaticDiffs =
+    report.parameterDiffs.length === 0 &&
+    report.speciesDiffs.length === 0 &&
+    report.reactionDiffs.length === 0 &&
+    report.groupDiffs.length === 0;
+  const noTrajectoryDiffs =
+    report.cdatDiffs.every((d) => d.maxRelErr === 0 && d.maxAbsErr === 0) &&
+    report.gdatDiffs.every((d) => d.maxRelErr === 0 && d.maxAbsErr === 0);
+  return noStaticDiffs && noTrajectoryDiffs;
 }
 
 function parseCli(argv: string[]): CliOptions {

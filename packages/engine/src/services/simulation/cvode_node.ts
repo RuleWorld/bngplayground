@@ -28,7 +28,10 @@ export const createCVodeModule: CvodeLoader = async (moduleArg?: unknown) => {
   if (!cachedLoader) {
     const moduleObj: { exports: unknown } = { exports: {} };
     const exportsObj: Record<string, unknown> = {};
-    const source = readFileSync(loaderPath, 'utf8');
+    let source = readFileSync(loaderPath, 'utf8');
+    // The generated loader may include an ESM default export, which vm.Script (CJS context)
+    // cannot parse. Strip only the terminal export statement before evaluating.
+    source = source.replace(/^\s*export\s+default\s+createCVodeModule\s*;?\s*$/gm, '');
     const script = new vm.Script(source, { filename: loaderPath });
     const context = vm.createContext({
       module: moduleObj,

@@ -86,13 +86,16 @@ const normalizeBareMoleculePattern = (s: string): string => {
     return /^[A-Za-z0-9_]+$/.test(s) ? `${s}()` : s;
 };
 
-const getLeadingCompartment = (s: string): string | null => {
-    const normalized = normalizeLegacySuffixCompartment(s);
-    const prefix = normalized.match(/^@([A-Za-z0-9_]+)::?/);
-    return prefix ? prefix[1] : null;
+const parseSimpleCompartmentMoleculePattern = (
+    pattern: string
+): { molecule: string; compartment: string; style: 'prefix' | 'suffix' } | null => {
+    const p = normalizeLegacySuffixCompartment(pattern.trim());
+    const m1 = p.match(/^@([A-Za-z0-9_]+)::?([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(\s*\))?$/);
+    if (m1) return { compartment: m1[1], molecule: m1[2], style: 'prefix' };
+    const m2 = p.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(\s*\))?@([A-Za-z0-9_]+)$/);
+    if (m2) return { molecule: m2[1], compartment: m2[2], style: 'suffix' };
+    return null;
 };
-
-const removeLeadingCompartment = (s: string): string => normalizeLegacySuffixCompartment(s).replace(/^@[A-Za-z0-9_]+::?/, '');
 
 // -------------------------------------------------------------------------
 // Graph Caching (Performance Optimization)
@@ -177,15 +180,27 @@ function countMoleculeEmbeddings(patMol: string, specMol: string): number {
 export function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
     const rawPat = normalizeLegacySuffixCompartment(pattern.trim());
     const rawSpec = normalizeLegacySuffixCompartment(speciesStr.trim());
+    const isMultiMoleculePattern = rawPat.includes('.');
+    const patPrefixComp = rawPat.match(/^@([A-Za-z0-9_]+)::?/)?.[1] ?? null;
+    if (patPrefixComp) {
+        const specComp = getCompartment(rawSpec);
+        if (specComp && specComp !== patPrefixComp) return false;
+        try {
+            const cleanPat = normalizeBareMoleculePattern(rawPat);
+            const cleanSpec = normalizeBareMoleculePattern(rawSpec);
+            const p = parseGraphCached(cleanPat).clone();
+            const s = parseGraphCached(cleanSpec).clone();
+            p.compartment = undefined;
+            s.compartment = undefined;
+            for (const m of p.molecules) m.compartment = undefined;
+            for (const m of s.molecules) m.compartment = undefined;
+            return GraphMatcher.matchesPattern(p, s, { allowExtraTargetBonds: true });
+        } catch {
+            // Fall through to canonical-string path.
+        }
+    }
 
-    const patPrefixComp = getLeadingCompartment(rawPat);
-    const specGlobalComp = getCompartment(rawSpec);
-    if (patPrefixComp && specGlobalComp && patPrefixComp !== specGlobalComp) return false;
-
-    // Strip compartment prefix from pattern after equality check — the @COMP: / @COMP:: prefix
-    // uses observable notation (single colon) which BNGLParser.parseSpeciesGraph cannot handle.
-    const innerPat = patPrefixComp ? rawPat.replace(/^@[A-Za-z0-9_]+::?/, '') : rawPat;
-    const cleanPat = normalizeBareMoleculePattern(innerPat);
+    const cleanPat = normalizeBareMoleculePattern(rawPat);
     const cleanSpec = normalizeBareMoleculePattern(rawSpec);
     const graphPat = normalizeGraphString(cleanPat);
     const graphSpec = normalizeGraphString(cleanSpec);
@@ -213,13 +228,7 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
     const rawPat = normalizeLegacySuffixCompartment(pattern.trim());
     const rawSpec = normalizeLegacySuffixCompartment(speciesStr.trim());
 
-    const patPrefixComp = getLeadingCompartment(rawPat);
-    const specGlobalComp = getCompartment(rawSpec);
-    if (patPrefixComp && specGlobalComp && patPrefixComp !== specGlobalComp) return 0;
-
-    // Strip compartment prefix from pattern after equality check.
-    const innerPat = patPrefixComp ? rawPat.replace(/^@[A-Za-z0-9_]+::?/, '') : rawPat;
-    const cleanPat = normalizeBareMoleculePattern(innerPat);
+    const cleanPat = normalizeBareMoleculePattern(rawPat);
     const cleanSpec = normalizeBareMoleculePattern(rawSpec);
     const graphPat = normalizeGraphString(cleanPat);
     const graphSpec = normalizeGraphString(cleanSpec);
@@ -246,17 +255,76 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
 
 // --- Helper: Count Matches for Molecules Observable ---
 export function countPatternMatches(speciesStr: string, patternStr: string): number {
+    const normalizedPattern = normalizeLegacySuffixCompartment(patternStr.trim());
+    const isMultiMoleculePattern = normalizedPattern.includes('.');
+    const patPrefixComp = normalizedPattern.match(/^@([A-Za-z0-9_]+)::?/)?.[1] ?? null;
+    if (patPrefixComp) {
+        const specComp = getCompartment(speciesStr);
+        if (specComp && specComp !== patPrefixComp) return 0;
+        try {
+            const rawPat = normalizeLegacySuffixCompartment(patternStr.trim());
+            const rawSpec = normalizeLegacySuffixCompartment(speciesStr.trim());
+            const cleanPat = normalizeBareMoleculePattern(rawPat);
+            const cleanSpec = normalizeBareMoleculePattern(rawSpec);
+            const p = parseGraphCached(cleanPat).clone();
+            const s = parseGraphCached(cleanSpec).clone();
+            p.compartment = undefined;
+            s.compartment = undefined;
+            for (const m of p.molecules) m.compartment = undefined;
+            for (const m of s.molecules) m.compartment = undefined;
+            const maps = GraphMatcher.findAllMaps(p, s, { allowExtraTargetBonds: false });
+            if (maps.length === 0) return 0;
+            let total = 0;
+            for (const map of maps) {
+                const d = countEmbeddingDegeneracy(p, s, map);
+                total += Number.isFinite(d) && d > 0 ? d : 1;
+            }
+            return total;
+        } catch {
+            // Fall through to non-prefix paths below.
+        }
+    }
+
+    // Fast path for simple compartment-molecule observable patterns (e.g. "@PM:L").
+    // For compartmental complexes, BNG2 observable semantics align with the species
+    // anchor compartment (e.g. @PM::...), not only explicit per-molecule @suffix tags.
+    const simpleCompPattern = parseSimpleCompartmentMoleculePattern(patternStr);
+    if (simpleCompPattern) {
+        if (simpleCompPattern.style === 'prefix') {
+            const speciesCompartment = getCompartment(speciesStr);
+            if (speciesCompartment !== simpleCompPattern.compartment) return 0;
+        }
+        try {
+            const specGraph = parseGraphCached(normalizeLegacySuffixCompartment(speciesStr.trim()));
+            let count = 0;
+            for (const mol of specGraph.molecules) {
+                if (mol.name !== simpleCompPattern.molecule) continue;
+                const effectiveComp = mol.compartment ?? specGraph.compartment ?? null;
+                if (effectiveComp === simpleCompPattern.compartment) count++;
+            }
+            return count;
+        } catch {
+            // Fallback to lightweight string parsing.
+            const normalized = normalizeLegacySuffixCompartment(speciesStr.trim());
+            const body = normalized.replace(/^@[A-Za-z0-9_]+::?/, '');
+            const chunks = body.split('.').map((c) => c.trim()).filter(Boolean);
+            let count = 0;
+            for (const chunk of chunks) {
+                const chunkComp = chunk.match(/@([A-Za-z0-9_]+)$/)?.[1] ?? getCompartment(speciesStr);
+                const noComp = chunk.replace(/@([A-Za-z0-9_]+)$/, '');
+                const nameMatch = noComp.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(|$)/);
+                if (nameMatch && nameMatch[1] === simpleCompPattern.molecule && chunkComp === simpleCompPattern.compartment) count++;
+            }
+            return count;
+        }
+    }
+
     const rawPat = normalizeLegacySuffixCompartment(patternStr.trim());
     const rawSpec = normalizeLegacySuffixCompartment(speciesStr.trim());
 
-    const patPrefixComp = getLeadingCompartment(rawPat);
-    const specGlobalComp = getCompartment(rawSpec);
-    if (patPrefixComp && specGlobalComp && patPrefixComp !== specGlobalComp) return 0;
-
-    // Strip compartment prefix from pattern after equality check.
-    const innerPat2 = patPrefixComp ? rawPat.replace(/^@[A-Za-z0-9_]+::?/, '') : rawPat;
-    const cleanPat = normalizeBareMoleculePattern(innerPat2);
+    const cleanPat = normalizeBareMoleculePattern(rawPat);
     const cleanSpec = normalizeBareMoleculePattern(rawSpec);
+
     const graphPat = normalizeGraphString(cleanPat);
     const graphSpec = normalizeGraphString(cleanSpec);
 

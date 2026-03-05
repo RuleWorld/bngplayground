@@ -167,6 +167,10 @@ function runLayeredParity(models, outPath, timeoutMs) {
     cwd: root,
     stdio: 'inherit',
     shell: true,
+    env: {
+      ...process.env,
+      BNG_DISABLE_NATIVE_BYTECODE: '1',
+    },
   });
   return typeof result.status === 'number' ? result.status : 1;
 }

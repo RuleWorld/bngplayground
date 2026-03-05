@@ -351,8 +351,11 @@ export class JITCompiler {
         }>,
         nSpecies: number,
         parameters?: Record<string, number>,
-        speciesVolumes?: Float64Array
+        speciesVolumes?: Float64Array,
+        constantSpeciesMask?: boolean[]
     ): NetworkByteCode | null {
+        const isConstant = (idx: number): boolean =>
+            !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
         try {
             const nReactions = reactions.length;
             const rateConstants = new Float64Array(nReactions);
@@ -414,6 +417,7 @@ export class JITCompiler {
                 // Reactants
                 for (let j = 0; j < rxn.reactantIndices.length; j++) {
                     const s = rxn.reactantIndices[j];
+                    if (isConstant(s)) continue;
                     const st = rxn.reactantStoich[j];
                     const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
                     if (existing) {
@@ -425,6 +429,7 @@ export class JITCompiler {
                 // Products
                 for (let j = 0; j < rxn.productIndices.length; j++) {
                     const s = rxn.productIndices[j];
+                    if (isConstant(s)) continue;
                     const st = rxn.productStoich[j];
                     const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
                     if (existing) {
