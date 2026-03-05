@@ -221,4 +221,7 @@ test*.csv
 
 rulebender-RuleBender-2.3.2
 
+public_models_compatibility.json
+public_atomizer_report.json
+
 # End of .gitignore
