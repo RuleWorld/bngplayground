@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { generateExpandedNetwork } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { NetworkGenerator } from '@bngplayground/engine';
-import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
+import { GraphCanonicalizer } from '@bngplayground/engine';
 
 // Mocks
 vi.mock('@bngplayground/engine', () => ({

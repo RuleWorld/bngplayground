@@ -4,7 +4,7 @@ import {
     computeJacobianSparsity, 
     buildJacobianContributions, 
     generateSparseJacobianFunction 
-} from '../../src/services/SparseJacobian';
+} from '@bngplayground/engine';
 
 // Mock Rxn
 interface MockRxn {

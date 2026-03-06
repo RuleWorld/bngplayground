@@ -9,7 +9,7 @@ import {
     csrMatVec,
     gmres,
     CSRMatrix 
-} from '../../src/services/SparseLUSolver';
+} from '@bngplayground/engine';
 
 describe('SparseLUSolver Service', () => {
 

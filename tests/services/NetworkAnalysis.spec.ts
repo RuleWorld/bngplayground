@@ -4,7 +4,7 @@ import {
     analyzeNetwork, 
     checkDeficiencyZeroTheorem, 
     NetworkAnalysis 
-} from '../../src/services/NetworkAnalysis';
+} from '@bngplayground/engine';
 
 // Mock Rxn
 interface MockRxn {
