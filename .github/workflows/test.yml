@@ -33,7 +33,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
       
       - name: Run fast test suite
         run: npm run test:fast
@@ -64,7 +64,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
       
       - name: Type check
         run: npm run type-check
@@ -106,7 +106,7 @@ jobs:
           cache: 'npm'
       
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
       
       - name: Run full test suite (sharded)
         run: npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
