@@ -1,7 +1,7 @@
 import { bnglService } from '../../services/bnglService';
 import { MODEL_CATEGORIES, BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../constants';
 import { BNGLModel, SimulationResults } from '../../types';
-import { getSimulationOptionsFromParsedModel } from './simulationOptions';
+import { getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 import { downloadCsv } from './download';
 import { loadModelCode } from '../../services/modelLoader';
 
