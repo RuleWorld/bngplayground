@@ -13,8 +13,8 @@ import {
   NFsimConcurrencyManager, 
   getConcurrencyManager,
   resetConcurrencyManager 
-} from '../../services/simulation/NFsimConcurrencyManager';
-import { NFsimExecutionOptions } from '../../services/simulation/NFsimExecutionWrapper';
+} from '@bngplayground/engine';
+import { NFsimExecutionOptions } from '@bngplayground/engine';
 
 // Mock WASM module for testing
 const createMockModule = (moduleId: string) => {

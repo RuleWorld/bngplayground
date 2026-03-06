@@ -2,8 +2,8 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Button } from './ui/Button';
 import { Input } from './ui/Input';
 import { CHART_COLORS } from '../constants';
-import { validateObservablePattern } from '../src/utils/dynamicObservable';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
+import { validateObservablePattern } from '@bngplayground/engine';
+import { BNGLParser } from '@bngplayground/engine';
 
 export interface CustomExpression {
   id: string;

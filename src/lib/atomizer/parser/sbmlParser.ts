@@ -34,6 +34,7 @@ if (typeof self === 'undefined') {
 // =============================================================================
 
 // These types represent the libsbmljs WebAssembly API
+// eslint-disable-next-line @typescript-eslint/no-namespace
 declare namespace LibSBML {
   interface SBMLReader {
     readSBMLFromString(sbmlString: string): SBMLDocument;
@@ -361,7 +362,7 @@ export class SBML2JSON {
     parameters.set(idx++, { name: 'rxn_layer_t', value: '0.01', unit: 'um', type: '' });
     parameters.set(idx++, { name: 'h', value: 'rxn_layer_t', unit: 'um', type: '' });
     parameters.set(idx++, { name: 'Rs', value: '0.002564', unit: 'um', type: '' });
-    parameters.set(idx++, { name: 'Rc', value: '0.0015', unit: 'um', type: '' });
+    parameters.set(idx, { name: 'Rc', value: '0.0015', unit: 'um', type: '' });
 
     return parameters;
   }
@@ -863,7 +864,7 @@ export class SBMLParser {
         logger.info('SBM001', 'libsbmljs initialized successfully');
       } catch (error) {
         logger.error('SBM002', `Failed to load libsbmljs: ${error}`);
-        throw new Error(`Failed to initialize SBML parser: ${error}`);
+        throw new Error(`Failed to initialize SBML parser: ${error}`, { cause: error });
       }
     })();
 
@@ -1385,7 +1386,7 @@ export class SBMLParser {
     if (!sanitized) return '';
 
     // Keep valid function/operator expressions, but reject punctuation-only artifacts.
-    if (/^[=(){}\[\],;\s]+$/.test(sanitized)) {
+    if (/^[=(){}[],;\s]+$/.test(sanitized)) {
       return '';
     }
     return sanitized;
@@ -1808,7 +1809,7 @@ export class SBMLParser {
     let kineticLaw: SBMLKineticLaw | null = null;
     let localAliases: Map<string, string> | undefined;
     let localParams: SBMLParameter[] = [];
-    let kl: any = null;
+    let kl: any;
     try {
       kl = rxn.getKineticLaw();
     } catch {
@@ -1818,14 +1819,14 @@ export class SBMLParser {
       localParams = [];
       localAliases = new Map<string, string>();
 
-      let numParams = 0;
+      let numParams: number;
       try {
         numParams = kl.getNumLocalParameters?.() ?? kl.getNumParameters?.() ?? 0;
       } catch {
         numParams = 0;
       }
       for (let i = 0; i < numParams; i++) {
-        let param: any = null;
+        let param: any;
         try {
           param = kl.getLocalParameter?.(i) ?? kl.getParameter?.(i);
         } catch {
@@ -2006,7 +2007,7 @@ export class SBMLParser {
 
     // Try getBody() first (standard SBML with <lambda>), fall back to getMath() (BNG-XML without <lambda>)
     let mathStr = '';
-    let body: any = null;
+    let body: any;
     try {
       body = func.getBody();
     } catch {
@@ -2016,7 +2017,7 @@ export class SBMLParser {
       mathStr = this.safeFormulaToString(body);
     } else {
       // BNG-XML format: use getMath() directly, skipping <lambda> wrapper if present
-      let math: any = null;
+      let math: any;
       try {
         math = func.getMath();
       } catch {

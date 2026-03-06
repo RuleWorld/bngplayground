@@ -338,8 +338,8 @@ export class GraphMatcher {
     }
 
     // Check that target has enough of each type
-    let targetTotal = target.molecules.length;
-    let patternTotal = pattern.molecules.length;
+    const targetTotal = target.molecules.length;
+    const patternTotal = pattern.molecules.length;
 
     for (const [molType, count] of patternCounts) {
       if (molType === '*') {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as fc from 'fast-check';
-import { NFsimValidator, ValidationErrorType } from '../../services/simulation/NFsimValidator';
+import { NFsimValidator, ValidationErrorType } from '@bngplayground/engine';
 import { BNGLModel, ReactionRule, BNGLFunction, BNGLCompartment, BNGLMoleculeType } from '../../types';
 
 describe('NFsimValidator', () => {

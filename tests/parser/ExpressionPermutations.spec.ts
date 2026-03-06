@@ -1,7 +1,7 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { evaluateFunctionalRate, _setEvaluatorRefForTests } from '../../services/simulation/ExpressionEvaluator';
-import { SafeExpressionEvaluator } from '../../services/safeExpressionEvaluator';
+import { evaluateFunctionalRate, _setEvaluatorRefForTests } from '@bngplayground/engine';
+import { SafeExpressionEvaluator } from '@bngplayground/engine';
 
 describe('MathPermutations', () => {
     beforeAll(() => {

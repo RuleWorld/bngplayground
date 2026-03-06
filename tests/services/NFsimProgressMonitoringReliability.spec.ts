@@ -15,8 +15,8 @@ import {
   NFsimExecutionOptions, 
   ProgressUpdate,
   ExecutionResult 
-} from '../../services/simulation/NFsimExecutionWrapper';
-import { resetConcurrencyManager } from '../../services/simulation/NFsimConcurrencyManager';
+} from '@bngplayground/engine';
+import { resetConcurrencyManager } from '@bngplayground/engine';
 
 // Mock WASM module for testing with configurable execution time
 const createMockModule = (executionTimeMs: number) => {

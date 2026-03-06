@@ -7,8 +7,8 @@ import {
   ModelComplexityMetrics,
   PerformanceMetrics,
   OptimizationResult
-} from '../../services/simulation/NFsimParameterOptimizer';
-import { NFsimExecutionOptions } from '../../services/simulation/NFsimExecutionWrapper';
+} from '@bngplayground/engine';
+import { NFsimExecutionOptions } from '@bngplayground/engine';
 
 describe('NFsim Performance Optimization', () => {
   let parameterOptimizer: NFsimParameterOptimizer;

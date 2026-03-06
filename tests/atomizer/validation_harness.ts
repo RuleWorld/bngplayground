@@ -12,11 +12,11 @@ import path from 'node:path';
 import { createInterface } from 'node:readline';
 
 import { Atomizer } from '../../src/lib/atomizer/index';
-import { parseBNGLStrict } from '../../src/parser/BNGLParserWrapper';
-import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
-import { loadEvaluator } from '../../services/simulation/ExpressionEvaluator';
-import { requiresCompartmentResolution, resolveCompartmentVolumes } from '../../services/simulation/CompartmentResolver';
-import { parseGdat } from '../../services/simulation/GdatParser';
+import { parseBNGLStrict } from '@bngplayground/engine';
+import { generateExpandedNetwork } from '@bngplayground/engine';
+import { loadEvaluator } from '@bngplayground/engine';
+import { requiresCompartmentResolution, resolveCompartmentVolumes } from '@bngplayground/engine';
+import { parseGdat } from '@bngplayground/engine';
 import { exportToSBML } from '../../services/exportSBML';
 import { DEFAULT_BNG2_PATH, DEFAULT_BNG_BIN, DEFAULT_PERL5LIB, DEFAULT_PERL_CMD } from '../../tools/bngDefaults.js';
 import type { BNGLModel } from '../../types';

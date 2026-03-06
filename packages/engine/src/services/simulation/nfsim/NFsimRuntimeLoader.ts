@@ -50,11 +50,11 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
       if (progressCb && module) {
         if (typeof module.print === 'function') {
           oldPrint = module.print.bind(module);
-          module.print = (s: any) => { try { progressCb(String(s)); } catch {} try { oldPrint?.(s); } catch {} };
+          module.print = (s: any) => { try { progressCb(String(s)); } catch { /* ignore */ } try { oldPrint?.(s); } catch { /* ignore */ } };
         }
         if (typeof module.printErr === 'function') {
           oldPrintErr = module.printErr.bind(module);
-          module.printErr = (s: any) => { try { progressCb(String(s)); } catch {} try { oldPrintErr?.(s); } catch {} };
+          module.printErr = (s: any) => { try { progressCb(String(s)); } catch { /* ignore */ } try { oldPrintErr?.(s); } catch { /* ignore */ } };
         }
       }
 
@@ -115,10 +115,14 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
           module.print = (s: any) => {
             try {
               progressCb(String(s));
-            } catch {}
+            } catch {
+              /* ignore */
+            }
             try {
               oldPrint?.(s);
-            } catch {}
+            } catch {
+              /* ignore */
+            }
           };
         }
         if (module && typeof module.printErr === 'function') {
@@ -126,10 +130,14 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
           module.printErr = (s: any) => {
             try {
               progressCb(String(s));
-            } catch {}
+            } catch {
+              /* ignore */
+            }
             try {
               oldPrintErr?.(s);
-            } catch {}
+            } catch {
+              /* ignore */
+            }
           };
         }
 
@@ -139,13 +147,17 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         console.log = (...args: any[]) => {
           try {
             progressCb(args.map(String).join(' '));
-          } catch {}
+          } catch {
+            /* ignore */
+          }
           origConsoleLog(...args);
         };
         console.error = (...args: any[]) => {
           try {
             progressCb(args.map(String).join(' '));
-          } catch {}
+          } catch {
+            /* ignore */
+          }
           origConsoleError(...args);
         };
       }
@@ -235,11 +247,11 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         origConsoleLog = console.log;
         origConsoleError = console.error;
         console.log = (...args: any[]) => {
-          try { progressCb(args.map(String).join(' ')); } catch {}
+          try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleLog(...args);
         };
         console.error = (...args: any[]) => {
-          try { progressCb(args.map(String).join(' ')); } catch {}
+          try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleError(...args);
         };
       }
@@ -265,11 +277,11 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         origConsoleLog = console.log;
         origConsoleError = console.error;
         console.log = (...args: any[]) => {
-          try { progressCb(args.map(String).join(' ')); } catch {}
+          try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleLog(...args);
         };
         console.error = (...args: any[]) => {
-          try { progressCb(args.map(String).join(' ')); } catch {}
+          try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleError(...args);
         };
       }
@@ -364,7 +376,7 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
         throw new Error('NFsim JS module loaded but no factory/runtime was found.');
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`NFsim runtime loader failed. Ensure ${url} exists and exports a run(xml, options) function or a factory (default export). (${message})`);
+        throw new Error(`NFsim runtime loader failed. Ensure ${url} exists and exports a run(xml, options) function or a factory (default export). (${message})`, { cause: error });
       }
     })();
   }

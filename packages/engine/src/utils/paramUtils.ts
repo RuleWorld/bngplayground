@@ -28,7 +28,7 @@ export function isNumericLiteral(expr: string): boolean {
 
 export function stripParametersBlock(src: string): string {
   const lines = src.split(/\r?\n/);
-  let out: string[] = [];
+  const out: string[] = [];
   let inParams = false;
   for (const raw of lines) {
     const l = raw.trim();

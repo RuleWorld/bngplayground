@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { runNFsimSimulation } from '../services/simulation/NFsimRunner';
+import { runNFsimSimulation } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL';
 import * as fs from 'fs';
 

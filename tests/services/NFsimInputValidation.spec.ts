@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fc from 'fast-check';
-import { getValidator, resetValidator, NFsimValidator } from '../../services/simulation/NFsimValidator';
-import { NFsimExecutionOptions } from '../../services/simulation/NFsimExecutionWrapper';
+import { getValidator, resetValidator, NFsimValidator } from '@bngplayground/engine';
+import { NFsimExecutionOptions } from '@bngplayground/engine';
 
 describe('NFsim Input Validation Consistency', () => {
   let validator: NFsimValidator;

@@ -1,8 +1,8 @@
 
 import { describe, it, expect } from 'vitest';
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
+import { BNGLParser } from '@bngplayground/engine';
 
-import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
+import { GraphCanonicalizer } from '@bngplayground/engine';
 
 // Helper to canonicalize
 const canon = (s: string) => {

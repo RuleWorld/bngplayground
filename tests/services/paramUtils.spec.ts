@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from '../../services/paramUtils';
+import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from '@bngplayground/engine';
 
 describe('paramUtils', () => {
   it('parses parameters block', () => {

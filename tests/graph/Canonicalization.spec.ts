@@ -1,11 +1,11 @@
 
 import { describe, it, expect } from 'vitest';
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser'; // Adjust path
+import { BNGLParser } from '@bngplayground/engine'; // Adjust path
 // Adjust path if needed
 // Or use canonical labeling directly if ParityService not available in test scope easily
 // Let's assume BNGLParser exposes parsing and we can verify identity strings.
 
-import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
+import { GraphCanonicalizer } from '@bngplayground/engine';
 
 // Helper to get canonical string
 function canonicalStr(bngl: string): string {

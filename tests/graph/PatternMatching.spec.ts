@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { isSpeciesMatch, countPatternMatches } from '../../services/parity/PatternMatcher';
+import { isSpeciesMatch, countPatternMatches } from '@bngplayground/engine';
 
 describe('PatternMatching', () => {
 

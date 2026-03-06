@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
-import { parseBNGLWithANTLR } from '../../src/parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import { buildContactMap } from '../../services/visualization/contactMapBuilder';
 
 const __filename = fileURLToPath(import.meta.url);

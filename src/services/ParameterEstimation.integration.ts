@@ -4,7 +4,7 @@
 
 import type { SimulationData } from './ParameterEstimation';
 // Note: ODESolver may not exist yet - this is a template for future integration
-// import { ODESolver } from './ODESolver';
+// import { ODESolver } from '@bngplayground/engine';
 
 /**
  * Integration helper to connect ParameterEstimation with existing ODESolver

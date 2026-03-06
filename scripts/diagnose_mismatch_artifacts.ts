@@ -1,8 +1,8 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { parseBNGL } from '../services/parseBNGL.ts';
-import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion.ts';
-import { simulate } from '../services/simulation/SimulationLoop.ts';
+import { generateExpandedNetwork } from '@bngplayground/engine';
+import { simulate } from '@bngplayground/engine';
 import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
 
 const ROOT = process.cwd();

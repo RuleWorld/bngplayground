@@ -474,7 +474,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public prog(): ProgContext {
-		let _localctx: ProgContext = new ProgContext(this._ctx, this.state);
+		const _localctx: ProgContext = new ProgContext(this._ctx, this.state);
 		this.enterRule(_localctx, 0, BNGParser.RULE_prog);
 		let _la: number;
 		try {
@@ -657,7 +657,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public header_block(): Header_blockContext {
-		let _localctx: Header_blockContext = new Header_blockContext(this._ctx, this.state);
+		const _localctx: Header_blockContext = new Header_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 2, BNGParser.RULE_header_block);
 		try {
 			this.state = 225;
@@ -711,7 +711,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public version_def(): Version_defContext {
-		let _localctx: Version_defContext = new Version_defContext(this._ctx, this.state);
+		const _localctx: Version_defContext = new Version_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 4, BNGParser.RULE_version_def);
 		let _la: number;
 		try {
@@ -781,7 +781,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public substance_def(): Substance_defContext {
-		let _localctx: Substance_defContext = new Substance_defContext(this._ctx, this.state);
+		const _localctx: Substance_defContext = new Substance_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 6, BNGParser.RULE_substance_def);
 		let _la: number;
 		try {
@@ -841,7 +841,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public set_option(): Set_optionContext {
-		let _localctx: Set_optionContext = new Set_optionContext(this._ctx, this.state);
+		const _localctx: Set_optionContext = new Set_optionContext(this._ctx, this.state);
 		this.enterRule(_localctx, 8, BNGParser.RULE_set_option);
 		let _la: number;
 		try {
@@ -1025,7 +1025,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public set_model_name(): Set_model_nameContext {
-		let _localctx: Set_model_nameContext = new Set_model_nameContext(this._ctx, this.state);
+		const _localctx: Set_model_nameContext = new Set_model_nameContext(this._ctx, this.state);
 		this.enterRule(_localctx, 10, BNGParser.RULE_set_model_name);
 		let _la: number;
 		try {
@@ -1085,7 +1085,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public program_block(): Program_blockContext {
-		let _localctx: Program_blockContext = new Program_blockContext(this._ctx, this.state);
+		const _localctx: Program_blockContext = new Program_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 12, BNGParser.RULE_program_block);
 		try {
 			this.state = 334;
@@ -1196,7 +1196,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public parameters_block(): Parameters_blockContext {
-		let _localctx: Parameters_blockContext = new Parameters_blockContext(this._ctx, this.state);
+		const _localctx: Parameters_blockContext = new Parameters_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 14, BNGParser.RULE_parameters_block);
 		let _la: number;
 		try {
@@ -1284,7 +1284,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public parameter_def(): Parameter_defContext {
-		let _localctx: Parameter_defContext = new Parameter_defContext(this._ctx, this.state);
+		const _localctx: Parameter_defContext = new Parameter_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 16, BNGParser.RULE_parameter_def);
 		let _la: number;
 		try {
@@ -1352,7 +1352,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public param_name(): Param_nameContext {
-		let _localctx: Param_nameContext = new Param_nameContext(this._ctx, this.state);
+		const _localctx: Param_nameContext = new Param_nameContext(this._ctx, this.state);
 		this.enterRule(_localctx, 18, BNGParser.RULE_param_name);
 		try {
 			this.state = 379;
@@ -1391,7 +1391,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_types_block(): Molecule_types_blockContext {
-		let _localctx: Molecule_types_blockContext = new Molecule_types_blockContext(this._ctx, this.state);
+		const _localctx: Molecule_types_blockContext = new Molecule_types_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 20, BNGParser.RULE_molecule_types_block);
 		let _la: number;
 		try {
@@ -1559,7 +1559,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_type_def(): Molecule_type_defContext {
-		let _localctx: Molecule_type_defContext = new Molecule_type_defContext(this._ctx, this.state);
+		const _localctx: Molecule_type_defContext = new Molecule_type_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 22, BNGParser.RULE_molecule_type_def);
 		let _la: number;
 		try {
@@ -1607,7 +1607,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_def(): Molecule_defContext {
-		let _localctx: Molecule_defContext = new Molecule_defContext(this._ctx, this.state);
+		const _localctx: Molecule_defContext = new Molecule_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 24, BNGParser.RULE_molecule_def);
 		let _la: number;
 		try {
@@ -1697,7 +1697,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_attributes(): Molecule_attributesContext {
-		let _localctx: Molecule_attributesContext = new Molecule_attributesContext(this._ctx, this.state);
+		const _localctx: Molecule_attributesContext = new Molecule_attributesContext(this._ctx, this.state);
 		this.enterRule(_localctx, 26, BNGParser.RULE_molecule_attributes);
 		let _la: number;
 		try {
@@ -1735,7 +1735,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public component_def_list(): Component_def_listContext {
-		let _localctx: Component_def_listContext = new Component_def_listContext(this._ctx, this.state);
+		const _localctx: Component_def_listContext = new Component_def_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 28, BNGParser.RULE_component_def_list);
 		let _la: number;
 		try {
@@ -1793,7 +1793,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public component_def(): Component_defContext {
-		let _localctx: Component_defContext = new Component_defContext(this._ctx, this.state);
+		const _localctx: Component_defContext = new Component_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 30, BNGParser.RULE_component_def);
 		let _la: number;
 		try {
@@ -1890,7 +1890,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public keyword_as_component_name(): Keyword_as_component_nameContext {
-		let _localctx: Keyword_as_component_nameContext = new Keyword_as_component_nameContext(this._ctx, this.state);
+		const _localctx: Keyword_as_component_nameContext = new Keyword_as_component_nameContext(this._ctx, this.state);
 		this.enterRule(_localctx, 32, BNGParser.RULE_keyword_as_component_name);
 		let _la: number;
 		try {
@@ -1926,7 +1926,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public keyword_as_mol_name(): Keyword_as_mol_nameContext {
-		let _localctx: Keyword_as_mol_nameContext = new Keyword_as_mol_nameContext(this._ctx, this.state);
+		const _localctx: Keyword_as_mol_nameContext = new Keyword_as_mol_nameContext(this._ctx, this.state);
 		this.enterRule(_localctx, 34, BNGParser.RULE_keyword_as_mol_name);
 		let _la: number;
 		try {
@@ -1962,7 +1962,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public state_list(): State_listContext {
-		let _localctx: State_listContext = new State_listContext(this._ctx, this.state);
+		const _localctx: State_listContext = new State_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 36, BNGParser.RULE_state_list);
 		let _la: number;
 		try {
@@ -2004,7 +2004,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public state_name(): State_nameContext {
-		let _localctx: State_nameContext = new State_nameContext(this._ctx, this.state);
+		const _localctx: State_nameContext = new State_nameContext(this._ctx, this.state);
 		this.enterRule(_localctx, 38, BNGParser.RULE_state_name);
 		let _la: number;
 		try {
@@ -2055,7 +2055,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public seed_species_block(): Seed_species_blockContext {
-		let _localctx: Seed_species_blockContext = new Seed_species_blockContext(this._ctx, this.state);
+		const _localctx: Seed_species_blockContext = new Seed_species_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 40, BNGParser.RULE_seed_species_block);
 		let _la: number;
 		try {
@@ -2191,7 +2191,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public seed_species_def(): Seed_species_defContext {
-		let _localctx: Seed_species_defContext = new Seed_species_defContext(this._ctx, this.state);
+		const _localctx: Seed_species_defContext = new Seed_species_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 42, BNGParser.RULE_seed_species_def);
 		let _la: number;
 		try {
@@ -2273,7 +2273,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public species_def(): Species_defContext {
-		let _localctx: Species_defContext = new Species_defContext(this._ctx, this.state);
+		const _localctx: Species_defContext = new Species_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 44, BNGParser.RULE_species_def);
 		let _la: number;
 		try {
@@ -2361,7 +2361,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_compartment(): Molecule_compartmentContext {
-		let _localctx: Molecule_compartmentContext = new Molecule_compartmentContext(this._ctx, this.state);
+		const _localctx: Molecule_compartmentContext = new Molecule_compartmentContext(this._ctx, this.state);
 		this.enterRule(_localctx, 46, BNGParser.RULE_molecule_compartment);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -2388,7 +2388,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_pattern(): Molecule_patternContext {
-		let _localctx: Molecule_patternContext = new Molecule_patternContext(this._ctx, this.state);
+		const _localctx: Molecule_patternContext = new Molecule_patternContext(this._ctx, this.state);
 		this.enterRule(_localctx, 48, BNGParser.RULE_molecule_pattern);
 		let _la: number;
 		try {
@@ -2498,7 +2498,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public pattern_bond_wildcard(): Pattern_bond_wildcardContext {
-		let _localctx: Pattern_bond_wildcardContext = new Pattern_bond_wildcardContext(this._ctx, this.state);
+		const _localctx: Pattern_bond_wildcardContext = new Pattern_bond_wildcardContext(this._ctx, this.state);
 		this.enterRule(_localctx, 50, BNGParser.RULE_pattern_bond_wildcard);
 		try {
 			this.state = 612;
@@ -2541,7 +2541,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public molecule_tag(): Molecule_tagContext {
-		let _localctx: Molecule_tagContext = new Molecule_tagContext(this._ctx, this.state);
+		const _localctx: Molecule_tagContext = new Molecule_tagContext(this._ctx, this.state);
 		this.enterRule(_localctx, 52, BNGParser.RULE_molecule_tag);
 		let _la: number;
 		try {
@@ -2579,7 +2579,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public component_pattern_list(): Component_pattern_listContext {
-		let _localctx: Component_pattern_listContext = new Component_pattern_listContext(this._ctx, this.state);
+		const _localctx: Component_pattern_listContext = new Component_pattern_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 54, BNGParser.RULE_component_pattern_list);
 		let _la: number;
 		try {
@@ -2637,7 +2637,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public component_pattern(): Component_patternContext {
-		let _localctx: Component_patternContext = new Component_patternContext(this._ctx, this.state);
+		const _localctx: Component_patternContext = new Component_patternContext(this._ctx, this.state);
 		this.enterRule(_localctx, 56, BNGParser.RULE_component_pattern);
 		let _la: number;
 		try {
@@ -2760,7 +2760,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public state_value(): State_valueContext {
-		let _localctx: State_valueContext = new State_valueContext(this._ctx, this.state);
+		const _localctx: State_valueContext = new State_valueContext(this._ctx, this.state);
 		this.enterRule(_localctx, 58, BNGParser.RULE_state_value);
 		let _la: number;
 		try {
@@ -2818,7 +2818,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public bond_spec(): Bond_specContext {
-		let _localctx: Bond_specContext = new Bond_specContext(this._ctx, this.state);
+		const _localctx: Bond_specContext = new Bond_specContext(this._ctx, this.state);
 		this.enterRule(_localctx, 60, BNGParser.RULE_bond_spec);
 		try {
 			this.state = 658;
@@ -2879,7 +2879,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public bond_id(): Bond_idContext {
-		let _localctx: Bond_idContext = new Bond_idContext(this._ctx, this.state);
+		const _localctx: Bond_idContext = new Bond_idContext(this._ctx, this.state);
 		this.enterRule(_localctx, 62, BNGParser.RULE_bond_id);
 		let _la: number;
 		try {
@@ -2915,7 +2915,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public observables_block(): Observables_blockContext {
-		let _localctx: Observables_blockContext = new Observables_blockContext(this._ctx, this.state);
+		const _localctx: Observables_blockContext = new Observables_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 64, BNGParser.RULE_observables_block);
 		let _la: number;
 		try {
@@ -3003,7 +3003,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public observable_def(): Observable_defContext {
-		let _localctx: Observable_defContext = new Observable_defContext(this._ctx, this.state);
+		const _localctx: Observable_defContext = new Observable_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 66, BNGParser.RULE_observable_def);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -3052,7 +3052,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public observable_type(): Observable_typeContext {
-		let _localctx: Observable_typeContext = new Observable_typeContext(this._ctx, this.state);
+		const _localctx: Observable_typeContext = new Observable_typeContext(this._ctx, this.state);
 		this.enterRule(_localctx, 68, BNGParser.RULE_observable_type);
 		let _la: number;
 		try {
@@ -3088,7 +3088,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public observable_pattern_list(): Observable_pattern_listContext {
-		let _localctx: Observable_pattern_listContext = new Observable_pattern_listContext(this._ctx, this.state);
+		const _localctx: Observable_pattern_listContext = new Observable_pattern_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 70, BNGParser.RULE_observable_pattern_list);
 		let _la: number;
 		try {
@@ -3138,7 +3138,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public observable_pattern(): Observable_patternContext {
-		let _localctx: Observable_patternContext = new Observable_patternContext(this._ctx, this.state);
+		const _localctx: Observable_patternContext = new Observable_patternContext(this._ctx, this.state);
 		this.enterRule(_localctx, 72, BNGParser.RULE_observable_pattern);
 		let _la: number;
 		try {
@@ -3204,7 +3204,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public reaction_rules_block(): Reaction_rules_blockContext {
-		let _localctx: Reaction_rules_blockContext = new Reaction_rules_blockContext(this._ctx, this.state);
+		const _localctx: Reaction_rules_blockContext = new Reaction_rules_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 74, BNGParser.RULE_reaction_rules_block);
 		let _la: number;
 		try {
@@ -3442,7 +3442,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public reaction_rule_def(): Reaction_rule_defContext {
-		let _localctx: Reaction_rule_defContext = new Reaction_rule_defContext(this._ctx, this.state);
+		const _localctx: Reaction_rule_defContext = new Reaction_rule_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 76, BNGParser.RULE_reaction_rule_def);
 		let _la: number;
 		try {
@@ -3536,7 +3536,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public label_def(): Label_defContext {
-		let _localctx: Label_defContext = new Label_defContext(this._ctx, this.state);
+		const _localctx: Label_defContext = new Label_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 78, BNGParser.RULE_label_def);
 		let _la: number;
 		try {
@@ -3634,7 +3634,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public reactant_patterns(): Reactant_patternsContext {
-		let _localctx: Reactant_patternsContext = new Reactant_patternsContext(this._ctx, this.state);
+		const _localctx: Reactant_patternsContext = new Reactant_patternsContext(this._ctx, this.state);
 		this.enterRule(_localctx, 80, BNGParser.RULE_reactant_patterns);
 		let _la: number;
 		try {
@@ -3744,7 +3744,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public product_patterns(): Product_patternsContext {
-		let _localctx: Product_patternsContext = new Product_patternsContext(this._ctx, this.state);
+		const _localctx: Product_patternsContext = new Product_patternsContext(this._ctx, this.state);
 		this.enterRule(_localctx, 82, BNGParser.RULE_product_patterns);
 		try {
 			let _alt: number;
@@ -3856,7 +3856,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public reaction_sign(): Reaction_signContext {
-		let _localctx: Reaction_signContext = new Reaction_signContext(this._ctx, this.state);
+		const _localctx: Reaction_signContext = new Reaction_signContext(this._ctx, this.state);
 		this.enterRule(_localctx, 84, BNGParser.RULE_reaction_sign);
 		let _la: number;
 		try {
@@ -3892,7 +3892,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public rate_law(): Rate_lawContext {
-		let _localctx: Rate_lawContext = new Rate_lawContext(this._ctx, this.state);
+		const _localctx: Rate_lawContext = new Rate_lawContext(this._ctx, this.state);
 		this.enterRule(_localctx, 86, BNGParser.RULE_rate_law);
 		let _la: number;
 		try {
@@ -3930,7 +3930,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public rule_modifiers(): Rule_modifiersContext {
-		let _localctx: Rule_modifiersContext = new Rule_modifiersContext(this._ctx, this.state);
+		const _localctx: Rule_modifiersContext = new Rule_modifiersContext(this._ctx, this.state);
 		this.enterRule(_localctx, 88, BNGParser.RULE_rule_modifiers);
 		try {
 			this.state = 917;
@@ -4063,7 +4063,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public pattern_list(): Pattern_listContext {
-		let _localctx: Pattern_listContext = new Pattern_listContext(this._ctx, this.state);
+		const _localctx: Pattern_listContext = new Pattern_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 90, BNGParser.RULE_pattern_list);
 		let _la: number;
 		try {
@@ -4105,7 +4105,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public functions_block(): Functions_blockContext {
-		let _localctx: Functions_blockContext = new Functions_blockContext(this._ctx, this.state);
+		const _localctx: Functions_blockContext = new Functions_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 92, BNGParser.RULE_functions_block);
 		let _la: number;
 		try {
@@ -4193,7 +4193,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public function_def(): Function_defContext {
-		let _localctx: Function_defContext = new Function_defContext(this._ctx, this.state);
+		const _localctx: Function_defContext = new Function_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 94, BNGParser.RULE_function_def);
 		let _la: number;
 		try {
@@ -4265,7 +4265,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public param_list(): Param_listContext {
-		let _localctx: Param_listContext = new Param_listContext(this._ctx, this.state);
+		const _localctx: Param_listContext = new Param_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 96, BNGParser.RULE_param_list);
 		let _la: number;
 		try {
@@ -4307,7 +4307,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public compartments_block(): Compartments_blockContext {
-		let _localctx: Compartments_blockContext = new Compartments_blockContext(this._ctx, this.state);
+		const _localctx: Compartments_blockContext = new Compartments_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 98, BNGParser.RULE_compartments_block);
 		let _la: number;
 		try {
@@ -4395,7 +4395,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public compartment_def(): Compartment_defContext {
-		let _localctx: Compartment_defContext = new Compartment_defContext(this._ctx, this.state);
+		const _localctx: Compartment_defContext = new Compartment_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 100, BNGParser.RULE_compartment_def);
 		let _la: number;
 		try {
@@ -4447,7 +4447,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public energy_patterns_block(): Energy_patterns_blockContext {
-		let _localctx: Energy_patterns_blockContext = new Energy_patterns_blockContext(this._ctx, this.state);
+		const _localctx: Energy_patterns_blockContext = new Energy_patterns_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 102, BNGParser.RULE_energy_patterns_block);
 		let _la: number;
 		try {
@@ -4539,7 +4539,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public energy_pattern_def(): Energy_pattern_defContext {
-		let _localctx: Energy_pattern_defContext = new Energy_pattern_defContext(this._ctx, this.state);
+		const _localctx: Energy_pattern_defContext = new Energy_pattern_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 104, BNGParser.RULE_energy_pattern_def);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -4578,7 +4578,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public population_maps_block(): Population_maps_blockContext {
-		let _localctx: Population_maps_blockContext = new Population_maps_blockContext(this._ctx, this.state);
+		const _localctx: Population_maps_blockContext = new Population_maps_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 106, BNGParser.RULE_population_maps_block);
 		let _la: number;
 		try {
@@ -4670,7 +4670,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public population_map_def(): Population_map_defContext {
-		let _localctx: Population_map_defContext = new Population_map_defContext(this._ctx, this.state);
+		const _localctx: Population_map_defContext = new Population_map_defContext(this._ctx, this.state);
 		this.enterRule(_localctx, 108, BNGParser.RULE_population_map_def);
 		let _la: number;
 		try {
@@ -4726,7 +4726,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public actions_block(): Actions_blockContext {
-		let _localctx: Actions_blockContext = new Actions_blockContext(this._ctx, this.state);
+		const _localctx: Actions_blockContext = new Actions_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 110, BNGParser.RULE_actions_block);
 		let _la: number;
 		try {
@@ -4764,7 +4764,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public wrapped_actions_block(): Wrapped_actions_blockContext {
-		let _localctx: Wrapped_actions_blockContext = new Wrapped_actions_blockContext(this._ctx, this.state);
+		const _localctx: Wrapped_actions_blockContext = new Wrapped_actions_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 112, BNGParser.RULE_wrapped_actions_block);
 		let _la: number;
 		try {
@@ -4838,7 +4838,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public begin_actions_block(): Begin_actions_blockContext {
-		let _localctx: Begin_actions_blockContext = new Begin_actions_blockContext(this._ctx, this.state);
+		const _localctx: Begin_actions_blockContext = new Begin_actions_blockContext(this._ctx, this.state);
 		this.enterRule(_localctx, 114, BNGParser.RULE_begin_actions_block);
 		let _la: number;
 		try {
@@ -4912,7 +4912,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public action_command(): Action_commandContext {
-		let _localctx: Action_commandContext = new Action_commandContext(this._ctx, this.state);
+		const _localctx: Action_commandContext = new Action_commandContext(this._ctx, this.state);
 		this.enterRule(_localctx, 116, BNGParser.RULE_action_command);
 		try {
 			this.state = 1142;
@@ -4996,7 +4996,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public generate_network_cmd(): Generate_network_cmdContext {
-		let _localctx: Generate_network_cmdContext = new Generate_network_cmdContext(this._ctx, this.state);
+		const _localctx: Generate_network_cmdContext = new Generate_network_cmdContext(this._ctx, this.state);
 		this.enterRule(_localctx, 118, BNGParser.RULE_generate_network_cmd);
 		let _la: number;
 		try {
@@ -5060,7 +5060,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public simulate_cmd(): Simulate_cmdContext {
-		let _localctx: Simulate_cmdContext = new Simulate_cmdContext(this._ctx, this.state);
+		const _localctx: Simulate_cmdContext = new Simulate_cmdContext(this._ctx, this.state);
 		this.enterRule(_localctx, 120, BNGParser.RULE_simulate_cmd);
 		let _la: number;
 		try {
@@ -5134,7 +5134,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public write_cmd(): Write_cmdContext {
-		let _localctx: Write_cmdContext = new Write_cmdContext(this._ctx, this.state);
+		const _localctx: Write_cmdContext = new Write_cmdContext(this._ctx, this.state);
 		this.enterRule(_localctx, 122, BNGParser.RULE_write_cmd);
 		let _la: number;
 		try {
@@ -5208,7 +5208,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public set_cmd(): Set_cmdContext {
-		let _localctx: Set_cmdContext = new Set_cmdContext(this._ctx, this.state);
+		const _localctx: Set_cmdContext = new Set_cmdContext(this._ctx, this.state);
 		this.enterRule(_localctx, 124, BNGParser.RULE_set_cmd);
 		let _la: number;
 		try {
@@ -5474,7 +5474,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public other_action_cmd(): Other_action_cmdContext {
-		let _localctx: Other_action_cmdContext = new Other_action_cmdContext(this._ctx, this.state);
+		const _localctx: Other_action_cmdContext = new Other_action_cmdContext(this._ctx, this.state);
 		this.enterRule(_localctx, 126, BNGParser.RULE_other_action_cmd);
 		let _la: number;
 		try {
@@ -5548,7 +5548,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public action_args(): Action_argsContext {
-		let _localctx: Action_argsContext = new Action_argsContext(this._ctx, this.state);
+		const _localctx: Action_argsContext = new Action_argsContext(this._ctx, this.state);
 		this.enterRule(_localctx, 128, BNGParser.RULE_action_args);
 		let _la: number;
 		try {
@@ -5586,7 +5586,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public action_arg_list(): Action_arg_listContext {
-		let _localctx: Action_arg_listContext = new Action_arg_listContext(this._ctx, this.state);
+		const _localctx: Action_arg_listContext = new Action_arg_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 130, BNGParser.RULE_action_arg_list);
 		let _la: number;
 		try {
@@ -5628,7 +5628,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public action_arg(): Action_argContext {
-		let _localctx: Action_argContext = new Action_argContext(this._ctx, this.state);
+		const _localctx: Action_argContext = new Action_argContext(this._ctx, this.state);
 		this.enterRule(_localctx, 132, BNGParser.RULE_action_arg);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -5657,7 +5657,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public action_arg_value(): Action_arg_valueContext {
-		let _localctx: Action_arg_valueContext = new Action_arg_valueContext(this._ctx, this.state);
+		const _localctx: Action_arg_valueContext = new Action_arg_valueContext(this._ctx, this.state);
 		this.enterRule(_localctx, 134, BNGParser.RULE_action_arg_value);
 		let _la: number;
 		try {
@@ -5797,7 +5797,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public keyword_as_value(): Keyword_as_valueContext {
-		let _localctx: Keyword_as_valueContext = new Keyword_as_valueContext(this._ctx, this.state);
+		const _localctx: Keyword_as_valueContext = new Keyword_as_valueContext(this._ctx, this.state);
 		this.enterRule(_localctx, 136, BNGParser.RULE_keyword_as_value);
 		let _la: number;
 		try {
@@ -5833,7 +5833,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public nested_hash_list(): Nested_hash_listContext {
-		let _localctx: Nested_hash_listContext = new Nested_hash_listContext(this._ctx, this.state);
+		const _localctx: Nested_hash_listContext = new Nested_hash_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 138, BNGParser.RULE_nested_hash_list);
 		let _la: number;
 		try {
@@ -5875,7 +5875,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public nested_hash_item(): Nested_hash_itemContext {
-		let _localctx: Nested_hash_itemContext = new Nested_hash_itemContext(this._ctx, this.state);
+		const _localctx: Nested_hash_itemContext = new Nested_hash_itemContext(this._ctx, this.state);
 		this.enterRule(_localctx, 140, BNGParser.RULE_nested_hash_item);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -5919,7 +5919,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public arg_name(): Arg_nameContext {
-		let _localctx: Arg_nameContext = new Arg_nameContext(this._ctx, this.state);
+		const _localctx: Arg_nameContext = new Arg_nameContext(this._ctx, this.state);
 		this.enterRule(_localctx, 142, BNGParser.RULE_arg_name);
 		let _la: number;
 		try {
@@ -5955,7 +5955,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public expression_list(): Expression_listContext {
-		let _localctx: Expression_listContext = new Expression_listContext(this._ctx, this.state);
+		const _localctx: Expression_listContext = new Expression_listContext(this._ctx, this.state);
 		this.enterRule(_localctx, 144, BNGParser.RULE_expression_list);
 		let _la: number;
 		try {
@@ -5997,7 +5997,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public expression(): ExpressionContext {
-		let _localctx: ExpressionContext = new ExpressionContext(this._ctx, this.state);
+		const _localctx: ExpressionContext = new ExpressionContext(this._ctx, this.state);
 		this.enterRule(_localctx, 146, BNGParser.RULE_expression);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -6022,7 +6022,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public conditional_expr(): Conditional_exprContext {
-		let _localctx: Conditional_exprContext = new Conditional_exprContext(this._ctx, this.state);
+		const _localctx: Conditional_exprContext = new Conditional_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 148, BNGParser.RULE_conditional_expr);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -6047,7 +6047,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public or_expr(): Or_exprContext {
-		let _localctx: Or_exprContext = new Or_exprContext(this._ctx, this.state);
+		const _localctx: Or_exprContext = new Or_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 150, BNGParser.RULE_or_expr);
 		let _la: number;
 		try {
@@ -6089,7 +6089,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public and_expr(): And_exprContext {
-		let _localctx: And_exprContext = new And_exprContext(this._ctx, this.state);
+		const _localctx: And_exprContext = new And_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 152, BNGParser.RULE_and_expr);
 		let _la: number;
 		try {
@@ -6131,7 +6131,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public equality_expr(): Equality_exprContext {
-		let _localctx: Equality_exprContext = new Equality_exprContext(this._ctx, this.state);
+		const _localctx: Equality_exprContext = new Equality_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 154, BNGParser.RULE_equality_expr);
 		let _la: number;
 		try {
@@ -6183,7 +6183,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public relational_expr(): Relational_exprContext {
-		let _localctx: Relational_exprContext = new Relational_exprContext(this._ctx, this.state);
+		const _localctx: Relational_exprContext = new Relational_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 156, BNGParser.RULE_relational_expr);
 		try {
 			this.enterOuterAlt(_localctx, 1);
@@ -6208,7 +6208,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public additive_expr(): Additive_exprContext {
-		let _localctx: Additive_exprContext = new Additive_exprContext(this._ctx, this.state);
+		const _localctx: Additive_exprContext = new Additive_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 158, BNGParser.RULE_additive_expr);
 		let _la: number;
 		try {
@@ -6260,7 +6260,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public multiplicative_expr(): Multiplicative_exprContext {
-		let _localctx: Multiplicative_exprContext = new Multiplicative_exprContext(this._ctx, this.state);
+		const _localctx: Multiplicative_exprContext = new Multiplicative_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 160, BNGParser.RULE_multiplicative_expr);
 		let _la: number;
 		try {
@@ -6312,7 +6312,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public power_expr(): Power_exprContext {
-		let _localctx: Power_exprContext = new Power_exprContext(this._ctx, this.state);
+		const _localctx: Power_exprContext = new Power_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 162, BNGParser.RULE_power_expr);
 		let _la: number;
 		try {
@@ -6354,7 +6354,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public unary_expr(): Unary_exprContext {
-		let _localctx: Unary_exprContext = new Unary_exprContext(this._ctx, this.state);
+		const _localctx: Unary_exprContext = new Unary_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 164, BNGParser.RULE_unary_expr);
 		let _la: number;
 		try {
@@ -6400,7 +6400,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public primary_expr(): Primary_exprContext {
-		let _localctx: Primary_exprContext = new Primary_exprContext(this._ctx, this.state);
+		const _localctx: Primary_exprContext = new Primary_exprContext(this._ctx, this.state);
 		this.enterRule(_localctx, 166, BNGParser.RULE_primary_expr);
 		try {
 			this.state = 1379;
@@ -6467,7 +6467,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public function_call(): Function_callContext {
-		let _localctx: Function_callContext = new Function_callContext(this._ctx, this.state);
+		const _localctx: Function_callContext = new Function_callContext(this._ctx, this.state);
 		this.enterRule(_localctx, 168, BNGParser.RULE_function_call);
 		let _la: number;
 		try {
@@ -6517,7 +6517,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public observable_ref(): Observable_refContext {
-		let _localctx: Observable_refContext = new Observable_refContext(this._ctx, this.state);
+		const _localctx: Observable_refContext = new Observable_refContext(this._ctx, this.state);
 		this.enterRule(_localctx, 170, BNGParser.RULE_observable_ref);
 		let _la: number;
 		try {
@@ -6557,7 +6557,7 @@ export class BNGParser extends Parser {
 	}
 	// @RuleVersion(0)
 	public literal(): LiteralContext {
-		let _localctx: LiteralContext = new LiteralContext(this._ctx, this.state);
+		const _localctx: LiteralContext = new LiteralContext(this._ctx, this.state);
 		this.enterRule(_localctx, 172, BNGParser.RULE_literal);
 		let _la: number;
 		try {

@@ -20,9 +20,9 @@ describe('Atom-rule graph builder enhancements', () => {
     const r = { name: 'w', reactants: ['A(b!+).B(a)'], products: ['A(b!1).B(a!1)'], rate: '', isBidirectional: false };
     const graph = buildAtomRuleGraph([r], { atomization: 'bng2' });
     // debug output
-    // eslint-disable-next-line no-console
+     
     console.log('wildcard graph nodes:', graph.nodes);
-    // eslint-disable-next-line no-console
+     
     console.log('wildcard graph edges:', graph.edges);
 
     // wildcard nodes/edges should have been removed
@@ -82,12 +82,12 @@ describe('Atom-rule graph builder enhancements', () => {
     const reactantGraphs = parseSpeciesGraphs(rule.reactants);
     expect(reactantGraphs.length).toBeGreaterThan(0);
     // show what the parser returned for debugging
-    // eslint-disable-next-line no-console
+     
     console.log('parsed reactant graphs:', reactantGraphs.map(g => g.toString()));
 
     const graph = buildAtomRuleGraph([rule], { atomization: 'bng2' });
     // log graph for debugging on failure
-    // eslint-disable-next-line no-console
+     
     console.log('graph nodes', graph.nodes);
     // wildcard helpers should have been removed entirely, so there
     // should be no node or edge referring to IL6(r!+)

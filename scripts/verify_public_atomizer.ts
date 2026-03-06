@@ -111,7 +111,7 @@ function parseGDAT(filePath: string): { headers: string[], data: number[][] } {
 // Compare two GDAT files with model-specific tolerance
 function compareGDAT(refPath: string, testPath: string, modelName: string, observableMap?: Map<string, string>): { passed: boolean, mae: number, error?: string, sharedHeaders: string[], rowCount: number } {
     const ref = parseGDAT(refPath);
-    let test = parseGDAT(testPath);
+    const test = parseGDAT(testPath);
     const relTol = MODEL_REL_TOL_OVERRIDES[modelName] ?? DEFAULT_TOLERANCE;
 
     // Map atomized headers back to reference names if possible
@@ -182,7 +182,7 @@ async function verifyModel(modelPath: string) {
 
     try {
         const originalContent = fs.readFileSync(modelPath, 'utf-8');
-        let actionsMatch = originalContent.match(/begin actions([\s\S]*?)end actions/i);
+        const actionsMatch = originalContent.match(/begin actions([\s\S]*?)end actions/i);
 
         let originalActions = '';
         const foundActions: string[] = [];
@@ -299,7 +299,7 @@ async function verifyModel(modelPath: string) {
         console.log(`[Parser] Generating SBML...`);
         runBNG2(['--outdir', `"${sbmlOutDir}"`, `"${tempBnglPath}"`]);
 
-        let sbmlFile = path.join(sbmlOutDir, 'model_sbml.xml');
+        const sbmlFile = path.join(sbmlOutDir, 'model_sbml.xml');
         if (!fs.existsSync(sbmlFile)) {
             console.error(`[ERROR] SBML file not found at ${sbmlFile}`);
             throw new Error(`SBML generation failed`);

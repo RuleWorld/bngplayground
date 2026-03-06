@@ -15,7 +15,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseBNGL } from '../services/parseBNGL';
-import { createSolver } from '../services/ODESolver';
+import { createSolver } from '@bngplayground/engine';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { NetworkGenerator, GeneratorProgress } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
@@ -868,7 +868,7 @@ async function runWebSimulator(
   const derivatives = (yIn: Float64Array, dydt: Float64Array, obsValues: Record<string, number>) => {
     dydt.fill(0);
     for (const rxn of concreteReactions) {
-      let rxnContext: Record<string, number> = {};
+      const rxnContext: Record<string, number> = {};
       if (rxn.rateEvaluator) {
         for (let j = 0; j < rxn.reactants.length; j++) {
           rxnContext[`ridx${j}`] = yIn[rxn.reactants[j]];

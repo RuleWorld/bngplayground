@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import type { BNGLModel } from '../types';
-import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 
 describe('NFsim Compartment Transport - End to End', () => {
     it('simulates molecule transport between compartments', async () => {

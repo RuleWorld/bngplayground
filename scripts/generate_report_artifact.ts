@@ -40,7 +40,7 @@ function main() {
     // Split on any newline characters to handle CRLF vs LF
     const lines = reportContent.split(/\r?\n/);
 
-    let outLines: string[] = [];
+    const outLines: string[] = [];
     let inTable = false;
 
     const resultMap = new Map<string, ParityResult>();

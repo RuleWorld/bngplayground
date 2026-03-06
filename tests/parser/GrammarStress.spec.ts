@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { parseBNGLStrict } from '../../src/parser/BNGLParserWrapper';
+import { parseBNGLStrict } from '@bngplayground/engine';
 
 // Helper to generate variations
 function generateExpressionPermutations() {

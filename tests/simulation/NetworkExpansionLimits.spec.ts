@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
+import { generateExpandedNetwork } from '@bngplayground/engine';
 import { BNGLModel } from '../../types';
 
 describe('NetworkExpansionLimits', () => {

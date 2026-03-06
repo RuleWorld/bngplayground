@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseBNGLWithANTLR } from '../../src/parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '@bngplayground/engine';
 
 function wrapRule(ruleLine: string): string {
   return `begin model

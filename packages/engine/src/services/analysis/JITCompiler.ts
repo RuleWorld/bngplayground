@@ -253,7 +253,7 @@ export class JITCompiler {
 
         let evaluate: CompiledRHS;
         try {
-            // eslint-disable-next-line no-eval
+             
             evaluate = eval(fullSource) as CompiledRHS;
         } catch (error) {
             console.error('[JITCompiler] Failed to compile RHS function:', error);
@@ -384,7 +384,7 @@ export class JITCompiler {
                     const translated = ExpressionTranslator.translate(rxn.rateConstant.toString());
                     // Simple evaluation for parameters
                     try {
-                        // eslint-disable-next-line no-new-func
+                         
                         const evaluator = new Function('params', `const {${Object.keys(parameters || {}).join(',')}} = params; return ${translated};`);
                         k = evaluator(parameters || {});
                         if (isNaN(k) || !isFinite(k)) return null;

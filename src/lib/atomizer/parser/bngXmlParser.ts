@@ -263,7 +263,7 @@ export function convertBNGXmlToBNGL(xml: string): string {
             rateName = rateEl.getAttribute('name') || '';
           } else if (type && ['MM', 'Sat', 'Hill', 'Arrhenius'].includes(type)) {
             const rcEls = Array.from(rateEl.getElementsByTagName('RateConstant'));
-            let argVals = rcEls.map(rc => rc.getAttribute('value') || rc.textContent || '0');
+            const argVals = rcEls.map(rc => rc.getAttribute('value') || rc.textContent || '0');
 
             // PARITY FIX: Scale Km (arg 2) from Molar to Molecules if reaction is in a compartment
             // MM(kcat, Km) -> MM(kcat, Km * vol * NA)

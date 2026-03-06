@@ -268,8 +268,8 @@ export async function generateExpandedNetwork(
         // Reverse Rule Handling (Bidirectional Rules)
         // -------------------------------------------------------------------------
         let reverseRate: number;
-        let expandedReverseRate: string | undefined = r.reverseRate;
-        let isReverseFunctional = false;
+        let expandedReverseRate: string | undefined;
+        let isReverseFunctional: boolean;
 
         if (r.reverseRate) {
             // BNG2 Logic: Bidirectional rules are split into two unidirectional rules.

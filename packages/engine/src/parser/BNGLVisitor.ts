@@ -533,17 +533,17 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // that matchRespectsProductImpliedFreeConstraints can distinguish them from explicitly-written
     // !? wildcards (e.g. CD40(l!?) in cd40-signaling). Synthetic wildcards are treated as absent
     // in the product-implied-free filter (GPCR fix), while explicit !? wildcards are carry-through.
-    let reactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
+    const reactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
 
     // Get products - collect all species and skip '0'
     const productSpecies = productCtx.species_def();
 
     // Mixed products like "A + 0" should result in ["A"]
-    let products: string[] = productSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
+    const products: string[] = productSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
 
     // Get rate(s)
     const rateExpressions = rateLawCtx.expression();
-    let rate = rateExpressions.length > 0 ? this.getExpressionText(rateExpressions[0]) : '0';
+    const rate = rateExpressions.length > 0 ? this.getExpressionText(rateExpressions[0]) : '0';
     const reverseRate = rateExpressions.length > 1 ? this.getExpressionText(rateExpressions[1]) : undefined;
 
     let isArrhenius = false;

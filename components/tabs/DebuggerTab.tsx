@@ -3,7 +3,7 @@ import type { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { DebuggerPanel } from '../debugger/DebuggerPanel';
-import { NetworkTracer } from '../../src/services/debugger/NetworkTracer';
+import { NetworkTracer } from '@bngplayground/engine';
 import type { TraceResult } from '../../src/services/debugger/types';
 
 const tracer = new NetworkTracer();

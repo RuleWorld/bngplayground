@@ -2,8 +2,8 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { NetworkGenerator } from '../../src/services/graph/NetworkGenerator.ts';
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser.ts';
+import { NetworkGenerator } from '@bngplayground/engine';
+import { BNGLParser } from '@bngplayground/engine';
 import { parseBNGL } from '../../services/parseBNGL.ts';
 
 const __filename = fileURLToPath(import.meta.url);

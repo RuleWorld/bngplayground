@@ -164,7 +164,7 @@ function optimizeModel(modelName: string) {
 
 function updateBNGL(modelName: string, newTEnd: number) {
     const filePath = path.join(modelsDir, modelName);
-    let content = fs.readFileSync(filePath, 'utf-8');
+    const content = fs.readFileSync(filePath, 'utf-8');
 
     // Look for simulate command. Use regex.
     // simulate({method=>"ode",t_end=>X,...})

@@ -9,10 +9,10 @@ import * as path from 'node:path';
 import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../../tools/bngDefaults.js';
 import { BNGLModel, SimulationOptions } from '../../types';
 import { parseBNGL } from '../../services/parseBNGL';
-import { simulate } from '../../services/simulation/SimulationLoop';
+import { simulate } from '@bngplayground/engine';
 import { convertBNGXmlToBNGL } from '../../src/lib/atomizer/parser/bngXmlParser';
 import { BNG2_EXCLUDED_MODELS } from '../../constants';
-import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
+import { generateExpandedNetwork } from '@bngplayground/engine';
 
 console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
 console.error(`[DEBUG-ENTRY] example-models exists: ${fs.existsSync('example-models')}`);

@@ -80,7 +80,7 @@ function compareGDAT(refPath: string, testPath: string, observableMap?: Map<stri
 
     // Apply observable mapping if provided
     let refHeaders = ref.headers;
-    let testHeaders = test.headers;
+    const testHeaders = test.headers;
     
     if (observableMap) {
       // Map reference headers to test headers using observableMap
@@ -171,7 +171,7 @@ async function verifyModel(modelPath: string) {
 
         runBNG2(['--outdir', `"${sbmlOutDir}"`, `"${tempBnglPath}"`]);
 
-        let sbmlFile = path.join(sbmlOutDir, 'model_sbml.xml');
+        const sbmlFile = path.join(sbmlOutDir, 'model_sbml.xml');
         if (!fs.existsSync(sbmlFile)) throw new Error(`SBML generation failed: ${sbmlFile} missing`);
 
         const atomizer = new Atomizer({ atomize: false, quietMode: true, useId: true, actions: originalActions });

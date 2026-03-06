@@ -956,7 +956,7 @@ export function writeFunctions(
   // Species scaling functions
   for (const name of speciesAmts) {
     let compId: string | undefined = standardizedSpeciesInfo.get(name)?.compId;
-    let isAmountOnly = standardizedSpeciesInfo.get(name)?.isAmountOnly || false;
+    const isAmountOnly = standardizedSpeciesInfo.get(name)?.isAmountOnly || false;
 
     // If not found, check assignmentRuleCompartments (for A, B, C, etc.)
     if (!compId && assignmentRuleCompartments.has(name)) {
@@ -1105,8 +1105,8 @@ export function writeFunctions(
     // If it's observable-compatible, it was already handled in writeObservables
     if (!/[*/^()]/.test(rule.math) && /\bS\d+\b/.test(rule.math)) continue;
 
-    let inlinedMath = inlineSBMLFunctions(rule.math, functions);
-    let body = bnglFunction(
+    const inlinedMath = inlineSBMLFunctions(rule.math, functions);
+    const body = bnglFunction(
       inlinedMath,
       ruleId,
       [],
@@ -1136,8 +1136,8 @@ export function writeFunctions(
     if (!rule.variable) continue;
     const name = standardizeName(rule.variable);
 
-    let inlinedMath = inlineSBMLFunctions(rule.math, functions);
-    let body = bnglFunction(
+    const inlinedMath = inlineSBMLFunctions(rule.math, functions);
+    const body = bnglFunction(
       inlinedMath,
       rule.variable,
       [],
@@ -1353,7 +1353,7 @@ export function writeReactionRulesFlat(
       }
     }
 
-    let hasDenominator = denominatorContent.includes('+');
+    const hasDenominator = denominatorContent.includes('+');
     let satSubstrate: string | null = null;
     if (hasDenominator) {
       for (const spId of reactantCounts.keys()) {
@@ -1429,7 +1429,7 @@ export function writeReactionRulesFlat(
         }
       }
 
-      let hasDenominator = denominatorContent.includes('+');
+      const hasDenominator = denominatorContent.includes('+');
       let satSubstrate: string | null = null;
       if (hasDenominator) {
         for (const spId of reactantCounts.keys()) {
@@ -2378,7 +2378,7 @@ function checkMassAction(
       const allValues = [...values, localContext['V'], ...varList.map(v => localContext[v])];
 
       try {
-        let evalExprV = jsEvalExpr.replace(/\^/g, '**');
+        const evalExprV = jsEvalExpr.replace(/\^/g, '**');
         const f = new Function(...allKeys, `return ${evalExprV};`);
         const result = f(...allValues);
 

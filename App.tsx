@@ -15,12 +15,12 @@ import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoa
 // Pre-warm cache so AB tutorial is always available synchronously
 setCachedCode('AB', INITIAL_BNGL_CODE);
 import SimulationModal from './components/SimulationModal';
-import { BNGLParser } from './src/services/graph/core/BNGLParser.ts';
+import { BNGLParser } from '@bngplayground/engine';
 import { validateBNGLModel, validationWarningsToMarkers } from './services/modelValidation';
 import { lintBNGL, lintDiagnosticsToMarkers } from './services/bnglLinter';
 import { getSharedModelFromUrl, clearModelFromUrl } from './src/utils/shareUrl';
-import { resolveAutoMethod } from './src/utils/simulationOptions';
-import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './services/paramUtils';
+import { resolveAutoMethod } from '@bngplayground/engine';
+import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from '@bngplayground/engine';
 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const SBML_IMPORT_TIMEOUT_MS = 45_000;
@@ -77,7 +77,7 @@ function App() {
       if (payload.message && (payload.source === 'nfsim-progress' || payload.source === 'nfsim-console')) {
         // Try to extract time label for display
         const tm = payload.message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||
-                   payload.message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
+          payload.message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
         if (tm) setSimulationTimeLabel(tm[1]);
       }
     });
@@ -501,7 +501,7 @@ function App() {
               e.id === candidate ||
               e.id === raw ||
               (e.name && (e.name === candidate || e.name === raw)) ||
-              // @ts-ignore
+              // @ts-expect-error: filename is an optional property that might not be on all Example types
               (e.filename && (e.filename === candidate || e.filename === raw || e.filename === `${candidate}.bngl`))
             ));
           }

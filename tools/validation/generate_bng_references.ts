@@ -235,7 +235,7 @@ async function main() {
   const results: BNGResult[] = [];
   let processed = 0;
   let skipped = 0;
-  let existed = 0;
+  const existed = 0;
   let generated = 0;
   let failed = 0;
 

@@ -776,14 +776,14 @@ function createComplexSpecies(
       for (const mol of compCopy.molecules) {
         // Site for predecessor (connect i-1 to i)
         if (i > 0) {
-          let bName = `b${i}`;
+          const bName = `b${i}`;
           if (!mol.contains(bName)) {
             mol.addComponent(new Component(bName, `${mol.idx}_${bName}`));
           }
         }
         // Site for successor (connect i to i+1)
         if (i < componentSpeciesIds.length - 1) {
-          let bName = `b${i + 1}`;
+          const bName = `b${i + 1}`;
           if (!mol.contains(bName)) {
             mol.addComponent(new Component(bName, `${mol.idx}_${bName}`));
           }
@@ -801,11 +801,11 @@ function createComplexSpecies(
 
       // Add sites for connectivity
       if (i > 0) {
-        let bName = `b${i}`;
+        const bName = `b${i}`;
         molecule.addComponent(new Component(bName, `${molecule.idx}_${bName}`));
       }
       if (i < componentSpeciesIds.length - 1) {
-        let bName = `b${i + 1}`;
+        const bName = `b${i + 1}`;
         molecule.addComponent(new Component(bName, `${molecule.idx}_${bName}`));
       }
 

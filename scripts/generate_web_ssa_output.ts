@@ -1,5 +1,5 @@
 
-import { runNFsimSimulation } from '../services/simulation/NFsimRunner';
+import { runNFsimSimulation } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL';
 import * as fs from 'fs';
 import * as path from 'path';

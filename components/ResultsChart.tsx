@@ -4,7 +4,7 @@ import { BNGLModel, SimulationResults } from '../types';
 import { CHART_COLORS } from '../constants';
 import { Card } from './ui/Card';
 import { CustomExpression, evaluateExpression } from './ExpressionInputPanel';
-import { computeDynamicObservable } from '../src/utils/dynamicObservable';
+import { computeDynamicObservable } from '@bngplayground/engine';
 
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';

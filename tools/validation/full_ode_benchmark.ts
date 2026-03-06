@@ -13,10 +13,10 @@ import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { createRequire } from 'module';
 import { parseBNGLWithANTLR } from '../src/parser/BNGLParserWrapper.ts';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator.ts';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
-import { NautyService } from '../src/services/graph/core/NautyService.ts';
-import { createSolver } from '../services/ODESolver.ts';
+import { NetworkGenerator } from '@bngplayground/engine';
+import { BNGLParser } from '@bngplayground/engine';
+import { NautyService } from '@bngplayground/engine';
+import { createSolver } from '@bngplayground/engine';
 import { execSync } from 'child_process';
 
 // Polyfill require and __dirname for CVODE WASM module compatibility

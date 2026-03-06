@@ -67,7 +67,7 @@ function formatBNGLMini(code: string): string {
 }
 import MonacoEditor from './MonacoEditor';
 import { BNGLModel, SimulationOptions, ValidationWarning, EditorMarker } from '../types';
-import { getSimulationOptionsFromParsedModel } from '../src/utils/simulationOptions';
+import { getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 
 interface EditorPanelProps {
   code: string;

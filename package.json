@@ -34,7 +34,7 @@
     "parity:targeted:det-rates": "node scripts/run_parity_targeted.mjs bab bab_coop haugh2b process_cell_adhesion_strength --out artifacts/parity_layer_report.targeted_det_rates.json",
     "parity:targeted:det-params": "node scripts/run_parity_targeted.mjs cs_pagerank eco_coevolution_host_parasite hif1a_degradation_loop lrr_comp repressilator synbio_band_pass_filter synbio_oscillator_synchronization --out artifacts/parity_layer_report.targeted_det_params.json",
     "type-check": "tsc --noEmit",
-    "lint": "eslint . --ext .ts,.tsx"
+    "lint": "eslint ."
   },
   "dependencies": {
     "@monaco-editor/react": "^4.7.0",
@@ -65,6 +65,7 @@
     "umap-js": "^1.4.0"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
     "@playwright/test": "^1.58.1",
     "@tailwindcss/postcss": "^4.2.0",
     "@testing-library/jest-dom": "^6.9.1",
@@ -83,16 +84,22 @@
     "autoprefixer": "^10.4.19",
     "baseline-browser-mapping": "^2.9.11",
     "chai": "^6.2.2",
+    "eslint": "^10.0.2",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.0.1",
     "fast-check": "^4.5.3",
     "jsdom": "^28.1.0",
     "playwright": "^1.58.1",
     "postcss": "^8.4.47",
+    "react-is": "^19.2.4",
+    "sharp": "^0.34.5",
     "sucrase": "^3.35.1",
     "tailwindcss": "^4.2.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
     "tsx": "^4.21.0",
     "typescript": "~5.9.3",
+    "typescript-eslint": "^8.56.1",
     "util": "^0.12.5",
     "vite": "^7.3.1",
     "vitest": "^4.0.8"

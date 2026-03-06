@@ -253,7 +253,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
   const bestOverrides: Record<string, number> = {};
   for (let i = 0; i < n; i++) bestOverrides[paramNames[i]] = bestParams[i];
 
-  let bestPredictions = new Map<string, number[]>();
+  const bestPredictions = new Map<string, number[]>();
   let finalSse = nmResult.value;
 
   try {

@@ -1,6 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
-import { compile } from '../services/safeExpressionEvaluator';
+import { compile } from '@bngplayground/engine';
 
 describe('SafeExpressionEvaluator Fuzzing', () => {
     const NUM_TESTS = 1000;

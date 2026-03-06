@@ -87,7 +87,7 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
     for (const u of uris) {
       attemptUri(u);
       // give the system a short moment to process the protocol; trying multiple forms increases chance the extension handles one
-      // eslint-disable-next-line no-await-in-loop
+       
       await sleep(350);
     }
 

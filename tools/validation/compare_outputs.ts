@@ -312,7 +312,7 @@ function getMultiPhaseReference(
 
   // Match web simulator logic: record from the beginning
   // and skip 1-step equilibration phases later.
-  let recordFromIdx = 0;
+  const recordFromIdx = 0;
 
   const phasesToInclude = odeCalls;
   console.log(`[MultiPhase] Identified output chain for ${baseName}: phases ${recordFromIdx + 1} to ${odeCalls.length}`);

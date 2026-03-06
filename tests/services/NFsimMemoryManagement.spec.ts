@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fc from 'fast-check';
-import { NFsimMemoryManager, resetMemoryManager } from '../../services/simulation/NFsimMemoryManager';
+import { NFsimMemoryManager, resetMemoryManager } from '@bngplayground/engine';
 
 // Mock WASM module for testing
 const createMockModule = () => ({

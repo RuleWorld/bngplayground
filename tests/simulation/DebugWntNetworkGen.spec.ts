@@ -1,9 +1,9 @@
 
 import { describe, it, expect, beforeAll } from 'vitest';
-import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
-import { loadEvaluator, _setEvaluatorRefForTests } from '../../services/simulation/ExpressionEvaluator';
-import { SafeExpressionEvaluator } from '../../services/safeExpressionEvaluator';
-import { parseBNGLStrict } from '../../src/parser/BNGLParserWrapper';
+import { generateExpandedNetwork } from '@bngplayground/engine';
+import { loadEvaluator, _setEvaluatorRefForTests } from '@bngplayground/engine';
+import { SafeExpressionEvaluator } from '@bngplayground/engine';
+import { parseBNGLStrict } from '@bngplayground/engine';
 
 describe('Debug Wnt Network Generation', () => {
     beforeAll(async () => {

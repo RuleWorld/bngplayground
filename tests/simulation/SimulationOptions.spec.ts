@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { simulate } from '../../services/simulation/SimulationLoop';
+import { simulate } from '@bngplayground/engine';
 import { BNGLModel, SimulationOptions } from '../../types';
 
 // Mock ODESolver
@@ -41,7 +41,7 @@ const mockCreateSolver = vi.fn().mockImplementation(() => ({
     compile: vi.fn(), // Only if webgpu
 }));
 
-vi.mock('../../services/ODESolver', () => ({
+vi.mock('@bngplayground/engine/src/services/simulation/ODESolver', () => ({
     createSolver: (config: any) => mockCreateSolver(config)
 }));
 

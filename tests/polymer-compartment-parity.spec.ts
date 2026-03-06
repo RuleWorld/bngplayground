@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, writeFileSync } from 'fs';
 import { execSync } from 'child_process';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
-import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 
 import { DEFAULT_BNG2_PATH, DEFAULT_PERL_CMD } from '../tools/bngDefaults.js';
 
@@ -42,7 +42,7 @@ describe('Polymer Compartment Parity Tests', () => {
       const lines = bnglContent.split('\n');
       
       let inCompartments = false;
-      let compartments: any[] = [];
+      const compartments: any[] = [];
       
       for (const line of lines) {
         const trimmed = line.trim();

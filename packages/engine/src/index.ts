@@ -86,6 +86,8 @@ export type { DynamicObservableDefinition, ComputedObservableResult } from './ut
 // ── Debugger ────────────────────────────────────────────────────────
 export { NetworkTracer } from './services/debugger/NetworkTracer';
 export { RuleBlocker } from './services/debugger/RuleBlocker';
+// Debugger types
+export type { NetworkTrace, ExpansionEvent, DebuggerNetwork, TraceResult, RuleBlockerReport, RuleBlockerDetails, RuleBlockerSuggestion } from './services/debugger/types';
 
 // ── Interfaces ───────────────────────────────────────────────────────
 export type { SimulationEngine, ExpandedNetwork } from './interfaces/SimulationEngine';

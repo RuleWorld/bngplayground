@@ -1,12 +1,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { simulate } from '../../services/simulation/SimulationLoop';
+import { simulate } from '@bngplayground/engine';
 import { jitCompiler } from '../../src/services/JITCompiler';
 import { BNGLModel } from '../../types';
 
 // Mock ODESolver
 const mockSolve = vi.fn();
-vi.mock('../../services/ODESolver', () => ({
+vi.mock('@bngplayground/engine/src/services/simulation/ODESolver', () => ({
     createSolver: vi.fn().mockReturnValue({
         integrate: mockSolve,
         dispose: vi.fn()

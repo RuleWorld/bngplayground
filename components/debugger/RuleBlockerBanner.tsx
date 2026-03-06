@@ -1,5 +1,5 @@
 import React from 'react';
-import type { RuleBlockerReport } from '../../src/services/debugger/types';
+import type { RuleBlockerReport } from '@bngplayground/engine';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 

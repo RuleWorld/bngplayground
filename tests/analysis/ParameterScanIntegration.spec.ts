@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { parseBNGLWithANTLR } from '../../src/parser/BNGLParserWrapper';
+import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import type { BNGLModel } from '../../types';
 
 // returns list of BNGL model file paths under example-models

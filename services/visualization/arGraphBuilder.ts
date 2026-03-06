@@ -4,7 +4,7 @@ import {
   extractAtoms,
   parseSpeciesGraphs,
 } from './speciesGraphUtils';
-import { getExpressionDependencies } from '../../src/parser/ExpressionDependencies';
+import { getExpressionDependencies } from '@bngplayground/engine';
 
 interface AtomRuleGraphOptions {
   getRuleId?: (rule: ReactionRule, index: number) => string;
@@ -102,8 +102,8 @@ const extractAtomicPatternsBNG2 = (
   productGraphs: import('@bngplayground/engine').SpeciesGraph[],
 ): { reactants: Set<string>; products: Set<string>; context: Set<string> } => {
   const reactants = new Set<string>();
-  const products  = new Set<string>();
-  const context   = new Set<string>();
+  const products = new Set<string>();
+  const context = new Set<string>();
 
   // Build molecule lists from each side
   // A SpeciesGraph wraps one or more molecules into a complex; flatten all
@@ -128,7 +128,7 @@ const extractAtomicPatternsBNG2 = (
           if (partners && partners.length > 0) {
             // Build bond key as "molA:compA|molB:compB" (sorted)
             const [pm, pc] = partners[0].split('.').map(Number);
-            const partnerMol  = graph.molecules[pm];
+            const partnerMol = graph.molecules[pm];
             const partnerComp = partnerMol?.components[pc];
             if (partnerMol && partnerComp) {
               bondKey = [mol.name + ':' + comp.name, partnerMol.name + ':' + partnerComp.name]
@@ -171,8 +171,8 @@ const extractAtomicPatternsBNG2 = (
       const pComp = pMol.comps[cIdx];
       if (!pComp) return;
       if (rComp.state !== undefined && pComp.state !== undefined &&
-          rComp.state !== pComp.state &&
-          rComp.state !== '?' && pComp.state !== '?') {
+        rComp.state !== pComp.state &&
+        rComp.state !== '?' && pComp.state !== '?') {
         reactants.add(makeStateAtom(rMol.name, rComp.name, rComp.state));
         products.add(makeStateAtom(pMol.name, pComp.name, pComp.state));
         rUsedComp.add(`${rIdx}.${cIdx}`);
@@ -485,7 +485,7 @@ export const buildAtomRuleGraph = (
     // "bond:" stripping logic as before.
     const skipPretty = options.atomization === 'bng2' && !atomId.startsWith('bond:');
 
-    let cleanId = atomId.startsWith('bond:') ? atomId.substring(5) : atomId;
+    const cleanId = atomId.startsWith('bond:') ? atomId.substring(5) : atomId;
 
     if (cleanId.includes('|')) {
       // bond endpointals should still be prettified even in BNG2 mode
@@ -515,7 +515,7 @@ export const buildAtomRuleGraph = (
     // 1. Structural dependencies (reactants/products)
     let reactantGraphs = [];
     let productGraphs = [];
-    
+
     try {
       reactantGraphs = parseSpeciesGraphs(rule.reactants);
       productGraphs = parseSpeciesGraphs(rule.products);
@@ -532,8 +532,8 @@ export const buildAtomRuleGraph = (
       // using whole species strings.  This matches BNG2.pl NetworkGraph.pm.
       const decomposed = extractAtomicPatternsBNG2(reactantGraphs, productGraphs);
       reactantAtoms = decomposed.reactants;
-      productAtoms  = decomposed.products;
-      contextAtoms  = decomposed.context;
+      productAtoms = decomposed.products;
+      contextAtoms = decomposed.context;
     } else {
       reactantAtoms = extractAtoms(reactantGraphs);
       productAtoms = extractAtoms(productGraphs);
@@ -572,18 +572,18 @@ export const buildAtomRuleGraph = (
       }
       // Bidirectional rules
       const rateExpressions = rule.reverseRate ? [rule.rate, rule.reverseRate] : [rule.rate];
-      
+
       allDepSpecies.forEach(speciesName => {
         // Only draw functional arrow if it's NOT already a consumed/produced/modified atom
         // AND it doesn't look like a keyword/primitive
-        if (speciesName && 
-            !reactantAtoms.has(speciesName) && 
-            !productAtoms.has(speciesName) &&
-            !['time', 'e', 'pi'].includes(speciesName.toLowerCase())) {
-           
-           // Standard: context dependency is a 'modifies' arrow (gray)
-           ensureAtomNode(speciesName, nodes, atomIds, formatLabel);
-           addEdge(speciesName, ruleId, 'modifies', edges, edgeIds);
+        if (speciesName &&
+          !reactantAtoms.has(speciesName) &&
+          !productAtoms.has(speciesName) &&
+          !['time', 'e', 'pi'].includes(speciesName.toLowerCase())) {
+
+          // Standard: context dependency is a 'modifies' arrow (gray)
+          ensureAtomNode(speciesName, nodes, atomIds, formatLabel);
+          addEdge(speciesName, ruleId, 'modifies', edges, edgeIds);
         }
       });
     }

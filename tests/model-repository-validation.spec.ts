@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, readdirSync, statSync } from 'fs';
 import { join, extname } from 'path';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
-import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 
 // Recursively find all .bngl files in a directory
 function findBnglFiles(dir: string): string[] {

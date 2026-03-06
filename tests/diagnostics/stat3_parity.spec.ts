@@ -2,9 +2,9 @@ import { readFileSync } from 'fs';
 import path from 'path';
 import { parseBNGL } from '../../services/parseBNGL';
 import { describe, it, expect } from 'vitest';
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
-import { NetworkGenerator } from '../../src/services/graph/NetworkGenerator';
-import { countPatternMatches } from '../../services/parity/PatternMatcher';
+import { BNGLParser } from '@bngplayground/engine';
+import { NetworkGenerator } from '@bngplayground/engine';
+import { countPatternMatches } from '@bngplayground/engine';
 
 describe('stat3-mediated-transcription parity diagnostic', () => {
   it('should find embeddings for Active_Dimer and Total_pSTAT3 patterns', async () => {

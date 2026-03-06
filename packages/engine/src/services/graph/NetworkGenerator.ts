@@ -5062,7 +5062,7 @@ export class NetworkGenerator {
       for (const pCompIdx of orderedComps) {
         const pComp = patternMol.components[pCompIdx];
         let requireUnboundForProductOnlyComponent = false;
-        let requireStrictUnboundMapping = false;
+        const requireStrictUnboundMapping = false;
 
         let pCompOccurrence = 0;
         for (let i = 0; i < pCompIdx; i++) {

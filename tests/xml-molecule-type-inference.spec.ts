@@ -6,7 +6,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 import type { BNGLModel } from '../types';
 
 describe('BNGXMLWriter Molecule Type Inference', () => {

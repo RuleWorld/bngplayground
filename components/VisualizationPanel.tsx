@@ -16,7 +16,7 @@ import { ParameterEstimationTab } from './tabs/ParameterEstimationTab';
 import { FluxAnalysisTab } from './tabs/FluxAnalysisTab';
 import { ModelExplorerTab } from './tabs/ModelExplorerTab';
 import { TrajectoryExplorerTab } from './tabs/TrajectoryExplorerTab';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
+import { BNGLParser } from '@bngplayground/engine';
 import { ExpressionInputPanel, CustomExpression } from './ExpressionInputPanel';
 import { ComparisonPanel } from './ComparisonPanel';
 import { JupyterExportTab } from './tabs/JupyterExportTab';

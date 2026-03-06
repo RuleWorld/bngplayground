@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 import React, { useRef, useEffect } from 'react';
 import { EditorMarker } from '../types';
@@ -183,13 +184,13 @@ useEffect(() => {
               [/[A-Z][A-Za-z0-9_]*(?=\()/, 'type.molecule'],
 
               // Component/state within parentheses
-              [/[a-z][A-Za-z0-9_]*(?=[\~\!\,\)])/, 'variable.component'],
+              [/[a-z][A-Za-z0-9_]*(?=[~!,)])/, 'variable.component'],
 
               // State values after tilde
-              [/\~([A-Za-z0-9_]+)/, 'string.state'],
+              [/~([A-Za-z0-9_]+)/, 'string.state'],
 
               // Bond index after exclamation
-              [/\!([0-9]+|\?|\+)/, 'constant.bond'],
+              [/!([0-9]+|\?|\+)/, 'constant.bond'],
 
               // Compartment annotation
               [/@([A-Za-z][A-Za-z0-9_]*)/, 'variable.compartment'],

@@ -4,7 +4,7 @@ import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkG
 import type { GeneratorOptions } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
 import { NetworkExporter } from '../packages/engine/src/services/graph/NetworkExporter.ts';
 import { parseBNGL } from '../services/parseBNGL.ts';
-import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion.ts';
+import { generateExpandedNetwork } from '@bngplayground/engine';
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';

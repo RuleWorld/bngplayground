@@ -4,9 +4,9 @@ import * as path from 'path';
 import { execSync } from 'child_process';
 import type { BNGLModel, GeneratorProgress } from '../types.ts';
 import { parseBNGL } from '../services/parseBNGL.ts';
-import { generateExpandedNetwork } from '../services/simulation/NetworkExpansion.ts';
+import { generateExpandedNetwork } from '@bngplayground/engine';
 import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
-import { simulate } from '../services/simulation/SimulationLoop.ts';
+import { simulate } from '@bngplayground/engine';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical.ts';
 
@@ -1283,7 +1283,7 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
   let cdatComparable = false;
   let gdatComparable = false;
 
-  let netFilesCompared = !!(preparedFiles.bng2Net && preparedFiles.webNet);
+  const netFilesCompared = !!(preparedFiles.bng2Net && preparedFiles.webNet);
   let cdatFilesCompared = !!(preparedFiles.bng2Cdat && preparedFiles.webCdat);
   let gdatFilesCompared = !!(preparedFiles.bng2Gdat && preparedFiles.webGdat);
 

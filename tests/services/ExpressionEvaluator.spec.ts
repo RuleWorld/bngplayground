@@ -6,7 +6,7 @@ import {
     clearAllEvaluatorCaches,
     evaluateExpressionOrParse,
     getCacheSizes
-} from '../../services/simulation/ExpressionEvaluator';
+} from '@bngplayground/engine';
 
 // Mock Evaluator
 const mockEvaluator = {

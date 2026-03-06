@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import * as fs from 'fs';
 

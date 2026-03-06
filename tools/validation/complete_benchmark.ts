@@ -12,9 +12,9 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
 import { parseBNGL } from '../services/parseBNGL.ts';
-import { NetworkGenerator } from '../src/services/graph/NetworkGenerator.ts';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
-import { NautyService } from '../src/services/graph/core/NautyService.ts';
+import { NetworkGenerator } from '@bngplayground/engine';
+import { BNGLParser } from '@bngplayground/engine';
+import { NautyService } from '@bngplayground/engine';
 import { execSync } from 'child_process';
 
 const __filename = fileURLToPath(import.meta.url);

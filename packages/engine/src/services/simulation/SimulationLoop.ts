@@ -12,7 +12,7 @@
 
 import { BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
 import type { SolverResult } from './ODESolver';
-import { CVODESolver } from './ODESolver';
+
 import { BNGLParser } from '../graph/core/BNGLParser';
 import { toBngGridTime } from '../parity/ParityService';
 import { countPatternMatches, isSpeciesMatch, isFunctionalRateExpr } from '../parity/PatternMatcher';
@@ -262,7 +262,7 @@ export async function simulate(
         await loadEvaluator();
       } catch (e: any) {
         console.error('[Worker] Failed to load SafeExpressionEvaluator module:', e?.message ?? String(e));
-        throw new Error('Failed to initialize expression evaluator');
+        throw new Error('Failed to initialize expression evaluator', { cause: e });
       }
     }
   }
@@ -641,7 +641,7 @@ export async function simulate(
 
         if (change.afterPhaseIndex === targetPhaseIdx - 1) {
           const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
-          let newVal: number = 0;
+          let newVal: number;
           if (typeof change.value === 'number') newVal = change.value;
           else {
             try {
@@ -682,6 +682,7 @@ export async function simulate(
                 anyChanged = true;
               }
             } catch (e: any) {
+              /* ignore */
             }
           }
           if (!anyChanged) break;
@@ -703,6 +704,7 @@ export async function simulate(
                 rxn.rateConstant = newK;
               }
             } catch (e: any) {
+              /* ignore */
             }
           }
         }
@@ -744,8 +746,8 @@ export async function simulate(
       // Time-windowed snapshots for animation
       const NUM_WINDOWS = 20;
       const influenceWindows: SSAInfluenceData[] = [];
-      let windowRuleFirings = includeInfluence ? new Int32Array(numReactions) : null;
-      let windowInfluenceMatrix = includeInfluence ? new Float64Array(numReactions * numReactions) : null;
+      const windowRuleFirings = includeInfluence ? new Int32Array(numReactions) : null;
+      const windowInfluenceMatrix = includeInfluence ? new Float64Array(numReactions * numReactions) : null;
       let windowStartTime = 0;
 
       // Calculate total simulation time for even window distribution
@@ -1002,7 +1004,6 @@ export async function simulate(
           const r1 = rng.next();
           const tau = (1 / aTotal) * Math.log(1 / r1);
           if (t + tau > phaseTEnd) {
-            t = phaseTEnd;
             break;
           }
           t += tau;
@@ -1864,7 +1865,9 @@ export async function simulate(
       try {
         const res = isWebGPUODESolverAvailable ? isWebGPUODESolverAvailable() : false;
         gpuAvailable = res instanceof Promise ? await res : res;
-      } catch { }
+      } catch {
+        /* ignore */
+      }
 
       if (gpuAvailable) {
         const { gpuReactions, rateConstants } = await convertReactionsToGPU(concreteReactions);
@@ -1930,7 +1933,7 @@ export async function simulate(
     const odeStart = performance.now();
     const y = new Float64Array(state);
     let modelTime = 0;
-    let shouldStop = false;
+    let shouldStop: boolean;
 
     // Persisted CVODE solver for continue=>1 multi-phase continuity.
     // BNG2 keeps the same CVODE instance running (preserving BDF step-size history) across
@@ -2035,7 +2038,7 @@ export async function simulate(
       // - continue=>1: phase frame is global model time, so subtract current modelTime.
       // - continue=>0: phase frame starts at phaseStart (usually 0), so do not subtract modelTime.
       const absoluteTEnd = phase.t_end ?? options.t_end ?? 0;
-      let phaseDuration = absoluteTEnd - phaseStart;
+      const phaseDuration = absoluteTEnd - phaseStart;
 
       if (phaseDuration < 0) {
         console.warn(`[Worker] Phase duration is negative (${phaseDuration}) for phase ${phaseIdx}. Skipping.`);
@@ -2116,7 +2119,7 @@ export async function simulate(
           continue; // Skip ODE solver for this phase
         } catch (nfsimError) {
           console.error(`[Worker] NFsim phase ${phaseIdx} failed:`, nfsimError);
-          throw new Error(`NFsim simulation failed in phase ${phaseIdx}: ${nfsimError instanceof Error ? nfsimError.message : String(nfsimError)}`);
+          throw new Error(`NFsim simulation failed in phase ${phaseIdx}: ${nfsimError instanceof Error ? nfsimError.message : String(nfsimError)}`, { cause: nfsimError });
         }
       }
 
@@ -2303,14 +2306,13 @@ export async function simulate(
       }
 
       if (shouldStop && !isLastPhase && !solverError) {
-        shouldStop = false;
+        // shouldStop will be reset at the start of next phase loop iteration
       } else if (shouldStop && solverError) break;
     }
 
     // Clean up any persisted solver that was not consumed (e.g. early break due to error).
     if (persistedSolver) {
       persistedSolver.destroy?.();
-      persistedSolver = undefined;
     }
 
     const odeTime = performance.now() - odeStart;

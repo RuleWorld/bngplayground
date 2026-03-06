@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { GraphMatcher } from '../packages/engine/src/services/graph/core/Matcher';
-import { countPatternMatches } from '../services/parity/PatternMatcher';
+import { countPatternMatches } from '@bngplayground/engine';
 
 describe('Pattern Matching - Simple Patterns', () => {
   it('should match single molecule pattern', () => {

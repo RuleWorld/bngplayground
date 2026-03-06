@@ -1,6 +1,6 @@
 
 import { describe, it, expect } from 'vitest';
-import { jitCompiler } from '../../src/services/JITCompiler';
+import { jitCompiler } from '@bngplayground/engine';
 
 describe('JITCompiler Service', () => {
 

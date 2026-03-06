@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import Editor from '@monaco-editor/react';
 import { BioParser } from '../services/grammar/parser';
 import { BNGLGenerator } from '../services/grammar/generator';
@@ -45,9 +45,23 @@ Simulate for 0.25s with 200 steps
 export const DesignerPanel: React.FC<DesignerPanelProps> = ({ text, onTextChange, onCodeChange, onParse, onSimulate }) => {
   // Use DEFAULT_TEXT if no text provided (first time opening designer)
   const displayText = text || DEFAULT_TEXT;
-  const [sentences, setSentences] = useState<BioSentence[]>([]);
-  const [lastGeneratedCode, setLastGeneratedCode] = useState('');
   const [isCheatsheetOpen, setIsCheatsheetOpen] = useState(false);
+
+  // 1. Parse Text -> Logic (Immediate derived state)
+  const sentences = useMemo(() => BioParser.parseDocument(displayText), [displayText]);
+
+  // 2. Logic -> BNGL Code (Derived state)
+  const lastGeneratedCode = useMemo(() => {
+    const validSentences = sentences.filter(s => s.isValid);
+    if (validSentences.length === 0 && displayText.trim() !== '') return '';
+
+    try {
+      return BNGLGenerator.generate(sentences);
+    } catch (e) {
+      console.error("Generation failed", e);
+      return '';
+    }
+  }, [sentences, displayText]);
 
   // Initialize text with default if empty
   useEffect(() => {
@@ -56,27 +70,12 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({ text, onTextChange
     }
   }, []);
 
-  // 1. Parse Text -> Logic (Immediate)
+  // Sync generated code with parent
   useEffect(() => {
-    const parsed = BioParser.parseDocument(displayText);
-    setSentences(parsed);
-  }, [displayText]);
-
-  // 2. Logic -> BNGL Code (Debounced)
-  useEffect(() => {
-    const validSentences = sentences.filter(s => s.isValid);
-    if (validSentences.length === 0 && displayText.trim() !== '') return;
-
-    try {
-      const bngl = BNGLGenerator.generate(sentences);
-      if (bngl !== lastGeneratedCode) {
-        setLastGeneratedCode(bngl);
-        onCodeChange(bngl);
-      }
-    } catch (e) {
-      console.error("Generation failed", e);
+    if (lastGeneratedCode) {
+      onCodeChange(lastGeneratedCode);
     }
-  }, [sentences, onCodeChange, lastGeneratedCode]);
+  }, [lastGeneratedCode, onCodeChange]);
 
   // Manual Sync function to force visualization update and run simulation
   const handleSync = async () => {

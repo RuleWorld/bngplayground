@@ -630,7 +630,7 @@ function isVolumeNormalizedConcentrationExpression(expression: string, symbol: s
 }
 
 function normalizeSpeciesPatternForLookup(value: string): string {
-  let raw = String(value || '')
+  const raw = String(value || '')
     .trim()
     .replace(/\s+/g, '')
     .replace(/^\$/, '');

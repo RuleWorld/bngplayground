@@ -1,3 +1,4 @@
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-nocheck
 /**
  * GDAT Comparison Benchmarking Tests
@@ -14,7 +15,7 @@ import { NetworkGenerator } from './services/graph/NetworkGenerator';
 import { BNGLParser } from './services/graph/core/BNGLParser';
 import { GraphCanonicalizer } from './services/graph/core/Canonical';
 import { NautyService } from './services/graph/core/NautyService';
-import { createSolver } from '../services/ODESolver';
+import { createSolver } from '@bngplayground/engine';
 import { findConservationLaws, createReducedSystem } from './services/ConservationLaws';
 import type { BNGLModel, SimulationResults, SimulationPhase, ConcentrationChange } from '../types';
 
@@ -1354,7 +1355,9 @@ describe('GDAT Comparison: Web Simulator vs BNG2.pl', () => {
                   console.log(`[${modelName}] Phase ${phaseIdx}: Set (canonical) ${canonicalPattern} = ${resolved}`);
                   matched = true;
                 }
-              } catch { }
+              } catch {
+                /* ignore */
+              }
             }
 
             if (!matched) {

@@ -5,12 +5,14 @@
 ## Development Commands
 
 ### Build & Development
+
 - `npm run dev` - Start Vite dev server (port 3000, host 0.0.0.0)
 - `npm run build` - Production build with semantic search embeddings
 - `npm run build:quick` - Production build without embeddings (faster iteration)
 - `npm run preview` - Preview production build locally
 
 ### Testing
+
 - `npm run test` - Run Vitest once (formal suite in `tests/` directory)
 - `npm run test:watch` - Run Vitest in watch mode
 - `npx vitest run <filename>` - Run single test file (e.g., `npx vitest run tests/constants.spec.ts`)
@@ -19,11 +21,13 @@
 - Additional test files in `src/*.test.ts` exist but are not in Vitest config; run manually with `npx vitest run`
 
 ### Utilities
+
 - `npm run generate:gdat` - Regenerate GDAT reference fixtures
 - `npm run generate:embeddings` - Generate `public/model-embeddings.json` for semantic search
 - `npm run generate:web-output` - Generate web output with Playwright
 
 ### WASM (CVODE)
+
 - Rebuild CVODE WASM (Windows): `cd wasm-sundials` then `./build_wasm.bat`
 - Rebuild CVODE WASM (bash): `cd wasm-sundials` then `./build_wasm.sh`
 
@@ -34,6 +38,7 @@ Notes:
   - `public/cvode.wasm`
 
 ### WASM (NFsim)
+
 - Pre-built artifacts are checked in at `public/nfsim.js` and `public/nfsim.wasm`.
 - C++ source lives in the `akutuva21/nfsim` fork (not in this repo).
 - Rebuild NFsim WASM (Windows): `cd wasm-nfsim` then `build_wasm.bat` (requires `NFSIM_SRC` env var pointing to `akutuva21/nfsim`)
@@ -44,6 +49,7 @@ Notes:
 ## Code Style Guidelines
 
 ### TypeScript Configuration
+
 - Target: ES2022, Module: ESNext
 - Strict mode enabled: noUnusedLocals, noUnusedParameters, noFallthroughCasesInSwitch
 - Module resolution: bundler
@@ -51,25 +57,34 @@ Notes:
 - Allow importing TypeScript extensions: yes
 
 ### Imports
+
 - Components in root (`App.tsx`, `index.tsx`): Use `./` for same-level imports
 - Components in `components/`: Use `../` for root services, `../../packages/engine/src/` for engine modules
-- Services in `services/`: Use `../packages/engine/src/` for engine modules`n- Scripts in `scripts/`: Use `../packages/engine/src/` for engine modules
+- Services in `services/`: Use `../packages/engine/src/` for engine modules
+- Scripts in `scripts/`: Use `../packages/engine/src/` for engine modules
 - Examples:
-  ```typescript
+
+```typescript
   // From root App.tsx:
-  import { bnglService } from './services/bnglService';         // root/services
-  import { getModelFromUrl } from './src/utils/shareUrl';         // src/utils (legacy)
-  import { types } from './types';                               // root
+  import { bnglService } from './services/bnglService';
+  import { getModelFromUrl } from './src/utils/shareUrl';
+  import { types } from './types';
 
   // From components/ directory:
-  import { bnglService } from '../services/bnglService';         // root/services
-  import { types } from '../../types';                          // root
-  import { NetworkGenerator } from '../../packages/engine/src/services/graph/NetworkGenerator'; // engine package`n`n  // From scripts/ directory:`n  import type { BNGLModel } from '../types.ts';                // root`n  import { parseBNGL } from '../services/parseBNGL.ts';         // root/services`n  import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts'; // engine package
+  import { bnglService } from '../services/bnglService';
+  import { types } from '../../types';
+  import { NetworkGenerator, BNGLParser } from '@bngplayground/engine';
+
+  // From scripts/ directory:
+  import type { BNGLModel } from '../types.ts';
+  import { parseBNGL } from '../services/parseBNGL.ts';
   ```
+
 - Group imports: React/core first, third-party libraries, local modules
 - ES module syntax only (type: "module" in package.json)
 
 ### React Components
+
 - Functional components with hooks preferred
 - TypeScript interfaces for props: `interface Props { ... }`
 - Export as named exports: `export const Component: React.FC<Props> = ({ prop }) => { ... }`
@@ -77,6 +92,7 @@ Notes:
 - Prefer `useState` for state, `useEffect` for side effects, `useCallback` for memoization
 
 ### Naming Conventions
+
 - Components: PascalCase (e.g., `VisualizationPanel`, `Header`)
 - Functions/variables: camelCase (e.g., `parseBNGL`, `setTheme`)
 - Constants: UPPER_SNAKE_CASE (e.g., `DEFAULT_TIMEOUT_MS`)
@@ -84,6 +100,7 @@ Notes:
 - Private members: prefix with underscore (optional)
 
 ### Error Handling
+
 - Use try/catch for async operations
 - AbortControllers for cancellable operations (refs: `parseAbortRef`, `simulateAbortRef`)
 - Custom error types: `DOMException('message', 'AbortError')`, `Error` with `.name`
@@ -131,117 +148,52 @@ Notes:
 ### Testing Patterns
 - Vitest with Node environment
 - Test files: `*.spec.ts` or `*.test.ts`
-- Import `describe`, `it`, `expect` from 'vitest'
-- Helper functions for common test operations
-- Timeout constants for long-running tests
-- Conditional tests based on environment (e.g., `bngAvailable`)
-- **Note**: `npm run test` only runs files in `tests/` directory. Test files in `src/*.test.ts` are not included in Vitest config.
 
 ## Repository Structure
 
-### Root vs `src/` Split
 The codebase uses a **monorepo structure** with core engine code in `packages/engine/`:
 
 **Root Directory (app-level code):**
 - `App.tsx`, `index.tsx` - Application entry point
-- `types.ts` - Central type definitions used across the app
-- `constants.ts` - App-wide constants
+- `types.ts` - Central type definitions used across the app (barrel export)
 - `components/` - React components (UI layer)
-- `hooks/` - Custom React hooks
-- `services/` - **App-level services** (worker communication, parsing APIs, UI helpers)
+- `services/` - **App-level services**. IMPORTANT: Files here that import from `@bngplayground/engine` are app-level wrappers or Web Worker interfaces, NOT the core algorithm implementations.
 - `public/` - Static assets, model gallery, WASM files
 
 **packages/engine/ (core BioNetGen engine):**
 - `packages/engine/src/parser/` - ANTLR-based BNGL parser implementation
-- `packages/engine/src/services/` - **Core algorithmic services** (graph generation, solvers, analysis)
+- `packages/engine/src/services/` - **Core algorithmic services**
   - `simulation/` - ODE/SSA/NFsim solvers, network expansion
   - `graph/` - Graph algorithms (network generation, matching, canonicalization)
   - `parity/` - Parity checking utilities
+  - `analysis/` - Jacobians, conservation laws
 - `packages/engine/src/utils/` - Utility functions for core algorithms
 - `packages/engine/src/interfaces/` - Engine interfaces
-- `packages/engine/src/types.ts` - Engine-specific types
 
-**src/ Directory (legacy - being migrated):**
-- Some files remain in root `src/` directories:
+**src/ Directory (Legacy - Being Migrated):**
+- Some files remain in `src/`. Most files in `src/services/`, `src/parser/`, and `src/utils/` are currently **shims** re-exporting from `@bngplayground/engine`.
 
-**Root Directory (app-level code):**
-- `App.tsx`, `index.tsx` - Application entry point
-- `types.ts` - Central type definitions used across the app
-- `constants.ts` - App-wide constants
-- `components/` - React components (UI layer)
-- `hooks/` - Custom React hooks
-- `services/` - **App-level services** (worker communication, parsing APIs, UI helpers)
-- `public/` - Static assets, model gallery, WASM files
-
-**src/ Directory (core algorithms):**
-- `src/services/` - **Core algorithmic services** (graph generation, solvers, analysis, estimation)
-- `src/parser/` - ANTLR-based BNGL parser implementation
-- `src/services/graph/` - Graph theory algorithms (network generation, matching, canonicalization)
-- `src/utils/` - Utility functions for core algorithms
-
-### Services Organization
-
-**App-level services (`services/`)** - Interface between React UI and core algorithms:
-- `bnglService.ts` - Worker communication layer, handles parse/simulate requests
-- `parseBNGL.ts` - Parser API wrapper used by app
-- `visualization/` - UI visualization helpers (color utilities, graph formatters)
-- `grammar/` - Designer panel grammar parser and generator
-- `semanticSearch.ts` - Semantic search for example gallery
-- `modelValidation.ts` - BNGL model validation logic
-
-**Core algorithm services (`src/services/`)** - Mathematical and algorithmic implementations:
-- `graph/NetworkGenerator.ts` - Network generation from reaction rules
-- `graph/core/` - Core data structures (Species, Rxn, Matcher, Canonical)
-- `ODESolver.ts` - ODE solver implementations
-- `ParameterEstimation.ts` - Parameter estimation algorithms
-- `NetworkAnalysis.ts` - Network analysis utilities
-- `WorkerPool.ts` - Worker pool management
-- Note: Many services in `src/services/` are imported from `services/` to expose to app
+### Shim Elimination Plan
+**CRITICAL FOR AGENTS:** We are actively eliminating shims.
+- Do **not** create new shims in `services/` or `src/services/`.
+- If you need a core capability, import it directly from `@bngplayground/engine`.
+- Files in `src/` and `services/` that are 1-line re-exports of engine functions are shims to be deleted after their consumers are updated.
 
 ### File Structure Overview
-```
-bionetgen-web-simulator/
+
+```text
+ruleworld-bngplayground/
 ├── App.tsx                          # Main app component (root)
 ├── index.tsx                        # React entry point (root)
-├── types.ts                         # Central type definitions (root)
-├── constants.ts                     # App constants (root)
 ├── components/                       # React UI components
-│   ├── EditorPanel.tsx              # BNGL editor
-│   ├── VisualizationPanel.tsx       # Analysis tabs container
-│   ├── Header.tsx                   # App header
-│   └── ui/                        # Reusable UI elements
-├── hooks/                          # Custom React hooks
-│   └── useTheme.ts                 # Theme management
-├── services/                        # App-level services (UI-facing)
-│   ├── bnglService.ts              # Worker comms layer
-│   ├── parseBNGL.ts                # Parser API
-│   ├── visualization/               # UI viz helpers
-│   ├── grammar/                     # Designer panel grammar
-│   └── semanticSearch.ts            # Example search
-├── src/
-│   ├── parser/                     # ANTLR parser implementation
-│   │   ├── BNGLParserWrapper.ts
-│   │   ├── BNGLVisitor.ts
-│   │   └── generated/             # ANTLR-generated files
-│   ├── services/                   # Core algorithms (computation)
-│   │   ├── graph/
-│   │   │   ├── NetworkGenerator.ts
-│   │   │   └── core/             # Data structures
-│   │   ├── ODESolver.ts           # ODE solvers
-│   │   ├── ParameterEstimation.ts   # Parameter estimation
-│   │   └── NetworkAnalysis.ts      # Analysis utilities
-│   └── utils/                     # Core utilities
-│       └── shareUrl.ts             # URL sharing
-├── tests/                          # Vitest test files
-│   └── *.spec.ts                  # Formal test suite
-├── scripts/                        # Build-time and utility scripts
-│   ├── generateEmbeddings.mjs       # Semantic search embeddings
-│   └── generateGdat.mjs           # GDAT reference fixtures
-├── public/                         # Static assets
-│   ├── models/                     # BNGL example models
-│   ├── model-embeddings.json        # Semantic search index
-│   └── *.wasm, *.js             # WASM solver files
-└── docs/                          # Documentation (optional)
+├── services/                        # App-level services (Worker wrappers)
+├── packages/
+│   └── engine/
+│       └── src/                     # Canonical location for all core algorithms
+├── src/                             # Legacy shims (do not add here)
+├── tests/                           # Vitest test files
+├── scripts/                         # Build-time and utility scripts
+└── public/                          # Static assets
 ```
 
 ### Test File Locations
@@ -301,12 +253,8 @@ The following are gitignored and should be considered temporary/debug:
 
 ## Important Paths
 - Entry point: `App.tsx` (root)
-- Main panels: `components/EditorPanel.tsx`, `components/VisualizationPanel.tsx` (root)
 - App services (UI-facing): `services/bnglService.ts`, `services/parseBNGL.ts`
-- Core algorithms: `src/services/graph/NetworkGenerator.ts`, `src/services/ODESolver.ts`
-- Worker communication: `services/bnglService.ts` (root)
-- Parser implementation: `src/parser/BNGLParserWrapper.ts`, `src/parser/BNGLVisitor.ts`
-- Types: `types.ts` (root)
-- Build config: `vite.config.ts`, `tsconfig.json` (root)
-- Test config: `vitest.config.ts` (root) - Note: only includes `tests/` directory
-
+- Core algorithms: `packages/engine/src/services/graph/NetworkGenerator.ts`, `packages/engine/src/services/simulation/ODESolver.ts`
+- Parser implementation: `packages/engine/src/parser/`
+- Build config: `vite.config.ts` (root)
+- Engine Package: `packages/engine/`

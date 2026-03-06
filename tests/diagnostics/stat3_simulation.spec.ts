@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import path from 'path';
 import { parseBNGL } from '../../services/parseBNGL';
-import { simulate } from '../../services/simulation/SimulationLoop';
+import { simulate } from '@bngplayground/engine';
 import { SimulationOptions } from '../../types';
 import { describe, it, expect } from 'vitest';
 

@@ -1,7 +1,7 @@
 import React from 'react';
 import type { BNGLModel } from '../../types';
-import type { DebuggerNetwork, ExpansionEvent, NetworkTrace } from '../../src/services/debugger/types';
-import { RuleBlocker } from '../../src/services/debugger/RuleBlocker';
+import type { DebuggerNetwork, ExpansionEvent, NetworkTrace } from '@bngplayground/engine';
+import { RuleBlocker } from '@bngplayground/engine';
 import { DebuggerContext } from './DebuggerContext';
 import { TimelineViewer } from './TimelineViewer';
 import { MatchVisualizerGlyph } from './MatchVisualizerGlyph';

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { ExpansionEvent } from '../../src/services/debugger/types';
+import type { ExpansionEvent } from '@bngplayground/engine';
 import { Card } from '../ui/Card';
 
 interface MatchVisualizerGlyphProps {

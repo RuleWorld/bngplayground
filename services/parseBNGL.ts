@@ -7,8 +7,8 @@
  */
 
 import type { BNGLModel } from '../types.ts';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
-import { SafeExpressionEvaluator } from './safeExpressionEvaluator.ts';
+import { BNGLParser } from '@bngplayground/engine';
+import { SafeExpressionEvaluator } from '@bngplayground/engine';
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
 
 interface NetworkGenerationOptions {

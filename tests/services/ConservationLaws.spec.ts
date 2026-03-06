@@ -6,7 +6,7 @@ import {
     findConservationLaws, 
     createReducedSystem, 
     ConservationLaw 
-} from '../../src/services/ConservationLaws';
+} from '@bngplayground/engine';
 
 // Mock Rxn interface based on usage
 interface MockRxn {

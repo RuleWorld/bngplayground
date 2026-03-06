@@ -13,7 +13,7 @@
  */
 
 import type { BNGLModel } from '../types.ts';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser.ts';
+import { BNGLParser } from '@bngplayground/engine';
 
 // Runtime deprecation warning - fires once on first use
 let _deprecationWarned = false;

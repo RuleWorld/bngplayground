@@ -8,9 +8,9 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { NFsimResultAdapter } from '../../services/simulation/NFsimResultAdapter';
+import { NFsimResultAdapter } from '@bngplayground/engine';
 import { BNGLModel, SimulationResults, BNGLObservable } from '../../types';
-import { GdatData } from '../../services/simulation/GdatParser';
+import { GdatData } from '@bngplayground/engine';
 
 describe('NFsim Result Format Compatibility', () => {
   describe('GDAT to SimulationResults Adaptation', () => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { BNGXMLWriter } from '../../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 import { parseBNGL } from '../../services/parseBNGL';
 
 describe('Component Completion in BNG-XML Generation', () => {

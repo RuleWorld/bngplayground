@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
-import { evaluateFunctionalRate, expandRateLawMacros, _setEvaluatorRefForTests } from '../../services/simulation/ExpressionEvaluator';
-import { SafeExpressionEvaluator } from '../../services/safeExpressionEvaluator';
+import { evaluateFunctionalRate, expandRateLawMacros, _setEvaluatorRefForTests } from '@bngplayground/engine';
+import { SafeExpressionEvaluator } from '@bngplayground/engine';
 
 describe('Rate Law Parity Audit', () => {
   beforeAll(() => {

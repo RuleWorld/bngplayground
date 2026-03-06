@@ -1,12 +1,12 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
-import { NetworkGenerator } from '../../src/services/graph/NetworkGenerator';
+import { generateExpandedNetwork } from '@bngplayground/engine';
+import { BNGLParser } from '@bngplayground/engine';
+import { NetworkGenerator } from '@bngplayground/engine';
 import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
 
 // Mocks
-vi.mock('../../src/services/graph/core/BNGLParser', () => ({
+vi.mock('@bngplayground/engine', () => ({
     BNGLParser: {
         parseSpeciesGraph: vi.fn(),
         parseRxnRule: vi.fn()
@@ -38,7 +38,7 @@ vi.mock('../../services/simulation/ExpressionEvaluator', () => ({
     containsRateLawMacro: vi.fn(() => false)
 }));
 
-import { evaluateFunctionalRate } from '../../services/simulation/ExpressionEvaluator';
+import { evaluateFunctionalRate } from '@bngplayground/engine';
 
 describe('NetworkExpansion Service', () => {
 

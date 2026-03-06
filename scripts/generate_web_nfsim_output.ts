@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { parseBNGL } from '../services/parseBNGL';
-import { BNGXMLWriter } from '../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 import { execSync } from 'child_process';
 
 async function run() {

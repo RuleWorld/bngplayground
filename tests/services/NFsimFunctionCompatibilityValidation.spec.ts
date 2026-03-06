@@ -7,7 +7,7 @@ import {
   FunctionDefinition,
   CompatibilityAnalysis,
   ReplacementSuggestion
-} from '../../services/simulation/NFsimFunctionCompatibility';
+} from '@bngplayground/engine';
 import { BNGLModel, BNGLFunction } from '../../types';
 
 describe('NFsim Function Compatibility Validation', () => {

@@ -1,5 +1,5 @@
 import React from 'react';
-import type { NetworkTrace, RuleBlockerReport } from '../../src/services/debugger/types';
+import type { NetworkTrace, RuleBlockerReport } from '@bngplayground/engine';
 
 export interface DebuggerContextValue {
   trace: NetworkTrace | null;

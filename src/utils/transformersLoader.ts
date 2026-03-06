@@ -18,7 +18,7 @@ export async function loadTransformersPipeline(): Promise<PipelineFactory> {
       let imported: any;
       try {
         // Indirect dynamic import to avoid bundler static analysis
-        // eslint-disable-next-line @typescript-eslint/no-implied-eval
+         
         imported = await new Function('moduleName', 'return import(moduleName)')(moduleName);
       } catch (e) {
         // Fallback to direct import (useful for test runners that mock the module)
@@ -43,7 +43,7 @@ export async function loadTransformersPipeline(): Promise<PipelineFactory> {
     const importModule = async (src: string) => {
       // Try dynamic import via an indirect Function to avoid bundler static resolution
       try {
-        // eslint-disable-next-line @typescript-eslint/no-implied-eval
+         
         const mod = await new Function('s', 'return import(s)')(src);
         return mod;
       } catch (err) {

@@ -7,7 +7,7 @@ import {
   NFsimError, 
   NFsimErrorType, 
   RecoveryStrategy 
-} from '../../services/simulation/NFsimErrorHandler';
+} from '@bngplayground/engine';
 
 describe('NFsim Error Handling Completeness', () => {
   let errorHandler: NFsimErrorHandler;

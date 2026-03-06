@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { simulate } from '../../services/simulation/SimulationLoop';
+import { simulate } from '@bngplayground/engine';
 import { BNGLModel } from '../../types';
 
 // Mock ODESolver

@@ -12,25 +12,19 @@ import type {
   NetworkAnalysisPayload,
 } from '../types';
 
-import { generateExpandedNetwork as generateExpandedNetworkService } from './simulation/NetworkExpansion';
-import { simulate } from './simulation/SimulationLoop';
 import {
+  generateExpandedNetwork as generateExpandedNetworkService,
+  simulate,
   resolveCompartmentVolumes,
-  requiresCompartmentResolution
-} from './simulation/CompartmentResolver';
-import {
+  requiresCompartmentResolution,
   runNFsimSimulation,
   validateModelForNFsim,
-  NFsimSimulationOptions
-} from './simulation/NFsimRunner';
-import {
   getCacheSizes as getEvaluatorCacheSizes,
-  loadEvaluator
-} from './simulation/ExpressionEvaluator';
-
-// SafeExpressionEvaluator will be dynamically imported only when functional rates are enabled to avoid bundling vulnerable libs
-// Using official ANTLR parser for bng2.pl parity (util polyfill added in vite.config.ts)
-import { parseBNGLWithANTLR, CVODESolver } from '@bngplayground/engine';
+  loadEvaluator,
+  parseBNGLWithANTLR,
+  CVODESolver
+} from '@bngplayground/engine';
+import type { NFsimSimulationOptions } from '@bngplayground/engine';
 import { Atomizer } from '../src/lib/atomizer';
 import { analyseGraph } from './igraphLoader';
 

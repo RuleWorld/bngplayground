@@ -7,10 +7,10 @@ import { fetchBioModelsSbml } from '../../services/bioModelsImport';
 import { Atomizer, SBMLParser } from '../../src/lib/atomizer';
 import { parseBNGLStrict } from '../../packages/engine/src/parser/BNGLParserWrapper';
 import { parseBNGLRegexDeprecated } from '../../services/parseBNGL';
-import { generateExpandedNetwork } from '../../services/simulation/NetworkExpansion';
-import { loadEvaluator } from '../../services/simulation/ExpressionEvaluator';
-import { requiresCompartmentResolution, resolveCompartmentVolumes } from '../../services/simulation/CompartmentResolver';
-import { simulate } from '../../services/simulation/SimulationLoop';
+import { generateExpandedNetwork } from '@bngplayground/engine';
+import { loadEvaluator } from '@bngplayground/engine';
+import { requiresCompartmentResolution, resolveCompartmentVolumes } from '@bngplayground/engine';
+import { simulate } from '@bngplayground/engine';
 import { exportToSBML } from '../../services/exportSBML';
 import type { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 

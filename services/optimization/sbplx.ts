@@ -80,7 +80,7 @@ export async function sbplx(
     const maxSub = Math.min(opts.maxSubspaceDim ?? 5, n);
 
     // Current best point.
-    let x = [...x0];
+    const x = [...x0];
     let fx = await f(x);
     let nEval = 1;
     let iter = 0;

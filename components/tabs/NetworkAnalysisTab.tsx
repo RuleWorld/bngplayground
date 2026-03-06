@@ -165,7 +165,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
   // NOTE: do NOT include graphType in deps — that would cause an instant reset
   // loop when the user clicks the Reaction button while !hasReactions.
   // This effect is intentionally only model/availability-driven.
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => {
     if (!model) return;
     // Only auto-redirect when the current selection becomes unavailable because
@@ -198,7 +198,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
           setExpandedReactionModel(sourceModel);
         } catch (expandErr: unknown) {
           const msg = expandErr instanceof Error ? expandErr.message : String(expandErr);
-          throw new Error(`Network expansion failed: ${msg}`);
+          throw new Error(`Network expansion failed: ${msg}`, { cause: expandErr });
         } finally {
           setIsExpandingNetwork(false);
         }
@@ -248,7 +248,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
   useEffect(() => {
     if (!model) return;
     runAnalysisRef.current();
-  }, [model, graphType]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [model, graphType]);  
 
   // Build Cytoscape instance when result arrives — matches ARGraphViewer pattern
   useEffect(() => {

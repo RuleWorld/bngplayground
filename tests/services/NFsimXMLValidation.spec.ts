@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { BNGXMLWriter } from '../../services/simulation/BNGXMLWriter';
+import { BNGXMLWriter } from '@bngplayground/engine';
 import { XMLValidator } from '../../services/simulation/XMLValidator';
 import { parseBNGL } from '../../services/parseBNGL';
 

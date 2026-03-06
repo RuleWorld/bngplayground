@@ -8,7 +8,7 @@ import { fileURLToPath } from 'url';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
-import { createSolver } from '../services/ODESolver.ts';
+import { createSolver } from '@bngplayground/engine';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
