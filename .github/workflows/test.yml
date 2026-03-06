@@ -152,7 +152,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+          run: npm install --legacy-peer-deps
 
       - name: Run reference validation suite
         run: npm run test:reference
@@ -194,7 +194,7 @@ jobs:
           cache: 'npm'
 
       - name: Install dependencies
-        run: npm ci
+        run: npm install --legacy-peer-deps
 
       - name: Run deterministic parity shard
         run: npm run test:deterministic:parity -- --shard ${{ matrix.shard }} --shards 3 --out artifacts/parity_layer_report.deterministic.shard-${{ matrix.shard }}.json --timeoutMs 180000
