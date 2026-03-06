@@ -2,10 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { parseBNGLWithANTLR } from './parser/BNGLParserWrapper';
-import { NetworkGenerator } from './services/graph/NetworkGenerator';
-import { BNGLParser } from './services/graph/core/BNGLParser';
-import { GraphCanonicalizer } from './services/graph/core/Canonical';
+import { parseBNGLWithANTLR, NetworkGenerator, BNGLParser, GraphCanonicalizer } from '@bngplayground/engine';
 import type { BNGLModel } from '../types';
 import modelsList from './gdat_models.json';
 

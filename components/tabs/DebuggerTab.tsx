@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { DebuggerPanel } from '../debugger/DebuggerPanel';
 import { NetworkTracer } from '@bngplayground/engine';
-import type { TraceResult } from '../../src/services/debugger/types';
+import type { TraceResult } from '@bngplayground/engine';
 
 const tracer = new NetworkTracer();
 

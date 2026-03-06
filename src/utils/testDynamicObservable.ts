@@ -2,9 +2,7 @@
  * Test suite for dynamic observable pattern parsing and matching
  */
 
-import { BNGLParser } from '../services/graph/core/BNGLParser';
-import { GraphMatcher } from '../services/graph/core/Matcher';
-import { validateObservablePattern, parseObservablePattern } from './dynamicObservable';
+import { BNGLParser, GraphMatcher, validateObservablePattern, parseObservablePattern } from '@bngplayground/engine';
 
 // Test cases for pattern parsing
 const testPatterns = [

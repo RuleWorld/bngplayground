@@ -4,7 +4,7 @@ import type {
   RuleOperation,
   VisualizationMolecule,
 } from '../../types/visualization';
-import type { SpeciesGraph } from '../../src/services/graph/core/SpeciesGraph';
+import type { SpeciesGraph } from '@bngplayground/engine';
 import {
   convertSpeciesGraph,
   extractBonds,
