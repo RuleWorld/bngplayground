@@ -69,6 +69,12 @@ interface AlignedRowPair {
   time: number;
 }
 
+interface ReferenceModelInfo {
+  requestedPhaseIndex: number;
+  methods: Set<SimCall['method']>;
+  isMultiPhaseOde: boolean;
+}
+
 // Project layout: compare exported browser CSVs in <repo>/web_output against
 // precomputed BNG2 outputs in <repo>/bng_test_output.
 const WEB_OUTPUT_DIR = path.join(PROJECT_ROOT, 'web_output');
@@ -157,6 +163,43 @@ function normalizeKey(raw: string): string {
     .replace(/\(\d+\)$/, '')
     .replace(/\s+/g, '')
     .replace(/[^a-z0-9]+/g, '');
+}
+
+function inferRequestedPhaseIndex(modelLabel: string, bnglPath?: string): number {
+  if (!bnglPath) return 1;
+
+  const baseName = path.basename(bnglPath).replace(/\.bngl$/i, '');
+  const labelLower = modelLabel.toLowerCase();
+  const baseLower = baseName.toLowerCase();
+  if (!labelLower.startsWith(`${baseLower}_`)) return 1;
+
+  const suffix = modelLabel.slice(baseName.length + 1);
+  const phaseWithParam = suffix.match(/^p(\d+)_/i);
+  if (phaseWithParam) return Number.parseInt(phaseWithParam[1], 10);
+
+  const numericPhase = suffix.match(/^(\d+)$/);
+  if (numericPhase) return Number.parseInt(numericPhase[1], 10);
+
+  return 1;
+}
+
+function analyzeReferenceModel(modelLabel: string, bnglPath?: string): ReferenceModelInfo | null {
+  if (!bnglPath || !fs.existsSync(bnglPath)) return null;
+
+  const content = fs.readFileSync(bnglPath, 'utf8');
+  const calls = parseSimulateCallsFromBngl(content);
+  const methods = new Set(calls.map((call) => call.method));
+  const odeCalls = calls.filter((call) => call.method === 'ode');
+
+  return {
+    requestedPhaseIndex: inferRequestedPhaseIndex(modelLabel, bnglPath),
+    methods,
+    isMultiPhaseOde: odeCalls.length > 1,
+  };
+}
+
+function formatMethodSummary(methods: Set<SimCall['method']>): string {
+  return [...methods].sort().join(', ');
 }
 
 function getTolerances(modelName: string): { absTol: number; relTol: number } {
@@ -634,10 +677,21 @@ function getMultiPhaseReference(
       })
       .map((gf) => path.join(BNG_OUTPUT_DIR, gf));
 
+    const requestedPhaseIndex = inferRequestedPhaseIndex(rawLabel, bnglPath);
     const candidates = uniqueStrings([...(inferredGdat ? [inferredGdat] : []), ...byPrefix]);
     // Prefer comparing against ODE references; drop explicit SSA/NF variants.
     const odeCandidates = candidates.filter((p) => !isClearlyNonOdeGdat(p));
-    return { gdatPaths: odeCandidates.length > 0 ? odeCandidates : candidates, bnglPath, inferred: true };
+    const filteredCandidates = odeCandidates.length > 0 ? odeCandidates : candidates;
+
+    if (requestedPhaseIndex > 1) {
+      const phaseSpecificCandidates = filteredCandidates.filter((candidate) => {
+        const fileName = path.basename(candidate, '.gdat').toLowerCase();
+        return fileName === rawLabel.toLowerCase() || fileName === `${baseNameLower}_${requestedPhaseIndex}`;
+      });
+      return { gdatPaths: phaseSpecificCandidates, bnglPath, inferred: true };
+    }
+
+    return { gdatPaths: filteredCandidates, bnglPath, inferred: true };
   }
 
   function betterCandidate(a: ComparisonResult, b: ComparisonResult): boolean {
@@ -967,6 +1021,7 @@ function getMultiPhaseReference(
       }
       const modelName = csvModelLabel(csvFile);
       processedModels.add(modelName);
+      const referenceModelInfo = analyzeReferenceModel(modelName, ref.bnglPath);
 
       // Skip models known to fail in canonical BNG2.pl (explicit exclusion list in constants.ts)
       const normalizedModelKey = normalizeKey(modelName);
@@ -983,7 +1038,31 @@ function getMultiPhaseReference(
         continue;
       }
 
+      if (referenceModelInfo && [...referenceModelInfo.methods].some((method) => method !== 'ode')) {
+        results.push({
+          model: modelName,
+          status: 'skipped',
+          referenceFile: undefined,
+          referenceInferred: ref.inferred,
+          details: null,
+          error: `Skipped non-deterministic or NFsim model (${formatMethodSummary(referenceModelInfo.methods)}).`,
+        });
+        continue;
+      }
+
       if (!ref.gdatPaths || ref.gdatPaths.length === 0) {
+        if ((referenceModelInfo?.requestedPhaseIndex ?? 1) > 1) {
+          results.push({
+            model: modelName,
+            status: 'skipped',
+            referenceFile: undefined,
+            referenceInferred: ref.inferred,
+            details: null,
+            error: `Skipped phase ${referenceModelInfo?.requestedPhaseIndex} output because no phase-specific GDAT reference was found.`,
+          });
+          continue;
+        }
+
         // Check for BNG failure marker
         const failMarker = path.join(BNG_OUTPUT_DIR, `${modelName}.bngfail`);
         const nosourceMarker = path.join(BNG_OUTPUT_DIR, `${modelName}.nosource`);
@@ -1032,6 +1111,18 @@ function getMultiPhaseReference(
         if (ref.bnglPath) {
           const baseName = path.basename(ref.bnglPath).replace(/\.bngl$/i, '');
           multiPhaseRef = getMultiPhaseReference(baseName, ref.bnglPath, gdatFiles);
+        }
+
+        if (referenceModelInfo?.isMultiPhaseOde && !multiPhaseRef && (referenceModelInfo.requestedPhaseIndex === 1)) {
+          results.push({
+            model: modelName,
+            status: 'skipped',
+            referenceFile: undefined,
+            referenceInferred: ref.inferred,
+            details: null,
+            error: 'Skipped multi-phase model because the full per-phase GDAT reference set could not be resolved.',
+          });
+          continue;
         }
 
         // Compare against all viable candidates and pick the best.
@@ -1187,6 +1278,7 @@ function getMultiPhaseReference(
               matching: results.filter(r => r.status === 'match').length,
               mismatches: results.filter(r => r.status === 'mismatch').length,
               missingReference: results.filter(r => r.status === 'missing_reference').length,
+              skipped: results.filter(r => r.status === 'skipped').length,
               errors: results.filter(r => r.status === 'error').length,
             },
             results,
@@ -1213,10 +1305,12 @@ function getMultiPhaseReference(
     const mismatches = results.filter(r => r.status === 'mismatch');
     const missing = results.filter(r => r.status === 'missing_reference');
     const errors = results.filter(r => r.status === 'error');
+    const skipped = results.filter(r => r.status === 'skipped');
 
     console.log(`Matching:      ${matches.length}`);
     console.log(`Mismatches:    ${mismatches.length}`);
     console.log(`No reference:  ${missing.length}`);
+    console.log(`Skipped:       ${skipped.length}`);
     console.log(`Errors:        ${errors.length}`);
     console.log();
 
@@ -1285,6 +1379,14 @@ function getMultiPhaseReference(
       console.log('Models without reference GDAT files:');
       for (const r of missing) {
         console.log(`  NOREF ${r.model}`);
+      }
+      console.log();
+    }
+
+    if (skipped.length > 0) {
+      console.log('Skipped Models:');
+      for (const r of skipped) {
+        console.log(`  SKIP ${r.model}: ${r.error ?? 'Skipped by comparison policy'}`);
       }
       console.log();
     }

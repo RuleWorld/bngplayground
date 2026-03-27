@@ -362,15 +362,6 @@ export const MODEL_PRESETS: Record<string, Partial<CVODEStiffConfig>> = {
     rationale: 'Lang_2024: Extreme stiffness (rate ratio >1e6), multi-phase with setConcentration'
   },
 
-  'cBNGL_simple': {
-    stabLimDet: 1,
-    maxOrd: 5,
-    maxNonlinIters: 5,
-    // Note: This model's divergence is due to Hill function bifurcation sensitivity,
-    // not solver configuration. These settings may help but won't fully resolve it.
-    rationale: 'cBNGL_simple: Hill function (n=50) bifurcation sensitivity'
-  },
-
   'eco_coevolution_host_parasite': {
     stabLimDet: 1,
     maxOrd: 4,

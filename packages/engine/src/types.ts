@@ -219,6 +219,8 @@ export interface SimulationOptions {
     n_steps: number;
     atol?: number;
     rtol?: number;
+    // `cvode` uses CVODE as the primary solver and automatically falls back to
+    // Rosenbrock23 on hard CVODE failures (convergence/invalid-state guard).
     solver?: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'webgpu_rk4';
     maxSteps?: number;
     maxStep?: number;

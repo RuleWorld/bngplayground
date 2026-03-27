@@ -42,7 +42,6 @@ const bngAvailable = hasBNG2();
 // These models have larger tolerance due to solver differences (BNG2 uses CVODE, web uses similar but not identical)
 const MODEL_REL_TOL_OVERRIDES: Record<string, number> = {
   'An_2009': 0.25,       // Complex NF-kB model with strict solver tolerances but notable cross-solver drift at long times
-  'cBNGL_simple': 0.08,  // cBNGL compartment model with volume scaling
 };
 
 
@@ -1862,7 +1861,7 @@ describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
       console.log(`  ✓ BNG2.pl completed in ${(bng2Time / 1000).toFixed(2)}s`);
 
       // Parse and run web simulator
-      const model = parseBNGL(comparisonBngl);
+      const model = parseBNGL(comparisonBngl, { modelName });
 
       try {
         const webResult = await runWebSimulator(model, params, modelName);

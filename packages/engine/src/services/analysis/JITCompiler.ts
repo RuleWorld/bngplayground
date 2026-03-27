@@ -100,6 +100,12 @@ export interface JITCompiledObservableFunction {
     compiledAt: number;
 }
 
+interface JITFunctionDefinition {
+    name: string;
+    args: string[];
+    expression: string;
+}
+
 /**
  * Compiled RHS function type
  */
@@ -590,7 +596,8 @@ export class JITCompiler {
             indices: Int32Array | number[];
             coefficients: Float64Array | number[];
         }>,
-        speciesNames?: string[]
+        speciesNames?: string[],
+        functions?: JITFunctionDefinition[]
     ): NetworkByteCode | null {
         const isConstant = (idx: number): boolean =>
             !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
@@ -648,7 +655,8 @@ export class JITCompiler {
                         rxn.rateConstant,
                         parameters || {},
                         speciesNames || [],
-                        (observables || []).map(o => o.name)
+                        (observables || []).map(o => o.name),
+                        functions
                     );
                     if (bc) {
                         bytecodeChunks.push(bc.bytecode);
@@ -891,10 +899,12 @@ export class JITCompiler {
         expr: string,
         parameters: Record<string, number>,
         speciesNames: string[],
-        observableNames: string[]
+        observableNames: string[],
+        functions?: JITFunctionDefinition[]
     ): { bytecode: Uint8Array; usesParameters: boolean } | null {
         try {
-            const ast = jsep(expr);
+            const expandedExpr = this.expandZeroArgFunctions(expr, functions).replace(/\^/g, '**');
+            const ast = jsep(expandedExpr);
             const bytes: number[] = [];
             let usesParameters = false;
             const speciesIndexByName = new Map<string, number>();
@@ -956,7 +966,7 @@ export class JITCompiler {
                         bytes.push(...new Uint8Array(buf));
                         return;
                     }
-                    throw new Error(`Unsupported member expression in ${expr}`);
+                    throw new Error(`Unsupported member expression in ${expandedExpr}`);
                 } else if (node.type === 'BinaryExpression') {
                     walk(node.left);
                     walk(node.right);
@@ -1000,6 +1010,33 @@ export class JITCompiler {
             console.warn('[JITCompiler] Bytecode compilation failed:', e);
             return null;
         }
+    }
+
+    private expandZeroArgFunctions(expr: string, functions?: JITFunctionDefinition[]): string {
+        if (!functions || functions.length === 0) return expr;
+
+        let expanded = expr;
+        for (let pass = 0; pass < 10; pass++) {
+            let changed = false;
+            for (const func of functions) {
+                if ((func.args?.length ?? 0) !== 0) continue;
+
+                const withParens = new RegExp(`\\b${func.name}\\s*\\(\\s*\\)`, 'g');
+                if (withParens.test(expanded)) {
+                    expanded = expanded.replace(withParens, `(${func.expression})`);
+                    changed = true;
+                }
+
+                const bareName = new RegExp(`\\b${func.name}\\b(?!\\s*\\()`, 'g');
+                if (bareName.test(expanded)) {
+                    expanded = expanded.replace(bareName, `(${func.expression})`);
+                    changed = true;
+                }
+            }
+            if (!changed) break;
+        }
+
+        return expanded;
     }
 
     /**

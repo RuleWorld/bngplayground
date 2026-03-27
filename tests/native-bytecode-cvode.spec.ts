@@ -26,7 +26,7 @@ describe('native CVODE bytecode', () => {
       method: 'ode',
       solver: 'auto',
       t_end: 10,
-      n_steps: 20,
+      n_steps: 200,
     } as const;
 
     const nativeResults = await simulate(1, model as any, {

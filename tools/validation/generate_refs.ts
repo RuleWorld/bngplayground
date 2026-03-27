@@ -19,7 +19,7 @@ const PERL_CMD = process.env.PERL_CMD ?? DEFAULT_PERL_CMD;
 const OUTPUT_DIR = path.join(PROJECT_ROOT, 'bng_test_output');
 
 // Skip list (same as tests)
-const SKIP_MODELS = ['blbr', 'cBNGL_simple'];
+const SKIP_MODELS = ['blbr'];
 
 // Parse arguments
 const args = process.argv.slice(2);

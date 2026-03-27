@@ -12,7 +12,7 @@ const VALID_MODELS_JSON = path.join(PROJECT_ROOT, 'tests/bionetgen-repo/valid_mo
 const DEST_FILE = path.join(PROJECT_ROOT, 'validation_models.ts');
 const INDEX_FILE = path.join(PROJECT_ROOT, 'constants.ts');
 
-const SKIP_MODELS = ['blbr', 'cBNGL_simple'];
+const SKIP_MODELS = ['blbr'];
 
 function shouldSkip(modelPath: string): boolean {
     const name = path.basename(modelPath, '.bngl');

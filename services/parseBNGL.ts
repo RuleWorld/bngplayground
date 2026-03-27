@@ -249,6 +249,7 @@ const splitProductsAndRates = (segment: string, parameters: Record<string, numbe
 export interface ParseBNGLOptions {
   checkCancelled?: () => void;
   debug?: boolean;
+  modelName?: string;
 }
 
 export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLModel {
@@ -265,6 +266,10 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
   if (!result.success && options.debug) {
     const errorMsg = result.errors.map(e => `Line ${e.line}:${e.column}: ${e.message}`).join('\n');
     console.warn(`[parseBNGL] ANTLR parse reported errors (best-effort model returned):\n${errorMsg}`);
+  }
+
+  if (!result.model.name && options.modelName) {
+    result.model.name = options.modelName;
   }
 
   return result.model;

@@ -1195,6 +1195,28 @@ export class CVODESolver {
     this.networkByteCode = this.options.networkByteCode;
   }
 
+  private validateCvodeState(y: Float64Array, t: number): string | null {
+    const NEG_TOL = 1e-8;
+    let minValue = 0;
+
+    for (let i = 0; i < y.length; i++) {
+      const value = y[i];
+      if (!Number.isFinite(value)) {
+        return `NaN/Infinity detected at t=${t.toExponential(4)}`;
+      }
+      if (value < minValue) minValue = value;
+      if (value < 0 && value >= -NEG_TOL) {
+        y[i] = 0;
+      }
+    }
+
+    if (minValue < -NEG_TOL) {
+      return `CVODE negative overshoot at t=${t.toExponential(4)} (min=${minValue.toExponential(4)})`;
+    }
+
+    return null;
+  }
+
   static async init() {
     if (this.module) return;
     if (this.initPromise) return this.initPromise;
@@ -1722,6 +1744,11 @@ export class CVODESolver {
         if (flag === 2) {
           m._get_y(solverMem, yPtr);
           yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
+          const stateError = this.validateCvodeState(yOut, t);
+          if (stateError) {
+            this.currentT = t;
+            return { success: false, t, y: yOut, steps, errorMessage: stateError };
+          }
           this.currentT = t;
           return { success: true, t, y: yOut, steps, errorMessage: 'ROOT_FOUND' };
         }
@@ -1746,6 +1773,11 @@ export class CVODESolver {
 
         m._get_y(solverMem, yPtr);
         yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
+        const stateError = this.validateCvodeState(yOut, t);
+        if (stateError) {
+          this.currentT = t;
+          return { success: false, t, y: yOut, steps, errorMessage: stateError };
+        }
         this.currentT = t;
 
         let errorMessage = `CVODE failed with flag ${flag}`;
@@ -1760,6 +1792,11 @@ export class CVODESolver {
       const currentHeap = m.HEAPF64;
       m._get_y(solverMem, yPtr);
       yOut.set(currentHeap.subarray(yPtr >> 3, (yPtr >> 3) + neq));
+      const stateError = this.validateCvodeState(yOut, t);
+      if (stateError) {
+        this.currentT = t;
+        return { success: false, t, y: yOut, steps, errorMessage: stateError };
+      }
 
       this.currentT = t;
 
@@ -1843,8 +1880,10 @@ export async function createSolver(
 
   switch (opts.solver) {
     case 'cvode':
+      // Preserve CVODE as the primary path for parity, but use the same guarded
+      // fallback wrapper as `cvode_auto` so invalid CVODE states do not leak out.
       await CVODESolver.init();
-      return new CVODESolver(n, f, opts, false);
+      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false));
     case 'cvode_sparse':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, true);
@@ -1968,7 +2007,9 @@ export class CVODEAutoSolver {
     // Check if this is a convergence failure (flag -4) or error test failure (flag -3)
     if (result.errorMessage?.includes('flag -4') ||
       result.errorMessage?.includes('flag -3') ||
-      result.errorMessage?.includes('convergence')) {
+      result.errorMessage?.includes('convergence') ||
+      result.errorMessage?.includes('negative overshoot') ||
+      result.errorMessage?.includes('NaN/Infinity')) {
       console.log('[CVODEAutoSolver] CVODE failed, switching to Rosenbrock23');
       this.useFallback = true;
       // Retry from beginning with Rosenbrock
@@ -1977,6 +2018,11 @@ export class CVODEAutoSolver {
 
     // Other failure - return as is
     return result;
+  }
+
+  destroy(): void {
+    this.cvode?.destroy?.();
+    this.cvode = null;
   }
 }
 

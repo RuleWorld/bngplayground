@@ -581,16 +581,15 @@ export async function simulate(
   };
 
   const isOde = !allSsa && !allPla && options.method !== 'ssa' && options.method !== 'pla';
+  const odeUsesAmountState = isOde && Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
   const state = new Float64Array(numSpecies);
   model.species.forEach((s, i) => {
-    // PARITY FIX: Species amount in BNGL is usually a count (integer).
-    // For ODE simulation, we must solve for concentrations (Amount/Vol).
-    // For SSA simulation, we solve for molecule counts directly.
+    // For compartment ODEs, integrate in amount space to better match BNG2/CVODE
+    // error weighting across heterogeneous compartment volumes.
     const initAmt = resolveInitialAmount(s);
 
     if (isOde) {
-      // Convert initial molecule counts to concentrations for ODE solver parity
-      state[i] = initAmt / speciesVolumes[i];
+      state[i] = odeUsesAmountState ? initAmt : (initAmt / speciesVolumes[i]);
     } else {
       // Keep as integer counts for SSA
       state[i] = initAmt;
@@ -606,6 +605,8 @@ export async function simulate(
   const minVol = Math.min(...Array.from(speciesVolumes));
   const maxVol = Math.max(...Array.from(speciesVolumes));
   console.log(`[Worker] Scaling Check: Species Vol Range [${minVol}, ${maxVol}]. Count 1.0s: ${Array.from(speciesVolumes).filter(v => v === 1.0).length}`);
+  const stateValueToSpeciesOutput = (value: number, speciesIdx: number): number =>
+    (isOde && odeUsesAmountState) ? (value / speciesVolumes[speciesIdx]) : value;
 
   // PARITY FIX: Concentration cache for saveConcentrations/resetConcentrations (BNG2 Cache semantics)
   // BNG2 uses a label-based cache. Default label resets to initial seed species values.
@@ -691,7 +692,7 @@ export async function simulate(
               indices: Int32Array | number[];
               coefficients: Float64Array | number[];
               volumes?: Float64Array | number[];
-            }>, numSpecies, isOde);
+            }>, numSpecies, isOde && !odeUsesAmountState);
           } catch {
             return null;
           }
@@ -714,7 +715,9 @@ export async function simulate(
           const termVolume = Array.isArray(obsVolumes)
             ? (obsVolumes[j] ?? speciesVolumes[idx])
             : speciesVolumes[idx];
-          const amount = isOde ? (val * termVolume) : val;
+          const amount = isOde
+            ? (odeUsesAmountState ? val : (val * termVolume))
+            : val;
           sum += amount * obs.coefficients[j];
         }
         observableValuesBuffer[i] = sum;
@@ -1087,7 +1090,7 @@ export async function simulate(
 
           if (speciesIdx !== undefined) {
             if (isOde) {
-              const delta = resolvedValue / speciesVolumes[speciesIdx];
+              const delta = odeUsesAmountState ? resolvedValue : (resolvedValue / speciesVolumes[speciesIdx]);
               const base = state[speciesIdx];
               state[speciesIdx] = mode === 'add' ? base + delta : delta;
             } else {
@@ -1542,11 +1545,15 @@ export async function simulate(
               // AND include full species names for user-defined functions
               const rxnContext: Record<string, number> = {};
               for (let j = 0; j < rxn.reactants.length; j++) {
-                rxnContext[`ridx${j}`] = yIn[rxn.reactants[j]];
+                rxnContext[`ridx${j}`] = odeUsesAmountState
+                  ? yIn[rxn.reactants[j]]
+                  : (yIn[rxn.reactants[j]] * speciesVolumes[rxn.reactants[j]]);
               }
               // Also add species names
               for (let k = 0; k < model.species.length; k++) {
-                rxnContext[model.species[k].name] = yIn[k];
+                rxnContext[model.species[k].name] = odeUsesAmountState
+                  ? yIn[k]
+                  : (yIn[k] * speciesVolumes[k]);
               }
 
               // Define debugContext here where inputs are available
@@ -1594,8 +1601,9 @@ export async function simulate(
             for (let j = 0; j < rxn.reactants.length; j++) {
               const ridx = rxn.reactants[j];
               const nativeVal = yIn[ridx];
-              // Convert native concentration to anchor-relative concentration: (N/Vi) * (Vi/Vanchor) = N/Vanchor
-              const anchorRelVal = nativeVal * (speciesVolumes[ridx] / vAnchor);
+              const anchorRelVal = odeUsesAmountState
+                ? (nativeVal / vAnchor)
+                : (nativeVal * (speciesVolumes[ridx] / vAnchor));
               multiplicative *= anchorRelVal;
             }
             const velocity = velocityBase * multiplicative;
@@ -1605,27 +1613,26 @@ export async function simulate(
               const reactantIdx = rxn.reactants[j];
               const isActuallyConstant = model.species[reactantIdx].isConstant;
               if (!isActuallyConstant) {
-                // d[C]/dt = Rate_Amount / Vol_Species
-                dydt[reactantIdx] -= velocity / speciesVolumes[reactantIdx];
+                dydt[reactantIdx] -= odeUsesAmountState
+                  ? velocity
+                  : (velocity / speciesVolumes[reactantIdx]);
               }
             }
             for (let j = 0; j < rxn.products.length; j++) {
               const productIdx = rxn.products[j];
               if (!model.species[productIdx].isConstant) {
                 const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
-                // d[C]/dt = Rate_Amount / Vol_Species
-                const contrib = (velocity * stoich) / speciesVolumes[productIdx];
-                const prevDydt = dydt[productIdx];
+                const contrib = odeUsesAmountState
+                  ? (velocity * stoich)
+                  : ((velocity * stoich) / speciesVolumes[productIdx]);
                 dydt[productIdx] += contrib;
-
-
               }
             }
           }
         };
       }
 
-      const allowJit = functionalRateCount === 0;
+      const allowJit = functionalRateCount === 0 && !odeUsesAmountState;
 
       if (allowJit) {
         try {
@@ -1667,10 +1674,12 @@ export async function simulate(
           // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
           for (let j = 0; j < rxn.reactants.length; j++) {
             const ridx = rxn.reactants[j];
-            // PARITY FIX: Scale reactant concentration by (Vol_Species / Vol_Anchor)
-            // This converts concentration in species volume to concentration in anchor volume.
-            const scale = speciesVolumes[ridx] / vAnchor;
-            multiplicative *= (yIn[ridx] * scale);
+            if (odeUsesAmountState) {
+              multiplicative *= (yIn[ridx] / vAnchor);
+            } else {
+              const scale = speciesVolumes[ridx] / vAnchor;
+              multiplicative *= (yIn[ridx] * scale);
+            }
           }
           velocity *= multiplicative * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
 
@@ -1682,15 +1691,18 @@ export async function simulate(
           for (let j = 0; j < rxn.reactants.length; j++) {
             const reactantIdx = rxn.reactants[j];
             if (!model.species[reactantIdx].isConstant) {
-              // Each occurrence in reactants list implies stoichiometry 1 for that entry
-              dydt[reactantIdx] -= velocity / speciesVolumes[reactantIdx];
+              dydt[reactantIdx] -= odeUsesAmountState
+                ? velocity
+                : (velocity / speciesVolumes[reactantIdx]);
             }
           }
           for (let j = 0; j < rxn.products.length; j++) {
             const productIdx = rxn.products[j];
             if (!model.species[productIdx].isConstant) {
               const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
-              dydt[productIdx] += (velocity * stoich) / speciesVolumes[productIdx];
+              dydt[productIdx] += odeUsesAmountState
+                ? (velocity * stoich)
+                : ((velocity * stoich) / speciesVolumes[productIdx]);
             }
           }
         }
@@ -1940,13 +1952,16 @@ export async function simulate(
       }
     }
 
-    if (jacobianColMajor) {
+    // The generated Jacobian is currently derived for concentration-space state.
+    // Keep amount-space compartment ODEs on the generic RHS until a matching
+    // amount-space Jacobian path is implemented and validated.
+    if (jacobianColMajor && !odeUsesAmountState) {
       if (solverType === 'cvode' || solverType === 'cvode_jac') {
         solverOptions.solver = 'cvode_jac';
         solverOptions.jacobian = jacobianColMajor;
       }
     }
-    if (jacobianRowMajor && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
+    if (jacobianRowMajor && !odeUsesAmountState && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
 
     // Try generating bytecode for native path
     const hasLocalFunctions = (model.functions || []).some((f) => Array.isArray(f.args) && f.args.length > 0);
@@ -1958,10 +1973,13 @@ export async function simulate(
       activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
 
+      // Native bytecode/JIT currently assumes concentration-space state and
+      // observable scaling. Disable it on the amount-space branch for now.
       const canUseNativeBytecode =
         enableNativeBytecode &&
         (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') &&
-        !hasLocalFunctions;
+        !hasLocalFunctions &&
+        !odeUsesAmountState;
 
       if (!canUseNativeBytecode) {
         return;
@@ -2017,7 +2035,8 @@ export async function simulate(
         speciesVolumes,
         constantSpeciesMask,
         concreteObservables as any,
-        speciesHeaders
+        speciesHeaders,
+        model.functions
       );
       if (bc) {
         activeNativeByteCode = bc;
@@ -2181,8 +2200,7 @@ export async function simulate(
             // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
             if (label === DEFAULT_CONC_LABEL) {
               for (let k = 0; k < numSpecies; k++) {
-                // ODE uses concentrations (amount / volume)
-                y[k] = initialSeedConcentrations[k] / speciesVolumes[k];
+                y[k] = odeUsesAmountState ? initialSeedConcentrations[k] : (initialSeedConcentrations[k] / speciesVolumes[k]);
                 state[k] = y[k];
               }
               console.log(`[Worker] ODE: Reset concentrations to initial seed species (no saved state)`);
@@ -2212,7 +2230,9 @@ export async function simulate(
           if (matches.length > 0) speciesIdx = matches[0];
         }
         if (speciesIdx !== undefined) {
-          const delta = isOde ? (resolvedValue / speciesVolumes[speciesIdx]) : resolvedValue;
+          const delta = isOde
+            ? (odeUsesAmountState ? resolvedValue : (resolvedValue / speciesVolumes[speciesIdx]))
+            : resolvedValue;
           const base = y[speciesIdx];
           const finalVal = mode === 'add' ? base + delta : delta;
           y[speciesIdx] = finalVal;
@@ -2408,7 +2428,7 @@ export async function simulate(
         const obsValues = evaluateObservablesFast(y);
         appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
         const s0: Record<string, number> = { time: outT0 };
-        for (let i = 0; i < numSpecies; i++) s0[speciesHeaders[i]] = y[i];
+        for (let i = 0; i < numSpecies; i++) s0[speciesHeaders[i]] = stateValueToSpeciesOutput(y[i], i);
         appendSpeciesSnapshot(phase.suffix, s0);
       }
 
@@ -2453,12 +2473,12 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(y);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
             const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = y[k];
+            for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = stateValueToSpeciesOutput(y[k], k);
             appendSpeciesSnapshot(phase.suffix, sp);
 
             if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
-              const tfCpAmt = tfCpIdx >= 0 ? (y[tfCpIdx] * speciesVolumes[tfCpIdx]) : NaN;
-              const tfNuAmt = tfNuIdx >= 0 ? (y[tfNuIdx] * speciesVolumes[tfNuIdx]) : NaN;
+              const tfCpAmt = tfCpIdx >= 0 ? (odeUsesAmountState ? y[tfCpIdx] : (y[tfCpIdx] * speciesVolumes[tfCpIdx])) : NaN;
+              const tfNuAmt = tfNuIdx >= 0 ? (odeUsesAmountState ? y[tfNuIdx] : (y[tfNuIdx] * speciesVolumes[tfNuIdx])) : NaN;
               let rateTranscribeVal = Number.NaN;
               const rateTranscribeFn = (model.functions || []).find((f) => f.name === 'rate_transcribe');
               if (rateTranscribeFn) {
@@ -2568,7 +2588,7 @@ export async function simulate(
         if (lastRecordedT !== finalT) {
           // Record final species state for multi-phase propagation
           const spFinal: Record<string, number> = { time: finalT };
-          for (let k = 0; k < numSpecies; k++) spFinal[speciesHeaders[k]] = y[k];
+          for (let k = 0; k < numSpecies; k++) spFinal[speciesHeaders[k]] = stateValueToSpeciesOutput(y[k], k);
           appendSpeciesSnapshot(phase.suffix, spFinal);
         }
       }

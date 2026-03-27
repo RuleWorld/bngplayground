@@ -407,7 +407,9 @@ async function compareModel(
 
     // Parse with our parser
     const bnglCode = fs.readFileSync(bnglPath, 'utf8');
-    const model = parseBNGL(bnglCode);
+    const model = parseBNGL(bnglCode, {
+      modelName: path.basename(bnglPath, '.bngl'),
+    });
 
     const seedSpecies = model.species.map(s => BNGLParser.parseSpeciesGraph(s.name));
 
