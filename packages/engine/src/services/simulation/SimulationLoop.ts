@@ -581,7 +581,14 @@ export async function simulate(
   };
 
   const isOde = !allSsa && !allPla && options.method !== 'ssa' && options.method !== 'pla';
-  const odeUsesAmountState = isOde && Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
+  const hasHeterogeneousSpeciesVolumes = Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
+  // The amount-space branch fixes CVODE parity for compartment models whose rates
+  // depend on observables/functions. Keep pure mass-action compartment models on
+  // the existing concentration-space fast path for performance.
+  const odeUsesAmountState = isOde && hasHeterogeneousSpeciesVolumes && functionalRateCount > 0;
+  if (odeUsesAmountState) {
+    console.log(`[Worker] Using amount-space ODE integration (heterogeneous compartment volumes + ${functionalRateCount} functional rate(s))`);
+  }
   const state = new Float64Array(numSpecies);
   model.species.forEach((s, i) => {
     // For compartment ODEs, integrate in amount space to better match BNG2/CVODE

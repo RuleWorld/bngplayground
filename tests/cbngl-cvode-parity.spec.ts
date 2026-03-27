@@ -1,4 +1,6 @@
 import { readFileSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
@@ -7,6 +9,10 @@ import { generateExpandedNetwork, simulate } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
 import { findRuleHubModelPath } from './helpers/rulehub.ts';
+
+const thisDir = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(thisDir, '..');
+const cbnglReferencePath = resolve(projectRoot, 'tests', 'fixtures', 'gdat', 'cBNGL_simple.gdat');
 
 function parseGdat(text: string): Record<string, number>[] {
   const lines = text.trim().split(/\r?\n/).filter(Boolean);
@@ -23,14 +29,13 @@ function parseGdat(text: string): Record<string, number>[] {
 
 describe('cBNGL_simple CVODE parity', () => {
   it('matches the BioNetGen reference without model-specific CVODE tuning', async () => {
-    const projectRoot = process.cwd();
     const modelPath = findRuleHubModelPath('cBNGL_simple', projectRoot);
     expect(modelPath).toBeTruthy();
 
     const parsed = parseBNGL(readFileSync(modelPath!, 'utf8'), { modelName: 'cBNGL_simple' });
     const expanded = await generateExpandedNetwork(parsed, () => {}, () => {});
     const baseOptions = getSimulationOptionsFromParsedModel(expanded, 'default');
-    const ref = parseGdat(readFileSync('./tests/fixtures/gdat/cBNGL_simple.gdat', 'utf8'));
+    const ref = parseGdat(readFileSync(cbnglReferencePath, 'utf8'));
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
