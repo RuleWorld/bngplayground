@@ -10,11 +10,13 @@ import { generateExpandedNetwork, simulate } from '@bngplayground/engine';
 
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
-import { resolveBNG2Paths } from '../tools/bng2-paths';
+import { hasBNG2, resolveBNG2Paths } from '../tools/bng2-paths';
 import { findRuleHubModelPath } from './helpers/rulehub.ts';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');
+const bng2Available = hasBNG2();
+const maybeItBng2 = bng2Available ? it : it.skip;
 
 function generateReferenceGdatWithBng2(modelPath: string): string {
   const bng2Paths = resolveBNG2Paths();
@@ -75,7 +77,7 @@ function parseGdat(text: string): Record<string, number>[] {
 }
 
 describe('cBNGL_simple CVODE parity', () => {
-  it('matches the BioNetGen reference without model-specific CVODE tuning', async () => {
+  maybeItBng2('matches the BioNetGen reference without model-specific CVODE tuning', async () => {
     const modelPath = findRuleHubModelPath('cBNGL_simple', projectRoot);
     expect(modelPath).toBeTruthy();
 

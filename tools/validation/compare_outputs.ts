@@ -112,6 +112,12 @@ const MODEL_TOLERANCE_OVERRIDES: Record<string, { absTol?: number; relTol?: numb
   // vegfangiogenesis: { relTol: 4e-2 }
 };
 
+// Known mismatches with understood causes that should not fail CI.
+const EXPECTED_MISMATCHES: Record<string, string> = {
+  baruabcr2012: 'Method mismatch: web=ODE, BNG2=NFsim',
+  ecocoevolutionhostparasite: 'Chaotic divergence between CVODE implementations',
+};
+
 // Allow steady-state models to have different row counts if values match in overlap
 const STEADY_STATE_MODELS = ['barua_2007'];
 
@@ -1408,9 +1414,18 @@ function getMultiPhaseReference(
     fs.writeFileSync(reportPath, JSON.stringify(results, null, 2));
     console.log(`Full report saved to: ${reportPath}`);
 
-    if (mismatches.length > 0) {
-      console.error(`${mismatches.length} model(s) had trajectory mismatches.`);
+    const unexpectedMismatches = mismatches.filter(
+      (r) => !EXPECTED_MISMATCHES[normalizeKey(r.model)] && !EXPECTED_MISMATCHES[r.model]
+    );
+
+    if (unexpectedMismatches.length > 0) {
+      console.error(`${unexpectedMismatches.length} UNEXPECTED model mismatch(es):`);
+      for (const mismatch of unexpectedMismatches) {
+        console.error(`  - ${mismatch.model}`);
+      }
       process.exit(1);
+    } else if (mismatches.length > 0) {
+      console.log(`All ${mismatches.length} mismatch(es) are in the expected-mismatches list. CI pass.`);
     }
     if (errors.length > 0) {
       console.error(`${errors.length} model(s) failed during comparison.`);

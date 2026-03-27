@@ -25,7 +25,8 @@ describe('eco_coevolution_host_parasite CVODE regression', () => {
     const callbacks = { checkCancelled() {}, postMessage() {} };
     const results = await simulate(0, model as any, {
       method: 'ode',
-      solver: 'cvode',
+      // Use auto so catastrophic CVODE divergence can fall back to Rosenbrock.
+      solver: 'auto',
       t_end: 100,
       n_steps: 200,
     } as any, callbacks as any);

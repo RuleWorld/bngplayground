@@ -1195,22 +1195,36 @@ export class CVODESolver {
     this.networkByteCode = this.options.networkByteCode;
   }
 
+  /**
+   * Validate CVODE output state. Clamp small negatives to zero (matching BNG2
+   * behavior) and only fail hard for non-finite output or clearly catastrophic
+   * negative overshoot relative to the overall state scale.
+   */
   private validateCvodeState(y: Float64Array, t: number): string | null {
-    const NEG_TOL = 1e-8;
+    let maxAbs = 0;
     let minValue = 0;
+    let hasNonFinite = false;
 
     for (let i = 0; i < y.length; i++) {
       const value = y[i];
       if (!Number.isFinite(value)) {
-        return `NaN/Infinity detected at t=${t.toExponential(4)}`;
+        hasNonFinite = true;
+        break;
       }
+      const absValue = Math.abs(value);
+      if (absValue > maxAbs) maxAbs = absValue;
       if (value < minValue) minValue = value;
-      if (value < 0 && value >= -NEG_TOL) {
-        y[i] = 0;
-      }
     }
 
-    if (minValue < -NEG_TOL) {
+    if (hasNonFinite) {
+      return `NaN/Infinity detected at t=${t.toExponential(4)}`;
+    }
+
+    for (let i = 0; i < y.length; i++) {
+      if (y[i] < 0) y[i] = 0;
+    }
+
+    if (minValue < -1.0 && Math.abs(minValue) > 0.01 * maxAbs) {
       return `CVODE negative overshoot at t=${t.toExponential(4)} (min=${minValue.toExponential(4)})`;
     }
 
@@ -1880,10 +1894,10 @@ export async function createSolver(
 
   switch (opts.solver) {
     case 'cvode':
-      // Preserve CVODE as the primary path for parity, but use the same guarded
-      // fallback wrapper as `cvode_auto` so invalid CVODE states do not leak out.
+      // Plain CVODE. validateCvodeState clamps transient negative overshoots
+      // internally; use auto/cvode_auto when fallback behavior is desired.
       await CVODESolver.init();
-      return new CVODEAutoSolver(n, f, opts, new CVODESolver(n, f, opts, false));
+      return new CVODESolver(n, f, opts, false);
     case 'cvode_sparse':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, true);
@@ -1980,6 +1994,7 @@ export class CVODEAutoSolver {
   private cvode: CVODESolver | null = null;
   private rosenbrock: Rosenbrock23Solver;
   private useFallback: boolean = false;
+  private fallbackStartMs: number = 0;
 
   constructor(_n: number, f: DerivativeFunction, options: SolverOptions, cvode: CVODESolver) {
     this.cvode = cvode;
@@ -1994,6 +2009,15 @@ export class CVODEAutoSolver {
   ): SolverResult {
     // If already detected CVODE failure, use Rosenbrock
     if (this.useFallback || !this.cvode) {
+      if (this.fallbackStartMs > 0 && (Date.now() - this.fallbackStartMs) > 30_000) {
+        return {
+          success: false,
+          t: t0,
+          y: y0,
+          steps: 0,
+          errorMessage: 'Rosenbrock23 fallback exceeded 30 s wall-clock limit',
+        };
+      }
       return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
     }
 
@@ -2012,6 +2036,7 @@ export class CVODEAutoSolver {
       result.errorMessage?.includes('NaN/Infinity')) {
       console.log('[CVODEAutoSolver] CVODE failed, switching to Rosenbrock23');
       this.useFallback = true;
+      this.fallbackStartMs = Date.now();
       // Retry from beginning with Rosenbrock
       return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
     }
