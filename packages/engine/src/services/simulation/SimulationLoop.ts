@@ -586,6 +586,9 @@ export async function simulate(
   // depend on observables/functions. Keep pure mass-action compartment models on
   // the existing concentration-space fast path for performance.
   const odeUsesAmountState = isOde && hasHeterogeneousSpeciesVolumes && functionalRateCount > 0;
+  const solverVolumes = odeUsesAmountState
+    ? new Float64Array(numSpecies).fill(1.0)
+    : speciesVolumes;
   if (odeUsesAmountState) {
     console.log(`[Worker] Using amount-space ODE integration (heterogeneous compartment volumes + ${functionalRateCount} functional rate(s))`);
   }
@@ -1639,7 +1642,7 @@ export async function simulate(
         };
       }
 
-      const allowJit = functionalRateCount === 0 && !odeUsesAmountState;
+      const allowJit = functionalRateCount === 0;
 
       if (allowJit) {
         try {
@@ -1649,7 +1652,7 @@ export async function simulate(
           // Return the JIT-compiled function but wrapped to handle speciesVolumes
           console.log(`[Worker] JIT compiler active for ${concreteReactions.length} reactions.`);
           return (yIn: Float64Array, dydt: Float64Array) => {
-            compiledMassActionJit!.evaluate(0, yIn, dydt, speciesVolumes);
+            compiledMassActionJit!.evaluate(0, yIn, dydt, solverVolumes);
           };
 
         } catch (e) {
@@ -1891,12 +1894,12 @@ export async function simulate(
             let velocityTerm = `${base}`;
             for (let rj = 0; rj < reactants.length; rj++) {
               const ridx = reactants[rj];
-              const scale = speciesVolumes[ridx] / volR;
+              const scale = solverVolumes[ridx] / volR;
               velocityTerm += ` * (y[${ridx}] * ${scale})`;
             }
 
             // Differentiate via power rule: d(y^n)/dy = n * (y^n)/y
-            const scaleK = speciesVolumes[speciesK] / volR;
+            const scaleK = solverVolumes[speciesK] / volR;
             lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] * ${scaleK} : 0.0;`);
 
             // Special case for order 1 to avoid /y[speciesK] when y is 0
@@ -1905,7 +1908,7 @@ export async function simulate(
               for (let rj = 0; rj < reactants.length; rj++) {
                 if (reactants[rj] !== speciesK) {
                   const ridx = reactants[rj];
-                  const scale = speciesVolumes[ridx] / volR;
+                  const scale = solverVolumes[ridx] / volR;
                   partialProduct += ` * (y[${ridx}] * ${scale})`;
                 }
               }
@@ -1917,7 +1920,7 @@ export async function simulate(
               for (let rj = 0; rj < reactants.length; rj++) {
                 const sIdx = reactants[rj];
                 if (!model.species[sIdx].isConstant) {
-                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${speciesVolumes[sIdx]};`);
+                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${solverVolumes[sIdx]};`);
                 }
               }
               // Products
@@ -1925,7 +1928,7 @@ export async function simulate(
                 const pIdx = rxn.products[pj];
                 if (!model.species[pIdx].isConstant) {
                   const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1;
-                  lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${speciesVolumes[pIdx]};`);
+                  lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${solverVolumes[pIdx]};`);
                 }
               }
             } else {
@@ -1933,14 +1936,14 @@ export async function simulate(
               for (let rj = 0; rj < reactants.length; rj++) {
                 const sIdx = reactants[rj];
                 if (!model.species[sIdx].isConstant) {
-                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${speciesVolumes[sIdx]};`);
+                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${solverVolumes[sIdx]};`);
                 }
               }
               for (let pj = 0; pj < rxn.products.length; pj++) {
                 const pIdx = rxn.products[pj];
                 if (!model.species[pIdx].isConstant) {
                   const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1;
-                  lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${speciesVolumes[pIdx]};`);
+                  lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${solverVolumes[pIdx]};`);
                 }
               }
             }
@@ -1959,16 +1962,13 @@ export async function simulate(
       }
     }
 
-    // The generated Jacobian is currently derived for concentration-space state.
-    // Keep amount-space compartment ODEs on the generic RHS until a matching
-    // amount-space Jacobian path is implemented and validated.
-    if (jacobianColMajor && !odeUsesAmountState) {
+    if (jacobianColMajor) {
       if (solverType === 'cvode' || solverType === 'cvode_jac') {
         solverOptions.solver = 'cvode_jac';
         solverOptions.jacobian = jacobianColMajor;
       }
     }
-    if (jacobianRowMajor && !odeUsesAmountState && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
+    if (jacobianRowMajor && ['rosenbrock23', 'auto', 'cvode_auto'].includes(solverType)) solverOptions.jacobianRowMajor = jacobianRowMajor;
 
     // Try generating bytecode for native path
     const hasLocalFunctions = (model.functions || []).some((f) => Array.isArray(f.args) && f.args.length > 0);
@@ -1980,13 +1980,10 @@ export async function simulate(
       activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
 
-      // Native bytecode/JIT currently assumes concentration-space state and
-      // observable scaling. Disable it on the amount-space branch for now.
       const canUseNativeBytecode =
         enableNativeBytecode &&
         (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') &&
-        !hasLocalFunctions &&
-        !odeUsesAmountState;
+        !hasLocalFunctions;
 
       if (!canUseNativeBytecode) {
         return;
@@ -2039,7 +2036,7 @@ export async function simulate(
         consolidatedBCReactions,
         numSpecies,
         model.parameters,
-        speciesVolumes,
+        solverVolumes,
         constantSpeciesMask,
         concreteObservables as any,
         speciesHeaders,
