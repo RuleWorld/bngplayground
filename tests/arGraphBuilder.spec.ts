@@ -70,6 +70,32 @@ describe('Atom-rule graph builder enhancements', () => {
     expect(bng2Labels.length).toBeGreaterThan(1);
   });
 
+  it('keeps influence edge for unchanged componentless species in BNG2 mode', () => {
+    const rule = {
+      name: 'r_mrna',
+      reactants: ['mRNA()'],
+      products: ['mRNA()', 'Protein(g)'],
+      rate: '',
+      isBidirectional: false,
+    };
+
+    const graph = buildAtomRuleGraph([rule], { atomization: 'bng2' });
+    expect(graph.edges.some((e) => e.from === 'mRNA' && e.to === 'r_mrna' && e.edgeType === 'modifies')).toBe(true);
+  });
+
+  it('keeps component-level context edge for unchanged stateful sites in BNG2 mode', () => {
+    const rule = {
+      name: 'r_gene',
+      reactants: ['Gene(state~free)'],
+      products: ['Gene(state~free)', 'mRNA()'],
+      rate: '',
+      isBidirectional: false,
+    };
+
+    const graph = buildAtomRuleGraph([rule], { atomization: 'bng2' });
+    expect(graph.edges.some((e) => e.from === 'Gene(state)' && e.to === 'r_gene' && e.edgeType === 'modifies')).toBe(true);
+  });
+
   it('sanitizes atom ids containing dots so edges always find a matching node', () => {
     const rule = {
       name: 'r',

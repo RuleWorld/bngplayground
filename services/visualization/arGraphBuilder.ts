@@ -262,6 +262,13 @@ const extractAtomicPatternsBNG2 = (
   rMatched.forEach((pIdx, rIdx) => {
     const rMol = rMols[rIdx];
     const pMol = pMols[pIdx];
+
+    // Species with no components (e.g. mRNA()) still participate as unchanged
+    // context when present on both sides of a rule.
+    if (rMol.comps.length === 0 && pMol.comps.length === 0) {
+      context.add(rMol.name);
+    }
+
     rMol.comps.forEach((rComp, cIdx) => {
       const pComp = pMol.comps[cIdx];
       if (!pComp) return;
@@ -272,6 +279,12 @@ const extractAtomicPatternsBNG2 = (
       // State context
       if (rComp.state !== undefined && rComp.state === pComp.state && rComp.state !== '?') {
         context.add(makeStateAtom(rMol.name, rComp.name, rComp.state));
+
+        // Also include the component-level atom for unchanged stateful sites.
+        // This matches expected AR/Regulatory influence edges such as Gene(state)->Rule.
+        if (!rComp.bondKey && !pComp.bondKey) {
+          context.add(makeFreeAtom(rMol.name, rComp.name));
+        }
         return;
       }
       // Bond context (bond present on both sides and not an operation)
@@ -290,6 +303,7 @@ const extractAtomicPatternsBNG2 = (
         context.add(makeFreeAtom(rMol.name, rComp.name));
       }
     });
+
   });
 
   // Remove empty strings that can arise from edge cases (e.g. '0' molecules)

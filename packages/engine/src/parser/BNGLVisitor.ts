@@ -596,6 +596,24 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     // Get rate(s)
     const rateExpressions = rateLawCtx.expression();
+    const isBidirectional = !!reactionSignCtx.BI_REACTION_SIGN();
+
+    // Enforce BNGL arrow/rate consistency:
+    // - Unidirectional rules (-> or <-) must provide exactly one rate.
+    // - Bidirectional rules (<->) must provide exactly two rates.
+    if (!isBidirectional && rateExpressions.length !== 1) {
+      const line = ctx.start?.line ?? 0;
+      throw new Error(
+        `Line ${line}: Unidirectional reaction rules must define exactly one rate constant, but found ${rateExpressions.length}. Use "<->" and two rates for reversible rules.`
+      );
+    }
+    if (isBidirectional && rateExpressions.length !== 2) {
+      const line = ctx.start?.line ?? 0;
+      throw new Error(
+        `Line ${line}: Bidirectional reaction rules must define exactly two rate constants (forward, reverse), but found ${rateExpressions.length}.`
+      );
+    }
+
     const rate = rateExpressions.length > 0 ? this.getExpressionText(rateExpressions[0]) : '0';
     const reverseRate = rateExpressions.length > 1 ? this.getExpressionText(rateExpressions[1]) : undefined;
 
@@ -654,8 +672,6 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         }
       }
     }
-
-    const isBidirectional = !!reactionSignCtx.BI_REACTION_SIGN();
 
     // Check modifiers (can be prefix or suffix, so we get an array)
     let deleteMolecules = false;
