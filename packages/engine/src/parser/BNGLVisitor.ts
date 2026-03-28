@@ -600,17 +600,17 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     // Enforce BNGL arrow/rate consistency:
     // - Unidirectional rules (-> or <-) must provide exactly one rate.
-    // - Bidirectional rules (<->) must provide exactly two rates.
+    // - Bidirectional rules (<->) can provide one (forward only) or two (forward, reverse) rates.
     if (!isBidirectional && rateExpressions.length !== 1) {
       const line = ctx.start?.line ?? 0;
       throw new Error(
-        `Line ${line}: Unidirectional reaction rules must define exactly one rate constant, but found ${rateExpressions.length}. Use "<->" and two rates for reversible rules.`
+        `Line ${line}: Unidirectional reaction rules must define exactly one rate constant, but found ${rateExpressions.length}. Use "<->" for reversible rules.`
       );
     }
-    if (isBidirectional && rateExpressions.length !== 2) {
+    if (isBidirectional && (rateExpressions.length < 1 || rateExpressions.length > 2)) {
       const line = ctx.start?.line ?? 0;
       throw new Error(
-        `Line ${line}: Bidirectional reaction rules must define exactly two rate constants (forward, reverse), but found ${rateExpressions.length}.`
+        `Line ${line}: Bidirectional reaction rules must define one or two rate constants, but found ${rateExpressions.length}.`
       );
     }
 
