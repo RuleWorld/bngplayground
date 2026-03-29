@@ -29,7 +29,7 @@ dist-ssr
 *.sw?
 
 # Documentation (if generated)
-docs/
+plans/
 handoffs/
 
 # Compiled WASM artifacts and C build files
