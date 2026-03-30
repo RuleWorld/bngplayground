@@ -90,8 +90,9 @@ const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   exp: Math.exp,
   expm1: Math.expm1 ?? ((x: number) => Math.exp(x) - 1),
   floor: Math.floor,
-  // BioNetGen if(cond, trueVal, falseVal) function - returns trueVal if cond != 0, else falseVal
-  if: (cond: number, trueVal: number, falseVal: number) => (cond !== 0 ? trueVal : falseVal),
+  // BioNetGen if(cond, trueVal, falseVal) function - returns trueVal if cond > 0.5, else falseVal
+  // Matches muParser behavior used in BNG2. Original: (cond !== 0 ? trueVal : falseVal)
+  if: (cond: number, trueVal: number, falseVal: number) => (cond > 0.5 ? trueVal : falseVal),
   ln: Math.log,
   log: Math.log,
   log10: Math.log10 ?? ((x: number) => Math.log(x) / Math.LN10),
@@ -313,7 +314,8 @@ function evaluateNode(node: JsepNode, context: Record<string, number>, stepRef: 
     case 'ConditionalExpression': {
       if (!node.test || !node.consequent || !node.alternate) throw new Error('Malformed conditional expression');
       const test = evaluateNode(node.test, context, stepRef);
-      return test !== 0 ? evaluateNode(node.consequent, context, stepRef) : evaluateNode(node.alternate, context, stepRef);
+      // Use 0.5 threshold for parity with BNG2/muParser
+      return test > 0.5 ? evaluateNode(node.consequent, context, stepRef) : evaluateNode(node.alternate, context, stepRef);
     }
 
     default:

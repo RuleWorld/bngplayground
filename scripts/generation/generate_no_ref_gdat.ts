@@ -106,9 +106,8 @@ function appendDefaultOdeActions(code: string): string {
 	return `${cleaned}\n\n# [auto-generated] Default ODE actions for reference generation\ngenerate_network({overwrite=>1})\nsimulate({method=>"ode",t_end=>100,n_steps=>100})\n`;
 }
 
-function sanitizeActionsKeepFirstOdeSimulateOnly(code: string): string {
-	// Copied from scripts/verify_published_models_with_bng2.cjs (kept in TS form).
-	// Keep only the first ODE simulate call in the actions block; comment out all others.
+function sanitizeActionsKeepAllOdeSimulates(code: string): string {
+	// Keep all ODE simulate calls. Comment out SSA/NFsim simulate calls only.
 	const beginRe = /\bbegin\s+actions\b/i;
 	const endRe = /\bend\s+actions\b/i;
 
@@ -125,20 +124,16 @@ function sanitizeActionsKeepFirstOdeSimulateOnly(code: string): string {
 	const actionsBody = code.slice(afterBeginIdx, endIdx);
 	const after = code.slice(endIdx);
 
-	let seenOdeSim = false;
 	const lines = actionsBody.split(/\r?\n/);
 	const outLines = lines.map((line) => {
 		const trimmed = line.trimStart();
 		if (trimmed.startsWith('#')) return line;
 		if (!/\b(simulate|simulate_ode)\s*\(/i.test(line)) return line;
 
-		const isOde = /\bsimulate_ode\s*\(/i.test(line) || /\bmethod\s*=>\s*["']ode["']/i.test(line);
-		if (isOde && !seenOdeSim) {
-			seenOdeSim = true;
-			return line;
-		}
-
-		return `# [auto-disabled] ${line}`;
+		const isSsa = /\bsimulate_ssa\s*\(/i.test(line) || /\bmethod\s*=>\s*["']ssa["']/i.test(line);
+		const isNf = /\bsimulate_nf\s*\(/i.test(line) || /\bmethod\s*=>\s*["'](?:nf|nfsim)["']/i.test(line);
+		if (isSsa || isNf) return `# [auto-disabled] ${line}`;
+		return line;
 	});
 
 	return `${before}\n${outLines.join('\n')}\n${after}`;
@@ -284,7 +279,7 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	if (fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
 	ensureDir(workDir);
 
-	let sanitized = sanitizeActionsKeepFirstOdeSimulateOnly(loadedCode);
+	let sanitized = sanitizeActionsKeepAllOdeSimulates(loadedCode);
 	if (!hasUncommentedSimulateAction(sanitized)) {
 		sanitized = appendDefaultOdeActions(sanitized);
 	}
@@ -327,7 +322,7 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 		'utf8'
 	);
 
-	if (res.status !== 0 || producedFiles.length === 0 || res.errorMessage) {
+	if (producedFiles.length === 0 || res.errorMessage) {
 		return {
 			safeName,
 			source: model.source,

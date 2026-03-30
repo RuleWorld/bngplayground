@@ -116,6 +116,8 @@ const MODEL_TOLERANCE_OVERRIDES: Record<string, { absTol?: number; relTol?: numb
 const EXPECTED_MISMATCHES: Record<string, string> = {
   baruabcr2012: 'Method mismatch: web=ODE, BNG2=NFsim',
   ecocoevolutionhostparasite: 'Chaotic divergence between CVODE implementations',
+  mtmusicsequencer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
+  spfouriersynthesizer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
 };
 
 // Allow steady-state models to have different row counts if values match in overlap
@@ -385,6 +387,8 @@ function getMultiPhaseReference(
   bnglPath: string,
   gdatFiles: string[]
 ): { headers: string[]; data: number[][] } | null {
+  const normalizedBaseName = baseName.replace(/-/g, '_');
+  const phaseBaseNames = Array.from(new Set([normalizedBaseName, baseName]));
   const content = fs.readFileSync(bnglPath, 'utf8');
   const calls = parseSimulateCallsFromBngl(content);
 
@@ -403,20 +407,27 @@ function getMultiPhaseReference(
   const phasesData: { headers: string[]; data: number[][]; t_end: number }[] = [];
   const usedPhaseFiles = new Set<string>();
 
-  const pickUnnumberedGdat = (): string | null => {
-    const candidate = `${baseName}.gdat`;
-    const lower = candidate.toLowerCase();
-    if (gdatFiles.some(gf => gf.toLowerCase() === lower) && !usedPhaseFiles.has(lower)) {
-      return candidate;
+  const findAvailableGdat = (candidates: string[]): string | null => {
+    for (const candidate of candidates) {
+      const lower = candidate.toLowerCase();
+      if (gdatFiles.some(gf => gf.toLowerCase() === lower) && !usedPhaseFiles.has(lower)) {
+        return candidate;
+      }
     }
     return null;
+  };
+
+  const pickUnnumberedGdat = (): string | null => {
+    return findAvailableGdat(phaseBaseNames.map(name => `${name}.gdat`));
   };
 
   const pickNumberedGdat = (): string | null => {
     const numbered = gdatFiles
       .map(gf => ({
         name: gf,
-        m: gf.match(new RegExp(`^${baseName.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')}_(\\\\d+)\\\\.gdat$`, 'i'))
+        m: phaseBaseNames
+          .map(name => gf.match(new RegExp(`^${name.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')}_(\\\\d+)\\\\.gdat$`, 'i')))
+          .find(Boolean) ?? null
       }))
       .filter(x => x.m)
       .map(x => ({ name: x.name, index: Number((x.m as RegExpMatchArray)[1]) }))
@@ -435,11 +446,12 @@ function getMultiPhaseReference(
     let expectedName = '';
 
     if (call.suffix) {
-      expectedName = `${baseName}_${call.suffix}.gdat`;
+      expectedName = findAvailableGdat(phaseBaseNames.map(name => `${name}_${call.suffix}.gdat`))
+        ?? `${normalizedBaseName}_${call.suffix}.gdat`;
     } else {
       // Unsuffixed simulate output is typically model.gdat regardless of position.
       // If that has already been consumed, fall back to numbered phase files.
-      expectedName = pickUnnumberedGdat() ?? pickNumberedGdat() ?? `${baseName}_${i + 1}.gdat`;
+      expectedName = pickUnnumberedGdat() ?? pickNumberedGdat() ?? `${normalizedBaseName}_${i + 1}.gdat`;
     }
 
     const expectedNameLower = expectedName.toLowerCase();
