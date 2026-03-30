@@ -130,6 +130,8 @@ const CSV_MODEL_ALIASES: Record<string, string> = {
   // Web example name vs reference file base
   lin2019: 'Lin_ERK_2019',
   jaruszewicz2023: 'Jaruszewicz-Blonska_2023',
+  typescriptchyleklibrary: 'barua_2013',
+  suderman2013: 'stress_response_adaptation',
   // Tutorials that have different ref file names
   babtutorial: 'bab',
   // Fix wrong fuzzy matches (keys normalized: lowercase, no special chars)
@@ -389,6 +391,7 @@ function getMultiPhaseReference(
 ): { headers: string[]; data: number[][] } | null {
   const normalizedBaseName = baseName.replace(/-/g, '_');
   const phaseBaseNames = Array.from(new Set([normalizedBaseName, baseName]));
+  const phaseTimeTol = 1e-9;
   const content = fs.readFileSync(bnglPath, 'utf8');
   const calls = parseSimulateCallsFromBngl(content);
 
@@ -406,6 +409,13 @@ function getMultiPhaseReference(
 
   const phasesData: { headers: string[]; data: number[][]; t_end: number }[] = [];
   const usedPhaseFiles = new Set<string>();
+  const unnumberedGdatNames = phaseBaseNames.map(name => `${name}.gdat`);
+  const availableUnnumberedGdats = gdatFiles.filter(gf =>
+    unnumberedGdatNames.some(candidate => candidate.toLowerCase() === gf.toLowerCase())
+  );
+  const hasExplicitPhaseFiles = gdatFiles.some(gf =>
+    phaseBaseNames.some(name => new RegExp(`^${name.replace(/[.*+?^${}()|[\\]\\]/g, '\\\\$&')}_(?:\\d+|[A-Za-z][A-Za-z0-9_]*)\\.gdat$`, 'i').test(gf))
+  );
 
   const findAvailableGdat = (candidates: string[]): string | null => {
     for (const candidate of candidates) {
@@ -440,6 +450,29 @@ function getMultiPhaseReference(
     }
     return null;
   };
+
+  if (availableUnnumberedGdats.length === 1 && !hasExplicitPhaseFiles) {
+    const gdatFile = availableUnnumberedGdats[0];
+    const gdatPath = path.join(BNG_OUTPUT_DIR, gdatFile);
+    const parsed = parseGDAT(fs.readFileSync(gdatPath, 'utf8'));
+    const timeIdx = parsed.headers.findIndex(h => h.toLowerCase() === 'time');
+    const firstPhaseEnd = odeCalls[0]?.t_end;
+    const finalPhaseEnd = odeCalls[odeCalls.length - 1]?.t_end;
+
+    if (timeIdx !== -1 && parsed.data.length > 0 && firstPhaseEnd !== undefined && finalPhaseEnd !== undefined) {
+      const lastTime = parsed.data[parsed.data.length - 1][timeIdx];
+      if (
+        Math.abs(lastTime - finalPhaseEnd) <= phaseTimeTol &&
+        lastTime < firstPhaseEnd - phaseTimeTol
+      ) {
+        console.log(
+          `[MultiPhase] ${baseName}: single unsuffixed GDAT matches final phase only ` +
+          `(lastTime=${lastTime}, phase1End=${firstPhaseEnd}, finalPhaseEnd=${finalPhaseEnd}). Using surviving file directly.`
+        );
+        return parsed;
+      }
+    }
+  }
 
   for (let i = 0; i < phasesToInclude.length; i++) {
     const call = phasesToInclude[i];
