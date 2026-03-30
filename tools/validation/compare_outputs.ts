@@ -130,8 +130,6 @@ const CSV_MODEL_ALIASES: Record<string, string> = {
   // Web example name vs reference file base
   lin2019: 'Lin_ERK_2019',
   jaruszewicz2023: 'Jaruszewicz-Blonska_2023',
-  typescriptchyleklibrary: 'barua_2013',
-  suderman2013: 'stress_response_adaptation',
   // Tutorials that have different ref file names
   babtutorial: 'bab',
   // Fix wrong fuzzy matches (keys normalized: lowercase, no special chars)
