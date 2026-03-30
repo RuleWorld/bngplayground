@@ -201,9 +201,13 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(result.structuredContent.dynamics).toBeDefined();
         expect(result.structuredContent.sobol).toBeDefined();
         expect(result.structuredContent.fim).toBeDefined();
+        expect(result.structuredContent.convergenceAssessment).toBeDefined();
+        expect(typeof result.structuredContent.convergenceAssessment.insightSaturated).toBe('boolean');
+        expect(['continue_analysis', 'collect_more_data', 'done']).toContain(result.structuredContent.convergenceAssessment.recommendation);
         expect(Array.isArray(result.structuredContent.mechanisticCausalTrace)).toBe(true);
         expect(result.structuredContent.parameterSelection).toBeDefined();
         expect(result.structuredContent.parameterSelection.analyzed).toBeLessThanOrEqual(2);
+        expect(Array.isArray(result.structuredContent.surprises)).toBe(true);
         const firstTrace = result.structuredContent.mechanisticCausalTrace[0];
         if (firstTrace) {
             expect(firstTrace.topologyPath || firstTrace.targetObservable).toBeDefined();
@@ -226,12 +230,46 @@ describe('MCP Server Tools Functional Validation', () => {
         });
         expect(result.structuredContent.profileLikelihood).toBeDefined();
         expect(result.structuredContent.profileLikelihood.profiles).toBeDefined();
+        expect(result.structuredContent.profileLikelihood.baselineSSR).toBeGreaterThanOrEqual(0);
         const paramNames = Object.keys(result.structuredContent.profileLikelihood.profiles);
         expect(paramNames.length).toBeGreaterThan(0);
         for (const name of paramNames) {
             const profile = result.structuredContent.profileLikelihood.profiles[name];
             expect(['identifiable', 'practically_unidentifiable', 'structurally_unidentifiable']).toContain(profile.identifiability);
         }
+    });
+
+    it('should pass experimental error weights into profile likelihood', async () => {
+        const weighted = await handleDiagnoseModel({
+            code: simpleModel,
+            t_end: 1,
+            n_steps: 10,
+            n_samples: 8,
+            n_bootstrap: 10,
+            max_parameters: 2,
+            experimental_data: [
+                { time: 0, observables: { A_free: 100, Complex: 0 }, errors: { A_free: 1, Complex: 1 } },
+                { time: 0.5, observables: { A_free: 80, Complex: 10 }, errors: { A_free: 0.5, Complex: 0.5 } },
+                { time: 1, observables: { A_free: 70, Complex: 15 }, errors: { A_free: 0.25, Complex: 0.25 } },
+            ],
+        });
+        const unweighted = await handleDiagnoseModel({
+            code: simpleModel,
+            t_end: 1,
+            n_steps: 10,
+            n_samples: 8,
+            n_bootstrap: 10,
+            max_parameters: 2,
+            experimental_data: [
+                { time: 0, observables: { A_free: 100, Complex: 0 } },
+                { time: 0.5, observables: { A_free: 80, Complex: 10 } },
+                { time: 1, observables: { A_free: 70, Complex: 15 } },
+            ],
+        });
+
+        expect(weighted.structuredContent.profileLikelihood).toBeDefined();
+        expect(unweighted.structuredContent.profileLikelihood).toBeDefined();
+        expect(weighted.structuredContent.profileLikelihood.baselineSSR).not.toBe(unweighted.structuredContent.profileLikelihood.baselineSSR);
     });
 
     it('should include contact map path in causal trace', async () => {

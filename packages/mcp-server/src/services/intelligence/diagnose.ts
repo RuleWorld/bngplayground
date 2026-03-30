@@ -32,6 +32,7 @@ import {
 import {
     detectDiminishingReturns,
     detectCrosstalk,
+    assessSensitivityConvergence,
 } from './utils/analysisUtils.js';
 import { inferConservationHints, detectIrreversibleSteps } from './utils/ruleAnalysisUtils.js';
 import { generateThreeRegisters } from './utils/summaryUtils.js';
@@ -123,7 +124,6 @@ export async function diagnoseModelDeep(args: {
     const firstObservable = observableNames[0];
     const series = firstObservable ? timeSeries.map((row) => Number(row[firstObservable] ?? 0)) : [];
 
-    const surprises = detectSurprises(timeSeries, observableNames);
     const conservationPreview = inferConservationHints(
         reactionRules.map((rule, index) => `${rule.name ?? `rule_${index + 1}`}: ${rule.reactants.join(' + ')} -> ${rule.products.join(' + ')}`),
     );
@@ -146,6 +146,7 @@ export async function diagnoseModelDeep(args: {
     let compilationSurprise: { numRules: number; numGeneratedSpecies: number; numGeneratedReactions: number; surpriseLevel: 'high' | 'moderate' | 'none'; warning?: string } | undefined = undefined;
     let irreversibleSteps: Array<{ rule: string; type: string; controllingParameters: string[]; note: string }> = [];
     let plausibilityChecks: Array<{ parameter: string; value: number; issue: string; physicalBound: number; message: string }> = [];
+    let surprises: Array<{ type: 'overshoot' | 'oscillation' | 'decorrelation' | 'insensitive_parameter' | 'unexpected_sensitivity'; description: string; observable?: string; parameter?: string }> = detectSurprises(timeSeries, observableNames);
 
     if (allParameterEntries.length > 0) {
         const ruleDescriptors = reactionRules.map((rule, index) => ({
@@ -154,6 +155,14 @@ export async function diagnoseModelDeep(args: {
             products: rule.products,
             rate: normalizeWhitespace(rule.rate),
         }));
+        const parameterRuleCounts = ruleDescriptors.reduce<Record<string, number>>((acc, rule) => {
+            for (const [name] of allParameterEntries) {
+                if (rule.rate.includes(name)) {
+                    acc[name] = (acc[name] ?? 0) + 1;
+                }
+            }
+            return acc;
+        }, {});
         const moleculeGraph = buildMoleculeGraph(ruleDescriptors);
         const observableTargets = model.observables.map((observable) => ({
             name: observable.name,
@@ -259,10 +268,33 @@ export async function diagnoseModelDeep(args: {
             const topTotalOrder = [...firstSobol.totalOrder].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 3).map((entry) => ({ name: entry.name, value: entry.value }));
             sobolSummary = { observable: firstSobol.observable, topFirstOrder, topTotalOrder };
             diminishingReturns = detectDiminishingReturns(topFirstOrder) ?? undefined;
+            surprises = detectSurprises(timeSeries, observableNames, {
+                firstOrder: topFirstOrder,
+                totalOrder: topTotalOrder,
+            }, parameterRuleCounts);
 
             const sensitiveParams = topFirstOrder.filter(p => Math.abs(p.value) > 0.01).map(p => p.name);
             const hasStrongSignal = topFirstOrder.length > 0 && Math.abs(topFirstOrder[0].value) > 0.1;
             const signalToNoise = hasStrongSignal ? Math.abs(topFirstOrder[0].value) / (Math.abs(topFirstOrder[0].value - (topTotalOrder[0]?.value ?? 0)) + 0.01) : 0;
+            const doubledSampleCount = Math.max((args.n_samples ?? 64) * 2, (args.n_samples ?? 64) + 16);
+            const secondPassSobol = await sobolSensitivity({
+                simulate: simulateWithOverrides,
+                params: sobolParams,
+                observables: model.observables.slice(0, 1).map((obs) => obs.name),
+                N: doubledSampleCount,
+                nBootstrap: args.n_bootstrap ?? 100,
+                seed: 84,
+            });
+            const secondSobol = secondPassSobol[0];
+            const convergence = secondSobol
+                ? assessSensitivityConvergence(
+                    { firstOrder: topFirstOrder, totalOrder: topTotalOrder },
+                    {
+                        firstOrder: [...secondSobol.firstOrder].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 3).map((entry) => ({ name: entry.name, value: entry.value })),
+                        totalOrder: [...secondSobol.totalOrder].sort((a, b) => Math.abs(b.value) - Math.abs(a.value)).slice(0, 3).map((entry) => ({ name: entry.name, value: entry.value })),
+                    },
+                )
+                : undefined;
             
             if (!hasStrongSignal) {
                 convergenceAssessment = {
@@ -270,17 +302,29 @@ export async function diagnoseModelDeep(args: {
                     recommendation: 'collect_more_data',
                     message: 'No strong sensitivity signals detected. Collect more experimental data or reconsider observable selection.',
                 };
+            } else if (convergence?.insightSaturated) {
+                convergenceAssessment = {
+                    insightSaturated: true,
+                    recommendation: 'done',
+                    message: `Sensitivity classifications are stable after a 2x Sobol rerun${convergence.baselineSensitive.length > 0 ? ` (${convergence.baselineSensitive.join(', ')})` : ''}. Additional analysis is unlikely to change which parameters matter.`,
+                };
             } else if (diminishingReturns?.detected && sensitiveParams.length <= 1) {
                 convergenceAssessment = {
                     insightSaturated: true,
                     recommendation: 'done',
-                    message: 'Single dominant parameter identified with clear sensitivity. Additional analysis unlikely to yield new insights.',
+                    message: 'Single dominant parameter identified with clear sensitivity. Additional analysis is unlikely to yield new insights.',
                 };
             } else if (signalToNoise > 10) {
                 convergenceAssessment = {
                     insightSaturated: true,
                     recommendation: 'done',
                     message: 'High signal-to-noise ratio (>10). First-order effects dominate; interaction effects are minimal.',
+                };
+            } else if (convergence && convergence.changedParameters.length > 0) {
+                convergenceAssessment = {
+                    insightSaturated: false,
+                    recommendation: 'continue_analysis',
+                    message: `Sensitivity classifications changed after increasing Sobol samples (${convergence.changedParameters.join(', ')}). Continue analysis before concluding saturation.`,
                 };
             } else {
                 convergenceAssessment = {

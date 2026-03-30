@@ -27,7 +27,8 @@ export const ExternalLegend: React.FC<{
             !highlightedSet || highlightedSet.size === 0 || highlightedSet.has(entry.name);
 
           return (
-            <div
+            <button
+              type="button"
               key={entry.name}
               onClick={() => onToggle(entry.name)}
               onDoubleClick={(e) => {
@@ -35,6 +36,8 @@ export const ExternalLegend: React.FC<{
                 onIsolate(entry.name);
               }}
               title="Double-click to isolate"
+              aria-pressed={isVisible}
+              aria-label={`${isVisible ? 'Hide' : 'Show'} series ${entry.name}`}
               className={`flex items-center cursor-pointer transition-opacity ${!isVisible ? 'opacity-40' : isHighlighted ? 'opacity-100' : 'opacity-60'} hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -ml-1`}
             >
               <div
@@ -47,7 +50,7 @@ export const ExternalLegend: React.FC<{
                 }}
               />
               <span className="text-xs text-slate-700 dark:text-slate-300">{entry.name}</span>
-            </div>
+            </button>
           );
         })}
       </div>
@@ -74,7 +77,8 @@ export const InlineLegend: React.FC<{
       {payload.map((entry, index) => {
         const isScatter = entry.type === 'scatter';
         return (
-          <div
+          <button
+            type="button"
             key={`item-${index}`}
             onClick={() => onToggle(entry.value)}
             onDoubleClick={(e) => {
@@ -82,6 +86,8 @@ export const InlineLegend: React.FC<{
               onIsolate(entry.value);
             }}
             title="Click to toggle, double-click to isolate"
+            aria-pressed={!entry.inactive}
+            aria-label={`${entry.inactive ? 'Show' : 'Hide'} series ${entry.value}`}
             className={`flex items-center gap-2 cursor-pointer transition-all duration-200 
               ${entry.inactive ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} 
               hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-md px-2 py-1
@@ -101,7 +107,7 @@ export const InlineLegend: React.FC<{
             <span className={`text-[11px] font-medium transition-colors ${entry.inactive ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
               {entry.value}
             </span>
-          </div>
+          </button>
         );
       })}
     </div>

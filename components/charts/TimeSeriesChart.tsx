@@ -64,7 +64,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   height = '100%',
   margin = { top: 20, right: 30, left: 30, bottom: 85 }, // Optimized bottom margin for legend
   syncId,
-  showGrid = true,
+  showGrid = false,
   animationDuration = 300,
   allowZoom = true,
   allowScale = true,
@@ -174,23 +174,23 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             onMouseUp={handleMouseUp}
             onDoubleClick={handleDoubleClick}
           >
-            {showGrid && <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#e2e8f0" strokeOpacity={0.6} />}
+            {showGrid && <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#cbd5e1" strokeOpacity={0.45} />}
             <XAxis
               dataKey={displayXKey}
               type="number"
               tickFormatter={(v) => formatValue(xAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
-              tick={{ fill: '#475569', fontSize: 11 }}
+              tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
               domain={currentDomain ? [currentDomain.x1, currentDomain.x2] : ['auto', 'auto']}
               allowDataOverflow={true}
               label={{
                 value: displayXLabel,
                 position: 'insideBottom',
                 offset: -12,
-                fill: '#64748b',
-                fontSize: 12,
-                fontWeight: 600
+                fill: '#0f172a',
+                fontSize: 13,
+                fontWeight: 700
               }}
             />
             <YAxis
@@ -198,7 +198,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               tickFormatter={(v) => formatValue(yAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
-              tick={{ fill: '#475569', fontSize: 11 }}
+              tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
               domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : [0, 'auto']}
               allowDataOverflow={true}
               label={{
@@ -206,9 +206,9 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                 angle: -90,
                 position: 'insideLeft',
                 offset: -10,
-                fill: '#64748b',
-                fontSize: 12,
-                fontWeight: 600,
+                fill: '#0f172a',
+                fontSize: 13,
+                fontWeight: 700,
                 style: { textAnchor: 'middle' }
               }}
             />
@@ -239,7 +239,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                   dataKey={dataKey}
                   name={s.name}
                   stroke={s.color}
-                  strokeWidth={s.strokeWidth ?? 2}
+                  strokeWidth={s.strokeWidth ?? 2.25}
                   strokeDasharray={s.strokeDasharray}
                   dot={s.dot ?? false}
                   animationDuration={animationDuration}

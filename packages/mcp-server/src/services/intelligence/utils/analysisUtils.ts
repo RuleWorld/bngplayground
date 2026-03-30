@@ -29,6 +29,51 @@ export function detectDiminishingReturns(
     return null;
 }
 
+export function classifySensitiveParameters(
+    firstOrder: Array<{ name: string; value: number }>,
+    totalOrder: Array<{ name: string; value: number }>,
+    threshold: number = 0.01,
+): string[] {
+    const sensitivityByParameter = new Map<string, number>();
+
+    for (const entry of [...firstOrder, ...totalOrder]) {
+        const current = sensitivityByParameter.get(entry.name) ?? 0;
+        sensitivityByParameter.set(entry.name, Math.max(current, Math.abs(entry.value)));
+    }
+
+    return [...sensitivityByParameter.entries()]
+        .filter(([, value]) => value >= threshold)
+        .sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]))
+        .map(([name]) => name);
+}
+
+export function assessSensitivityConvergence(
+    baseline: { firstOrder: Array<{ name: string; value: number }>; totalOrder: Array<{ name: string; value: number }> },
+    followUp: { firstOrder: Array<{ name: string; value: number }>; totalOrder: Array<{ name: string; value: number }> },
+    threshold: number = 0.01,
+): {
+    insightSaturated: boolean;
+    baselineSensitive: string[];
+    followUpSensitive: string[];
+    changedParameters: string[];
+} {
+    const baselineSensitive = classifySensitiveParameters(baseline.firstOrder, baseline.totalOrder, threshold);
+    const followUpSensitive = classifySensitiveParameters(followUp.firstOrder, followUp.totalOrder, threshold);
+    const baselineSet = new Set(baselineSensitive);
+    const followUpSet = new Set(followUpSensitive);
+
+    const changedParameters = Array.from(new Set([...baselineSensitive, ...followUpSensitive]))
+        .filter((name) => baselineSet.has(name) !== followUpSet.has(name))
+        .sort((a, b) => a.localeCompare(b));
+
+    return {
+        insightSaturated: changedParameters.length === 0,
+        baselineSensitive,
+        followUpSensitive,
+        changedParameters,
+    };
+}
+
 export function detectCrosstalk(
     reactionRules: Array<{ reactants: string[]; products: string[]; name?: string }>,
     moleculeTypes: Array<{ name: string }>,
