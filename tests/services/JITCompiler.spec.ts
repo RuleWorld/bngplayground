@@ -1,6 +1,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { jitCompiler } from '@bngplayground/engine';
+import { OpCode } from '../../packages/engine/src/services/simulation/ExpressionCompiler';
 
 describe('JITCompiler Service', () => {
 
@@ -183,6 +184,56 @@ describe('JITCompiler Service', () => {
                expect(bytecode?.exprBytecode.length).toBeGreaterThan(0);
                expect(bytecode?.exprBytecodeOffsets[1]).toBeGreaterThan(0);
                expect(bytecode?.requiresParameterRebuild).toBe(true);
+           });
+
+           it('should keep JIT functional bytecode aligned with the shared opcode enum', () => {
+               const expr = 'if(A > 1, max(A_total, 2), min(abs(-A), 3))';
+               const bytecode = jitCompiler.compileToByteCode([
+                   {
+                       reactantIndices: [0],
+                       reactantStoich: [1],
+                       productIndices: [1],
+                       productStoich: [1],
+                       rateConstant: expr
+                   }
+               ], 2, {}, undefined, undefined, [
+                   {
+                       name: 'A_total',
+                       indices: [0],
+                       coefficients: [1]
+                   }
+               ], ['A', 'B']);
+
+               expect(bytecode).not.toBeNull();
+               const opcodes: number[] = [];
+               const exprBytecode = bytecode!.exprBytecode;
+               for (let i = 0; i < exprBytecode.length; ) {
+                   const opcode = exprBytecode[i++];
+                   opcodes.push(opcode);
+                   if (opcode === OpCode.PUSH_CONST) {
+                       i += 8;
+                   } else if (opcode === OpCode.PUSH_SPEC || opcode === OpCode.PUSH_OBS) {
+                       i += 4;
+                   } else if (opcode === 0xFF) {
+                       break;
+                   }
+               }
+
+               expect(opcodes).toEqual([
+                   OpCode.PUSH_SPEC,
+                   OpCode.PUSH_CONST,
+                   OpCode.GT,
+                   OpCode.PUSH_OBS,
+                   OpCode.PUSH_CONST,
+                   OpCode.MAX,
+                   OpCode.PUSH_SPEC,
+                   OpCode.NEG,
+                   OpCode.ABS,
+                   OpCode.PUSH_CONST,
+                   OpCode.MIN,
+                   OpCode.IF_ELSE,
+                   0xFF
+               ]);
            });
         
         // Property / Fuzz Testing

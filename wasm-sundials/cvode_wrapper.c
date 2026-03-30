@@ -123,43 +123,65 @@ static double evaluate_expression(NetworkByteCode* bc, int reactionIdx, double* 
         if (op == 0xFF) break; // STOP
 
         switch (op) {
-            case 1: { // PUSH_CONST
+            case 0: { // PUSH_CONST
                 double val;
                 uint8_t* pval = (uint8_t*)&val;
                 for (int i = 0; i < 8; i++) pval[i] = *pc++;
                 stack[sp++] = val;
                 break;
             }
-            case 2: { // PUSH_SPEC
+            case 1: { // PUSH_SPEC
                 int32_t idx;
                 uint8_t* pidx = (uint8_t*)&idx;
                 for (int i = 0; i < 4; i++) pidx[i] = *pc++;
                 stack[sp++] = y[idx];
                 break;
             }
-            case 3: { // PUSH_OBS
+            case 2: { // PUSH_OBS
                 int32_t idx;
                 uint8_t* pidx = (uint8_t*)&idx;
                 for (int i = 0; i < 4; i++) pidx[i] = *pc++;
                 stack[sp++] = bc->obs_cache[idx];
                 break;
             }
-            case 4: { // PUSH_PARAM
-                int32_t idx;
-                uint8_t* pidx = (uint8_t*)&idx;
-                for (int i = 0; i < 4; i++) pidx[i] = *pc++;
-                stack[sp++] = bc->rateConstants[idx]; // We repurpose rateConstants for parameters here if needed
+            case 3: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a + b; break; } // ADD
+            case 4: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a - b; break; } // SUB
+            case 5: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a * b; break; } // MUL
+            case 6: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a / b; break; } // DIV
+            case 7: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = pow(a, b); break; } // POW
+            case 8: { stack[sp-1] = -stack[sp-1]; break; } // NEG
+            case 9: { stack[sp-1] = exp(stack[sp-1]); break; } // EXP
+            case 10: { stack[sp-1] = log(stack[sp-1]); break; } // LOG
+            case 11: { stack[sp-1] = log10(stack[sp-1]); break; } // LOG10
+            case 12: { stack[sp-1] = sqrt(stack[sp-1]); break; } // SQRT
+            case 13: { stack[sp-1] = fabs(stack[sp-1]); break; } // ABS
+            case 14: { stack[sp-1] = sin(stack[sp-1]); break; } // SIN
+            case 15: { stack[sp-1] = cos(stack[sp-1]); break; } // COS
+            case 16: { stack[sp-1] = ceil(stack[sp-1]); break; } // CEIL
+            case 17: { stack[sp-1] = floor(stack[sp-1]); break; } // FLOOR
+            case 18: { stack[sp-1] = nearbyint(stack[sp-1]); break; } // ROUND (rint in TS)
+            case 19: { stack[sp-1] = tan(stack[sp-1]); break; } // TAN
+            case 20: { stack[sp-1] = asin(stack[sp-1]); break; } // ASIN
+            case 21: { stack[sp-1] = acos(stack[sp-1]); break; } // ACOS
+            case 22: { stack[sp-1] = atan(stack[sp-1]); break; } // ATAN
+            case 23: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = fmax(a, b); break; } // MAX
+            case 24: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = fmin(a, b); break; } // MIN
+            case 25: { // IF_ELSE
+                double else_val = stack[--sp];
+                double then_val = stack[--sp];
+                double cond = stack[--sp];
+                stack[sp++] = (cond != 0.0) ? then_val : else_val;
                 break;
             }
-            case 5: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a + b; break; }
-            case 6: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a - b; break; }
-            case 7: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a * b; break; }
-            case 8: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = a / b; break; }
-            case 9: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = pow(a, b); break; }
-            case 10: { stack[sp-1] = -stack[sp-1]; break; }
-            case 11: { stack[sp-1] = log(stack[sp-1]); break; }
-            case 12: { stack[sp-1] = exp(stack[sp-1]); break; }
-            case 13: { stack[sp-1] = sqrt(stack[sp-1]); break; }
+            case 26: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = (a < b) ? 1.0 : 0.0; break; } // LT
+            case 27: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = (a > b) ? 1.0 : 0.0; break; } // GT
+            case 28: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = (a <= b) ? 1.0 : 0.0; break; } // LE
+            case 29: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = (a >= b) ? 1.0 : 0.0; break; } // GE
+            case 30: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = (a == b) ? 1.0 : 0.0; break; } // EQ
+            case 31: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = (a != b) ? 1.0 : 0.0; break; } // NE
+            case 32: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = ((a != 0.0) && (b != 0.0)) ? 1.0 : 0.0; break; } // AND
+            case 33: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = ((a != 0.0) || (b != 0.0)) ? 1.0 : 0.0; break; } // OR
+            case 34: { stack[sp-1] = (stack[sp-1] == 0.0) ? 1.0 : 0.0; break; } // NOT
             default: return 0.0;
         }
     }

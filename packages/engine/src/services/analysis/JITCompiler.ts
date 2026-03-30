@@ -13,22 +13,45 @@
 
 import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
+import { OpCode } from '../simulation/ExpressionCompiler';
 import jsep from 'jsep';
 
 const OP_STOP = 0xFF;
-const OP_PUSH_CONST = 1;
-const OP_PUSH_SPEC = 2;
-const OP_PUSH_OBS = 3;
-const OP_PUSH_PARAM = 4;
-const OP_ADD = 5;
-const OP_SUB = 6;
-const OP_MUL = 7;
-const OP_DIV = 8;
-const OP_POW = 9;
-const OP_NEG = 10;
-const OP_LOG = 11;
-const OP_EXP = 12;
-const OP_SQRT = 13;
+const OP_PUSH_CONST = OpCode.PUSH_CONST;
+const OP_PUSH_SPEC = OpCode.PUSH_SPEC;
+const OP_PUSH_OBS = OpCode.PUSH_OBS;
+const OP_ADD = OpCode.ADD;
+const OP_SUB = OpCode.SUB;
+const OP_MUL = OpCode.MUL;
+const OP_DIV = OpCode.DIV;
+const OP_POW = OpCode.POW;
+const OP_NEG = OpCode.NEG;
+const OP_EXP = OpCode.EXP;
+const OP_LOG = OpCode.LOG;
+const OP_LOG10 = OpCode.LOG10;
+const OP_SQRT = OpCode.SQRT;
+const OP_ABS = OpCode.ABS;
+const OP_SIN = OpCode.SIN;
+const OP_COS = OpCode.COS;
+const OP_CEIL = OpCode.CEIL;
+const OP_FLOOR = OpCode.FLOOR;
+const OP_ROUND = OpCode.ROUND;
+const OP_TAN = OpCode.TAN;
+const OP_ASIN = OpCode.ASIN;
+const OP_ACOS = OpCode.ACOS;
+const OP_ATAN = OpCode.ATAN;
+const OP_MAX = OpCode.MAX;
+const OP_MIN = OpCode.MIN;
+const OP_IF_ELSE = OpCode.IF_ELSE;
+const OP_LT = OpCode.LT;
+const OP_GT = OpCode.GT;
+const OP_LE = OpCode.LE;
+const OP_GE = OpCode.GE;
+const OP_EQ = OpCode.EQ;
+const OP_NE = OpCode.NE;
+const OP_AND = OpCode.AND;
+const OP_OR = OpCode.OR;
+const OP_NOT = OpCode.NOT;
 
 export interface NetworkByteCode {
     nReactions: number;
@@ -967,7 +990,7 @@ export class JITCompiler {
                         return;
                     }
                     throw new Error(`Unsupported member expression in ${expandedExpr}`);
-                } else if (node.type === 'BinaryExpression') {
+                } else if (node.type === 'BinaryExpression' || node.type === 'LogicalExpression') {
                     walk(node.left);
                     walk(node.right);
                     if (node.operator === '+') bytes.push(OP_ADD);
@@ -975,9 +998,20 @@ export class JITCompiler {
                     else if (node.operator === '*') bytes.push(OP_MUL);
                     else if (node.operator === '/') bytes.push(OP_DIV);
                     else if (node.operator === '^' || node.operator === '**') bytes.push(OP_POW);
-                } else if (node.type === 'UnaryExpression' && node.operator === '-') {
+                    else if (node.operator === '<') bytes.push(OP_LT);
+                    else if (node.operator === '>') bytes.push(OP_GT);
+                    else if (node.operator === '<=') bytes.push(OP_LE);
+                    else if (node.operator === '>=') bytes.push(OP_GE);
+                    else if (node.operator === '==') bytes.push(OP_EQ);
+                    else if (node.operator === '!=') bytes.push(OP_NE);
+                    else if (node.operator === '&&') bytes.push(OP_AND);
+                    else if (node.operator === '||') bytes.push(OP_OR);
+                    else throw new Error(`Unsupported binary operator: ${node.operator}`);
+                } else if (node.type === 'UnaryExpression') {
                     walk(node.argument);
-                    bytes.push(OP_NEG);
+                    if (node.operator === '-') bytes.push(OP_NEG);
+                    else if (node.operator === '!') bytes.push(OP_NOT);
+                    else throw new Error(`Unsupported unary operator: ${node.operator}`);
                 } else if (node.type === 'CallExpression') {
                     const name = node.callee.name.toLowerCase();
                     if (name === 'sat') {
@@ -995,7 +1029,22 @@ export class JITCompiler {
                     node.arguments.forEach((arg: any) => walk(arg));
                     if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
                     else if (name === 'exp') bytes.push(OP_EXP);
+                    else if (name === 'log10') bytes.push(OP_LOG10);
                     else if (name === 'sqrt') bytes.push(OP_SQRT);
+                    else if (name === 'abs') bytes.push(OP_ABS);
+                    else if (name === 'sin') bytes.push(OP_SIN);
+                    else if (name === 'cos') bytes.push(OP_COS);
+                    else if (name === 'ceil') bytes.push(OP_CEIL);
+                    else if (name === 'floor') bytes.push(OP_FLOOR);
+                    else if (name === 'rint' || name === 'round') bytes.push(OP_ROUND);
+                    else if (name === 'tan') bytes.push(OP_TAN);
+                    else if (name === 'asin') bytes.push(OP_ASIN);
+                    else if (name === 'acos') bytes.push(OP_ACOS);
+                    else if (name === 'atan') bytes.push(OP_ATAN);
+                    else if (name === 'max') bytes.push(OP_MAX);
+                    else if (name === 'min') bytes.push(OP_MIN);
+                    else if (name === 'if') bytes.push(OP_IF_ELSE);
+                    else if (name === 'not') bytes.push(OP_NOT);
                     else if (name === 'pow') bytes.push(OP_POW);
                     else throw new Error(`Unknown function: ${name}`);
                 } else {
