@@ -121,6 +121,17 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     return `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
   };
 
+  type TooltipState = {
+    x: number;
+    y: number;
+    value: number;
+    left: number;
+    top: number;
+    pinned: boolean;
+  } | null;
+
+  const [tooltip, setTooltip] = useState<TooltipState>(null);
+
   // Map x, y values to column/row indices
   const xIndex = useMemo(() => {
     const m = new Map<number, number>();
@@ -132,17 +143,6 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     ys.forEach((v, i) => m.set(v, i));
     return m;
   }, [ys]);
-
-  type TooltipState = {
-    x: number;
-    y: number;
-    value: number;
-    left: number;
-    top: number;
-    pinned: boolean;
-  } | null;
-
-  const [tooltip, setTooltip] = useState<TooltipState>(null);
 
   const setHoverTooltip = (d: HeatmapDatum, clientX: number, clientY: number) => {
     const container = containerRef.current;

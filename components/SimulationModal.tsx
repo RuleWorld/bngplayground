@@ -2,9 +2,6 @@ import { useMemo } from 'react';
 import { BNGLModel } from '../types';
 import { ParticleAnimation } from './ParticleAnimation';
 
-const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;
-const getRuleLabel = (rule: { name?: string }, index: number): string => rule.name ?? `Rule ${index + 1}`;
-
 interface SimulationModalProps {
   isGenerating: boolean;
   progressMessage: string;

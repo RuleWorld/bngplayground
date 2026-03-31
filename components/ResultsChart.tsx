@@ -8,6 +8,7 @@ import { computeDynamicObservable } from '@bngplayground/engine';
 
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
+import { InlineLegend } from './charts/InteractiveLegend';
 
 interface ResultsChartProps {
   results: SimulationResults | null;
@@ -163,49 +164,6 @@ type ZoomDomain = {
 
 // Threshold for when to move legend below the chart
 const LEGEND_THRESHOLD = 8;
-
-// External legend component for when there are many series
-const ExternalLegend: React.FC<{
-  series: Array<{ name: string; color: string }>;
-  visibleSpecies: Set<string>;
-  onToggle: (name: string) => void;
-  onHighlight: (name: string) => void;
-  highlightedSeries: Set<string>;
-}> = ({ series, visibleSpecies, onToggle, onHighlight, highlightedSeries }) => {
-  return (
-    <div className="mt-4 max-h-48 overflow-y-auto border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 pt-4">
-      <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-2 px-4">
-        {series.map((item) => {
-          const isVisible = visibleSpecies.has(item.name);
-          const isHighlighted = highlightedSeries.size === 0 || highlightedSeries.has(item.name);
-          return (
-            <div
-              key={item.name}
-              onClick={() => onToggle(item.name)}
-              onDoubleClick={(e) => {
-                e.preventDefault();
-                onHighlight(item.name);
-              }}
-              title="Double-click to isolate"
-              className={`flex items-center cursor-pointer transition-opacity ${!isVisible ? 'opacity-40' : isHighlighted ? 'opacity-100' : 'opacity-60'} hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-800 rounded px-1 -ml-1`}
-            >
-              <div
-                style={{
-                  width: 12,
-                  height: 12,
-                  backgroundColor: item.color,
-                  marginRight: 6,
-                  borderRadius: '2px'
-                }}
-              />
-              <span className="text-xs text-slate-700 dark:text-slate-300">{item.name}</span>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-};
 
 const CustomLegend = (props: any) => {
   const { payload, onClick, onHighlight } = props;
@@ -686,16 +644,18 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   const CustomTooltip = ({ active, payload, label }: any) => {
     if (active && payload && payload.length) {
       return (
-        <div className="bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 p-3 rounded-lg shadow-lg text-xs">
-          <p className="font-semibold text-slate-700 dark:text-slate-200 mb-2">
+        <div className="bg-white/95 dark:bg-slate-900/95 p-3 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl backdrop-blur-sm min-w-[160px] text-xs">
+          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
             {xAxisLabel}: {typeof label === 'number' ? formatAxisValue(label, 'x') : label}
-          </p>
-          <div className="flex flex-col gap-1 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
+          </div>
+          <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-2 custom-scrollbar">
             {payload.map((entry: any, idx: number) => (
-              <div key={idx} className="flex items-center gap-2">
-                <div className="w-2 h-2 rounded-full" style={{ backgroundColor: entry.color }} />
-                <span className="text-slate-500 dark:text-slate-400">{entry.name}:</span>
-                <span className="font-mono font-medium text-slate-700 dark:text-slate-200">
+              <div key={idx} className="flex items-center justify-between gap-4">
+                <div className="flex items-center gap-1.5">
+                  <div className="w-2.5 h-2.5 rounded-sm" style={{ backgroundColor: entry.color }} />
+                  <span className="text-slate-700 dark:text-slate-300 font-medium">{entry.name}</span>
+                </div>
+                <span className="font-mono text-slate-900 dark:text-slate-100">
                   {typeof entry.value === 'number' ? formatAxisValue(entry.value, 'y') : entry.value}
                 </span>
               </div>
@@ -841,16 +801,24 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
 
       {/* External legend */}
       {useExternalLegend && (
-        <ExternalLegend
-          series={[
-            ...speciesToPlot.filter(filterVisibleSpecies).map((name, i) => ({ name, color: CHART_COLORS[i % CHART_COLORS.length] })),
-            ...expressions.filter(expr => filterVisibleSpecies(expr.name)).map(expr => ({ name: expr.name, color: expr.color }))
-          ]}
-          visibleSpecies={visibleSpecies}
-          onToggle={handleToggleSeries}
-          onHighlight={handleLegendHighlight}
-          highlightedSeries={highlightSet}
-        />
+        <div className="py-4 px-2 border-t border-slate-50 dark:border-slate-800/20 max-h-48 overflow-y-auto">
+          <InlineLegend
+            payload={[
+              ...speciesToPlot.filter(filterVisibleSpecies).map((name, i) => ({
+                value: name,
+                color: CHART_COLORS[i % CHART_COLORS.length],
+                inactive: !visibleSpecies.has(name)
+              })),
+              ...expressions.filter(expr => filterVisibleSpecies(expr.name)).map(expr => ({
+                value: expr.name,
+                color: expr.color,
+                inactive: !visibleSpecies.has(expr.name)
+              }))
+            ]}
+            onToggle={handleToggleSeries}
+            onIsolate={handleLegendHighlight}
+          />
+        </div>
       )}
 
 
