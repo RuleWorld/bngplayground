@@ -122,17 +122,63 @@ describe('priors', () => {
     });
   });
 
-  describe('error handling', () => {
-    it('throws for min > max in uniform', () => {
-      expect(() => createPrior({ name: 'x', distribution: 'uniform', min: 5, max: 2 })).toThrow();
+  describe('Boundary validation', () => {
+    describe('log-uniform', () => {
+      it('throws when min is zero', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 0, max: 10 })).toThrow(/positive/i);
+      });
+
+      it('throws when min is negative', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: -1, max: 10 })).toThrow(/positive/i);
+      });
+
+      it('throws when max is zero', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 0.1, max: 0 })).toThrow(/positive/i);
+      });
+
+      it('throws when max is negative', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 0.1, max: -5 })).toThrow(/positive/i);
+      });
+
+      it('throws when min >= max', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 10, max: 1 })).toThrow(/less than/i);
+      });
+
+      it('throws when min == max', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 5, max: 5 })).toThrow(/less than/i);
+      });
+
+      it('accepts valid positive bounds', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 0.001, max: 1000 })).not.toThrow();
+      });
+
+      it('accepts very small positive lower bound', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 1e-10, max: 1e10 })).not.toThrow();
+      });
     });
 
-    it('throws for min <= 0 in log-uniform', () => {
-      expect(() => createPrior({ name: 'x', distribution: 'log-uniform', min: 0, max: 1 })).toThrow();
+    describe('uniform', () => {
+      it('throws when min >= max', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'uniform', min: 10, max: 1 })).toThrow(/less than/i);
+      });
+
+      it('accepts negative bounds (valid for uniform)', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'uniform', min: -10, max: 10 })).not.toThrow();
+      });
     });
 
-    it('throws for std <= 0 in normal', () => {
-      expect(() => createPrior({ name: 'x', distribution: 'normal', mean: 0, std: 0 })).toThrow();
+    describe('normal', () => {
+      it('throws when std is zero', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'normal', mean: 0, std: 0 })).toThrow(/positive/i);
+      });
+
+      it('throws when std is negative', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'normal', mean: 0, std: -1 })).toThrow(/positive/i);
+      });
+
+      it('throws when min >= max (bounded normal)', () => {
+        expect(() => createPrior({ name: 'x', distribution: 'normal', mean: 0, std: 1, min: 10, max: 1 })).toThrow(/less than/i);
+      });
     });
   });
 });
