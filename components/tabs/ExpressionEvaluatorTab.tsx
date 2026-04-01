@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
 import { Card } from '../ui/Card';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { SafeExpressionEvaluator } from '@bngplayground/engine';
 import {
   ExternalLegend,
   InlineLegend,
@@ -28,34 +29,15 @@ interface ComputedExpression {
 // Simple expression evaluator that supports +, -, *, /, parentheses, and numbers
 function evaluateExpression(expression: string, variables: Record<string, number>): number | null {
   try {
-    // Replace variable names with their values
-    let expr = expression;
-
-    // Sort variables by length (longest first) to avoid partial replacement issues
-    const sortedVars = Object.keys(variables).sort((a, b) => b.length - a.length);
-
-    for (const varName of sortedVars) {
-      const value = variables[varName];
-      // Use word boundary matching to avoid partial replacements
-      const regex = new RegExp(`\\b${varName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
-      expr = expr.replace(regex, `(${value})`);
-    }
-
-    // Validate: only allow numbers, operators, parentheses, spaces, dots
-    if (!/^[\d\s+\-*/().e]+$/i.test(expr)) {
-      return null;
-    }
-
-    // Use Function constructor for safe evaluation (only math operations)
-
-    const result = new Function(`return ${expr}`)();
+    const evaluator = SafeExpressionEvaluator.compile(expression, Object.keys(variables));
+    const result = evaluator(variables);
 
     if (typeof result !== 'number' || !Number.isFinite(result)) {
       return null;
     }
 
     return result;
-  } catch {
+  } catch (e) {
     return null;
   }
 }
