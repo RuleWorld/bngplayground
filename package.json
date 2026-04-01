@@ -81,7 +81,7 @@
     "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^5.0.0",
     "@webgpu/types": "^0.1.68",
-    "@xmldom/xmldom": "^0.8.11",
+    "@xmldom/xmldom": "^0.8.12",
     "antlr4ts": "^0.5.0-alpha.4",
     "antlr4ts-cli": "^0.5.0-alpha.4",
     "assert": "^2.1.0",
