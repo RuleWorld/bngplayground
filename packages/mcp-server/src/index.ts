@@ -1,3 +1,4 @@
+#!/usr/bin/env node
 // === MCP stdio transport compatibility ===
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, resolve } from 'path';
