@@ -36,6 +36,9 @@ import type {
 import { writeBNGL } from '../graph/BNGLWriter';
 import { isSpeciesMatch } from '../parity/PatternMatcher';
 
+/**
+ * Configuration options governing the generation of a hybrid particle/population BNGL model.
+ */
 export interface HybridModelOptions {
   /** Output file prefix */
   prefix?: string;
@@ -53,11 +56,17 @@ export interface HybridModelOptions {
   verbose?: boolean;
 }
 
+/**
+ * Internal helper structure storing the population classification inferred for a molecule type.
+ */
 export interface PopulationType {
   moleculeName: string;
   treatAsPopulation: boolean;
 }
 
+/**
+ * Rule governing how species matching a BNGL pattern are automatically lumped into an ODE population variable.
+ */
 export interface PopulationMap {
   pattern: string;
   populationVariable: string;
@@ -67,6 +76,13 @@ export interface PopulationMap {
 // ────────────────────────────────────────────────────────────────────
 // Hybrid Model Generator
 // ────────────────────────────────────────────────────────────────────
+/**
+ * Service responsible for generating a hybrid particle/population (HPP) model from a standard BNGL model.
+ *
+ * An HPP model partitions the state space into ODE populations (for high-copy, structurally simple species)
+ * and NFsim particles (for low-copy, complex species). This generator translates the species, rules, and observables
+ * to support the hybrid methodology defined in Hogg et al. (2014).
+ */
 export class HybridModelGenerator {
   /**
    * Generate a hybrid particle/population model.
@@ -400,6 +416,10 @@ export class HybridModelGenerator {
 // ────────────────────────────────────────────────────────────────────
 // Result type
 // ────────────────────────────────────────────────────────────────────
+/**
+ * Structured output returned after generating a hybrid model.
+ * Contains both the in-memory AST and the serialized BNGL string.
+ */
 export interface HybridModelResult {
   /** The generated hybrid model */
   model: BNGLModel;
@@ -433,7 +453,15 @@ function isSimplePatternMatch(speciesStr: string, patternStr: string): boolean {
 // ────────────────────────────────────────────────────────────────────
 
 /**
- * Entry point for generate_hybrid_model action.
+ * Generates a Hybrid Particle/Population (HPP) model from an existing BNGL model.
+ *
+ * Replaces specified high-copy seed species with population variables, auto-infers
+ * population mappings if none are provided, and adds bridging mapping rules to link
+ * the stochastic particle phase to the continuous ODE population phase.
+ *
+ * @param model - The parsed standard BNGL model.
+ * @param options - Configuration dictating generation safety rules and output file formatting.
+ * @returns An object containing the generated AST, BNGL string, and diagnostic logs.
  */
 export async function generateHybridModel(
   model: BNGLModel,

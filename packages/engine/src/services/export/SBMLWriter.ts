@@ -3,6 +3,9 @@ import type { ExpandedNetwork } from '../../interfaces/SimulationEngine';
 import { inferReactionSBO, inferRateLawSBO, SBO } from './SBOAnnotations';
 import { generateMIRIAMBlock, suggestMIRIAMAnnotations } from './MIRIAMAnnotation';
 
+/**
+ * Configuration options dictating SBML file generation behavior.
+ */
 export interface SBMLWriterOptions {
   modelName?: string;
   includeAnnotations?: boolean;
@@ -10,12 +13,23 @@ export interface SBMLWriterOptions {
 }
 
 /**
- * SBMLWriter.ts — Generates SBML Level 3 Version 2 from a BNGLModel.
+ * Service responsible for exporting a BioNetGen reaction network to SBML Level 3 Version 2 format.
  *
- * Focuses on high-fidelity representation of the reaction network
- * with SBO and MIRIAM enrichment.
+ * Supports optionally enriching the generated SBML XML with standard SBO (Systems Biology Ontology)
+ * terms and MIRIAM annotations for better interoperability with other systems biology tools.
  */
 export class SBMLWriter {
+  /**
+   * Generates an SBML XML string representing the model.
+   *
+   * If an `ExpandedNetwork` is provided, it outputs concrete species and reactions with mass-action kinetics.
+   * If only the abstract `BNGLModel` is provided, it outputs skeleton reactions corresponding to the rules.
+   *
+   * @param model - The abstract BNGL model definition.
+   * @param network - (Optional) The expanded reaction network.
+   * @param options - Output formatting and annotation options.
+   * @returns A valid SBML XML string.
+   */
   static write(
     model: BNGLModel,
     network?: ExpandedNetwork,
