@@ -159,7 +159,9 @@ export async function explainModelNarrative(code: string, includeCrux: boolean =
                             const koValue = Number(koFinal[firstObs] ?? 0);
                             const effect = Math.abs(koValue - baselineValue) / (Math.abs(baselineValue) || 1);
                             ruleEffects.push({ rule: rule.name ?? 'unnamed', parameter: rateParam, effect });
-                        } catch (e) {}
+                        } catch (_e) {
+                            // Ignored knockout simulation failure
+                        }
                     }
                     
                     if (ruleEffects.length > 0) {
@@ -174,7 +176,9 @@ export async function explainModelNarrative(code: string, includeCrux: boolean =
                     }
                 }
             }
-        } catch (e) {}
+        } catch (_e) {
+            // Ignored outer baseline failure
+        }
     }
 
     return { summary, sections, mechanisms: mechanismList, molecules: moleculeList, ...(crux && crux.length > 0 ? { crux } : {}) };

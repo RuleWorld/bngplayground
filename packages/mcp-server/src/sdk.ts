@@ -27,7 +27,7 @@ try {
 }
 
 export class Server {
-  private handlers = new Map<unknown, Function>();
+  private handlers = new Map<unknown, (...args: any[]) => any>();
   private impl?: any;
 
   constructor(info: any, opts: any) {
@@ -36,7 +36,7 @@ export class Server {
     }
   }
 
-  setRequestHandler(schema: unknown, handler: Function) {
+  setRequestHandler(schema: unknown, handler: (...args: any[]) => any) {
     this.handlers.set(schema, handler);
     this.impl?.setRequestHandler?.(schema, handler);
   }
