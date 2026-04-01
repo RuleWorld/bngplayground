@@ -1135,6 +1135,12 @@ function App() {
                 activeTabIndex={activeVizTab}
                 onActiveTabIndexChange={setActiveVizTab}
                 bnglCode={code}
+                onLoadModel={(modelCode, name, id) => {
+                  setLoadedModelId(id);
+                  setLoadedModelName(name);
+                  handleCodeChange(modelCode);
+                  setStatus({ type: 'success', message: `Loaded ${name} from Model Explorer` });
+                }}
               />
             </div>
           </div>

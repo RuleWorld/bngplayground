@@ -42,6 +42,7 @@ interface VisualizationPanelProps {
   activeTabIndex?: number;
   onActiveTabIndexChange?: (idx: number) => void;
   bnglCode?: string;
+  onLoadModel?: (code: string, name: string, id: string) => void;
 }
 
 const TabButton: React.FC<{
@@ -71,6 +72,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   activeTabIndex,
   onActiveTabIndexChange,
   bnglCode,
+  onLoadModel,
 }) => {
   const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
@@ -570,10 +572,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               plotDescription="The similarity map (UMAP) organizes models by their biological motifs. Clusters of models often share similar signaling mechanisms or reaction structures."
             />
             <div className="flex-1 min-h-0">
-              <ModelExplorerTab onLoadModel={(code, name, id) => {
-              console.log("Model Explorer: request to load model", { name, id });
-              // TODO: Implement model loading via custom event or prop callback
-              }} />
+              <ModelExplorerTab onLoadModel={onLoadModel} />
             </div>
           </div>
         )}
