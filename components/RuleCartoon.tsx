@@ -147,7 +147,15 @@ interface RuleCartoonProps {
   classification?: RuleChangeSummary | null;
 }
 
-export const RuleCartoon: React.FC<RuleCartoonProps> = ({
+/**
+ * ⚡ Bolt Performance Optimization:
+ * Wrapped RuleCartoon in React.memo to prevent unnecessary re-renders
+ * when the parent component (e.g., CartoonTab) re-renders, such as when
+ * the selected rule changes. Since these components can be numerous and
+ * their props are generally stable (except for isSelected), this saves
+ * significant reconciliation time.
+ */
+export const RuleCartoon = React.memo<RuleCartoonProps>(({
   ruleId,
   displayName,
   rule,
@@ -236,6 +244,6 @@ export const RuleCartoon: React.FC<RuleCartoonProps> = ({
       </div>
     </button>
   );
-};
+});
 
 export const EnhancedRuleCartoon = RuleCartoon;
