@@ -16,7 +16,8 @@
 import type { Rxn } from '../graph/core/Rxn';
 
 /**
- * A conservation law represents a linear combination of species that is constant.
+ * A conservation law represents a linear combination of species that remains constant over time.
+ * For example, total enzyme `E_total = E + ES` or total receptor `R_total = R + RL + RL_p`.
  */
 export interface ConservationLaw {
   /** Index of the dependent species to eliminate */
@@ -30,7 +31,9 @@ export interface ConservationLaw {
 }
 
 /**
- * Result of conservation law analysis
+ * The complete result of a conservation law analysis on a reaction network.
+ * Divides the system into independent species (which must be integrated) and
+ * dependent species (which can be algebraically calculated from the laws).
  */
 export interface ConservationAnalysis {
   laws: ConservationLaw[];
@@ -43,12 +46,13 @@ export interface ConservationAnalysis {
 }
 
 /**
- * Build the stoichiometric matrix from reactions.
- * N[i][r] = net change in species i from reaction r
+ * Constructs the stoichiometric matrix for a given reaction network.
+ * The matrix N is of size (species_count) x (reaction_count), where N[i][r]
+ * represents the net change in species `i` when reaction `r` fires.
  * 
- * @param reactions - Array of reactions
- * @param nSpecies - Total number of species
- * @returns Stoichiometric matrix as 2D array
+ * @param reactions - The expanded reaction network.
+ * @param nSpecies - Total number of unique species.
+ * @returns A 2D array representing the stoichiometric matrix.
  */
 export function buildStoichiometricMatrix(
   reactions: Rxn[],
@@ -77,14 +81,13 @@ export function buildStoichiometricMatrix(
 }
 
 /**
- * Compute the left null space of a matrix using Gaussian elimination.
- * The left null space consists of vectors v where v^T * N = 0.
+ * Computes the left null space of the stoichiometric matrix using Gaussian elimination.
  * 
- * This uses the transpose approach: nullspace(N^T) gives right null space of N^T,
- * which equals left null space of N.
+ * Every vector `v` in the left null space satisfies `v^T * N = 0`, meaning that
+ * `d/dt(v^T * y) = v^T * N * v_rxn = 0`. Thus, `v^T * y` is a conserved quantity.
  * 
- * @param N Stoichiometric matrix (rows = species, cols = reactions)
- * @returns Array of null space basis vectors (each has length = nSpecies)
+ * @param N - Stoichiometric matrix (rows = species, cols = reactions).
+ * @returns An array of null space basis vectors, each of length `nSpecies`.
  */
 export function computeLeftNullSpace(N: number[][]): number[][] {
   const nSpecies = N.length;
@@ -206,14 +209,17 @@ export function computeLeftNullSpace(N: number[][]): number[][] {
 }
 
 /**
- * Find conservation laws from the stoichiometric matrix.
- * Inspired by Catalyst.jl's approach.
+ * Analyzes a reaction network to find linear conservation laws (mass conservation).
  * 
- * @param reactions - Array of reactions
- * @param nSpecies - Total number of species
- * @param initialConcentrations - Initial concentrations to compute totals
- * @param speciesNames - Optional species names for descriptions
- * @returns Conservation analysis with laws and species classification
+ * Identifies conserved cycles (like phosphorylation states or bound/unbound receptor states)
+ * and calculates their constant total amounts based on initial concentrations. It heuristically
+ * selects the best "dependent" species to eliminate from the ODE system for numerical stability.
+ *
+ * @param reactions - The expanded reaction network.
+ * @param nSpecies - Total number of unique species.
+ * @param initialConcentrations - The starting state vector, used to evaluate the conserved totals.
+ * @param speciesNames - Optional mapping of species indices to names for generating human-readable descriptions.
+ * @returns A complete analysis detailing the discovered laws and the optimal split of independent/dependent species.
  */
 export function findConservationLaws(
   reactions: Rxn[],
@@ -294,14 +300,16 @@ export function findConservationLaws(
 }
 
 /**
- * Apply conservation laws to reduce the ODE system.
- * Returns functions to:
- * 1. Map full state to reduced state
- * 2. Map reduced state back to full state
- * 3. Transform derivatives
+ * Generates transformation functions to execute ODE integration on a reduced state space.
+ *
+ * By eliminating dependent species using conservation laws, the ODE system size is reduced,
+ * often improving numerical stability and bypassing rank-deficiency issues in the Jacobian.
+ * Provides closure functions to map between the full state `y` and the reduced state `y_r`,
+ * as well as wrappers to project the derivative and Jacobian functions.
  * 
- * @param analysis - Conservation analysis from findConservationLaws
- * @param nSpecies - Total number of species
+ * @param analysis - The conservation laws and species classification.
+ * @param nSpecies - Total number of species in the full system.
+ * @returns An object containing the reduced size and bidirectional state mapping functions.
  */
 export function createReducedSystem(
   analysis: ConservationAnalysis,

@@ -40,6 +40,18 @@ interface ConcreteReaction {
   ruleName?: string;
 }
 
+/**
+ * Resolves the sequence of simulation phases to execute based on the model and options.
+ *
+ * Extracts authored `simulate({ ... })` blocks from the BNGL model and normalizes them into
+ * a standardized array of `SimulationPhase` objects. If no phases are authored, it generates
+ * a single default phase based on the provided `SimulationOptions`. It also handles overrides
+ * from the interactive UI (e.g., when a user changes the end time for a single-phase model).
+ *
+ * @param model - The parsed BNGL model, which may contain predefined simulation phases.
+ * @param options - Fallback options (method, time, tolerances) to use if the model lacks phases.
+ * @returns An array of normalized simulation phases detailing method, duration, and output requirements.
+ */
 export function resolveSimulationPhasesForRun(model: BNGLModel, options: SimulationOptions): SimulationPhase[] {
   const normalizeNSteps = (value: unknown): number | undefined => {
     if (!Number.isFinite(value)) {
@@ -172,6 +184,35 @@ async function convertReactionsToGPU(
   return { gpuReactions, rateConstants };
 }
 
+/**
+ * Executes a full simulation of a BioNetGen reaction network.
+ *
+ * This is the core driver of the engine, equivalent to `run_network.cpp` in BNG2.
+ * It manages the entire simulation lifecycle:
+ * 1. Resolving the sequence of simulation phases (e.g., equilibration followed by perturbation).
+ * 2. Compiling the reaction network into highly optimized structures (JIT-compiled functions, WebAssembly CVODE, or WebGPU).
+ * 3. Handling parameter and concentration changes between phases.
+ * 4. Executing the numerical integration via ODE (CVODE/RK45), SSA (Gillespie), or PLA (Hybrid).
+ * 5. Calculating dynamic observables and functional rates at every output step.
+ *
+ * Results are dynamically accumulated and returned as a unified data structure matching BNG2's `.gdat` output.
+ *
+ * @param _jobId - A unique identifier for the simulation job, used for logging or cancellation tracking.
+ * @param inputModel - The expanded BNGL model (containing species, parameters, and generated reactions).
+ * @param options - Top-level simulation configuration (overridden by phase-specific settings if present).
+ * @param callbacks - Integration callbacks for checking cancellation status and posting progress messages.
+ * @returns A promise resolving to the final simulation results, including time series data for observables and species.
+ * @throws {Error} If JIT compilation fails, functional rate evaluation encounters an error, or the underlying numerical solver fails to converge.
+ *
+ * @example
+ * ```typescript
+ * const results = await simulate(1, expandedNetwork, { method: 'ode', t_end: 100, n_steps: 1000 }, {
+ *   checkCancelled: () => { if (userCancelled) throw new Error('Cancelled'); },
+ *   postMessage: (msg) => console.log('Progress:', msg)
+ * });
+ * console.log('Final time:', results.data[results.data.length - 1].time);
+ * ```
+ */
 export async function simulate(
   _jobId: number,
   inputModel: BNGLModel,
