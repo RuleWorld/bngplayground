@@ -7,10 +7,11 @@
 
 import type { BNGLModel } from '../../types';
 import { BNGLParser } from '../graph/core/BNGLParser';
+import { GraphCanonicalizer } from '../graph/core/Canonical';
 
 function extractSpeciesName(pattern: string): string {
     const graph = BNGLParser.parseSpeciesGraph(pattern, false);
-    return graph.toString();
+    return GraphCanonicalizer.canonicalize(graph);
 }
 
 export interface QSSACandidate {
@@ -54,6 +55,34 @@ const DEFAULT_OPTIONS: Required<QSSAOptions> = {
     minFastReactions: 2,
     generateReducedModel: false,
 };
+
+function findMatchingSpeciesName(pattern: string, availableSpecies: string[]): string | undefined {
+    // Attempt multiple resolution strategies to match canonical strings
+    const graph = BNGLParser.parseSpeciesGraph(pattern, false);
+    const toStringMatch = graph.toString();
+    if (availableSpecies.includes(toStringMatch)) return toStringMatch;
+
+    // Canonical form
+    const canonMatch = GraphCanonicalizer.canonicalize(graph);
+    if (availableSpecies.includes(canonMatch)) return canonMatch;
+
+    // Direct match (maybe exact string)
+    if (availableSpecies.includes(pattern)) return pattern;
+
+    // Check against canonical forms of available species to be completely safe
+    for (const sp of availableSpecies) {
+        try {
+            const spGraph = BNGLParser.parseSpeciesGraph(sp, false);
+            if (GraphCanonicalizer.canonicalize(spGraph) === canonMatch) {
+                return sp;
+            }
+        } catch {
+            // Ignore parse errors on available species
+        }
+    }
+
+    return undefined;
+}
 
 export function analyzeQSSA(
     model: BNGLModel,
@@ -100,14 +129,14 @@ export function analyzeQSSA(
         
         const allMols = [...rule.reactants, ...rule.products];
         for (const molExpr of allMols) {
-            const molName = extractSpeciesName(molExpr);
-            if (speciesReactionMap[molName]) {
+            const canonicalMatch = findMatchingSpeciesName(molExpr, Object.keys(speciesReactionMap));
+            if (canonicalMatch && speciesReactionMap[canonicalMatch]) {
                 if (isFast) {
-                    speciesReactionMap[molName].fast++;
+                    speciesReactionMap[canonicalMatch].fast++;
                 } else {
-                    speciesReactionMap[molName].slow++;
+                    speciesReactionMap[canonicalMatch].slow++;
                 }
-                speciesReactionMap[molName].reactions.push(rule.name ?? 'unnamed');
+                speciesReactionMap[canonicalMatch].reactions.push(rule.name ?? 'unnamed');
             }
         }
     }
@@ -217,19 +246,23 @@ export function applyQSSAReduction(
         
         // Products add to stoichiometry
         for (const prod of rule.products) {
-            const spName = extractSpeciesName(prod);
-            const idx = speciesIndex.get(spName);
-            if (idx !== undefined) {
-                N[idx][r] += 1;
+            const spName = findMatchingSpeciesName(prod, speciesNames);
+            if (spName !== undefined) {
+                const idx = speciesIndex.get(spName);
+                if (idx !== undefined) {
+                    N[idx][r] += 1;
+                }
             }
         }
         
         // Reactants subtract from stoichiometry
         for (const reac of rule.reactants) {
-            const spName = extractSpeciesName(reac);
-            const idx = speciesIndex.get(spName);
-            if (idx !== undefined) {
-                N[idx][r] -= 1;
+            const spName = findMatchingSpeciesName(reac, speciesNames);
+            if (spName !== undefined) {
+                const idx = speciesIndex.get(spName);
+                if (idx !== undefined) {
+                    N[idx][r] -= 1;
+                }
             }
         }
     }
@@ -255,8 +288,14 @@ export function applyQSSAReduction(
     const ruleNamesModified: string[] = [];
     
     for (const rule of reactions) {
-        const hasEliminatedReactant = rule.reactants.some(r => eliminatedSet.has(extractSpeciesName(r)));
-        const hasEliminatedProduct = rule.products.some(p => eliminatedSet.has(extractSpeciesName(p)));
+        const hasEliminatedReactant = rule.reactants.some(r => {
+            const spName = findMatchingSpeciesName(r, speciesNames);
+            return spName && eliminatedSet.has(spName);
+        });
+        const hasEliminatedProduct = rule.products.some(p => {
+            const spName = findMatchingSpeciesName(p, speciesNames);
+            return spName && eliminatedSet.has(spName);
+        });
         
         if (hasEliminatedReactant || hasEliminatedProduct) {
             ruleNamesModified.push(rule.name ?? 'unnamed');
