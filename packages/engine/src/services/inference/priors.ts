@@ -44,7 +44,9 @@ export function createPrior(spec: PriorSpec): PriorDistribution {
     case 'uniform': {
       const min = spec.min ?? 0;
       const max = spec.max ?? 1;
-      if (max <= min) throw new Error(`Uniform prior: max (${max}) must be > min (${min})`);
+      if (max <= min) {
+        throw new Error(`Uniform prior: min bound (${min}) must be less than max bound (${max}).`);
+      }
       const logWidth = -Math.log(max - min);
       return {
         sample(rng: SeededRandom): number {
@@ -61,8 +63,23 @@ export function createPrior(spec: PriorSpec): PriorDistribution {
     case 'log-uniform': {
       const min = spec.min ?? 1e-6;
       const max = spec.max ?? 1;
-      if (min <= 0) throw new Error(`Log-uniform prior: min (${min}) must be > 0`);
-      if (max <= min) throw new Error(`Log-uniform prior: max (${max}) must be > min (${min})`);
+      if (min <= 0) {
+        throw new Error(
+          `Log-uniform prior: min bound must be positive, got ${min}. ` +
+          `Math.log(${min}) = ${Math.log(min)} would corrupt sampling.`
+        );
+      }
+      if (max <= 0) {
+        throw new Error(
+          `Log-uniform prior: max bound must be positive, got ${max}. ` +
+          `Math.log(${max}) = ${Math.log(max)} would corrupt sampling.`
+        );
+      }
+      if (min >= max) {
+        throw new Error(
+          `Log-uniform prior: min bound (${min}) must be less than max bound (${max}).`
+        );
+      }
       const logMin = Math.log(min);
       const logMax = Math.log(max);
       const logRange = logMax - logMin;
@@ -81,10 +98,15 @@ export function createPrior(spec: PriorSpec): PriorDistribution {
     case 'normal': {
       const mean = spec.mean ?? 0;
       const std = spec.std ?? 1;
-      if (std <= 0) throw new Error(`Normal prior: std (${std}) must be > 0`);
+      if (std <= 0) {
+        throw new Error(`Normal prior: std must be positive, got ${std}.`);
+      }
       const logNorm = -Math.log(std * Math.sqrt(2 * Math.PI));
       const minBound = spec.min ?? -Infinity;
       const maxBound = spec.max ?? Infinity;
+      if (minBound >= maxBound) {
+        throw new Error(`Normal prior: min bound (${minBound}) must be less than max bound (${maxBound}).`);
+      }
       return {
         sample(rng: SeededRandom): number {
           let val: number;
