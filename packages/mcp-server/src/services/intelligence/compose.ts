@@ -89,7 +89,7 @@ export function composeModelFromStatements(args: {
 
     const documentText = args.statements.map((line) => normalizeWhitespace(line)).join('\n');
     const sentences = BioParser.parseDocument(documentText);
-    const validSentences = sentences.filter((sentence) => sentence.isValid && sentence.type !== 'COMMENT');
+    const validSentences = sentences.filter((sentence) => sentence.isValid && sentence.type !== 'COMMENT' && sentence.type !== 'COMPARTMENT');
     const invalidSentences = sentences.filter((sentence) => !sentence.isValid || sentence.type === 'INVALID');
 
     if (args.strict && validSentences.length === 0) {
