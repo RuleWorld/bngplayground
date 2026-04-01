@@ -77,7 +77,7 @@ export async function diagnoseModelDeep(args: {
     compilationSurprise?: { numRules: number; numGeneratedSpecies: number; numGeneratedReactions: number; surpriseLevel: 'high' | 'moderate' | 'none'; warning?: string };
     irreversibleSteps?: Array<{ rule: string; type: string; controllingParameters: string[]; note: string }>;
     plausibilityChecks?: Array<{ parameter: string; value: number; issue: string; physicalBound: number; message: string }>;
-    unreachableAnalysis?: { unreachableRules: string[]; count: number; note: string };
+    unreachableAnalysis?: { unreachableRules: string[]; totalRules: number; performanceNote: string };
     surprises?: Array<{ type: 'overshoot' | 'oscillation' | 'decorrelation' | 'insensitive_parameter' | 'unexpected_sensitivity'; description: string; observable?: string; parameter?: string }>;
     diminishingReturns?: { detected: boolean; message: string };
     convergenceAssessment?: { insightSaturated: boolean; recommendation: 'continue_analysis' | 'collect_more_data' | 'done'; message: string };
@@ -95,7 +95,33 @@ export async function diagnoseModelDeep(args: {
     const model = parseModelOrThrow(args.code);
     const reactionRules = model.reactionRules ?? [];
     const validation = validateModel(model, false);
-    const unreachableRules = findUnreachableRules(model);
+
+    // --- Unreachable rules analysis ---
+    let unreachableAnalysis: { unreachableRules: string[]; totalRules: number; performanceNote: string } | undefined;
+    try {
+        const unreachableRules = findUnreachableRules(model);
+        const totalRules = reactionRules.length;
+
+        if (unreachableRules.length > 0) {
+            unreachableAnalysis = {
+                unreachableRules,
+                totalRules,
+                performanceNote: `${unreachableRules.length} of ${totalRules} rules are unreachable from the seed species. ` +
+                    `These rules can never fire and may indicate missing seed species or modeling errors: ` +
+                    `${unreachableRules.join(', ')}.`
+            };
+        } else {
+            unreachableAnalysis = {
+                unreachableRules: [],
+                totalRules,
+                performanceNote: `All ${totalRules} rules are reachable from the seed species.`
+            };
+        }
+    } catch (err) {
+        // Non-fatal: if unreachable analysis fails, continue with the rest of the pipeline
+        unreachableAnalysis = undefined;
+    }
+
     const crosstalkWarnings = detectCrosstalk(reactionRules, model.moleculeTypes ?? []);
 
     const rateConstants = reactionRules.map((rule) => {
@@ -433,6 +459,7 @@ export async function diagnoseModelDeep(args: {
         dynamics: { reaches_steady_state: reachedSteadyState(series), likely_oscillatory: detectOscillation(series) },
         structure: { species: model.species.length, reactionRules: reactionRules.length, observables: model.observables.length, parameters: Object.keys(model.parameters).length },
         mechanisticCausalTrace,
+        unreachableAnalysis,
     });
 
     let pathwayCommons: {
@@ -467,7 +494,7 @@ export async function diagnoseModelDeep(args: {
         compilationSurprise,
         ...(irreversibleSteps.length > 0 ? { irreversibleSteps } : {}),
         ...(plausibilityChecks.length > 0 ? { plausibilityChecks } : {}),
-        ...(unreachableRules.length > 0 ? { unreachableAnalysis: { unreachableRules, count: unreachableRules.length, note: `${unreachableRules.length} rule(s) cannot fire — their reactants are unreachable from seed species.` } } : {}),
+        ...(unreachableAnalysis ? { unreachableAnalysis } : {}),
         ...(surprises.length > 0 ? { surprises } : {}),
         ...(diminishingReturns ? { diminishingReturns } : {}),
         ...(convergenceAssessment ? { convergenceAssessment } : {}),

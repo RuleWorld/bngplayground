@@ -316,4 +316,77 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(result.structuredContent.fixes.length).toBeGreaterThan(0);
         expect(result.structuredContent.auto_corrected_code).toContain('begin observables');
     });
+
+    describe('unreachable rules analysis', () => {
+        it('should detect unreachable rules in a model with dead rules', async () => {
+            // A model where Rule2 requires a phosphorylated species that
+            // no seed species provides and no other rule creates
+            const bnglWithDeadRule = `
+begin model
+begin parameters
+    kf 1.0
+    kr 0.5
+end parameters
+begin molecule types
+    A(b,p~u~p)
+    B(a)
+    C(a)
+end molecule types
+begin seed species
+    A(b,p~u) 100
+    B(a) 100
+end seed species
+begin observables
+    Molecules Atot A()
+end observables
+begin reaction rules
+    # Rule 1: A binds B (reachable — both seeds exist)
+    Rule1: A(b,p~u) + B(a) <-> A(b!1,p~u).B(a!1) kf, kr
+    # Rule 2: C unbinds (UNREACHABLE — no seed species for C)
+    Rule2: C(a) -> B(a) kr
+end reaction rules
+end model
+`;
+            const result = await handleDiagnoseModel({
+                code: bnglWithDeadRule,
+            });
+
+            expect(result.structuredContent.unreachableAnalysis).toBeDefined();
+            expect(result.structuredContent.unreachableAnalysis!.unreachableRules.length).toBeGreaterThan(0);
+            expect(result.structuredContent.unreachableAnalysis!.unreachableRules).toContain('Rule2');
+        });
+
+        it('should report all rules reachable for a well-formed model', async () => {
+            // Use a known-good model where all rules are reachable
+            const goodModel = `
+begin model
+begin parameters
+    kf 1.0
+    kr 0.5
+end parameters
+begin molecule types
+    A(b)
+    B(a)
+end molecule types
+begin seed species
+    A(b) 100
+    B(a) 100
+end seed species
+begin observables
+    Molecules AB A(b!1).B(a!1)
+end observables
+begin reaction rules
+    A(b) + B(a) <-> A(b!1).B(a!1) kf, kr
+end reaction rules
+end model
+`;
+            const result = await handleDiagnoseModel({
+                code: goodModel,
+            });
+
+            expect(result.structuredContent.unreachableAnalysis).toBeDefined();
+            expect(result.structuredContent.unreachableAnalysis!.unreachableRules).toEqual([]);
+            expect(result.structuredContent.unreachableAnalysis!.totalRules).toBe(1);  // 1 reversible rule
+        });
+    });
 });

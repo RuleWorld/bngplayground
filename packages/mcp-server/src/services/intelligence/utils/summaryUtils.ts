@@ -6,6 +6,7 @@ import type {
     DynamicsResult,
     CausalTraceEntry,
     DiagnosticSummary,
+    UnreachableAnalysis,
 } from '../types.js';
 
 export function generateThreeRegisters(args: {
@@ -16,8 +17,14 @@ export function generateThreeRegisters(args: {
     dynamics: DynamicsResult;
     structure: { species: number; reactionRules: number; observables: number; parameters: number };
     mechanisticCausalTrace?: CausalTraceEntry[];
+    unreachableAnalysis?: UnreachableAnalysis;
 }): DiagnosticSummary {
     const parts = { technical: [] as string[], biological: [] as string[], strategic: [] as string[] };
+
+    if (args.unreachableAnalysis && args.unreachableAnalysis.unreachableRules.length > 0) {
+        parts.technical.push(`${args.unreachableAnalysis.unreachableRules.length} rules are unreachable from seed species: ${args.unreachableAnalysis.unreachableRules.join(', ')}.`);
+        parts.strategic.push(`Consider adding seed species for unreachable rules, or remove dead rules to simplify the model.`);
+    }
 
     if (args.stiffness.category !== 'benign') {
         parts.technical.push(`Stiffness ratio ${args.stiffness.ratio.toExponential(1)}, category: ${args.stiffness.category}.`);
