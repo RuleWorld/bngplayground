@@ -1,0 +1,13 @@
+src/
+tests/
+*.spec.ts
+*.test.ts
+tsconfig.json
+tsconfig.*.json
+vitest.config.*
+jest.config.*
+.eslintrc*
+.prettierrc*
+*.tsbuildinfo
+coverage/
+node_modules/

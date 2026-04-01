@@ -1,10 +1,54 @@
 {
   "name": "@bngplayground/engine",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
+  "description": "Pure TypeScript BioNetGen Language (BNGL) simulation engine with ODE, SSA, NFsim, and analysis suite",
+  "license": "MIT",
+  "author": "RuleWorld <https://github.com/RuleWorld>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RuleWorld/bngplayground.git",
+    "directory": "packages/engine"
+  },
+  "homepage": "https://github.com/RuleWorld/bngplayground#readme",
+  "bugs": {
+    "url": "https://github.com/RuleWorld/bngplayground/issues"
+  },
+  "keywords": [
+    "bionetgen",
+    "bngl",
+    "rule-based-modeling",
+    "systems-biology",
+    "ode-solver",
+    "stochastic-simulation",
+    "gillespie",
+    "nfsim",
+    "sensitivity-analysis",
+    "sobol",
+    "fisher-information",
+    "parameter-estimation",
+    "sbml",
+    "computational-biology"
+  ],
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "sideEffects": false,
   "scripts": {
     "build": "tsc",
     "test": "vitest run",

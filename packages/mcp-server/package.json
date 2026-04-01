@@ -1,9 +1,51 @@
 {
   "name": "@bngplayground/mcp-server",
-  "version": "0.1.0",
+  "version": "1.0.0",
+  "description": "MCP server for BioNetGen Language modeling — 19 tools for parsing, simulation, sensitivity analysis, identifiability, Bayesian inference, and mechanistic causal tracing",
+  "license": "MIT",
+  "author": "RuleWorld <https://github.com/RuleWorld>",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/RuleWorld/bngplayground.git",
+    "directory": "packages/mcp-server"
+  },
+  "homepage": "https://github.com/RuleWorld/bngplayground#readme",
+  "bugs": {
+    "url": "https://github.com/RuleWorld/bngplayground/issues"
+  },
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "bionetgen",
+    "bngl",
+    "rule-based-modeling",
+    "systems-biology",
+    "ai-tools",
+    "llm-tools",
+    "sensitivity-analysis",
+    "parameter-estimation"
+  ],
   "type": "module",
-  "main": "src/index.ts",
-  "types": "src/index.ts",
+  "main": "dist/packages/mcp-server/src/index.js",
+  "types": "dist/packages/mcp-server/src/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/packages/mcp-server/src/index.d.ts",
+      "import": "./dist/packages/mcp-server/src/index.js",
+      "default": "./dist/packages/mcp-server/src/index.js"
+    }
+  },
+  "bin": {
+    "ruleworld-mcp": "./dist/packages/mcp-server/src/index.js"
+  },
+  "files": [
+    "dist/",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=18.0.0"
+  },
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx src/index.ts",
