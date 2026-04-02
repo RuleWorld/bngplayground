@@ -27,6 +27,7 @@ export interface ActionContext {
   // Execution state
   outputPrefix?: string;
   outputDir?: string;
+  speciesMap?: Map<string, BNGLModel['species'][0]>;
   // Callbacks
   readFile?: (filepath: string) => Promise<string>;
   writeFile?: (filepath: string, content: string) => Promise<void>;
@@ -42,6 +43,16 @@ export class ActionDispatcher {
       concentrationCaches: new Map(),
       ...context
     };
+  }
+
+  private getSpecies(name: string) {
+    if (!this.context.speciesMap) {
+      this.context.speciesMap = new Map();
+      for (const s of this.context.model.species) {
+        this.context.speciesMap.set(s.name, s);
+      }
+    }
+    return this.context.speciesMap.get(name);
   }
 
   /**
@@ -292,7 +303,7 @@ export class ActionDispatcher {
     }
 
     // Find species in model
-    const speciesObj = this.context.model.species.find(s => s.name === species);
+    const speciesObj = this.getSpecies(species);
     if (!speciesObj) {
       throw new Error(`setConcentration: species not found: ${species}`);
     }
@@ -329,7 +340,7 @@ export class ActionDispatcher {
     }
 
     // Find species in model
-    const speciesObj = this.context.model.species.find(s => s.name === species);
+    const speciesObj = this.getSpecies(species);
     if (!speciesObj) {
       throw new Error(`addConcentration: species not found: ${species}`);
     }
