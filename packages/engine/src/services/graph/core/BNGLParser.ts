@@ -699,6 +699,9 @@ export class BNGLParser {
         }
       }
 
+      // Replace entity names (parameters and observables) with values
+      let evaluable = expr;
+
       // 1. Collect all entities
       const entities = new Map<string, number>();
       for (const [name, value] of parameters.entries()) entities.set(name, value);
@@ -710,17 +713,38 @@ export class BNGLParser {
         }
       }
 
+      // 2. Sort entities by length (longest first) to avoid partial replacement issues
+      const sortedEntities = Array.from(entities.entries()).sort((a, b) => b[0].length - a[0].length);
+
+      // 3. Perform replacements (longest names first)
+      // This is needed for things that aren't valid identifiers in expressions (e.g. A(b!1).B(a!1))
+      for (const [name, value] of sortedEntities) {
+        const valueStr = (value < 0 || isNaN(value)) ? `(${value})` : value.toString();
+
+        // Escape name for use in regex
+        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+        // Match name with word boundaries if it's a simple identifier,
+        // otherwise match it literally.
+        const isSimpleName = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
+        const regex = isSimpleName
+          ? new RegExp(`\\b${escapedName}\\b`, 'g')
+          : new RegExp(escapedName, 'g');
+
+        evaluable = evaluable.replace(regex, valueStr);
+      }
+
       // Check if mratio, if, or FunctionProduct is used
-      const usesMratio = /\bmratio\s*\(/g.test(expr);
-      const usesIf = /\bif\s*\(/g.test(expr);
-      const usesFunctionProduct = /\bFunctionProduct\s*\(/gi.test(expr);
+      const usesMratio = /\bmratio\s*\(/g.test(evaluable);
+      const usesIf = /\bif\s*\(/g.test(evaluable);
+      const usesFunctionProduct = /\bFunctionProduct\s*\(/gi.test(evaluable);
       let needsHP = usesIf || usesMratio || usesFunctionProduct;
 
       // Also check if any custom function is used
       if (functions) {
         for (const fname of functions.keys()) {
           const escaped = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          if (new RegExp(`\\b${escaped}\\s*\\(`, 'g').test(expr)) {
+          if (new RegExp(`\\b${escaped}\\s*\\(`, 'g').test(evaluable)) {
             needsHP = true;
             break;
           }
@@ -742,16 +766,9 @@ export class BNGLParser {
         return evaluateExpressionHighPrecision(expr, evalParams, functions);
       }
 
-      // Create context for SafeExpressionEvaluator to avoid manual string replacement bugs
-      const context: Record<string, number> = {};
-      for (const [name, value] of entities.entries()) {
-        context[name] = value;
-      }
-
       // Use SafeExpressionEvaluator for safe evaluation instead of new Function
       // SafeExpressionEvaluator has built-in support for BNGL operators and math functions
-      const compiled = SafeExpressionEvaluator.compile(expr, Object.keys(context));
-      const result = compiled(context);
+      const result = SafeExpressionEvaluator.evaluateConstant(evaluable);
       return typeof result === 'number' && !isNaN(result) ? result : NaN;
     } catch (e) {
       // Silence errors during multi-pass parameter resolution
