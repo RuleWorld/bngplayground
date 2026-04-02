@@ -3438,8 +3438,15 @@ export class NetworkGenerator {
         const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
 
         const changes: { comp: string, state: string }[] = [];
+
+        // Build a lookup map for new components to avoid O(N*M) linear search
+        const newComponentsMap = new Map<string, typeof newMol.components[0]>();
+        for (const c of newMol.components) {
+          newComponentsMap.set(c.name, c);
+        }
+
         for (const oldC of oldMol.components) {
-          const newC = newMol.components.find(c => c.name === oldC.name);
+          const newC = newComponentsMap.get(oldC.name);
           if (newC && newC.state !== undefined && newC.state !== oldC.state) {
             changes.push({ comp: oldC.name, state: newC.state });
           }
