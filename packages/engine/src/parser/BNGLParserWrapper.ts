@@ -419,12 +419,13 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     try {
       const visitor = new BNGLVisitor();
       model = visitor.visit(tree);
-    } catch (visitorError: any) {
+    } catch (visitorError) {
+      const message = visitorError instanceof Error ? visitorError.message : String(visitorError);
       console.error('Visitor exception:', visitorError);
       errors.push({
         line: 0,
         column: 0,
-        message: `Visitor error: ${visitorError.message}`
+        message: `Visitor error: ${message}`
       });
     }
 
@@ -433,11 +434,12 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       model,
       errors
     };
-  } catch (e: any) {
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
     console.error('Parser exception:', e);
     return {
       success: false,
-      errors: [{ line: 0, column: 0, message: e.message || 'Unknown parser error' }]
+      errors: [{ line: 0, column: 0, message: message || 'Unknown parser error' }]
     };
   }
 }
