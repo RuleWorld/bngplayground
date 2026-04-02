@@ -219,16 +219,16 @@ export class BioParser {
         if (!text || text.trim() === '') return { id: uuidv4(), text, type: 'COMMENT', isValid: true };
         if (PATTERNS.COMMENT.test(text)) return { id: uuidv4(), text, type: 'COMMENT', isValid: true };
 
+        // Try Compartment first so "Define compartment" isn't swallowed by DEFINITION
+        const compMatch = text.match(PATTERNS.COMPARTMENT);
+        if (compMatch) {
+            return this.parseCompartment(text, compMatch);
+        }
+
         // Try Definition
         const defMatch = text.match(PATTERNS.DEFINITION);
         if (defMatch) {
             return this.parseDefinition(text, defMatch);
-        }
-
-        // Try Compartment
-        const compMatch = text.match(PATTERNS.COMPARTMENT);
-        if (compMatch) {
-            return this.parseCompartment(text, compMatch);
         }
 
         // Try Observable
@@ -591,12 +591,18 @@ export class BioParser {
     }
 
     private static parseCompartment(text: string, match: RegExpMatchArray): BioSentence {
-        // For now, return as a comment/special type - extend types.ts if needed
+        const name = match[1];
+        const volumeStr = match[2];
+        const dimStr = match[3];
+
         return {
             id: uuidv4(),
             text,
-            type: 'COMMENT', // TODO: Add COMPARTMENT type
-            isValid: true
+            type: 'COMPARTMENT',
+            isValid: true,
+            name,
+            volume: volumeStr ? parseFloat(volumeStr) : undefined,
+            dimension: dimStr ? parseInt(dimStr, 10) : undefined
         };
     }
 

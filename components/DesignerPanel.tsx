@@ -410,7 +410,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Logic Parser</h3>
                 <div className="flex-1 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-800">
                   <div className="space-y-1">
-                    {sentences.filter((sentence) => sentence.type !== 'COMMENT').map((sentence) => (
+                    {sentences.filter((sentence) => sentence.type !== 'COMMENT' && sentence.type !== 'COMPARTMENT').map((sentence) => (
                       <div
                         key={sentence.id}
                         className={`rounded border-l-4 p-2 text-xs ${

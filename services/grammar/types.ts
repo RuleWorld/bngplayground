@@ -34,7 +34,7 @@ export type ParseError = {
   endColumn: number;
 };
 
-export type SentenceType = 'DEFINITION' | 'INTERACTION' | 'INITIALIZATION' | 'SIMULATION' | 'COMMENT' | 'INVALID';
+export type SentenceType = 'DEFINITION' | 'COMPARTMENT' | 'INTERACTION' | 'INITIALIZATION' | 'SIMULATION' | 'COMMENT' | 'INVALID';
 
 export interface BaseSentence {
   id: string; // unique ID for tracking (useful for React keys)
@@ -42,6 +42,13 @@ export interface BaseSentence {
   type: SentenceType;
   isValid: boolean;
   error?: ParseError;
+}
+
+export interface CompartmentSentence extends BaseSentence {
+  type: 'COMPARTMENT';
+  name: string;
+  volume?: number;
+  dimension?: number;
 }
 
 export interface DefinitionSentence extends BaseSentence {
@@ -84,6 +91,7 @@ export interface InvalidSentence extends BaseSentence {
 
 export type BioSentence =
   | DefinitionSentence
+  | CompartmentSentence
   | InteractionSentence
   | InitializationSentence
   | SimulationSentence
