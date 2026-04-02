@@ -3,8 +3,8 @@
 // Integration layer between ParameterEstimation and existing ODESolver
 
 import type { SimulationData } from './ParameterEstimation';
-// Note: ODESolver may not exist yet - this is a template for future integration
-// import { ODESolver } from '@bngplayground/engine';
+import { simulate } from '@bngplayground/engine';
+import type { SimulationOptions, BNGLModel } from '@bngplayground/engine';
 
 /**
  * Integration helper to connect ParameterEstimation with existing ODESolver
@@ -21,10 +21,10 @@ import type { SimulationData } from './ParameterEstimation';
  * );
  */
 export class ODESolverAdapter {
-  private model: any; // BNGLModel
+  private model: BNGLModel;
   private baseParameters: Map<string, number>;
 
-  constructor(model: any) { // BNGLModel
+  constructor(model: BNGLModel) {
     this.model = model;
 
     // Store original parameter values
@@ -52,33 +52,27 @@ export class ODESolverAdapter {
     // Create modified model with new parameter values
     const modifiedModel = this.createModifiedModel(parameterNames, parameterValues);
 
-    // NOTE: This is a placeholder implementation
-    // In practice, integrate with your actual ODE solver (bnglService, CVODE, etc.)
-    // For now, return dummy data to avoid runtime errors
-
-    // TODO: Integrate with actual ODESolver when available
-    // const solver = new ODESolver(modifiedModel);
-    // const simulationResult = await solver.solve({...});
-
-    // Placeholder: return the model parameters as dummy result
-    const result = new Map<string, number[]>();
-    for (const obsName of observableNames) {
-      // Return time-varying dummy data
-      result.set(obsName, timePoints.map(t => Math.random() * 100));
-    }
-    return result;
-
-    /* Original implementation - uncomment when ODESolver is available:
-    const solver = new ODESolver(modifiedModel);
+    const maxTime = Math.max(...timePoints);
+    const nSteps = Math.max(1, timePoints.length - 1);
     
-    const simulationResult = await solver.solve({
+    const options: SimulationOptions = {
       method: 'ode',
-      t_end: Math.max(...timePoints),
-      n_steps: timePoints.length,
+      t_end: maxTime,
+      n_steps: nSteps,
       atol: 1e-6,
       rtol: 1e-6
-    });
-    
+    };
+
+    const simulationResult = await simulate(
+      0, // jobId
+      modifiedModel,
+      options,
+      {
+        checkCancelled: () => {},
+        postMessage: () => {}
+      }
+    );
+
     // Extract observables at specified time points
     const result = new Map<string, number[]>();
     
@@ -92,7 +86,6 @@ export class ODESolverAdapter {
     }
     
     return result;
-    */
   }
   /**
    * Create a copy of the model with modified parameters
@@ -100,7 +93,7 @@ export class ODESolverAdapter {
   private createModifiedModel(
     parameterNames: string[],
     parameterValues: number[]
-  ): any { // BNGLModel
+  ): BNGLModel {
     const modifiedModel = { ...this.model };
 
     // Deep copy parameters
@@ -118,21 +111,23 @@ export class ODESolverAdapter {
    * Extract observable values at specified time points
    */
   private extractObservable(
-    simulationResult: any, // Type depends on your ODESolver return type
+    simulationResult: any, // SimulationResults from @bngplayground/engine
     observableName: string,
     timePoints: number[]
   ): number[] {
-    // This implementation depends on your ODESolver's output format
-    // Adjust according to your actual structure
-
     const values: number[] = [];
+    const data = simulationResult.data;
+
+    if (!data || data.length === 0) {
+      return timePoints.map(() => 0);
+    }
 
     for (const t of timePoints) {
       // Find closest time point in simulation result
-      const idx = this.findClosestTimeIndex(simulationResult.timePoints, t);
+      const idx = this.findClosestTimeIndex(data.map((row: any) => row.time), t);
 
       // Extract observable value at that time
-      const value = simulationResult.observables[observableName]?.[idx] ?? 0;
+      const value = data[idx]?.[observableName] ?? 0;
       values.push(value);
     }
 
@@ -181,7 +176,7 @@ export class SurrogateSimulationFunction {
   private adapter: ODESolverAdapter;
   private observableNames: string[];
 
-  constructor(model: any, observableNames: string[]) { // BNGLModel
+  constructor(model: BNGLModel, observableNames: string[]) {
     this.adapter = new ODESolverAdapter(model);
     this.observableNames = observableNames;
   }
