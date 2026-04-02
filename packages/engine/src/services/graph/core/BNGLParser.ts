@@ -1,7 +1,7 @@
 import { Component } from './Component';
 import { Molecule } from './Molecule';
 import { SpeciesGraph } from './SpeciesGraph';
-import { ExpressionTranslator } from './ExpressionTranslator';
+import { SafeExpressionEvaluator } from '../../../utils/safeExpressionEvaluator';
 
 import { evaluateExpressionHighPrecision, needsHighPrecision } from './highPrecisionEvaluator';
 import { RxnRule } from './RxnRule';
@@ -285,7 +285,7 @@ export class BNGLParser {
 
     // Check for suffix notation: Name@comp
     // Be careful not to match inside parentheses
-    const suffixMatch = cleanStr.match(/^([^\(]+)@([A-Za-z0-9_]+)(\(.*\))?$/);
+    const suffixMatch = cleanStr.match(/^([^()]+)@([A-Za-z0-9_]+)(\(.*\))?$/);
     if (suffixMatch) {
       // This regex is simplistic, might need robustness
     }
@@ -699,10 +699,7 @@ export class BNGLParser {
         }
       }
 
-      // Replace entity names (parameters and observables) with values
-      let evaluable = expr;
-
-      // 1. Collect all entities to replace
+      // 1. Collect all entities
       const entities = new Map<string, number>();
       for (const [name, value] of parameters.entries()) entities.set(name, value);
       if (observables) {
@@ -713,40 +710,17 @@ export class BNGLParser {
         }
       }
 
-      // 2. Sort entities by length (longest first) to avoid partial replacement issues
-      const sortedEntities = Array.from(entities.entries()).sort((a, b) => b[0].length - a[0].length);
-
-      // 3. Perform replacements (longest names first)
-      for (const [name, value] of sortedEntities) {
-        const valueStr = (value < 0 || isNaN(value)) ? `(${value})` : value.toString();
-
-        // Escape name for use in regex
-        const escapedName = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-
-        // Match name with word boundaries if it's a simple identifier, 
-        // otherwise match it literally.
-        const isSimpleName = /^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
-        const regex = isSimpleName
-          ? new RegExp(`\\b${escapedName}\\b`, 'g')
-          : new RegExp(escapedName, 'g');
-
-        evaluable = evaluable.replace(regex, valueStr);
-      }
-
-      // Convert BNGL operators and math functions to JavaScript
-      evaluable = ExpressionTranslator.translate(evaluable);
-
       // Check if mratio, if, or FunctionProduct is used
-      const usesMratio = /\bmratio\s*\(/g.test(evaluable);
-      const usesIf = /\bif\s*\(/g.test(evaluable);
-      const usesFunctionProduct = /\bFunctionProduct\s*\(/gi.test(evaluable);
+      const usesMratio = /\bmratio\s*\(/g.test(expr);
+      const usesIf = /\bif\s*\(/g.test(expr);
+      const usesFunctionProduct = /\bFunctionProduct\s*\(/gi.test(expr);
       let needsHP = usesIf || usesMratio || usesFunctionProduct;
 
       // Also check if any custom function is used
       if (functions) {
         for (const fname of functions.keys()) {
           const escaped = fname.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-          if (new RegExp(`\\b${escaped}\\s*\\(`, 'g').test(evaluable)) {
+          if (new RegExp(`\\b${escaped}\\s*\\(`, 'g').test(expr)) {
             needsHP = true;
             break;
           }
@@ -768,11 +742,19 @@ export class BNGLParser {
         return evaluateExpressionHighPrecision(expr, evalParams, functions);
       }
 
-      // Use Function constructor for safe evaluation
-      const result = new Function(`return ${evaluable}`)();
+      // Create context for SafeExpressionEvaluator to avoid manual string replacement bugs
+      const context: Record<string, number> = {};
+      for (const [name, value] of entities.entries()) {
+        context[name] = value;
+      }
+
+      // Use SafeExpressionEvaluator for safe evaluation instead of new Function
+      // SafeExpressionEvaluator has built-in support for BNGL operators and math functions
+      const compiled = SafeExpressionEvaluator.compile(expr, Object.keys(context));
+      const result = compiled(context);
       return typeof result === 'number' && !isNaN(result) ? result : NaN;
     } catch (e) {
-      // Silence ReferenceErrors during multi-pass parameter resolution
+      // Silence errors during multi-pass parameter resolution
       if (!(e instanceof ReferenceError)) {
         console.error(`[evaluateExpression] Failed to evaluate: "${expr}"`, e);
       }
