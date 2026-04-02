@@ -768,7 +768,9 @@ export class BNGLParser {
 
       // Use SafeExpressionEvaluator for safe evaluation instead of new Function
       // SafeExpressionEvaluator has built-in support for BNGL operators and math functions
-      const result = SafeExpressionEvaluator.evaluateConstant(evaluable);
+      // Pass true for fallbackNaN to match previous new Function ReferenceError behavior
+      // Pass true for silent to avoid console warnings during parameter resolution
+      const result = SafeExpressionEvaluator.evaluateConstant(evaluable, true, true);
       return typeof result === 'number' && !isNaN(result) ? result : NaN;
     } catch (e) {
       // Silence errors during multi-pass parameter resolution

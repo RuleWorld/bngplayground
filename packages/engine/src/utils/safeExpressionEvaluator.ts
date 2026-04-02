@@ -415,7 +415,7 @@ export function compile(
   };
 }
 
-export function evaluateConstant(expr: string): number {
+export function evaluateConstant(expr: string, fallbackNaN: boolean = false, silent: boolean = false): number {
   try {
     validateExprBasics(expr);
     if (maxParenDepth(expr) > MAX_PAREN_DEPTH) {
@@ -427,12 +427,14 @@ export function evaluateConstant(expr: string): number {
       throw new Error(`Constant expression contains variables: ${vars.join(', ')}`);
     }
     const val = evaluateNode(ast, {}, { count: 0 });
-    return typeof val === 'number' && Number.isFinite(val) ? val : 0;
+    return typeof val === 'number' && Number.isFinite(val) ? val : (fallbackNaN ? NaN : 0);
   } catch (e) {
-    console.warn(
-      `[SafeExpressionEvaluator] Failed to evaluate constant: ${expr}\nError: ${e instanceof Error ? e.message : String(e)}`
-    );
-    return 0;
+    if (!silent) {
+      console.warn(
+        `[SafeExpressionEvaluator] Failed to evaluate constant: ${expr}\nError: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+    return fallbackNaN ? NaN : 0;
   }
 }
 
