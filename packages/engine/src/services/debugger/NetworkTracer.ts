@@ -27,7 +27,7 @@ export interface TraceOptions {
 }
 
 export class NetworkTracer {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+
   async trace(_model: BNGLModel, _options: TraceOptions = {}): Promise<TraceResult> {
     throw new Error("Network Tracing is currently disabled due to NetworkGenerator refactoring.");
   }

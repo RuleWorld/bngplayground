@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': resolve(__dirname, './'),
+      '@bngplayground/engine': resolve(__dirname, 'packages/engine/src'),
     },
   },
   test: {

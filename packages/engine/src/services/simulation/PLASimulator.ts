@@ -47,6 +47,9 @@ interface PLAReaction {
   propensity: number;
 }
 
+/**
+ * Configuration options governing the behavior of the Partitioned Leaping Algorithm (PLA).
+ */
 export interface PLAOptions extends SimulationOptions {
   /** Error threshold for tau selection (default: 0.03) */
   epsilon?: number;
@@ -59,6 +62,15 @@ export interface PLAOptions extends SimulationOptions {
 // ────────────────────────────────────────────────────────────────────
 // PLA Simulator
 // ────────────────────────────────────────────────────────────────────
+/**
+ * Executes hybrid stochastic simulations using the Partitioned Leaping Algorithm (PLA).
+ *
+ * PLA accelerates exact stochastic simulation by partitioning reactions into Exact Stochastic (ES),
+ * Poisson Tau-Leaping, Langevin, and Deterministic regimes based on propensity and molecule counts.
+ * This allows fast reactions to leap forward in time while handling rare events exactly.
+ *
+ * @see simulatePLA
+ */
 export class PLASimulator {
   private rng: SeededRandom;
   private epsilon: number;
@@ -607,11 +619,16 @@ export class PLASimulator {
 }
 
 /**
- * PLA simulation entry point.
+ * Runs a hybrid stochastic simulation using the Partitioned Leaping Algorithm (PLA).
  *
- * Uses the Partitioned Leaping Algorithm for hybrid stochastic simulation.
- * Best for systems with widely separated time scales (fast equilibria + slow reactions)
- * and high copy numbers (>100 molecules per species).
+ * PLA is an approximate accelerated stochastic method. It dynamically partitions reactions into
+ * continuous deterministic, Langevin, Poisson tau-leaping, and Exact Stochastic regimes at every step.
+ * It is best suited for systems with widely separated time scales (fast equilibria mixed with slow reactions)
+ * and relatively high copy numbers (>100 molecules per species).
+ *
+ * @param model - The parsed BNGL model.
+ * @param options - PLA-specific simulation options (e.g. error tolerances, critical boundaries).
+ * @returns Time series data for the model observables.
  */
 export async function simulatePLA(
   model: BNGLModel,

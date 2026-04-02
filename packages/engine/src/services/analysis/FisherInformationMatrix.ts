@@ -10,6 +10,10 @@ import { nelderMead } from '../optimization/nelderMead';
 
 // ── Types ────────────────────────────────────────────────────────────
 
+/**
+ * Configuration options for Fisher Information Matrix computation.
+ * Specifies the target parameters, simulation function, and finite difference parameters.
+ */
 export interface FIMConfig {
   /** Async simulation function: takes parameter overrides, returns simulation data */
   simulate: (overrides: Record<string, number>) => Promise<{ data: Array<Record<string, number>> }>;
@@ -33,6 +37,10 @@ export interface FIMConfig {
   defaultStep?: number;
 }
 
+/**
+ * Structured output of a Fisher Information Matrix analysis.
+ * Contains identical/unidentifiable parameter sets, collinearity indices (VIF), and covariance matrices.
+ */
 export interface FIMResult {
   fimMatrix: number[][];
   jacobian: number[][];
@@ -63,6 +71,9 @@ export interface FIMResult {
   }>;
 }
 
+/**
+ * Structured output for analyzing multicollinearity amongst subsets of parameters.
+ */
 export interface CollinearityResult {
   subsets: Array<{
     params: string[];
@@ -74,6 +85,17 @@ export interface CollinearityResult {
 
 // ── Main FIM computation ─────────────────────────────────────────────
 
+/**
+ * Computes the Fisher Information Matrix (FIM) and related local sensitivity metrics.
+ *
+ * Uses a finite difference approximation (central difference) to construct the sensitivity
+ * Jacobian for the selected parameters. From this, it computes the FIM (J^T J), performs
+ * eigendecomposition to find sloppy/unidentifiable directions in parameter space, and
+ * calculates Variance Inflation Factors (VIF) to detect collinearity.
+ *
+ * @param config - The FIM configuration including baseline parameters and async simulate runner.
+ * @returns A comprehensive suite of local sensitivity and identifiability metrics.
+ */
 export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
   const {
     simulate,
@@ -393,6 +415,18 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
 
 // ── Collinearity Index ───────────────────────────────────────────────
 
+/**
+ * Computes the collinearity index for all subsets of parameters of a given size.
+ *
+ * The collinearity index (1 / sqrt(min eigenvalue of subset Gram matrix)) measures how
+ * near-linearly dependent a specific subset of parameter sensitivities is. High values (>20)
+ * strongly indicate structural unidentifiability within that specific combination.
+ *
+ * @param jacobian - The full pre-computed sensitivity Jacobian matrix.
+ * @param paramNames - Ordered list of parameter names corresponding to Jacobian columns.
+ * @param subsetSize - The dimension of the subsets to test (default: 2 for pairwise).
+ * @returns An array of subsets and their respective collinearity indices.
+ */
 export function computeCollinearity(
   jacobian: number[][],
   paramNames: string[],

@@ -26,7 +26,7 @@ export function inferConservationHints(ruleLines: string[]): string[] {
         }
 
         const left = getMoleculeCounts(split[0]);
-        const rightSide = split[1].replace(/\s+[A-Za-z0-9_\.]+\s*$/, '');
+        const rightSide = split[1].replace(/\s+[A-Za-z0-9_.]+\s*$/, '');
         const right = getMoleculeCounts(rightSide);
         if (left.size === 0 || right.size === 0) {
             continue;

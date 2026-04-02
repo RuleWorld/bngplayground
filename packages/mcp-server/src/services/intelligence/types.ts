@@ -118,8 +118,8 @@ export type PlausibilityCheck = {
 
 export type UnreachableAnalysis = {
     unreachableRules: string[];
-    count: number;
-    note: string;
+    totalRules: number;
+    performanceNote: string;
 };
 
 export type SurpriseDetection = {

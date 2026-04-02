@@ -65,7 +65,14 @@ interface CompactRuleVisualizationProps {
   classification?: RuleChangeSummary | null;
 }
 
-export const CompactRuleVisualization: React.FC<CompactRuleVisualizationProps> = ({ rule, ruleId, displayName, isSelected = false, onSelect, classification }) => {
+/**
+ * ⚡ Bolt Performance Optimization:
+ * Wrapped CompactRuleVisualization in React.memo to prevent unnecessary
+ * re-renders of the entire list when the parent (e.g., CartoonTab) updates
+ * selection state. This avoids reconciling unchanged compact rule views,
+ * leading to snappier UI interaction.
+ */
+export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps>(({ rule, ruleId, displayName, isSelected = false, onSelect, classification }) => {
   const hasOperations = rule.operations.length > 0;
 
   const baseClasses = 'w-full rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-4 text-left shadow-sm transition focus:outline-none focus:ring-2 focus:ring-sky-500 dark:border-slate-700 dark:bg-slate-900';
@@ -146,4 +153,4 @@ export const CompactRuleVisualization: React.FC<CompactRuleVisualizationProps> =
       </div>
     </button>
   );
-};
+});
