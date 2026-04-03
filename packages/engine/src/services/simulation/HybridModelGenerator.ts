@@ -162,10 +162,17 @@ export class HybridModelGenerator {
       components: [...mt.components],
     }));
 
+    const existingMoleculeNames = new Set(moleculeTypes.map(mt => mt.name));
+    const seenPopTypes = new Set<string>();
+
     // Add population types as new molecule types
     for (const pt of popTypes) {
-      const existingIdx = moleculeTypes.findIndex(mt => mt.name === pt.name);
-      if (existingIdx >= 0) {
+      if (seenPopTypes.has(pt.name)) {
+        throw new Error(`PopulationType ${pt.name} clashes with another PopulationType of the same name.`);
+      }
+      seenPopTypes.add(pt.name);
+
+      if (existingMoleculeNames.has(pt.name)) {
         throw new Error(`PopulationType ${pt.name} clashes with MoleculeType of the same name.`);
       }
       moleculeTypes.push({
@@ -205,14 +212,15 @@ export class HybridModelGenerator {
 
     // Step 5: Add zero-count populations for unmatched population types
     let zeroPops = 0;
+    const existingSpeciesNames = new Set(species.map(s => s.name));
     for (const pm of popMaps) {
       const popName = pm.populationName + '()';
-      const existing = species.find(s => s.name === popName);
-      if (!existing) {
+      if (!existingSpeciesNames.has(popName)) {
         species.push({
           name: popName,
           initialConcentration: 0,
         });
+        existingSpeciesNames.add(popName);
         zeroPops++;
       }
     }
@@ -225,7 +233,9 @@ export class HybridModelGenerator {
       // Add population matches to observable pattern
       const addedPatterns: string[] = [];
       for (const pm of popMaps) {
-        if (isSimplePatternMatch(pm.pattern, obs.pattern) || obs.pattern.includes(pm.pattern.split('(')[0])) {
+        const simpleBase = pm.pattern.split('(')[0];
+        // Fast rejection with includes before running full pattern match
+        if (obs.pattern.includes(simpleBase) || isSimplePatternMatch(pm.pattern, obs.pattern)) {
           addedPatterns.push(pm.populationName + '()');
         }
       }
@@ -384,16 +394,22 @@ export class HybridModelGenerator {
       let hasParticle = false;
 
       for (const pattern of allPatterns) {
-        for (const molName of populationMolecules) {
-          if (pattern.includes(molName)) {
-            hasPopulation = true;
-          }
-        }
-
         // Extract molecule names from pattern
-        const moleculeNames = pattern.match(/\b[A-Z][A-Za-z0-9_]*\b/g) || [];
+        // 1. Strip component groups to avoid misidentifying uppercase states or components
+        // 2. Remove compartment prefixes (e.g., @cell:)
+        // 3. Split by '.' to handle multi-molecule patterns
+        const strippedPattern = pattern.replace(/\(.*?\)/g, '');
+        const moleculeNames = strippedPattern.split('.')
+          .map(part => {
+            const colonIndex = part.indexOf(':');
+            return colonIndex !== -1 ? part.substring(colonIndex + 1) : part;
+          })
+          .filter(name => name.length > 0 && /^[A-Z]/.test(name)); // Molecules must start with uppercase
+
         for (const molName of moleculeNames) {
-          if (!populationMolecules.has(molName)) {
+          if (populationMolecules.has(molName)) {
+            hasPopulation = true;
+          } else {
             hasParticle = true;
           }
         }

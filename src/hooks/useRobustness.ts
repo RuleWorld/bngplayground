@@ -50,6 +50,7 @@ export function useRobustness() {
             const sumSqs: Record<string, number[]> = {};
             const mins: Record<string, number[]> = {};
             const maxs: Record<string, number[]> = {};
+            let processHeaders: string[] = [];
 
             // Loop
             const { iterations, variationPercent } = robustnessOptions;
@@ -80,22 +81,31 @@ export function useRobustness() {
                         sumSqs[h] = new Array(timePoints.length).fill(0);
                         mins[h] = new Array(timePoints.length).fill(Infinity);
                         maxs[h] = new Array(timePoints.length).fill(-Infinity);
+                        processHeaders.push(h);
                     });
                 }
 
-                // Aggregate Data
-                runResult.data.forEach((row, timeIdx) => {
-                    Object.entries(row).forEach(([key, val]) => {
-                        if (key === 'time') return;
-                        if (!sums[key]) return; // Should allow headers stability
+                // ⚡ Bolt Performance Optimization:
+                // Replaced slow Object.entries().forEach with standard nested for-loops.
+                // This tight loop runs for every time point in every iteration, making
+                // avoiding array allocation (Object.entries) extremely critical.
+                const dataLen = runResult.data.length;
+                const headersLen = processHeaders.length;
 
-                        const value = val as number;
-                        sums[key][timeIdx] += value;
-                        sumSqs[key][timeIdx] += value * value;
-                        if (value < mins[key][timeIdx]) mins[key][timeIdx] = value;
-                        if (value > maxs[key][timeIdx]) maxs[key][timeIdx] = value;
-                    });
-                });
+                for (let timeIdx = 0; timeIdx < dataLen; timeIdx++) {
+                    const row = runResult.data[timeIdx];
+                    for (let hIdx = 0; hIdx < headersLen; hIdx++) {
+                        const key = processHeaders[hIdx];
+                        const value = row[key] as number;
+
+                        if (value !== undefined) {
+                            sums[key][timeIdx] += value;
+                            sumSqs[key][timeIdx] += value * value;
+                            if (value < mins[key][timeIdx]) mins[key][timeIdx] = value;
+                            if (value > maxs[key][timeIdx]) maxs[key][timeIdx] = value;
+                        }
+                    }
+                }
 
                 setProgress(Math.round(((i + 1) / iterations) * 100));
             }
