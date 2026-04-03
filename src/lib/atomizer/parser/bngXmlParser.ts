@@ -248,8 +248,8 @@ export function convertBNGXmlToBNGL(xml: string): string {
           return molecules.length > 1 ? molStrs.join(isProduct ? '.' : ' + ') : molStrs.join('');
         }
 
-        const reactStr = reactPatterns.map(p => patternToString(p, false)).join(' + ');
-        const prodStr = prodPatterns.map(p => patternToString(p, true)).join(' + ');
+        const reactStr = reactPatterns.map(p => patternToString(p as unknown as Element, false)).join(' + ');
+        const prodStr = prodPatterns.map(p => patternToString(p as unknown as Element, true)).join(' + ');
 
         // Rate - reconstruct based on type (MM, Sat, etc) for parity with xmlparsers.py
         const rateEl = r.getElementsByTagName('RateLaw')[0];
