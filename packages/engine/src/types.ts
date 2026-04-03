@@ -173,6 +173,10 @@ export interface SimulationPhase {
     gml?: number;
     equilibrate?: number;
     useAdams?: boolean;
+    /** BNG2 parity: non-uniform output time points (sample_times=>[t1,t2,...]) */
+    sample_times?: number[];
+    /** BNG2 parity: print_CDAT=>0 suppresses species concentration columns from output */
+    print_CDAT?: boolean;
 }
 
 export interface ConcentrationChange {
@@ -188,6 +192,10 @@ export interface ParameterChange {
     parameter: string;
     value: number | string;
     afterPhaseIndex: number;
+    /** BNG2 parity: 'set' (default setParameter), 'save' (saveParameters), 'reset' (resetParameters) */
+    mode?: 'set' | 'save' | 'reset';
+    /** Optional label for saveParameters/resetParameters (BNG2 Cache semantics) */
+    label?: string;
 }
 
 export interface SimulationResults {

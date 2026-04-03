@@ -145,6 +145,8 @@ export { generateOMEX } from './services/export/OMEXWriter';
 export type { OMEXExportOptions } from './services/export/OMEXWriter';
 export { SBMLWriter } from './services/export/SBMLWriter';
 export type { SBMLWriterOptions } from './services/export/SBMLWriter';
+export { MatlabWriter } from './services/export/MatlabWriter';
+export type { MatlabWriterOptions } from './services/export/MatlabWriter';
 export { inferReactionSBO, inferRateLawSBO, SBO } from './services/export/SBOAnnotations';
 export { generateMIRIAMBlock, suggestMIRIAMAnnotations, resolveAnnotations, createUniProtResolver } from './services/export/MIRIAMAnnotation';
 export type { MIRIAMAnnotation, IdentifierResolver } from './services/export/MIRIAMAnnotation';

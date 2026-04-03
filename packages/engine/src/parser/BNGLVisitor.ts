@@ -1235,6 +1235,42 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       return;
     }
 
+    if (ctx.SAVEPARAMETERS()) {
+      const afterPhaseIndex = this.simulationPhases.length - 1;
+      // Parse optional label: saveParameters("label") or saveParameters({label=>"label"})
+      const saveText = ctx.text;
+      const saveLabelMatch = saveText.match(/saveParameters\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) ||
+                             saveText.match(/saveParameters\s*\(\s*["']([^"']+)["']\s*\)/i);
+      const saveLabel = saveLabelMatch ? saveLabelMatch[1] : undefined;
+      this.parameterChanges.push({
+        parameter: '',
+        value: 0,
+        mode: 'save',
+        afterPhaseIndex,
+        label: saveLabel,
+      });
+      this.actions.push({ type: 'saveParameters', args: { label: saveLabel } });
+      return;
+    }
+
+    if (ctx.RESETPARAMETERS()) {
+      const afterPhaseIndex = this.simulationPhases.length - 1;
+      // Parse optional label: resetParameters("label") or resetParameters({label=>"label"})
+      const resetText = ctx.text;
+      const resetLabelMatch = resetText.match(/resetParameters\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) ||
+                              resetText.match(/resetParameters\s*\(\s*["']([^"']+)["']\s*\)/i);
+      const resetLabel = resetLabelMatch ? resetLabelMatch[1] : undefined;
+      this.parameterChanges.push({
+        parameter: '',
+        value: 0,
+        mode: 'reset',
+        afterPhaseIndex,
+        label: resetLabel,
+      });
+      this.actions.push({ type: 'resetParameters', args: { label: resetLabel } });
+      return;
+    }
+
     // For other commands, default to visiting children
     this.visitChildren(ctx);
   }

@@ -2,7 +2,7 @@
  * ActionDispatcher.ts - Unified execution system for all BNG2 actions
  *
  * This module implements all BNGL action commands to match BNG2.pl functionality:
- * - File I/O: readFile, writeModel, writeNetwork, writeXML, writeSBML
+ * - File I/O: readFile, writeModel, writeNetwork, writeXML, writeSBML, writeMfile
  * - Parameters: setParameter, saveParameters, resetParameters
  * - Concentrations: setConcentration, addConcentration, saveConcentrations, resetConcentrations
  * - Network: generate_network
@@ -17,6 +17,7 @@ import { writeBNGL } from '../graph/BNGLWriter';
 import { NetworkExporter } from '../graph/NetworkExporter';
 import { BNGXMLWriter } from '../simulation/BNGXMLWriter';
 import { SBMLWriter } from '../export/SBMLWriter';
+import { MatlabWriter } from '../export/MatlabWriter';
 import { parseNetFile } from '../graph/NetParser';
 
 export interface ActionContext {
@@ -74,6 +75,9 @@ export class ActionDispatcher {
         return await this.writeXML(args);
       case 'writeSBML':
         return await this.writeSBML(args);
+      case 'writeMfile':
+      case 'writeMFile':
+        return await this.writeMfile(args);
 
       // Parameter actions
       case 'setParameter':
@@ -240,6 +244,28 @@ export class ActionDispatcher {
 
     await this.context.writeFile(filename, content);
     console.log(`[ActionDispatcher] Wrote SBML to ${filename}`);
+  }
+
+  private async writeMfile(args: Record<string, any>): Promise<void> {
+    const prefix = args.prefix || this.context.outputPrefix || this.context.model.name || 'model';
+    const filename = `${prefix}.m`;
+
+    const content = MatlabWriter.write(this.context.model, undefined, {
+      tStart: args.t_start ?? 0,
+      tEnd: args.t_end ?? 10,
+      nSteps: args.n_steps ?? 100,
+      atol: args.atol,
+      rtol: args.rtol,
+    });
+
+    if (!this.context.writeFile) {
+      console.log('[ActionDispatcher] writeMfile: no file writer callback, printing to console');
+      console.log(content);
+      return;
+    }
+
+    await this.context.writeFile(filename, content);
+    console.log(`[ActionDispatcher] Wrote MATLAB file to ${filename}`);
   }
 
   // ========================================================================
