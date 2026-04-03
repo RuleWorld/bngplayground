@@ -152,6 +152,8 @@ export interface BNGLModel {
     energyPatterns?: BNGLEnergyPattern[];
   populationMaps?: BNGLPopulationMap[];
   populationTypes?: BNGLPopulationType[];
+  /** BNG2 parity: substanceUnits action sets concentration units ("Concentration" or "Number") */
+  substanceUnits?: 'Concentration' | 'Number';
 }
 
 export interface SimulationPhase {

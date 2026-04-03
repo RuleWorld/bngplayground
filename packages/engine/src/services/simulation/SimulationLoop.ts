@@ -1043,12 +1043,20 @@ export async function simulate(
         if (rxn.isFunctionalRate && rxn.rateExpression) {
           try {
             const currentObs = evaluateObservablesFast(state);
+            // Build context with ridx0/ridx1 placeholders for expanded Sat/MM/Hill macros
+            const rxnContext: Record<string, number> = { ...currentObs };
+            for (let j = 0; j < rxn.reactants.length; j++) {
+              rxnContext[`ridx${j}`] = state[rxn.reactants[j]];
+            }
+            for (let k = 0; k < model.species.length; k++) {
+              rxnContext[model.species[k].name] = state[k];
+            }
             rate = evaluateFunctionalRate(
               rxn.rateExpression,
               model.parameters || {},
               currentObs,
               model.functions,
-              undefined,
+              rxnContext,
               undefined
             );
           } catch (e: any) {
@@ -1194,12 +1202,21 @@ export async function simulate(
             let rate = rxn.rateConstant;
             if (rxn.isFunctionalRate && rxn.rateExpression) {
               try {
+                const obsForProp = getCurrentObsForPropensity();
+                // Build context with ridx0/ridx1 placeholders for expanded Sat/MM/Hill macros
+                const rxnContext: Record<string, number> = { ...obsForProp };
+                for (let j = 0; j < rxn.reactants.length; j++) {
+                  rxnContext[`ridx${j}`] = state[rxn.reactants[j]];
+                }
+                for (let k = 0; k < model.species.length; k++) {
+                  rxnContext[model.species[k].name] = state[k];
+                }
                 rate = evaluateFunctionalRate(
                   rxn.rateExpression,
                   model.parameters || {},
-                  getCurrentObsForPropensity(),
+                  obsForProp,
                   model.functions,
-                  undefined,
+                  rxnContext,
                   undefined
                 );
               } catch (e: any) {
