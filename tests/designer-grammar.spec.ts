@@ -15,6 +15,18 @@ const SIMPLE_DOC = [
 ].join('\n');
 
 describe('Designer grammar ontology + validator', () => {
+  it('parses compartment sentences correctly', () => {
+    const sentences = BioParser.parseDocument('Define compartment cytoplasm with volume 1 dim 3');
+    expect(sentences).toHaveLength(1);
+    expect(sentences[0]).toMatchObject({
+      type: 'COMPARTMENT',
+      name: 'cytoplasm',
+      volume: 1,
+      dimension: 3,
+      isValid: true,
+    });
+  });
+
   it('parses binding and simulation statements', () => {
     const sentences = BioParser.parseDocument(SIMPLE_DOC);
     const interactions = sentences.filter((s) => s.type === 'INTERACTION');

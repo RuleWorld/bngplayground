@@ -15,11 +15,11 @@ if (isMain) {
 
   // MCP uses stdout for JSON-RPC - redirect all console output to stderr
   const _write = (msg: string) => { process.stderr.write(msg + '\n'); };
-  console.log = (...args: any[]) => _write(args.map(String).join(' '));
-  console.warn = (...args: any[]) => _write('[WARN] ' + args.map(String).join(' '));
-  console.error = (...args: any[]) => _write('[ERROR] ' + args.map(String).join(' '));
-  console.info = (...args: any[]) => _write(args.map(String).join(' '));
-  console.debug = (...args: any[]) => _write('[DEBUG] ' + args.map(String).join(' '));
+  console.log = (...args: unknown[]) => _write(args.map(String).join(' '));
+  console.warn = (...args: unknown[]) => _write('[WARN] ' + args.map(String).join(' '));
+  console.error = (...args: unknown[]) => _write('[ERROR] ' + args.map(String).join(' '));
+  console.info = (...args: unknown[]) => _write(args.map(String).join(' '));
+  console.debug = (...args: unknown[]) => _write('[DEBUG] ' + args.map(String).join(' '));
 }
 
 import { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } from './sdk.js';

@@ -117,18 +117,24 @@ const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   hypot: Math.hypot ?? ((...xs: number[]) => Math.sqrt(xs.reduce((s, v) => s + v * v, 0))),
   pow: Math.pow,
   round: Math.round,
+  rint: Math.round,
   sin: Math.sin,
   sqrt: Math.sqrt,
   signum: Math.sign ?? ((x: number) => (x > 0 ? 1 : x < 0 ? -1 : 0)),
-  tan: Math.tan
+  tan: Math.tan,
+  asinh: Math.asinh,
+  acosh: Math.acosh,
+  atanh: Math.atanh
 };
 
 // Allowed constants available by name
 const ALLOWED_CONSTS: Record<string, number> = {
   pi: Math.PI,
   PI: Math.PI,
+  _pi: Math.PI,
   e: Math.E,
   E: Math.E,
+  _e: Math.E,
   Infinity: Infinity,
   infinity: Infinity,
   NaN: NaN,
@@ -409,7 +415,7 @@ export function compile(
   };
 }
 
-export function evaluateConstant(expr: string): number {
+export function evaluateConstant(expr: string, fallbackNaN: boolean = false, silent: boolean = false): number {
   try {
     validateExprBasics(expr);
     if (maxParenDepth(expr) > MAX_PAREN_DEPTH) {
@@ -421,12 +427,14 @@ export function evaluateConstant(expr: string): number {
       throw new Error(`Constant expression contains variables: ${vars.join(', ')}`);
     }
     const val = evaluateNode(ast, {}, { count: 0 });
-    return typeof val === 'number' && Number.isFinite(val) ? val : 0;
+    return typeof val === 'number' && Number.isFinite(val) ? val : (fallbackNaN ? NaN : 0);
   } catch (e) {
-    console.warn(
-      `[SafeExpressionEvaluator] Failed to evaluate constant: ${expr}\nError: ${e instanceof Error ? e.message : String(e)}`
-    );
-    return 0;
+    if (!silent) {
+      console.warn(
+        `[SafeExpressionEvaluator] Failed to evaluate constant: ${expr}\nError: ${e instanceof Error ? e.message : String(e)}`
+      );
+    }
+    return fallbackNaN ? NaN : 0;
   }
 }
 

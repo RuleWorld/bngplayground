@@ -30,8 +30,8 @@ export interface FeatureFlags {
 
 // Initialize from build-time environment (Vite). Default true after security hardening.
 let FEATURE_FLAGS: FeatureFlags = {
-  functionalRatesEnabled: (typeof (import.meta as any).env !== 'undefined' &&
-    String((import.meta as any).env.VITE_ENABLE_FUNCTIONAL_RATES) === 'false') ? false : true,
+  functionalRatesEnabled: (typeof (import.meta as unknown as { env?: { VITE_ENABLE_FUNCTIONAL_RATES?: string } }).env !== 'undefined' &&
+    String((import.meta as unknown as { env: { VITE_ENABLE_FUNCTIONAL_RATES?: string } }).env.VITE_ENABLE_FUNCTIONAL_RATES) === 'false') ? false : true,
   conservationLawReduction: false,
 };
 

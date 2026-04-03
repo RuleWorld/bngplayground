@@ -82,8 +82,9 @@ export class ModelValidator {
 
       result.passed = result.errors.length === 0;
 
-    } catch (err: any) {
-      result.errors.push(err.message);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : String(err);
+      result.errors.push(message);
     }
 
     return result;
