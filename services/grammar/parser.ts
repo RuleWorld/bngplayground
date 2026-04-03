@@ -1,5 +1,3 @@
-// import { v4 as uuidv4 } from 'uuid';
-const uuidv4 = () => Math.random().toString(36).substring(2, 9);
 import {
     BioSentence,
     InteractionSentence,
@@ -10,6 +8,8 @@ import {
 } from './types';
 import { buildVerbPattern, VERBS_BY_ACTION } from './ontology';
 import { validateInteractionSentence } from './validator';
+
+const uuidv4 = () => crypto.randomUUID();
 
 // ============================================================================
 // SYNONYM MAPS - Makes the parser more "LLM-like" by accepting many phrasings

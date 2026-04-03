@@ -188,7 +188,7 @@ export class WorkerPool {
       await this.initialize();
     }
 
-    const taskId = `${Date.now()}-${Math.random().toString(36).substring(7)}`;
+    const taskId = crypto.randomUUID();
     const task: WorkerTask<T> = { id: taskId, type, data };
 
     return new Promise((resolve, reject) => {
