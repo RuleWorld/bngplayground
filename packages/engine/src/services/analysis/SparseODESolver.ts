@@ -226,6 +226,10 @@ export class SparseODESolver {
       values: mValues
     };
 
+    // Cache the system matrix for use in linear solves
+    // (M and the ILU factors must correspond to the same matrix)
+    (this as any).systemMatrix = M;
+
     // ILU(0) factorization with cached symbolic structure
     // For biochemical networks, the sparsity pattern is fixed across steps,
     // so we perform symbolic analysis once and reuse it for numerical-only updates.
@@ -255,14 +259,26 @@ export class SparseODESolver {
       return true;
     }
 
-    // Build M = I - γ*J (already done in buildAndFactorizeMatrix)
-    const M: CSRMatrix = {
-      n: this.n,
-      nnz: this.jacobianCSR.nnz,
-      rowPtr: this.jacobianCSR.rowPtr,
-      colIdx: this.jacobianCSR.colIdx,
-      values: this.jacobianCSR.values // Note: should use M values, not J
-    };
+    // Use the system matrix M = I - γ*J built in buildAndFactorizeMatrix
+    const M = (this as any).systemMatrix as CSRMatrix | undefined;
+    if (!M) {
+      // Fallback: behave as before but this should not happen if buildAndFactorizeMatrix was called
+      const fallbackM: CSRMatrix = {
+        n: this.n,
+        nnz: this.jacobianCSR.nnz,
+        rowPtr: this.jacobianCSR.rowPtr,
+        colIdx: this.jacobianCSR.colIdx,
+        values: this.jacobianCSR.values
+      };
+      k.fill(0); // Initial guess
+      if (this.iluFactors) {
+        sparseSolve(this.iluFactors, rhs, k);
+        return true;
+      } else {
+        const iters = gmres(fallbackM, rhs, k, undefined, 1e-10, this.options.gmresMaxIter);
+        return iters >= 0;
+      }
+    }
 
     k.fill(0); // Initial guess
 
