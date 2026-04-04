@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useRef, useCallback } from 'react';
 import {
   ComposedChart,
   Line,
@@ -13,6 +13,8 @@ import {
 } from 'recharts';
 import { formatValue } from '../../src/utils/formatValue';
 import { InlineLegend } from './InteractiveLegend';
+import { CHART_FONT_DEFAULTS } from '../../src/utils/chartColors';
+import { downloadTextFile } from '../../src/utils/download';
 
 export interface TimeSeriesSeries {
   name: string;
@@ -39,6 +41,11 @@ interface TimeSeriesChartProps {
   animationDuration?: number;
   allowZoom?: boolean;
   allowScale?: boolean;
+
+  // Publication mode
+  hideXAxisLabel?: boolean;    // For top panels in multi-row layout
+  hideYAxisLabel?: boolean;    // For right panels in multi-column layout
+  subfigureLabel?: string;     // e.g., "(A)", "(B)"
 }
 
 type ZoomDomain = {
@@ -68,11 +75,83 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   animationDuration = 300,
   allowZoom = true,
   allowScale = true,
+  hideXAxisLabel = false,
+  hideYAxisLabel = false,
+  subfigureLabel,
 }) => {
   const [zoomHistory, setZoomHistory] = useState<ZoomDomain[]>([]);
   const [selection, setSelection] = useState<ZoomDomain | null>(null);
   const [xAxisScale, setXAxisScale] = useState<'linear' | 'log'>('linear');
   const [yAxisScale, setYAxisScale] = useState<'linear' | 'log'>('linear');
+
+  const chartRef = useRef<HTMLDivElement>(null);
+
+  const exportChartSVG = useCallback(() => {
+    if (!chartRef.current) return;
+    const svgElement = chartRef.current.querySelector('svg');
+    if (!svgElement) return;
+
+    // Default column width for single column PLOS Comp Bio is 13.2cm
+    const widthCm = 13.2;
+    const widthInches = widthCm / 2.54;
+    const widthPx = Math.round(widthInches * 300); // 300 DPI
+    const aspectRatio = svgElement.viewBox.baseVal.height / svgElement.viewBox.baseVal.width;
+    const heightPx = Math.round(widthPx * aspectRatio);
+
+    const clone = svgElement.cloneNode(true) as SVGSVGElement;
+    clone.setAttribute('width', `${widthPx}`);
+    clone.setAttribute('height', `${heightPx}`);
+
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(clone);
+
+    // Add xml declaration if missing
+    const finalSvg = svgString.startsWith('<?xml') ? svgString : `<?xml version="1.0" encoding="UTF-8"?>\n${svgString}`;
+
+    downloadTextFile(finalSvg, 'chart.svg', 'image/svg+xml');
+  }, []);
+
+  const exportChartRaster = useCallback(() => {
+    if (!chartRef.current) return;
+    const svgElement = chartRef.current.querySelector('svg');
+    if (!svgElement) return;
+
+    const widthCm = 13.2;
+    const dpi = 300;
+    const widthInches = widthCm / 2.54;
+    const widthPx = Math.round(widthInches * dpi);
+    const aspectRatio = svgElement.viewBox.baseVal.height / svgElement.viewBox.baseVal.width;
+    const heightPx = Math.round(widthPx * aspectRatio);
+
+    const canvas = document.createElement('canvas');
+    canvas.width = widthPx;
+    canvas.height = heightPx;
+
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    // Fill background with white
+    ctx.fillStyle = 'white';
+    ctx.fillRect(0, 0, widthPx, heightPx);
+
+    const img = new Image();
+    const serializer = new XMLSerializer();
+    const svgString = serializer.serializeToString(svgElement);
+    const svgBlob = new Blob([svgString], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(svgBlob);
+
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, widthPx, heightPx);
+      URL.revokeObjectURL(url);
+
+      const pngUrl = canvas.toDataURL('image/png');
+      const a = document.createElement('a');
+      a.href = pngUrl;
+      a.download = 'chart.png';
+      a.click();
+    };
+    img.src = url;
+  }, []);
 
   const handleLegendClick = (name: string) => {
     if (onSeriesToggle) {
@@ -163,7 +242,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       style={{ height: height || '100%' }}
     >
       {/* Main Chart Area */}
-      <div className="flex-1 min-h-[160px] relative">
+      <div className="flex-1 min-h-[160px] relative" ref={chartRef}>
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart 
             data={plotData} 
@@ -181,16 +260,19 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               tickFormatter={(v) => formatValue(xAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
-              tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
+              tick={{ fill: CHART_FONT_DEFAULTS.tickColor, fontSize: CHART_FONT_DEFAULTS.tickLabelSize, fontWeight: CHART_FONT_DEFAULTS.tickLabelWeight, fontFamily: CHART_FONT_DEFAULTS.tickLabelFamily }}
               domain={currentDomain ? [currentDomain.x1, currentDomain.x2] : ['auto', 'auto']}
               allowDataOverflow={true}
-              label={{
+              label={hideXAxisLabel ? undefined : {
                 value: displayXLabel,
                 position: 'insideBottom',
                 offset: -12,
-                fill: '#0f172a',
-                fontSize: 13,
-                fontWeight: 700
+                style: {
+                  fontSize: CHART_FONT_DEFAULTS.axisTitleSize,
+                  fontWeight: CHART_FONT_DEFAULTS.axisTitleWeight,
+                  fontFamily: CHART_FONT_DEFAULTS.axisTitleFamily,
+                  fill: CHART_FONT_DEFAULTS.axisColor,
+                }
               }}
             />
             <YAxis
@@ -198,18 +280,21 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               tickFormatter={(v) => formatValue(yAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
-              tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
+              tick={{ fill: CHART_FONT_DEFAULTS.tickColor, fontSize: CHART_FONT_DEFAULTS.tickLabelSize, fontWeight: CHART_FONT_DEFAULTS.tickLabelWeight, fontFamily: CHART_FONT_DEFAULTS.tickLabelFamily }}
               domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : [0, 'auto']}
               allowDataOverflow={true}
-              label={{
+              label={hideYAxisLabel ? undefined : {
                 value: displayYLabel,
                 angle: -90,
                 position: 'insideLeft',
                 offset: -10,
-                fill: '#0f172a',
-                fontSize: 13,
-                fontWeight: 700,
-                style: { textAnchor: 'middle' }
+                style: {
+                  fontSize: CHART_FONT_DEFAULTS.axisTitleSize,
+                  fontWeight: CHART_FONT_DEFAULTS.axisTitleWeight,
+                  fontFamily: CHART_FONT_DEFAULTS.axisTitleFamily,
+                  fill: CHART_FONT_DEFAULTS.axisColor,
+                  textAnchor: 'middle'
+                }
               }}
             />
             <RechartsTooltip
@@ -257,6 +342,21 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
                 fillOpacity={0.1}
               />
             )}
+
+            {subfigureLabel && (
+                <text
+                    x={margin.left + 5}
+                    y={margin.top + 15}
+                    style={{
+                        fontSize: CHART_FONT_DEFAULTS.axisTitleSize,
+                        fontWeight: 700,
+                        fontFamily: CHART_FONT_DEFAULTS.axisTitleFamily,
+                        fill: CHART_FONT_DEFAULTS.axisColor,
+                    }}
+                >
+                    {subfigureLabel}
+                </text>
+            )}
           </ComposedChart>
         </ResponsiveContainer>
       </div>
@@ -296,6 +396,22 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               Reset View
             </button>
           )}
+          <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200 dark:border-slate-700">
+            <button
+              onClick={exportChartSVG}
+              className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              title="Download Plot as SVG (300 DPI equivalent)"
+            >
+              SVG
+            </button>
+            <button
+              onClick={exportChartRaster}
+              className="px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              title="Download Plot as PNG (300 DPI equivalent)"
+            >
+              PNG
+            </button>
+          </div>
         </div>
       )}
     </div>
