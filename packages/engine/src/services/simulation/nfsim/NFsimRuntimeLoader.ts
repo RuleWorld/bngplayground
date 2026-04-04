@@ -1,41 +1,9 @@
-export interface NFsimRunOptions {
-  /** Callback for progress messages (stdout forwarding) */
-  progressCallback?: (msg: string) => void;
-  /** Model name used for file paths (default: 'model') */
-  modelName?: string;
-  /** Path to the XML input inside the virtual FS (default: '/<modelName>.xml') */
-  xmlPath?: string;
-  /** Path to the GDAT output inside the virtual FS (default: '/<modelName>.gdat') */
-  outputPath?: string;
-  /** Simulation end time */
-  t_end?: number;
-  /** Number of output steps */
-  n_steps?: number;
-  /** RNG seed */
-  seed?: number;
-  /** Complex bookkeeping (cb flag) */
-  cb?: boolean;
-  /** Path for species output */
-  speciesPath?: string;
-  /** Enable verbose logging */
-  verbose?: boolean;
-  /** Extra fields for compatibility */
-  utl?: number;
-  gml?: number;
-  equilibrate?: number;
-  timeoutMs?: number;
-}
-
 export type NFsimModuleFactory = (options?: Record<string, unknown>) => Promise<any> | any;
 
 export type NFsimRuntime = {
-  run: (xml: string, options: NFsimRunOptions) => Promise<string> | string;
+  run: (xml: string, options: Record<string, unknown>) => Promise<string> | string;
   reset?: () => void;
 };
-
-function isEmscriptenExitStatus(e: unknown): e is { status: number } {
-  return e != null && typeof (e as Record<string, unknown>).status === 'number';
-}
 
 const getGlobalRuntime = (): NFsimRuntime | null => {
   const globalAny = globalThis as unknown as { __nfsimRuntime?: NFsimRuntime };
@@ -67,13 +35,13 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
   // ExitStatus wrapping, -utl, error checks, etc.).  Use this before falling back to
   // raw FS + callMain so we don't re-implement the same logic with missing pieces.
   if (typeof module.runNFsim === 'function') {
-    const run = (xml: string, options: NFsimRunOptions = {}) => {
+    const run = (xml: string, options: Record<string, unknown> = {}) => {
       if (typeof xml !== 'string') {
         throw new Error('NFsim run expects XML text input.');
       }
       const opts = options ?? {};
-      const progressCb = typeof opts.progressCallback === 'function'
-        ? opts.progressCallback
+      const progressCb = typeof (opts as any).progressCallback === 'function'
+        ? (opts as any).progressCallback as (msg: string) => void
         : undefined;
 
       // Wire module.print/printErr to the progress callback so NFsim stdout is forwarded.
@@ -114,15 +82,15 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
   const hasCallMain = typeof module.callMain === 'function';
 
   if (hasFs && hasCallMain) {
-    const run = (xml: string, options: NFsimRunOptions = {}) => {
+    const run = (xml: string, options: Record<string, unknown> = {}) => {
       if (typeof xml !== 'string') {
         throw new Error('NFsim run expects XML text input.');
       }
       const opts = options ?? {};
-      const progressCb = typeof opts.progressCallback === 'function' ? opts.progressCallback : undefined;
-      const modelName = opts.modelName || 'model';
-      const xmlPath = opts.xmlPath || `/${modelName}.xml`;
-      const outPath = opts.outputPath || `/${modelName}.gdat`;
+      const progressCb = typeof (opts as any).progressCallback === 'function' ? (opts as any).progressCallback as (msg: string) => void : undefined;
+      const modelName = (opts as any).modelName || 'model';
+      const xmlPath = (opts as any).xmlPath || `/${modelName}.xml`;
+      const outPath = (opts as any).outputPath || `/${modelName}.gdat`;
 
       try {
         module.FS.unlink(xmlPath);
@@ -197,22 +165,22 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
       module.FS.writeFile(xmlPath, xml);
 
       const args: string[] = ['-xml', xmlPath, '-o', outPath];
-      if (opts.t_end !== undefined) {
-        args.push('-sim', String(opts.t_end));
+      if ((opts as any).t_end !== undefined) {
+        args.push('-sim', String((opts as any).t_end));
       }
-      if (opts.n_steps !== undefined) {
-        args.push('-oSteps', String(opts.n_steps));
+      if ((opts as any).n_steps !== undefined) {
+        args.push('-oSteps', String((opts as any).n_steps));
       }
-      if (opts.seed !== undefined) {
-        args.push('-seed', String(opts.seed));
+      if ((opts as any).seed !== undefined) {
+        args.push('-seed', String((opts as any).seed));
       }
-      if (opts.cb) {
+      if ((opts as any).cb) {
         args.push('-cb');
       }
-      if (opts.speciesPath) {
-        args.push('-ss', String(opts.speciesPath));
+      if ((opts as any).speciesPath) {
+        args.push('-ss', String((opts as any).speciesPath));
       }
-      if (opts.verbose) {
+      if ((opts as any).verbose) {
         args.push('-v');
       }
 
@@ -238,8 +206,9 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         // Emscripten throws ExitStatus (an object with a `status` property) when the
         // process exits – even on clean exit (status 0).  Treat status-0 as success and
         // fall through so we can read the output file.  Any other value is a real error.
-        if (isEmscriptenExitStatus(e)) {
-          const code = e.status;
+        const isExitStatus = e != null && typeof (e as any).status === 'number';
+        if (isExitStatus) {
+          const code = (e as any).status as number;
           if (code !== 0) {
             callMainError = new Error(`NFsim exited with code ${code}`);
           }
@@ -269,9 +238,9 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
   }
 
   if (typeof module.run === 'function') {
-    const run = (xml: string, options: NFsimRunOptions = {}) => {
+    const run = (xml: string, options: Record<string, unknown> = {}) => {
       const opts = options ?? {};
-      const progressCb = typeof opts.progressCallback === 'function' ? opts.progressCallback : undefined;
+      const progressCb = typeof (opts as any).progressCallback === 'function' ? (opts as any).progressCallback as (msg: string) => void : undefined;
       let origConsoleLog: typeof console.log | undefined;
       let origConsoleError: typeof console.error | undefined;
       if (progressCb) {
@@ -299,9 +268,9 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
   }
 
   if (typeof module.runNFsim === 'function') {
-    const run = (xml: string, options: NFsimRunOptions = {}) => {
+    const run = (xml: string, options: Record<string, unknown> = {}) => {
       const opts = options ?? {};
-      const progressCb = typeof opts.progressCallback === 'function' ? opts.progressCallback : undefined;
+      const progressCb = typeof (opts as any).progressCallback === 'function' ? (opts as any).progressCallback as (msg: string) => void : undefined;
       let origConsoleLog: typeof console.log | undefined;
       let origConsoleError: typeof console.error | undefined;
       if (progressCb) {
@@ -355,8 +324,8 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
     initPromise = (async () => {
       const { moduleUrl, wasmUrl, factory } = getRuntimeHints();
 
-      const baseUrl = typeof import.meta !== 'undefined' && (import.meta as { env?: { BASE_URL?: string } }).env?.BASE_URL
-        ? (import.meta as { env?: { BASE_URL?: string } }).env!.BASE_URL!
+      const baseUrl = typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL
+        ? (import.meta as any).env.BASE_URL
         : '/';
       const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
       const resolvedWasmUrl = wasmUrl ?? `${normalizedBase}nfsim.wasm`;

@@ -22,9 +22,7 @@ import { lintBNGL, lintDiagnosticsToMarkers } from './services/bnglLinter';
 import { getSharedModelFromUrl, clearModelFromUrl } from './src/utils/shareUrl';
 import { resolveAutoMethod, getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from '@bngplayground/engine';
-import { createDebugLogger } from './src/utils/debug';
-
-const debug = createDebugLogger('App');
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const SBML_IMPORT_TIMEOUT_MS = 45_000;
@@ -640,7 +638,7 @@ function App() {
   useEffect(() => {
     let cancelled = false;
 
-    debug('initializeModel effect run');
+    console.log('[App] initializeModel effect run');
 
     const initializeModel = async () => {
       try {
@@ -717,7 +715,7 @@ function App() {
     import('./src/utils/batchRunner').then(({ runAllModels, runModels }) => {
       (window as any).runAllModels = runAllModels;
       (window as any).runModels = runModels;
-      debug('🤖 batch runner loaded. Run `window.runAllModels()` to start.');
+      console.log('🤖 batch runner loaded. Run `window.runAllModels()` to start.');
     });
 
     return () => {
@@ -802,7 +800,7 @@ function App() {
   }, [handleSimulate]);
 
   const handleCodeChange = (newCode: string) => {
-    debug('handleCodeChange called:', {
+    console.log('[App] handleCodeChange called:', {
       codeLength: newCode.length,
       codePreview: newCode.substring(0, 200),
       firstLine: newCode.split('\n')[0] || '',
@@ -838,8 +836,8 @@ function App() {
     try {
       const startedAt = performance.now();
       const text = await file.text();
-      debug(
-        `[SBML Import] file=${file.name} bytes=${file.size} chars=${text.length} timeoutMs=${SBML_IMPORT_TIMEOUT_MS}`
+      console.log(
+        `[App][SBML Import] file=${file.name} bytes=${file.size} chars=${text.length} timeoutMs=${SBML_IMPORT_TIMEOUT_MS}`
       );
       const result = await bnglService.atomize(text, {
         timeoutMs: SBML_IMPORT_TIMEOUT_MS,
@@ -853,7 +851,7 @@ function App() {
         } catch (e) {
           // ignore failures in name parsing
         }
-        debug(`[SBML Import] success in ${Math.round(performance.now() - startedAt)} ms`);
+        console.log(`[App][SBML Import] success in ${Math.round(performance.now() - startedAt)} ms`);
         setStatus({ type: 'success', message: 'SBML imported successfully!' });
       } else {
         setStatus({ type: 'error', message: `Import failed: ${result.error || 'Unknown error'}` });
@@ -1057,50 +1055,54 @@ function App() {
             >
               <div ref={editorContainerRef} className="h-full flex flex-col">
                 {viewMode === 'code' ? (
-                  <EditorPanel
-                    lastResized={lastResized}
-                    isCollapsed={splitPosition <= 5}
-                    onExpand={() => setSplitPosition(35)}
-                    onRunQuick={handleQuickRun}
-                    editorResetKey={editorResetKey}
-                    code={code}
-                    onCodeChange={handleEditorCodeChange}
-                    onLoadCode={handleCodeChange}
-                    onParse={handleParse}
-                    onSimulate={handleSimulate}
-                    isSimulating={isSimulating}
-                    modelExists={!!model}
-                    model={model}
-                    validationWarnings={validationWarnings}
-                    editorMarkers={editorMarkers}
-                    loadedModelName={loadedModelName}
-                    onModelNameChange={setLoadedModelName}
-                    onModelIdChange={setLoadedModelId}
-                    selection={editorSelection}
-                    onImportSBML={handleImportSBML}
-                    onExportSBML={handleExportSBML}
-                    onExportSedML={handleExportSedML}
-                    onExportOMEX={handleExportOMEX}
-                    onExportBNGL={handleExportBNGL}
-                    onExportNET={handleExportNET}
-                  />
+                  <ErrorBoundary label="editor">
+                    <EditorPanel
+                      lastResized={lastResized}
+                      isCollapsed={splitPosition <= 5}
+                      onExpand={() => setSplitPosition(35)}
+                      onRunQuick={handleQuickRun}
+                      editorResetKey={editorResetKey}
+                      code={code}
+                      onCodeChange={handleEditorCodeChange}
+                      onLoadCode={handleCodeChange}
+                      onParse={handleParse}
+                      onSimulate={handleSimulate}
+                      isSimulating={isSimulating}
+                      modelExists={!!model}
+                      model={model}
+                      validationWarnings={validationWarnings}
+                      editorMarkers={editorMarkers}
+                      loadedModelName={loadedModelName}
+                      onModelNameChange={setLoadedModelName}
+                      onModelIdChange={setLoadedModelId}
+                      selection={editorSelection}
+                      onImportSBML={handleImportSBML}
+                      onExportSBML={handleExportSBML}
+                      onExportSedML={handleExportSedML}
+                      onExportOMEX={handleExportOMEX}
+                      onExportBNGL={handleExportBNGL}
+                      onExportNET={handleExportNET}
+                    />
+                  </ErrorBoundary>
                 ) : (
-                  <DesignerPanel
-                    isCollapsed={splitPosition <= 5}
-                    onExpand={() => setSplitPosition(35)}
-                    text={designerText}
-                    onTextChange={setDesignerText}
-                    modelName={designerModelName}
-                    onModelNameChange={handleDesignerModelNameChange}
-                    onCodeChange={handleEditorCodeChange}
-                    onParse={handleParse}
-                    onSimulate={(modelOverride) => handleSimulate({
-                      method: 'ode',
-                      t_end: 100,
-                      n_steps: 100,
-                      solver: 'auto'
-                    }, modelOverride)}
-                  />
+                  <ErrorBoundary label="designer">
+                    <DesignerPanel
+                      isCollapsed={splitPosition <= 5}
+                      onExpand={() => setSplitPosition(35)}
+                      text={designerText}
+                      onTextChange={setDesignerText}
+                      modelName={designerModelName}
+                      onModelNameChange={handleDesignerModelNameChange}
+                      onCodeChange={handleEditorCodeChange}
+                      onParse={handleParse}
+                      onSimulate={(modelOverride) => handleSimulate({
+                        method: 'ode',
+                        t_end: 100,
+                        n_steps: 100,
+                        solver: 'auto'
+                      }, modelOverride)}
+                    />
+                  </ErrorBoundary>
                 )}
               </div>
             </div>
@@ -1128,23 +1130,25 @@ function App() {
                 width: '100%', // Mobile default
               }}
             >
-              <VisualizationPanel
-                model={model}
-                results={results}
-                onSimulate={handleSimulate}
-                isSimulating={isSimulating}
-                onCancelSimulation={handleCancelSimulation}
-                simulationMethod={currentMethod}
-                activeTabIndex={activeVizTab}
-                onActiveTabIndexChange={setActiveVizTab}
-                bnglCode={code}
-                onLoadModel={(modelCode, name, id) => {
-                  setLoadedModelId(id);
-                  setLoadedModelName(name);
-                  handleCodeChange(modelCode);
-                  setStatus({ type: 'success', message: `Loaded ${name} from Model Explorer` });
-                }}
-              />
+              <ErrorBoundary label="visualization">
+                <VisualizationPanel
+                  model={model}
+                  results={results}
+                  onSimulate={handleSimulate}
+                  isSimulating={isSimulating}
+                  onCancelSimulation={handleCancelSimulation}
+                  simulationMethod={currentMethod}
+                  activeTabIndex={activeVizTab}
+                  onActiveTabIndexChange={setActiveVizTab}
+                  bnglCode={code}
+                  onLoadModel={(modelCode, name, id) => {
+                    setLoadedModelId(id);
+                    setLoadedModelName(name);
+                    handleCodeChange(modelCode);
+                    setStatus({ type: 'success', message: `Loaded ${name} from Model Explorer` });
+                  }}
+                />
+              </ErrorBoundary>
             </div>
           </div>
           <SimulationModal

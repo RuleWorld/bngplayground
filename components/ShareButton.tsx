@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useId } from 'react';
+import React, { useState, useCallback } from 'react';
 import { Button } from './ui/Button';
 import { generateShareUrl } from '../src/utils/shareUrl';
 
@@ -49,7 +49,6 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
     }, []);
 
     const embedCode = `<iframe src="${shareUrl}" width="100%" height="600" frameborder="0"></iframe>`;
-    const formId = useId();
 
     return (
         <>
@@ -70,20 +69,17 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                     <div
                         className="bg-white dark:bg-slate-900 dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6"
                         onClick={(e) => e.stopPropagation()}
-                        role="dialog"
-                        aria-modal="true"
-                        aria-labelledby={`${formId}-title`}
                     >
                         <div className="flex justify-between items-center mb-4">
-                            <h3 id={`${formId}-title`} className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+                            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
                                 Share Model
                             </h3>
                             <button
                                 onClick={handleClose}
                                 className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-300"
-                                aria-label="Close dialog"
+                                aria-label="Close share modal"
                             >
-                                <svg aria-hidden="true" className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                                 </svg>
                             </button>
@@ -91,11 +87,10 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
 
                         <div className="space-y-4">
                             <div>
-                                <label htmlFor={`${formId}-name`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Model Name (optional)
                                 </label>
                                 <input
-                                    id={`${formId}-name`}
                                     type="text"
                                     value={nameInput}
                                     onChange={(e) => {
@@ -112,12 +107,11 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                             </div>
 
                             <div>
-                                <label htmlFor={`${formId}-link`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Shareable Link
                                 </label>
                                 <div className="flex gap-2">
                                     <input
-                                        id={`${formId}-link`}
                                         type="text"
                                         readOnly
                                         value={shareUrl}
@@ -134,11 +128,10 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                             </div>
 
                             <div>
-                                <label htmlFor={`${formId}-embed`} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Embed Code
                                 </label>
                                 <textarea
-                                    id={`${formId}-embed`}
                                     readOnly
                                     value={embedCode}
                                     rows={2}

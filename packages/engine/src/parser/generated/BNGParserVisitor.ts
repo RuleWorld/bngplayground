@@ -28,12 +28,10 @@ import { Seed_species_defContext } from "./BNGParser";
 import { Species_defContext } from "./BNGParser";
 import { Molecule_compartmentContext } from "./BNGParser";
 import { Molecule_patternContext } from "./BNGParser";
-import { Scope_prefixContext } from "./BNGParser";
 import { Pattern_bond_wildcardContext } from "./BNGParser";
 import { Molecule_tagContext } from "./BNGParser";
 import { Component_pattern_listContext } from "./BNGParser";
 import { Component_patternContext } from "./BNGParser";
-import { Component_labelContext } from "./BNGParser";
 import { State_valueContext } from "./BNGParser";
 import { Bond_specContext } from "./BNGParser";
 import { Bond_idContext } from "./BNGParser";
@@ -281,13 +279,6 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitMolecule_pattern?: (ctx: Molecule_patternContext) => Result;
 
 	/**
-	 * Visit a parse tree produced by `BNGParser.scope_prefix`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitScope_prefix?: (ctx: Scope_prefixContext) => Result;
-
-	/**
 	 * Visit a parse tree produced by `BNGParser.pattern_bond_wildcard`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -314,13 +305,6 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitComponent_pattern?: (ctx: Component_patternContext) => Result;
-
-	/**
-	 * Visit a parse tree produced by `BNGParser.component_label`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitComponent_label?: (ctx: Component_labelContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.state_value`.

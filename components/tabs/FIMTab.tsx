@@ -18,7 +18,6 @@ import {
 } from 'recharts';
 import { FIMHeatmap } from '../../components/FIMHeatmap';
 import { formatValue } from '../../src/utils/formatValue';
-import { downloadTextFile } from '../../src/utils/download';
 
 import { EmptyState } from '../ui/EmptyState';
 
@@ -223,7 +222,13 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       )
     ].join('\n');
 
-    downloadTextFile(csv, 'nullspace_combinations.csv', 'text/csv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'nullspace_combinations.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadVIF = () => {
@@ -234,7 +239,13 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
         [name, result.vif?.[i] || 'N/A'].join(',')
       )
     ].join('\n');
-    downloadTextFile(csv, 'vif_table.csv', 'text/csv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'vif_table.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadCorrelations = () => {
@@ -245,7 +256,13 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
         [result.paramNames[i], ...row].join(',')
       )
     ].join('\n');
-    downloadTextFile(csv, 'correlations.csv', 'text/csv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'correlations.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   const downloadFIMMatrix = () => {
@@ -256,7 +273,13 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
         [result.paramNames[i], ...row].join(',')
       )
     ].join('\n');
-    downloadTextFile(csv, 'fim_matrix.csv', 'text/csv');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'fim_matrix.csv';
+    a.click();
+    URL.revokeObjectURL(url);
   };
 
   return (
@@ -369,7 +392,15 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               <Button onClick={() => {
                 try {
                   const data = exportFIM(result);
-                  downloadTextFile(JSON.stringify(data, null, 2), 'fim_analysis.json', 'application/json');
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'fim_analysis.json';
+                  document.body.appendChild(a);
+                  a.click();
+                  a.remove();
+                  URL.revokeObjectURL(url);
                 } catch (e) {
                    
                   console.warn('Failed to export FIM', e);
@@ -744,7 +775,14 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                 className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 text-sm"
                 onClick={() => {
                   const data = exportFIM(result);
-                  downloadTextFile(JSON.stringify(data, null, 2), 'fim_analysis.json', 'application/json');
+                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = 'fim_analysis.json';
+                  document.body.appendChild(a);
+                  a.click();
+                  URL.revokeObjectURL(url);
                 }}
               >
                 💾 Export Full Analysis

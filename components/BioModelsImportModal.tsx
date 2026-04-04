@@ -49,8 +49,7 @@ export const BioModelsImportModal: React.FC<BioModelsImportModalProps> = ({ isOp
       <div>
         <p className="text-sm text-slate-600 dark:text-slate-300 mb-2">Enter a BioModels model ID (e.g., <span className="font-mono">BIOMD0000000001</span>) and click <strong>Fetch &amp; Import</strong>. The importer will fetch SBML (or a COMBINE archive) and import the primary SBML file.</p>
         <div className="mb-3">
-          <label htmlFor="biomodels-id-input" className="sr-only">BioModels ID</label>
-          <Input id="biomodels-id-input" value={id} onChange={(e) => setId(e.target.value)} placeholder="BioModels ID" />
+          <Input value={id} onChange={(e) => setId(e.target.value)} placeholder="BioModels ID" />
         </div>
         {error && <div className="text-sm text-red-600 mb-3">{error}</div>}
         <div className="flex gap-2 justify-end">

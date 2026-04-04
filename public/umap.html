@@ -550,23 +550,13 @@
             animationFrame = requestAnimationFrame(animate);
         }
 
-        function escapeHtml(str) {
-            return String(str)
-                .replace(/&/g, '&amp;')
-                .replace(/</g, '&lt;')
-                .replace(/>/g, '&gt;')
-                .replace(/"/g, '&quot;')
-                .replace(/'/g, '&#039;');
-        }
-
         function renderLegend() {
             const legend = document.getElementById('legend');
             legend.style.display = 'flex';
             const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
             legend.innerHTML = sorted.map(([category, count]) => {
-                const color = escapeHtml(colorMap[category] || '#94a3b8');
-                const safeCat = escapeHtml(category);
-                return `<div class="legend-item" data-tag="${safeCat}"><div class="legend-dot" style="background:${color};color:${color}"></div><div class="legend-label">${safeCat} (${count})</div></div>`;
+                const color = colorMap[category] || '#94a3b8';
+                return `<div class="legend-item" data-tag="${category}"><div class="legend-dot" style="background:${color};color:${color}"></div><div class="legend-label">${category} (${count})</div></div>`;
             }).join('');
             legend.querySelectorAll('.legend-item').forEach(el => {
                 el.onclick = () => { 
@@ -648,18 +638,13 @@
             if (hoveredIdx >= 0) {
                 const m = models[hoveredIdx];
                 tooltip.style.display = 'block';
-                const tagBadges = m.tags.map(t => {
-                    const safeTag = escapeHtml(t);
-                    const safeColor = escapeHtml(colorMap[t] || '#64748b');
-                    return `<span class="tooltip-tag" style="background:${safeColor}">${safeTag}</span>`;
-                }).join('');
+                const tagBadges = m.tags.map(t => `<span class="tooltip-tag" style="background:${colorMap[t] || '#64748b'}">${t}</span>`).join('');
                 const obs = m.observables && m.observables.length > 0 
-                    ? m.observables.slice(0, 8).map(escapeHtml).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
+                    ? m.observables.slice(0, 8).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
                     : 'None';
-                const simMode = escapeHtml(m.simulationMode || 'Unknown');
-                const displayName = escapeHtml(m.displayName || '');
+                const simMode = m.simulationMode || 'Unknown';
                 tooltip.innerHTML = `
-                    <div class="tooltip-title">${displayName}</div>
+                    <div class="tooltip-title">${m.displayName}</div>
                     <div class="tooltip-tags">${tagBadges}</div>
                     <div class="tooltip-obs"><strong>Observables:</strong> ${obs}</div>
                     <div class="tooltip-obs" style="margin-top:4px"><strong>Simulation:</strong> ${simMode}</div>

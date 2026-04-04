@@ -118,7 +118,6 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
         <button
           onClick={isRunning ? handleStop : handleRun}
           disabled={state === 'initializing'}
-          aria-label={isRunning ? 'Stop spatial simulation' : 'Run spatial simulation'}
           className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all
             ${isRunning
               ? 'bg-red-600/90 hover:bg-red-500 text-white'
@@ -132,40 +131,34 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
 
         {/* Parameter inputs */}
         <div className="flex items-center gap-2 text-xs">
-          <label className="text-gray-400" htmlFor="spatial-t-end">
+          <label className="text-gray-400">
             t_end:
             <input
-              id="spatial-t-end"
               type="text"
               ref={tEndRef}
               defaultValue={DEFAULT_SPATIAL_CONFIG.tEnd}
               className="w-20 ml-1 px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-gray-200"
               disabled={isRunning}
-              aria-label="Simulation t_end"
             />
           </label>
-          <label className="text-gray-400" htmlFor="spatial-dt">
+          <label className="text-gray-400">
             dt:
             <input
-              id="spatial-dt"
               type="text"
               ref={dtRef}
               defaultValue={DEFAULT_SPATIAL_CONFIG.dt}
               className="w-20 ml-1 px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-gray-200"
               disabled={isRunning}
-              aria-label="Simulation dt"
             />
           </label>
-          <label className="text-gray-400" htmlFor="spatial-seed">
+          <label className="text-gray-400">
             seed:
             <input
-              id="spatial-seed"
               type="number"
               value={config.seed ?? DEFAULT_SPATIAL_CONFIG.seed}
               onChange={(e) => setConfig(c => ({ ...c, seed: parseInt(e.target.value) || DEFAULT_SPATIAL_CONFIG.seed }))}
               className="w-16 ml-1 px-1.5 py-0.5 bg-gray-800 border border-gray-700 rounded text-gray-200"
               disabled={isRunning}
-              aria-label="Simulation random seed"
             />
           </label>
         </div>

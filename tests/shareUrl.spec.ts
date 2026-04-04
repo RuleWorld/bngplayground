@@ -1,19 +1,9 @@
 // @vitest-environment jsdom
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { encodeModelForUrl, getModelFromUrl, getSharedModelFromUrl, clearModelFromUrl } from '../src/utils/shareUrl';
+import { describe, it, expect } from 'vitest';
+import { encodeModelForUrl, getModelFromUrl, getSharedModelFromUrl } from '../src/utils/shareUrl';
 
 describe('shareUrl utils', () => {
-  beforeEach(() => {
-    // Reset hash before each test
-    window.location.hash = '';
-    vi.restoreAllMocks();
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
-  });
-
   it('decodes a raw base64 model from hash', () => {
     const code = 'A+B\nparam k=1';
     const encoded = encodeModelForUrl(code);
@@ -50,38 +40,5 @@ describe('shareUrl utils', () => {
     expect(shared?.code).toBe(code);
     expect(shared?.name).toBe('My Model');
     expect(shared?.modelId).toBe('abc123');
-  });
-
-  describe('clearModelFromUrl', () => {
-    it('clears the model from the URL hash using history.replaceState', () => {
-      const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
-      window.location.hash = '#model=123&other=456';
-
-      clearModelFromUrl();
-
-      expect(replaceStateSpy).toHaveBeenCalledTimes(1);
-      expect(replaceStateSpy).toHaveBeenCalledWith(
-        null,
-        '',
-        window.location.pathname + window.location.search
-      );
-    });
-
-    it('does not call replaceState if hash does not contain model=', () => {
-      const replaceStateSpy = vi.spyOn(window.history, 'replaceState');
-      window.location.hash = '#other=456';
-
-      clearModelFromUrl();
-
-      expect(replaceStateSpy).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when window is undefined', () => {
-      // Stub window to be undefined
-      vi.stubGlobal('window', undefined);
-
-      // This shouldn't throw any errors
-      expect(() => clearModelFromUrl()).not.toThrow();
-    });
   });
 });

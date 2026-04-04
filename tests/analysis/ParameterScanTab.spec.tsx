@@ -93,8 +93,8 @@ describe('ParameterScanTab component', () => {
         });
 
         // results table should show formatted parameter values
-        const ones = await screen.findAllByText('1');
-        const twos = await screen.findAllByText('2');
+        const ones = await screen.findAllByText('1.000');
+        const twos = await screen.findAllByText('2.000');
         expect(ones.length).toBeGreaterThan(0);
         expect(twos.length).toBeGreaterThan(0);
 

@@ -178,8 +178,6 @@ RESETCONCENTRATIONS: 'resetConcentrations';
 SETPARAMETER: 'setParameter';
 SAVEPARAMETERS: 'saveParameters';
 RESETPARAMETERS: 'resetParameters';
-SETVOLUME: 'setVolume';
-SIMULATE_PSA: 'simulate_psa';
 QUIT: 'quit';
 
 // Boolean literals (text form only - 0/1 handled as INT in expressions)

@@ -9,7 +9,6 @@ import { computeDynamicObservable } from '@bngplayground/engine';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { InlineLegend } from './charts/InteractiveLegend';
-import { downloadTextFile } from '../src/utils/download';
 
 interface ResultsChartProps {
   results: SimulationResults | null;
@@ -221,8 +220,14 @@ function exportAsGDAT(results: SimulationResults | null) {
     );
 
     const gdat = [headerLine, ...dataRows].join('\n');
+    const blob = new Blob([gdat], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     const sfx = suffix === '__default__' ? '' : `_${suffix}`;
-    downloadTextFile(gdat, `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.gdat`, 'text/plain');
+    a.download = `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.gdat`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }
 
@@ -257,8 +262,14 @@ function exportAsCDAT(results: SimulationResults | null) {
     });
 
     const cdat = [headerLine, ...dataRows].join('\n');
+    const blob = new Blob([cdat], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
     const sfx = suffix === '__default__' ? '' : `_${suffix}`;
-    downloadTextFile(cdat, `simulation_species_${new Date().toISOString().slice(0, 10)}${sfx}.cdat`, 'text/plain');
+    a.download = `simulation_species_${new Date().toISOString().slice(0, 10)}${sfx}.cdat`;
+    a.click();
+    URL.revokeObjectURL(url);
   }
 }
 
