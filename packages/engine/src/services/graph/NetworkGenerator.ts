@@ -3639,36 +3639,21 @@ export class NetworkGenerator {
               // Use the first available anchor to determine the delta
               const anchorKey = anchors.keys().next().value;
               if (anchorKey) {
-                // BNG2 parity: Only apply MoveConnected deltas to bystanders that were
-                // in the same original compartment as the anchor molecule.
-                const [anchorRStr, anchorMStr] = anchorKey.split(':');
-                const anchorRIdx = Number(anchorRStr);
-                const anchorMIdx = Number(anchorMStr);
-                let anchorOrigComp: string | undefined;
-                if (Number.isFinite(anchorRIdx) && Number.isFinite(anchorMIdx) &&
-                    anchorRIdx >= 0 && anchorRIdx < reactantGraphs.length) {
-                  const anchorSrc = reactantGraphs[anchorRIdx].molecules[anchorMIdx];
-                  anchorOrigComp = anchorSrc?.compartment || reactantGraphs[anchorRIdx].compartment;
-                }
-
-                const bystanderOrigComp = oldMol.compartment || rg.compartment;
-                const sameCompartment = !anchorOrigComp || !bystanderOrigComp || anchorOrigComp === bystanderOrigComp;
-
-                if (sameCompartment) {
-                  const deltas = survivorDeltas.get(anchorKey);
-                  if (deltas) {
-                    for (const delta of deltas) {
-                      const compToUpdate = newMol.components.find(c => c.name === delta.comp);
-                      if (compToUpdate) {
-                        if (shouldLogNetworkGenerator) {
-                          debugNetworkLog(`[applyTransformation] Propagating MoveConnected delta to bystander ${oldIdx}: ${delta.comp} -> ${delta.state}`);
-                        }
-                        compToUpdate.state = delta.state;
+                const deltas = survivorDeltas.get(anchorKey);
+                if (deltas) {
+                  for (const delta of deltas) {
+                    const compToUpdate = newMol.components.find(c => c.name === delta.comp);
+                    if (compToUpdate) {
+                      // Only update if the bystander has the component and it matches the "old" state implies it's ready to move?
+                      // BNG2 semantics: "Move" implies setting the new state regardless,
+                      // but usually it operates on compartments where everything moves.
+                      // Here we just set it.
+                      if (shouldLogNetworkGenerator) {
+                        debugNetworkLog(`[applyTransformation] Propagating MoveConnected delta to bystander ${oldIdx}: ${delta.comp} -> ${delta.state}`);
                       }
+                      compToUpdate.state = delta.state;
                     }
                   }
-                } else if (shouldLogNetworkGenerator) {
-                  debugNetworkLog(`[applyTransformation] Skipping MoveConnected delta for bystander ${oldIdx}: different original compartment (${bystanderOrigComp} vs anchor ${anchorOrigComp})`);
                 }
               }
             }
@@ -3855,11 +3840,8 @@ export class NetworkGenerator {
     }
 
     // BioNetGen MoveConnected semantics (RxnRule.pm):
-    // When a molecule is transported to a new compartment via a rule, also transport
-    // all molecules bonded to it that are in the SAME original compartment as the
-    // anchor molecule. Molecules bonded to the anchor but originally in a different
-    // compartment are NOT moved. Molecules explicitly in the rule's reactant pattern
-    // are also excluded (they get their own compartment assignments from the rule).
+    // For each transported matched molecule, move only its connected component while
+    // excluding other molecules explicitly named in the same reactant pattern.
     if (rule.isMoveConnected) {
       for (const graph of productGraphs) {
         const sourceToGraphIndex = new Map<string, number>();
@@ -3885,7 +3867,6 @@ export class NetworkGenerator {
           const targetComp = anchorMol.compartment || graph.compartment;
           if (!sourceComp || !targetComp || sourceComp === targetComp) continue;
 
-          // Build set of molecules explicitly in the reactant pattern (exclude from move)
           const excluded = new Set<number>();
           const reactantMatch = matches[reactantIdx];
           if (reactantMatch) {
@@ -3902,28 +3883,6 @@ export class NetworkGenerator {
           const connected = graph.getConnectedComponentMolecules(anchorIdx);
           for (const movedIdx of connected) {
             if (excluded.has(movedIdx)) continue;
-
-            // BNG2 parity: Only move bystander molecules that were originally in the
-            // same compartment as the anchor molecule. Molecules bonded to the anchor
-            // but in a different original compartment stay where they are.
-            const bystanderMol = graph.molecules[movedIdx];
-            if (bystanderMol._sourceKey) {
-              const [bRStr, bMStr] = bystanderMol._sourceKey.split(':');
-              const bReactantIdx = Number(bRStr);
-              const bMolIdx = Number(bMStr);
-              if (Number.isFinite(bReactantIdx) && Number.isFinite(bMolIdx) &&
-                  bReactantIdx >= 0 && bReactantIdx < reactantGraphs.length) {
-                const bSourceMol = reactantGraphs[bReactantIdx].molecules[bMolIdx];
-                if (bSourceMol) {
-                  const bOrigComp = bSourceMol.compartment || reactantGraphs[bReactantIdx].compartment;
-                  if (bOrigComp && bOrigComp !== sourceComp) {
-                    // Bystander is in a different original compartment; do not move it
-                    continue;
-                  }
-                }
-              }
-            }
-
             graph.molecules[movedIdx].compartment = targetComp;
           }
         }
@@ -5784,12 +5743,10 @@ export class NetworkGenerator {
   private validateProducts(products: SpeciesGraph[]): boolean {
     for (const product of products) {
       if (product.molecules.length > this.options.maxAgg) {
-        // BNG2 parity: exceeding max_agg silently rejects the species (skips the
-        // reaction) rather than halting network generation with an error.
-        // Reference: BNG2/Perl2/RxnRule.pm - species exceeding max_agg are simply
-        // not added to the network.
         this.warnAggLimit(product.molecules.length);
-        return false;
+        throw this.buildLimitError(
+          `Species exceeds max complex size (${this.options.maxAgg}); rule "${this.currentRuleName ?? 'unknown'}" likely produces runaway polymerization.`
+        );
       }
 
       const typeCounts = new Map<string, number>();

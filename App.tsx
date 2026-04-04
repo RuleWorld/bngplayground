@@ -22,6 +22,7 @@ import { lintBNGL, lintDiagnosticsToMarkers } from './services/bnglLinter';
 import { getSharedModelFromUrl, clearModelFromUrl } from './src/utils/shareUrl';
 import { resolveAutoMethod, getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from '@bngplayground/engine';
+import { ErrorBoundary } from './components/ui/ErrorBoundary';
 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const SBML_IMPORT_TIMEOUT_MS = 45_000;
@@ -1054,50 +1055,54 @@ function App() {
             >
               <div ref={editorContainerRef} className="h-full flex flex-col">
                 {viewMode === 'code' ? (
-                  <EditorPanel
-                    lastResized={lastResized}
-                    isCollapsed={splitPosition <= 5}
-                    onExpand={() => setSplitPosition(35)}
-                    onRunQuick={handleQuickRun}
-                    editorResetKey={editorResetKey}
-                    code={code}
-                    onCodeChange={handleEditorCodeChange}
-                    onLoadCode={handleCodeChange}
-                    onParse={handleParse}
-                    onSimulate={handleSimulate}
-                    isSimulating={isSimulating}
-                    modelExists={!!model}
-                    model={model}
-                    validationWarnings={validationWarnings}
-                    editorMarkers={editorMarkers}
-                    loadedModelName={loadedModelName}
-                    onModelNameChange={setLoadedModelName}
-                    onModelIdChange={setLoadedModelId}
-                    selection={editorSelection}
-                    onImportSBML={handleImportSBML}
-                    onExportSBML={handleExportSBML}
-                    onExportSedML={handleExportSedML}
-                    onExportOMEX={handleExportOMEX}
-                    onExportBNGL={handleExportBNGL}
-                    onExportNET={handleExportNET}
-                  />
+                  <ErrorBoundary label="editor">
+                    <EditorPanel
+                      lastResized={lastResized}
+                      isCollapsed={splitPosition <= 5}
+                      onExpand={() => setSplitPosition(35)}
+                      onRunQuick={handleQuickRun}
+                      editorResetKey={editorResetKey}
+                      code={code}
+                      onCodeChange={handleEditorCodeChange}
+                      onLoadCode={handleCodeChange}
+                      onParse={handleParse}
+                      onSimulate={handleSimulate}
+                      isSimulating={isSimulating}
+                      modelExists={!!model}
+                      model={model}
+                      validationWarnings={validationWarnings}
+                      editorMarkers={editorMarkers}
+                      loadedModelName={loadedModelName}
+                      onModelNameChange={setLoadedModelName}
+                      onModelIdChange={setLoadedModelId}
+                      selection={editorSelection}
+                      onImportSBML={handleImportSBML}
+                      onExportSBML={handleExportSBML}
+                      onExportSedML={handleExportSedML}
+                      onExportOMEX={handleExportOMEX}
+                      onExportBNGL={handleExportBNGL}
+                      onExportNET={handleExportNET}
+                    />
+                  </ErrorBoundary>
                 ) : (
-                  <DesignerPanel
-                    isCollapsed={splitPosition <= 5}
-                    onExpand={() => setSplitPosition(35)}
-                    text={designerText}
-                    onTextChange={setDesignerText}
-                    modelName={designerModelName}
-                    onModelNameChange={handleDesignerModelNameChange}
-                    onCodeChange={handleEditorCodeChange}
-                    onParse={handleParse}
-                    onSimulate={(modelOverride) => handleSimulate({
-                      method: 'ode',
-                      t_end: 100,
-                      n_steps: 100,
-                      solver: 'auto'
-                    }, modelOverride)}
-                  />
+                  <ErrorBoundary label="designer">
+                    <DesignerPanel
+                      isCollapsed={splitPosition <= 5}
+                      onExpand={() => setSplitPosition(35)}
+                      text={designerText}
+                      onTextChange={setDesignerText}
+                      modelName={designerModelName}
+                      onModelNameChange={handleDesignerModelNameChange}
+                      onCodeChange={handleEditorCodeChange}
+                      onParse={handleParse}
+                      onSimulate={(modelOverride) => handleSimulate({
+                        method: 'ode',
+                        t_end: 100,
+                        n_steps: 100,
+                        solver: 'auto'
+                      }, modelOverride)}
+                    />
+                  </ErrorBoundary>
                 )}
               </div>
             </div>
@@ -1125,23 +1130,25 @@ function App() {
                 width: '100%', // Mobile default
               }}
             >
-              <VisualizationPanel
-                model={model}
-                results={results}
-                onSimulate={handleSimulate}
-                isSimulating={isSimulating}
-                onCancelSimulation={handleCancelSimulation}
-                simulationMethod={currentMethod}
-                activeTabIndex={activeVizTab}
-                onActiveTabIndexChange={setActiveVizTab}
-                bnglCode={code}
-                onLoadModel={(modelCode, name, id) => {
-                  setLoadedModelId(id);
-                  setLoadedModelName(name);
-                  handleCodeChange(modelCode);
-                  setStatus({ type: 'success', message: `Loaded ${name} from Model Explorer` });
-                }}
-              />
+              <ErrorBoundary label="visualization">
+                <VisualizationPanel
+                  model={model}
+                  results={results}
+                  onSimulate={handleSimulate}
+                  isSimulating={isSimulating}
+                  onCancelSimulation={handleCancelSimulation}
+                  simulationMethod={currentMethod}
+                  activeTabIndex={activeVizTab}
+                  onActiveTabIndexChange={setActiveVizTab}
+                  bnglCode={code}
+                  onLoadModel={(modelCode, name, id) => {
+                    setLoadedModelId(id);
+                    setLoadedModelName(name);
+                    handleCodeChange(modelCode);
+                    setStatus({ type: 'success', message: `Loaded ${name} from Model Explorer` });
+                  }}
+                />
+              </ErrorBoundary>
             </div>
           </div>
           <SimulationModal

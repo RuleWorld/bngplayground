@@ -29,6 +29,7 @@ import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { EmptyState } from './ui/EmptyState';
 import { HelpSection } from './HelpSection';
 import { SpatialPanel } from './SpatialPanel';
+import { ErrorBoundary } from './ui/ErrorBoundary';
 import { BifurcationTab } from './tabs/BifurcationTab';
 import { TemporalAnalysisTab } from './tabs/TemporalAnalysisTab';
 import { VersionHistoryTab } from './tabs/VersionHistoryTab';
@@ -311,28 +312,30 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The chart shows concentration (or molecular count) on the Y-axis vs. simulated time on the X-axis. Higher peaks represent higher abundance of that molecule at that specific time."
             />
-            <div className="min-h-0 shrink-0">
-              <ResultsChart
-                results={results}
-                model={model}
-                isNFsim={simulationMethod === 'nf'}
-                // PLA outputs stochastic count-style trajectories, so render with SSA chart semantics.
-                isSSA={simulationMethod === 'ssa' || simulationMethod === 'pla'}
-                visibleSpecies={visibleSpecies}
-                onVisibleSpeciesChange={setVisibleSpecies}
-                expressions={expressions}
-              />
-            </div>
-            <div className="mt-4 shrink-0">
-              <ExpressionInputPanel
-                expressions={expressions}
-                onExpressionsChange={handleExpressionsChange}
-                observableNames={model?.observables?.map((o) => o.name) ?? []}
-                parameterNames={seedParameterNames}
-                speciesNames={results?.speciesHeaders ?? []}
-                hasSpeciesData={!!results?.speciesData && results.speciesData.length > 0}
-              />
-            </div>
+            <ErrorBoundary label="tab:time-courses">
+              <div className="min-h-0 shrink-0">
+                <ResultsChart
+                  results={results}
+                  model={model}
+                  isNFsim={simulationMethod === 'nf'}
+                  // PLA outputs stochastic count-style trajectories, so render with SSA chart semantics.
+                  isSSA={simulationMethod === 'ssa' || simulationMethod === 'pla'}
+                  visibleSpecies={visibleSpecies}
+                  onVisibleSpeciesChange={setVisibleSpecies}
+                  expressions={expressions}
+                />
+              </div>
+              <div className="mt-4 shrink-0">
+                <ExpressionInputPanel
+                  expressions={expressions}
+                  onExpressionsChange={handleExpressionsChange}
+                  observableNames={model?.observables?.map((o) => o.name) ?? []}
+                  parameterNames={seedParameterNames}
+                  speciesNames={results?.speciesHeaders ?? []}
+                  hasSpeciesData={!!results?.speciesData && results.speciesData.length > 0}
+                />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -349,12 +352,14 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Green edges with '+' symbols represent activation (one rule produces a substrate for another). Red edges with '-' symbols represent inhibition (one rule consumes a substrate needed by another)."
             />
-            <RegulatoryTab
-              model={model}
-              selectedRuleId={selectedRuleId}
-              onSelectRule={setSelectedRuleId}
-              forceFitTrigger={`${activeTab}:${networkViewMode}:${model?.reactionRules?.length ?? 0}`}
-            />
+            <ErrorBoundary label="tab:regulatory">
+              <RegulatoryTab
+                model={model}
+                selectedRuleId={selectedRuleId}
+                onSelectRule={setSelectedRuleId}
+                forceFitTrigger={`${activeTab}:${networkViewMode}:${model?.reactionRules?.length ?? 0}`}
+              />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -371,7 +376,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Shapes represent molecules, and internal port-dots represent sites. Lines between sites indicate that those two molecules can physically bind to each other."
             />
-            <ContactMapTab model={model} results={results} onSelectRule={setSelectedRuleId} />
+            <ErrorBoundary label="tab:contact-map">
+              <ContactMapTab model={model} results={results} onSelectRule={setSelectedRuleId} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -388,13 +395,15 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The chart tracks observables linked to specific sites ('atoms'). Emerald badges show production, Sky badges show modifications, and Amber badges show consumption."
             />
-            <RulesTab
-              model={model}
-              results={results}
-              selectedRuleId={selectedRuleId}
-              onSelectRule={setSelectedRuleId}
-              simulationMethod={simulationMethod}
-            />
+            <ErrorBoundary label="tab:rules">
+              <RulesTab
+                model={model}
+                results={results}
+                selectedRuleId={selectedRuleId}
+                onSelectRule={setSelectedRuleId}
+                simulationMethod={simulationMethod}
+              />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -411,9 +420,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Based on structural overlap between rule centers (changes) and contexts (requirements), ported from RuleBender's influence graph algorithm."
             />
-            <InfluenceGraphViewer
-              graphData={influenceGraphData}
-            />
+            <ErrorBoundary label="tab:influence">
+              <InfluenceGraphViewer
+                graphData={influenceGraphData}
+              />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -430,9 +441,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The X-axis represents the value of the parameter being scanned (e.g., drug concentration), and the Y-axis shows the resulting state of the system."
             />
-            <div className="flex-1 min-h-0">
-              <ParameterScanTab model={model} />
-            </div>
+            <ErrorBoundary label="tab:parameter-scan">
+              <div className="flex-1 min-h-0">
+                <ParameterScanTab model={model} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -449,13 +462,15 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="A vertical bar chart showing the final equilibrated concentration of every species. Use this to identify relative abundance in the steady-state network."
             />
-            <SteadyStateTab
-              model={model}
-              results={results}
-              onSimulate={onSimulate}
-              onCancelSimulation={onCancelSimulation}
-              isSimulating={isSimulating}
-            />
+            <ErrorBoundary label="tab:steady-state">
+              <SteadyStateTab
+                model={model}
+                results={results}
+                onSimulate={onSimulate}
+                onCancelSimulation={onCancelSimulation}
+                isSimulating={isSimulating}
+              />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -472,9 +487,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The Eigenvalue spectrum shows which directions in parameter space are well-determined. Loading bars for each eigenvector identify which specific parameters contribute to uncertainty."
             />
-            <div className="flex-1 min-h-0">
-              <FIMTab model={model} />
-            </div>
+            <ErrorBoundary label="tab:fim">
+              <div className="flex-1 min-h-0">
+                <FIMTab model={model} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -491,9 +508,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The 'ELBO Convergence' plot tracks the Evidence Lower Bound; as it increases and stabilizes, the model fit improves. The 'Posterior Estimates' chart displays the final estimated values along with their 95% uncertainty bars."
             />
-            <div className="flex-1 min-h-0">
-              <ParameterEstimationTab model={model} />
-            </div>
+            <ErrorBoundary label="tab:parameter-estimation">
+              <div className="flex-1 min-h-0">
+                <ParameterEstimationTab model={model} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -510,9 +529,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Green bars represent species production; Red bars represent consumption. The length of the bar indicates the magnitude of the flux (rate) at the selected time point."
             />
-            <div className="flex-1 min-h-0">
-              <FluxAnalysisTab model={model} results={results} />
-            </div>
+            <ErrorBoundary label="tab:flux-analysis">
+              <div className="flex-1 min-h-0">
+                <FluxAnalysisTab model={model} results={results} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -529,9 +550,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Constraints are evaluated at every time point. If a condition (like A + B == target) is violated anywhere, the specific failure time and reason will be highlighted."
             />
-            <div className="flex-1 min-h-0">
-              <VerificationTab model={model} results={results} />
-            </div>
+            <ErrorBoundary label="tab:verification">
+              <div className="flex-1 min-h-0">
+                <VerificationTab model={model} results={results} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -548,9 +571,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Baseline results are shown as solid lines, while your modified 'What-If' results appear as dashed lines. This makes it easy to spot deviations."
             />
-            <div className="flex-1 min-h-0">
-              <ComparisonPanel model={model} baseResults={results} />
-            </div>
+            <ErrorBoundary label="tab:comparison">
+              <div className="flex-1 min-h-0">
+                <ComparisonPanel model={model} baseResults={results} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -567,7 +592,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Reactant molecules (involved in the change) are shown in color, while context molecules (required but unchanged) are in gray. Icons like 🔗 (bind) and 🌀 (state) denote specific site-level actions."
             />
-            <CartoonTab model={model} selectedRuleId={selectedRuleId} onSelectRule={setSelectedRuleId} />
+            <ErrorBoundary label="tab:cartoon">
+              <CartoonTab model={model} selectedRuleId={selectedRuleId} onSelectRule={setSelectedRuleId} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -584,9 +611,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The similarity map (UMAP) organizes models by their biological motifs. Clusters of models often share similar signaling mechanisms or reaction structures."
             />
-            <div className="flex-1 min-h-0">
-              <ModelExplorerTab onLoadModel={onLoadModel} />
-            </div>
+            <ErrorBoundary label="tab:model-explorer">
+              <div className="flex-1 min-h-0">
+                <ModelExplorerTab onLoadModel={onLoadModel} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -603,7 +632,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The UMAP map on the left shows how different stochastic runs cluster together. Selecting a run displays its specific observable trajectory on the right."
             />
-            <TrajectoryExplorerTab model={model} />
+            <ErrorBoundary label="tab:trajectory-explorer">
+              <TrajectoryExplorerTab model={model} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -620,7 +651,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The preview window shows the exact code that will be generated. Once exported, you can run this in VS Code, Google Colab, or locally."
             />
-            <JupyterExportTab model={model} bnglCode={bnglCode} />
+            <ErrorBoundary label="tab:jupyter-export">
+              <JupyterExportTab model={model} bnglCode={bnglCode} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -637,7 +670,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Nodes are colored by community and sized by PageRank. The degree distribution chart shows connectivity across the network."
             />
-            <NetworkAnalysisTab model={model} />
+            <ErrorBoundary label="tab:network-analysis">
+              <NetworkAnalysisTab model={model} />
+            </ErrorBoundary>
           </div>
         )}
 
@@ -668,9 +703,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Higher bars indicate parameters that dominate the model variance. If Total-order (ST) is significantly higher than First-order (S1), the parameter has strong non-linear interactions with others."
             />
-            <div className="flex-1 min-h-0">
-              <SobolSensitivityTab model={model} />
-            </div>
+            <ErrorBoundary label="tab:sobol-sensitivity">
+              <div className="flex-1 min-h-0">
+                <SobolSensitivityTab model={model} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -687,9 +724,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="A sharp parabolic bowl indicates a well-identified parameter. A flat or shallow curve indicates unidentifiability, where multiple parameter combinations explain the data equally well."
             />
-            <div className="flex-1 min-h-0 overflow-hidden">
-              <ProfileLikelihoodTab model={model} />
-            </div>
+            <ErrorBoundary label="tab:profile-likelihood">
+              <div className="flex-1 min-h-0 overflow-hidden">
+                <ProfileLikelihoodTab model={model} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
@@ -706,9 +745,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="The posterior distribution shows the range of values that are statistically consistent with your data. The narrower the peak, the more certain the inference."
             />
-            <div className="flex-1 min-h-0">
-              <ABCSMCTab model={model} />
-            </div>
+            <ErrorBoundary label="tab:abc-smc">
+              <div className="flex-1 min-h-0">
+                <ABCSMCTab model={model} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
         {activeTab === 17 && (
@@ -724,9 +765,11 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               ]}
               plotDescription="Dots represent individual molecule instances. The simulation handles spatial exclusion and diffusion-limited reactions."
             />
-            <div className="flex-1 min-h-0">
-              <SpatialPanel bnglText={bnglCode || ''} />
-            </div>
+            <ErrorBoundary label="tab:spatial">
+              <div className="flex-1 min-h-0">
+                <SpatialPanel bnglText={bnglCode || ''} />
+              </div>
+            </ErrorBoundary>
           </div>
         )}
 
