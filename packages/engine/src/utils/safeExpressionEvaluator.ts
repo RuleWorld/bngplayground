@@ -112,11 +112,6 @@ const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   sat: (k: number, K: number) => k / (K + k),
   FunctionProduct: (a: number, b: number) => a * b, // BNG2 compatibility
   functionproduct: (a: number, b: number) => a * b, // case-insensitive fallback
-  // BNG2 parity: TFUN(observable_value) returns the observable value in ODE mode.
-  // In Perl, TFUN is used for time-dependent functions; for ODE simulation it simply
-  // returns its first argument (the current observable value).
-  TFUN: (x: number) => x,
-  tfun: (x: number) => x,
   sign: Math.sign ?? ((x: number) => (x > 0 ? 1 : x < 0 ? -1 : 0)),
   trunc: Math.trunc ?? ((x: number) => (x < 0 ? Math.ceil(x) : Math.floor(x))),
   hypot: Math.hypot ?? ((...xs: number[]) => Math.sqrt(xs.reduce((s, v) => s + v * v, 0))),

@@ -236,7 +236,7 @@ FLOAT
     : DIGIT+ '.' DIGIT+ EXPONENT_ALL?
     | '.' DIGIT+ EXPONENT_ALL?
     | DIGIT+ EXPONENT_ALL
-    | DIGIT+ '.' { !(/^[a-zA-Z_]$/.test(String.fromCharCode(this._input.LA(1)))) }?
+    | DIGIT+ '.' ~[a-zA-Z_]
     ;
 INT: DIGIT+;
 STRING: (LETTER | '_') (LETTER | DIGIT | '_')*;

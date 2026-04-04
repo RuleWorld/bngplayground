@@ -12,7 +12,7 @@ const assessModelMaturityArgsSchema = z.object({
         date: z.string().optional().describe('Date of validation'),
         fit_quality: z.enum(['good', 'moderate', 'poor']).optional().describe('Quality of fit'),
     })).optional().describe('History of experimental validations'),
-    parameter_sources: z.record(z.object({
+    parameter_sources: z.record(z.string(), z.object({
         source: z.string().describe('Source: "literature", "fit", "assumption", "measurement"'),
         citation: z.string().optional().describe('Citation if from literature'),
         value: z.number().describe('Parameter value'),

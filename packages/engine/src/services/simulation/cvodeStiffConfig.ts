@@ -246,7 +246,7 @@ export function getOptimalCVODEConfig(profile: StiffnessProfile): CVODEStiffConf
   switch (profile.category) {
     case 'mild':
       config.useAdams = true; // Adams-Moulton is superior for non-stiff systems
-      config.maxJacobianAge = 300; // Mild stiffness: Jacobian changes very slowly
+      config.maxJacobianAge = 0; // Jacobian skipped: age setting not used
       config.skipJacobian = true; // Non-stiff: skip Jacobian, use explicit methods
       config.rationale = 'Mild stiffness: Adams-Moulton solver enabled, Jacobian skipped for explicit methods';
       break;
