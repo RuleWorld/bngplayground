@@ -1,4 +1,4 @@
-// Generated from src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
+// Generated from packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
 import { ParseTreeListener } from "antlr4ts/tree/ParseTreeListener";
@@ -28,10 +28,12 @@ import { Seed_species_defContext } from "./BNGParser";
 import { Species_defContext } from "./BNGParser";
 import { Molecule_compartmentContext } from "./BNGParser";
 import { Molecule_patternContext } from "./BNGParser";
+import { Scope_prefixContext } from "./BNGParser";
 import { Pattern_bond_wildcardContext } from "./BNGParser";
 import { Molecule_tagContext } from "./BNGParser";
 import { Component_pattern_listContext } from "./BNGParser";
 import { Component_patternContext } from "./BNGParser";
+import { Component_labelContext } from "./BNGParser";
 import { State_valueContext } from "./BNGParser";
 import { Bond_specContext } from "./BNGParser";
 import { Bond_idContext } from "./BNGParser";
@@ -376,6 +378,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	exitMolecule_pattern?: (ctx: Molecule_patternContext) => void;
 
 	/**
+	 * Enter a parse tree produced by `BNGParser.scope_prefix`.
+	 * @param ctx the parse tree
+	 */
+	enterScope_prefix?: (ctx: Scope_prefixContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.scope_prefix`.
+	 * @param ctx the parse tree
+	 */
+	exitScope_prefix?: (ctx: Scope_prefixContext) => void;
+
+	/**
 	 * Enter a parse tree produced by `BNGParser.pattern_bond_wildcard`.
 	 * @param ctx the parse tree
 	 */
@@ -418,6 +431,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitComponent_pattern?: (ctx: Component_patternContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.component_label`.
+	 * @param ctx the parse tree
+	 */
+	enterComponent_label?: (ctx: Component_labelContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.component_label`.
+	 * @param ctx the parse tree
+	 */
+	exitComponent_label?: (ctx: Component_labelContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.state_value`.

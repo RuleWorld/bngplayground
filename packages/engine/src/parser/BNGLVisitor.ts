@@ -1470,8 +1470,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       const wildcardCtx = mp.pattern_bond_wildcard();
       if (wildcardCtx) molStr += wildcardCtx.text;
 
-      const tagCtx = mp.molecule_tag();
-      if (tagCtx) molStr += tagCtx.text;
+      const tagCtxList = mp.molecule_tag();
+      if (tagCtxList && tagCtxList.length > 0) {
+        for (const tagCtx of tagCtxList) molStr += tagCtx.text;
+      }
 
       const attrCtx = (mp as any).molecule_attributes?.();
       if (attrCtx) molStr += attrCtx.text;
