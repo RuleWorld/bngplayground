@@ -1,13 +1,16 @@
 import { fitParameters, pruneModel, simulate, loadEvaluator } from '@bngplayground/engine';
+import { z } from 'zod';
 import type { ParamBounds, ExperimentalDataPoint, RegularizationConfig } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { reduceModelArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
+type ReduceModelArgs = z.infer<typeof reduceModelArgsSchema>;
+
 export async function handleReduceModel(args: ToolArgs): Promise<ToolResult<any>> {
     try {
-        const parsedArgs = parseArgs('reduce_model', reduceModelArgsSchema, args);
+        const parsedArgs = parseArgs('reduce_model', reduceModelArgsSchema, args) as ReduceModelArgs;
         const model = parseModelOrThrow(parsedArgs.code);
         const expandedModel = await expandModel(model);
 

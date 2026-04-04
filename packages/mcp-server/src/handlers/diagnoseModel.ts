@@ -14,14 +14,14 @@ const diagnoseModelUnifiedArgsSchema = diagnoseModelArgsSchema.extend({
     include_fix_suggestions: z.boolean().default(false).describe('Include structured fix suggestions.'),
     include_residuals: z.boolean().default(false).describe('Include residual analysis when experimental_data is provided.'),
     include_maturity: z.boolean().default(false).describe('Include model maturity scoring.'),
-    residual_parameters: z.record(z.number()).optional().describe('Optional parameter overrides for residual analysis.'),
+    residual_parameters: z.record(z.string(), z.number()).optional().describe('Optional parameter overrides for residual analysis.'),
     validation_history: z.array(z.object({
         dataset: z.string(),
         source: z.string(),
         date: z.string().optional(),
         fit_quality: z.enum(['good', 'moderate', 'poor']).optional(),
     })).optional(),
-    parameter_sources: z.record(z.object({
+    parameter_sources: z.record(z.string(), z.object({
         source: z.string(),
         citation: z.string().optional(),
         value: z.number(),
