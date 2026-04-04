@@ -75,7 +75,7 @@ export const diagnoseModelArgsSchema = z.object({
     n_bootstrap: positiveInt.optional(),
     max_parameters: positiveInt.optional(),
     method: z.enum(simulationMethods).optional(),
-    t_end: finiteNumber.nonnegative().optional(),
+    t_end: finiteNumber.positive().optional(),
     n_steps: positiveInt.optional(),
     experimental_data: z.array(z.object({
         time: z.number(),
