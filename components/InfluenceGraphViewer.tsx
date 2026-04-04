@@ -6,6 +6,7 @@ import fcose from 'cytoscape-fcose';
 import type { InfluenceGraphData } from '../services/visualization/influenceGraph';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
+import { downloadTextFile } from '../src/utils/download';
 
 cytoscape.use(dagre);
 cytoscape.use(fcose);
@@ -389,10 +390,7 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
               return `  <edge id="e${i}" source="n${e.sourceRuleIndex}" target="n${e.targetRuleIndex}"><data key="type">${type}</data></edge>`;
             }).join('\n');
             const graphml = `<?xml version="1.0" encoding="UTF-8"?>\n<graphml xmlns="http://graphml.graphdrawing.org/graphml">\n  <key id="label" for="node" attr.name="label" attr.type="string"/>\n  <key id="type" for="edge" attr.name="type" attr.type="string"/>\n  <graph id="influence" edgedefault="directed">\n${nodes}\n${edges}\n  </graph>\n</graphml>`;
-            const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });
-            const url = URL.createObjectURL(blob);
-            const a = document.createElement('a'); a.href = url; a.download = 'influence_graph.graphml'; a.click();
-            URL.revokeObjectURL(url);
+            downloadTextFile(graphml, 'influence_graph.graphml', 'application/xml');
           }} className="text-xs h-6 px-2" title="Export for yED Graph Editor">yED</Button>
           <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
           <div className="flex items-center gap-2 ml-auto text-[10px] text-slate-400 uppercase tracking-tighter">

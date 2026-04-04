@@ -10,6 +10,7 @@ import { DataTable } from '../ui/DataTable';
 import { bnglService } from '../../services/bnglService';
 import { CHART_COLORS } from '../../src/utils/chartColors';
 import HeatmapChart from '../HeatmapChart';
+import { downloadTextFile } from '../../src/utils/download';
 
 
 // reusable helpers for parameter scanning logic and formatting
@@ -806,18 +807,6 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
     };
   }, [model]);
 
-  const downloadFile = (content: string, fileName: string, mime = 'text/csv') => {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
-
   const handleExportCSV = () => {
     // Long-form CSV: param1_name, param1_value, [param2_name, param2_value], observable_name, value
     if (!oneDResult && !twoDResult) return;
@@ -846,13 +835,13 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
       });
     }
 
-    downloadFile(rows.join('\n'), 'parameter_scan.csv', 'text/csv');
+    downloadTextFile(rows.join('\n'), 'parameter_scan.csv', 'text/csv');
   };
 
   const handleExportJSON = () => {
     const exportObj = oneDResult ?? twoDResult ?? null;
     if (!exportObj) return;
-    downloadFile(JSON.stringify(exportObj, null, 2), 'parameter_scan.json', 'application/json');
+    downloadTextFile(JSON.stringify(exportObj, null, 2), 'parameter_scan.json', 'application/json');
   };
 
   const guardMessage = !model

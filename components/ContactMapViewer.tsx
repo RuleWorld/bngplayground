@@ -9,6 +9,7 @@ import type { ContactMapSnapshot } from '../services/visualization/dynamicContac
 import { applyCytoscapeDynamicOverlay, dynamicOverlayStyles } from '../services/visualization/applyCytoscapeDynamicOverlay';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';
+import { downloadTextFile } from '../src/utils/download';
 
 // Register layouts
 cytoscape.use(dagre);
@@ -656,9 +657,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       if (sourceId && targetId) graphml += `    <edge source="${sourceId}" target="${targetId}">\n      <data key="d1">\n        <y:PolyLineEdge>\n          <y:LineStyle color="#000000" type="line" width="1.0"/>\n          <y:Arrows source="none" target="none"/>\n        </y:PolyLineEdge>\n      </data>\n    </edge>\n`;
     });
     graphml += `  </graph>\n</graphml>`;
-    const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a'); a.href = url; a.download = 'contact_map.graphml'; a.click();
+    downloadTextFile(graphml, 'contact_map.graphml', 'application/xml');
   };
 
   return (
