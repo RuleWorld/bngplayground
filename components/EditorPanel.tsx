@@ -68,6 +68,9 @@ function formatBNGLMini(code: string): string {
 import MonacoEditor from './MonacoEditor';
 import { BNGLModel, SimulationOptions, ValidationWarning, EditorMarker } from '../types';
 import { getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
+import { createDebugLogger } from '../src/utils/debug';
+
+const debug = createDebugLogger('EditorPanel');
 
 interface EditorPanelProps {
   code: string;
@@ -163,7 +166,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
     const reader = new FileReader();
     reader.onload = (e) => {
       const newCode = e.target?.result as string;
-      console.log('[EditorPanel] Local BNGL file loaded', {
+      debug('Local BNGL file loaded', {
         fileName: file.name,
         length: newCode?.length ?? 0,
         firstLine: (newCode || '').split('\n')[0] || '',
@@ -181,7 +184,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   };
 
   const handleLoadExample = (exampleCode: string, modelName?: string, modelId?: string) => {
-    console.log('[EditorPanel] handleLoadExample', {
+    debug('handleLoadExample', {
       modelId,
       modelName,
       length: exampleCode.length,

@@ -2,6 +2,9 @@
 // @ts-nocheck
 import React, { useRef, useEffect } from 'react';
 import { EditorMarker } from '../types';
+import { createDebugLogger } from '../src/utils/debug';
+
+const debug = createDebugLogger('MonacoEditor');
 
 interface MonacoEditorProps {
   value: string;
@@ -100,7 +103,7 @@ export const MonacoEditor: React.FC<MonacoEditorProps> = ({
   useEffect(() => {
     valueRef.current = value;
     if (DEBUG_MONACO_SYNC) {
-      console.log('[MonacoEditor] prop:value changed', {
+      debug('prop:value changed', {
         length: value.length,
         firstLine: previewFirstLine(value),
       });
@@ -311,7 +314,7 @@ useEffect(() => {
       });
 
       if (DEBUG_MONACO_SYNC) {
-        console.log('[MonacoEditor] editor created', {
+        debug('editor created', {
           initialLength: valueRef.current.length,
           initialFirstLine: previewFirstLine(valueRef.current),
         });
@@ -400,7 +403,7 @@ useEffect(() => {
       contentListener = editor.onDidChangeModelContent(() => {
         if (DEBUG_MONACO_SYNC) {
           const current = editor.getValue();
-          console.log('[MonacoEditor] onDidChangeModelContent', {
+          debug('onDidChangeModelContent', {
             length: current.length,
             firstLine: previewFirstLine(current),
           });
@@ -454,7 +457,7 @@ useEffect(() => {
   const editor = editorInstanceRef.current;
   if (!editor) {
     if (DEBUG_MONACO_SYNC) {
-      console.log('[MonacoEditor] sync skipped: editor not ready', {
+      debug('sync skipped: editor not ready', {
         incomingLength: value.length,
         incomingFirstLine: previewFirstLine(value),
       });
@@ -465,7 +468,7 @@ useEffect(() => {
   const currentValue = editor.getValue();
   if (currentValue === value) {
     if (DEBUG_MONACO_SYNC) {
-      console.log('[MonacoEditor] sync no-op: editor already matches prop', {
+      debug('sync no-op: editor already matches prop', {
         length: value.length,
         firstLine: previewFirstLine(value),
       });
@@ -485,7 +488,7 @@ useEffect(() => {
   }
 
   if (DEBUG_MONACO_SYNC) {
-    console.log('[MonacoEditor] applying external sync', {
+    debug('applying external sync', {
       editorLength: currentValue.length,
       propLength: value.length,
       editorFirstLine: previewFirstLine(currentValue),
@@ -502,7 +505,7 @@ useEffect(() => {
   const after = editor.getValue();
   lastSyncedValueRef.current = after;
   if (DEBUG_MONACO_SYNC) {
-    console.log('[MonacoEditor] sync applied result', {
+    debug('sync applied result', {
       afterLength: after.length,
       afterFirstLine: previewFirstLine(after),
       matchesProp: after === value,

@@ -9,6 +9,9 @@ import { Tabs, TabList, Tab, TabPanels, TabPanel } from './ui/Tabs';
 import { getManifestDebugInfo, loadModelCode } from '../services/modelLoader';
 import { fetchBioModelsSbml } from '../services/bioModelsImport';
 import { loadModelCatalog, type CatalogCategory, type CatalogExample } from '../services/modelCatalog';
+import { createDebugLogger } from '../src/utils/debug';
+
+const debug = createDebugLogger('ExampleGalleryModal');
 
 // Helper to convert model names to Title Case
 // Handles special acronyms like MAPK, EGFR, etc.
@@ -55,9 +58,9 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
 
   // Debug: Log model counts in dev mode
   if ((import.meta as any)?.env?.DEV) {
-    console.log('[ExampleGalleryModal] Total RuleHub gallery models:', allModels.length);
-    console.log('[ExampleGalleryModal] Models after category filtering:', allModels.length);
-    console.log('[ExampleGalleryModal] Total category count:', categories.reduce((sum, cat) => sum + cat.models.length, 0));
+    debug('Total RuleHub gallery models:', allModels.length);
+    debug('Models after category filtering:', allModels.length);
+    debug('Total category count:', categories.reduce((sum, cat) => sum + cat.models.length, 0));
   }
 
   const filteredExamples = useMemo(() => {
@@ -284,7 +287,7 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
                         try {
                           // Use embedded code if present (fastest), otherwise fetch
                           const code = example.code ?? await loadModelCode(example.id);
-                          console.log('[ExampleGalleryModal] Load Model clicked:', {
+                          debug('Load Model clicked:', {
                             id: example.id,
                             name: example.name,
                             codeLength: code.length,
