@@ -6,6 +6,7 @@
  */
 
 import type { BNGLModel } from '../../types';
+import { escapeXml } from '../../utils/xmlUtils';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -36,15 +37,6 @@ const KISAO_MAP: Record<string, string> = {
 };
 
 // ── XML Helpers ──────────────────────────────────────────────────────
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
 
 function xmlId(name: string): string {
   // Make a valid XML ID from an observable name

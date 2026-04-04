@@ -38,6 +38,7 @@ function generateReferenceGdatWithBng2(modelPath: string): string {
       timeout: 2 * 60 * 1000,
       env: {
         ...process.env,
+        ...(bng2Paths.bngRoot ? { BNGPATH: bng2Paths.bngRoot } : {}),
         ...(bng2Paths.perl5lib ? { PERL5LIB: process.env.PERL5LIB ?? bng2Paths.perl5lib } : {}),
       },
     });

@@ -2,6 +2,7 @@ import type { BNGLModel } from '../../types';
 import type { ExpandedNetwork } from '../../interfaces/SimulationEngine';
 import { inferReactionSBO, inferRateLawSBO, SBO } from './SBOAnnotations';
 import { generateMIRIAMBlock, suggestMIRIAMAnnotations } from './MIRIAMAnnotation';
+import { escapeXml } from '../../utils/xmlUtils';
 
 /**
  * Configuration options dictating SBML file generation behavior.
@@ -39,7 +40,7 @@ export class SBMLWriter {
     const sboAttr = (term: string) => options.includeSBO ? ` sboTerm="${term}"` : '';
 
     const compartmentsXml = (model.compartments || [])
-      .map(c => `      <compartment id="${this.escapeXml(c.name)}" size="${c.size || 1}" constant="true"${sboAttr('SBO:0000290')}/>`)
+      .map(c => `      <compartment id="${escapeXml(c.name)}" size="${c.size || 1}" constant="true"${sboAttr('SBO:0000290')}/>`)
       .join('\n');
 
     const speciesList = network ? network.species : model.species || [];
@@ -52,18 +53,18 @@ export class SBMLWriter {
         
         const annotations = options.includeAnnotations ? generateMIRIAMBlock(cleanId, suggestMIRIAMAnnotations(name)) : '';
         
-        return `      <species id="${cleanId}" name="${this.escapeXml(name)}" compartment="${model.compartments?.[0]?.name || 'default'}" initialConcentration="${s.initialConcentration || 0}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"${sboAttr(sbo)}>\n${annotations}\n      </species>`;
+        return `      <species id="${cleanId}" name="${escapeXml(name)}" compartment="${model.compartments?.[0]?.name || 'default'}" initialConcentration="${s.initialConcentration || 0}" hasOnlySubstanceUnits="false" boundaryCondition="false" constant="false"${sboAttr(sbo)}>\n${annotations}\n      </species>`;
     }).join('\n');
 
     const parametersXml = Object.entries(model.parameters || {})
-      .map(([name, val]) => `      <parameter id="${this.toSBMLId(name)}" name="${this.escapeXml(name)}" value="${val}" constant="true"${sboAttr('SBO:0000002')}/>`)
+      .map(([name, val]) => `      <parameter id="${this.toSBMLId(name)}" name="${escapeXml(name)}" value="${val}" constant="true"${sboAttr('SBO:0000002')}/>`)
       .join('\n');
 
     const reactionsXml = this.generateReactions(model, network, options);
 
     return `<?xml version="1.0" encoding="UTF-8"?>
 <sbml xmlns="http://www.sbml.org/sbml/level3/version2/core" level="3" version="2">
-  <model id="${this.toSBMLId(id)}" name="${this.escapeXml(id)}">
+  <model id="${this.toSBMLId(id)}" name="${escapeXml(id)}">
     <listOfCompartments>
 ${compartmentsXml || '      <compartment id="default" size="1" constant="true" sboTerm="SBO:0000290"/>'}
     </listOfCompartments>
@@ -128,14 +129,6 @@ ${products}
     return name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^([0-9])/, '_$1');
   }
 
-  private static escapeXml(value: string): string {
-    return value
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&apos;');
-  }
 
   private static isNumber(s: string): boolean {
     return !isNaN(parseFloat(s)) && isFinite(Number(s));

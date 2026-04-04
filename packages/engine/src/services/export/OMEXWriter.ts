@@ -8,6 +8,7 @@
 import type { BNGLModel } from '../../types';
 import { generateSedML, SedMLExportOptions } from './SedMLWriter';
 import { createZip, ZipEntry } from '../../utils/miniZip';
+import { escapeXml } from '../../utils/xmlUtils';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -31,14 +32,6 @@ export interface OMEXExportOptions {
 }
 
 // ── XML Helpers ──────────────────────────────────────────────────────
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
 
 function generateManifest(hasMetadata: boolean): string {
   const entries = [

@@ -82,6 +82,21 @@ export function resolveBNG2Paths(): BNG2Paths {
     }
   }
 
+  // Check for sibling bionetgen-cpp/bng2 directory (common local dev layout)
+  if (!result.bngRoot) {
+    const siblingCandidates = [
+      resolve('../bionetgen-cpp/bng2'),
+      resolve('../../bionetgen-cpp/bng2'),
+      resolve('../bng2'),
+    ];
+    for (const candidate of siblingCandidates) {
+      if (existsSync(join(candidate, 'BNG2.pl'))) {
+        result.bngRoot = candidate;
+        break;
+      }
+    }
+  }
+
   if (result.bngRoot) {
     if (!result.bng2pl) {
       const bng2pl = join(result.bngRoot, 'BNG2.pl');
@@ -92,8 +107,16 @@ export function resolveBNG2Paths(): BNG2Paths {
       if (existsSync(nfsim)) result.nfsim = nfsim;
     }
     if (!result.runNetwork) {
-      const runNetwork = join(result.bngRoot, 'bin', `run_network${ext}`);
-      if (existsSync(runNetwork)) result.runNetwork = runNetwork;
+      const runNetworkCandidates = [
+        join(result.bngRoot, 'bin', `run_network${ext}`),
+        join(result.bngRoot, 'Network3', 'bin', `run_network${ext}`),
+      ];
+      for (const candidate of runNetworkCandidates) {
+        if (existsSync(candidate)) {
+          result.runNetwork = candidate;
+          break;
+        }
+      }
     }
     const perl2 = join(result.bngRoot, 'Perl2');
     if (existsSync(perl2)) {

@@ -209,7 +209,7 @@ export { bisectBehavior, compareVersions } from './services/versioning/Behaviora
 export type { BehavioralProperty, BisectionResult } from './services/versioning/BehavioralBisection';
 
 // ── Differentiable Simulation ───────────────────────────────────────
-export { forwardSensitivity, adjointSensitivity, computeObjectiveGradient } from './services/analysis/DifferentiableSolver';
+export { forwardSensitivity, adjointSensitivity, computeObjectiveGradient, setCVodeSensModule } from './services/analysis/DifferentiableSolver';
 export type { SensitivityConfig, SensitivityResult, GradientResult } from './services/analysis/DifferentiableSolver';
 export { lbfgsOptimize, adamOptimize, trustRegionOptimize } from './services/analysis/GradientOptimizer';
 export type { GradientOptimizerConfig, OptimizationResult } from './services/analysis/GradientOptimizer';

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef } from 'react';
+import React, { useState, useCallback, useRef, useEffect } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
@@ -8,6 +8,7 @@ import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LA
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
+import type { MultiscaleWorkerRequest, MultiscaleWorkerResponse } from '../../services/multiscaleWorker';
 
 interface MultiscaleTabProps {
   bnglCode: string;
@@ -61,42 +62,93 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
   const [currentSnapshotIdx, setCurrentSnapshotIdx] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [populationTimeSeries, setPopulationTimeSeries] = useState<any[]>([]);
+  const [progress, setProgress] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const workerRef = useRef<Worker | null>(null);
+
+  // Clean up worker on unmount
+  useEffect(() => {
+    return () => {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
+    };
+  }, []);
+
+  const handleCancel = useCallback(() => {
+    if (workerRef.current) {
+      const msg: MultiscaleWorkerRequest = { type: 'cancel' };
+      workerRef.current.postMessage(msg);
+    }
+  }, []);
 
   const handleRun = useCallback(async () => {
     setIsRunning(true);
     setError(null);
     setSnapshots([]);
     setPopulationTimeSeries([]);
+    setProgress(0);
+
+    // Terminate any existing worker
+    if (workerRef.current) {
+      workerRef.current.terminate();
+      workerRef.current = null;
+    }
 
     try {
-      const engine = await import('@bngplayground/engine');
       const parsed = JSON.parse(definition);
 
-      if (engine.parseMultiscaleModel && engine.multiscaleSimulation) {
-        const config = engine.parseMultiscaleModel(parsed);
-        const result = await engine.multiscaleSimulation(config, (fraction: number) => {
-          // Progress callback
-        });
+      const worker = new Worker(
+        new URL('../../services/multiscaleWorker.ts', import.meta.url),
+        { type: 'module' }
+      );
+      workerRef.current = worker;
 
-        setSnapshots(result.snapshots);
-        if (result.snapshots.length > 0) {
-          setCurrentSnapshotIdx(result.snapshots.length - 1);
-        }
+      worker.onmessage = (event: MessageEvent<MultiscaleWorkerResponse>) => {
+        const msg = event.data;
 
-        // Build population time series for chart
-        const tsData = result.populationTimeSeries.time.map((t: number, i: number) => {
-          const point: Record<string, number> = { time: t };
-          for (const [type, counts] of Object.entries(result.populationTimeSeries.counts)) {
-            point[type] = (counts as number[])[i];
+        switch (msg.type) {
+          case 'progress':
+            setProgress(msg.fraction);
+            break;
+
+          case 'complete': {
+            const result = msg.result;
+            setSnapshots(result.snapshots);
+            if (result.snapshots.length > 0) {
+              setCurrentSnapshotIdx(result.snapshots.length - 1);
+            }
+            // Build population time series for chart
+            const tsData = result.populationTimeSeries.time.map((t: number, i: number) => {
+              const point: Record<string, number> = { time: t };
+              for (const [type, counts] of Object.entries(result.populationTimeSeries.counts)) {
+                point[type] = (counts as number[])[i];
+              }
+              return point;
+            });
+            setPopulationTimeSeries(tsData);
+            setIsRunning(false);
+            setProgress(1);
+            break;
           }
-          return point;
-        });
-        setPopulationTimeSeries(tsData);
-      }
+
+          case 'error':
+            setError(msg.message);
+            setIsRunning(false);
+            break;
+        }
+      };
+
+      worker.onerror = (err) => {
+        setError(err.message || 'Worker error');
+        setIsRunning(false);
+      };
+
+      const msg: MultiscaleWorkerRequest = { type: 'run_from_definition', definition: parsed };
+      worker.postMessage(msg);
     } catch (err: any) {
-      setError(err.message || 'Simulation failed');
-    } finally {
+      setError(err.message || 'Failed to start simulation');
       setIsRunning(false);
     }
   }, [definition]);
@@ -191,9 +243,14 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
           <div className="flex gap-2 mt-2">
             <Button onClick={handleRun} disabled={isRunning}>
               {isRunning && <LoadingSpinner className="w-3 h-3 mr-1" />}
-              {isRunning ? 'Running...' : 'Run Simulation'}
+              {isRunning ? `Running (${Math.round(progress * 100)}%)...` : 'Run Simulation'}
             </Button>
-            <Button variant="secondary" onClick={() => setDefinition(EXAMPLE_DEFINITION)}>
+            {isRunning && (
+              <Button variant="secondary" onClick={handleCancel}>
+                Cancel
+              </Button>
+            )}
+            <Button variant="secondary" onClick={() => setDefinition(EXAMPLE_DEFINITION)} disabled={isRunning}>
               Reset
             </Button>
           </div>

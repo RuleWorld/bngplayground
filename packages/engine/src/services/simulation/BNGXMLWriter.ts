@@ -1,6 +1,7 @@
 import type { BNGLModel } from '../../types';
 import { BNGLParser } from '../graph/core/BNGLParser';
 import type { SpeciesGraph } from '../graph/core/SpeciesGraph';
+import { escapeXml } from '../../utils/xmlUtils';
 
 export interface BNGXMLValidationIssue {
   message: string;
@@ -11,14 +12,6 @@ export interface BNGXMLValidationResult {
   errors: BNGXMLValidationIssue[];
   warnings: BNGXMLValidationIssue[];
 }
-
-const escapeXml = (value: string): string =>
-  value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
 
 const normalizeObservableType = (value?: string): string => {
   const raw = String(value ?? 'Molecules');
@@ -126,7 +119,10 @@ export class BNGXMLWriter {
       .join('');
 
     const compartmentsXml = compartments
-      .map((c) => `      <Compartment id="${escapeXml(c.name)}" size="${escapeXml(String(c.size))}" dimension="${escapeXml(String(c.dimension))}"/>\n`)
+      .map((c) => {
+        const outsideAttr = c.parent ? ` outside="${escapeXml(c.parent)}"` : '';
+        return `      <compartment id="${escapeXml(c.name)}" spatialDimensions="${escapeXml(String(c.dimension))}" size="${escapeXml(String(c.size))}"${outsideAttr}/>\n`;
+      })
       .join('');
 
     const speciesXml = species
@@ -223,7 +219,8 @@ export class BNGXMLWriter {
           }
 
           const { mapXml, operationsXml } = this.buildRuleOperations(reactantPatternData, productPatternData, {
-            deleteMolecules: Boolean(r.deleteMolecules)
+            deleteMolecules: Boolean(r.deleteMolecules),
+            moveConnected: Boolean(r.moveConnected)
           });
 
           const rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
@@ -317,6 +314,8 @@ export class BNGXMLWriter {
       })
       .join('');
 
+    const energyPatternsXml = this.writeEnergyPatterns(model, moleculeTypeDefs);
+
     return `<?xml version="1.0" encoding="UTF-8"?>\n` +
       `<sbml xmlns="http://www.sbml.org/sbml/level2" level="2" version="1">\n` +
       `  <model id="${modelId}">\n` +
@@ -327,6 +326,7 @@ export class BNGXMLWriter {
       `    <ListOfReactionRules>\n${reactionRulesXml}    </ListOfReactionRules>\n` +
       `    <ListOfObservables>\n${observablesXml}    </ListOfObservables>\n` +
       `    <ListOfFunctions>\n${functionsXml}    </ListOfFunctions>\n` +
+      energyPatternsXml +
       `  </model>\n` +
       `</sbml>`;
   }
@@ -348,6 +348,32 @@ export class BNGXMLWriter {
     }
 
     return { valid: errors.length === 0, errors, warnings };
+  }
+
+  private static writeEnergyPatterns(
+    model: BNGLModel,
+    moleculeTypeDefs: Map<string, Map<string, Set<string>>>
+  ): string {
+    const energyPatterns = model.energyPatterns || [];
+    if (energyPatterns.length === 0) return '';
+
+    const items = energyPatterns
+      .map((ep, idx) => {
+        const epId = `EP${idx + 1}`;
+        const patternId = `${epId}_P1`;
+        const graph = BNGLParser.parseSpeciesGraph(ep.pattern);
+        const { moleculesXml, bondsXml } = this.serializeMolecules(graph, patternId, moleculeTypeDefs, true);
+
+        return `      <EnergyPattern id="${epId}" expression="${escapeXml(ep.expression)}">\n` +
+          `        <Pattern id="${patternId}">\n` +
+          `          ${moleculesXml}\n` +
+          `          ${bondsXml}\n` +
+          `        </Pattern>\n` +
+          `      </EnergyPattern>\n`;
+      })
+      .join('');
+
+    return `    <ListOfEnergyPatterns>\n${items}    </ListOfEnergyPatterns>\n`;
   }
 
   private static inferMoleculeTypes(model: BNGLModel): Map<string, Map<string, Set<string>>> {
@@ -487,7 +513,7 @@ export class BNGXMLWriter {
       moleculeIdMap: Map<number, string>;
       componentIdMap: Map<string, string>;
     }>,
-    options: { deleteMolecules?: boolean } = {}
+    options: { deleteMolecules?: boolean; moveConnected?: boolean } = {}
   ): { mapXml: string; operationsXml: string } {
     type MolRef = {
       patternIdx: number;
@@ -779,7 +805,8 @@ export class BNGXMLWriter {
           if (reactCompartment !== prodCompartment && prodCompartment) {
             const molId = pattern.moleculeIdMap.get(molIdx);
             if (molId) {
-              operations.push(`<ChangeCompartment id="${molId}" destination="${escapeXml(prodCompartment)}"/>`);
+              const moveConnectedAttr = options.moveConnected ? ' moveConnected="1"' : '';
+              operations.push(`<ChangeCompartment id="${molId}" destination="${escapeXml(prodCompartment)}"${moveConnectedAttr}/>`);
             }
           }
         });

@@ -1,3 +1,5 @@
+import { escapeXml } from '../../utils/xmlUtils';
+
 /**
  * MIRIAMAnnotation.ts — MIRIAM annotation helper for SBML enrichment.
  *
@@ -363,16 +365,6 @@ function inferGOAnnotations(components: string[]): string[] {
     }
   }
   return goTerms;
-}
-
-// ── XML ──────────────────────────────────────────────────────────────
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
 }
 
 /**

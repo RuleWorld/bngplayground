@@ -4,6 +4,11 @@
  *
  * Provides forward sensitivity, adjoint gradient, and parameter-estimation
  * gradient (sum-of-squared-residuals) computations.
+ *
+ * When the CVODE WASM module is available and has been compiled with CVODES
+ * support (sens_init_forward etc.), this module uses exact forward sensitivities
+ * at ~2-3x the cost of a single ODE solve. Otherwise it falls back to central
+ * finite differences (N+1 solves per parameter).
  */
 
 // ── Interfaces ──────────────────────────────────────────────────────
@@ -43,19 +48,51 @@ export interface GradientResult {
   method: 'adjoint' | 'forward' | 'finite_difference';
 }
 
-// ── CVODES WASM availability check ──────────────────────────────────
+// ── CVODES WASM module interface ────────────────────────────────────
 
-let cvodesModule: unknown = null;
+/**
+ * Interface for the CVODE WASM module with CVODES sensitivity extensions.
+ * These functions map 1:1 to the C exports in cvode_wrapper.c.
+ */
+interface CVodeSensModule {
+  _sens_init_forward(neq: number, Ns: number, t0: number,
+    y0Ptr: number, pPtr: number,
+    rtol: number, atol: number, maxSteps: number): number;
+  _sens_solve_step(mem: number, tout: number, tretPtr: number): number;
+  _sens_get_y(mem: number, destPtr: number): void;
+  _sens_get_s(mem: number, is: number, destPtr: number): void;
+  _sens_get_all(mem: number, destPtr: number): void;
+  _sens_destroy(mem: number): void;
+  _malloc(size: number): number;
+  _free(ptr: number): void;
+  HEAPF64: Float64Array;
+}
 
-/** Attempt to load the CVODES WASM module if it exists. */
-function getCvodesModule(): unknown {
-  if (cvodesModule !== null) return cvodesModule;
+/** Cached reference to the CVODE WASM module (set externally). */
+let cvodesModule: CVodeSensModule | null = null;
+
+/**
+ * Register the CVODE WASM module for use by the sensitivity solver.
+ * Called by ODESolver or application init code after loading the WASM.
+ * The module must have been compiled with CVODES support (sens_* exports).
+ */
+export function setCVodeSensModule(mod: unknown): void {
+  // Verify the module has sensitivity exports
+  const m = mod as Record<string, unknown>;
+  if (m && typeof m._sens_init_forward === 'function') {
+    cvodesModule = mod as CVodeSensModule;
+  }
+}
+
+/** Check if CVODES WASM sensitivity is available. */
+function getCvodesModule(): CVodeSensModule | null {
+  if (cvodesModule) return cvodesModule;
+  // Also check globalThis for backward compatibility
   try {
-    // The CVODES WASM module would be provided at runtime via globalThis
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const g = globalThis as any;
-    if (g.__CVODES_WASM && typeof g.__CVODES_WASM.forwardSensitivity === 'function') {
-      cvodesModule = g.__CVODES_WASM;
+    if (g.__CVODES_WASM && typeof g.__CVODES_WASM._sens_init_forward === 'function') {
+      cvodesModule = g.__CVODES_WASM as CVodeSensModule;
       return cvodesModule;
     }
   } catch {
@@ -118,42 +155,121 @@ function integrateRK4(
   return { time, states };
 }
 
+// ── CVODES WASM forward sensitivity integration ─────────────────────
+
+/**
+ * Run forward sensitivity analysis using the CVODES WASM module.
+ * Returns null if WASM is not available or fails.
+ */
+function cvodesForwardSensitivity(config: SensitivityConfig): SensitivityResult | null {
+  const mod = getCvodesModule();
+  if (!mod) return null;
+
+  const { nSpecies, nParameters, parameterValues, initialState, tSpan, nOutputPoints } = config;
+  const rtol = config.tolerances?.rtol ?? 1e-8;
+  const atol = config.tolerances?.atol ?? 1e-10;
+  const nPts = nOutputPoints;
+
+  // Allocate WASM heap memory
+  const y0Ptr = mod._malloc(nSpecies * 8);
+  const pPtr = mod._malloc(nParameters * 8);
+  const yOutPtr = mod._malloc(nSpecies * 8);
+  const sOutPtr = mod._malloc(nParameters * nSpecies * 8);
+  const tretPtr = mod._malloc(8);
+
+  if (!y0Ptr || !pPtr || !yOutPtr || !sOutPtr || !tretPtr) {
+    [y0Ptr, pPtr, yOutPtr, sOutPtr, tretPtr].forEach(p => { if (p) mod._free(p); });
+    return null;
+  }
+
+  try {
+    // Copy initial state and parameters to WASM heap
+    mod.HEAPF64.set(initialState, y0Ptr >> 3);
+    mod.HEAPF64.set(parameterValues, pPtr >> 3);
+
+    // Initialize CVODES forward sensitivity solver
+    const sensMem = mod._sens_init_forward(
+      nSpecies, nParameters, tSpan[0],
+      y0Ptr, pPtr,
+      rtol, atol, 10000
+    );
+    if (!sensMem) return null;
+
+    try {
+      // Output storage
+      const time = new Float64Array(nPts + 1);
+      const states: Float64Array[] = [];
+      const sensitivities: Float64Array[][] = [];
+
+      // Record initial state (t=0, sensitivity = 0)
+      time[0] = tSpan[0];
+      states.push(new Float64Array(initialState));
+      const initSens: Float64Array[] = [];
+      for (let p = 0; p < nParameters; p++) {
+        initSens.push(new Float64Array(nSpecies)); // all zeros
+      }
+      sensitivities.push(initSens);
+
+      // Integrate to each output time point
+      const dt = (tSpan[1] - tSpan[0]) / nPts;
+      for (let i = 1; i <= nPts; i++) {
+        const tout = tSpan[0] + i * dt;
+        const flag = mod._sens_solve_step(sensMem, tout, tretPtr);
+        if (flag < 0) {
+          // Solver failed — fall back to finite difference
+          return null;
+        }
+
+        // Read achieved time
+        time[i] = mod.HEAPF64[tretPtr >> 3];
+
+        // Read state
+        mod._sens_get_y(sensMem, yOutPtr);
+        const yArr = new Float64Array(nSpecies);
+        yArr.set(mod.HEAPF64.subarray(yOutPtr >> 3, (yOutPtr >> 3) + nSpecies));
+        states.push(yArr);
+
+        // Read all sensitivities at this time point
+        mod._sens_get_all(sensMem, sOutPtr);
+        const timeSens: Float64Array[] = [];
+        for (let p = 0; p < nParameters; p++) {
+          const sArr = new Float64Array(nSpecies);
+          const offset = (sOutPtr >> 3) + p * nSpecies;
+          sArr.set(mod.HEAPF64.subarray(offset, offset + nSpecies));
+          timeSens.push(sArr);
+        }
+        sensitivities.push(timeSens);
+      }
+
+      return { time, states, sensitivities, method: 'cvodes_forward', computeTimeMs: 0 };
+    } finally {
+      mod._sens_destroy(sensMem);
+    }
+  } finally {
+    mod._free(y0Ptr);
+    mod._free(pPtr);
+    mod._free(yOutPtr);
+    mod._free(sOutPtr);
+    mod._free(tretPtr);
+  }
+}
+
 // ── Forward sensitivity ─────────────────────────────────────────────
 
 /**
  * Compute forward sensitivities dy_j/dp_i at every output time point.
  *
- * Tries CVODES WASM first; falls back to central finite differences.
+ * Tries CVODES WASM first (exact, ~2-3x cost of one solve);
+ * falls back to central finite differences (2*N+1 solves).
  */
 export function forwardSensitivity(config: SensitivityConfig): SensitivityResult {
   const start = performance.now();
 
-  // ── Try CVODES ──
-  const wasm = getCvodesModule();
-  if (wasm) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = wasm as any;
-      const raw = w.forwardSensitivity({
-        nSpecies: config.nSpecies,
-        nParameters: config.nParameters,
-        parameterValues: config.parameterValues,
-        initialState: config.initialState,
-        tSpan: config.tSpan,
-        nOutputPoints: config.nOutputPoints,
-        rtol: config.tolerances?.rtol ?? 1e-8,
-        atol: config.tolerances?.atol ?? 1e-10,
-      });
-      return {
-        time: raw.time,
-        states: raw.states,
-        sensitivities: raw.sensitivities,
-        method: 'cvodes_forward',
-        computeTimeMs: performance.now() - start,
-      };
-    } catch {
-      // fall through to finite difference
-    }
+  // ── Try CVODES WASM (exact forward sensitivity) ──
+  const wasmResult = cvodesForwardSensitivity(config);
+  if (wasmResult) {
+    wasmResult.computeTimeMs = performance.now() - start;
+    return wasmResult;
   }
 
   // ── Finite-difference fallback (central differences) ──
@@ -245,40 +361,24 @@ export function adjointSensitivity(
   config: SensitivityConfig,
   objectiveFn: (states: Float64Array[], time: Float64Array) => { value: number; dLdy: Float64Array[] },
 ): GradientResult {
-  // ── Try CVODES adjoint ──
-  const wasm = getCvodesModule();
-  if (wasm) {
-    try {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const w = wasm as any;
-      // Run forward simulation first to get states
-      const fwd = w.forwardSimulation({
-        nSpecies: config.nSpecies,
-        nParameters: config.nParameters,
-        parameterValues: config.parameterValues,
-        initialState: config.initialState,
-        tSpan: config.tSpan,
-        nOutputPoints: config.nOutputPoints,
-        rtol: config.tolerances?.rtol ?? 1e-8,
-        atol: config.tolerances?.atol ?? 1e-10,
-      });
-      const obj = objectiveFn(fwd.states, fwd.time);
-      const raw = w.adjointSensitivity({
-        states: fwd.states,
-        time: fwd.time,
-        dLdy: obj.dLdy,
-        parameterValues: config.parameterValues,
-        rtol: config.tolerances?.rtol ?? 1e-8,
-        atol: config.tolerances?.atol ?? 1e-10,
-      });
-      return {
-        gradient: raw.gradient,
-        objectiveValue: obj.value,
-        method: 'adjoint',
-      };
-    } catch {
-      // fall through
+  // ── Use forward sensitivities + chain rule as a fast alternative ──
+  // When CVODES forward sensitivity is available, we can compute the gradient
+  // via: dL/dp_i = sum_t (dL/dy(t))^T * (dy(t)/dp_i) which is exact.
+  const sensResult = forwardSensitivity(config);
+  if (sensResult.method === 'cvodes_forward') {
+    const obj = objectiveFn(sensResult.states, sensResult.time);
+    const gradient = new Float64Array(config.nParameters);
+    for (let t = 0; t < sensResult.time.length; t++) {
+      const dLdy = obj.dLdy[t];
+      if (!dLdy) continue;
+      for (let pi = 0; pi < config.nParameters; pi++) {
+        const dyDp = sensResult.sensitivities[t][pi];
+        for (let s = 0; s < config.nSpecies; s++) {
+          gradient[pi] += dLdy[s] * dyDp[s];
+        }
+      }
     }
+    return { gradient, objectiveValue: obj.value, method: 'forward' };
   }
 
   // ── Finite-difference gradient fallback ──

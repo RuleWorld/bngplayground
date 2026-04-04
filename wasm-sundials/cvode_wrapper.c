@@ -8,6 +8,8 @@ typedef double realtype;
 
 #include <cvode/cvode.h>
 #include <cvode/cvode_ls.h>
+#include <cvodes/cvodes.h>
+#include <cvodes/cvodes_ls.h>
 #include <nvector/nvector_serial.h>
 #include <sunmatrix/sunmatrix_dense.h>
 #include <sunmatrix/sunmatrix_sparse.h>
@@ -1089,6 +1091,307 @@ void cvode_bind_network(uintptr_t solver_ptr, uintptr_t network_ptr) {
 
 void cvode_update_rate_constants(uintptr_t handle, double* rateConstants, int nReactions) {
     update_rate_constants(handle, rateConstants, nReactions);
+}
+
+/* ====================================================================
+ * CVODES Forward Sensitivity Analysis
+ *
+ * Uses CVODES (the sensitivity-capable superset of CVODE) to compute
+ * exact forward sensitivities dy/dp via internal difference quotients.
+ * Cost: ~2-3x a single ODE solve (vs N+1 for finite-difference).
+ *
+ * The approach:
+ *   1. Create a CVODES solver with the same RHS as the ODE solver
+ *   2. Set parameter array via CVodeSetSensParams
+ *   3. Call CVodeSensInit with NULL fS (CVODES uses internal DQ)
+ *   4. At each output time, extract sensitivity vectors via CVodeGetSens
+ * ==================================================================== */
+
+/* Sensitivity-aware wrapper. Extends CvodeWrapper with sensitivity state. */
+typedef struct {
+    void* cvode_mem;
+    N_Vector y;
+    SUNMatrix A;
+    SUNLinearSolver LS;
+    SUNNonlinearSolver NLS;
+    SUNContext sunctx;
+    NetworkByteCode* network_bc;
+    long int max_num_steps;
+
+    /* Sensitivity-specific fields */
+    int Ns;              /* Number of sensitivity parameters */
+    N_Vector* yS;        /* Array of Ns sensitivity vectors, each length neq */
+    double* pbar;        /* Scaling factors for parameters (|p_i| or 1) */
+    double* plist;       /* Parameter values array (owned, copy of user input) */
+} SensWrapper;
+
+/* RHS bridge for CVODES — identical to f_bridge but with SensWrapper */
+static int sens_f_bridge(realtype t, N_Vector y, N_Vector ydot, void *user_data) {
+    SensWrapper* sw = (SensWrapper*)user_data;
+    double* y_data = N_VGetArrayPointer(y);
+    double* ydot_data = N_VGetArrayPointer(ydot);
+
+    if (sw && sw->network_bc) {
+        network_dydt(sw->network_bc, (int)N_VGetLength(y), y_data, ydot_data);
+    } else {
+        js_f((double)t, y_data, ydot_data);
+    }
+    return 0;
+}
+
+/**
+ * Initialize a CVODES forward sensitivity solver.
+ *
+ * @param neq       Number of state variables (species)
+ * @param Ns        Number of sensitivity parameters
+ * @param t0        Initial time
+ * @param y0_data   Initial state vector [neq]
+ * @param p_data    Parameter values [Ns] — CVODES perturbs these for DQ
+ * @param reltol    Relative tolerance for state
+ * @param abstol    Absolute tolerance for state
+ * @param max_steps Max internal steps per output interval
+ * @return          Opaque pointer to SensWrapper, or NULL on failure
+ */
+void* sens_init_forward(int neq, int Ns, double t0,
+                        double* y0_data, double* p_data,
+                        double reltol, double abstol, int max_steps) {
+    if (neq <= 0 || Ns <= 0) return NULL;
+
+    SensWrapper* sw = (SensWrapper*)calloc(1, sizeof(SensWrapper));
+    if (!sw) return NULL;
+
+    sw->Ns = Ns;
+    sw->network_bc = NULL;
+
+    /* SUNDIALS context */
+    if (SUNContext_Create(0, &sw->sunctx) != 0) {
+        free(sw);
+        return NULL;
+    }
+
+    /* State vector */
+    sw->y = N_VNew_Serial(neq, sw->sunctx);
+    if (!sw->y) { SUNContext_Free(&sw->sunctx); free(sw); return NULL; }
+    for (int i = 0; i < neq; i++) NV_Ith_S(sw->y, i) = y0_data[i];
+
+    /* Dense matrix + linear solver */
+    sw->A = SUNDenseMatrix(neq, neq, sw->sunctx);
+    sw->LS = SUNLinSol_Dense(sw->y, sw->A, sw->sunctx);
+    if (!sw->A || !sw->LS) goto fail;
+
+    /* Create CVODES solver (BDF for stiff systems) */
+    sw->cvode_mem = CVodeCreate(CV_BDF, sw->sunctx);
+    if (!sw->cvode_mem) goto fail;
+
+    sw->NLS = SUNNonlinSol_Newton(sw->y, sw->sunctx);
+
+    /* Standard CVODE initialization */
+    if (CVodeInit(sw->cvode_mem, sens_f_bridge, t0, sw->y) != CV_SUCCESS) goto fail;
+    CVodeSetUserData(sw->cvode_mem, sw);
+    CVodeSStolerances(sw->cvode_mem, reltol, abstol);
+    CVodeSetNonlinearSolver(sw->cvode_mem, sw->NLS);
+    CVodeSetLinearSolver(sw->cvode_mem, sw->LS, sw->A);
+
+    sw->max_num_steps = (max_steps > 0) ? (long int)max_steps : 10000;
+    CVodeSetMaxNumSteps(sw->cvode_mem, sw->max_num_steps);
+    CVodeSetMaxErrTestFails(sw->cvode_mem, 7);
+    CVodeSetMaxConvFails(sw->cvode_mem, 10);
+
+    /* --- Forward sensitivity setup --- */
+
+    /* Copy parameter values (CVODES needs a persistent array) */
+    sw->plist = (double*)malloc(Ns * sizeof(double));
+    sw->pbar = (double*)malloc(Ns * sizeof(double));
+    if (!sw->plist || !sw->pbar) goto fail;
+    for (int i = 0; i < Ns; i++) {
+        sw->plist[i] = p_data[i];
+        sw->pbar[i] = fabs(p_data[i]) > 0.0 ? fabs(p_data[i]) : 1.0;
+    }
+
+    /* Allocate Ns sensitivity vectors, initialized to zero */
+    sw->yS = N_VCloneVectorArray(Ns, sw->y);
+    if (!sw->yS) goto fail;
+    for (int i = 0; i < Ns; i++) {
+        N_VConst(0.0, sw->yS[i]);
+    }
+
+    /* Initialize forward sensitivity with internal DQ (fS = NULL).
+     * CV_STAGGERED: solve sensitivity equations after the state correction
+     * at each step — more stable than CV_SIMULTANEOUS for stiff systems. */
+    if (CVodeSensInit(sw->cvode_mem, Ns, CV_STAGGERED, NULL, sw->yS) != CV_SUCCESS)
+        goto fail;
+
+    /* Tell CVODES about parameter values and scaling */
+    if (CVodeSetSensParams(sw->cvode_mem, sw->plist, sw->pbar, NULL) != CV_SUCCESS)
+        goto fail;
+
+    /* Use the EE (estimated error) approach for sensitivity tolerances —
+     * automatically derives sensitivity tolerances from the state tolerances. */
+    CVodeSensEEtolerances(sw->cvode_mem);
+
+    /* Include sensitivity variables in the error test for better accuracy */
+    CVodeSetSensErrCon(sw->cvode_mem, SUNTRUE);
+
+    return (void*)sw;
+
+fail:
+    if (sw->yS) N_VDestroyVectorArray(sw->yS, Ns);
+    if (sw->plist) free(sw->plist);
+    if (sw->pbar) free(sw->pbar);
+    if (sw->NLS) SUNNonlinSolFree(sw->NLS);
+    if (sw->LS) SUNLinSolFree(sw->LS);
+    if (sw->A) SUNMatDestroy(sw->A);
+    if (sw->cvode_mem) CVodeFree(&sw->cvode_mem);
+    if (sw->y) N_VDestroy(sw->y);
+    if (sw->sunctx) SUNContext_Free(&sw->sunctx);
+    free(sw);
+    return NULL;
+}
+
+/**
+ * Advance the CVODES sensitivity solver to time tout.
+ * Returns CVODE flag (CV_SUCCESS=0 on success).
+ */
+int sens_solve_step(void* sens_mem, double tout, double* tret) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw) return -1;
+
+    realtype t_out;
+    int flag = CVode(sw->cvode_mem, (realtype)tout, sw->y, &t_out, CV_NORMAL);
+
+    /* Auto-grow max_num_steps on CV_TOO_MUCH_WORK (match CVODESolver behavior) */
+    while (flag == CV_TOO_MUCH_WORK && sw->max_num_steps < 500000) {
+        sw->max_num_steps *= 2;
+        CVodeSetMaxNumSteps(sw->cvode_mem, sw->max_num_steps);
+        flag = CVode(sw->cvode_mem, (realtype)tout, sw->y, &t_out, CV_NORMAL);
+    }
+
+    *tret = (double)t_out;
+
+    /* Extract sensitivities at this time point */
+    if (flag >= 0) {
+        realtype tS;
+        CVodeGetSens(sw->cvode_mem, &tS, sw->yS);
+    }
+
+    return flag;
+}
+
+/**
+ * Copy current state vector into destination buffer.
+ */
+void sens_get_y(void* sens_mem, double* dest) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw) return;
+    double* y_data = N_VGetArrayPointer(sw->y);
+    int neq = (int)N_VGetLength(sw->y);
+    for (int i = 0; i < neq; i++) dest[i] = y_data[i];
+}
+
+/**
+ * Copy sensitivity vector for parameter `is` into destination buffer.
+ * dest must have space for neq doubles.
+ * Sensitivity s_i[j] = dy_j / dp_i
+ */
+void sens_get_s(void* sens_mem, int is, double* dest) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw || is < 0 || is >= sw->Ns) return;
+    double* s_data = N_VGetArrayPointer(sw->yS[is]);
+    int neq = (int)N_VGetLength(sw->yS[is]);
+    for (int i = 0; i < neq; i++) dest[i] = s_data[i];
+}
+
+/**
+ * Copy ALL sensitivity vectors into a flat buffer.
+ * Layout: [p0_s0, p0_s1, ..., p0_sN, p1_s0, ..., pNs_sN]
+ * dest must have space for Ns * neq doubles.
+ */
+void sens_get_all(void* sens_mem, double* dest) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw) return;
+    int neq = (int)N_VGetLength(sw->y);
+    for (int p = 0; p < sw->Ns; p++) {
+        double* s_data = N_VGetArrayPointer(sw->yS[p]);
+        for (int i = 0; i < neq; i++) {
+            dest[p * neq + i] = s_data[i];
+        }
+    }
+}
+
+/**
+ * Bind a network bytecode to the sensitivity solver.
+ * This enables the fast WASM-only RHS path for sensitivity integration.
+ */
+void sens_bind_network(void* sens_mem, uintptr_t network_ptr) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw || !network_ptr) return;
+    NetworkByteCode* bc = (NetworkByteCode*)network_ptr;
+    sw->network_bc = bc;
+
+    /* CVODES internal DQ perturbs parameters via the plist array.
+     * For bytecode networks, the parameters are the rate constants.
+     * We need CVODES to perturb sw->plist and we rebuild rates from
+     * that in the RHS. Since network_dydt uses bc->rateConstants
+     * directly, we point bc->rateConstants at sw->plist so CVODES
+     * perturbations flow through automatically. */
+    if (sw->Ns == bc->nReactions) {
+        /* Direct mapping: each sensitivity parameter = one rate constant */
+        free(bc->rateConstants);
+        bc->rateConstants = sw->plist;
+    }
+}
+
+/**
+ * Update sensitivity parameter values (e.g., for a new parameter point).
+ */
+void sens_update_params(void* sens_mem, double* p_data, int Ns) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw || Ns != sw->Ns) return;
+    for (int i = 0; i < Ns; i++) {
+        sw->plist[i] = p_data[i];
+        sw->pbar[i] = fabs(p_data[i]) > 0.0 ? fabs(p_data[i]) : 1.0;
+    }
+}
+
+/**
+ * Get the number of RHS evaluations used by the forward sensitivity solver.
+ * Useful for performance diagnostics.
+ */
+void sens_get_stats(void* sens_mem, long* nfeval, long* nfSeval) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw) return;
+    long int nfe = 0, nfSe = 0;
+    CVodeGetNumRhsEvals(sw->cvode_mem, &nfe);
+    CVodeGetSensNumRhsEvals(sw->cvode_mem, &nfSe);
+    *nfeval = (long)nfe;
+    *nfSeval = (long)nfSe;
+}
+
+/**
+ * Destroy the sensitivity solver and free all resources.
+ */
+void sens_destroy(void* sens_mem) {
+    SensWrapper* sw = (SensWrapper*)sens_mem;
+    if (!sw) return;
+
+    /* Free sensitivity state before CVodeFree (which calls CVodeSensFree) */
+    if (sw->cvode_mem) {
+        CVodeSensFree(sw->cvode_mem);
+        CVodeFree(&sw->cvode_mem);
+    }
+    if (sw->yS) N_VDestroyVectorArray(sw->yS, sw->Ns);
+    if (sw->NLS) SUNNonlinSolFree(sw->NLS);
+    if (sw->LS) SUNLinSolFree(sw->LS);
+    if (sw->A) SUNMatDestroy(sw->A);
+    if (sw->y) N_VDestroy(sw->y);
+    /* plist may have been aliased to bc->rateConstants — only free if we own it */
+    if (sw->network_bc && sw->network_bc->rateConstants == sw->plist) {
+        sw->network_bc->rateConstants = NULL; /* prevent double-free */
+    }
+    free(sw->plist);
+    free(sw->pbar);
+    if (sw->sunctx) SUNContext_Free(&sw->sunctx);
+    free(sw);
 }
 
 #ifdef __cplusplus
