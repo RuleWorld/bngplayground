@@ -29,9 +29,7 @@ import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { EmptyState } from './ui/EmptyState';
 import { HelpSection } from './HelpSection';
 import { SpatialPanel } from './SpatialPanel';
-<<<<<<< HEAD
 import { ErrorBoundary } from './ui/ErrorBoundary';
-=======
 import { BifurcationTab } from './tabs/BifurcationTab';
 import { TemporalAnalysisTab } from './tabs/TemporalAnalysisTab';
 import { VersionHistoryTab } from './tabs/VersionHistoryTab';
@@ -39,7 +37,6 @@ import { MultiscaleTab } from './tabs/MultiscaleTab';
 import { PKPDTab } from './tabs/PKPDTab';
 
 
->>>>>>> upstream/main
 
 interface VisualizationPanelProps {
   model: BNGLModel | null;
