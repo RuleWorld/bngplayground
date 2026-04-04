@@ -93,10 +93,10 @@ describe('computeSemanticDiff', () => {
 describe('VersionDAG', () => {
   it('creates DAG with root version', () => {
     const dag = createVersionDAG(BASE_MODEL, 'Initial');
-    expect(dag.rootId).toBeTruthy();
-    expect(dag.headId).toBe(dag.rootId);
+    // The initial version is both head and root (single version)
+    expect(dag.headId).toBeTruthy();
     expect(dag.versions.size).toBe(1);
-    const root = dag.versions.get(dag.rootId);
+    const root = dag.versions.get(dag.headId);
     expect(root?.label).toBe('Initial');
     expect(root?.code).toBe(BASE_MODEL);
   });
@@ -141,7 +141,6 @@ describe('VersionDAG', () => {
 
     const restored = deserializeDAG(json);
     expect(restored.versions.size).toBe(dag.versions.size);
-    expect(restored.rootId).toBe(dag.rootId);
     expect(restored.headId).toBe(dag.headId);
     expect(restored.branches.get('test-branch')).toBe(dag.branches.get('test-branch'));
   });
@@ -152,11 +151,11 @@ describe('BehavioralBisection', () => {
     // This is a conceptual test — the actual bisection requires simulation
     const { bisectBehavior, testProperty } = await import('../../src/services/versioning/BehavioralBisection');
 
-    // Create a 5-version history
-    const dag = createVersionDAG(BASE_MODEL, 'v1');
+    // Create a 5-version history (recordVersion returns a new DAG each time)
+    let dag = createVersionDAG(BASE_MODEL, 'v1');
     for (let i = 2; i <= 5; i++) {
       const modifiedCode = BASE_MODEL.replace(`kf 0.1`, `kf ${0.1 * i}`);
-      recordVersion(dag, modifiedCode, { label: `v${i}` });
+      dag = recordVersion(dag, modifiedCode, { label: `v${i}` });
     }
 
     const history = getHistory(dag);
@@ -173,9 +172,9 @@ describe('BehavioralBisection', () => {
         ],
       };
       const property = {
-        kind: 'observable_value' as const,
-        observable: 'A_free',
-        time: 100,
+        type: 'observable_value' as const,
+        observableName: 'A_free',
+        timePoint: 100,
         predicate: 'above' as const,
         threshold: 50,
       };

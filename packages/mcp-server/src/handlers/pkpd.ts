@@ -1,33 +1,12 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 import { simulate, loadEvaluator } from '@bngplayground/engine';
 
-const pkpdArgsSchema = {
-  type: 'object',
-  properties: {
-    action: {
-      type: 'string',
-      enum: ['generate_model', 'simulate_dosing', 'compute_metrics', 'population_simulation'],
-      description: 'PK/PD action to perform',
-    },
-    model_type: { type: 'string', description: 'PK model type (one_compartment_iv, two_compartment_oral, tmdd, etc.)' },
-    drug_name: { type: 'string', description: 'Drug name (default: Drug)' },
-    route: { type: 'string', description: 'Route of administration (iv_bolus, oral, etc.)' },
-    dose: { type: 'number', description: 'Dose amount in mg' },
-    code: { type: 'string', description: 'BNGL model code (for simulate_dosing and compute_metrics)' },
-    dosing_interval: { type: 'number', description: 'Dosing interval in hours' },
-    n_doses: { type: 'number', description: 'Number of doses' },
-    observable: { type: 'string', description: 'Observable name for PK metrics' },
-    n_patients: { type: 'number', description: 'Number of virtual patients (default: 100)' },
-  },
-  required: ['action'],
-};
-
 export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('pkpd', pkpdArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
-    const engine = await import('@bngplayground/engine');
+    const engine = await import('@bngplayground/engine') as any;
     await loadEvaluator();
 
     switch (parsedArgs.action) {
@@ -79,8 +58,8 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
           results: { headers: results.headers, nTimePoints: results.data.length },
           metrics,
           dosing: regimen,
-          technical: `Simulated ${regimen.events.length} dose(s) over ${tEnd} hours. Cmax=${metrics.Cmax.toPrecision(4)}, t½=${metrics.halfLife.toPrecision(4)} hr.`,
-          biological: `Peak concentration ${metrics.Cmax.toPrecision(4)} reached at ${metrics.Tmax.toPrecision(3)} hr. AUC=${metrics.AUC_0_inf.toPrecision(4)} mg·hr/L.`,
+          technical: `Simulated ${regimen.events.length} dose(s) over ${tEnd} hours. Cmax=${metrics.Cmax.toPrecision(4)}, t\u00BD=${metrics.halfLife.toPrecision(4)} hr.`,
+          biological: `Peak concentration ${metrics.Cmax.toPrecision(4)} reached at ${metrics.Tmax.toPrecision(3)} hr. AUC=${metrics.AUC_0_inf.toPrecision(4)} mg\u00B7hr/L.`,
           strategic: 'Adjust dosing schedule parameters (interval, number of doses) to optimize the PK profile.',
         });
       }
@@ -97,7 +76,7 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
         const metrics = engine.computePKMetrics(results, obsName, parsedArgs.dose || 100);
         const nca = engine.nonCompartmentalAnalysis(results, obsName, parsedArgs.dose || 100);
 
-        return createToolResult({ metrics, nca, technical: 'NCA analysis complete.', biological: `t½=${metrics.halfLife.toPrecision(4)} hr, CL=${metrics.clearance.toPrecision(4)} L/hr.` });
+        return createToolResult({ metrics, nca, technical: 'NCA analysis complete.', biological: `t\u00BD=${metrics.halfLife.toPrecision(4)} hr, CL=${metrics.clearance.toPrecision(4)} L/hr.` });
       }
 
       case 'population_simulation': {
@@ -106,7 +85,7 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
         const popModel = parseModelOrThrow(parsedArgs.code);
         const population = engine.generatePopulation({
           nPatients,
-          parameters: Object.keys(popModel.parameters || {}).map(name => ({
+          parameters: Object.keys(popModel.parameters || {}).map((name: string) => ({
             name, distribution: 'log_normal' as const, mean: popModel.parameters[name], cv: 0.3,
           })),
         });
@@ -114,10 +93,10 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
         return createToolResult({
           nPatients: population.length,
           parameterSummary: Object.fromEntries(
-            Object.keys(population[0]?.parameters || {}).map(name => {
-              const values = population.map(p => p.parameters[name]);
-              const mean = values.reduce((a, b) => a + b, 0) / values.length;
-              return [name, { mean, cv: Math.sqrt(values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length) / mean }];
+            Object.keys(population[0]?.parameters || {}).map((name: string) => {
+              const values = population.map((p: any) => p.parameters[name]);
+              const mean = values.reduce((a: number, b: number) => a + b, 0) / values.length;
+              return [name, { mean, cv: Math.sqrt(values.reduce((s: number, v: number) => s + (v - mean) ** 2, 0) / values.length) / mean }];
             })
           ),
           technical: `Generated ${nPatients} virtual patients with log-normal PK parameter distributions (CV=30%).`,

@@ -1,28 +1,16 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs } from '../services/engine.js';
+import { createToolResult } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-const multiscaleArgsSchema = {
-  type: 'object',
-  properties: {
-    definition: {
-      type: 'object',
-      description: 'Multi-scale model definition (JSON object with cellTypes, extracellular, domain, population, time)',
-    },
-    max_cells: { type: 'number', description: 'Maximum number of cells (safety limit, default: 10000)' },
-  },
-  required: ['definition'],
-};
-
 export async function handleMultiscaleSimulation(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('multiscale_simulation', multiscaleArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
-    const engine = await import('@bngplayground/engine');
+    const engine = await import('@bngplayground/engine') as any;
 
     const config = engine.parseMultiscaleModel(parsedArgs.definition);
     if (parsedArgs.max_cells) config.maxCells = parsedArgs.max_cells;
 
-    const result = await engine.multiscaleSimulation(config, (time: number, nCells: number, phase: string) => {
+    const result = engine.multiscaleSimulation(config, (fraction: number) => {
       // Progress tracking
     });
 

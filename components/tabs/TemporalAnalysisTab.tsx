@@ -19,10 +19,12 @@ interface TemporalAnalysisTabProps {
 }
 
 interface MutualInformationUI {
-  reaction1: number;
-  reaction2: number;
-  reaction1Name?: string;
-  reaction2Name?: string;
+  pair: {
+    reaction1: number;
+    reaction2: number;
+    reaction1Name?: string;
+    reaction2Name?: string;
+  };
   mutualInformation: number;
   normalizedMI: number;
   pValue: number;
@@ -40,16 +42,16 @@ interface TransferEntropyUI {
 }
 
 interface PhaseLockingUI {
-  reaction1: number;
-  reaction2: number;
+  pair: { reaction1: number; reaction2: number };
   phaseLockingValue: number;
+  dominantPhaseOffset: number;
   isLocked: boolean;
 }
 
 interface CausalComparisonUI {
-  concordant: Array<{ source: number; target: number; rule?: string }>;
-  structuralOnly: Array<{ source: number; target: number; rule?: string }>;
-  emergent: Array<{ source: number; target: number; informationFlow: number }>;
+  concordant: Array<{ source: number; target: number; empiricalWeight: number }>;
+  structuralOnly: Array<{ source: number; target: number }>;
+  emergent: Array<{ source: number; target: number; empiricalWeight: number }>;
 }
 
 interface ITResultUI {
@@ -145,8 +147,8 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
     if (!itResult) return null;
     const reactions = new Set<number>();
     itResult.mutualInformation.forEach(mi => {
-      reactions.add(mi.reaction1);
-      reactions.add(mi.reaction2);
+      reactions.add(mi.pair.reaction1);
+      reactions.add(mi.pair.reaction2);
     });
     const sortedReactions = Array.from(reactions).sort((a, b) => a - b);
     return {
@@ -328,8 +330,8 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                     .map((mi, i) => (
                       <tr key={i} className="border-t border-slate-200 dark:border-slate-700">
                         <td className="p-1">
-                          {mi.reaction1Name || `R${mi.reaction1 + 1}`} ↔{' '}
-                          {mi.reaction2Name || `R${mi.reaction2 + 1}`}
+                          {mi.pair.reaction1Name || `R${mi.pair.reaction1 + 1}`} ↔{' '}
+                          {mi.pair.reaction2Name || `R${mi.pair.reaction2 + 1}`}
                         </td>
                         <td className="p-1 text-right font-mono">{mi.mutualInformation.toFixed(4)}</td>
                         <td className="p-1 text-right">
@@ -421,7 +423,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                 {causalComparison.concordant.map((c, i) => (
                   <div key={i} className="text-xs p-1 bg-green-50 dark:bg-green-900/20 rounded">
                     R{c.source + 1} → R{c.target + 1}
-                    {c.rule && <span className="text-slate-400 ml-1">({c.rule})</span>}
+                    <span className="text-slate-400 ml-1">({c.empiricalWeight.toFixed(3)})</span>
                   </div>
                 ))}
               </div>
@@ -449,7 +451,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                   <div key={i} className="text-xs p-1 bg-amber-50 dark:bg-amber-900/20 rounded">
                     R{c.source + 1} → R{c.target + 1}
                     <span className="text-amber-600 ml-1">
-                      ({c.informationFlow.toFixed(3)} bits)
+                      ({c.empiricalWeight.toFixed(3)} bits)
                     </span>
                   </div>
                 ))}

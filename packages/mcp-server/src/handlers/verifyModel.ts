@@ -1,21 +1,11 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow } from '../services/engine.js';
+import { createToolResult, parseModelOrThrow } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-const verifyModelArgsSchema = {
-  type: 'object',
-  properties: {
-    code: { type: 'string', description: 'BNGL model code' },
-    query: { type: 'string', description: 'BVL verification query (e.g., "reachable?(A(b!1).B(a!1))", "never(X())", "fires?(rule_name)", "deadlock?")' },
-    maxSpecies: { type: 'number', description: 'Species bound for bounded verification (default: 1000)' },
-  },
-  required: ['code', 'query'],
-};
-
 export async function handleVerifyModel(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('verify_model', verifyModelArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
-    const engine = await import('@bngplayground/engine');
+    const engine = await import('@bngplayground/engine') as any;
     const { parseQuery, checkAbstractReachability, boundedReachabilityCheck } = engine;
     const model = parseModelOrThrow(parsedArgs.code);
     const query = parseQuery(parsedArgs.query);
@@ -44,7 +34,7 @@ export async function handleVerifyModel(args: ToolArgs): Promise<ToolResult<any>
           result = { query: parsedArgs.query, answer: false, confidence: 'exact', layerUsed: 1,
             explanation: 'Pattern is provably unreachable: no contact map edges satisfy the binding requirements.' };
         } else if (contactMapResult.reachable && query.kind === 'never') {
-          // Layer 1 says possibly reachable — need Layer 2 to confirm
+          // Layer 1 says possibly reachable -- need Layer 2 to confirm
           result = { query: parsedArgs.query, answer: 'unknown', confidence: 'over_approximate', layerUsed: 1,
             explanation: 'Contact map allows this pattern. Running bounded verification...' };
         }
@@ -76,16 +66,20 @@ export async function handleVerifyModel(args: ToolArgs): Promise<ToolResult<any>
     } else if (query.kind === 'fires') {
       try {
         const { checkRuleFires } = await import('@bngplayground/engine');
-        const fireResult = await checkRuleFires(model, query.ruleName, { maxSpecies: parsedArgs.maxSpecies || 1000 });
+        const fireResult = checkRuleFires(model, query.ruleName, { maxSpecies: parsedArgs.maxSpecies || 1000 });
         result = { query: parsedArgs.query, answer: fireResult.fires, confidence: 'bounded', layerUsed: 2,
-          explanation: fireResult.fires ? `Rule "${query.ruleName}" fires at iteration ${fireResult.firstFiringIteration}.` : `Rule "${query.ruleName}" does not fire within bounded exploration.` };
+          explanation: fireResult.fires
+            ? `Rule "${query.ruleName}" fires (matching species found: ${(fireResult.matchingSpecies ?? []).join(', ')}).`
+            : `Rule "${query.ruleName}" does not fire within bounded exploration.` };
       } catch (e: any) { result.explanation = e.message; }
     } else if (query.kind === 'deadlock') {
       try {
         const { checkDeadlock } = await import('@bngplayground/engine');
-        const deadlockResult = await checkDeadlock(model, { maxSpecies: parsedArgs.maxSpecies || 1000 });
+        const deadlockResult = checkDeadlock(model, { maxSpecies: parsedArgs.maxSpecies || 1000 });
         result = { query: parsedArgs.query, answer: deadlockResult.hasDeadlock, confidence: 'bounded', layerUsed: 2,
-          explanation: deadlockResult.hasDeadlock ? `Deadlock detected: ${deadlockResult.deadlockStates?.join(', ')}` : 'No deadlock states found.' };
+          explanation: deadlockResult.hasDeadlock
+            ? `Deadlock detected: ${deadlockResult.deadlockState ?? 'unknown state'}`
+            : 'No deadlock states found.' };
       } catch (e: any) { result.explanation = e.message; }
     }
 

@@ -1,24 +1,11 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-const bifurcationArgsSchema = {
-  type: 'object',
-  properties: {
-    code: { type: 'string', description: 'BNGL model code' },
-    parameter: { type: 'string', description: 'Name of the parameter to vary for continuation' },
-    start_value: { type: 'number', description: 'Start value for the continuation parameter' },
-    end_value: { type: 'number', description: 'End value for the continuation parameter' },
-    max_steps: { type: 'number', description: 'Maximum continuation steps (default: 500)' },
-    species: { type: 'string', description: 'Species to track on y-axis (default: first observable)' },
-  },
-  required: ['code', 'parameter', 'start_value', 'end_value'],
-};
-
 export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('bifurcation_analysis', bifurcationArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
-    const engine = await import('@bngplayground/engine');
+    const engine = await import('@bngplayground/engine') as any;
     const model = parseModelOrThrow(parsedArgs.code);
     const expandedModel = await expandModel(model);
 
@@ -27,7 +14,7 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
     const maxSteps = parsedArgs.max_steps || 500;
 
     // Build RHS function from expanded model using JIT compiler
-    let rhsFactory: (p: Record<string, number>) => (t: number, y: Float64Array, dydt: Float64Array) => void;
+    let rhsFactory: any;
     try {
       const jit = new engine.JITCompiler(expandedModel);
       rhsFactory = (p: Record<string, number>) => {
@@ -49,13 +36,12 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
     // Run continuation
     const result = await engine.continuation({
       nSpecies,
-      continuationParameter: parsedArgs.parameter,
-      startValue: parsedArgs.start_value,
-      endValue: parsedArgs.end_value,
+      rhsFn: rhsFactory as any,
+      initialState: new Float64Array(nSpecies),
+      parameterStart: parsedArgs.start_value,
+      parameterEnd: parsedArgs.end_value,
       stepSize: (parsedArgs.end_value - parsedArgs.start_value) / maxSteps,
       maxSteps,
-      parameters: params,
-      rhsFn: rhsFactory,
     });
 
     // Attribute bifurcations if any found
@@ -68,11 +54,10 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
 
     return createToolResult({
       bifurcations: attributions,
-      branches: result.branches,
-      totalPoints: result.points.length,
-      stablePoints: result.points.filter((p: any) => p.stable).length,
-      unstablePoints: result.points.filter((p: any) => !p.stable).length,
-      technical: `Continuation along ${parsedArgs.parameter} from ${parsedArgs.start_value} to ${parsedArgs.end_value}. Found ${result.bifurcations.length} bifurcation(s) across ${result.branches} branch(es).`,
+      totalPoints: result.path.length,
+      stablePoints: result.path.filter((p: any) => p.stable).length,
+      unstablePoints: result.path.filter((p: any) => !p.stable).length,
+      technical: `Continuation along ${parsedArgs.parameter} from ${parsedArgs.start_value} to ${parsedArgs.end_value}. Found ${result.bifurcations.length} bifurcation(s).`,
       biological: result.bifurcations.length > 0
         ? `Qualitative behavior changes detected: ${result.bifurcations.map((b: any) => `${b.type} at ${parsedArgs.parameter}=${b.parameterValue.toPrecision(4)}`).join('; ')}.`
         : `No bifurcations detected in the parameter range. The system maintains qualitative stability.`,

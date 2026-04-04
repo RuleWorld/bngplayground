@@ -45,7 +45,7 @@ describe('SteadyStateFinder', () => {
     const result = findSteadyState({
       nSpecies: 1,
       parameters: { k: 1 },
-      rhsFn: (t, y, dydt) => { dydt[0] = -1.0 * y[0]; },
+      rhsFn: (y: Float64Array, dydt: Float64Array) => { dydt[0] = -1.0 * y[0]; },
       tolerance: 1e-10,
       maxIterations: 100,
     }, new Float64Array([5.0]));
@@ -63,7 +63,7 @@ describe('SteadyStateFinder', () => {
     const result = findSteadyState({
       nSpecies: 1,
       parameters: {},
-      rhsFn: (t, y, dydt) => { dydt[0] = 10 - 2 * y[0]; },
+      rhsFn: (y: Float64Array, dydt: Float64Array) => { dydt[0] = 10 - 2 * y[0]; },
       tolerance: 1e-10,
     }, new Float64Array([1.0]));
 
@@ -81,19 +81,18 @@ describe('Continuation', () => {
     // dx/dt = r + x^2 (saddle-node normal form, bifurcation at r=0)
     const result = await continuation({
       nSpecies: 1,
-      continuationParameter: 'r',
-      startValue: -1,
-      endValue: 0.5,
+      rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
+        dydt[0] = p + y[0] * y[0];
+      },
+      initialState: new Float64Array([1.0]),
+      parameterStart: -1,
+      parameterEnd: 0.5,
       stepSize: 0.05,
       maxSteps: 50,
-      parameters: { r: -1 },
-      rhsFn: (params) => (t: number, y: Float64Array, dydt: Float64Array) => {
-        dydt[0] = params.r + y[0] * y[0];
-      },
     });
 
-    expect(result.points.length).toBeGreaterThan(0);
-    expect(result.parameterName).toBe('r');
+    expect(result.path.length).toBeGreaterThan(0);
+    expect(result.bifurcations).toBeDefined();
   });
 });
 
@@ -104,21 +103,20 @@ describe('Nullclines', () => {
     // dy/dt = -cy + dxy (nullcline: y=0 or x=c/d)
     const a = 1, b = 0.1, c = 1.5, d = 0.075;
     const result = computeNullclines({
-      rhsFn: (t, y, dydt) => {
-        dydt[0] = a * y[0] - b * y[0] * y[1];
-        dydt[1] = -c * y[1] + d * y[0] * y[1];
+      rhsFn: (state: Float64Array) => {
+        const out = new Float64Array(2);
+        out[0] = a * state[0] - b * state[0] * state[1];
+        out[1] = -c * state[1] + d * state[0] * state[1];
+        return out;
       },
-      speciesIndex1: 0,
-      speciesIndex2: 1,
-      nSpecies: 2,
-      fixedConcentrations: new Float64Array([10, 10]),
       xRange: [0, 40],
       yRange: [0, 20],
-      resolution: 50,
+      nGridX: 50,
+      nGridY: 50,
     });
 
-    expect(result.species1Nullcline.length).toBeGreaterThan(0);
-    expect(result.species2Nullcline.length).toBeGreaterThan(0);
+    expect(result.xNullclines.length).toBeGreaterThan(0);
+    expect(result.yNullclines.length).toBeGreaterThan(0);
     expect(result.fixedPoints.length).toBeGreaterThanOrEqual(1);
     // The coexistence fixed point should be at x=c/d=20, y=a/b=10
     const coexistence = result.fixedPoints.find(fp => fp.x > 5 && fp.y > 5);

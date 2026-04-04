@@ -1,32 +1,10 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 import { simulate, loadEvaluator, compareModels } from '@bngplayground/engine';
 
-const compareModelsArgsSchema = {
-  type: 'object',
-  properties: {
-    variants: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          name: { type: 'string' },
-          code: { type: 'string' },
-        },
-        required: ['name', 'code'],
-      },
-      description: 'Array of model variants to compare (each with name and BNGL code)',
-    },
-    t_end: { type: 'number', description: 'Simulation end time (default: 100)' },
-    n_steps: { type: 'number', description: 'Number of steps (default: 200)' },
-    divergence_threshold: { type: 'number', description: 'CV threshold for divergence detection (default: 0.1)' },
-  },
-  required: ['variants'],
-};
-
 export async function handleCompareModels(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('compare_models', compareModelsArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
     await loadEvaluator();
 

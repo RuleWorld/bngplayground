@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useMemo } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -28,7 +28,7 @@ interface ContinuationPointUI {
 
 interface BifurcationPointUI {
   parameterValue: number;
-  type: 'saddle_node' | 'hopf' | 'transcritical' | 'pitchfork' | 'branch_point';
+  type: 'saddle-node' | 'hopf-supercritical' | 'hopf-subcritical' | 'transcritical' | 'pitchfork';
   frequency?: number;
   ruleContributions?: Array<{ ruleName: string; contribution: number; mechanism: string }>;
 }
@@ -52,8 +52,8 @@ interface ContinuationResultUI {
 }
 
 interface NullclineResultUI {
-  species1Nullcline: NullclinePointUI[];
-  species2Nullcline: NullclinePointUI[];
+  xNullclines: Array<{ points: NullclinePointUI[] }>;
+  yNullclines: Array<{ points: NullclinePointUI[] }>;
   vectorField: Array<{ x: number; y: number; dx: number; dy: number }>;
   fixedPoints: FixedPointUI[];
 }
@@ -72,8 +72,6 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
   const [nullclineResult, setNullclineResult] = useState<NullclineResultUI | null>(null);
   const [selectedBifurcation, setSelectedBifurcation] = useState<BifurcationPointUI | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const chartRef = useRef<HTMLDivElement>(null);
-
   const parameterOptions = useMemo(() => {
     if (!model) return [];
     return Object.keys(model.parameters).map(p => ({ value: p, label: `${p} = ${model.parameters[p]}` }));
@@ -119,34 +117,36 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       // Generate continuation points using the engine if available
       if (engine.continuation) {
         const nSpecies = model.species.length;
-        const params = { ...model.parameters };
 
-        const result = await engine.continuation({
+        const initialState = new Float64Array(nSpecies);
+        model.species.forEach((s, i) => { initialState[i] = s.initialConcentration; });
+
+        const result = engine.continuation({
           nSpecies,
-          continuationParameter: selectedParam,
-          startValue,
-          endValue,
-          stepSize: (endValue - startValue) / maxSteps,
-          maxSteps,
-          parameters: params,
-          rhsFn: (p: Record<string, number>) => {
+          rhsFn: (_y: Float64Array, _p: number, dydt: Float64Array) => {
             // TODO: Use engine.JITCompiler to generate real RHS from expanded model
             // Currently a placeholder — continuation needs a proper RHS to produce results
-            return (t: number, y: Float64Array, dydt: Float64Array) => {
-              for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-            };
+            for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
           },
+          initialState,
+          parameterStart: startValue,
+          parameterEnd: endValue,
+          stepSize: (endValue - startValue) / maxSteps,
+          maxSteps,
         });
 
         const speciesIdx = model.species.findIndex(s => s.name === (selectedSpecies1 || model.species[0]?.name));
-        mockResult.points = result.points.map((p: any) => ({
+        mockResult.points = result.path.map((p: any) => ({
           parameterValue: p.parameterValue,
-          steadyState: p.steadyState[speciesIdx >= 0 ? speciesIdx : 0],
+          steadyState: p.y[speciesIdx >= 0 ? speciesIdx : 0],
           stable: p.stable,
-          branchId: p.branchId,
+          branchId: 0,
         }));
-        mockResult.bifurcations = result.bifurcations;
-        mockResult.branches = result.branches;
+        mockResult.bifurcations = result.bifurcations.map((b: any) => ({
+          parameterValue: b.parameterValue,
+          type: b.type,
+        }));
+        mockResult.branches = 1;
       }
 
       setContinuationResult(mockResult);
@@ -162,16 +162,16 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           model.species.forEach((s, i) => { fixed[i] = s.initialConcentration; });
 
           const ncResult = engine.computeNullclines({
-            rhsFn: (t: number, y: Float64Array, dydt: Float64Array) => {
-              for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
+            rhsFn: (_state: Float64Array) => {
+              // TODO: Use engine.JITCompiler to generate real RHS from expanded model
+              return new Float64Array(2);
             },
-            speciesIndex1: idx1,
-            speciesIndex2: idx2,
-            nSpecies,
-            fixedConcentrations: fixed,
             xRange: [0, fixed[idx1] * 3 || 10] as [number, number],
             yRange: [0, fixed[idx2] * 3 || 10] as [number, number],
-            resolution: 200,
+            nGridX: 200,
+            nGridY: 200,
+            xIndex: idx1,
+            yIndex: idx2,
           });
           setNullclineResult(ncResult);
         }
@@ -228,8 +228,10 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             <Select
               value={selectedParam}
               onChange={(e) => setSelectedParam(e.target.value)}
-              options={[{ value: '', label: 'Select parameter...' }, ...parameterOptions]}
-            />
+            >
+              <option value="">Select parameter...</option>
+              {parameterOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
@@ -238,8 +240,10 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             <Select
               value={selectedSpecies1}
               onChange={(e) => setSelectedSpecies1(e.target.value)}
-              options={[{ value: '', label: 'Select species...' }, ...speciesOptions]}
-            />
+            >
+              <option value="">Select species...</option>
+              {speciesOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
@@ -274,8 +278,10 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             <Select
               value={selectedSpecies2}
               onChange={(e) => setSelectedSpecies2(e.target.value)}
-              options={[{ value: '', label: '(None - 1D only)' }, ...speciesOptions]}
-            />
+            >
+              <option value="">(None - 1D only)</option>
+              {speciesOptions.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
@@ -310,7 +316,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       {/* Bifurcation Diagram */}
       {continuationResult && continuationResult.points.length > 0 && (
-        <Card className="p-4 flex-1 min-h-[300px]" ref={chartRef}>
+        <Card className="p-4 flex-1 min-h-[300px]">
           <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">
             Bifurcation Diagram — {continuationResult.parameterName}
             {continuationResult.bifurcations.length > 0 && (
@@ -405,7 +411,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
               <Tooltip />
               <Scatter
                 name={`d[${selectedSpecies1}]/dt = 0`}
-                data={nullclineResult.species1Nullcline}
+                data={nullclineResult.xNullclines.flatMap(c => c.points)}
                 fill="none"
                 line={{ stroke: CHART_COLORS[0], strokeWidth: 2 }}
                 lineType="joint"
@@ -413,7 +419,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
               />
               <Scatter
                 name={`d[${selectedSpecies2}]/dt = 0`}
-                data={nullclineResult.species2Nullcline}
+                data={nullclineResult.yNullclines.flatMap(c => c.points)}
                 fill="none"
                 line={{ stroke: CHART_COLORS[1], strokeWidth: 2 }}
                 lineType="joint"
@@ -441,7 +447,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             <div>
               <p className="text-xs text-slate-500 dark:text-slate-400">Type</p>
               <p className="font-medium text-sm capitalize">
-                {selectedBifurcation.type.replace(/_/g, ' ')}
+                {selectedBifurcation.type.replace(/-/g, ' ')}
               </p>
             </div>
             <div>
@@ -482,8 +488,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             </div>
           )}
           <Button
-            size="sm"
-            variant="outline"
+            variant="secondary"
             className="mt-3"
             onClick={() => setSelectedBifurcation(null)}
           >

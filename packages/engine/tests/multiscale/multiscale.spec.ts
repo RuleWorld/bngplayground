@@ -52,7 +52,7 @@ describe('CellAgent', () => {
       observables: {}, age: 10, phase: 'active', volume: 500,
       secretionRates: {}, uptakeRates: {},
     };
-    const rng = { next: () => 0.5, gaussian: () => 0 };
+    const rng = { next: () => 0.5, gaussian: () => 0, binomial: (n: number, p: number) => Math.round(n * p) } as any;
     const daughter = divideCell(parent, 2, rng);
 
     expect(daughter.id).toBe(2);

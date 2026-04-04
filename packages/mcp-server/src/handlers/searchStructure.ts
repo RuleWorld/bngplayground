@@ -1,37 +1,12 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 import { simulate, loadEvaluator } from '@bngplayground/engine';
 
-const searchStructureArgsSchema = {
-  type: 'object',
-  properties: {
-    code: { type: 'string', description: 'Partial BNGL model (molecule types + seed species + observables, no reaction rules)' },
-    experimental_data: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: {
-          time: { type: 'number' },
-          observable: { type: 'string' },
-          value: { type: 'number' },
-          error: { type: 'number' },
-        },
-        required: ['time', 'observable', 'value'],
-      },
-      description: 'Experimental data points to fit against',
-    },
-    n_particles: { type: 'number', description: 'ABC-SMC particles (default: 100)' },
-    n_generations: { type: 'number', description: 'ABC-SMC generations (default: 10)' },
-    inclusion_prior: { type: 'number', description: 'Prior probability that each rule is included (default: 0.1)' },
-  },
-  required: ['code', 'experimental_data'],
-};
-
 export async function handleSearchStructure(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('search_structure', searchStructureArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
-    const engine = await import('@bngplayground/engine');
+    const engine = await import('@bngplayground/engine') as any;
     const model = parseModelOrThrow(parsedArgs.code);
     await loadEvaluator();
 
@@ -57,7 +32,7 @@ export async function handleSearchStructure(args: ToolArgs): Promise<ToolResult<
         experimentalData: parsedArgs.experimental_data,
         inclusionPrior: parsedArgs.inclusion_prior || 0.1,
         parameterBounds: Object.fromEntries(
-          Object.keys(model.parameters || {}).map(k => [k, [1e-4, 1e4] as [number, number]])
+          Object.keys(model.parameters || {}).map((k: string) => [k, [1e-4, 1e4] as [number, number]])
         ),
         nParticles: parsedArgs.n_particles || 100,
         nGenerations: parsedArgs.n_generations || 10,

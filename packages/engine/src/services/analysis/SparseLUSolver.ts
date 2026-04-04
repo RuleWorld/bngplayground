@@ -78,11 +78,216 @@ export function createCSR(
 }
 
 /**
+ * Cached symbolic ILU structure for reuse across factorizations.
+ *
+ * For biochemical networks, the sparsity pattern does not change between
+ * integration steps. This cache stores the symbolic analysis (diagonal indices,
+ * column position maps, L/U sparsity structure) so that subsequent factorizations
+ * only need to update numerical values.
+ */
+export interface ILU0SymbolicCache {
+  /** Matrix dimension */
+  n: number;
+  /** Number of non-zeros in original matrix */
+  nnz: number;
+  /** Row pointer array (reference, not copy) */
+  rowPtr: Int32Array;
+  /** Column index array (reference, not copy) */
+  colIdx: Int32Array;
+  /** Diagonal element index for each row */
+  diagIdx: Int32Array;
+  /** For each row i, maps column j -> position in values array */
+  colPos: Map<number, Map<number, number>>;
+  /** L factor sparsity: row pointers */
+  lRowPtr: Int32Array;
+  /** L factor sparsity: column indices */
+  lColIdx: Int32Array;
+  /** L factor: mapping from combined LU position to L values position */
+  lMap: { luPos: number; lPos: number }[];
+  /** L factor: diagonal positions (unit diagonal) */
+  lDiagPositions: { lPos: number; row: number }[];
+  /** U factor sparsity: row pointers */
+  uRowPtr: Int32Array;
+  /** U factor sparsity: column indices */
+  uColIdx: Int32Array;
+  /** U factor: mapping from combined LU position to U values position */
+  uMap: { luPos: number; uPos: number }[];
+  /** Total number of L entries */
+  lNnz: number;
+  /** Total number of U entries */
+  uNnz: number;
+}
+
+/**
+ * Perform symbolic analysis of a CSR matrix for ILU(0).
+ * This discovers the sparsity structure once so that repeated numerical
+ * factorizations can skip the pattern discovery phase entirely.
+ */
+export function ilu0SymbolicAnalysis(A: CSRMatrix): ILU0SymbolicCache {
+  const n = A.n;
+  const rowStart = A.rowPtr;
+  const colIdx = A.colIdx;
+
+  // Diagonal index lookup
+  const diagIdx = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    diagIdx[i] = -1;
+    for (let p = rowStart[i]; p < rowStart[i + 1]; p++) {
+      if (colIdx[p] === i) {
+        diagIdx[i] = p;
+        break;
+      }
+    }
+  }
+
+  // Column position lookup for each row
+  const colPos = new Map<number, Map<number, number>>();
+  for (let i = 0; i < n; i++) {
+    const rowMap = new Map<number, number>();
+    for (let p = rowStart[i]; p < rowStart[i + 1]; p++) {
+      rowMap.set(colIdx[p], p);
+    }
+    colPos.set(i, rowMap);
+  }
+
+  // Pre-compute L and U sparsity structure
+  const lCols: number[] = [];
+  const uCols: number[] = [];
+  const lMapEntries: { luPos: number; lPos: number }[] = [];
+  const uMapEntries: { luPos: number; uPos: number }[] = [];
+  const lDiagPositions: { lPos: number; row: number }[] = [];
+  const lRowPtr = new Int32Array(n + 1);
+  const uRowPtr = new Int32Array(n + 1);
+
+  for (let i = 0; i < n; i++) {
+    lRowPtr[i] = lCols.length;
+    uRowPtr[i] = uCols.length;
+
+    for (let p = rowStart[i]; p < rowStart[i + 1]; p++) {
+      const j = colIdx[p];
+      if (j < i) {
+        lMapEntries.push({ luPos: p, lPos: lCols.length });
+        lCols.push(j);
+      } else {
+        uMapEntries.push({ luPos: p, uPos: uCols.length });
+        uCols.push(j);
+      }
+    }
+
+    // L has implicit unit diagonal
+    lDiagPositions.push({ lPos: lCols.length, row: i });
+    lCols.push(i);
+  }
+  lRowPtr[n] = lCols.length;
+  uRowPtr[n] = uCols.length;
+
+  return {
+    n,
+    nnz: A.nnz,
+    rowPtr: A.rowPtr,
+    colIdx: A.colIdx,
+    diagIdx,
+    colPos,
+    lRowPtr,
+    lColIdx: new Int32Array(lCols),
+    lMap: lMapEntries,
+    lDiagPositions,
+    uRowPtr,
+    uColIdx: new Int32Array(uCols),
+    uMap: uMapEntries,
+    lNnz: lCols.length,
+    uNnz: uCols.length
+  };
+}
+
+/**
+ * Perform numerical ILU(0) factorization using a cached symbolic structure.
+ * This avoids re-discovering the sparsity pattern and rebuilding lookup maps,
+ * only updating numerical values. For biochemical ODE systems where the
+ * Jacobian pattern is fixed, this is significantly faster than full ilu0Factorize.
+ */
+export function ilu0NumericalFactorize(A: CSRMatrix, cache: ILU0SymbolicCache): ILU0Factors {
+  const n = cache.n;
+  const rowStart = cache.rowPtr;
+  const colIdx = cache.colIdx;
+
+  // Copy values for in-place IKJ ILU(0)
+  const LU = new Float64Array(A.values);
+
+  // IKJ variant of ILU(0) using cached structure
+  for (let i = 1; i < n; i++) {
+    const rowI = cache.colPos.get(i)!;
+
+    for (let pk = rowStart[i]; pk < rowStart[i + 1]; pk++) {
+      const k = colIdx[pk];
+      if (k >= i) break;
+
+      const diagK = cache.diagIdx[k];
+      if (diagK === -1 || Math.abs(LU[diagK]) < 1e-15) continue;
+
+      LU[pk] /= LU[diagK];
+      const lik = LU[pk];
+
+      for (let pj = rowStart[k]; pj < rowStart[k + 1]; pj++) {
+        const j = colIdx[pj];
+        if (j <= k) continue;
+
+        const posIJ = rowI.get(j);
+        if (posIJ !== undefined) {
+          LU[posIJ] -= lik * LU[pj];
+        }
+      }
+    }
+  }
+
+  // Extract L and U values using cached structure mappings
+  const lValues = new Float64Array(cache.lNnz);
+  const uValues = new Float64Array(cache.uNnz);
+
+  for (const { luPos, lPos } of cache.lMap) {
+    lValues[lPos] = LU[luPos];
+  }
+  for (const { lPos } of cache.lDiagPositions) {
+    lValues[lPos] = 1.0; // Unit diagonal
+  }
+  for (const { luPos, uPos } of cache.uMap) {
+    uValues[uPos] = LU[luPos];
+  }
+
+  // Identity permutation
+  const perm = new Int32Array(n);
+  const invPerm = new Int32Array(n);
+  for (let i = 0; i < n; i++) {
+    perm[i] = i;
+    invPerm[i] = i;
+  }
+
+  return {
+    L: {
+      n,
+      nnz: cache.lNnz,
+      rowPtr: cache.lRowPtr,
+      colIdx: cache.lColIdx,
+      values: lValues
+    },
+    U: {
+      n,
+      nnz: cache.uNnz,
+      rowPtr: cache.uRowPtr,
+      colIdx: cache.uColIdx,
+      values: uValues
+    },
+    perm,
+    invPerm
+  };
+}
+
+/**
  * Compute ILU(0) factorization - Incomplete LU with zero fill-in
- * 
+ *
  * This preserves the sparsity pattern of the original matrix, making it
  * efficient for iterative methods with repeated factorizations.
- * 
+ *
  * @param A - CSR matrix to factorize
  * @returns ILU(0) factors L and U
  */

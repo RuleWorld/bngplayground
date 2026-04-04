@@ -286,7 +286,7 @@ export async function adamOptimize(config: GradientOptimizerConfig): Promise<Opt
     }
 
     // Gradient clipping
-    let clippedG = g;
+    let clippedG: Float64Array = g;
     if (gNorm > maxGradNorm) {
       clippedG = vecScale(g, maxGradNorm / gNorm);
     }

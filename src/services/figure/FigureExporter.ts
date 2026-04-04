@@ -70,7 +70,7 @@ async function exportPNG(
   const canvas = await renderSVGToCanvas(svg, widthPx, heightPx);
 
   const blob = await new Promise<Blob>((resolve, reject) => {
-    canvas.toBlob(
+    (canvas as HTMLCanvasElement).toBlob(
       (b) => (b ? resolve(b) : reject(new Error('Canvas toBlob returned null'))),
       'image/png',
     );
@@ -93,12 +93,12 @@ async function exportTIFF(
   const { widthPx, heightPx } = computePixelDims(svg, dpi, widthMm, heightMm);
   const canvas = await renderSVGToCanvas(svg, widthPx, heightPx);
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
   if (!ctx) throw new Error('Failed to get canvas 2d context');
   const imageData = ctx.getImageData(0, 0, widthPx, heightPx);
 
   const tiffBytes = encodeTIFF(imageData.data, widthPx, heightPx, dpi);
-  const blob = new Blob([tiffBytes], { type: 'image/tiff' });
+  const blob = new Blob([tiffBytes as unknown as BlobPart], { type: 'image/tiff' });
   return { blob, filename, mimeType: 'image/tiff' };
 }
 
@@ -240,7 +240,7 @@ async function exportPDF(
   const hPx = Math.round(hMm * pngDpi / 25.4);
   const canvas = await renderSVGToCanvas(svg, wPx, hPx);
 
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
   if (!ctx) throw new Error('Failed to get canvas 2d context');
   const imageData = ctx.getImageData(0, 0, wPx, hPx);
 
@@ -364,7 +364,7 @@ async function exportEPS(
   const wPx = Math.round(wMm * pngDpi / 25.4);
   const hPx = Math.round(hMm * pngDpi / 25.4);
   const canvas = await renderSVGToCanvas(svg, wPx, hPx);
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d') as CanvasRenderingContext2D | null;
   if (!ctx) throw new Error('Failed to get canvas 2d context');
   const imageData = ctx.getImageData(0, 0, wPx, hPx);
 

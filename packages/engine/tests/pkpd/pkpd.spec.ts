@@ -335,7 +335,7 @@ describe('Virtual population generation', () => {
     expect(patients).toHaveLength(5000);
 
     // Check CL statistics
-    const clValues = patients.map((p) => p.CL ?? p.parameters['CL']);
+    const clValues = patients.map((p) => (p as any).CL ?? p.parameters['CL']);
     const clMean = clValues.reduce((s, v) => s + v, 0) / clValues.length;
     const clVariance = clValues.reduce((s, v) => s + (v - clMean) ** 2, 0) / (clValues.length - 1);
     const clCV = Math.sqrt(clVariance) / clMean;

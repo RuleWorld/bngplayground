@@ -236,6 +236,71 @@ export class Rosenbrock23Solver {
   private jacobianAge = 0;
   private maxJacobianAge = 100;  // Reuse Jacobian for up to 100 steps (stiff systems change slowly)
 
+  // Adaptive Jacobian age tracking: monitors step acceptance rate
+  // to dynamically adjust maxJacobianAge for stiff systems
+  private readonly adaptiveWindowSize = 50;
+  private recentAcceptances: boolean[] = [];
+  private readonly highAcceptanceThreshold = 0.9;   // >90% acceptance => extend reuse
+  private readonly lowAcceptanceThreshold = 0.7;     // <70% acceptance => reduce reuse
+  private readonly extendedMaxJacobianAge = 300;
+  private readonly defaultMaxJacobianAge = 100;
+
+  // Buffer pool for Float64Array reuse across integration steps
+  private static bufferPool: Map<number, Float64Array[]> = new Map();
+
+  /**
+   * Acquire a Float64Array buffer of the given size from the pool.
+   * Returns a pooled buffer if available, otherwise allocates a new one.
+   */
+  static acquire(size: number): Float64Array {
+    const pool = Rosenbrock23Solver.bufferPool.get(size);
+    if (pool && pool.length > 0) {
+      return pool.pop()!;
+    }
+    return new Float64Array(size);
+  }
+
+  /**
+   * Release a Float64Array buffer back to the pool for reuse.
+   */
+  static release(buffer: Float64Array): void {
+    const size = buffer.length;
+    let pool = Rosenbrock23Solver.bufferPool.get(size);
+    if (!pool) {
+      pool = [];
+      Rosenbrock23Solver.bufferPool.set(size, pool);
+    }
+    // Cap pool size to prevent unbounded memory growth
+    if (pool.length < 16) {
+      buffer.fill(0);
+      pool.push(buffer);
+    }
+  }
+
+  /**
+   * Update adaptive Jacobian age based on recent step acceptance history.
+   * If the solver consistently accepts steps (>90% over last 50 steps),
+   * the Jacobian changes slowly and we can reuse it longer (age 300).
+   * If rejection rate increases (<70% acceptance), revert to default (age 100).
+   */
+  private updateAdaptiveJacobianAge(accepted: boolean): void {
+    this.recentAcceptances.push(accepted);
+    if (this.recentAcceptances.length > this.adaptiveWindowSize) {
+      this.recentAcceptances.shift();
+    }
+
+    if (this.recentAcceptances.length >= this.adaptiveWindowSize) {
+      const acceptCount = this.recentAcceptances.filter(a => a).length;
+      const acceptRate = acceptCount / this.recentAcceptances.length;
+
+      if (acceptRate >= this.highAcceptanceThreshold) {
+        this.maxJacobianAge = this.extendedMaxJacobianAge;
+      } else if (acceptRate < this.lowAcceptanceThreshold) {
+        this.maxJacobianAge = this.defaultMaxJacobianAge;
+      }
+    }
+  }
+
   constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}) {
     this.n = n;
     this.f = f;
@@ -419,6 +484,9 @@ export class Rosenbrock23Solver {
     } else {
       this.lastStepRejected = true;
     }
+
+    // Update adaptive Jacobian reuse age based on acceptance history
+    this.updateAdaptiveJacobianAge(accepted);
 
     const hNew = h * scale;
 

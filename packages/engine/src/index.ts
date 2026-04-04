@@ -190,7 +190,7 @@ export { qrEigenvalues, arnoldiEigenvalues } from './services/analysis/EigenSolv
 export { continuation, detectBifurcation } from './services/analysis/Continuation';
 export type { ContinuationConfig, ContinuationPoint, BifurcationPoint, ContinuationResult } from './services/analysis/Continuation';
 export { attributeBifurcation, eigenvalueSensitivity } from './services/analysis/BifurcationAttribution';
-export type { BifurcationAttribution as BifurcationAttributionResult } from './services/analysis/BifurcationAttribution';
+export type { AttributionResult as BifurcationAttributionResult } from './services/analysis/BifurcationAttribution';
 export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 

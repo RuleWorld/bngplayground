@@ -1,13 +1,12 @@
 /**
  * EigenSolver.ts -- Full eigenvalue/eigenvector solver for dense real matrices.
  *
- * Algorithms:
- *   1. Householder reduction to upper Hessenberg form
- *   2. Implicit double-shift QR iteration (Francis QR step)
- *   3. Eigenvalue extraction from quasi-triangular (real Schur) form
- *   4. Arnoldi iteration for leading eigenvalues of large/sparse matrices
- *   5. Eigenvector computation via inverse iteration
+ * Uses ml-matrix EigenvalueDecomposition for the primary qrEigenvalues path
+ * (battle-tested, handles all edge cases). Custom Arnoldi iteration for
+ * leading eigenvalues of large/sparse matrices.
  */
+
+import { Matrix, EigenvalueDecomposition } from 'ml-matrix';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -16,162 +15,9 @@ export interface ComplexNumber {
   imag: number;
 }
 
-// ── Householder reduction to upper Hessenberg form ──────────────────
-
 /**
- * Reduce a general n×n matrix (row-major Float64Array) to upper Hessenberg
- * form in-place using Householder reflections.  H = Q^T A Q.
- * On exit `H` is stored in the input array; the reflectors are stored below
- * the sub-diagonal for optional Q accumulation.
- */
-function hessenbergReduce(H: Float64Array, n: number): void {
-  for (let k = 0; k < n - 2; k++) {
-    // Build Householder vector for column k, rows k+1..n-1
-    let sigma = 0;
-    for (let i = k + 1; i < n; i++) {
-      sigma += H[i * n + k] * H[i * n + k];
-    }
-    if (sigma < 1e-300) continue;
-
-    const alpha = H[(k + 1) * n + k];
-    const mu = Math.sqrt(sigma); // sigma = ||x||^2, includes alpha^2
-    // v0 = alpha - sign(alpha)*mu, using cancellation-safe form when alpha > 0
-    const v0 = alpha <= 0 ? alpha - mu : -(sigma - alpha * alpha) / (alpha + mu);
-    const beta = 2 * v0 * v0 / (sigma - alpha * alpha + v0 * v0);
-
-    // Store Householder vector in-place (v[0] = v0 already implicit)
-    const v = new Float64Array(n - k - 1);
-    v[0] = v0;
-    for (let i = 1; i < v.length; i++) {
-      v[i] = H[(k + 1 + i) * n + k];
-    }
-    // Normalise so v[0]=1 for the reflector
-    const invV0 = 1 / v0;
-    for (let i = 1; i < v.length; i++) v[i] *= invV0;
-    v[0] = 1;
-
-    // Apply from left: H <- (I - beta*v*v^T) * H
-    for (let j = k; j < n; j++) {
-      let dot = 0;
-      for (let i = 0; i < v.length; i++) {
-        dot += v[i] * H[(k + 1 + i) * n + j];
-      }
-      dot *= beta;
-      for (let i = 0; i < v.length; i++) {
-        H[(k + 1 + i) * n + j] -= v[i] * dot;
-      }
-    }
-
-    // Apply from right: H <- H * (I - beta*v*v^T)
-    for (let i = 0; i < n; i++) {
-      let dot = 0;
-      for (let j = 0; j < v.length; j++) {
-        dot += H[i * n + (k + 1 + j)] * v[j];
-      }
-      dot *= beta;
-      for (let j = 0; j < v.length; j++) {
-        H[i * n + (k + 1 + j)] -= dot * v[j];
-      }
-    }
-
-    // Zero out sub-sub-diagonal entries explicitly for cleanliness
-    for (let i = k + 2; i < n; i++) {
-      H[i * n + k] = 0;
-    }
-  }
-}
-
-// ── Implicit double-shift QR step (Francis) ─────────────────────────
-
-/**
- * Perform one implicit double-shift QR step on the Hessenberg matrix H,
- * restricted to rows/columns lo..hi (inclusive).
- */
-function francisQRStep(H: Float64Array, n: number, lo: number, hi: number): void {
-  const nn = hi - lo + 1;
-  if (nn < 3) return;
-
-  // Wilkinson shift: eigenvalues of the trailing 2×2 block
-  const a = H[hi * n + hi];
-  const b = H[(hi - 1) * n + (hi - 1)];
-  const c = H[(hi - 1) * n + hi];
-  const d = H[hi * n + (hi - 1)];
-
-  const s = b + a; // trace
-  const t = b * a - c * d; // determinant
-
-  // Initial column of (H - sI)(H - tI)*e_1
-  let x = H[lo * n + lo] * H[lo * n + lo] + H[lo * n + (lo + 1)] * H[(lo + 1) * n + lo] - s * H[lo * n + lo] + t;
-  let y = H[(lo + 1) * n + lo] * (H[lo * n + lo] + H[(lo + 1) * n + (lo + 1)] - s);
-  let z = H[(lo + 1) * n + lo] * H[(lo + 2) * n + (lo + 1)];
-
-  for (let k = lo; k <= hi - 2; k++) {
-    // Construct Householder reflector for [x, y, z]
-    const norm = Math.sqrt(x * x + y * y + z * z);
-    if (norm < 1e-300) {
-      x = H[(k + 1) * n + k];
-      y = k + 2 <= hi ? H[(k + 2) * n + k] : 0;
-      z = k + 3 <= hi ? H[(k + 3) * n + k] : 0;
-      continue;
-    }
-    const v1 = x + Math.sign(x) * norm;
-    const v2 = y;
-    const v3 = z;
-    const tau = 2 / (v1 * v1 + v2 * v2 + v3 * v3);
-
-    // Apply reflector from the left
-    const colStart = Math.max(k, lo);
-    for (let j = colStart; j < n; j++) {
-      const w = v1 * H[k * n + j] + v2 * H[(k + 1) * n + j] + v3 * H[(k + 2) * n + j];
-      H[k * n + j] -= tau * v1 * w;
-      H[(k + 1) * n + j] -= tau * v2 * w;
-      H[(k + 2) * n + j] -= tau * v3 * w;
-    }
-
-    // Apply reflector from the right
-    const rowEnd = Math.min(k + 4, hi + 1);
-    for (let i = 0; i < rowEnd; i++) {
-      const w = v1 * H[i * n + k] + v2 * H[i * n + (k + 1)] + v3 * H[i * n + (k + 2)];
-      H[i * n + k] -= tau * v1 * w;
-      H[i * n + (k + 1)] -= tau * v2 * w;
-      H[i * n + (k + 2)] -= tau * v3 * w;
-    }
-
-    // Prepare next iteration
-    x = H[(k + 1) * n + k];
-    y = k + 2 <= hi ? H[(k + 2) * n + k] : 0;
-    z = k + 3 <= hi ? H[(k + 3) * n + k] : 0;
-  }
-
-  // Final 2×2 Givens rotation for the last bulge
-  {
-    const k = hi - 1;
-    const norm = Math.sqrt(x * x + y * y);
-    if (norm > 1e-300) {
-      const cs = x / norm;
-      const sn = y / norm;
-
-      // Apply from left
-      for (let j = k; j < n; j++) {
-        const tmp = cs * H[k * n + j] + sn * H[(k + 1) * n + j];
-        H[(k + 1) * n + j] = -sn * H[k * n + j] + cs * H[(k + 1) * n + j];
-        H[k * n + j] = tmp;
-      }
-      // Apply from right
-      for (let i = 0; i <= hi; i++) {
-        const tmp = cs * H[i * n + k] + sn * H[i * n + (k + 1)];
-        H[i * n + (k + 1)] = -sn * H[i * n + k] + cs * H[i * n + (k + 1)];
-        H[i * n + k] = tmp;
-      }
-    }
-  }
-}
-
-// ── QR eigenvalue extraction ────────────────────────────────────────
-
-/**
- * Compute all eigenvalues of a real n×n matrix using Householder reduction
- * to Hessenberg form followed by the implicit double-shift QR algorithm.
+ * Compute all eigenvalues of a real n×n matrix via ml-matrix
+ * EigenvalueDecomposition (Householder + QR internally).
  *
  * Returns complex eigenvalues as {real, imag} pairs.
  */
@@ -182,69 +28,23 @@ export function qrEigenvalues(
   if (n === 0) return [];
   if (n === 1) return [{ real: matrix[0], imag: 0 }];
 
-  // Work on a copy
-  const H = new Float64Array(matrix);
-
-  // Reduce to Hessenberg form
-  hessenbergReduce(H, n);
+  // Use ml-matrix's battle-tested EigenvalueDecomposition
+  const data: number[][] = [];
+  for (let i = 0; i < n; i++) {
+    const row: number[] = [];
+    for (let j = 0; j < n; j++) {
+      row.push(matrix[i * n + j]);
+    }
+    data.push(row);
+  }
+  const m = new Matrix(data);
+  const evd = new EigenvalueDecomposition(m);
 
   const eigenvalues: Array<ComplexNumber> = [];
-
-  // QR iteration
-  let hi = n - 1;
-  const maxIter = 300 * n;
-  let iter = 0;
-
-  while (hi >= 0 && iter < maxIter) {
-    // Find the lowest unreduced sub-diagonal entry
-    let lo = hi;
-    while (lo > 0) {
-      const s = Math.abs(H[(lo - 1) * n + (lo - 1)]) + Math.abs(H[lo * n + lo]);
-      const threshold = s > 0 ? 1e-14 * s : 1e-30;
-      if (Math.abs(H[lo * n + (lo - 1)]) <= threshold) {
-        H[lo * n + (lo - 1)] = 0;
-        break;
-      }
-      lo--;
-    }
-
-    if (lo === hi) {
-      // 1×1 block: real eigenvalue
-      eigenvalues.push({ real: H[hi * n + hi], imag: 0 });
-      hi--;
-    } else if (lo === hi - 1) {
-      // 2×2 block: extract pair
-      const a11 = H[(hi - 1) * n + (hi - 1)];
-      const a12 = H[(hi - 1) * n + hi];
-      const a21 = H[hi * n + (hi - 1)];
-      const a22 = H[hi * n + hi];
-
-      const tr = a11 + a22;
-      const det = a11 * a22 - a12 * a21;
-      const disc = tr * tr - 4 * det;
-
-      if (disc >= 0) {
-        const sqrtDisc = Math.sqrt(disc);
-        eigenvalues.push({ real: (tr + sqrtDisc) / 2, imag: 0 });
-        eigenvalues.push({ real: (tr - sqrtDisc) / 2, imag: 0 });
-      } else {
-        const sqrtDisc = Math.sqrt(-disc);
-        eigenvalues.push({ real: tr / 2, imag: sqrtDisc / 2 });
-        eigenvalues.push({ real: tr / 2, imag: -sqrtDisc / 2 });
-      }
-      hi -= 2;
-    } else {
-      // Perform QR step
-      francisQRStep(H, n, lo, hi);
-      iter++;
-    }
-  }
-
-  // If we didn't converge, extract remaining diagonal entries
-  if (hi >= 0) {
-    for (let i = 0; i <= hi; i++) {
-      eigenvalues.push({ real: H[i * n + i], imag: 0 });
-    }
+  const realParts = evd.realEigenvalues;
+  const imagParts = evd.imaginaryEigenvalues;
+  for (let i = 0; i < n; i++) {
+    eigenvalues.push({ real: realParts[i], imag: imagParts[i] });
   }
 
   return eigenvalues;

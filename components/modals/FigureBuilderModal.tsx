@@ -247,10 +247,11 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
             <Select
               value={preset}
               onChange={e => setPreset(e.target.value as JournalPreset)}
-              options={Object.entries(PRESET_DESCRIPTIONS).map(([k, v]) => ({
-                value: k, label: k.toUpperCase(),
-              }))}
-            />
+            >
+              {Object.keys(PRESET_DESCRIPTIONS).map(k => (
+                <option key={k} value={k}>{k.toUpperCase()}</option>
+              ))}
+            </Select>
             <p className="text-[10px] text-slate-400 mt-0.5">{PRESET_DESCRIPTIONS[preset]}</p>
           </div>
 
@@ -325,8 +326,7 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
             {(['svg', 'png', 'tiff', 'pdf'] as const).map(fmt => (
               <Button
                 key={fmt}
-                size="sm"
-                variant="outline"
+                variant="secondary"
                 className="w-full justify-center"
                 onClick={() => handleExport(fmt)}
                 disabled={isExporting || selectedPanels.length === 0}

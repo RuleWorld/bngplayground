@@ -76,7 +76,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
 
       if (engine.parseMultiscaleModel && engine.multiscaleSimulation) {
         const config = engine.parseMultiscaleModel(parsed);
-        const result = await engine.multiscaleSimulation(config, (time, nCells, phase) => {
+        const result = await engine.multiscaleSimulation(config, (fraction: number) => {
           // Progress callback
         });
 
@@ -190,11 +190,11 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
             spellCheck={false}
           />
           <div className="flex gap-2 mt-2">
-            <Button size="sm" onClick={handleRun} disabled={isRunning}>
+            <Button onClick={handleRun} disabled={isRunning}>
               {isRunning && <LoadingSpinner className="w-3 h-3 mr-1" />}
               {isRunning ? 'Running...' : 'Run Simulation'}
             </Button>
-            <Button size="sm" variant="outline" onClick={() => setDefinition(EXAMPLE_DEFINITION)}>
+            <Button variant="secondary" onClick={() => setDefinition(EXAMPLE_DEFINITION)}>
               Reset
             </Button>
           </div>

@@ -295,7 +295,7 @@ export async function runGPUSSAEnsemble(
 
   // PRNG state
   const prngData = initializePRNGState(nTrajectories, seed);
-  device.queue.writeBuffer(buffers.prngState, 0, prngData);
+  device.queue.writeBuffer(buffers.prngState, 0, prngData as Uint32Array<ArrayBuffer>);
 
   // Output times
   device.queue.writeBuffer(buffers.outputTimes, 0, timePoints);
@@ -304,7 +304,7 @@ export async function runGPUSSAEnsemble(
   const zeroOutput = new Float32Array(nTrajectories * nOutputPoints * nSpecies);
   device.queue.writeBuffer(buffers.output, 0, zeroOutput);
   const zeroReactions = new Uint32Array(nTrajectories);
-  device.queue.writeBuffer(buffers.totalReactions, 0, zeroReactions);
+  device.queue.writeBuffer(buffers.totalReactions, 0, zeroReactions as unknown as Uint32Array<ArrayBuffer>);
 
   // -----------------------------------------------------------------------
   // Dispatch

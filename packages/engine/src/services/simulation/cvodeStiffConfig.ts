@@ -112,6 +112,12 @@ export interface CVODEStiffConfig {
   /** Use Adams-Moulton method for non-stiff systems (requires WASM build with _init_solver_adams) */
   useAdams: boolean;
 
+  /** Maximum Jacobian reuse age for Rosenbrock solver (controls recomputation frequency) */
+  maxJacobianAge: number;
+
+  /** Whether to skip Jacobian entirely (use explicit methods for non-stiff systems) */
+  skipJacobian: boolean;
+
   /** Explanation of why these settings were chosen */
   rationale: string;
 }
@@ -231,6 +237,8 @@ export function getOptimalCVODEConfig(profile: StiffnessProfile): CVODEStiffConf
     useSparse: false,
     useAnalyticalJacobian: false,
     useAdams: false,
+    maxJacobianAge: 100,
+    skipJacobian: false,
     rationale: 'Default BNG2-compatible settings'
   };
 
@@ -238,13 +246,16 @@ export function getOptimalCVODEConfig(profile: StiffnessProfile): CVODEStiffConf
   switch (profile.category) {
     case 'mild':
       config.useAdams = true; // Adams-Moulton is superior for non-stiff systems
-      config.rationale = 'Mild stiffness: Adams-Moulton solver enabled for improved performance';
+      config.maxJacobianAge = 300; // Mild stiffness: Jacobian changes very slowly
+      config.skipJacobian = true; // Non-stiff: skip Jacobian, use explicit methods
+      config.rationale = 'Mild stiffness: Adams-Moulton solver enabled, Jacobian skipped for explicit methods';
       break;
 
     case 'moderate':
       config.maxSteps = 5000;
       config.maxNonlinIters = 5;
-      config.rationale = 'Moderate stiffness: increased iteration limits';
+      config.maxJacobianAge = 300; // Moderate: Jacobian still relatively stable
+      config.rationale = 'Moderate stiffness: increased iteration limits, extended Jacobian reuse';
       break;
 
     case 'severe':
@@ -253,6 +264,7 @@ export function getOptimalCVODEConfig(profile: StiffnessProfile): CVODEStiffConf
       config.nonlinConvCoef = 0.05;
       config.stabLimDet = 1;  // Enable stability limit detection
       config.maxOrd = 4;      // Slightly reduce max BDF order for stability
+      config.maxJacobianAge = 100; // Severe: default reuse, adaptive tracking will adjust
       config.rationale = 'Severe stiffness: stability detection enabled, stricter convergence';
       break;
 
@@ -267,7 +279,11 @@ export function getOptimalCVODEConfig(profile: StiffnessProfile): CVODEStiffConf
       config.maxConvFails = 20;
       config.maxErrTestFails = 15;
       config.useAnalyticalJacobian = true;  // Analytical Jacobian crucial for extreme stiffness
-      config.rationale = 'Extreme stiffness: maximum stability settings, analytical Jacobian recommended';
+      config.maxJacobianAge = 50; // Extreme: recompute Jacobian frequently for accuracy
+      config.useSparse = profile.systemSize > 50; // Sparse solver for large extreme-stiff systems
+      config.rationale = 'Extreme stiffness: maximum stability settings, frequent Jacobian recomputation' +
+        (profile.systemSize > 50 ? ', sparse solver for large system' : '') +
+        ', analytical Jacobian recommended';
       break;
   }
 

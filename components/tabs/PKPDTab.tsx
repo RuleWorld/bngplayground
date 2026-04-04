@@ -204,11 +204,15 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">PK Model</label>
-            <Select value={modelType} onChange={e => setModelType(e.target.value as PKModelType)} options={MODEL_OPTIONS} />
+            <Select value={modelType} onChange={e => setModelType(e.target.value as PKModelType)}>
+              {MODEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Route</label>
-            <Select value={route} onChange={e => setRoute(e.target.value as RouteType)} options={ROUTE_OPTIONS} />
+            <Select value={route} onChange={e => setRoute(e.target.value as RouteType)}>
+              {ROUTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+            </Select>
           </div>
           <div>
             <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Drug Name</label>

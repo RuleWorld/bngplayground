@@ -159,18 +159,18 @@ molecule_pattern
     ;
 
 scope_prefix
-    : MOD STRING COLON COLON
+    : MOLECULE_TAG_TOKEN COLON COLON
     ;
 
 // Bond wildcards that apply to entire molecule patterns
 // These specify bond requirements for the whole molecule
 pattern_bond_wildcard
     : EMARK PLUS      // !+ = molecule must have one or more bonds
-    | EMARK QMARK     // !? = molecule may or may not have bonds  
+    | EMARK QMARK     // !? = molecule may or may not have bonds
     ;
 
 molecule_tag
-    : MOD (INT | STRING)
+    : MOLECULE_TAG_TOKEN
     ;
 
 // Allow empty entries in component pattern lists to handle double commas (,,)
@@ -185,7 +185,7 @@ component_pattern
     ;
 
 component_label
-    : MOD (INT | STRING)     // Component label (e.g., %1, %reaction_1)
+    : MOLECULE_TAG_TOKEN     // Component label (e.g., %1, %reaction_1)
     ;
 
 state_value

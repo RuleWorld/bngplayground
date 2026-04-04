@@ -1,21 +1,10 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 import { simulate, loadEvaluator, analyzeReactionInformation } from '@bngplayground/engine';
 
-const temporalAnalysisArgsSchema = {
-  type: 'object',
-  properties: {
-    code: { type: 'string', description: 'BNGL model code' },
-    t_end: { type: 'number', description: 'Simulation end time (default: 100)' },
-    n_steps: { type: 'number', description: 'Number of output steps (default: 200)' },
-    bin_width: { type: 'number', description: 'Time bin width for discretization (default: auto)' },
-  },
-  required: ['code'],
-};
-
 export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = parseArgs('temporal_analysis', temporalAnalysisArgsSchema, args);
+  const parsedArgs = (args ?? {}) as any;
   try {
     const model = parseModelOrThrow(parsedArgs.code);
     const expandedModel = await expandModel(model);
@@ -61,12 +50,12 @@ export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult
       firingEvents: results.firingLog.length,
       reactionsAnalyzed: nReactions,
       topCoupledPairs: topMI.map((mi: any) => ({
-        reactions: `${mi.reaction1Name || `R${mi.reaction1 + 1}`} ↔ ${mi.reaction2Name || `R${mi.reaction2 + 1}`}`,
+        reactions: `${mi.reaction1Name || `R${mi.reaction1 + 1}`} \u2194 ${mi.reaction2Name || `R${mi.reaction2 + 1}`}`,
         normalizedMI: mi.normalizedMI,
         pValue: mi.pValue,
       })),
       topCausalFlows: topTE.map((te: any) => ({
-        flow: `${te.sourceName || `R${te.source + 1}`} → ${te.targetName || `R${te.target + 1}`}`,
+        flow: `${te.sourceName || `R${te.source + 1}`} \u2192 ${te.targetName || `R${te.target + 1}`}`,
         netInformationFlow: te.netInformationFlow,
         pValue: te.pValue,
       })),
@@ -76,9 +65,9 @@ export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult
       })),
       technical: `Analyzed ${results.firingLog.length} firing events across ${nReactions} reactions. Top MI pair: ${topMI[0]?.normalizedMI?.toFixed(3) || 'N/A'}.`,
       biological: topTE.length > 0
-        ? `Strongest causal flow: ${topTE[0]?.sourceName || `R${topTE[0]?.source + 1}`} → ${topTE[0]?.targetName || `R${topTE[0]?.target + 1}`} (${topTE[0]?.netInformationFlow?.toFixed(3)} bits).`
+        ? `Strongest causal flow: ${topTE[0]?.sourceName || `R${topTE[0]?.source + 1}`} \u2192 ${topTE[0]?.targetName || `R${topTE[0]?.target + 1}`} (${topTE[0]?.netInformationFlow?.toFixed(3)} bits).`
         : 'No significant directional information flow detected between reactions.',
-      strategic: 'Transfer entropy reveals which reactions drive others — emergent couplings not in any single rule are particularly interesting.',
+      strategic: 'Transfer entropy reveals which reactions drive others \u2014 emergent couplings not in any single rule are particularly interesting.',
     });
   } catch (error: any) {
     return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
