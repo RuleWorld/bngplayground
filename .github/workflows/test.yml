@@ -49,7 +49,7 @@ jobs:
       
       - name: Upload coverage (if generated)
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-fast
           path: coverage/
@@ -170,7 +170,7 @@ jobs:
       
       - name: Upload coverage (if generated)
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: coverage-full-shard-${{ matrix.shard }}
           path: coverage/
@@ -178,7 +178,7 @@ jobs:
       
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-full-shard-${{ matrix.shard }}
           path: |
@@ -277,7 +277,7 @@ jobs:
 
       - name: Upload reference test results
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-reference
           path: |
@@ -358,7 +358,7 @@ jobs:
 
       - name: Upload deterministic parity reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: parity-deterministic-shard-${{ matrix.shard }}
           path: artifacts/parity_layer_report.deterministic.shard-${{ matrix.shard }}.json
