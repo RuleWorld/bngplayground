@@ -160,3 +160,76 @@ export type { ZipEntry } from './utils/miniZip';
 
 // ── Spatial Simulation ─────────────────────────────────────────────
 export * from './services/spatial';
+
+// ── Symbolic Analysis ───────────────────────────────────────────────
+export { symConst, symVar, symAdd, symMul, symDiv, symPow, symNeg, simplify, evaluate, differentiate, exprToString, exprToLatex, expand, collectTerms, factor, isPolynomial, degree, freeVariables, substitute } from './services/symbolic/SymbolicExpr';
+export type { SymExpr } from './services/symbolic/SymbolicExpr';
+export { buildSymbolicODESystem, solveSymbolicSteadyState, symbolicSensitivity, symbolicBifurcationConditions } from './services/symbolic/SymbolicODE';
+export type { SymbolicODESystem, SymbolicSteadyState } from './services/symbolic/SymbolicODE';
+export { resultant, solvePolynomialSystem, symbolicGaussianElimination, symbolicDeterminant } from './services/symbolic/PolynomialSolver';
+
+// ── Verification ────────────────────────────────────────────────────
+export { parseQuery } from './services/verification/QueryParser';
+export type { VerificationQuery, VerificationResult } from './services/verification/QueryParser';
+export { checkAbstractReachability, enumerateAbstractComplexes } from './services/verification/ContactMapReachability';
+export { boundedReachabilityCheck, checkDeadlock, checkRuleFires } from './services/verification/BoundedVerifier';
+export { fullReachabilityCheck } from './services/verification/SymmetryReducedVerifier';
+
+// ── Structure Learning ──────────────────────────────────────────────
+export { enumerateRules, countCandidateRules } from './services/verification/RuleEnumerator';
+export type { CandidateRule, EnumerationConfig } from './services/verification/RuleEnumerator';
+export { filterCandidates } from './services/verification/CandidateFilter';
+export { scoreStructure } from './services/verification/StructureScorer';
+export { structureSearch, assembleModel } from './services/inference/StructureABCSMC';
+export type { StructureSearchConfig, StructureSearchResult, StructureParticle } from './services/inference/StructureABCSMC';
+
+// ── Bifurcation Analysis ────────────────────────────────────────────
+export { findSteadyState, computeEigenvalues } from './services/analysis/SteadyStateFinder';
+export type { SteadyState, SteadyStateConfig } from './services/analysis/SteadyStateFinder';
+export { qrEigenvalues, arnoldiEigenvalues } from './services/analysis/EigenSolver';
+export { continuation, detectBifurcation } from './services/analysis/Continuation';
+export type { ContinuationConfig, ContinuationPoint, BifurcationPoint, ContinuationResult } from './services/analysis/Continuation';
+export { attributeBifurcation, eigenvalueSensitivity } from './services/analysis/BifurcationAttribution';
+export type { BifurcationAttribution as BifurcationAttributionResult } from './services/analysis/BifurcationAttribution';
+export { computeNullclines } from './services/analysis/Nullclines';
+export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
+
+// ── Temporal Information Theory ─────────────────────────────────────
+export { analyzeReactionInformation, compareCausalGraphs } from './services/analysis/ReactionInformationTheory';
+export type { ReactionITConfig, ReactionITResult, MutualInformationResult, TransferEntropyResult, PhaseLockingResult } from './services/analysis/ReactionInformationTheory';
+
+// ── Multi-Model Comparison ──────────────────────────────────────────
+export { compareModels, generateVariants, attributeDivergence } from './services/analysis/MultiModelComparator';
+export type { ModelVariant, MultiModelResult, MultiModelConfig, DivergencePoint, RuleAttribution } from './services/analysis/MultiModelComparator';
+
+// ── Model Versioning ────────────────────────────────────────────────
+export { computeSemanticDiff, createVersionDAG, recordVersion, getHistory, createBranch, serializeDAG, deserializeDAG } from './services/versioning/ModelVersionTracker';
+export type { SemanticDiff, ModelVersion, VersionDAG } from './services/versioning/ModelVersionTracker';
+export { bisectBehavior, compareVersions } from './services/versioning/BehavioralBisection';
+export type { BehavioralProperty, BisectionResult } from './services/versioning/BehavioralBisection';
+
+// ── Differentiable Simulation ───────────────────────────────────────
+export { forwardSensitivity, adjointSensitivity, computeObjectiveGradient } from './services/analysis/DifferentiableSolver';
+export type { SensitivityConfig, SensitivityResult, GradientResult } from './services/analysis/DifferentiableSolver';
+export { lbfgsOptimize, adamOptimize, trustRegionOptimize } from './services/analysis/GradientOptimizer';
+export type { GradientOptimizerConfig, OptimizationResult } from './services/analysis/GradientOptimizer';
+export { computeExactFIM } from './services/analysis/ExactFIM';
+export type { ExactFIMConfig, ExactFIMResult } from './services/analysis/ExactFIM';
+
+// ── Multi-Scale ─────────────────────────────────────────────────────
+export { multiscaleSimulation } from './services/multiscale/MultiscaleSimulation';
+export type { MultiscaleConfig, MultiscaleSnapshot, MultiscaleResult } from './services/multiscale/MultiscaleSimulation';
+export type { CellState, CellDecisionRule, CellAction, CellTypeDefinition } from './services/multiscale/CellAgent';
+export { ExtracellularGrid } from './services/multiscale/ExtracellularGrid';
+export { parseMultiscaleModel } from './services/multiscale/MultiscaleParser';
+export type { MultiscaleModelDefinition } from './services/multiscale/MultiscaleParser';
+
+// ── PK/PD ───────────────────────────────────────────────────────────
+export { generatePKModel, getDefaultPKParameters } from './services/pkpd/PKTemplates';
+export type { PKModelType, PKModelConfig, PKModelResult } from './services/pkpd/PKTemplates';
+export { generateDosingSchedule, dosingToSimulationPhases } from './services/pkpd/DosingSchedule';
+export type { DosingEvent, DosingRegimen, StandardDosingConfig } from './services/pkpd/DosingSchedule';
+export { computePKMetrics, trapezoidalAUC, estimateTerminalHalfLife, nonCompartmentalAnalysis } from './services/pkpd/PKMetrics';
+export type { PKMetricsResult } from './services/pkpd/PKMetrics';
+export { generatePopulation, populationSimulation } from './services/pkpd/VirtualPopulation';
+export type { PopulationParameter, VirtualPopulationConfig, VirtualPatient, PopulationSimulationResult } from './services/pkpd/VirtualPopulation';

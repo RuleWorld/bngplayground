@@ -198,6 +198,13 @@ export interface ParameterChange {
     label?: string;
 }
 
+export interface ReactionFiringEvent {
+    time: number;
+    reactionIndex: number;
+    ruleName?: string;
+    propensity: number;
+}
+
 export interface SimulationResults {
     headers: string[];
     data: Record<string, number>[];
@@ -208,6 +215,8 @@ export interface SimulationResults {
     expandedReactions?: BNGLReaction[];
     expandedSpecies?: BNGLSpecies[];
     ssaInfluence?: SSAInfluenceTimeSeries;
+    /** Reaction firing log (only populated when recordFirings=true and method='ssa') */
+    firingLog?: ReactionFiringEvent[];
 }
 
 export interface SSAInfluenceData {
@@ -259,6 +268,10 @@ export interface SimulationOptions {
     includeInfluence?: boolean;
     includeSpeciesData?: boolean;
     maxEvents?: number;
+    /** Record individual reaction firing events for information-theoretic analysis */
+    recordFirings?: boolean;
+    /** Maximum firing events to record (prevents memory blowout, default: 100000) */
+    maxFiringEvents?: number;
     useAdams?: boolean;
 }
 
