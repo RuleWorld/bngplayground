@@ -18,6 +18,7 @@ export interface BNGLSpecies {
     initialConcentration: number;
     isConstant?: boolean;
     initialExpression?: string;
+    initialAmount?: number;
 }
 
 export interface BNGLObservable {
@@ -27,6 +28,15 @@ export interface BNGLObservable {
     comment?: string;
     countFilter?: number;
     countRelation?: string;
+    volumes?: number[] | Float64Array;
+}
+
+export interface ConcreteObservable {
+    name: string;
+    type?: string;
+    indices: Int32Array | number[];
+    coefficients: Float64Array | number[];
+    volumes?: number[] | Float64Array;
 }
 
 export interface BNGLCompartment {
@@ -146,6 +156,8 @@ export interface BNGLModel {
     };
     simulationOptions?: Partial<SimulationOptions>;
     simulationPhases?: SimulationPhase[];
+    phases?: SimulationPhase[];
+    concreteObservables?: ConcreteObservable[];
     concentrationChanges?: ConcentrationChange[];
     parameterChanges?: ParameterChange[];
     paramExpressions?: Record<string, string>;
@@ -252,6 +264,7 @@ export interface SimulationOptions {
     includeSpeciesData?: boolean;
     maxEvents?: number;
     useAdams?: boolean;
+    disableNativeBytecode?: boolean;
 }
 
 export interface SerializedWorkerError {

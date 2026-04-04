@@ -1885,11 +1885,16 @@ class SparseODESolverWrapper {
 /**
  * Factory function to create appropriate solver
  */
+export interface Solver {
+  integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult;
+  destroy?: () => void;
+}
+
 export async function createSolver(
   n: number,
   f: DerivativeFunction,
   options: Partial<SolverOptions> = {}
-): Promise<{ integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult; destroy?: () => void }> {
+): Promise<Solver> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   switch (opts.solver) {
