@@ -1,12 +1,15 @@
 import { ParamBounds, ExperimentalDataPoint, fitParameters, simulate, loadEvaluator } from '@bngplayground/engine';
+import { z } from 'zod';
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { fitParametersArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
+type FitParametersArgs = z.infer<typeof fitParametersArgsSchema>;
+
 export async function handleFitParameters(args: ToolArgs): Promise<ToolResult<any>> {
     try {
-        const parsedArgs = parseArgs('fit_parameters', fitParametersArgsSchema, args);
+        const parsedArgs = parseArgs('fit_parameters', fitParametersArgsSchema, args) as FitParametersArgs;
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
 

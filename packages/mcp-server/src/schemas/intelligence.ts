@@ -16,7 +16,7 @@ const indraQuerySchema = z.object({
 
 export const composeModelArgsSchema = z.object({
     statements: z.array(z.string().min(1)).min(1).optional(),
-    parameters: z.record(finiteNumber).optional(),
+    parameters: z.record(z.string(), finiteNumber).optional(),
     seed_species: z.array(composeSeedSpeciesSchema).optional(),
     strict: z.boolean().optional(),
     source: z.enum(['grammar', 'indra_nlp', 'indra_db']).optional(),
@@ -79,8 +79,8 @@ export const diagnoseModelArgsSchema = z.object({
     n_steps: positiveInt.optional(),
     experimental_data: z.array(z.object({
         time: z.number(),
-        observables: z.record(z.number()),
-        errors: z.record(z.number()).optional(),
+        observables: z.record(z.string(), z.number()),
+        errors: z.record(z.string(), z.number()).optional(),
     })).optional().describe('Experimental data for profile likelihood. When provided, enables identifiability classification.'),
 }).strict();
 
