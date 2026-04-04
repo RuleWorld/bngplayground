@@ -123,10 +123,12 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
         const result = engine.continuation({
           nSpecies,
-          rhsFn: (_y: Float64Array, _p: number, dydt: Float64Array) => {
-            // TODO: Use engine.JITCompiler to generate real RHS from expanded model
-            // Currently a placeholder — continuation needs a proper RHS to produce results
-            for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
+          rhsFn: (_y: Float64Array, _p: number, _dydt: Float64Array) => {
+            // TODO: Use engine.JITCompiler to generate real RHS from expanded model.
+            // For now, explicitly fail rather than returning meaningless results.
+            throw new Error(
+              'Bifurcation analysis is not yet implemented: RHS function is not available for continuation.'
+            );
           },
           initialState,
           parameterStart: startValue,
