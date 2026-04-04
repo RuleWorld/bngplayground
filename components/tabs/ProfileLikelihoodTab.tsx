@@ -131,10 +131,14 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       });
       
       const expData = parseExperimentalData(dataInput);
+      let expIdx = 0;
       const combined = sim.data.map(d => {
-        const exp = expData.find(e => Math.abs(e.time - d.time) < 1e-5);
+        while (expIdx < expData.length && expData[expIdx].time + 1e-5 <= d.time) {
+          expIdx++;
+        }
         const point: any = { ...d };
-        if (exp) {
+        if (expIdx < expData.length && Math.abs(expData[expIdx].time - d.time) < 1e-5) {
+          const exp = expData[expIdx];
           Object.entries(exp.values).forEach(([k, v]) => {
             point[`${k}_exp`] = v;
           });
@@ -142,7 +146,9 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
         return point;
       });
       setPreviewData(combined);
-    } catch (e) {}
+    } catch (e) {
+      // Ignored intentionally for silent preview updates
+    }
   };
 
   React.useEffect(() => {
