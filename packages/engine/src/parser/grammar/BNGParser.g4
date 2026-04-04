@@ -153,30 +153,39 @@ molecule_compartment
 // Molecule patterns can have optional parentheses (e.g., ".CK1a" is valid in reactions)
 // Molecule tagging: pattern%1, pattern%2 for identifying molecules in reactions
 // Bond wildcards can appear after entire patterns: e.g., Smad1(loc~cyt)!+
+// Scope prefix: %x:: for local function parameterization (e.g., %x::A())
 molecule_pattern
-    : (STRING | keyword_as_mol_name) (LPAREN component_pattern_list? RPAREN)? pattern_bond_wildcard? molecule_tag? molecule_attributes?
+    : scope_prefix? (STRING | keyword_as_mol_name) molecule_compartment? molecule_tag? (LPAREN component_pattern_list? RPAREN)? pattern_bond_wildcard? molecule_tag? molecule_attributes?
+    ;
+
+scope_prefix
+    : MOLECULE_TAG_TOKEN COLON COLON
     ;
 
 // Bond wildcards that apply to entire molecule patterns
 // These specify bond requirements for the whole molecule
 pattern_bond_wildcard
     : EMARK PLUS      // !+ = molecule must have one or more bonds
-    | EMARK QMARK     // !? = molecule may or may not have bonds  
+    | EMARK QMARK     // !? = molecule may or may not have bonds
     ;
 
 molecule_tag
-    : MOD (INT | STRING)
+    : MOLECULE_TAG_TOKEN
     ;
 
 // Allow empty entries in component pattern lists to handle double commas (,,)
 component_pattern_list
     : component_pattern? (COMMA component_pattern?)*
     ;
-// Component patterns can have state, multiple bonds (e.g., !0!1), or bond wildcards
-// Support mixed/interleaved state and bond attributes (e.g. site!?~?)
+// Component patterns can have state, multiple bonds (e.g., !0!1), labels (e.g. %1), or bond wildcards
+// Support mixed/interleaved state, bond, and label attributes (e.g. c1%1, site!?~?)
 // Support unbound notation with DOT (e.g., sin., ric.)
 component_pattern
-    : (STRING | INT | keyword_as_component_name) ((TILDE state_value) | bond_spec | DOT)*
+    : (STRING | INT | keyword_as_component_name) ((TILDE state_value) | bond_spec | component_label | DOT)*
+    ;
+
+component_label
+    : MOLECULE_TAG_TOKEN     // Component label (e.g., %1, %reaction_1)
     ;
 
 state_value
@@ -362,7 +371,7 @@ generate_hybrid_model_cmd
     ;
 
 simulate_cmd
-    : (SIMULATE | SIMULATE_ODE | SIMULATE_SSA | SIMULATE_PLA | SIMULATE_NF | SIMULATE_RM)
+    : (SIMULATE | SIMULATE_ODE | SIMULATE_SSA | SIMULATE_PLA | SIMULATE_NF | SIMULATE_RM | SIMULATE_PSA)
       LPAREN action_args? RPAREN SEMI? LB*
     ;
 
@@ -379,8 +388,8 @@ set_cmd
 
 other_action_cmd
     : (SAVECONCENTRATIONS | RESETCONCENTRATIONS | SAVEPARAMETERS | RESETPARAMETERS | QUIT
-       | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE)
-      LPAREN action_arg_value? RPAREN SEMI? LB*
+       | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE | SETVOLUME)
+      LPAREN (action_args | action_arg_value)? RPAREN SEMI? LB*
     ;
 
 // Action arguments can be: {key=>val,...} or simple quoted string

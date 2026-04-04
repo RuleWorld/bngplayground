@@ -171,6 +171,10 @@ export interface SimulationPhase {
     gml?: number;
     equilibrate?: number;
     useAdams?: boolean;
+    /** BNG2 parity: non-uniform output time points (sample_times=>[t1,t2,...]) */
+    sample_times?: number[];
+    /** BNG2 parity: print_CDAT=>0 suppresses species concentration columns from output */
+    print_CDAT?: boolean;
 }
 
 export interface ConcentrationChange {
@@ -186,6 +190,17 @@ export interface ParameterChange {
     parameter: string;
     value: number | string;
     afterPhaseIndex: number;
+    /** BNG2 parity: 'set' (default setParameter), 'save' (saveParameters), 'reset' (resetParameters) */
+    mode?: 'set' | 'save' | 'reset';
+    /** Optional label for saveParameters/resetParameters (BNG2 Cache semantics) */
+    label?: string;
+}
+
+export interface ReactionFiringEvent {
+    time: number;
+    reactionIndex: number;
+    ruleName?: string;
+    propensity: number;
 }
 
 export interface SimulationResults {
@@ -198,6 +213,8 @@ export interface SimulationResults {
     expandedReactions?: BNGLReaction[];
     expandedSpecies?: BNGLSpecies[];
     ssaInfluence?: SSAInfluenceTimeSeries;
+    /** Reaction firing log (only populated when recordFirings=true and method='ssa') */
+    firingLog?: ReactionFiringEvent[];
 }
 
 export interface SSAInfluenceData {
@@ -249,6 +266,10 @@ export interface SimulationOptions {
     includeInfluence?: boolean;
     includeSpeciesData?: boolean;
     maxEvents?: number;
+    /** Record individual reaction firing events for information-theoretic analysis */
+    recordFirings?: boolean;
+    /** Maximum firing events to record (prevents memory blowout, default: 100000) */
+    maxFiringEvents?: number;
     useAdams?: boolean;
 }
 

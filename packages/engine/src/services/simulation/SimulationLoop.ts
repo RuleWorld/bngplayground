@@ -1000,6 +1000,11 @@ export async function simulate(
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
 
+      // Reaction firing log for information-theoretic analysis
+      const shouldRecordFirings = !!(options as any).recordFirings;
+      const maxFiringEvents = (options as any).maxFiringEvents ?? 100000;
+      const firingLog: Array<{ time: number; reactionIndex: number; ruleName?: string; propensity: number }> = [];
+
       // Extract meaningful reaction names from ruleName or reactants/products
       const ruleNames = concreteReactions.map((rxn, i) => {
         if (rxn.ruleName) return rxn.ruleName;
@@ -1265,6 +1270,16 @@ export async function simulate(
           totalEvents++;
           nEventsThisPhase++;
 
+          // Record firing event for information-theoretic analysis
+          if (shouldRecordFirings && firingLog.length < maxFiringEvents) {
+            firingLog.push({
+              time: t,
+              reactionIndex,
+              ruleName: ruleNames[reactionIndex],
+              propensity: propensities[reactionIndex],
+            });
+          }
+
           // === DIN INFLUENCE TRACKING: Capture old propensities BEFORE state change ===
           let numAffected = 0;
           if (includeInfluence && ruleFirings && windowRuleFirings && affectedReactionIndices && oldPropensityValues) {
@@ -1418,7 +1433,8 @@ export async function simulate(
         speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
         expandedReactions: model.reactions,
         expandedSpecies: model.species,
-        ssaInfluence
+        ssaInfluence,
+        firingLog: shouldRecordFirings && firingLog.length > 0 ? firingLog : undefined,
       } satisfies SimulationResults;
     }
 

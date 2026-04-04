@@ -271,6 +271,8 @@ TIMES: '*';
 MINUS: '-';
 PLUS: '+';
 POWER: '^' | '**';
+// Molecule tag: %N or %name — lexer-level token to prevent ambiguity with modulo
+MOLECULE_TAG_TOKEN: '%' (DIGIT+ | LETTER (LETTER | DIGIT | '_')*);
 MOD: '%';
 PIPE: '|';
 QMARK: '?';

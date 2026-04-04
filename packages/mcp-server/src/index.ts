@@ -45,6 +45,14 @@ import { handleEditModel } from './handlers/editModel.js';
 import { handleDiagnoseModel } from './handlers/diagnoseModel.js';
 import { handleExplainModel } from './handlers/explainModel.js';
 import { handleOptimalExperiment } from './handlers/optimalExperiment.js';
+import { handleVerifyModel } from './handlers/verifyModel.js';
+import { handleBifurcationAnalysis } from './handlers/bifurcationAnalysis.js';
+import { handleTemporalAnalysis } from './handlers/temporalAnalysis.js';
+import { handleSymbolicSteadyState } from './handlers/symbolicSteadyState.js';
+import { handleCompareModels } from './handlers/compareModels.js';
+import { handleSearchStructure } from './handlers/searchStructure.js';
+import { handlePKPD } from './handlers/pkpd.js';
+import { handleMultiscaleSimulation } from './handlers/multiscaleSimulation.js';
 
 const server = new Server(
   {
@@ -480,6 +488,46 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['code'],
         },
       },
+      {
+        name: 'verify_model',
+        description: 'Formally verify reachability, safety, and liveness properties of a BNGL model without simulation',
+        inputSchema: { type: 'object', properties: { code: { type: 'string', description: 'BNGL model code' }, query: { type: 'string', description: 'BVL query (reachable?, never, fires?, deadlock?)' }, maxSpecies: { type: 'number' } }, required: ['code', 'query'] },
+      },
+      {
+        name: 'bifurcation_analysis',
+        description: 'Trace steady-state branches as a parameter varies, detecting qualitative changes and attributing them to specific rules',
+        inputSchema: { type: 'object', properties: { code: { type: 'string' }, parameter: { type: 'string' }, start_value: { type: 'number' }, end_value: { type: 'number' }, max_steps: { type: 'number' } }, required: ['code', 'parameter', 'start_value', 'end_value'] },
+      },
+      {
+        name: 'temporal_analysis',
+        description: 'Analyze SSA reaction firing trajectories using information theory (mutual information, transfer entropy, phase locking)',
+        inputSchema: { type: 'object', properties: { code: { type: 'string' }, t_end: { type: 'number' }, n_steps: { type: 'number' }, bin_width: { type: 'number' } }, required: ['code'] },
+      },
+      {
+        name: 'symbolic_steady_state',
+        description: 'Compute closed-form algebraic expressions for steady-state concentrations as functions of rate constants',
+        inputSchema: { type: 'object', properties: { code: { type: 'string' } }, required: ['code'] },
+      },
+      {
+        name: 'compare_models',
+        description: 'Simultaneously simulate multiple model variants, detect behavioral divergences, and attribute them to specific rules',
+        inputSchema: { type: 'object', properties: { variants: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, code: { type: 'string' } }, required: ['name', 'code'] } }, t_end: { type: 'number' }, divergence_threshold: { type: 'number' } }, required: ['variants'] },
+      },
+      {
+        name: 'search_structure',
+        description: 'Search the space of possible rule sets to find model structures that best explain experimental data',
+        inputSchema: { type: 'object', properties: { code: { type: 'string' }, experimental_data: { type: 'array' }, n_particles: { type: 'number' }, n_generations: { type: 'number' } }, required: ['code', 'experimental_data'] },
+      },
+      {
+        name: 'pkpd',
+        description: 'Pharmacokinetic/pharmacodynamic analysis: generate PK models, design dosing schedules, compute PK metrics, run population simulations',
+        inputSchema: { type: 'object', properties: { action: { type: 'string', enum: ['generate_model', 'simulate_dosing', 'compute_metrics', 'population_simulation'] }, model_type: { type: 'string' }, drug_name: { type: 'string' }, route: { type: 'string' }, dose: { type: 'number' }, code: { type: 'string' }, observable: { type: 'string' }, n_patients: { type: 'number' } }, required: ['action'] },
+      },
+      {
+        name: 'multiscale_simulation',
+        description: 'Run multi-scale simulation combining intracellular BNGL models with cell-agent decisions and extracellular diffusion',
+        inputSchema: { type: 'object', properties: { definition: { type: 'object', description: 'Multi-scale model definition' }, max_cells: { type: 'number' } }, required: ['definition'] },
+      },
     ],
   };
 });
@@ -525,6 +573,22 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
       return handleExplainModel(args);
     case 'optimal_experiment':
       return handleOptimalExperiment(args);
+    case 'verify_model':
+      return handleVerifyModel(args);
+    case 'bifurcation_analysis':
+      return handleBifurcationAnalysis(args);
+    case 'temporal_analysis':
+      return handleTemporalAnalysis(args);
+    case 'symbolic_steady_state':
+      return handleSymbolicSteadyState(args);
+    case 'compare_models':
+      return handleCompareModels(args);
+    case 'search_structure':
+      return handleSearchStructure(args);
+    case 'pkpd':
+      return handlePKPD(args);
+    case 'multiscale_simulation':
+      return handleMultiscaleSimulation(args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

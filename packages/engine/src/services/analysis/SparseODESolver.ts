@@ -13,7 +13,10 @@
 import {
   type CSRMatrix,
   type ILU0Factors,
+  type ILU0SymbolicCache,
   ilu0Factorize,
+  ilu0SymbolicAnalysis,
+  ilu0NumericalFactorize,
   sparseSolve,
   gmres
 } from './SparseLUSolver';
@@ -67,6 +70,7 @@ export class SparseODESolver {
   private jacobianCSR?: CSRMatrix;
   private jacobianEvaluator?: (y: Float64Array, J: Float64Array) => void;
   private iluFactors?: ILU0Factors;
+  private iluSymbolicCache?: ILU0SymbolicCache;
 
   // Conservation law system reduction
   private conservation?: ConservationAnalysis;
@@ -222,10 +226,19 @@ export class SparseODESolver {
       values: mValues
     };
 
-    // ILU(0) factorization
+    // ILU(0) factorization with cached symbolic structure
+    // For biochemical networks, the sparsity pattern is fixed across steps,
+    // so we perform symbolic analysis once and reuse it for numerical-only updates.
     if (this.options.useILUPreconditioner) {
       try {
-        this.iluFactors = ilu0Factorize(M);
+        if (!this.iluSymbolicCache) {
+          // First factorization: perform full symbolic analysis
+          this.iluSymbolicCache = ilu0SymbolicAnalysis(M);
+          this.iluFactors = ilu0NumericalFactorize(M, this.iluSymbolicCache);
+        } else {
+          // Subsequent factorizations: reuse symbolic structure, update numerics only
+          this.iluFactors = ilu0NumericalFactorize(M, this.iluSymbolicCache);
+        }
       } catch (e) {
         console.warn('[SparseODE] ILU factorization failed, using unpreconditioned GMRES');
         this.iluFactors = undefined;

@@ -74,7 +74,7 @@
     "@types/three": "^0.183.1",
     "@vitejs/plugin-react": "^5.0.0",
     "@webgpu/types": "^0.1.68",
-    "@xmldom/xmldom": "^0.8.11",
+    "@xmldom/xmldom": "^0.9.9",
     "antlr4ts": "^0.5.0-alpha.4",
     "antlr4ts-cli": "^0.5.0-alpha.4",
     "assert": "^2.1.0",
@@ -111,6 +111,7 @@
     "vitest": "4.1.0",
     "css-tree": "^3.2.1",
     "@csstools/css-syntax-patches-for-csstree": "^1.1.0",
-    "picomatch": "4.0.4"
+    "picomatch": "4.0.4",
+    "lodash": ">=4.18.1"
   }
 }

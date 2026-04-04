@@ -1,0 +1,276 @@
+import React, { useState, useCallback, useRef } from 'react';
+import { Button } from '../ui/Button';
+import { Card } from '../ui/Card';
+import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { InfoIcon } from '../icons/InfoIcon';
+import { CHART_COLORS } from '../../src/utils/chartColors';
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+} from 'recharts';
+
+interface MultiscaleTabProps {
+  bnglCode: string;
+}
+
+interface CellStateUI {
+  id: number;
+  cellType: string;
+  position: [number, number, number];
+  radius: number;
+  phase: string;
+  observables: Record<string, number>;
+}
+
+interface SnapshotUI {
+  time: number;
+  cells: CellStateUI[];
+  populationCounts: Record<string, number>;
+  meanObservables: Record<string, Record<string, number>>;
+}
+
+const EXAMPLE_DEFINITION = `{
+  "name": "Tumor Growth",
+  "cellTypes": {
+    "cancer": {
+      "model": "begin parameters\\n  kgrow 0.01\\n  kdeath 0.001\\nend parameters\\nbegin molecule types\\n  Cell(state~alive~dead)\\nend molecule types\\nbegin seed species\\n  Cell(state~alive) 1\\nend seed species\\nbegin observables\\n  Molecules alive Cell(state~alive)\\nend observables\\nbegin reaction rules\\n  Cell(state~alive) -> Cell(state~dead) kdeath\\nend reaction rules",
+      "radius": 5.0,
+      "motility": 0.1,
+      "doublingVolume": 1000,
+      "volumeGrowthRate": 0.5,
+      "decisions": [
+        { "name": "divide", "when": "alive > 0.5", "then": "divide", "probability": 0.1 },
+        { "name": "death", "when": "alive < 0.1", "then": "die" }
+      ]
+    }
+  },
+  "extracellular": {
+    "species": [
+      { "name": "oxygen", "D": 2000, "degradation": 0.01, "initial": 1.0 }
+    ]
+  },
+  "domain": { "dimensions": 2, "size": [200, 200, 1], "boundary": "reflective" },
+  "population": [
+    { "cellType": "cancer", "count": 10, "region": "center" }
+  ],
+  "time": { "end": 100, "dtIntra": 0.01, "dtExtra": 0.1, "dtDecision": 1.0, "outputs": 50 }
+}`;
+
+export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
+  const [definition, setDefinition] = useState(EXAMPLE_DEFINITION);
+  const [isRunning, setIsRunning] = useState(false);
+  const [snapshots, setSnapshots] = useState<SnapshotUI[]>([]);
+  const [currentSnapshotIdx, setCurrentSnapshotIdx] = useState(0);
+  const [error, setError] = useState<string | null>(null);
+  const [populationTimeSeries, setPopulationTimeSeries] = useState<any[]>([]);
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const handleRun = useCallback(async () => {
+    setIsRunning(true);
+    setError(null);
+    setSnapshots([]);
+    setPopulationTimeSeries([]);
+
+    try {
+      const engine = await import('@bngplayground/engine');
+      const parsed = JSON.parse(definition);
+
+      if (engine.parseMultiscaleModel && engine.multiscaleSimulation) {
+        const config = engine.parseMultiscaleModel(parsed);
+        const result = await engine.multiscaleSimulation(config, (fraction: number) => {
+          // Progress callback
+        });
+
+        setSnapshots(result.snapshots);
+        if (result.snapshots.length > 0) {
+          setCurrentSnapshotIdx(result.snapshots.length - 1);
+        }
+
+        // Build population time series for chart
+        const tsData = result.populationTimeSeries.time.map((t: number, i: number) => {
+          const point: Record<string, number> = { time: t };
+          for (const [type, counts] of Object.entries(result.populationTimeSeries.counts)) {
+            point[type] = (counts as number[])[i];
+          }
+          return point;
+        });
+        setPopulationTimeSeries(tsData);
+      }
+    } catch (err: any) {
+      setError(err.message || 'Simulation failed');
+    } finally {
+      setIsRunning(false);
+    }
+  }, [definition]);
+
+  // Draw cells on canvas
+  const drawCells = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || snapshots.length === 0) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const snapshot = snapshots[currentSnapshotIdx];
+    if (!snapshot) return;
+
+    const w = canvas.width;
+    const h = canvas.height;
+    ctx.clearRect(0, 0, w, h);
+
+    // Background
+    ctx.fillStyle = '#1e293b';
+    ctx.fillRect(0, 0, w, h);
+
+    // Get domain bounds from cell positions
+    let maxX = 200, maxY = 200;
+    try {
+      const parsed = JSON.parse(definition);
+      maxX = parsed.domain?.size?.[0] || 200;
+      maxY = parsed.domain?.size?.[1] || 200;
+    } catch {}
+
+    const scaleX = w / maxX;
+    const scaleY = h / maxY;
+
+    // Unique cell types for coloring
+    const cellTypes = Array.from(new Set(snapshot.cells.map(c => c.cellType)));
+
+    // Draw cells
+    for (const cell of snapshot.cells) {
+      if (cell.phase === 'dead') continue;
+
+      const x = cell.position[0] * scaleX;
+      const y = cell.position[1] * scaleY;
+      const r = Math.max(2, cell.radius * Math.min(scaleX, scaleY));
+      const colorIdx = cellTypes.indexOf(cell.cellType);
+      const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
+
+      ctx.beginPath();
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+      ctx.fillStyle = cell.phase === 'apoptotic' ? '#64748b' : color;
+      ctx.globalAlpha = cell.phase === 'apoptotic' ? 0.3 : 0.8;
+      ctx.fill();
+      ctx.globalAlpha = 1;
+      ctx.strokeStyle = '#ffffff22';
+      ctx.lineWidth = 0.5;
+      ctx.stroke();
+    }
+
+    // Time label
+    ctx.fillStyle = '#e2e8f0';
+    ctx.font = '12px Arial';
+    ctx.fillText(`t = ${snapshot.time.toFixed(1)}`, 8, 18);
+    ctx.fillText(`${snapshot.cells.filter(c => c.phase !== 'dead').length} cells`, 8, 34);
+  }, [snapshots, currentSnapshotIdx, definition]);
+
+  // Redraw when snapshot changes
+  React.useEffect(() => { drawCells(); }, [drawCells]);
+
+  return (
+    <div className="space-y-4 h-full flex flex-col overflow-auto p-2">
+      <div className="p-3 rounded-md bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200 flex items-start gap-3 shrink-0">
+        <InfoIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
+        <p className="text-sm">
+          <b>Multi-Scale Modeling:</b> Combine intracellular BNGL models with cell-agent decisions
+          (divide, die, migrate) and extracellular diffusion. Each cell has its own intracellular
+          simulation state. The first browser-native tool to combine rule-based dynamics with
+          agent-based cell populations.
+        </p>
+      </div>
+
+      <div className="flex gap-4 flex-1 min-h-0">
+        {/* Model Editor (left) */}
+        <Card className="w-80 shrink-0 p-3 flex flex-col">
+          <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wide">
+            Model Definition (JSON)
+          </h3>
+          <textarea
+            value={definition}
+            onChange={e => setDefinition(e.target.value)}
+            className="flex-1 px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-mono resize-none min-h-[200px]"
+            spellCheck={false}
+          />
+          <div className="flex gap-2 mt-2">
+            <Button onClick={handleRun} disabled={isRunning}>
+              {isRunning && <LoadingSpinner className="w-3 h-3 mr-1" />}
+              {isRunning ? 'Running...' : 'Run Simulation'}
+            </Button>
+            <Button variant="secondary" onClick={() => setDefinition(EXAMPLE_DEFINITION)}>
+              Reset
+            </Button>
+          </div>
+        </Card>
+
+        {/* Visualization (center) */}
+        <div className="flex-1 flex flex-col gap-3 min-w-0">
+          {error && (
+            <div className="p-2 rounded bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-xs">
+              {error}
+            </div>
+          )}
+
+          {/* Cell view */}
+          <Card className="flex-1 p-3 min-h-[250px]">
+            <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
+              Cell Population View
+            </h3>
+            <canvas
+              ref={canvasRef}
+              width={500}
+              height={400}
+              className="w-full h-full rounded bg-slate-900"
+              style={{ imageRendering: 'auto' }}
+            />
+          </Card>
+
+          {/* Timeline slider */}
+          {snapshots.length > 1 && (
+            <div className="flex items-center gap-2 px-1">
+              <span className="text-xs text-slate-500">t=0</span>
+              <input
+                type="range"
+                min={0}
+                max={snapshots.length - 1}
+                value={currentSnapshotIdx}
+                onChange={e => setCurrentSnapshotIdx(Number(e.target.value))}
+                className="flex-1"
+              />
+              <span className="text-xs text-slate-500">
+                t={snapshots[snapshots.length - 1]?.time?.toFixed(1)}
+              </span>
+            </div>
+          )}
+
+          {/* Population dynamics chart */}
+          {populationTimeSeries.length > 0 && (
+            <Card className="p-3 h-48 shrink-0">
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-1">
+                Population Dynamics
+              </h3>
+              <ResponsiveContainer width="100%" height="85%">
+                <LineChart data={populationTimeSeries}>
+                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <XAxis dataKey="time" tick={{ fontSize: 10 }} label={{ value: 'Time', position: 'bottom', fontSize: 10, offset: 0 }} />
+                  <YAxis tick={{ fontSize: 10 }} label={{ value: 'Cell Count', angle: -90, position: 'insideLeft', fontSize: 10 }} />
+                  <Tooltip />
+                  <Legend wrapperStyle={{ fontSize: 10 }} />
+                  {Object.keys(populationTimeSeries[0] || {})
+                    .filter(k => k !== 'time')
+                    .map((key, i) => (
+                      <Line
+                        key={key}
+                        type="monotone"
+                        dataKey={key}
+                        stroke={CHART_COLORS[i % CHART_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                      />
+                    ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </Card>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};

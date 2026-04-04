@@ -29,7 +29,17 @@ import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { EmptyState } from './ui/EmptyState';
 import { HelpSection } from './HelpSection';
 import { SpatialPanel } from './SpatialPanel';
+<<<<<<< HEAD
 import { ErrorBoundary } from './ui/ErrorBoundary';
+=======
+import { BifurcationTab } from './tabs/BifurcationTab';
+import { TemporalAnalysisTab } from './tabs/TemporalAnalysisTab';
+import { VersionHistoryTab } from './tabs/VersionHistoryTab';
+import { MultiscaleTab } from './tabs/MultiscaleTab';
+import { PKPDTab } from './tabs/PKPDTab';
+
+
+>>>>>>> upstream/main
 
 interface VisualizationPanelProps {
   model: BNGLModel | null;
@@ -158,7 +168,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   // 12: Jupyter Export
 
   // Map activeTab to a group for UI highlighting
-  const isAnalysisTab = (activeTab >= 2 && activeTab <= 9) || activeTab >= 11 || activeTab === 17;
+  const isAnalysisTab = (activeTab >= 2 && activeTab <= 9) || activeTab >= 11;
 
 
   // Filter parameter names to only those used in seed species (as requested by user)
@@ -221,6 +231,14 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               <DropdownItem onClick={() => setActiveTab(12)}>📓 Jupyter Export</DropdownItem>
               <div className="border-t border-slate-50 dark:border-slate-800/50 my-0.5" />
               <DropdownItem onClick={() => setActiveTab(17)}>🔬 Spatial Simulation</DropdownItem>
+
+              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+              <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Advanced Analysis</div>
+              <DropdownItem onClick={() => setActiveTab(18)}>🔀 Bifurcation Analysis</DropdownItem>
+              <DropdownItem onClick={() => setActiveTab(19)}>🎵 Temporal Info Theory</DropdownItem>
+              <DropdownItem onClick={() => setActiveTab(20)}>📜 Version History</DropdownItem>
+              <DropdownItem onClick={() => setActiveTab(21)}>🧫 Multi-Scale Modeling</DropdownItem>
+              <DropdownItem onClick={() => setActiveTab(22)}>💊 PK/PD Framework</DropdownItem>
 
             </Dropdown>
           </div>
@@ -755,6 +773,57 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 <SpatialPanel bnglText={bnglCode || ''} />
               </div>
             </ErrorBoundary>
+          </div>
+        )}
+
+        {activeTab === 18 && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <BifurcationTab
+              model={model}
+              results={results}
+              onSimulate={onSimulate}
+              onCancelSimulation={onCancelSimulation}
+              isSimulating={isSimulating}
+            />
+          </div>
+        )}
+        {activeTab === 19 && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <TemporalAnalysisTab
+              model={model}
+              results={results}
+              onSimulate={onSimulate}
+              onCancelSimulation={onCancelSimulation}
+              isSimulating={isSimulating}
+            />
+          </div>
+        )}
+        {activeTab === 20 && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <VersionHistoryTab
+              model={model}
+              bnglCode={bnglCode || ''}
+              onCodeChange={(code: string) => onLoadModel?.(code, 'Loaded Version', '')}
+              results={results}
+              onSimulate={onSimulate}
+              isSimulating={isSimulating}
+            />
+          </div>
+        )}
+        {activeTab === 21 && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <MultiscaleTab bnglCode={bnglCode || ''} />
+          </div>
+        )}
+        {activeTab === 22 && (
+          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <PKPDTab
+              model={model}
+              results={results}
+              onSimulate={onSimulate}
+              onCodeChange={(code: string) => onLoadModel?.(code, 'PK Model', '')}
+              isSimulating={isSimulating}
+            />
           </div>
         )}
 
