@@ -59,17 +59,11 @@ interface EstimationResult {
 }
 
 // Default data for testing - uses typical BNGL observable names
-const DEFAULT_TEST_DATA = `# Default test data (A → B reaction)
-time, A, B
-0, 100, 0
-5, 82, 18
-10, 67, 33
-15, 55, 45
-20, 45, 55
-30, 30, 70
-50, 13, 87
-75, 5, 95
-100, 2, 98`;
+const DEFAULT_TEST_DATA = `# Paste experimental data here (CSV format)
+# Columns: time, observable1, observable2, ...
+# Or click "Generate from Simulation" to auto-populate
+# from the current model's time course with 5% noise.
+time`;
 
 export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ model }) => {
   // Parameter selection

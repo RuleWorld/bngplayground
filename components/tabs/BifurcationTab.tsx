@@ -6,9 +6,11 @@ import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LABEL_STYLE, CHART_TOOLTIP_CURSOR, CHART_LINE_WIDTH, CHART_MARGIN } from '../../src/utils/chartStyle';
+import { formatValue } from '../../src/utils/formatValue';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line, Legend
+  LineChart, Line
 } from 'recharts';
 
 interface BifurcationTabProps {
@@ -325,24 +327,31 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
               </span>
             )}
           </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+          <ResponsiveContainer width="100%" height={340}>
+            <ScatterChart margin={{ ...CHART_MARGIN, bottom: 50 }}>
+              <CartesianGrid {...CHART_GRID} />
               <XAxis
                 dataKey="parameterValue"
                 type="number"
                 name={continuationResult.parameterName}
-                label={{ value: continuationResult.parameterName, position: 'bottom', offset: 10 }}
-                tickFormatter={(v: number) => v.toPrecision(3)}
+                axisLine={CHART_AXIS_LINE}
+                tickLine={CHART_TICK_LINE}
+                tick={CHART_TICK}
+                /* x-axis label rendered externally below */
+                tickFormatter={(v: number) => formatValue(v)}
               />
               <YAxis
                 dataKey="steadyState"
                 type="number"
                 name="Concentration"
-                label={{ value: selectedSpecies1 || 'Concentration', angle: -90, position: 'insideLeft' }}
-                tickFormatter={(v: number) => v.toPrecision(3)}
+                axisLine={CHART_AXIS_LINE}
+                tickLine={CHART_TICK_LINE}
+                tick={CHART_TICK}
+                label={{ value: selectedSpecies1 || 'Concentration', angle: -90, position: 'insideLeft', offset: -10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
+                tickFormatter={(v: number) => formatValue(v)}
               />
               <Tooltip
+                cursor={CHART_TOOLTIP_CURSOR}
                 formatter={(value: number, name: string) => [value.toPrecision(4), name]}
                 labelFormatter={(label: number) => `${continuationResult.parameterName} = ${label.toPrecision(4)}`}
               />
@@ -351,7 +360,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
                 name="Stable"
                 data={stablePoints}
                 fill={CHART_COLORS[0]}
-                line={{ stroke: CHART_COLORS[0], strokeWidth: 2 }}
+                line={{ stroke: CHART_COLORS[0], strokeWidth: CHART_LINE_WIDTH }}
                 lineType="joint"
                 shape="circle"
                 legendType="circle"
@@ -362,7 +371,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
                 data={unstablePoints}
                 fill="none"
                 stroke={CHART_COLORS[1]}
-                line={{ stroke: CHART_COLORS[1], strokeWidth: 2, strokeDasharray: '5 5' }}
+                line={{ stroke: CHART_COLORS[1], strokeWidth: CHART_LINE_WIDTH, strokeDasharray: '5 5' }}
                 lineType="joint"
                 shape="circle"
                 legendType="circle"
@@ -381,9 +390,24 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
                   if (bp) setSelectedBifurcation(bp);
                 }}
               />
-              <Legend />
             </ScatterChart>
           </ResponsiveContainer>
+          {/* X-axis label below chart */}
+          <div className="text-center -mt-1 mb-1">
+            <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{continuationResult.parameterName}</span>
+          </div>
+          {/* Legend below chart — matches TimeSeriesChart pattern */}
+          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[0] }} /> Stable
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="w-3 h-0.5 border-t-2 border-dashed" style={{ borderColor: CHART_COLORS[1], width: 16 }} /> Unstable
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="w-3 h-3" style={{ backgroundColor: CHART_COLORS[5], clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} /> Bifurcation
+            </span>
+          </div>
         </Card>
       )}
 
@@ -394,26 +418,23 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             Phase Portrait — {selectedSpecies1} vs {selectedSpecies2}
           </h3>
           <ResponsiveContainer width="100%" height={300}>
-            <ScatterChart margin={{ top: 10, right: 20, bottom: 30, left: 40 }}>
-              <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+            <ScatterChart margin={{ ...CHART_MARGIN, bottom: 25 }}>
+              <CartesianGrid {...CHART_GRID} />
               <XAxis
-                dataKey="x"
-                type="number"
-                name={selectedSpecies1}
-                label={{ value: selectedSpecies1, position: 'bottom', offset: 10 }}
+                dataKey="x" type="number" name={selectedSpecies1}
+                axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
               />
               <YAxis
-                dataKey="y"
-                type="number"
-                name={selectedSpecies2}
-                label={{ value: selectedSpecies2, angle: -90, position: 'insideLeft' }}
+                dataKey="y" type="number" name={selectedSpecies2}
+                axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
+                label={{ value: selectedSpecies2, angle: -90, position: 'insideLeft', offset: -10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
               />
-              <Tooltip />
+              <Tooltip cursor={CHART_TOOLTIP_CURSOR} />
               <Scatter
                 name={`d[${selectedSpecies1}]/dt = 0`}
                 data={nullclineResult.xNullclines.flatMap(c => c.points)}
                 fill="none"
-                line={{ stroke: CHART_COLORS[0], strokeWidth: 2 }}
+                line={{ stroke: CHART_COLORS[0], strokeWidth: CHART_LINE_WIDTH }}
                 lineType="joint"
                 shape={() => null}
               />
@@ -421,7 +442,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
                 name={`d[${selectedSpecies2}]/dt = 0`}
                 data={nullclineResult.yNullclines.flatMap(c => c.points)}
                 fill="none"
-                line={{ stroke: CHART_COLORS[1], strokeWidth: 2 }}
+                line={{ stroke: CHART_COLORS[1], strokeWidth: CHART_LINE_WIDTH }}
                 lineType="joint"
                 shape={() => null}
               />
@@ -429,11 +450,26 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
                 name="Fixed Points"
                 data={nullclineResult.fixedPoints}
                 fill={CHART_COLORS[5]}
-                shape="star"
+                shape="diamond"
               />
-              <Legend />
             </ScatterChart>
           </ResponsiveContainer>
+          {/* X-axis label below chart */}
+          <div className="text-center -mt-1 mb-1">
+            <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{selectedSpecies1}</span>
+          </div>
+          {/* External legend */}
+          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[0] }} /> d[{selectedSpecies1}]/dt = 0
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[1] }} /> d[{selectedSpecies2}]/dt = 0
+            </span>
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
+              <span className="w-3 h-3" style={{ backgroundColor: CHART_COLORS[5], clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} /> Fixed Points
+            </span>
+          </div>
         </Card>
       )}
 

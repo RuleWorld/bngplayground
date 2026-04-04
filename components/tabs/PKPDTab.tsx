@@ -3,11 +3,12 @@ import { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Card } from '../ui/Card';
-import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LABEL_STYLE, CHART_TOOLTIP_CURSOR, CHART_MARGIN } from '../../src/utils/chartStyle';
+import { formatValue } from '../../src/utils/formatValue';
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea
 } from 'recharts';
 
@@ -107,11 +108,18 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
           parameters: { Dose: dose },
         });
         onCodeChange(result.bnglCode);
+        // Auto-simulate after generating model so charts populate
+        setTimeout(() => {
+          const tEnd = dosingEvents.length > 1
+            ? dosingEvents[dosingEvents.length - 1].time + (dosingInterval || 24) * 2
+            : 48;
+          onSimulate({ method: 'ode', t_end: tEnd, n_steps: 500 });
+        }, 500);
       }
     } catch (err: any) {
       setError(err.message || 'Model generation failed');
     }
-  }, [modelType, drugName, route, dose, onCodeChange]);
+  }, [modelType, drugName, route, dose, onCodeChange, onSimulate, dosingEvents, dosingInterval]);
 
   // Compute PK metrics from results
   const computeMetrics = useCallback(async () => {
@@ -282,33 +290,45 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
               </button>
             </div>
             {chartData.length > 0 ? (
-              <ResponsiveContainer width="100%" height="90%">
-                <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
-                  <XAxis dataKey="time" tick={{ fontSize: 10 }}
-                    label={{ value: 'Time (hr)', position: 'bottom', fontSize: 10, offset: 0 }} />
-                  <YAxis
-                    scale={logScale ? 'log' : 'auto'}
-                    domain={logScale ? ['auto', 'auto'] : [0, 'auto']}
-                    tick={{ fontSize: 10 }}
-                    label={{ value: 'Concentration', angle: -90, position: 'insideLeft', fontSize: 10 }}
-                    allowDataOverflow
-                  />
-                  <Tooltip formatter={(v: number) => v.toPrecision(4)} />
-                  <Legend wrapperStyle={{ fontSize: 10 }} />
-                  {therapeutic_min !== null && therapeutic_max !== null && (
-                    <ReferenceArea y1={therapeutic_min} y2={therapeutic_max} fill="#10b98120" />
-                  )}
-                  {/* Dose markers */}
-                  {dosingEvents.map((ev, i) => (
-                    <ReferenceLine key={i} x={ev.time} stroke="#ef444480" strokeDasharray="3 3" />
-                  ))}
+              <>
+                <ResponsiveContainer width="100%" height="85%">
+                  <LineChart data={chartData} margin={{ ...CHART_MARGIN, bottom: 35 }}>
+                    <CartesianGrid {...CHART_GRID} />
+                    <XAxis dataKey="time" type="number" tickCount={10}
+                      axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
+                      tickFormatter={(v: number) => formatValue(v)}
+                      label={{ value: 'Time (hr)', position: 'insideBottom', offset: -12, ...CHART_AXIS_LABEL_STYLE }} />
+                    <YAxis
+                      scale={logScale ? 'log' : 'auto'}
+                      domain={logScale ? ['auto', 'auto'] : [0, 'auto']}
+                      axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
+                      tickFormatter={(v: number) => formatValue(v)}
+                      label={{ value: 'Concentration', angle: -90, position: 'insideLeft', offset: -10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
+                      allowDataOverflow
+                    />
+                    <Tooltip cursor={CHART_TOOLTIP_CURSOR} formatter={(v: number) => v.toPrecision(4)} />
+                    {therapeutic_min !== null && therapeutic_max !== null && (
+                      <ReferenceArea y1={therapeutic_min} y2={therapeutic_max} fill="#10b98120" />
+                    )}
+                    {dosingEvents.map((ev, i) => (
+                      <ReferenceLine key={i} x={ev.time} stroke="#ef444480" strokeDasharray="3 3" />
+                    ))}
+                    {observableNames.map((name, i) => (
+                      <Line key={name} type="monotone" dataKey={name}
+                        stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2.25} dot={false} />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+                {/* External legend — matches TimeSeriesChart pattern */}
+                <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
                   {observableNames.map((name, i) => (
-                    <Line key={name} type="monotone" dataKey={name}
-                      stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2.25} dot={false} />
+                    <span key={name} className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
+                      <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />
+                      {name}
+                    </span>
                   ))}
-                </LineChart>
-              </ResponsiveContainer>
+                </div>
+              </>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 text-sm">
                 Generate a model and run simulation to see results.

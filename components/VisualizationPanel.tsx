@@ -206,35 +206,40 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 </button>
               }
             >
-              <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Parameter Analysis</div>
-              <DropdownItem onClick={() => setActiveTab(2)}>🔍 Parameter Scan</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(4)}>🎯 Local Sensitivity</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(14)}>📊 Global Sensitivity (Sobol)</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(5)}>🧬 Parameter Estimation (VI)</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(16)}>🎲 ABC-SMC (Inference)</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(15)}>📈 Profile Likelihood</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(3)}>⚖️ Steady State</DropdownItem>
-
-              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-              <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Model Analysis</div>
-              <DropdownItem onClick={() => setActiveTab(11)}>☄️ Trajectory Explorer</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(6)}>🌊 Flux Analysis</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(9)}>🎨 Rule Cartoons</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(8)}>🤔 What-If Compare</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(7)}>✅ Verification</DropdownItem>
-              <div className="border-t border-slate-50 dark:border-slate-800/50 my-0.5" />
-              <DropdownItem onClick={() => setActiveTab(10)}>🌎 Model Explorer</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(12)}>📓 Jupyter Export</DropdownItem>
-              <div className="border-t border-slate-50 dark:border-slate-800/50 my-0.5" />
-              <DropdownItem onClick={() => setActiveTab(17)}>🔬 Spatial Simulation</DropdownItem>
-
-              <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
-              <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Advanced Analysis</div>
-              <DropdownItem onClick={() => setActiveTab(18)}>🔀 Bifurcation Analysis</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(19)}>🎵 Temporal Info Theory</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(20)}>📜 Version History</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(21)}>🧫 Multi-Scale Modeling</DropdownItem>
-              <DropdownItem onClick={() => setActiveTab(22)}>💊 PK/PD Framework</DropdownItem>
+              <div className="grid grid-cols-2 gap-x-2" style={{ width: '28rem' }}>
+                {/* Left column */}
+                <div>
+                  <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Parameter Analysis</div>
+                  <DropdownItem onClick={() => setActiveTab(2)}>🔍 Parameter Scan</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(4)}>🎯 Local Sensitivity</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(14)}>📊 Global Sensitivity (Sobol)</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(5)}>🧬 Parameter Estimation (VI)</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(16)}>🎲 ABC-SMC (Inference)</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(15)}>📈 Profile Likelihood</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(3)}>⚖️ Steady State</DropdownItem>
+                  <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                  <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Advanced</div>
+                  <DropdownItem onClick={() => setActiveTab(18)}>🔀 Bifurcation Analysis</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(19)}>🎵 Temporal Info Theory</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(22)}>💊 PK/PD Framework</DropdownItem>
+                </div>
+                {/* Right column */}
+                <div>
+                  <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Model Analysis</div>
+                  <DropdownItem onClick={() => setActiveTab(11)}>☄️ Trajectory Explorer</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(6)}>🌊 Flux Analysis</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(9)}>🎨 Rule Cartoons</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(8)}>🤔 What-If Compare</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(7)}>✅ Verification</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(10)}>🌎 Model Explorer</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(12)}>📓 Jupyter Export</DropdownItem>
+                  <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                  <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Simulation</div>
+                  <DropdownItem onClick={() => setActiveTab(17)}>🔬 Spatial Simulation</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(21)}>🧫 Multi-Scale Modeling</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(20)}>📜 Version History</DropdownItem>
+                </div>
+              </div>
 
             </Dropdown>
           </div>

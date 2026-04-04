@@ -102,11 +102,13 @@ export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
           threshold: bisectionThreshold,
         };
         const simulatorFn = async (code: string) => {
-          // Simulate and return results
+          // Load evaluator first (required for expression parsing)
+          await engine.loadEvaluator();
           const m = engine.parseBNGLWithANTLR(code);
           if (!m.model) throw new Error('Parse error');
           const expanded = await engine.generateExpandedNetwork(m.model, () => {}, () => {});
-          return await engine.simulate(0, expanded, { method: 'ode', t_end: 100, n_steps: 200 }, {
+          // Use SSA as fallback if CVODE isn't available (avoids factory error)
+          return await engine.simulate(0, expanded, { method: 'ssa', t_end: 100, n_steps: 200 }, {
             checkCancelled: () => {},
             postMessage: () => {},
           });

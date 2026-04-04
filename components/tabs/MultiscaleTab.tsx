@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LABEL_STYLE, CHART_TOOLTIP_CURSOR, CHART_LINE_WIDTH, CHART_MARGIN } from '../../src/utils/chartStyle';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -29,30 +30,28 @@ interface SnapshotUI {
 }
 
 const EXAMPLE_DEFINITION = `{
-  "name": "Tumor Growth",
+  "name": "Simple Growth",
   "cellTypes": {
-    "cancer": {
-      "model": "begin parameters\\n  kgrow 0.01\\n  kdeath 0.001\\nend parameters\\nbegin molecule types\\n  Cell(state~alive~dead)\\nend molecule types\\nbegin seed species\\n  Cell(state~alive) 1\\nend seed species\\nbegin observables\\n  Molecules alive Cell(state~alive)\\nend observables\\nbegin reaction rules\\n  Cell(state~alive) -> Cell(state~dead) kdeath\\nend reaction rules",
+    "cell": {
+      "model": "begin parameters\\n  k 0.01\\nend parameters\\nbegin molecule types\\n  A()\\nend molecule types\\nbegin seed species\\n  A() 10\\nend seed species\\nbegin observables\\n  Molecules A_count A()\\nend observables\\nbegin reaction rules\\n  A() -> 0 k\\nend reaction rules",
       "radius": 5.0,
-      "motility": 0.1,
-      "doublingVolume": 1000,
-      "volumeGrowthRate": 0.5,
+      "motility": 0.5,
       "decisions": [
-        { "name": "divide", "when": "alive > 0.5", "then": "divide", "probability": 0.1 },
-        { "name": "death", "when": "alive < 0.1", "then": "die" }
+        { "name": "divide", "when": "A_count > 5", "then": "divide", "probability": 0.3 },
+        { "name": "death", "when": "A_count < 1", "then": "die" }
       ]
     }
   },
   "extracellular": {
     "species": [
-      { "name": "oxygen", "D": 2000, "degradation": 0.01, "initial": 1.0 }
+      { "name": "signal", "D": 100, "degradation": 0.1, "initial": 0.5 }
     ]
   },
-  "domain": { "dimensions": 2, "size": [200, 200, 1], "boundary": "reflective" },
+  "domain": { "dimensions": 2, "size": [50, 50, 1], "boundary": "reflective" },
   "population": [
-    { "cellType": "cancer", "count": 10, "region": "center" }
+    { "cellType": "cell", "count": 5, "region": "center" }
   ],
-  "time": { "end": 100, "dtIntra": 0.01, "dtExtra": 0.1, "dtDecision": 1.0, "outputs": 50 }
+  "time": { "end": 10, "dtIntra": 0.1, "dtExtra": 0.5, "dtDecision": 1.0, "outputs": 10 }
 }`;
 
 export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
@@ -213,13 +212,20 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
             <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
               Cell Population View
             </h3>
-            <canvas
-              ref={canvasRef}
-              width={500}
-              height={400}
-              className="w-full h-full rounded bg-slate-900"
-              style={{ imageRendering: 'auto' }}
-            />
+            <div className="relative">
+              <canvas
+                ref={canvasRef}
+                width={500}
+                height={400}
+                className="w-full rounded bg-slate-900"
+                style={{ imageRendering: 'auto', maxHeight: '350px' }}
+              />
+              {snapshots.length === 0 && !isRunning && (
+                <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-sm pointer-events-none">
+                  Click "Run Simulation" to visualize cell dynamics
+                </div>
+              )}
+            </div>
           </Card>
 
           {/* Timeline slider */}
@@ -248,7 +254,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
               </h3>
               <ResponsiveContainer width="100%" height="85%">
                 <LineChart data={populationTimeSeries}>
-                  <CartesianGrid strokeDasharray="3 3" opacity={0.3} />
+                  <CartesianGrid strokeDasharray="2 4" vertical={false} stroke="#cbd5e1" strokeOpacity={0.45} />
                   <XAxis dataKey="time" tick={{ fontSize: 10 }} label={{ value: 'Time', position: 'bottom', fontSize: 10, offset: 0 }} />
                   <YAxis tick={{ fontSize: 10 }} label={{ value: 'Cell Count', angle: -90, position: 'insideLeft', fontSize: 10 }} />
                   <Tooltip />
@@ -261,7 +267,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
                         type="monotone"
                         dataKey={key}
                         stroke={CHART_COLORS[i % CHART_COLORS.length]}
-                        strokeWidth={2}
+                        strokeWidth={2.25}
                         dot={false}
                       />
                     ))}

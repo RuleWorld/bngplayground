@@ -238,6 +238,8 @@ public_atomizer_report.json
 
 .serena/
 output/
+*.png
+*.jpg
 AGENTS-COLLECTION/
 wasm-sundials_deps/
 

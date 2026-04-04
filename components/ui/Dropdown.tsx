@@ -112,7 +112,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
             position: 'absolute',
             zIndex: 9999
           }}
-          className="w-56 rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 focus:outline-none"
+          className="w-auto min-w-[14rem] rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 focus:outline-none"
           onClick={() => setIsOpen(false)}
         >
           <div className="py-1" role="menu" aria-orientation="vertical">

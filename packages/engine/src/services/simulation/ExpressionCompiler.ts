@@ -214,7 +214,5 @@ export class ExpressionCompiler {
         buffer.push(0xFF); // STOP opcode
 
         return new Uint8Array(buffer);
-
-        return new Uint8Array(buffer);
     }
 }
