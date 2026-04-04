@@ -8,9 +8,9 @@ const analyzeResidualsArgsSchema = z.object({
     code: z.string().describe('BNGL model code'),
     experimental_data: z.array(z.object({
         time: z.number(),
-        observables: z.record(z.number()),
+        observables: z.record(z.string(), z.number()),
     })).describe('Experimental data points'),
-    parameters: z.record(z.number()).optional().describe('Model parameters to use (default: from model)'),
+    parameters: z.record(z.string(), z.number()).optional().describe('Model parameters to use (default: from model)'),
     method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
     t_end: z.number().positive().optional().describe('End time (default: max experimental time)'),
 }).strict();

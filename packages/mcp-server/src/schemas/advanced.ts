@@ -2,14 +2,14 @@ import { z } from 'zod';
 
 export const fitParametersArgsSchema = z.object({
     code: z.string().describe('BNGL code containing the model and observables'),
-    parameters: z.record(z.object({
+    parameters: z.record(z.string(), z.object({
         min: z.number(),
         max: z.number(),
         initial: z.number().optional(),
     })).describe('Map of parameter names to their fitting bounds { min, max, initial? }'),
     data: z.array(z.object({
         time: z.number(),
-        observables: z.record(z.number()),
+        observables: z.record(z.string(), z.number()),
     })).describe('Experimental data points: list of { time, observables: { obsName: value } }'),
     method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method to use during fitting'),
     algorithm: z.enum(['nelder-mead', 'sbplx']).default('nelder-mead').describe('Optimization algorithm'),
@@ -31,14 +31,14 @@ export const importPetabArgsSchema = z.object({
 
 export const reduceModelArgsSchema = z.object({
     code: z.string().describe('BNGL model code'),
-    parameters: z.record(z.object({
+    parameters: z.record(z.string(), z.object({
         min: z.number(),
         max: z.number(),
         initial: z.number().optional(),
     })).describe('Parameters to fit (same as fit_parameters)'),
     data: z.array(z.object({
         time: z.number(),
-        observables: z.record(z.number()),
+        observables: z.record(z.string(), z.number()),
     })).describe('Experimental data'),
     lambda: z.number().default(0.01).describe('Regularization strength'),
     regularization: z.enum(['l1', 'l2', 'elastic-net']).default('l1'),

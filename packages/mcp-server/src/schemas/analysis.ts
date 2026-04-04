@@ -46,7 +46,7 @@ export const identifiabilityArgsSchema = z.object({
     parameters: z.array(z.string()).optional().describe('Parameters to profile (default: all)'),
     data: z.array(z.object({
         time: z.number(),
-        observables: z.record(z.number()),
+        observables: z.record(z.string(), z.number()),
     })).describe('Experimental data for SSR computation'),
     n_grid: positiveInt.optional().describe('Grid points per parameter (default: 20)'),
     range_factor: finiteNumber.positive().optional().describe('Grid range factor (default: 10)'),
@@ -74,7 +74,7 @@ export const bayesianInferenceArgsSchema = z.object({
     })).describe('Prior distribution specifications for each parameter'),
     data: z.array(z.object({
         time: z.number(),
-        observables: z.record(z.number()),
+        observables: z.record(z.string(), z.number()),
     })).describe('Experimental data to fit against'),
     observables: z.array(z.string()).optional().describe('Observables to compare'),
     distance: z.enum(['sse', 'rmse', 'weighted_sse', 'chi_squared']).optional().describe('Distance metric (default: sse)'),
