@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Button } from './ui/Button';
 import { downloadTextFile } from '../src/utils/download';
 
@@ -33,6 +33,45 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [showHelp, setShowHelp] = useState(false);
   const [toast, setToast] = useState<string | null>(null);
+
+  const dialogRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const dialog = dialogRef.current;
+    if (!dialog) return;
+
+    const focusableElements = dialog.querySelectorAll<HTMLElement>(
+      'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+    );
+    const firstElement = focusableElements[0];
+    const lastElement = focusableElements[focusableElements.length - 1];
+
+    if (firstElement) {
+      firstElement.focus();
+    }
+
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        onClose();
+      }
+      if (event.key === 'Tab') {
+        if (event.shiftKey && document.activeElement === firstElement) {
+          event.preventDefault();
+          lastElement?.focus();
+        } else if (!event.shiftKey && document.activeElement === lastElement) {
+          event.preventDefault();
+          firstElement?.focus();
+        }
+      }
+    };
+
+    dialog.addEventListener('keydown', handleKeyDown);
+    return () => {
+      dialog.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isOpen, onClose]);
 
   if (!isOpen) return null;
 
@@ -123,16 +162,23 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm">
-      <div className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 p-4 backdrop-blur-sm" onClick={onClose}>
+      <div
+        ref={dialogRef}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="vscode-export-modal-title"
+        className="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-800"
+        onClick={(e) => e.stopPropagation()}
+      >
         <div className="p-6">
           <div className="mb-4 flex items-center gap-3">
             <div className="rounded-lg bg-blue-100 p-2 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400">
-              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor">
+              <svg className="h-6 w-6" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
                 <path d="M19.1 22.1l-11.2-4.5-9.6 4.5v-2.1L7.9 16.5l-7.9-3.5v-2L7.9 7.5L0 4.1V2l9.6 4.5L19.1 2z M10.6 12l8.5-4L24 12l-4.9 4z" />
               </svg>
             </div>
-            <h3 className="text-xl font-bold text-slate-900 dark:text-white">Open in VS Code</h3>
+            <h3 id="vscode-export-modal-title" className="text-xl font-bold text-slate-900 dark:text-white">Open in VS Code</h3>
           </div>
 
           <div className="mb-6 space-y-4">

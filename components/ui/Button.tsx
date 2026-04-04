@@ -18,7 +18,7 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
 
     const combinedClasses = `${baseClasses} ${variantClasses[variant]} ${className}`;
 
-    return <button className={combinedClasses} ref={ref} {...props} />;
+    return <button className={combinedClasses} ref={ref} aria-disabled={props.disabled} {...props} />;
   }
 );
 Button.displayName = 'Button';

@@ -697,7 +697,12 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 relative w-full border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-900 rounded-lg shadow-sm flex flex-col" data-testid="contact-map-panel">
+      <div
+        className="flex-1 min-h-0 relative w-full border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-900 rounded-lg shadow-sm flex flex-col"
+        data-testid="contact-map-panel"
+        role="img"
+        aria-label="Interactive contact map showing molecule types, components, states, and possible bonds"
+      >
         {!layoutDone && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white dark:bg-slate-900/70 dark:bg-slate-900/70 rounded-lg">
             <LoadingSpinner className="w-8 h-8 text-[#0ea5e9]" />

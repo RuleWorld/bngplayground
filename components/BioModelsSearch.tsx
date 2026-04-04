@@ -81,9 +81,12 @@ export const BioModelsSearch: React.FC<BioModelsSearchProps> = ({ onImportById }
   };
 
   return (
-    <div className="mb-4">
+    <div className="mb-4" role="search" aria-label="BioModels database search">
       <div className="flex gap-2 items-center">
+        <label htmlFor="biomodels-search-input" className="sr-only">Search BioModels</label>
         <Input
+          id="biomodels-search-input"
+          type="search"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
@@ -92,25 +95,30 @@ export const BioModelsSearch: React.FC<BioModelsSearchProps> = ({ onImportById }
             }
           }}
           placeholder="Search SBML BioModels (e.g., MAPK)"
+          aria-describedby="biomodels-search-help"
         />
-        <Button onClick={runSearch} disabled={loading}>{loading ? 'Searching...' : 'Search'}</Button>
+        <Button onClick={runSearch} disabled={loading} aria-label="Submit search">{loading ? 'Searching...' : 'Search'}</Button>
       </div>
 
-      <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
+      <div id="biomodels-search-help" className="mt-2 text-xs text-slate-500 dark:text-slate-400">
         Searches BioModels by your term and restricts results to SBML models only.
       </div>
 
-      {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
+      <div aria-live="polite" className="sr-only">
+        {results.length > 0 ? `Found ${results.length} models` : (loading ? 'Searching...' : '')}
+      </div>
 
-      <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+      {error && <div className="text-sm text-red-600 mt-2" role="alert">{error}</div>}
+
+      <div className="mt-3 space-y-2 max-h-48 overflow-y-auto" role="listbox" aria-label="Search results">
         {results.map(r => (
-          <div key={r.id} className="flex items-center justify-between p-2 border rounded bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800">
+          <div key={r.id} role="option" aria-selected="false" className="flex items-center justify-between p-2 border rounded bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800">
             <div className="text-sm">
               <div className="font-medium">{r.name || r.id}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400">{r.id}</div>
             </div>
             <div>
-              <Button onClick={() => onImportById(r.id)} className="text-xs">Import</Button>
+              <Button onClick={() => onImportById(r.id)} className="text-xs" aria-label={`Import model ${r.name || r.id}`}>Import</Button>
             </div>
           </div>
         ))}
