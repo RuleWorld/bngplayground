@@ -556,17 +556,43 @@ function interpolateRow(
   t: number
 ): Record<string, number> | null {
   if (!rows.length) return null;
-  const times = rows.map(r => r.time as number);
-  const idx = times.findIndex(rt => rt >= t);
-  if (idx <= 0) return rows[0];
-  if (idx >= rows.length) return rows[rows.length - 1];
-  const t0 = times[idx - 1], t1 = times[idx];
+
+  let low = 0;
+  let high = rows.length - 1;
+
+  // Fast path for out-of-bounds
+  if (t <= (rows[0].time as number)) return rows[0];
+  if (t >= (rows[high].time as number)) return rows[high];
+
+  // Binary search for O(log N) lookup instead of O(N) findIndex
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const midTime = rows[mid].time as number;
+
+    if (midTime === t) {
+      return rows[mid];
+    } else if (midTime < t) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  // After loop, high is the index just before t, low is the index just after
+  const r0 = rows[high];
+  const r1 = rows[low];
+
+  const t0 = r0.time as number;
+  const t1 = r1.time as number;
   const alpha = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+
   const result: Record<string, number> = { time: t } as any;
-  for (const key of Object.keys(rows[idx])) {
+
+  // Use for-in to avoid Object.keys array allocation
+  for (const key in r0) {
     if (key === 'time') continue;
-    const v0 = rows[idx - 1][key] as number;
-    const v1 = rows[idx][key] as number;
+    const v0 = r0[key] as number;
+    const v1 = r1[key] as number;
     result[key] = v0 + alpha * (v1 - v0);
   }
   return result;
