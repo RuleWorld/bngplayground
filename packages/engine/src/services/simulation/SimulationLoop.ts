@@ -1593,25 +1593,33 @@ export async function simulate(
     const buildDerivativesFunction = () => {
       if (functionalRateCount > 0) {
         const parameterNames = Object.keys(model.parameters || {});
-        const reusableRateContext = { ...(model.parameters || {}), ...observableValuesRecord };
+        // Create a single shared context to avoid object allocations in the hot loop
+        const sharedRateContext: Record<string, number> = { ...(model.parameters || {}), ...observableValuesRecord };
+        const speciesNames = model.species.map(s => s.name);
+        // Pre-allocate a set of `ridxX` keys to clear them out safely
+        const maxReactants = Math.max(0, ...concreteReactions.map(r => r.reactants.length));
 
-        const computeObservableValues = (yIn: Float64Array): Record<string, number> => {
+        const updateSharedContextGlobal = (yIn: Float64Array): Record<string, number> => {
           const obsValues = evaluateObservablesFast(yIn);
           for (let i = 0; i < parameterNames.length; i++) {
             const name = parameterNames[i];
-            reusableRateContext[name] = model.parameters[name];
+            sharedRateContext[name] = model.parameters[name];
           }
           for (let i = 0; i < observableNames.length; i++) {
             const name = observableNames[i];
-            reusableRateContext[name] = obsValues[name];
+            sharedRateContext[name] = obsValues[name];
+          }
+          for (let k = 0; k < numSpecies; k++) {
+            sharedRateContext[speciesNames[k]] = odeUsesAmountState
+              ? yIn[k]
+              : (yIn[k] * speciesVolumes[k]);
           }
           return obsValues;
         };
 
         return (yIn: Float64Array, dydt: Float64Array) => {
           dydt.fill(0);
-          const obsValues = computeObservableValues(yIn);
-          const context = reusableRateContext;
+          const obsValues = updateSharedContextGlobal(yIn);
 
           for (let i = 0; i < concreteReactions.length; i++) {
             if (debugDerivs && !debugState.hasLoggedIndices) {
@@ -1622,23 +1630,17 @@ export async function simulate(
             let rate: number;
 
             if (rxn.isFunctionalRate && rxn.rateExpression) {
-              // Add indexed reactant names for macro-expanded rates
-              // AND include full species names for user-defined functions
-              const rxnContext: Record<string, number> = {};
-              for (let j = 0; j < rxn.reactants.length; j++) {
-                rxnContext[`ridx${j}`] = odeUsesAmountState
-                  ? yIn[rxn.reactants[j]]
-                  : (yIn[rxn.reactants[j]] * speciesVolumes[rxn.reactants[j]]);
+              // Set reactant bindings for macro-expanded rates
+              for (let j = 0; j < maxReactants; j++) {
+                if (j < rxn.reactants.length) {
+                  const ridx = rxn.reactants[j];
+                  sharedRateContext[`ridx${j}`] = odeUsesAmountState
+                    ? yIn[ridx]
+                    : (yIn[ridx] * speciesVolumes[ridx]);
+                } else {
+                  sharedRateContext[`ridx${j}`] = 0;
+                }
               }
-              // Also add species names
-              for (let k = 0; k < model.species.length; k++) {
-                rxnContext[model.species[k].name] = odeUsesAmountState
-                  ? yIn[k]
-                  : (yIn[k] * speciesVolumes[k]);
-              }
-
-              // Define debugContext here where inputs are available
-              const debugContext = { ...context, ...rxnContext };
 
               try {
                 rate = evaluateFunctionalRate(
@@ -1646,7 +1648,7 @@ export async function simulate(
                   model.parameters,
                   obsValues,
                   model.functions,
-                  debugContext
+                  sharedRateContext
                 );
                 if (!loggedVDephos && rxn.rateExpression.includes('v_dephos')) {
                   loggedVDephos = true;
@@ -1658,7 +1660,7 @@ export async function simulate(
                   });
                 }
                 if (isNaN(rate) || !isFinite(rate)) {
-                  console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}. Context:`, debugContext);
+                  console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}. Context:`, JSON.stringify(sharedRateContext));
                   rate = 0;
                 }
               } catch (e: any) {
