@@ -8,6 +8,7 @@
  */
 
 import type { BNGLModel, BNGLMoleculeType, BNGLSpecies, BNGLObservable, BNGLReaction, ReactionRule, BNGLFunction, BNGLCompartment } from '../../types';
+import { formatNumberBNGL as formatNumber } from '../../utils/numberFormat';
 
 export interface BNGLWriterOptions {
   includeComments?: boolean;
@@ -241,23 +242,6 @@ export function writeBNGL(model: BNGLModel, options: BNGLWriterOptions = {}): st
   }
 
   return output;
-}
-
-/**
- * Format a number for BNGL output
- */
-function formatNumber(value: number): string {
-  if (!Number.isFinite(value)) return '0';
-
-  // Use scientific notation for very large or very small numbers
-  if (Math.abs(value) > 1e6 || (Math.abs(value) < 1e-3 && value !== 0)) {
-    return value.toExponential();
-  }
-
-  // For normal-sized numbers, use fixed notation
-  const str = value.toString();
-  // Remove unnecessary trailing zeros after decimal point
-  return str.replace(/(\.\d*?[1-9])0+$/, '$1').replace(/\.0+$/, '');
 }
 
 /**

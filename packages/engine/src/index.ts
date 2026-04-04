@@ -80,7 +80,7 @@ export type { CSRMatrix } from './services/analysis/SparseLUSolver';
 export { JITCompiler, jitCompiler } from './services/analysis/JITCompiler';
 export { analyzeNetwork, checkDeficiencyZeroTheorem } from './services/analysis/NetworkAnalysis';
 export type { NetworkAnalysis } from './services/analysis/NetworkAnalysis';
-export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
+export { roundForInput, DEFAULT_ZERO_DELTA, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
@@ -92,6 +92,7 @@ export { parseBPSL, evaluateBPSL } from './services/analysis/bpsl';
 export type { BPSLConstraint, BPSLResult, BPSLConstraintResult, ConstraintType } from './services/analysis/bpsl';
 
 // ── Utils ───────────────────────────────────────────────────────────
+export { formatNumber, formatNumberBNGL, formatNumberDisplay } from './utils/numberFormat';
 export { SafeExpressionEvaluator } from './utils/safeExpressionEvaluator';
 export { SeededRandom } from './utils/random';
 export { resolveAutoMethod, getSimulationOptionsFromParsedModel } from './utils/simulationOptions';
