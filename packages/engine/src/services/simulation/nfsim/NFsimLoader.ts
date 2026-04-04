@@ -1,18 +1,5 @@
-import { ensureNFsimRuntime } from './NFsimRuntimeLoader';
-
-export interface NFsimRunOptions {
-  t_end: number;
-  n_steps: number;
-  seed?: number;
-  utl?: number;
-  gml?: number;
-  equilibrate?: number;
-  cb?: boolean;
-  timeoutMs?: number;
-  verbose?: boolean;
-  progressCallback?: (line: string) => void;
-  [key: string]: any;
-}
+import { ensureNFsimRuntime, type NFsimRunOptions } from './NFsimRuntimeLoader';
+export type { NFsimRunOptions };
 
 type NFsimRuntime = {
   run: (xml: string, options: NFsimRunOptions) => Promise<string> | string;
