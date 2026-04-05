@@ -521,10 +521,14 @@ void* init_solver(int neq, double t0, double* y0_data, double reltol, double abs
     // Create CVODE memory
     mem->cvode_mem = CVodeCreate(CV_BDF, mem->sunctx);
     mem->NLS = SUNNonlinSol_Newton(mem->y, mem->sunctx);
-    
+
     // Init and Attach
     CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
     CVodeSetUserData(mem->cvode_mem, mem);
+    // NOTE: Currently using scalar tolerances (CVodeSStolerances).
+    // Future improvement: expose CVodeSVtolerances for per-species absolute tolerance
+    // vectors, enabling better handling of models where species concentrations span
+    // many orders of magnitude (e.g., 1e-3 to 1e6). See CVODESolver.ts computeScaledAtol().
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
     CVodeSetLinearSolver(mem->cvode_mem, mem->LS, mem->A);

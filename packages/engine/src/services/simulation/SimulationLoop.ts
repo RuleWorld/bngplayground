@@ -22,6 +22,7 @@ import { getFeatureFlags } from '../../featureFlags';
 import { jitCompiler, type JITCompiledFunction, type NetworkByteCode } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
+import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 // import * as fs from 'node:fs';
 
 interface ConcreteReaction {
@@ -1733,52 +1734,238 @@ export async function simulate(
       }
 
       // Fallback: Mass Action Loop
-      return (yIn: Float64Array, dydt: Float64Array) => {
-        if (!(globalThis as any)._hasLoggedDerivCall) {
-          console.log('[Worker] DERIVATIVE FUNCTION CALLED (Loop Fallback)');
-          (globalThis as any)._hasLoggedDerivCall = true;
-        }
-        dydt.fill(0);
-        for (let i = 0; i < concreteReactions.length; i++) {
-          const rxn = concreteReactions[i];
-          let velocity = rxn.rateConstant; // Start with rate constant
+      // --- Sparse CSR acceleration for large models ---
+      const constantSpeciesMaskForCSR = model.species.map((s) => !!s.isConstant);
+      const csrMatrix = buildCSRStoichiometry(concreteReactions, numSpecies, constantSpeciesMaskForCSR);
+      const useSparse = shouldUseSparse(numSpecies, concreteReactions.length, csrMatrix.nnz);
 
-          // Mass action kinetics (not functional rate)
-          // PARITY FIX: Apply volume scaling to reactants in fallback loop
-          let multiplicative = 1.0;
+      if (useSparse) {
+        // Pre-allocate velocity buffer once (reused every derivative call)
+        const sparseNRxns = concreteReactions.length;
+        const velocityBuffer = new Float64Array(sparseNRxns);
+        // Pre-compute inverse volume per species for concentration mode
+        const invSpeciesVolumes = odeUsesAmountState ? null : new Float64Array(numSpecies);
+        if (invSpeciesVolumes) {
+          for (let i = 0; i < numSpecies; i++) {
+            invSpeciesVolumes[i] = 1.0 / speciesVolumes[i];
+          }
+        }
+
+        // Flatten per-reaction data into contiguous typed arrays (zero-copy hot path)
+        const sparseRxnRateK = new Float64Array(sparseNRxns);
+        const sparseRxnPropDeg = new Float64Array(sparseNRxns);
+        const sparseRxnVAnchors = new Float64Array(sparseNRxns);
+        let sparseTotalReactants = 0;
+        for (let i = 0; i < sparseNRxns; i++) sparseTotalReactants += concreteReactions[i].reactants.length;
+        const sparseFlatReactantIdx = new Int32Array(sparseTotalReactants);
+        const sparseFlatReactantOffsets = new Int32Array(sparseNRxns + 1);
+        const sparseFlatReactantScale = odeUsesAmountState ? null : new Float64Array(sparseTotalReactants);
+
+        let srOff = 0;
+        for (let i = 0; i < sparseNRxns; i++) {
+          const rxn = concreteReactions[i];
           const vAnchor = reactionReactingVolumes[i] || 1.0;
-          // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
+          sparseRxnRateK[i] = rxn.rateConstant;
+          sparseRxnPropDeg[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+          sparseRxnVAnchors[i] = vAnchor;
+          sparseFlatReactantOffsets[i] = srOff;
           for (let j = 0; j < rxn.reactants.length; j++) {
             const ridx = rxn.reactants[j];
+            sparseFlatReactantIdx[srOff] = ridx;
+            if (sparseFlatReactantScale) {
+              sparseFlatReactantScale[srOff] = speciesVolumes[ridx] / vAnchor;
+            }
+            srOff++;
+          }
+        }
+        sparseFlatReactantOffsets[sparseNRxns] = srOff;
+
+        console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
+
+        return (yIn: Float64Array, dydt: Float64Array) => {
+          if (!(globalThis as any)._hasLoggedDerivCall) {
+            console.log('[Worker] DERIVATIVE FUNCTION CALLED (Sparse CSR Fallback)');
+            (globalThis as any)._hasLoggedDerivCall = true;
+          }
+
+          // Step 1: Compute reaction velocities into pre-allocated buffer (flattened arrays)
+          for (let i = 0; i < sparseNRxns; i++) {
+            let velocity = sparseRxnRateK[i];
+            let multiplicative = 1.0;
+            const vAnchor = sparseRxnVAnchors[i];
+            const rStart = sparseFlatReactantOffsets[i];
+            const rEnd = sparseFlatReactantOffsets[i + 1];
+
             if (odeUsesAmountState) {
-              multiplicative *= (yIn[ridx] / vAnchor);
+              for (let j = rStart; j < rEnd; j++) {
+                multiplicative *= (yIn[sparseFlatReactantIdx[j]] / vAnchor);
+              }
             } else {
-              const scale = speciesVolumes[ridx] / vAnchor;
-              multiplicative *= (yIn[ridx] * scale);
+              for (let j = rStart; j < rEnd; j++) {
+                multiplicative *= (yIn[sparseFlatReactantIdx[j]] * sparseFlatReactantScale![j]);
+              }
+            }
+
+            velocity *= multiplicative * sparseRxnPropDeg[i] * vAnchor;
+            velocityBuffer[i] = velocity;
+          }
+
+          // Step 2: Sparse matrix-vector product: dydt = S * velocityBuffer
+          dydt.fill(0);
+          sparseCSRDgemv(csrMatrix, velocityBuffer, dydt);
+
+          // Step 3: For concentration mode, scale by 1/volume per species
+          if (invSpeciesVolumes) {
+            for (let i = 0; i < numSpecies; i++) {
+              dydt[i] *= invSpeciesVolumes[i];
             }
           }
-          velocity *= multiplicative * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+        };
+      }
 
-          // Apply anchor volume scaling to get FLUX (Amount/Time)
-          // Flux = k * [Patterns] * Vol_Anchor
-          velocity *= vAnchor;
+      // Dense fallback for small models (< 20 species or low sparsity)
+      // --- Zero-copy optimization: pre-allocate all temporaries outside the closure ---
+      const nRxns = concreteReactions.length;
 
-          // Distribute flux to products and reactants
-          for (let j = 0; j < rxn.reactants.length; j++) {
-            const reactantIdx = rxn.reactants[j];
-            if (!model.species[reactantIdx].isConstant) {
-              dydt[reactantIdx] -= odeUsesAmountState
-                ? velocity
-                : (velocity / speciesVolumes[reactantIdx]);
+      // Pre-allocated reaction velocity buffer (reused every derivative call)
+      const denseVelocityBuffer = new Float64Array(nRxns);
+
+      // Flatten per-reaction data into contiguous typed arrays for cache-friendly access.
+      // This eliminates object property lookups on concreteReactions[i] in the hot loop.
+      const rxnRateConstants = new Float64Array(nRxns);
+      const rxnPropensityFactors = new Float64Array(nRxns);   // propensityFactor * degeneracy
+      const rxnVAnchors = new Float64Array(nRxns);
+
+      // Flatten reactant indices into a single contiguous Int32Array with offsets
+      let totalReactants = 0;
+      let totalProducts = 0;
+      for (let i = 0; i < nRxns; i++) {
+        totalReactants += concreteReactions[i].reactants.length;
+        totalProducts += concreteReactions[i].products.length;
+      }
+      const flatReactantIdx = new Int32Array(totalReactants);
+      const flatReactantOffsets = new Int32Array(nRxns + 1);
+      const flatProductIdx = new Int32Array(totalProducts);
+      const flatProductStoich = new Float64Array(totalProducts);
+      const flatProductOffsets = new Int32Array(nRxns + 1);
+
+      // Pre-compute per-reactant volume scale factors (concentration mode)
+      // and per-product inverse volume (concentration mode)
+      const flatReactantScale = odeUsesAmountState ? null : new Float64Array(totalReactants);
+      const denseInvSpeciesVolumes = odeUsesAmountState ? null : new Float64Array(numSpecies);
+      if (denseInvSpeciesVolumes) {
+        for (let i = 0; i < numSpecies; i++) {
+          denseInvSpeciesVolumes[i] = 1.0 / speciesVolumes[i];
+        }
+      }
+
+      // Constant species mask as a Uint8Array for branchless checks
+      const isConstant = new Uint8Array(numSpecies);
+      for (let i = 0; i < numSpecies; i++) {
+        isConstant[i] = model.species[i].isConstant ? 1 : 0;
+      }
+
+      let rOff = 0;
+      let pOff = 0;
+      for (let i = 0; i < nRxns; i++) {
+        const rxn = concreteReactions[i];
+        const vAnchor = reactionReactingVolumes[i] || 1.0;
+
+        rxnRateConstants[i] = rxn.rateConstant;
+        rxnPropensityFactors[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+        rxnVAnchors[i] = vAnchor;
+
+        flatReactantOffsets[i] = rOff;
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          const ridx = rxn.reactants[j];
+          flatReactantIdx[rOff] = ridx;
+          if (flatReactantScale) {
+            flatReactantScale[rOff] = speciesVolumes[ridx] / vAnchor;
+          }
+          rOff++;
+        }
+
+        flatProductOffsets[i] = pOff;
+        for (let j = 0; j < rxn.products.length; j++) {
+          flatProductIdx[pOff] = rxn.products[j];
+          flatProductStoich[pOff] = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+          pOff++;
+        }
+      }
+      flatReactantOffsets[nRxns] = rOff;
+      flatProductOffsets[nRxns] = pOff;
+
+      console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
+
+      return (yIn: Float64Array, dydt: Float64Array) => {
+        if (!(globalThis as any)._hasLoggedDerivCall) {
+          console.log('[Worker] DERIVATIVE FUNCTION CALLED (Zero-Copy Dense Fallback)');
+          (globalThis as any)._hasLoggedDerivCall = true;
+        }
+
+        // Step 1: Compute reaction velocities into pre-allocated buffer
+        for (let i = 0; i < nRxns; i++) {
+          let velocity = rxnRateConstants[i];
+          let multiplicative = 1.0;
+          const vAnchor = rxnVAnchors[i];
+          const rStart = flatReactantOffsets[i];
+          const rEnd = flatReactantOffsets[i + 1];
+
+          if (odeUsesAmountState) {
+            for (let j = rStart; j < rEnd; j++) {
+              multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
+            }
+          } else {
+            for (let j = rStart; j < rEnd; j++) {
+              multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
             }
           }
-          for (let j = 0; j < rxn.products.length; j++) {
-            const productIdx = rxn.products[j];
-            if (!model.species[productIdx].isConstant) {
-              const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
-              dydt[productIdx] += odeUsesAmountState
-                ? (velocity * stoich)
-                : ((velocity * stoich) / speciesVolumes[productIdx]);
+
+          velocity *= multiplicative * rxnPropensityFactors[i] * vAnchor;
+          denseVelocityBuffer[i] = velocity;
+        }
+
+        // Step 2: Distribute flux using flattened arrays
+        dydt.fill(0);
+        for (let i = 0; i < nRxns; i++) {
+          const velocity = denseVelocityBuffer[i];
+          const rStart = flatReactantOffsets[i];
+          const rEnd = flatReactantOffsets[i + 1];
+
+          // Subtract from reactants
+          if (odeUsesAmountState) {
+            for (let j = rStart; j < rEnd; j++) {
+              const idx = flatReactantIdx[j];
+              if (!isConstant[idx]) {
+                dydt[idx] -= velocity;
+              }
+            }
+          } else {
+            for (let j = rStart; j < rEnd; j++) {
+              const idx = flatReactantIdx[j];
+              if (!isConstant[idx]) {
+                dydt[idx] -= velocity * denseInvSpeciesVolumes![idx];
+              }
+            }
+          }
+
+          // Add to products
+          const pStart = flatProductOffsets[i];
+          const pEnd = flatProductOffsets[i + 1];
+
+          if (odeUsesAmountState) {
+            for (let j = pStart; j < pEnd; j++) {
+              const idx = flatProductIdx[j];
+              if (!isConstant[idx]) {
+                dydt[idx] += velocity * flatProductStoich[j];
+              }
+            }
+          } else {
+            for (let j = pStart; j < pEnd; j++) {
+              const idx = flatProductIdx[j];
+              if (!isConstant[idx]) {
+                dydt[idx] += velocity * flatProductStoich[j] * denseInvSpeciesVolumes![idx];
+              }
             }
           }
         }
@@ -1827,21 +2014,36 @@ export async function simulate(
       // Logging can go here if needed
     }
 
+    // Auto-detect KLU sparse solver for large models (>= 50 species).
+    // For these models the Jacobian is typically sparse, and KLU direct factorization
+    // is much faster than dense LU.  For smaller models dense is preferred to avoid
+    // the overhead of sparse bookkeeping.
+    const KLU_SPARSE_SPECIES_THRESHOLD = 50;
+    const autoSparseEligible =
+      numSpecies >= KLU_SPARSE_SPECIES_THRESHOLD &&
+      allMassAction &&
+      // Respect explicit user opt-out
+      options.sparse !== false;
+
     if (solverType === 'auto') {
       if (useAdaptiveCvodeTuning) {
-        if (stiffConfig.useSparse) {
+        if (stiffConfig.useSparse || autoSparseEligible) {
           solverType = 'cvode_sparse';
         } else if (stiffConfig.useAnalyticalJacobian) {
           solverType = 'cvode_jac';
         }
       } else {
-        solverType = 'cvode';
+        solverType = autoSparseEligible ? 'cvode_sparse' : 'cvode';
       }
-    } else if (solverType === 'cvode' && usePresetCvodeTuning) {
-      if (stiffConfig.useSparse) {
+    } else if (solverType === 'cvode') {
+      if (usePresetCvodeTuning && stiffConfig.useSparse) {
         solverType = 'cvode_sparse';
-      } else if (stiffConfig.useAnalyticalJacobian && allMassAction) {
+      } else if (usePresetCvodeTuning && stiffConfig.useAnalyticalJacobian && allMassAction) {
         solverType = 'cvode_jac';
+      } else if (autoSparseEligible) {
+        // Auto-upgrade dense CVODE to sparse KLU for large models
+        solverType = 'cvode_sparse';
+        console.log(`[SimulationLoop] Auto-selecting KLU sparse solver for ${numSpecies}-species model (threshold: ${KLU_SPARSE_SPECIES_THRESHOLD})`);
       }
     }
 

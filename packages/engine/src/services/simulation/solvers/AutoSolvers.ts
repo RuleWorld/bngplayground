@@ -9,6 +9,8 @@ import { Rosenbrock23Solver } from './Rosenbrock23Solver';
 import { RK45Solver, FastRK4Solver } from './RK45Solver';
 import { CVODESolver } from './CVODESolver';
 import { SparseODESolver } from '../../analysis/SparseODESolver';
+import { buildJacobianFunction, isPurelyMassAction } from '../AnalyticalJacobian';
+import type { JacobianReaction } from '../AnalyticalJacobian';
 
 /**
  * Auto-switching solver: starts with RK45, switches to Rosenbrock23 if stiffness detected
@@ -227,9 +229,24 @@ export async function createSolver(
     case 'cvode_sparse':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, true);
-    case 'cvode_jac':
+    case 'cvode_jac': {
       await CVODESolver.init();
-      return new CVODESolver(n, f, opts, false, (options as any).jacobian);
+      let jacobian = (options as any).jacobian;
+      // Auto-build analytical Jacobian from reaction data when no explicit Jacobian is provided
+      if (!jacobian && (options as any).reactions) {
+        const reactions = (options as any).reactions as JacobianReaction[];
+        const useAnalytical = (options as any).useAnalyticalJacobian !== false;
+        if (useAnalytical && isPurelyMassAction(reactions)) {
+          jacobian = buildJacobianFunction(reactions, n);
+          console.log('[createSolver] Auto-generated analytical Jacobian for', n, 'species,', reactions.length, 'mass-action reactions');
+        } else if (useAnalytical) {
+          // Hybrid: analytical for mass-action + FD for functional
+          jacobian = buildJacobianFunction(reactions, n, f);
+          console.log('[createSolver] Auto-generated hybrid Jacobian for', n, 'species,', reactions.length, 'reactions (includes functional rates)');
+        }
+      }
+      return new CVODESolver(n, f, opts, false, jacobian);
+    }
     case 'cvode_adams':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, false, undefined, true);

@@ -19,6 +19,13 @@
  * - reinit_solver(ptr, t0, y0): Reinitialize at new time/state (for multi-phase)
  * - get_solver_stats(ptr, ...): Get diagnostic statistics
  *
+ * Per-species absolute tolerance scaling (RoadRunner-inspired):
+ * When initial concentrations span > 3 orders of magnitude, the scalar atol is
+ * scaled by the geometric mean of nonzero concentrations, clamped to [1e-12, 1e-6].
+ * This avoids wasting CVODE steps on well-resolved large-concentration species.
+ * A future improvement is to expose CVodeSVtolerances in the WASM build for true
+ * per-species vector tolerances: atol_i = max(base_atol, base_atol * |y0_i|).
+ *
  * Known limitations for strict numerical parity with BNG2:
  * 1. Chaotic systems (Hill n>10) will diverge due to floating-point sensitivity
  * 2. Long-period oscillators accumulate phase drift over many cycles
@@ -129,6 +136,62 @@ export class CVODESolver {
   private jacobian?: JacobianFunction;
   private networkByteCode?: NetworkByteCode;
   private networkHandle: number = 0;
+
+  /**
+   * Compute a scaled scalar absolute tolerance based on initial concentrations.
+   *
+   * Inspired by RoadRunner's per-species tolerance approach. Since the WASM CVODE
+   * build only exposes CVodeSStolerances (scalar atol), we approximate per-species
+   * scaling by adjusting the single atol based on the geometric mean of nonzero
+   * initial concentrations.
+   *
+   * This only activates when concentrations span > 3 orders of magnitude.
+   * When activated, atol is set to: clamp(baseAtol * geometricMean, 1e-12, 1e-6).
+   *
+   * If CVodeSVtolerances becomes available in the WASM build (wasm-sundials/cvode_wrapper.c),
+   * this should be replaced with true per-species tolerances:
+   *   atol_i = max(baseAtol, baseAtol * |y0_i|)
+   *
+   * @param y0 Initial state vector
+   * @param baseAtol The user-configured scalar atol (default 1e-8)
+   * @returns The (possibly scaled) scalar atol to pass to CVODE
+   */
+  static computeScaledAtol(y0: Float64Array, baseAtol: number): number {
+    if (y0.length === 0) return baseAtol;
+
+    // Collect absolute values of nonzero initial concentrations
+    let minNonzero = Infinity;
+    let maxAbs = 0;
+    let logSum = 0;
+    let nonzeroCount = 0;
+
+    for (let i = 0; i < y0.length; i++) {
+      const absVal = Math.abs(y0[i]);
+      if (absVal > 0) {
+        if (absVal < minNonzero) minNonzero = absVal;
+        if (absVal > maxAbs) maxAbs = absVal;
+        logSum += Math.log(absVal);
+        nonzeroCount++;
+      }
+    }
+
+    // If no nonzero species or range is within 3 orders of magnitude, keep base atol
+    if (nonzeroCount === 0 || maxAbs === 0 || minNonzero === Infinity) {
+      return baseAtol;
+    }
+
+    const dynamicRange = maxAbs / minNonzero;
+    if (dynamicRange <= 1e3) {
+      return baseAtol; // Range <= 3 orders of magnitude; no scaling needed
+    }
+
+    // Geometric mean of nonzero concentrations
+    const geoMean = Math.exp(logSum / nonzeroCount);
+
+    // Scale atol by geometric mean, clamped to [1e-12, 1e-6]
+    const scaledAtol = Math.max(1e-12, Math.min(1e-6, baseAtol * geoMean));
+    return scaledAtol;
+  }
 
   private solverMem: number | null = null;
   private yPtr: number = 0;
@@ -467,7 +530,10 @@ export class CVODESolver {
     if (!m) return { success: false as const, errorMessage: 'CVODE WASM not loaded' };
 
     const neq = this.n;
-    const { atol, rtol } = this.options;
+    const { rtol } = this.options;
+    // Apply per-species absolute tolerance scaling when concentrations span wide ranges.
+    // This is a TypeScript-layer heuristic since CVodeSVtolerances is not yet exposed in WASM.
+    const atol = CVODESolver.computeScaledAtol(y0, this.options.atol);
 
     // If we have an active solver, verify we're continuing from the expected state.
     if (this.solverMem) {

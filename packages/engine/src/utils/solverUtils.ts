@@ -65,6 +65,10 @@ export interface SolverOptions {
   rootFunction?: (t: number, y: Float64Array, gout: Float64Array) => void;
   numRoots?: number;
   networkByteCode?: import('../services/analysis/JITCompiler').NetworkByteCode;
+  /** Enable analytical Jacobian generation from reaction data. Default: true for mass-action, false for functional rates. */
+  useAnalyticalJacobian?: boolean;
+  /** Reaction data for analytical Jacobian auto-generation (set by SimulationLoop). */
+  reactions?: unknown[];
 }
 
 export interface SolverResult {
