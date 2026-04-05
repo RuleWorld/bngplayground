@@ -217,6 +217,8 @@ export interface SimulationResults {
     ssaInfluence?: SSAInfluenceTimeSeries;
     /** Reaction firing log (only populated when recordFirings=true and method='ssa') */
     firingLog?: ReactionFiringEvent[];
+    /** Dense output buffer for continuous interpolation (only populated when denseOutput=true and method='ode') */
+    denseOutput?: import('./services/simulation/DenseOutput').DenseOutputBuffer;
 }
 
 export interface SSAInfluenceData {
@@ -277,6 +279,8 @@ export interface SimulationOptions {
     poplevel?: number;
     /** Optional callback invoked by the solver after each integration step */
     onStep?: (currentStep: number, maxSteps: number) => void;
+    /** Enable Hermite dense output (continuous interpolation between steps). Default: false. */
+    denseOutput?: boolean;
 }
 
 export interface SerializedWorkerError {

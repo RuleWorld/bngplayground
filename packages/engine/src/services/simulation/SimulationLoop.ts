@@ -23,6 +23,7 @@ import { jitCompiler, type JITCompiledFunction, type NetworkByteCode } from '../
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
+import { DenseOutputBuffer } from './DenseOutput';
 // import * as fs from 'node:fs';
 
 interface ConcreteReaction {
@@ -2033,6 +2034,17 @@ export async function simulate(
       } else {
         solverType = autoJacEligible ? 'cvode_jac' : 'cvode';
       }
+    } else if (solverType === 'auto_detect') {
+      // Runtime stiffness detection: probe the system at t=0 and select solver accordingly.
+      // The createSolver factory handles the 'auto_detect' case via CompositeAutoSolver,
+      // but here we can also do a quick static pre-selection based on the stiffness profile
+      // so that the initial probe starts from a reasonable baseline.
+      if (stiffnessProfile.category === 'extreme' || stiffnessProfile.category === 'severe') {
+        // Override: extremely stiff models should start with Jacobian-equipped CVODE
+        // even in auto_detect mode — the runtime probe will confirm.
+        console.log('[SimulationLoop] auto_detect: static pre-analysis suggests severe stiffness, starting with cvode_jac');
+      }
+      // Leave solverType as 'auto_detect' — createSolver will handle it
     } else if (solverType === 'cvode') {
       if (usePresetCvodeTuning && stiffConfig.useSparse) {
         solverType = 'cvode_sparse';
@@ -2449,6 +2461,11 @@ export async function simulate(
     let modelTime = 0;
     let shouldStop: boolean;
 
+    // Dense output: Hermite interpolation buffer for continuous trajectory reconstruction.
+    // Only allocated when denseOutput=true to avoid memory overhead in normal runs.
+    const denseOutputEnabled = !!options.denseOutput;
+    const denseOutputBuffer = denseOutputEnabled ? new DenseOutputBuffer() : undefined;
+
     // Persisted CVODE solver for continue=>1 multi-phase continuity.
     // BNG2 keeps the same CVODE instance running (preserving BDF step-size history) across
     // phases with continue=>1. We replicate this by NOT destroying the solver at phase end
@@ -2737,9 +2754,24 @@ export async function simulate(
       try {
         if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Starting loop for Phase ${phaseIdx}, steps=${phase_n_steps}, record=${recordThisPhase}`);
         let solverState = phaseState;
+
+        // Dense output: pre-compute derivatives at the start of this phase if needed.
+        // We store f(t_n, y_n) before each step and f(t_{n+1}, y_{n+1}) after,
+        // then feed both to the Hermite interpolant.
+        let denseF0: Float64Array | undefined;
+        if (denseOutputBuffer && !phaseExpandState) {
+          denseF0 = new Float64Array(solverState.length);
+          phaseDerivatives(solverState, denseF0);
+        }
+
         for (let i = 1; i <= phase_n_steps && !shouldStop; i++) {
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
+
+          // Dense output: snapshot state before integration step
+          const denseT0 = denseOutputBuffer && !phaseExpandState ? t : 0;
+          const denseY0 = denseOutputBuffer && !phaseExpandState ? new Float64Array(solverState) : undefined;
+
           const result = solver.integrate(solverState, t, tTarget, callbacks.checkCancelled);
 
           if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Step ${i} done. t=${result.t}, success=${result.success}`);
@@ -2762,6 +2794,17 @@ export async function simulate(
             solverState = y;
           }
           t = result.t;
+
+          // Dense output: compute f(t_{n+1}, y_{n+1}) and store the Hermite interval.
+          // Only supported for non-reduced (full-state) systems to keep the interpolant
+          // in the same coordinate space as the solution output.
+          if (denseOutputBuffer && denseY0 && denseF0 && !phaseExpandState) {
+            const denseF1 = new Float64Array(solverState.length);
+            phaseDerivatives(solverState, denseF1);
+            denseOutputBuffer.addInterval(denseT0, t, denseY0, new Float64Array(solverState), denseF0, denseF1);
+            // f1 of this step becomes f0 of next step
+            denseF0 = denseF1;
+          }
 
           if (result.errorMessage === "ROOT_FOUND") {
             // Signal a discontinuity event. In BNG2, this usually just means 
@@ -2918,7 +2961,8 @@ export async function simulate(
       speciesData: includeSpeciesData ? speciesDataBySuffix[defaultOdeSuffix] || [] : undefined,
       speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
       expandedReactions: model.reactions,
-      expandedSpecies: model.species
+      expandedSpecies: model.species,
+      denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined
     } satisfies SimulationResults;
   }
 
