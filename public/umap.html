@@ -99,6 +99,16 @@
     </div>
 
     <script type="module">
+        function escapeHTML(str) {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
         const colors = ['#ef4444', '#f97316', '#facc15', '#22c55e', '#06b6d4', '#3b82f6', '#8b5cf6', '#d946ef', '#ec4899', '#f43f5e', '#10b981', '#f59e0b', '#ef4444'];
         let models = [];
         let colorMap = {};
@@ -556,7 +566,7 @@
             const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
             legend.innerHTML = sorted.map(([category, count]) => {
                 const color = colorMap[category] || '#94a3b8';
-                return `<div class="legend-item" data-tag="${category}"><div class="legend-dot" style="background:${color};color:${color}"></div><div class="legend-label">${category} (${count})</div></div>`;
+                return `<div class="legend-item" data-tag="${escapeHTML(category)}"><div class="legend-dot" style="background:${escapeHTML(color)};color:${escapeHTML(color)}"></div><div class="legend-label">${escapeHTML(category)} (${count})</div></div>`;
             }).join('');
             legend.querySelectorAll('.legend-item').forEach(el => {
                 el.onclick = () => { 
@@ -638,16 +648,16 @@
             if (hoveredIdx >= 0) {
                 const m = models[hoveredIdx];
                 tooltip.style.display = 'block';
-                const tagBadges = m.tags.map(t => `<span class="tooltip-tag" style="background:${colorMap[t] || '#64748b'}">${t}</span>`).join('');
+                const tagBadges = m.tags.map(t => `<span class="tooltip-tag" style="background:${escapeHTML(colorMap[t] || '#64748b')}">${escapeHTML(t)}</span>`).join('');
                 const obs = m.observables && m.observables.length > 0 
-                    ? m.observables.slice(0, 8).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
+                    ? m.observables.map(escapeHTML).slice(0, 8).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
                     : 'None';
                 const simMode = m.simulationMode || 'Unknown';
                 tooltip.innerHTML = `
-                    <div class="tooltip-title">${m.displayName}</div>
+                    <div class="tooltip-title">${escapeHTML(m.displayName)}</div>
                     <div class="tooltip-tags">${tagBadges}</div>
                     <div class="tooltip-obs"><strong>Observables:</strong> ${obs}</div>
-                    <div class="tooltip-obs" style="margin-top:4px"><strong>Simulation:</strong> ${simMode}</div>
+                    <div class="tooltip-obs" style="margin-top:4px"><strong>Simulation:</strong> ${escapeHTML(simMode)}</div>
                 `;
                 let x = e.clientX + 15, y = e.clientY - 15;
                 if (x + 360 > window.innerWidth) x = e.clientX - 375;
