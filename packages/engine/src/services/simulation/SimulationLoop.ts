@@ -1456,7 +1456,7 @@ export async function simulate(
       console.error('[Worker Debug] SimulationLoop: Failed to import ODESolver', err);
       throw err;
     }
-    const debugDerivs = VERBOSE_SIM_DEBUG;
+
     const canJIT = typeof Function !== 'undefined';
 
     let derivatives: (y: Float64Array, dydt: Float64Array) => void;
@@ -1607,10 +1607,6 @@ export async function simulate(
           const context = reusableRateContext;
 
           for (let i = 0; i < concreteReactions.length; i++) {
-            if (debugDerivs && !(globalThis as any)._hasLoggedIndices) {
-              console.log(`[Worker] Rxn ${i}: k=${concreteReactions[i].rateConstant} isFunc=${concreteReactions[i].isFunctionalRate}`);
-              if (i === concreteReactions.length - 1) (globalThis as any)._hasLoggedIndices = true;
-            }
             const rxn = concreteReactions[i];
             let rate: number;
 
@@ -1732,11 +1728,6 @@ export async function simulate(
           (globalThis as any)._hasLoggedDerivCall = true;
         }
         dydt.fill(0);
-        if (!(globalThis as any)._hasLoggedDeriv && debugDerivs) {
-          console.log('[Worker] Computing derivatives (first step)...');
-          (globalThis as any)._hasLoggedDeriv = true;
-        }
-
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           let velocity = rxn.rateConstant; // Start with rate constant

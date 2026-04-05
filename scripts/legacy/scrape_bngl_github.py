@@ -337,7 +337,7 @@ def analyze_and_dedupe(api, all_files, download=False, output_dir=None):
     
     # Mark duplicates
     duplicate_count = 0
-    for file_hash, keys in content_hashes.items():
+    for _file_hash, keys in content_hashes.items():
         if len(keys) > 1:
             duplicate_count += len(keys) - 1
             for dup_key in keys[1:]:
@@ -370,7 +370,7 @@ def save_results(all_files, output_prefix="bngl_files"):
             writer.writerow(file_info)
     
     repo_summary = defaultdict(lambda: {'count': 0, 'files': [], 'stars': 0})
-    for key, file_info in unique_files.items():
+    for _key, file_info in unique_files.items():
         repo = file_info['repo']
         repo_summary[repo]['count'] += 1
         repo_summary[repo]['files'].append(file_info['filename'])

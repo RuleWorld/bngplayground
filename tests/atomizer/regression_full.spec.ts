@@ -537,7 +537,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           // If simulation produced too few points, skip numeric comparison but record solver failure
           if (simTimes.length < 2) {
             console.warn('Simulation returned too few time points for', modelKey, '- skipping numeric comparison');
-            solverFailures.push({ model: modelKey, reason: 'insufficient_timepoints', logs: runLogs || [], timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
+            solverFailures.push({ model: modelKey, reason: 'insufficient_timepoints', logs: runLogs, timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
             return;
           }
 
@@ -555,7 +555,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
 
           if (matchedIndices.length < 2) {
             console.warn('Insufficient overlapping time points for', modelKey, '- skipping numeric comparison');
-            solverFailures.push({ model: modelKey, reason: 'insufficient_overlap', logs: runLogs || [], timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
+            solverFailures.push({ model: modelKey, reason: 'insufficient_overlap', logs: runLogs, timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
             return;
           }
 

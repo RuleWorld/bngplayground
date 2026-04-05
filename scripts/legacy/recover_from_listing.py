@@ -27,18 +27,17 @@ if not FAILED_FILE.exists():
     sys.exit(1)
 
 # reuse sanitize from mirror script
-import re as _re
 
 def sanitize_path(p: str) -> str:
     s = p.replace('\\', '/')
     s = s.strip()
     if s.startswith('examples/'):
         s = s[len('examples/'):]
-    s = _re.sub(r'[,:]', '', s)
+    s = re.sub(r'[,:]', '', s)
     s = s.replace(' ', '_')
     s = s.replace('\u2013', '-')
     s = s.replace('\u2014', '-')
-    s = _re.sub(r'_+', '_', s)
+    s = re.sub(r'_+', '_', s)
     # remove leading/trailing underscores or dots
     s = s.strip('_.')
     return s

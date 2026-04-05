@@ -28,7 +28,6 @@ try:
     import matplotlib
     matplotlib.use('Agg')  # Non-interactive backend
     import matplotlib.pyplot as plt
-    from matplotlib.ticker import LogLocator, LogFormatter
 except ImportError:
     print("Error: matplotlib is required. Install with: pip install matplotlib")
     sys.exit(1)
@@ -267,7 +266,7 @@ def generate_root_cause_chart():
     ax.invert_yaxis()
 
     # Add count labels
-    for i, (bar, val) in enumerate(zip(bars, values)):
+    for _i, (bar, val) in enumerate(zip(bars, values)):
         ax.text(bar.get_width() + 0.5, bar.get_y() + bar.get_height() / 2,
                 str(val), va='center', fontsize=8, color=COLORS['gray'])
 
