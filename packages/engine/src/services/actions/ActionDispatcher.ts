@@ -108,6 +108,7 @@ export class ActionDispatcher {
       case 'simulate_ssa':
       case 'simulate_nf':
       case 'simulate_pla':
+      case 'simulate_psa':
         console.log(`[ActionDispatcher] ${type} handled by main engine`);
         return;
 

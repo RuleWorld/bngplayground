@@ -12,15 +12,15 @@ interface SimulationControlsProps {
   onRun: (options: SimulationOptions) => void;
   isSimulating: boolean;
   modelExists: boolean;
-  defaultMethod?: 'ode' | 'ssa' | 'pla' | 'nf' | 'default';
-  simulationMethod?: 'ode' | 'ssa' | 'pla' | 'nf' | 'default';
-  onMethodChange?: (method: 'ode' | 'ssa' | 'pla' | 'nf' | 'default') => void;
+  defaultMethod?: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'default';
+  simulationMethod?: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'default';
+  onMethodChange?: (method: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'default') => void;
   model?: any; // BNGLModel - to extract simulation phases
 }
 
 export function resolveSimulationControlDefaults(
   model: any,
-  method: 'default' | 'ode' | 'ssa' | 'pla' | 'nf'
+  method: 'default' | 'ode' | 'ssa' | 'pla' | 'psa' | 'nf'
 ): { tStart: string; tEnd: string; nSteps: string } {
   const fallbackOptions = model ? getSimulationOptionsFromParsedModel(model, method) : { t_end: 100, n_steps: 100 };
   const firstPhase = model?.simulationPhases?.[0];
@@ -61,10 +61,10 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 }) => {
   const [showOptions, setShowOptions] = useState(false);
   // Local state if not controlled
-  const [localMethod, setLocalMethod] = useState<'default' | 'ode' | 'ssa' | 'pla' | 'nf'>(defaultMethod);
+  const [localMethod, setLocalMethod] = useState<'default' | 'ode' | 'ssa' | 'pla' | 'psa' | 'nf'>(defaultMethod);
 
   const method = initialMethod !== undefined ? initialMethod : localMethod;
-  const setMethod = (m: 'default' | 'ode' | 'ssa' | 'pla' | 'nf') => {
+  const setMethod = (m: 'default' | 'ode' | 'ssa' | 'pla' | 'psa' | 'nf') => {
     setLocalMethod(m);
     onMethodChange?.(m);
   };
@@ -87,6 +87,16 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     setTStart(nextDefaults.tStart);
     setNSteps(nextDefaults.nSteps);
   }, [model, method]);
+
+  // SSA-specific parameters
+  const [ssaSeed, setSsaSeed] = useState('');
+
+  // PLA-specific parameters
+  const [plaSeed, setPlaSeed] = useState('');
+
+  // PSA-specific parameters
+  const [poplevel, setPoplevel] = useState('100');
+  const [psaSeed, setPsaSeed] = useState('');
 
   // NFsim-specific parameters
   const [utl, setUtl] = useState('');
@@ -165,8 +175,24 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
       includeInfluence: method === 'ssa' ? includeInfluence : undefined,
     };
 
-    // Add NFsim-specific options if NFsim method is selected
-    if (method === 'nf') {
+    // Add method-specific options
+    if (method === 'ssa') {
+      onRun({
+        ...baseOptions,
+        seed: ssaSeed ? parseInt(ssaSeed) : undefined,
+      } as any);
+    } else if (method === 'pla') {
+      onRun({
+        ...baseOptions,
+        seed: plaSeed ? parseInt(plaSeed) : undefined,
+      } as any);
+    } else if (method === 'psa') {
+      onRun({
+        ...baseOptions,
+        poplevel: poplevel ? parseInt(poplevel) : 100,
+        seed: psaSeed ? parseInt(psaSeed) : undefined,
+      } as any);
+    } else if (method === 'nf') {
       onRun({
         ...baseOptions,
         utl: utl ? parseInt(utl) : undefined,
@@ -185,6 +211,8 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
     ? 'Auto'
     : method === 'pla'
       ? 'PLA'
+    : method === 'psa'
+      ? 'PSA'
     : method === 'nf'
       ? 'NFsim'
       : `${method.toUpperCase()}${method === 'ode' && solver !== 'auto' ? ` • ${solver}` : ''}`;
@@ -247,7 +275,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 Simulation Method
               </label>
               <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-900/50 p-1 rounded-md">
-                {['default', 'ode', 'ssa', 'pla', 'nf'].map(m => (
+                {['default', 'ode', 'ssa', 'pla', 'psa', 'nf'].map(m => (
                   <button
                     key={m}
                     onClick={() => setMethod(m as any)}
@@ -256,7 +284,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                       }`}
                   >
-                    {m === 'default' ? 'Auto' : m === 'nf' ? 'NFsim' : m.toUpperCase()}
+                    {m === 'default' ? 'Auto' : m === 'nf' ? 'NFsim' : m === 'psa' ? 'PSA' : m.toUpperCase()}
                   </button>
                 ))}
               </div>
@@ -305,6 +333,109 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 italic">
                   Required for the "Dynamics Graph" visualization.
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    Seed
+                    <span
+                      className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
+                    >
+                      i
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    value={ssaSeed}
+                    onChange={e => setSsaSeed(e.target.value)}
+                    placeholder="Random"
+                    className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* PLA-specific options */}
+            {method === 'pla' && (
+              <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  <strong>PLA Parameters</strong> - Partitioned-leaping algorithm
+                </div>
+                <div>
+                  <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    Seed
+                    <span
+                      className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                      title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
+                    >
+                      i
+                    </span>
+                  </label>
+                  <input
+                    type="number"
+                    value={plaSeed}
+                    onChange={e => setPlaSeed(e.target.value)}
+                    placeholder="Random"
+                    className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                  />
+                </div>
+                <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 p-2 rounded">
+                  <strong>Note:</strong> PLA uses partitioned tau-leaping for efficient stochastic simulation.
+                  It adaptively partitions reactions into exact (SSA) and approximate (tau-leap) groups.
+                </div>
+              </div>
+            )}
+
+            {/* PSA-specific options */}
+            {method === 'psa' && (
+              <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">
+                  <strong>PSA Parameters</strong> - Hybrid ODE/SSA with adaptive scaling
+                </div>
+
+                <div className="grid grid-cols-2 gap-2">
+                  <div>
+                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                      Pop Level
+                      <span
+                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        title="Population threshold: Species with counts above this value are simulated with scaled propensities (ODE-like), while species below are simulated with exact SSA. Default: 100."
+                      >
+                        i
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      value={poplevel}
+                      onChange={e => setPoplevel(e.target.value)}
+                      placeholder="100"
+                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                      Seed
+                      <span
+                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
+                        title="Random seed for the stochastic component. Leave empty for default seed."
+                      >
+                        i
+                      </span>
+                    </label>
+                    <input
+                      type="number"
+                      value={psaSeed}
+                      onChange={e => setPsaSeed(e.target.value)}
+                      placeholder="12345"
+                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                    />
+                  </div>
+                </div>
+
+                <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 p-2 rounded">
+                  <strong>Note:</strong> PSA is ideal for models with both high-copy and low-copy species.
+                  High-copy species are simulated with scaled propensities for efficiency,
+                  while low-copy species use exact stochastic simulation.
                 </div>
               </div>
             )}

@@ -44,7 +44,7 @@ interface VisualizationPanelProps {
   onSimulate: (options: SimulationOptions) => void;
   isSimulating: boolean;
   onCancelSimulation: () => void;
-  simulationMethod?: 'ode' | 'ssa' | 'pla' | 'nf' | 'nfsim';
+  simulationMethod?: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'nfsim';
   activeTabIndex?: number;
   onActiveTabIndexChange?: (idx: number) => void;
   bnglCode?: string;
