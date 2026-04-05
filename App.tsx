@@ -30,7 +30,7 @@ const INITIAL_BNGL_CODE = '';
 
 const shouldGenerateNetworkForSimulation = (
   model: BNGLModel,
-  method: 'ode' | 'ssa' | 'pla' | 'nf' | 'nfsim'
+  method: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'nfsim'
 ) => {
   if (method === 'nf' || method === 'nfsim') return false;
   if ((model.reactions?.length ?? 0) > 0) return false;
@@ -75,7 +75,7 @@ function App() {
   const isResizingRef = useRef(false);
 
   const [isSimulating, setIsSimulating] = useState(false);
-  const [currentMethod, setCurrentMethod] = useState<'ode' | 'ssa' | 'pla' | 'nf' | 'nfsim'>('ode');
+  const [currentMethod, setCurrentMethod] = useState<'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'nfsim'>('ode');
   const [generationProgress, setGenerationProgress] = useState<string>('');
   const [progressStats, setProgressStats] = useState<{ species: number; reactions: number; iteration: number }>({ species: 0, reactions: 0, iteration: 0 });
   const [simulationProgress, setSimulationProgress] = useState<number | undefined>(0);

@@ -34,7 +34,10 @@ interface RunData {
 
 export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ model }) => {
     const [ensembleSize, setEnsembleSize] = useState(50);
-    const [method, setMethod] = useState<'ssa' | 'nf'>('ssa');
+    const [method, setMethod] = useState<'ssa' | 'pla' | 'psa' | 'nf'>('ssa');
+    const [seed, setSeed] = useState('');
+    const [utl, setUtl] = useState('');
+    const [poplevel, setPoplevel] = useState('100');
     const [ensembleResults, setEnsembleResults] = useState<SimulationResults[] | SharedEnsembleResultsHandle | null>(null);
     const [runs, setRuns] = useState<RunData[]>([]);
     const [isSimulating, setIsSimulating] = useState(false);
@@ -65,6 +68,12 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                 n_steps: model.simulationOptions?.n_steps ?? 100,
                 includeInfluence: false, // Disable DIN for maximum speed in explorer
                 includeSpeciesData: false,
+                // Stochastic seed (SSA, PLA, PSA, NFsim)
+                ...(seed ? { seed: parseInt(seed) } : {}),
+                // NFsim-specific
+                ...(method === 'nf' && utl ? { utl: parseInt(utl) } : {}),
+                // PSA-specific
+                ...(method === 'psa' ? { poplevel: poplevel ? parseInt(poplevel) : 100 } : {}),
             };
 
             // Run parallel ensemble using worker pool
@@ -201,14 +210,106 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                         <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Method</label>
                         <select
                             value={method}
-                            onChange={(e) => setMethod(e.target.value as 'ssa' | 'nf')}
+                            onChange={(e) => setMethod(e.target.value as 'ssa' | 'pla' | 'psa' | 'nf')}
                             disabled={isSimulating}
                             className="rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
                         >
                             <option value="ssa">Gillespie (SSA)</option>
+                            <option value="pla">Partitioned Leaping (PLA)</option>
+                            <option value="psa">Partial Scaling (PSA)</option>
                             <option value="nf">Network-Free (NFsim)</option>
                         </select>
                     </div>
+
+                    {/* Seed input for stochastic methods */}
+                    {(method === 'ssa' || method === 'pla' || method === 'psa') && (
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                Seed
+                                <span
+                                    className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
+                                >
+                                    i
+                                </span>
+                            </label>
+                            <input
+                                type="number"
+                                value={seed}
+                                onChange={(e) => setSeed(e.target.value)}
+                                disabled={isSimulating}
+                                placeholder="Random"
+                                className="w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                            />
+                        </div>
+                    )}
+
+                    {/* PSA-specific: poplevel */}
+                    {method === 'psa' && (
+                        <div className="flex items-center gap-2">
+                            <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                Pop Level
+                                <span
+                                    className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                                    title="Population threshold: species above this count use scaled propensities (ODE-like), below use exact SSA. Default: 100."
+                                >
+                                    i
+                                </span>
+                            </label>
+                            <input
+                                type="number"
+                                value={poplevel}
+                                onChange={(e) => setPoplevel(e.target.value)}
+                                disabled={isSimulating}
+                                placeholder="100"
+                                className="w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                            />
+                        </div>
+                    )}
+
+                    {/* NFsim-specific: UTL and seed */}
+                    {method === 'nf' && (
+                        <>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                    UTL
+                                    <span
+                                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                                        title="Universal Traversal Limit: controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto."
+                                    >
+                                        i
+                                    </span>
+                                </label>
+                                <input
+                                    type="number"
+                                    value={utl}
+                                    onChange={(e) => setUtl(e.target.value)}
+                                    disabled={isSimulating}
+                                    placeholder="Auto"
+                                    className="w-20 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                                />
+                            </div>
+                            <div className="flex items-center gap-2">
+                                <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                    Seed
+                                    <span
+                                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
+                                        title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
+                                    >
+                                        i
+                                    </span>
+                                </label>
+                                <input
+                                    type="number"
+                                    value={seed}
+                                    onChange={(e) => setSeed(e.target.value)}
+                                    disabled={isSimulating}
+                                    placeholder="Random"
+                                    className="w-24 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                                />
+                            </div>
+                        </>
+                    )}
 
                     <div className="flex items-center gap-2">
                         {!isSimulating ? (

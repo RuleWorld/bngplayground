@@ -1020,15 +1020,17 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     };
 
     // Determine method from command name or args
-    let method: 'ode' | 'ssa' | 'nf' | 'pla' = 'ode';
+    let method: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa' = 'ode';
     const cmdText = ctx.text.toLowerCase();
     if (cmdText.includes('simulate_nf')) method = 'nf';
+    else if (cmdText.includes('simulate_psa')) method = 'psa';
     else if (cmdText.includes('simulate_pla')) method = 'pla';
     else if (cmdText.includes('simulate_ssa') || args.method === 'ssa' || args.method === '"ssa"') method = 'ssa';
     else if (args.method) {
       // Remove quotes if present
       const methodValue = String(args.method).replace(/['"]/g, '').toLowerCase();
       if (methodValue === 'nf' || methodValue === 'nfsim') method = 'nf';
+      else if (methodValue === 'psa') method = 'psa';
       else if (methodValue === 'pla') method = 'pla';
       else if (methodValue === 'ssa') method = 'ssa';
       else method = 'ode';
@@ -1059,6 +1061,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       print_functions: args.print_functions !== undefined
         ? (String(args.print_functions).trim() === '1' || String(args.print_functions).trim().toLowerCase() === 'true')
         : undefined,
+      poplevel: args.poplevel !== undefined ? evalNumericArg(args.poplevel, 100) : undefined,
     };
     visitorDebugLog(`[BNGLVisitor] evaluated phase:`, phase);
 
@@ -1073,6 +1076,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Also update global simulationOptions for backward compatibility (uses last phase)
     if (args.method) {
       if (args.method === 'ssa') this.simulationOptions.method = 'ssa';
+      else if (args.method === 'psa') this.simulationOptions.method = 'psa';
       else if (args.method === 'pla') this.simulationOptions.method = 'pla';
       else this.simulationOptions.method = 'ode';
     }
