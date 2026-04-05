@@ -38,9 +38,9 @@ if errorlevel 1 (
 if not exist "%ROOT_DIR%\_deps" mkdir "%ROOT_DIR%\_deps"
 
 if not exist "%SUITESPARSE_SRC%\.git" (
-    echo Fetching SuiteSparse ^(stable branch^)...
+    echo Fetching SuiteSparse ^(tag v7.3.0^)...
     if exist "%SUITESPARSE_SRC%" rmdir /s /q "%SUITESPARSE_SRC%"
-    git clone --depth 1 --branch stable https://github.com/DrTimothyAldenDavis/SuiteSparse.git "%SUITESPARSE_SRC%"
+    git clone --depth 1 --branch v7.3.0 https://github.com/DrTimothyAldenDavis/SuiteSparse.git "%SUITESPARSE_SRC%"
     if errorlevel 1 (
         echo Failed to fetch SuiteSparse.
         exit /b 1

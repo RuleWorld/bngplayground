@@ -61,7 +61,8 @@ describe('CellAgent', () => {
     // Total state should be approximately conserved
     for (let i = 0; i < parent.intracellularState.length; i++) {
       const total = parent.intracellularState[i] + daughter.intracellularState[i];
-      expect(total).toBeCloseTo(100 + 200 + 50 > 0 ? [100, 200, 50][i] : 0, -1);
+      const expected = [100, 200, 50][i];
+      expect(total).toBeCloseTo(expected, -1);
     }
   });
 });

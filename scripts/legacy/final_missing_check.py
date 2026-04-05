@@ -26,7 +26,7 @@ for l in FAILED.read_text(encoding='utf-8').splitlines():
     key = name.replace('\\','/').lower()
     key_noext = re.sub(r'[^a-z0-9]', '', Path(key).stem.lower())
     found = False
-    for rel, norm in present:
+    for _rel, norm in present:
         if key_noext and key_noext in norm:
             found = True
             break

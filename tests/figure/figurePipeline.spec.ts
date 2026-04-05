@@ -176,7 +176,7 @@ describe('FIGURE_PRESETS', () => {
   });
 
   it('all presets have 8 palette colors', () => {
-    for (const [name, style] of Object.entries(FIGURE_PRESETS)) {
+    for (const [_name, style] of Object.entries(FIGURE_PRESETS)) {
       expect(style.palette.length).toBe(8);
     }
   });

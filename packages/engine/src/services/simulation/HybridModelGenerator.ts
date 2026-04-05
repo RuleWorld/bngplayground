@@ -117,13 +117,22 @@ export class HybridModelGenerator {
 
     // Validate inputs
     if (!model.moleculeTypes || model.moleculeTypes.length === 0) {
-      throw new Error('generate_hybrid_model: Model has zero molecule type definitions.');
+      throw new Error(
+        'generate_hybrid_model failed: the model has no molecule type definitions. ' +
+        'A hybrid (particle/population) model requires at least one molecule type in the molecule_types block.'
+      );
     }
     if (!model.species || model.species.length === 0) {
-      throw new Error('generate_hybrid_model: Model has zero seed species definitions.');
+      throw new Error(
+        'generate_hybrid_model failed: the model has no seed species. ' +
+        'Define at least one species in the seed species block before generating a hybrid model.'
+      );
     }
     if (!model.reactionRules || model.reactionRules.length === 0) {
-      throw new Error('generate_hybrid_model: Model has zero reaction rule definitions.');
+      throw new Error(
+        'generate_hybrid_model failed: the model has no reaction rules. ' +
+        'Define at least one reaction rule in the reaction_rules block before generating a hybrid model.'
+      );
     }
 
     // Get population types and maps from model
@@ -141,7 +150,11 @@ export class HybridModelGenerator {
     }
 
     if (popTypes.length === 0) {
-      throw new Error('generate_hybrid_model: No population types defined or inferred.');
+      throw new Error(
+        'generate_hybrid_model failed: no population types could be identified. ' +
+        'Define population types explicitly using population_types, or ensure the model contains ' +
+        'simple molecule types that can be auto-inferred as populations (single-component, no internal state).'
+      );
     }
 
     log.push(`Found ${popTypes.length} population types.`);
@@ -168,12 +181,19 @@ export class HybridModelGenerator {
     // Add population types as new molecule types
     for (const pt of popTypes) {
       if (seenPopTypes.has(pt.name)) {
-        throw new Error(`PopulationType ${pt.name} clashes with another PopulationType of the same name.`);
+        throw new Error(
+          `generate_hybrid_model failed: population type "${pt.name}" is defined more than once. ` +
+          'Each population type must have a unique name. Remove the duplicate definition.'
+        );
       }
       seenPopTypes.add(pt.name);
 
       if (existingMoleculeNames.has(pt.name)) {
-        throw new Error(`PopulationType ${pt.name} clashes with MoleculeType of the same name.`);
+        throw new Error(
+          `generate_hybrid_model failed: population type "${pt.name}" has the same name as an existing molecule type. ` +
+          'Population types are added as new molecule types and must not conflict. ' +
+          'Rename either the population type or the molecule type to resolve the clash.'
+        );
       }
       moleculeTypes.push({
         name: pt.name,
@@ -184,7 +204,6 @@ export class HybridModelGenerator {
     log.push(`Added ${popTypes.length} population types to molecule types.`);
 
     // Step 4: Copy seed species, replacing with population molecules 
-    const popTypeNames = new Set(popTypes.map(pt => pt.name));
     const species: BNGLSpecies[] = [];
 
     for (const sp of model.species) {

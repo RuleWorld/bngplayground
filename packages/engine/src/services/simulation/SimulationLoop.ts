@@ -228,10 +228,7 @@ export async function simulate(
   };
 
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
-  const debugLog = 'artifacts/logs/direct_debug.log';
-  // if (VERBOSE_SIM_DEBUG) fs.appendFileSync(debugLog, '[DEBUG_TRACE] Entering simulate function\n');
   const simulationStartTime = performance.now();
-  // if (VERBOSE_SIM_DEBUG) fs.appendFileSync(debugLog, `[Worker Diagnostic] simulate() entry. stabLimDet from options: ${options.stabLimDet}\n`);
   // ... using simulationStartTime later ...
   callbacks.checkCancelled();
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
@@ -273,6 +270,7 @@ export async function simulate(
 
   const allSsa = phases.every(p => p.method === 'ssa') || options.method === 'ssa';
   const allPla = phases.every(p => p.method === 'pla') || options.method === 'pla';
+  const allPsa = phases.every(p => p.method === 'psa') || options.method === 'psa';
 
   // -------------------------------------------------------------------------
   // 2. Prepare Reactions (Optimization & Parity)
@@ -382,7 +380,14 @@ export async function simulate(
         await loadEvaluator();
       } catch (e: any) {
         console.error('[Worker] Failed to load SafeExpressionEvaluator module:', e?.message ?? String(e));
-        throw new Error('Failed to initialize expression evaluator', { cause: e });
+        throw new Error(
+          'Failed to initialize the expression evaluator needed for functional rates ' +
+          '(e.g., Michaelis-Menten, Hill functions). ' +
+          'This may indicate the SafeExpressionEvaluator module could not be loaded in the current runtime. ' +
+          'If running in a browser worker, ensure the evaluator bundle is included. ' +
+          `Original error: ${e?.message ?? String(e)}`,
+          { cause: e }
+        );
       }
     }
   }
@@ -621,7 +626,7 @@ export async function simulate(
     }
   };
 
-  const isOde = !allSsa && !allPla && options.method !== 'ssa' && options.method !== 'pla';
+  const isOde = !allSsa && !allPla && !allPsa && options.method !== 'ssa' && options.method !== 'pla' && options.method !== 'psa';
   const hasHeterogeneousSpeciesVolumes = Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
   // The amount-space branch fixes CVODE parity for compartment models whose rates
   // depend on observables/functions. Keep pure mass-action compartment models on
@@ -940,6 +945,21 @@ export async function simulate(
       return parametersUpdated;
     };
 
+
+    if (allPsa) {
+      // PSA (Partitioned Stochastic Algorithm / Haseltine-Rawlings adaptive scaling)
+      const { simulatePSA } = await import('./PSASimulator');
+      const psaModel = {
+        ...model,
+        species: model.species.map((s, i) => ({ ...s, initialConcentration: state[i] }))
+      };
+      const psaOptions = {
+        ...options,
+        poplevel: (options as any).poplevel ?? phases[0]?.poplevel ?? 100,
+      };
+      const result = await simulatePSA(psaModel, psaOptions);
+      return result;
+    }
 
     if (allPla) {
       // PLA is fully stochastic hybrid model generator
@@ -1449,8 +1469,6 @@ export async function simulate(
       console.error('[Worker Debug] SimulationLoop: Failed to import ODESolver', err);
       throw err;
     }
-    const debugDerivs = VERBOSE_SIM_DEBUG;
-    const canJIT = typeof Function !== 'undefined';
 
     let derivatives: (y: Float64Array, dydt: Float64Array) => void;
 
@@ -1600,10 +1618,6 @@ export async function simulate(
           const context = reusableRateContext;
 
           for (let i = 0; i < concreteReactions.length; i++) {
-            if (debugDerivs && !(globalThis as any)._hasLoggedIndices) {
-              console.log(`[Worker] Rxn ${i}: k=${concreteReactions[i].rateConstant} isFunc=${concreteReactions[i].isFunctionalRate}`);
-              if (i === concreteReactions.length - 1) (globalThis as any)._hasLoggedIndices = true;
-            }
             const rxn = concreteReactions[i];
             let rate: number;
 
@@ -1725,11 +1739,6 @@ export async function simulate(
           (globalThis as any)._hasLoggedDerivCall = true;
         }
         dydt.fill(0);
-        if (!(globalThis as any)._hasLoggedDeriv && debugDerivs) {
-          console.log('[Worker] Computing derivatives (first step)...');
-          (globalThis as any)._hasLoggedDeriv = true;
-        }
-
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           let velocity = rxn.rateConstant; // Start with rate constant
@@ -1849,6 +1858,40 @@ export async function simulate(
       // Start from BNG2 default internally, but allow escalation to a high ceiling.
       // A low cap (2000) prematurely aborts stiff equilibration phases (e.g., An_2009).
       maxSteps: options.maxSteps ?? 5_000_000,
+      // Optional progress callback for long-running simulations.
+      // If the caller provides options.onStep, forward it to the solver.
+      // Otherwise, when using the large default maxSteps, install a basic warning
+      // callback that can be triggered by the underlying solver as the limit is
+      // approached or reached.
+      onStep: options.onStep
+        ? options.onStep
+        : (options.maxSteps === undefined
+          ? (() => {
+              let warnedApproaching = false;
+              let warnedReached = false;
+              return (currentStep: number, maxSteps: number) => {
+                // Only warn when we are close to or at the configured maximum.
+                if (maxSteps > 0) {
+                  const fraction = currentStep / maxSteps;
+                  if (!warnedReached && currentStep >= maxSteps) {
+                    warnedReached = true;
+                    console.warn(
+                      `[SimulationLoop] Reached maxSteps=${maxSteps} (default). ` +
+                      `Simulation may have been running for a long time. ` +
+                      `Consider lowering maxSteps or loosening tolerances if this is unexpected.`
+                    );
+                  } else if (!warnedApproaching && fraction >= 0.9) {
+                    warnedApproaching = true;
+                    console.warn(
+                      `[SimulationLoop] Approaching maxSteps=${maxSteps} (default, 90% used). ` +
+                      `If your simulation appears to run for a very long time, ` +
+                      `consider adjusting maxSteps or solver settings.`
+                    );
+                  }
+                }
+              };
+            })()
+          : undefined),
       // Keep a small nonzero floor in Node/WASM to avoid infinitesimal-step stalls.
       minStep: options.minStep ?? 1e-15,
       maxStep: options.maxStep ?? 0,  // 0 = no limit (matches BNG2)
@@ -2681,7 +2724,12 @@ export async function simulate(
     } satisfies SimulationResults;
   }
 
-  throw new Error('Simulation finished without producing results');
+  throw new Error(
+    'Simulation finished without producing results. ' +
+    'This can happen if all simulation phases were skipped (e.g., t_end <= t_start), ' +
+    'or an internal error prevented data collection. ' +
+    'Check that your simulate() action specifies a positive time span and that network generation succeeded.'
+  );
 }
 
 

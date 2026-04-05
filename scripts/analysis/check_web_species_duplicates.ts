@@ -30,7 +30,6 @@ async function checkDuplicates() {
         // Line format: "Index String" e.g. "1 R(...)"
         const parts = line.split(' ');
         if (parts.length < 2) continue;
-        const index = parts[0];
         const speciesStr = parts.slice(1).join(' ');
 
         try {

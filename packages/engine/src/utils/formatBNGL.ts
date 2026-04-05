@@ -30,7 +30,6 @@ export function formatBNGL(code: string): string {
     }
 
     // For lines inside a section, ensure two-space indentation
-    const leading = ln.match(/^\s*/)?.[0] ?? '';
     const trimmed = ln.trim();
     if (!/^\s*(#|!)/.test(trimmed) && !/\b(->|<-|<->|=>)\b/.test(trimmed)) {
       cleaned.push('  ' + trimmed);

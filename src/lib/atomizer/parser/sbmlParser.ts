@@ -599,7 +599,7 @@ export class SBML2JSON {
     rate: string,
     parameters: Map<number, any>
   ): void {
-    for (const [key, param] of parameters) {
+    for (const [_key, param] of parameters) {
       if (rate.includes(param.name) && param.unit === '') {
         if (stoichiometry === 2) {
           param.unit = 'Bimolecular';

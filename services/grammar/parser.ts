@@ -286,8 +286,6 @@ export class BioParser {
     }
 
     private static tryParseInteraction(text: string): InteractionSentence | null {
-        const lowerText = text.toLowerCase();
-        
         // Helper to extract subject and object from pattern
         const extractEntities = (pattern: RegExp, actionType: ActionType, options: {
             isBidirectional?: boolean,

@@ -321,7 +321,6 @@ export function attributeDivergence(
 ): RuleAttribution[] {
   if (divergences.length === 0) return [];
 
-  const timeCol = getTimeColumn(baseResults);
   const attributions: RuleAttribution[] = [];
 
   // Total divergence magnitude across all divergence points

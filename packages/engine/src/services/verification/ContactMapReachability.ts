@@ -363,8 +363,6 @@ export function enumerateAbstractComplexes(
   contactMap: ContactMap,
   maxSize: number = 4
 ): string[][] {
-  const adj = buildAdjacency(contactMap);
-
   // Gather all molecule types from nodes
   const allMolTypes = new Set<string>();
   for (const node of contactMap.nodes) {

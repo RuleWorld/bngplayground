@@ -188,7 +188,7 @@ async function example2_neuralODESurrogate() {
   );
   
   const sweepStart = performance.now();
-  const sweepResults = await surrogate.parameterSweep(sweepParams, testTime);
+  await surrogate.parameterSweep(sweepParams, testTime);
   const sweepElapsed = performance.now() - sweepStart;
   
   console.log(`Sweep of 1000 parameter sets completed in ${sweepElapsed.toFixed(2)}ms`);

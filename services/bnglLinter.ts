@@ -601,7 +601,7 @@ function checkUnusedParameters(model: BNGLModel, sourceCode?: string): LintDiagn
     extractParams(func.expression);
   }
 
-  for (const [name, value] of Object.entries(model.parameters)) {
+  for (const [name, _value] of Object.entries(model.parameters)) {
     if ((model as any).paramExpressions?.[name]) {
       extractParams((model as any).paramExpressions[name]);
     }

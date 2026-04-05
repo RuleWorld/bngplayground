@@ -230,7 +230,6 @@ export function countCandidateRules(
   }
 
   // Binding + Unbinding share same count
-  const bindingSiteCount = collectBindingSites(parsed).length;
   const bindingPairCount = countPairsExcludingSameMolSameComp(parsed);
 
   if (cfg.includeBinding) count += bindingPairCount;

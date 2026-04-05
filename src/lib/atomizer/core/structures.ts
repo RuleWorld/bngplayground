@@ -921,7 +921,7 @@ export class Species {
       }
     }
 
-    for (const [key, value] of bondedPatterns) {
+    for (const [_key, value] of bondedPatterns) {
       atomicPatterns.set(value.toString(), value);
     }
 

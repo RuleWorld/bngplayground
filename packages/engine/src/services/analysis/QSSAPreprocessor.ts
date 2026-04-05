@@ -108,8 +108,6 @@ export function analyzeQSSA(
     const rateValues = paramValues.map(p => p.value).filter(v => v > 0);
     const maxRate = Math.max(...rateValues, 1e-6);
     const minRate = Math.min(...rateValues.filter(v => v > 0), 1e-6);
-    const globalRatio = maxRate / minRate;
-    
     for (const rule of reactionRules) {
         let rateValue: number;
         

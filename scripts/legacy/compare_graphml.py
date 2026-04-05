@@ -18,7 +18,6 @@ import re
 from lxml import etree
 from collections import defaultdict
 from dataclasses import dataclass, field
-from typing import Optional
 
 
 # ── Namespaces ──────────────────────────────────────────────────────────────

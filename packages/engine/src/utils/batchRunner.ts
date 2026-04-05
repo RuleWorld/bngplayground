@@ -159,7 +159,10 @@ export async function runSingleBatchItem(
         if (!code && modelDef.id && simulator.loadModelCode) {
             code = await simulator.loadModelCode(modelDef.id);
         }
-        if (!code) throw new Error(`No code available for model: ${modelDef.name}`);
+        if (!code) throw new Error(
+          `No BNGL code available for model "${modelDef.name}". ` +
+          'Either provide the code directly in the model definition, or ensure loadModelCode is configured to retrieve it by ID.'
+        );
 
         // 1. Parse
         if (verbose) reporter.time('Parse');

@@ -14,7 +14,6 @@ const getBlock = (name: string) => {
 };
 
 const paramsBlock = getBlock('parameters');
-const molTypesBlock = getBlock('molecule types');
 const seedsBlock = getBlock('seed species');
 const rulesBlock = getBlock('reaction rules');
 

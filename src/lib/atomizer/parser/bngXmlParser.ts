@@ -216,7 +216,6 @@ export function convertBNGXmlToBNGL(xml: string): string {
               const cname = c.getAttribute('name') || '';
               const state = c.getAttribute('state');
               const bond = c.getAttribute('bond');
-              const numberOfBonds = c.getAttribute('numberOfBonds');
               const cid = c.getAttribute('id') || '';
               let cs = cname;
               if (state) cs += `~${state}`;

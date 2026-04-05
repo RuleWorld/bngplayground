@@ -169,7 +169,6 @@ describe('SparseJacobian Service', () => {
                  const yBase = new Float64Array(y);
                  const dyBase = getRates(yBase);
                  
-                 const ptr = 0;
                  for (let r = 0; r < nSpecies; r++) {
                      for (let p = sparsity.rowPtr[r]; p < sparsity.rowPtr[r+1]; p++) {
                          const c = sparsity.colIdx[p];

@@ -647,8 +647,6 @@ function generatePBPKMinimal(config: PKModelConfig): PKModelResult {
 function generatePDBlock(config: PKModelConfig): string {
   if (!config.includePD || !config.pdModel) return '';
 
-  const drug = config.drugName;
-
   switch (config.pdModel) {
     case 'direct_emax': {
       return [
@@ -724,7 +722,10 @@ export function generatePKModel(config: PKModelConfig): PKModelResult {
       result = generatePBPKMinimal(config);
       break;
     default:
-      throw new Error(`Unknown PK model type: ${(config as any).type}`);
+      throw new Error(
+        `Unknown PK model type: "${(config as any).type}". ` +
+        'Supported types: one_compartment, two_compartment, three_compartment, tmdd, pbpk_minimal.'
+      );
   }
 
   // Inject PD parameter lines if requested

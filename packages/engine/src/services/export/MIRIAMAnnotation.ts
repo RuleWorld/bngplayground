@@ -377,6 +377,26 @@ function inferGOAnnotations(components: string[]): string[] {
  * NOTE: This factory is callable from Node.js (MCP server) only.
  *       The engine does NOT call it internally.
  */
+type UniProtSearchResponse = {
+  results: Array<{
+    primaryAccession: string;
+    genes?: Array<{ geneName?: { value: string } }>;
+    organism?: { scientificName: string };
+  }>;
+};
+
+function isUniProtSearchResponse(data: unknown): data is UniProtSearchResponse {
+  if (!data || typeof data !== 'object') return false;
+  const obj = data as { results?: unknown };
+  if (!Array.isArray(obj.results)) return false;
+  // We only minimally validate items to ensure primaryAccession exists.
+  return obj.results.every((item) => {
+    if (!item || typeof item !== 'object') return false;
+    const rec = item as { primaryAccession?: unknown };
+    return typeof rec.primaryAccession === 'string';
+  });
+}
+
 export function createUniProtResolver(
   fetchFn: typeof fetch,
 ): IdentifierResolver {
@@ -389,13 +409,11 @@ export function createUniProtResolver(
     });
     if (!response.ok) return null;
 
-    const data = await response.json() as {
-      results: Array<{
-        primaryAccession: string;
-        genes?: Array<{ geneName?: { value: string } }>;
-        organism?: { scientificName: string };
-      }>;
-    };
+    const raw = await response.json() as unknown;
+    if (!isUniProtSearchResponse(raw)) {
+      return null;
+    }
+    const data = raw;
 
     if (!data.results || data.results.length === 0) return null;
 

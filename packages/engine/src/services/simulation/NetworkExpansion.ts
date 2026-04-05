@@ -168,8 +168,6 @@ export async function generateExpandedNetwork(
     // Pre-calculate sets for fast lookup during functional rate detection.
     const observableNames = new Set(inputModel.observables.map((o) => o.name));
     const functionNames = new Set((inputModel.functions || []).map((f) => f.name));
-    const changingParams = new Set((inputModel.parameterChanges || []).map(c => c.parameter));
-
     // Build a map of local functions (BNG2 %x:: syntax).
     // A "local function" has args (e.g., f_synth(x)) and evaluates observables
     // within the REACTANT SPECIES rather than globally. BNG2 computes these as

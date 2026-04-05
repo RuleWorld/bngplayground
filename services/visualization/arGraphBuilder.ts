@@ -584,9 +584,6 @@ export const buildAtomRuleGraph = (
       if (rule.rate) {
         getSpeciesDependencies(rule.rate, options.observables, options.functions).forEach(s => allDepSpecies.add(s));
       }
-      // Bidirectional rules
-      const rateExpressions = rule.reverseRate ? [rule.rate, rule.reverseRate] : [rule.rate];
-
       allDepSpecies.forEach(speciesName => {
         // Only draw functional arrow if it's NOT already a consumed/produced/modified atom
         // AND it doesn't look like a keyword/primitive

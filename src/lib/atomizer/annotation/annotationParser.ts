@@ -246,7 +246,7 @@ export function getCanonicalSpecies(
 ): Map<string, string> {
   const canonicalMap = new Map<string, string>();
 
-  for (const [annotation, speciesIds] of equivalenceMap) {
+  for (const [_annotation, speciesIds] of equivalenceMap) {
     // Sort by name length, then alphabetically
     const sorted = [...speciesIds].sort((a, b) => {
       const nameA = model.species.get(a)?.name || a;
@@ -296,7 +296,7 @@ export function buildRDFDatabase(
   }
 
   // Sort each group by name length
-  for (const [key, speciesIds] of rdfDatabase) {
+  for (const [_key, speciesIds] of rdfDatabase) {
     speciesIds.sort((a, b) => {
       const nameA = model.species.get(a)?.name || a;
       const nameB = model.species.get(b)?.name || b;

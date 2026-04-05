@@ -62,7 +62,11 @@ export async function runNFsimSimulation(
   const validation = validateModelForNFsim(inputModel);
   if (!validation.valid) {
     const errors = validation.errors.map((e) => e.message).join('\n• ');
-    throw new Error(`Model incompatible with NFsim:\n• ${errors}`);
+    throw new Error(
+      `This model cannot be simulated with NFsim (network-free method):\n• ${errors}\n` +
+      'NFsim requires specific model features. ' +
+      'Try using simulate({method=>"ode"}) or simulate({method=>"ssa"}) with generate_network() instead.'
+    );
   }
 
   try {
@@ -116,7 +120,11 @@ export async function runNFsimSimulation(
   } catch (error) {
     const formatted = formatNFsimError(error);
     if (options.requireRuntime) {
-      throw new Error(`NFsim failed: ${formatted}`);
+      throw new Error(
+        `NFsim simulation failed: ${formatted}. ` +
+        'This may be caused by invalid XML output from the model, or an issue in the NFsim WASM runtime. ' +
+        'Try simplifying the model or switching to simulate({method=>"ssa"}).'
+      );
     }
     console.warn('[NFsimRunner] NFsim runtime unavailable, falling back to SSA.', formatted);
     const expanded = await ensureExpandedNetwork(inputModel);

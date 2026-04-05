@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { resolveBNG2Paths, resolveBNGValidateDir } from '../../tools/bng2-paths';
+import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { BNGLModel, SimulationOptions } from '../../types';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '@bngplayground/engine';
@@ -15,11 +15,14 @@ import { BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../src/constants';
 import { generateExpandedNetwork } from '@bngplayground/engine';
 import { resolveRuleHubRoot } from '../helpers/rulehub';
 
+function normalizeKey(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
 const RULEHUB_EXAMPLES_DIR = join(resolveRuleHubRoot(process.cwd()), 'Contributed', 'BNGPlayground_Examples');
 console.error(`[DEBUG-ENTRY] RuleHub examples exists: ${fs.existsSync(RULEHUB_EXAMPLES_DIR)}`);
 
-const VALIDATE_DIR = resolveBNGValidateDir();
 const BNG_OUTPUT_DIR = 'bng_test_output';
 
 const paths = resolveBNG2Paths();
@@ -69,7 +72,7 @@ function runBNG2EnsureSBML(modelPath: string, outdir: string): boolean {
     encoding: 'utf-8',
     timeout: 120000,
   });
-  return result.status === 0 && true;
+  return result.status === 0;
 }
 
 
@@ -227,7 +230,7 @@ function getBnglFiles(dir: string): string[] {
     const fullPath = path.join(dir, item.name);
     if (item.isDirectory()) {
       files = files.concat(getBnglFiles(fullPath));
-    } else if (item.name.endsWith('.bngl')) {
+    } else if (item.name.toLowerCase().endsWith('.bngl')) {
       files.push(path.resolve(fullPath));
     }
   }
@@ -241,7 +244,6 @@ function applyActionsToModel(model: any, actions: BnglAction[]) {
   const concChanges: any[] = []; // concentrationChanges
 
   let currentPhaseIdx = -1;
-  let virtualTime = 0;
 
   for (const action of actions) {
     if (action.type === 'simulate') {
@@ -260,13 +262,6 @@ function applyActionsToModel(model: any, actions: BnglAction[]) {
         suffix: args.suffix,
         print_functions: !!args.print_functions
       };
-
-      // Update virtual time for next phase tracking (if needed)
-      if (args.continue) {
-        virtualTime = tEndArg;
-      } else {
-        virtualTime = tEndArg;
-      }
 
       phases.push(phase);
     } else if (action.type === 'setParameter') {
@@ -473,8 +468,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
 
           // If no actions found, fallback to default single-phase options
           if (!parsedModel.simulationPhases || parsedModel.simulationPhases.length === 0) {
-            const simCall = parseActionsFromBngl(bnglText).find(a => a.type === 'simulate'); // Re-scan just in case
-            // ... existing fallback logic or just default
+            // Fallback to default single-phase options
             const baseOptions = {
               method: 'ode',
               t_end: 100,
@@ -506,9 +500,8 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           refGdatPath = join(temp, `${modelKey}.gdat`);
           if (!fs.existsSync(refGdatPath)) {
             // Search for candidate in bng_test_output by normalized key
-            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
             const candidates = fs.existsSync(BNG_OUTPUT_DIR) ? fs.readdirSync(BNG_OUTPUT_DIR).filter(f => f.toLowerCase().endsWith('.gdat')) : [];
-            const matched = candidates.find(c => norm(c).includes(norm(modelKey)));
+            const matched = candidates.find(c => normalizeKey(c).includes(normalizeKey(modelKey)));
             if (matched) refGdatPath = join(BNG_OUTPUT_DIR, matched);
             else {
               console.warn('Reference GDAT not found for', modelKey, '- skipping');
@@ -537,7 +530,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           // If simulation produced too few points, skip numeric comparison but record solver failure
           if (simTimes.length < 2) {
             console.warn('Simulation returned too few time points for', modelKey, '- skipping numeric comparison');
-            solverFailures.push({ model: modelKey, reason: 'insufficient_timepoints', logs: runLogs || [], timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
+            solverFailures.push({ model: modelKey, reason: 'insufficient_timepoints', logs: runLogs, timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
             return;
           }
 
@@ -555,7 +548,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
 
           if (matchedIndices.length < 2) {
             console.warn('Insufficient overlapping time points for', modelKey, '- skipping numeric comparison');
-            solverFailures.push({ model: modelKey, reason: 'insufficient_overlap', logs: runLogs || [], timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
+            solverFailures.push({ model: modelKey, reason: 'insufficient_overlap', logs: runLogs, timestamp: new Date().toISOString(), refGdatPath: refGdatPath ?? undefined, options });
             return;
           }
 
@@ -585,10 +578,18 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           const failing = issues.filter(it => it.maxAbs > (modelAbsTol + 1e-12) || it.maxRel > (modelRelTol + 1e-12));
           if (failing.length > 0) {
             try {
+              // Helper: write simulation CSV once to avoid duplicated logic
+              const writeSimCsv = (filePath: string, headers: string[], rows: string[][]) => {
+                const csvContent = [headers.join(',')]
+                  .concat(rows.map(row => row.join(',')))
+                  .join('\n');
+                fs.writeFileSync(filePath, csvContent, 'utf8');
+              };
+
               // Write simulation CSV
               const simCsvPath = join(process.cwd(), 'artifacts', 'diagnostics', `${modelKey}-sim.csv`);
-              const simCsv = [simHeaders.join(',')].concat(results.data.map(r => simHeaders.map(h => (r[h] ?? '')).join(','))).join('\n');
-              fs.writeFileSync(simCsvPath, simCsv, 'utf8');
+              // Prefer the row-array representation used elsewhere (simDataRows) when writing CSV
+              writeSimCsv(simCsvPath, simHeaders, simDataRows);
 
               // Write reference GDAT (if available)
               if (refGdatPath && fs.existsSync(refGdatPath)) {
@@ -607,13 +608,6 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
               // Write diff summary
               const diffPath = join(process.cwd(), 'artifacts', 'diagnostics', `${modelKey}-diff.json`);
               fs.writeFileSync(diffPath, JSON.stringify({ model: modelKey, issues, matchedIndicesCount: matchedIndices.length, generatedAt: new Date().toISOString(), options: options }, null, 2), 'utf8');
-
-              // DEBUG: Write simulation CSV
-              const csvPath = join(process.cwd(), 'artifacts', 'diagnostics', `${modelKey}-sim.csv`);
-              const csvContent = [simHeaders.join(',')].concat(
-                simDataRows.map(row => row.join(','))
-              ).join('\n');
-              fs.writeFileSync(csvPath, csvContent, 'utf8');
 
               console.info('Wrote diagnostics for', modelKey, 'to artifacts/diagnostics');
             } catch (e) {

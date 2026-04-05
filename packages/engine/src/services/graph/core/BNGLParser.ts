@@ -325,7 +325,11 @@ export class BNGLParser {
         return molecule;
       }
       // Invalid molecule name
-      throw new Error(`Invalid molecule name: "${baseStr}". Must start with a letter or underscore.`);
+      throw new Error(
+        `Invalid molecule name: "${baseStr}". ` +
+        'Molecule names must start with a letter or underscore, followed by letters, digits, or underscores. ' +
+        'Examples of valid names: A, EGF_receptor, _temp1.'
+      );
     }
 
     const name = match[1];
@@ -414,11 +418,17 @@ export class BNGLParser {
     // Detect arrow robustly (->, <-, <->, ~>) and split around the first arrow
     const arrowRegex = /(?:<->|->|<-|~>)/;
     const arrowMatch = ruleStr.match(arrowRegex);
-    if (!arrowMatch) throw new Error(`Invalid rule (no arrow found): ${ruleStr}`);
+    if (!arrowMatch) throw new Error(
+      `Invalid reaction rule: no arrow found in "${ruleStr}". ` +
+      'Reaction rules must contain an arrow operator: -> (forward), <- (reverse), or <-> (bidirectional).'
+    );
     const parts = ruleStr.split(arrowRegex).map(p => p.trim());
     // Filter but keep track of empty strings for synthesis rules
     const nonEmpty = parts.filter(Boolean);
-    if (nonEmpty.length < 1) throw new Error(`Invalid rule: ${ruleStr}`);
+    if (nonEmpty.length < 1) throw new Error(
+      `Invalid reaction rule: "${ruleStr}" has no reactants or products. ` +
+      'A rule must have at least one side with species patterns. Use "0" for synthesis (0 -> A()) or degradation (A() -> 0) rules.'
+    );
 
     const reactantsStr = parts[0] || '';
     const productsStr = parts.slice(1).join(' ').trim();

@@ -48,7 +48,7 @@ let arrayItems = '';
 
 const toCamelCase = (str: string) => {
   return str.replace(/[-_](.)/g, (_, c) => c.toUpperCase());
-}
+};
 
 files.forEach((file) => {
   const relativePath = path.relative(RULEHUB_ROOT, file).replace(/\\/g, '/');

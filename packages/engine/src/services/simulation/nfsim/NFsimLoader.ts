@@ -27,7 +27,12 @@ const getRuntime = (): NFsimRuntime | null => {
 export async function runNFsim(xml: string, options: NFsimRunOptions): Promise<string> {
   const runtime = getRuntime() ?? (await ensureNFsimRuntime());
   if (!runtime) {
-    throw new Error('NFsim WASM runtime not available');
+    throw new Error(
+      'NFsim WASM runtime is not available. ' +
+      'The network-free simulator requires the NFsim WebAssembly module to be loaded. ' +
+      'If running in the browser, ensure nfsim.js and nfsim.wasm are served alongside the app. ' +
+      'As an alternative, try simulate({method=>"ssa"}) or simulate({method=>"ode"}) with a generated network.'
+    );
   }
   const result = await runtime.run(xml, options);
   return typeof result === 'string' ? result : String(result);

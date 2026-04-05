@@ -125,7 +125,7 @@ function extractStatisticalFactors(
 
   // Check if coefficient matches statistical factors from reactants
   let expectedStatFactor = 1;
-  for (const [speciesId, species] of reactantSpecies) {
+  for (const [_speciesId, species] of reactantSpecies) {
     for (const mol of species.molecules) {
       // Count identical components that could serve as binding sites
       const componentCounts = new Map<string, number>();
@@ -135,7 +135,7 @@ function extractStatisticalFactors(
       }
 
       // For each set of identical components, multiply by count
-      for (const [compName, count] of componentCounts) {
+      for (const [_compName, count] of componentCounts) {
         if (count > 1) {
           expectedStatFactor *= count;
         }
@@ -824,7 +824,7 @@ export function writeObservables(
 
   // First pass: Define direct observables for each species
   // These are used for concentration scaling functions (_c_S1) and rates (S1_amt)
-  for (const [id, sp] of sbmlSpecies) {
+  for (const [id, _sp] of sbmlSpecies) {
     const entry = sct.entries.get(id);
     if (entry && entry.structure) {
       const name = needsStandardization(id) ? standardizeName(id) : id;
@@ -1367,7 +1367,7 @@ export function writeReactionRulesFlat(
 
     const divisorParts: string[] = [];
     if (hasDenominator && satSubstrate && reactantCounts.size > 1) {
-      for (const [spId, stoich] of reactantCounts) {
+      for (const [spId, _stoich] of reactantCounts) {
         const name = standardizeName(spId);
         if (spId === satSubstrate) divisorParts.push(`${name}_amt`);
         else divisorParts.push(`(${name}_amt * ${name}_amt)`);
@@ -1889,7 +1889,7 @@ export function generateBNGL(
     }
   }
 
-  for (const [id, sp] of model.species) {
+  for (const [id, _sp] of model.species) {
     const name = standardizeName(id);
     observableMap.set(id, name);
   }
@@ -2833,7 +2833,7 @@ function processOneDirection(
 
   // ── Tier 2: Reactant neutralization ──
   let modifiedRate = rateExpr;
-  for (const [spId, stoich] of speciesCounts) {
+  for (const [spId, _stoich] of speciesCounts) {
     const name = standardizeName(spId);
     // Replace concentration and amount references with 1
     // Important: replace exactly the right number of occurrences for stoichiometry

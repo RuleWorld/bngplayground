@@ -178,12 +178,8 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         const arrowMatch = mainPart.match(/^(.*?)\s*(<->|->|<-)\s*(.*?)\s+((?:\S+)(?:\s+\S+)?)\s*$/);
         if (!arrowMatch) return null;
         const lhsRaw = arrowMatch[1].trim();
-        const arrow = arrowMatch[2];
-        const rhsRaw = arrowMatch[3].trim();
-        const rateRaw = arrowMatch[4].trim();
 
         // Find all label definitions in LHS (compName%label)
-        const labelRe = /([A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_]+)/g;
         const labelDefs = new Map<
           string,
           { molName: string; compName: string; states: string[]; reactantIdx: number }
@@ -305,7 +301,6 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
 
       // Fold standalone include/exclude_* modifier-only lines onto the previous
       // non-empty rule line instead of dropping them (semantics-preserving).
-      const modifierTokenPattern = /(?:include|exclude)_(?:reactants|products)\([^)]*\)/g;
       const modifierOnlyLinePattern = /^\s*(?:(?:include|exclude)_(?:reactants|products)\([^)]*\)\s*)+$/i;
       const foldedLines = next.split(/\r\n|\n/);
       let foldedStandaloneModifierLines = false;

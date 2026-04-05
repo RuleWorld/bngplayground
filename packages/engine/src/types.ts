@@ -155,7 +155,7 @@ export interface BNGLModel {
 }
 
 export interface SimulationPhase {
-    method: 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla';
+    method: 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla' | 'psa';
     t_start?: number;
     t_end: number;
     n_steps: number;
@@ -175,6 +175,8 @@ export interface SimulationPhase {
     sample_times?: number[];
     /** BNG2 parity: print_CDAT=>0 suppresses species concentration columns from output */
     print_CDAT?: boolean;
+    /** PSA: population threshold for ODE vs SSA partitioning (default 100) */
+    poplevel?: number;
 }
 
 export interface ConcentrationChange {
@@ -231,7 +233,7 @@ export interface SSAInfluenceTimeSeries {
 }
 
 export interface SimulationOptions {
-    method: 'default' | 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla';
+    method: 'default' | 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla' | 'psa';
     t_end: number;
     n_steps: number;
     atol?: number;
@@ -271,6 +273,10 @@ export interface SimulationOptions {
     /** Maximum firing events to record (prevents memory blowout, default: 100000) */
     maxFiringEvents?: number;
     useAdams?: boolean;
+    /** PSA: population threshold for ODE vs SSA partitioning (default 100) */
+    poplevel?: number;
+    /** Optional callback invoked by the solver after each integration step */
+    onStep?: (currentStep: number, maxSteps: number) => void;
 }
 
 export interface SerializedWorkerError {

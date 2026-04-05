@@ -65,13 +65,12 @@ export const createCVodeModule: CvodeLoader = async (moduleArg?: unknown) => {
     const candidate =
       (moduleObj.exports as Record<string, unknown>)?.default ?? moduleObj.exports;
     if (typeof candidate !== 'function') {
-      throw new Error('Failed to resolve CVODE loader from services/cvode_loader.js');
+      throw new Error(
+        'Failed to resolve CVODE loader: the cvode_loader.js module did not export a callable function. ' +
+        'Ensure the CVODE WASM build is complete and cvode_loader.js is present in the services directory.'
+      );
     }
     cachedLoader = candidate as CvodeLoader;
-  }
-
-  if (!cachedLoader) {
-    throw new Error('Failed to resolve CVODE loader from services/cvode_loader.js');
   }
 
   const config = {

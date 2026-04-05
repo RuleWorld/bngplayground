@@ -150,7 +150,11 @@ export function parsePEtab(files: Map<string, string>): PEtabProblem {
 
   const paramText = findFile('parameters.tsv') ?? findFile('_parameters.tsv');
   if (!paramText) {
-    throw new Error('PEtab import requires a parameters.tsv file.');
+    throw new Error(
+      'PEtab import failed: no parameters.tsv file was found in the provided archive. ' +
+      'A valid PEtab problem requires a parameters.tsv file defining the parameter bounds, scales, and nominal values. ' +
+      'Ensure the file is named "parameters.tsv" or "_parameters.tsv".'
+    );
   }
 
   const paramRows = parseTSV(paramText);
@@ -177,7 +181,11 @@ export function parsePEtab(files: Map<string, string>): PEtabProblem {
 
   const measText = findFile('measurements.tsv') ?? findFile('_measurements.tsv');
   if (!measText) {
-    throw new Error('PEtab import requires a measurements.tsv file.');
+    throw new Error(
+      'PEtab import failed: no measurements.tsv file was found in the provided archive. ' +
+      'A valid PEtab problem requires a measurements.tsv file containing experimental data. ' +
+      'Ensure the file is named "measurements.tsv" or "_measurements.tsv".'
+    );
   }
 
   const measRows = parseTSV(measText);

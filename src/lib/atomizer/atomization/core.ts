@@ -661,14 +661,12 @@ function parseAndApplyCompartments(
   const moleculeStrs = patternPart.split('.');
 
   // Check if any molecule has a compartment suffix
-  let hasSuffixCompartments = false;
   const moleculeComps: (string | undefined)[] = [];
-  
+
   for (const molStr of moleculeStrs) {
     // Extract compartment suffix: Molecule@Comp
     const suffixMatch = molStr.match(/@([^@.]+)$/);
     if (suffixMatch) {
-      hasSuffixCompartments = true;
       moleculeComps.push(suffixMatch[1]);
     } else {
       moleculeComps.push(undefined);
@@ -945,7 +943,7 @@ export function buildSpeciesCompositionTable(
   }
 
   // Add naming-based dependencies
-  for (const [modification, pairs] of namingAnalysis.pairClassification) {
+  for (const [_modification, pairs] of namingAnalysis.pairClassification) {
     for (const [baseName, derivedName] of pairs) {
       const derivedId = speciesIds.find(id => {
         const sp = model.species.get(id);

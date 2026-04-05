@@ -29,7 +29,11 @@ export interface TraceOptions {
 export class NetworkTracer {
 
   async trace(_model: BNGLModel, _options: TraceOptions = {}): Promise<TraceResult> {
-    throw new Error("Network Tracing is currently disabled due to NetworkGenerator refactoring.");
+    throw new Error(
+      "Network tracing is currently unavailable. " +
+      "This feature is temporarily disabled while the NetworkGenerator is being refactored. " +
+      "Use generate_network() followed by simulate() as an alternative workflow."
+    );
   }
 
   /*

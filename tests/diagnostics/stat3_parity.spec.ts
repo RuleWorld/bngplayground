@@ -16,7 +16,7 @@ describe('stat3-mediated-transcription parity diagnostic', () => {
     // Build seed species & rules
     const seedSpecies = model.species.map((s: any) => BNGLParser.parseSpeciesGraph(s.name));
     const rules: any[] = [];
-    for (const [i, r] of model.reactionRules.entries()) {
+    for (const [_i, r] of model.reactionRules.entries()) {
       if (r.isBidirectional && r.rate && r.rate.includes(',')) {
         const parts = r.rate.split(',').map((p: string) => p.trim());
         rules.push(BNGLParser.parseRxnRule(`${r.reactants.join(' + ')} -> ${r.products.join(' + ')}`, parts[0] || 0));

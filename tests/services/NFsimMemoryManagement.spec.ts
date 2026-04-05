@@ -381,7 +381,7 @@ describe('NFsim Memory Management Safety', () => {
 
       // Allocate some memory
       const buffer1 = memoryManager.allocateBuffer(1024);
-      const buffer2 = memoryManager.allocateBuffer(2048);
+      memoryManager.allocateBuffer(2048);
 
       const midStats = memoryManager.getStats();
       expect(midStats.currentUsage).toBe(3072);
@@ -403,7 +403,7 @@ describe('NFsim Memory Management Safety', () => {
       expect(memoryManager.getMemoryUsagePercent()).toBe(0);
 
       // Allocate significant memory
-      const buffer = memoryManager.allocateBuffer(8 * 1024 * 1024); // 8MB of 10MB limit
+      memoryManager.allocateBuffer(8 * 1024 * 1024); // 8MB of 10MB limit
 
       expect(memoryManager.isMemoryHealthy()).toBe(false); // Over 80% threshold
       expect(memoryManager.getMemoryUsagePercent()).toBeCloseTo(80, 0);

@@ -33,7 +33,6 @@ describe('FIM Service', () => {
         // k+ (1+eps): exp(-(1+eps)*t)
         // k- (1-eps): exp(-(1-eps)*t)
         
-        const eps = 1e-4;
         const baseVal = 0.367879; // exp(-1)
         
         vi.mocked(bnglService.simulateCached).mockImplementation(async (id, override) => {

@@ -224,6 +224,30 @@ export { ExtracellularGrid } from './services/multiscale/ExtracellularGrid';
 export { parseMultiscaleModel } from './services/multiscale/MultiscaleParser';
 export type { MultiscaleModelDefinition } from './services/multiscale/MultiscaleParser';
 
+// ── Linear Noise Approximation ─────────────────────────────────────
+export { computeLNASteadyState, computeLNATimeCourse } from './services/analysis/LinearNoiseApproximation';
+export type { LNAConfig, LNASteadyStateResult, LNATimeResult } from './services/analysis/LinearNoiseApproximation';
+
+// ── NFsim Post-Processing ──────────────────────────────────────────
+export { analyzeNFsimOutput } from './services/analysis/NFsimAnalysis';
+export type { NFsimAnalysisConfig, NFsimAnalysisResult, ComplexSizeDistribution, BondOccupancy, SiteStateDistribution } from './services/analysis/NFsimAnalysis';
+
+// ── First Passage Time ─────────────────────────────────────────────
+export { computeFirstPassageTimes } from './services/analysis/FirstPassageTime';
+export type { FirstPassageTimeConfig, FPTDistribution } from './services/analysis/FirstPassageTime';
+
+// ── Dose-Response ──────────────────────────────────────────────────
+export { computeDoseResponse } from './services/analysis/DoseResponse';
+export type { DoseResponseConfig, DoseResponseResult, DoseResponseCurve, HillFit } from './services/analysis/DoseResponse';
+
+// ── Perturbation Screen ────────────────────────────────────────────
+export { perturbationScreen } from './services/analysis/PerturbationScreen';
+export type { PerturbationScreenConfig, PerturbationScreenResult, PerturbationResult, SyntheticLethalPair } from './services/analysis/PerturbationScreen';
+
+// ── Posterior Predictive ───────────────────────────────────────────
+export { posteriorPredictive } from './services/inference/PosteriorPredictive';
+export type { PosteriorPredictiveConfig, PosteriorPredictiveResult, PredictionBand } from './services/inference/PosteriorPredictive';
+
 // ── PK/PD ───────────────────────────────────────────────────────────
 export { generatePKModel, getDefaultPKParameters } from './services/pkpd/PKTemplates';
 export type { PKModelType, PKModelConfig, PKModelResult } from './services/pkpd/PKTemplates';

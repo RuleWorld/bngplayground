@@ -267,7 +267,7 @@ async function verifyModel(modelPath: string) {
         let strippedContent = originalContent.replace(/begin actions[\s\S]*?end actions/gi, '');
 
         // Strip the extracted loose actions robustly
-        if (typeof foundActions !== 'undefined') {
+        if (foundActions.length > 0) {
             for (const action of foundActions) {
                 strippedContent = strippedContent.replace(action, '');
             }

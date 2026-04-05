@@ -72,8 +72,6 @@ failed = []
 from urllib.parse import quote
 import time
 
-import re
-
 def sanitize_path(p):
     # make filenames safe for Windows by replacing problematic characters
     s = p.replace('\\', '/')
@@ -120,7 +118,7 @@ for rel in sorted(set(files)):
     except Exception as e:
         print('ERROR', e, src_url)
         failed.append((rel, 'ERROR %s' % e))
-    time.sleep(0.05)  # be polite
+    time.sleep(0.05)  # rate-limit requests to avoid overwhelming the GitHub raw content endpoint
 
 print('\nSummary:')
 print('  fetched:', len(ok))
@@ -139,8 +137,6 @@ print('\nWrote failed items to', failed_file)
 # attempt automated recovery for failed items
 print('\nAttempting automated recovery for failed items...')
 import json
-from urllib.request import urlopen, Request
-from urllib.error import HTTPError, URLError
 
 RECOVERY_LOG = os.path.join(TARGET_BASE, 'recovery_attempts.txt')
 branches_to_try = ['master', 'main', 'develop', 'gh-pages']
@@ -154,8 +150,8 @@ def try_raw_branch(rel_path, branch):
         req = Request(src, headers={'User-Agent': 'bionetgen-mirror/1.0'})
         with urlopen(req, timeout=20) as resp:
             return resp.read()
-    except Exception as e:
-        return None
+    except Exception:
+        return None  # branch does not exist or network error; caller tries next branch
 
 # fetch repo tree once per branch to search for moved files
 repo_trees = {}
@@ -169,7 +165,7 @@ for b in branches_to_try:
         repo_trees[b] = paths
         time.sleep(0.1)
     except Exception:
-        repo_trees[b] = set()
+        repo_trees[b] = set()  # API unavailable for this branch; treat as empty tree
 
 with open(RECOVERY_LOG, 'w', encoding='utf-8') as logfh:
     for rel, msg in failed:
@@ -211,8 +207,8 @@ with open(RECOVERY_LOG, 'w', encoding='utf-8') as logfh:
                     recovered.append(rel)
                     found = True
                     break
-                except Exception as e:
-                    continue
+                except Exception:
+                    continue  # download failed for this candidate; try next branch
         if found:
             continue
         # try a GitHub code search (filename only)
@@ -241,9 +237,9 @@ with open(RECOVERY_LOG, 'w', encoding='utf-8') as logfh:
                     recovered.append(rel)
                     found = True
                 except Exception:
-                    pass
+                    pass  # recovery attempt failed, try next search result
         except Exception:
-            pass
+            pass  # search API call failed, fall through to still_missing
         if not found:
             logfh.write(f"STILL_MISSING\t{rel}\t{msg}\n")
             still_failed.append((rel, msg))

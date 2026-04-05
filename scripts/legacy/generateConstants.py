@@ -1,10 +1,9 @@
 #!/usr/bin/env python3
 """Generate TypeScript constants.ts file for all published models."""
 
-import json
 import re
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 
 # Model categorization  
 CATEGORY_INFO = {
