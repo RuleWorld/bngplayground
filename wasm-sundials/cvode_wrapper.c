@@ -19,6 +19,8 @@ typedef double realtype;
 #include <sundials/sundials_context.h>
 #include <sunnonlinsol/sunnonlinsol_newton.h>
 #include <sunnonlinsol/sunnonlinsol_fixedpoint.h>
+#include <kinsol/kinsol.h>
+#include <kinsol/kinsol_ls.h>
 
 // Global callback to JS: f(t, y_ptr, ydot_ptr)
 // Emscripten will link this to a JS function provided at library initialization
@@ -646,7 +648,10 @@ void* init_solver_jac(int neq, double t0, double* y0_data, double reltol, double
     
     return (void*)mem;
 }
-// This is what BioNetGen uses when sparse=>1 is specified
+// This is what BioNetGen uses when sparse=>1 is specified.
+// Uses a dense fallback initially (safe for all SUNDIALS 7.x configs).
+// When bind_network() is called with a bytecode that has a Jacobian sparsity
+// pattern, the solver is upgraded to KLU (or SPGMR with sparse Jacobian).
 void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, double abstol, int max_steps) {
     CvodeWrapper* mem = (CvodeWrapper*)malloc(sizeof(CvodeWrapper));
     if (!mem) return NULL;
@@ -654,7 +659,7 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     mem->use_sparse = 1;
     mem->network_bc = NULL;
     mem->use_analytical_jac = 0;
-    mem->A = NULL;  // Bound later when a network with Jacobian sparsity is attached
+    mem->A = NULL;
     mem->LS = NULL;
     mem->NLS = NULL;
 
@@ -666,11 +671,23 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
 
     // Create vector
     mem->y = N_VNew_Serial(neq, mem->sunctx);
+    if (!mem->y) {
+        SUNContext_Free(&mem->sunctx);
+        free(mem);
+        return NULL;
+    }
     for (int i=0; i<neq; i++) NV_Ith_S(mem->y, i) = y0_data[i];
 
-    // Start matrix-free and upgrade to KLU once a sparse Jacobian pattern is bound.
-    // If KLU configuration fails at runtime, the wrapper falls back to the previous SPGMR path.
-    if (configure_sparse_spgmr_solver(mem) != 0) {
+    // Use dense linear solver as the safe initial fallback.
+    // The old approach (SPGMR with NULL matrix before CVodeCreate) crashed in
+    // SUNDIALS 7.x WASM with "memory access out of bounds" when called from
+    // the JS-callback path without bytecode. Dense always works standalone.
+    // When bind_network() is called later, it upgrades to KLU/SPGMR+sparse.
+    mem->A = SUNDenseMatrix(neq, neq, mem->sunctx);
+    mem->LS = SUNLinSol_Dense(mem->y, mem->A, mem->sunctx);
+    if (!mem->A || !mem->LS) {
+        if (mem->LS) SUNLinSolFree(mem->LS);
+        if (mem->A) SUNMatDestroy(mem->A);
         N_VDestroy(mem->y);
         SUNContext_Free(&mem->sunctx);
         free(mem);
@@ -679,17 +696,22 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
 
     // Create CVODE memory
     mem->cvode_mem = CVodeCreate(CV_BDF, mem->sunctx);
+    if (!mem->cvode_mem) {
+        SUNLinSolFree(mem->LS);
+        SUNMatDestroy(mem->A);
+        N_VDestroy(mem->y);
+        SUNContext_Free(&mem->sunctx);
+        free(mem);
+        return NULL;
+    }
     mem->NLS = SUNNonlinSol_Newton(mem->y, mem->sunctx);
-    
+
     // Init and Attach
     CVodeInit(mem->cvode_mem, f_bridge, t0, mem->y);
     CVodeSetUserData(mem->cvode_mem, mem);
     CVodeSStolerances(mem->cvode_mem, reltol, abstol);
     CVodeSetNonlinearSolver(mem->cvode_mem, mem->NLS);
-    
-    // Keep SPGMR until bytecode Jacobian data is bound, then switch to KLU if available.
-    CVodeSetLinearSolver(mem->cvode_mem, mem->LS, NULL);
-    
+    CVodeSetLinearSolver(mem->cvode_mem, mem->LS, mem->A);
 
     // Match BNG2 defaults
     mem->max_num_steps = (max_steps > 0) ? (long int)max_steps : 2000;
@@ -697,7 +719,7 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     CVodeSetMaxErrTestFails(mem->cvode_mem, 7);
     CVodeSetMaxConvFails(mem->cvode_mem, 10);
     CVodeSetMaxStep(mem->cvode_mem, 0.0);
-    
+
     return (void*)mem;
 }
 
@@ -1396,6 +1418,230 @@ void sens_destroy(void* sens_mem) {
     free(sw->pbar);
     if (sw->sunctx) SUNContext_Free(&sw->sunctx);
     free(sw);
+}
+
+/* ====================================================================
+ * CVodeSVtolerances — per-species vector absolute tolerances
+ *
+ * Enables different absolute tolerances for each species, critical for
+ * models where species concentrations span many orders of magnitude.
+ * ==================================================================== */
+
+/**
+ * Set per-species vector absolute tolerances.
+ *
+ * @param ptr          Opaque pointer to CvodeWrapper
+ * @param rtol         Relative tolerance (scalar)
+ * @param atol_vec_ptr Pointer to array of absolute tolerances [neq]
+ * @return             0 on success, negative on failure
+ */
+int set_sv_tolerances(void* ptr, double rtol, double* atol_vec_ptr) {
+    if (!ptr || !atol_vec_ptr) return -1;
+    CvodeWrapper* mem = (CvodeWrapper*)ptr;
+    int neq = (int)N_VGetLength(mem->y);
+
+    /* Create a temporary N_Vector wrapping the atol array */
+    N_Vector atol_vec = N_VNew_Serial(neq, mem->sunctx);
+    if (!atol_vec) return -1;
+    for (int i = 0; i < neq; i++) {
+        NV_Ith_S(atol_vec, i) = atol_vec_ptr[i];
+    }
+
+    int flag = CVodeSVtolerances(mem->cvode_mem, (realtype)rtol, atol_vec);
+    N_VDestroy(atol_vec);
+    return flag;
+}
+
+/* ====================================================================
+ * KINSOL Steady-State Solver
+ *
+ * Finds steady state by solving F(y) = dydt = 0 using Newton iteration.
+ * Reuses the existing js_f callback or bytecode interpreter for the RHS.
+ * ==================================================================== */
+
+typedef struct {
+    void* kin_mem;
+    N_Vector y;
+    N_Vector scale;       /* Scaling vector for solution and function */
+    SUNMatrix A;
+    SUNLinearSolver LS;
+    SUNContext sunctx;
+    NetworkByteCode* network_bc;
+    int neq;
+} KinsolWrapper;
+
+/* KINSOL system function bridge: computes F(y) = dydt(y) for the steady-state
+ * problem F(y) = 0. Uses bytecode if available, otherwise JS callback. */
+static int kinsol_sysfn(N_Vector uu, N_Vector fval, void* user_data) {
+    KinsolWrapper* kw = (KinsolWrapper*)user_data;
+    double* y_data = N_VGetArrayPointer(uu);
+    double* f_data = N_VGetArrayPointer(fval);
+
+    if (kw && kw->network_bc) {
+        network_dydt(kw->network_bc, kw->neq, y_data, f_data);
+    } else {
+        /* Use JS callback. KINSOL does not have a time variable, pass t=0. */
+        js_f(0.0, y_data, f_data);
+    }
+    return 0;
+}
+
+/**
+ * Initialize a KINSOL steady-state solver.
+ *
+ * @param neq       Number of state variables (species)
+ * @param y0_ptr    Initial guess for steady state [neq]
+ * @param fnormtol  Function norm tolerance (||F(y)||_inf < fnormtol)
+ * @param max_iters Maximum Newton iterations (0 = KINSOL default 200)
+ * @return          Opaque pointer to KinsolWrapper, or NULL on failure
+ */
+void* kinsol_init(int neq, double* y0_ptr, double fnormtol, int max_iters) {
+    if (neq <= 0 || !y0_ptr) return NULL;
+
+    KinsolWrapper* kw = (KinsolWrapper*)calloc(1, sizeof(KinsolWrapper));
+    if (!kw) return NULL;
+
+    kw->neq = neq;
+    kw->network_bc = NULL;
+
+    /* SUNDIALS context */
+    if (SUNContext_Create(0, &kw->sunctx) != 0) {
+        free(kw);
+        return NULL;
+    }
+
+    /* Solution vector — initial guess */
+    kw->y = N_VNew_Serial(neq, kw->sunctx);
+    if (!kw->y) goto fail;
+    for (int i = 0; i < neq; i++) NV_Ith_S(kw->y, i) = y0_ptr[i];
+
+    /* Scaling vector — use ones (no special scaling) */
+    kw->scale = N_VNew_Serial(neq, kw->sunctx);
+    if (!kw->scale) goto fail;
+    N_VConst(1.0, kw->scale);
+
+    /* Dense matrix + linear solver */
+    kw->A = SUNDenseMatrix(neq, neq, kw->sunctx);
+    kw->LS = SUNLinSol_Dense(kw->y, kw->A, kw->sunctx);
+    if (!kw->A || !kw->LS) goto fail;
+
+    /* Create KINSOL solver */
+    kw->kin_mem = KINCreate(kw->sunctx);
+    if (!kw->kin_mem) goto fail;
+
+    /* Initialize with system function */
+    if (KINInit(kw->kin_mem, kinsol_sysfn, kw->y) != KIN_SUCCESS) goto fail;
+
+    /* Set user data */
+    KINSetUserData(kw->kin_mem, kw);
+
+    /* Attach linear solver */
+    if (KINSetLinearSolver(kw->kin_mem, kw->LS, kw->A) != KIN_SUCCESS) goto fail;
+
+    /* Configure tolerances and iteration limits */
+    if (fnormtol > 0.0) {
+        KINSetFuncNormTol(kw->kin_mem, (sunrealtype)fnormtol);
+    }
+    if (max_iters > 0) {
+        KINSetNumMaxIters(kw->kin_mem, (long int)max_iters);
+    }
+
+    /* Reasonable defaults for scaled step tolerance */
+    KINSetScaledStepTol(kw->kin_mem, (sunrealtype)1.0e-12);
+
+    return (void*)kw;
+
+fail:
+    if (kw->kin_mem) KINFree(&kw->kin_mem);
+    if (kw->LS) SUNLinSolFree(kw->LS);
+    if (kw->A) SUNMatDestroy(kw->A);
+    if (kw->scale) N_VDestroy(kw->scale);
+    if (kw->y) N_VDestroy(kw->y);
+    if (kw->sunctx) SUNContext_Free(&kw->sunctx);
+    free(kw);
+    return NULL;
+}
+
+/**
+ * Run KINSOL to find steady state.
+ *
+ * @param ptr       Opaque pointer to KinsolWrapper
+ * @param strategy  0 = KIN_NONE (basic Newton), 1 = KIN_LINESEARCH
+ * @return          KIN_SUCCESS (0) on success, negative on failure
+ */
+int kinsol_solve(void* ptr, int strategy) {
+    if (!ptr) return -1;
+    KinsolWrapper* kw = (KinsolWrapper*)ptr;
+
+    int strat = (strategy == 1) ? KIN_LINESEARCH : KIN_NONE;
+
+    /* scale vectors: ones = no scaling (solution and function) */
+    int flag = KINSol(kw->kin_mem, kw->y, strat, kw->scale, kw->scale);
+
+    return flag;
+}
+
+/**
+ * Copy the current KINSOL solution into a destination buffer.
+ *
+ * @param ptr       Opaque pointer to KinsolWrapper
+ * @param y_out_ptr Destination buffer [neq]
+ */
+void kinsol_get_y(void* ptr, double* y_out_ptr) {
+    if (!ptr || !y_out_ptr) return;
+    KinsolWrapper* kw = (KinsolWrapper*)ptr;
+    double* y_data = N_VGetArrayPointer(kw->y);
+    for (int i = 0; i < kw->neq; i++) y_out_ptr[i] = y_data[i];
+}
+
+/**
+ * Bind a network bytecode to the KINSOL solver for fast WASM-only RHS.
+ *
+ * @param ptr          Opaque pointer to KinsolWrapper
+ * @param network_ptr  Handle from load_network()
+ */
+void kinsol_bind_network(void* ptr, uintptr_t network_ptr) {
+    if (!ptr || !network_ptr) return;
+    KinsolWrapper* kw = (KinsolWrapper*)ptr;
+    kw->network_bc = (NetworkByteCode*)network_ptr;
+}
+
+/**
+ * Get KINSOL solver statistics.
+ *
+ * @param ptr      Opaque pointer to KinsolWrapper
+ * @param nniters  Output: number of nonlinear iterations
+ * @param nfevals  Output: number of function evaluations
+ * @param fnorm    Output: final function norm ||F(y)||
+ */
+void kinsol_get_stats(void* ptr, long int* nniters, long int* nfevals, double* fnorm) {
+    if (!ptr) return;
+    KinsolWrapper* kw = (KinsolWrapper*)ptr;
+    if (nniters) KINGetNumNonlinSolvIters(kw->kin_mem, nniters);
+    if (nfevals) KINGetNumFuncEvals(kw->kin_mem, nfevals);
+    if (fnorm) {
+        sunrealtype fn = 0.0;
+        KINGetFuncNorm(kw->kin_mem, &fn);
+        *fnorm = (double)fn;
+    }
+}
+
+/**
+ * Destroy the KINSOL solver and free all resources.
+ *
+ * @param ptr  Opaque pointer to KinsolWrapper
+ */
+void kinsol_destroy(void* ptr) {
+    if (!ptr) return;
+    KinsolWrapper* kw = (KinsolWrapper*)ptr;
+
+    if (kw->kin_mem) KINFree(&kw->kin_mem);
+    if (kw->LS) SUNLinSolFree(kw->LS);
+    if (kw->A) SUNMatDestroy(kw->A);
+    if (kw->scale) N_VDestroy(kw->scale);
+    if (kw->y) N_VDestroy(kw->y);
+    if (kw->sunctx) SUNContext_Free(&kw->sunctx);
+    free(kw);
 }
 
 #ifdef __cplusplus
