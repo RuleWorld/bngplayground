@@ -94,8 +94,14 @@ for (const entry of needGdat) {
   const modelName: string = entry.model;
   const key = normalizeKey(modelName);
 
+  type EntryWithPath = { path: string };
+  const hasPath = (e: unknown): e is EntryWithPath =>
+    !!e && typeof (e as any).path === 'string';
+
   // Try manifest path first, then file walker fallback
-  const manifestPath = (entry as any).path ? path.resolve('artifacts/rulehub-export', (entry as any).path) : null;
+  const manifestPath = hasPath(entry)
+    ? path.resolve('artifacts/rulehub-export', entry.path)
+    : null;
   const bnglPath = (manifestPath && fs.existsSync(manifestPath)) ? manifestPath : bnglFiles.get(key);
   if (!bnglPath || !fs.existsSync(bnglPath)) { skipped++; continue; }
 
