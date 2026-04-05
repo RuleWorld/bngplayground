@@ -7,13 +7,13 @@ import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/util
 
 const ROOT = process.cwd();
 const MODELS: Array<{ id: string; bngl: string; refGdat: string; refNet: string; refCdat?: string }> = [
-  { id: 'an_2009', bngl: 'An_2009.bngl', refGdat: 'tests/fixtures/gdat/An_2009.gdat', refNet: 'bng_test_output/An_2009.net', refCdat: 'tests/pac/atomized_sim/An_2009/An_2009.cdat' },
-  { id: 'cbngl_simple', bngl: 'cBNGL_simple.bngl', refGdat: 'tests/fixtures/gdat/cBNGL_simple.gdat', refNet: 'bng_test_output/cBNGL_simple.net', refCdat: 'bng_test_output/cBNGL_simple.cdat' },
-  { id: 'eco_coevolution_host_parasite', bngl: 'eco_coevolution_host_parasite.bngl', refGdat: 'tests/fixtures/gdat/eco_coevolution_host_parasite.gdat', refNet: 'bng_test_output/eco_coevolution_host_parasite.net', refCdat: 'bng_test_output/eco_coevolution_host_parasite.cdat' },
-  { id: 'egfr_simple', bngl: 'egfr_simple.bngl', refGdat: 'tests/fixtures/gdat/egfr_simple.gdat', refNet: 'bng_test_output/egfr_simple.net' },
-  { id: 'genetic_bistability_energy', bngl: 'genetic_bistability_energy.bngl', refGdat: 'tests/fixtures/gdat/genetic_bistability_energy.gdat', refNet: 'bng_test_output/genetic_bistability_energy.net', refCdat: 'bng_test_output/genetic_bistability_energy.cdat' },
-  { id: 'lin_prion_2019', bngl: 'Lin_Prion_2019.bngl', refGdat: 'tests/fixtures/gdat/Lin_Prion_2019_ODE.gdat', refNet: 'bng_test_output/Lin_Prion_2019_ODE.net' },
-  { id: 'process_cell_adhesion_strength', bngl: 'process_cell_adhesion_strength.bngl', refGdat: 'tests/fixtures/gdat/process_cell_adhesion_strength.gdat', refNet: 'bng_test_output/process_cell_adhesion_strength.net', refCdat: 'bng_test_output/process_cell_adhesion_strength.cdat' },
+  { id: 'an_2009', bngl: 'An_2009.bngl', refGdat: 'bng_test_output/An_2009.gdat', refNet: 'bng_test_output/An_2009.net', refCdat: 'tests/pac/atomized_sim/An_2009/An_2009.cdat' },
+  { id: 'cbngl_simple', bngl: 'cBNGL_simple.bngl', refGdat: 'bng_test_output/cBNGL_simple.gdat', refNet: 'bng_test_output/cBNGL_simple.net', refCdat: 'bng_test_output/cBNGL_simple.cdat' },
+  { id: 'eco_coevolution_host_parasite', bngl: 'eco_coevolution_host_parasite.bngl', refGdat: 'bng_test_output/eco_coevolution_host_parasite.gdat', refNet: 'bng_test_output/eco_coevolution_host_parasite.net', refCdat: 'bng_test_output/eco_coevolution_host_parasite.cdat' },
+  { id: 'egfr_simple', bngl: 'egfr_simple.bngl', refGdat: 'bng_test_output/egfr_simple.gdat', refNet: 'bng_test_output/egfr_simple.net' },
+  { id: 'genetic_bistability_energy', bngl: 'genetic_bistability_energy.bngl', refGdat: 'bng_test_output/genetic_bistability_energy.gdat', refNet: 'bng_test_output/genetic_bistability_energy.net', refCdat: 'bng_test_output/genetic_bistability_energy.cdat' },
+  { id: 'lin_prion_2019', bngl: 'Lin_Prion_2019.bngl', refGdat: 'bng_test_output/Lin_Prion_2019_ODE.gdat', refNet: 'bng_test_output/Lin_Prion_2019_ODE.net' },
+  { id: 'process_cell_adhesion_strength', bngl: 'process_cell_adhesion_strength.bngl', refGdat: 'bng_test_output/process_cell_adhesion_strength.gdat', refNet: 'bng_test_output/process_cell_adhesion_strength.net', refCdat: 'bng_test_output/process_cell_adhesion_strength.cdat' },
 ];
 
 const ABS_TOL = 1e-5;

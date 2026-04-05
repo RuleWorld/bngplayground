@@ -214,10 +214,16 @@ function resolveRuleHubRoot(): string | null {
 const RULEHUB_ROOT = resolveRuleHubRoot();
 const RULEHUB_MANIFEST_PATH = RULEHUB_ROOT ? path.join(RULEHUB_ROOT, 'manifest.json') : null;
 const WEB_OUTPUT_DIR = path.join(PROJECT_ROOT, 'web_output');
-const BNG_REFERENCE_ROOT = path.join(PROJECT_ROOT, 'tests', 'fixtures');
-const BNG_NET_DIR = path.join(BNG_REFERENCE_ROOT, 'net');
-const BNG_CDAT_DIR = path.join(BNG_REFERENCE_ROOT, 'cdat');
-const BNG_GDAT_DIR = path.join(BNG_REFERENCE_ROOT, 'gdat');
+// All BNG2 reference outputs (gdat, cdat, net) live in bng_test_output/.
+// This is the single source of truth — the generate:gdat CI step writes here,
+// and both compare_outputs.ts and this parity checker read from here.
+// Override with BNG_OUTPUT_DIR env var if needed.
+const BNG_REFERENCE_ROOT = process.env.BNG_OUTPUT_DIR
+  ? path.resolve(PROJECT_ROOT, process.env.BNG_OUTPUT_DIR)
+  : path.join(PROJECT_ROOT, 'bng_test_output');
+const BNG_NET_DIR = BNG_REFERENCE_ROOT;
+const BNG_CDAT_DIR = BNG_REFERENCE_ROOT;
+const BNG_GDAT_DIR = BNG_REFERENCE_ROOT;
 const PARITY_ARTIFACTS_DIR = path.join(PROJECT_ROOT, 'artifacts', 'parity_artifacts');
 
 let ruleHubManifestCache: Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> | null = null;
