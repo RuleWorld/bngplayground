@@ -1,7 +1,18 @@
 #!/bin/bash
 set -euo pipefail
 
-export EMSDK="/c/Users/Achyudhan/emsdk"
+# Allow EMSDK to be provided externally; otherwise, fall back to sensible defaults.
+if [ -z "${EMSDK:-}" ]; then
+  # Try a repository-local emsdk first, then the original user-specific path as a last resort.
+  SCRIPT_DIR_LOCAL="$(cd "$(dirname "$0")" && pwd)"
+  DEFAULT_EMSDK_LOCAL="$SCRIPT_DIR_LOCAL/emsdk"
+  if [ -d "$DEFAULT_EMSDK_LOCAL" ]; then
+    EMSDK="$DEFAULT_EMSDK_LOCAL"
+  else
+    EMSDK="/c/Users/Achyudhan/emsdk"
+  fi
+fi
+export EMSDK
 EMSDK_PYTHON="$EMSDK/python/3.13.3_64bit"
 
 # Put emsdk's python FIRST — before Windows Store aliases
@@ -17,8 +28,11 @@ ln -sf "$EMSDK_PYTHON/python.exe" "$TMPBIN/python"
 ln -sf "$EMSDK_PYTHON/python.exe" "$TMPBIN/python3"
 export PATH="$TMPBIN:$PATH"
 
-NFSIM_SRC="/c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/temp/nfsim"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Allow overriding NFsim source directory via environment; default to repo-relative path
+: "${NFSIM_SRC:="$SCRIPT_DIR/../nfsim"}"
+
 BUILD_DIR="$SCRIPT_DIR/build_ems"
 POST_JS="$SCRIPT_DIR/nfsim_post.js"
 
