@@ -118,8 +118,10 @@ export class WorkerPool {
 
       // Wait for worker to signal ready
       initPromises.push(new Promise((resolve) => {
+        let ready = false;
         const checkReady = (event: MessageEvent) => {
           if (event.data?.type === 'READY') {
+            ready = true;
             worker.removeEventListener('message', checkReady);
             resolve();
           }
@@ -127,7 +129,15 @@ export class WorkerPool {
         worker.addEventListener('message', checkReady);
 
         // Timeout fallback
-        setTimeout(() => resolve(), 2000);
+        setTimeout(() => {
+          if (!ready) {
+            worker.removeEventListener('message', checkReady);
+            console.warn(
+              `[WorkerPool] Worker ${i} did not signal READY within 2000ms; continuing initialization with timeout fallback`
+            );
+            resolve();
+          }
+        }, 2000);
       }));
     }
 
@@ -264,7 +274,9 @@ export class WorkerPool {
     return {
       poolSize: this.workers.length,
       busyWorkers: this.workers.filter(w => w.busy).length,
-      pendingTasks: this.pendingTaskMap.size,
+      // pendingTasks counts only tasks waiting in the queue for a free worker,
+      // not tasks currently being processed by workers.
+      pendingTasks: this.taskQueue.length,
       totalTasks: this.workers.reduce((sum, w) => sum + w.taskCount, 0)
     };
   }

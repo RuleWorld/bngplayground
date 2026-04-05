@@ -216,17 +216,13 @@ export class ActionDispatcher {
       );
     }
 
-    // Convert to Species/Rxn objects for exporter
-    // This is a simplified version - real implementation would need proper Species/Rxn classes
-    const content = '# Network export not fully implemented yet\n';
-    console.warn('[ActionDispatcher] writeNetwork: full implementation pending');
-
-    if (!this.context.writeFile) {
-      console.log(content);
-      return;
-    }
-
-    await this.context.writeFile(filename, content);
+    // Network export is not yet implemented. Throw an explicit error instead of writing a placeholder file.
+    throw new Error(
+      'writeNetwork is not yet implemented in this engine. ' +
+      `Requested output file name would have been "${filename}". ` +
+      'Please use generate_network() and other available export actions (e.g., writeXML or writeSBML) ' +
+      'until full network export support is added.'
+    );
   }
 
   private async writeXML(args: Record<string, any>): Promise<void> {
