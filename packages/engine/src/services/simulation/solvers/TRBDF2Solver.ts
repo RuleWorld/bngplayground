@@ -193,6 +193,10 @@ export class TRBDF2Solver {
   private lastStepRejected: boolean = false;
   private lastNewtonIters: number = 0;
 
+  // FSAL (First Same As Last): when true, f0 already contains f(y_n) from the
+  // previous accepted step's fNew, so we can skip the redundant evaluation.
+  private fsalValid: boolean = false;
+
   // Error history for PI controller
   private errPrev: number = 1;
 
@@ -497,8 +501,13 @@ export class TRBDF2Solver {
     const n = this.n;
     const { atol, rtol } = this.options;
 
-    // Evaluate f at current point
-    this.f(y, this.f0);
+    // FSAL: skip f0 evaluation if we already have f(y_n) from the previous
+    // accepted step (fNew was copied into f0 at the end of the integrate loop).
+    if (!this.fsalValid) {
+      this.f(y, this.f0);
+    }
+    // Invalidate FSAL for next call (will be re-enabled after accepted step)
+    this.fsalValid = false;
 
     // Recompute Jacobian if stale or after rejection
     const needJacobian =
@@ -634,6 +643,7 @@ export class TRBDF2Solver {
 
     // Estimate initial step size
     this.f(y, this.f0);
+    this.fsalValid = true; // f0 is now valid for the first step() call
     let h = this.options.initialStep ?? this.estimateInitialStep(y, this.f0, tEnd - t0);
     h = Math.min(h, tEnd - t0);
 
@@ -664,6 +674,10 @@ export class TRBDF2Solver {
         y.set(result.yNew);
         steps++;
         rejections = 0;
+        // FSAL: copy fNew into f0 so the next step() can skip the f0 evaluation.
+        // fNew = f(yNew) was computed at the end of the accepted step.
+        this.f0.set(this.fNew);
+        this.fsalValid = true;
       } else {
         rejections++;
         if (rejections > 100) {
