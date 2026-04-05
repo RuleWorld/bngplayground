@@ -73,7 +73,9 @@ interface WorkerInstance {
  */
 export class WorkerPool {
   private workers: WorkerInstance[] = [];
-  private pendingTasks: PendingTask[] = [];
+  // ⚡ Bolt Optimization: Replace O(N) array with O(1) Map for task lookups and a separate queue
+  private pendingTaskMap: Map<string, PendingTask> = new Map();
+  private taskQueue: string[] = [];
   private isInitialized: boolean = false;
   private workerUrl: string;
   private poolSize: number;
@@ -141,11 +143,10 @@ export class WorkerPool {
     if (!instance.currentTask) return;
 
     const taskId = instance.currentTask;
-    const pendingIndex = this.pendingTasks.findIndex(p => p.task.id === taskId);
+    const pending = this.pendingTaskMap.get(taskId);
 
-    if (pendingIndex >= 0) {
-      const pending = this.pendingTasks[pendingIndex];
-      this.pendingTasks.splice(pendingIndex, 1);
+    if (pending) {
+      this.pendingTaskMap.delete(taskId);
 
       if (result.type === 'ERROR') {
         pending.reject(new Error(result.error || 'Unknown worker error'));
@@ -167,11 +168,10 @@ export class WorkerPool {
   private handleWorkerError(instance: WorkerInstance, error: ErrorEvent): void {
     if (instance.currentTask) {
       const taskId = instance.currentTask;
-      const pendingIndex = this.pendingTasks.findIndex(p => p.task.id === taskId);
+      const pending = this.pendingTaskMap.get(taskId);
 
-      if (pendingIndex >= 0) {
-        const pending = this.pendingTasks[pendingIndex];
-        this.pendingTasks.splice(pendingIndex, 1);
+      if (pending) {
+        this.pendingTaskMap.delete(taskId);
         pending.reject(new Error(`Worker error: ${error.message}`));
       }
     }
@@ -192,12 +192,13 @@ export class WorkerPool {
     const task: WorkerTask<T> = { id: taskId, type, data };
 
     return new Promise((resolve, reject) => {
-      this.pendingTasks.push({
+      this.pendingTaskMap.set(taskId, {
         task,
         resolve: resolve as (result: unknown) => void,
         reject,
         submittedAt: Date.now()
       });
+      this.taskQueue.push(taskId);
       this.processQueue();
     });
   }
@@ -206,16 +207,21 @@ export class WorkerPool {
    * Process the task queue
    */
   private processQueue(): void {
-    const availableWorker = this.workers.find(w => !w.busy);
-    if (!availableWorker) return;
+    // ⚡ Bolt Optimization: Loop through all idle workers instead of finding just one, maximizing parallel task assignment
+    for (const worker of this.workers) {
+      if (worker.busy) continue;
 
-    const pending = this.pendingTasks.find(p => !this.workers.some(w => w.currentTask === p.task.id));
-    if (!pending) return;
+      if (this.taskQueue.length === 0) break;
 
-    availableWorker.busy = true;
-    availableWorker.currentTask = pending.task.id;
-    availableWorker.taskCount++;
-    availableWorker.worker.postMessage(pending.task);
+      const taskId = this.taskQueue.shift()!;
+      const pending = this.pendingTaskMap.get(taskId);
+      if (!pending) continue;
+
+      worker.busy = true;
+      worker.currentTask = taskId;
+      worker.taskCount++;
+      worker.worker.postMessage(pending.task);
+    }
   }
 
   /**
@@ -258,7 +264,7 @@ export class WorkerPool {
     return {
       poolSize: this.workers.length,
       busyWorkers: this.workers.filter(w => w.busy).length,
-      pendingTasks: this.pendingTasks.length,
+      pendingTasks: this.pendingTaskMap.size,
       totalTasks: this.workers.reduce((sum, w) => sum + w.taskCount, 0)
     };
   }
@@ -271,7 +277,8 @@ export class WorkerPool {
       instance.worker.terminate();
     }
     this.workers = [];
-    this.pendingTasks = [];
+    this.pendingTaskMap.clear();
+    this.taskQueue = [];
     this.isInitialized = false;
     console.log('[WorkerPool] Terminated all workers');
   }
