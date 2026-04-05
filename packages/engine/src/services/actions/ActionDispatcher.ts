@@ -132,11 +132,17 @@ export class ActionDispatcher {
   private async readFile(args: Record<string, any>): Promise<void> {
     const file = args.file;
     if (!file) {
-      throw new Error('readFile: file parameter is required');
+      throw new Error(
+        'readFile action requires a "file" parameter specifying the path to read. ' +
+        'Example: readFile({file=>"model.net"})'
+      );
     }
 
     if (!this.context.readFile) {
-      throw new Error('readFile: no file reader callback provided');
+      throw new Error(
+        'readFile action is not available in this environment (no file reader callback configured). ' +
+        'File I/O is only supported when running with a backend that provides file access.'
+      );
     }
 
     const content = await this.context.readFile(file);
@@ -145,15 +151,25 @@ export class ActionDispatcher {
     if (file.endsWith('.net')) {
       const result = parseNetFile(content);
       if (!result.success) {
-        throw new Error(`Failed to parse .net file: ${result.errors.join(', ')}`);
+        throw new Error(
+          `Failed to parse .net file "${file}": ${result.errors.join(', ')}. ` +
+          'Ensure the file follows the BioNetGen .net format (species, reactions, groups blocks).'
+        );
       }
       // Merge parsed model into current model
       this.context.model = { ...this.context.model, ...result.model };
     } else if (file.endsWith('.bngl')) {
       // Parse BNGL file - would need to import the parser
-      throw new Error('readFile for .bngl not yet implemented - use main parser');
+      throw new Error(
+        'readFile for .bngl files is not yet supported inside action blocks. ' +
+        'To load a BNGL model, provide it as the main input to the parser instead of using readFile().'
+      );
     } else {
-      throw new Error(`readFile: unsupported file type: ${file}`);
+      throw new Error(
+        `readFile does not support the file type of "${file}". ` +
+        'Supported formats are .net (network files). ' +
+        'For BNGL models, provide them as the main parser input.'
+      );
     }
   }
 
@@ -187,10 +203,16 @@ export class ActionDispatcher {
 
     // Check that network has been generated
     if (!this.context.model.species || this.context.model.species.length === 0) {
-      throw new Error('writeNetwork: no species found - generate network first');
+      throw new Error(
+        'writeNetwork requires an expanded network, but no species were found. ' +
+        'Call generate_network() before writeNetwork() to expand the rule-based model into a concrete reaction network.'
+      );
     }
     if (!this.context.model.reactions || this.context.model.reactions.length === 0) {
-      throw new Error('writeNetwork: no reactions found - generate network first');
+      throw new Error(
+        'writeNetwork requires an expanded network, but no reactions were found. ' +
+        'Call generate_network() before writeNetwork() to expand the rule-based model into a concrete reaction network.'
+      );
     }
 
     // Convert to Species/Rxn objects for exporter
@@ -269,10 +291,16 @@ export class ActionDispatcher {
     const value = args.value;
 
     if (!parameter) {
-      throw new Error('setParameter: parameter name is required');
+      throw new Error(
+        'setParameter action requires a "parameter" argument specifying which parameter to change. ' +
+        'Example: setParameter("k1", 0.5)'
+      );
     }
     if (value === undefined) {
-      throw new Error('setParameter: value is required');
+      throw new Error(
+        'setParameter action requires a "value" argument. ' +
+        'Example: setParameter("k1", 0.5)'
+      );
     }
 
     // Parse value if it's an expression
@@ -281,7 +309,10 @@ export class ActionDispatcher {
       // Simple evaluation - would need expression evaluator for complex cases
       numericValue = parseFloat(value);
       if (isNaN(numericValue)) {
-        throw new Error(`setParameter: invalid numeric value: ${value}`);
+        throw new Error(
+          `setParameter: "${value}" is not a valid numeric value. ` +
+          'Provide a number or a numeric string (e.g., "0.5", "1e-3").'
+        );
       }
     } else {
       numericValue = value;
@@ -305,7 +336,11 @@ export class ActionDispatcher {
 
     const saved = this.context.parameterCaches.get(label);
     if (!saved) {
-      throw new Error(`resetParameters: no saved parameters found for label '${label}'`);
+      throw new Error(
+        `resetParameters: no saved parameter snapshot exists for label "${label}". ` +
+        'Call saveParameters() with the same label before attempting to reset. ' +
+        'Available labels can be set via saveParameters({label=>"myLabel"}).'
+      );
     }
 
     // Restore parameters
@@ -322,16 +357,26 @@ export class ActionDispatcher {
     const value = args.value;
 
     if (!species) {
-      throw new Error('setConcentration: species is required');
+      throw new Error(
+        'setConcentration action requires a "species" argument identifying which species to modify. ' +
+        'Example: setConcentration("A(b)", 100)'
+      );
     }
     if (value === undefined) {
-      throw new Error('setConcentration: value is required');
+      throw new Error(
+        'setConcentration action requires a "value" argument specifying the new concentration. ' +
+        'Example: setConcentration("A()", 100)'
+      );
     }
 
     // Find species in model
     const speciesObj = this.getSpecies(species);
     if (!speciesObj) {
-      throw new Error(`setConcentration: species not found: ${species}`);
+      throw new Error(
+        `setConcentration: species "${species}" was not found in the model. ` +
+        'Ensure the species name matches exactly (including components and states). ' +
+        'If the network has not been generated yet, call generate_network() first.'
+      );
     }
 
     // Parse value
@@ -343,7 +388,10 @@ export class ActionDispatcher {
       } else {
         numericValue = parseFloat(value);
         if (isNaN(numericValue)) {
-          throw new Error(`setConcentration: invalid value: ${value}`);
+          throw new Error(
+            `setConcentration: "${value}" is not a valid numeric value and is not a known parameter name. ` +
+            'Provide a number, numeric string, or the name of a defined parameter.'
+          );
         }
       }
     } else {
@@ -359,16 +407,26 @@ export class ActionDispatcher {
     const value = args.value;
 
     if (!species) {
-      throw new Error('addConcentration: species is required');
+      throw new Error(
+        'addConcentration action requires a "species" argument identifying which species to modify. ' +
+        'Example: addConcentration("A(b)", 50)'
+      );
     }
     if (value === undefined) {
-      throw new Error('addConcentration: value is required');
+      throw new Error(
+        'addConcentration action requires a "value" argument specifying the amount to add. ' +
+        'Example: addConcentration("A()", 50)'
+      );
     }
 
     // Find species in model
     const speciesObj = this.getSpecies(species);
     if (!speciesObj) {
-      throw new Error(`addConcentration: species not found: ${species}`);
+      throw new Error(
+        `addConcentration: species "${species}" was not found in the model. ` +
+        'Ensure the species name matches exactly (including components and states). ' +
+        'If the network has not been generated yet, call generate_network() first.'
+      );
     }
 
     // Parse value
@@ -379,7 +437,10 @@ export class ActionDispatcher {
       } else {
         numericValue = parseFloat(value);
         if (isNaN(numericValue)) {
-          throw new Error(`addConcentration: invalid value: ${value}`);
+          throw new Error(
+            `addConcentration: "${value}" is not a valid numeric value and is not a known parameter name. ` +
+            'Provide a number, numeric string, or the name of a defined parameter.'
+          );
         }
       }
     } else {
@@ -408,7 +469,11 @@ export class ActionDispatcher {
 
     const saved = this.context.concentrationCaches.get(label);
     if (!saved) {
-      throw new Error(`resetConcentrations: no saved concentrations found for label '${label}'`);
+      throw new Error(
+        `resetConcentrations: no saved concentration snapshot exists for label "${label}". ` +
+        'Call saveConcentrations() with the same label before attempting to reset. ' +
+        'Available labels can be set via saveConcentrations({label=>"myLabel"}).'
+      );
     }
 
     // Restore concentrations

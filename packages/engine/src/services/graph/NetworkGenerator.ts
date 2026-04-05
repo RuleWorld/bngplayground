@@ -5723,7 +5723,10 @@ export class NetworkGenerator {
   private async checkResourceLimits(signal?: AbortSignal): Promise<void> {
     // Removed yielding to event loop - it causes issues in some test runners
     if (signal?.aborted) {
-      throw new Error('Network generation aborted by user');
+      throw new Error(
+        'Network generation was cancelled. ' +
+        'The expansion was aborted before completion. No partial network is available.'
+      );
     }
 
     const now = Date.now();
@@ -5733,8 +5736,11 @@ export class NetworkGenerator {
       const memory = (performance as any).memory;
       if (memory && memory.usedJSHeapSize > this.options.memoryLimit) {
         throw new Error(
-          `Memory limit exceeded: ${(memory.usedJSHeapSize / 1e6).toFixed(0)}MB > ` +
-          `${(this.options.memoryLimit / 1e6).toFixed(0)}MB`
+          `Network generation stopped: memory usage (${(memory.usedJSHeapSize / 1e6).toFixed(0)} MB) ` +
+          `exceeded the ${(this.options.memoryLimit / 1e6).toFixed(0)} MB limit. ` +
+          'This usually means the model generates too many species (unbounded polymerization). ' +
+          'Try adding max_stoich or max_iter to your generate_network() action, ' +
+          'or use simulate({method=>"nf"}) for network-free simulation.'
         );
       }
     }

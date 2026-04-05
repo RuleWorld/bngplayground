@@ -234,7 +234,11 @@ export class CVODESolver {
 
           const callable = candidates.find((candidate) => typeof candidate === 'function');
           if (!callable) {
-            throw new Error('Failed to resolve callable CVODE loader export');
+            throw new Error(
+              'Failed to resolve a callable CVODE loader export from the WASM module. ' +
+              'The module was loaded but does not export a recognized factory function (default or createCVodeModule). ' +
+              'This is a configuration issue - ensure the CVODE WASM build is compatible with this version of the simulator.'
+            );
           }
 
           return callable as (moduleArg?: unknown) => Promise<CVodeModule>;
@@ -253,8 +257,10 @@ export class CVODESolver {
           // In browser/worker context, cvodeModuleFactory must be injected by the app layer
           // (see bnglWorker.ts). If we reach here without a factory, it's a setup error.
           throw new Error(
-            '[ODESolver] CVODESolver.cvodeModuleFactory is not set. ' +
-            'The app must inject the CVODE loader before simulating.'
+            'CVODE solver is not available: the CVODE WASM module factory has not been injected. ' +
+            'In the browser, the app layer must call CVODESolver.cvodeModuleFactory = ... before simulating. ' +
+            'If you are using the playground UI, this usually means the CVODE WASM file failed to load. ' +
+            'Try refreshing the page, or switch to the Rosenbrock23 solver as a fallback.'
           );
         }
 

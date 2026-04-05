@@ -96,7 +96,10 @@ export function parseNetFile(content: string): NetFileParseResult {
 function parseParameterLine(line: string, model: BNGLModel, lineNum: number): void {
   const parts = line.trim().split(/\s+/);
   if (parts.length < 3) {
-    throw new Error(`Invalid parameter format (expected: index name value)`);
+    throw new Error(
+      `Invalid parameter format in .net file at line ${lineNum}: expected "index name value" (e.g., "1 NA 6.02e+23"), ` +
+      `but got "${line.trim()}".`
+    );
   }
 
   const index = parseInt(parts[0]);
@@ -104,7 +107,10 @@ function parseParameterLine(line: string, model: BNGLModel, lineNum: number): vo
   const value = parseFloat(parts[2]);
 
   if (isNaN(index) || isNaN(value)) {
-    throw new Error(`Invalid parameter: index or value not a number`);
+    throw new Error(
+      `Invalid parameter in .net file at line ${lineNum}: the index and value must be numeric, ` +
+      `but got index="${parts[0]}", value="${parts[2]}".`
+    );
   }
 
   model.parameters[name] = value;
@@ -117,7 +123,10 @@ function parseParameterLine(line: string, model: BNGLModel, lineNum: number): vo
 function parseCompartmentLine(line: string, model: BNGLModel, lineNum: number): void {
   const parts = line.trim().split(/\s+/);
   if (parts.length < 4) {
-    throw new Error(`Invalid compartment format (expected: index name dimension size [parent])`);
+    throw new Error(
+      `Invalid compartment format in .net file at line ${lineNum}: expected "index name dimension size [parent]" ` +
+      `(e.g., "1 EC 3 1.0e-10"), but got "${line.trim()}".`
+    );
   }
 
   const index = parseInt(parts[0]);
@@ -127,7 +136,10 @@ function parseCompartmentLine(line: string, model: BNGLModel, lineNum: number): 
   const parent = parts.length > 4 ? parts[4] : undefined;
 
   if (isNaN(index) || isNaN(dimension) || isNaN(size)) {
-    throw new Error(`Invalid compartment: numeric values not valid`);
+    throw new Error(
+      `Invalid compartment in .net file at line ${lineNum}: index, dimension, and size must be numeric, ` +
+      `but got index="${parts[0]}", dimension="${parts[2]}", size="${parts[3]}".`
+    );
   }
 
   model.compartments!.push({
@@ -177,12 +189,17 @@ function parseReactionLine(line: string, model: BNGLModel, lineNum: number): voi
 
   const parts = line.trim().split(/\s+/);
   if (parts.length < 4) {
-    throw new Error(`Invalid reaction format (expected: index reactants products rate [label])`);
+    throw new Error(
+      `Invalid reaction format in .net file at line ${lineNum}: expected "index reactants products rate [label]" ` +
+      `(e.g., "1 S1,S2 S3 k1*S1*S2"), but got "${line.trim()}".`
+    );
   }
 
   const index = parseInt(parts[0]);
   if (isNaN(index)) {
-    throw new Error(`Invalid reaction index`);
+    throw new Error(
+      `Invalid reaction in .net file at line ${lineNum}: the reaction index "${parts[0]}" is not a valid number.`
+    );
   }
 
   const reactants = parts[1].split(',').map(s => s.trim()).filter(s => s);
@@ -215,7 +232,10 @@ function parseReactionLine(line: string, model: BNGLModel, lineNum: number): voi
 function parseObservableLine(line: string, model: BNGLModel, lineNum: number): void {
   const parts = line.trim().split(/\s+/);
   if (parts.length < 4) {
-    throw new Error(`Invalid observable format (expected: index name type pattern)`);
+    throw new Error(
+      `Invalid observable format in .net file at line ${lineNum}: expected "index name type pattern" ` +
+      `(e.g., "1 Dimers Molecules EGFR(CR1!+)"), but got "${line.trim()}".`
+    );
   }
 
   const index = parseInt(parts[0]);
@@ -224,7 +244,9 @@ function parseObservableLine(line: string, model: BNGLModel, lineNum: number): v
   const patterns = parts.slice(3).join(' ');
 
   if (isNaN(index)) {
-    throw new Error(`Invalid observable index`);
+    throw new Error(
+      `Invalid observable in .net file at line ${lineNum}: the observable index "${parts[0]}" is not a valid number.`
+    );
   }
 
   model.observables.push({
@@ -242,7 +264,10 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
   // Format: index name(args) = expression
   const match = line.match(/^(\d+)\s+(\w+)\s*\(([^)]*)\)\s*=\s*(.+)$/);
   if (!match) {
-    throw new Error(`Invalid function format (expected: index name(args) = expression)`);
+    throw new Error(
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
+    );
   }
 
   const index = parseInt(match[1]);
@@ -251,7 +276,9 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
   const expression = match[4].trim();
 
   if (isNaN(index)) {
-    throw new Error(`Invalid function index`);
+    throw new Error(
+      `Invalid function in .net file at line ${lineNum}: the function index "${match[1]}" is not a valid number.`
+    );
   }
 
   const args = argsStr ? argsStr.split(',').map(a => a.trim()) : [];
@@ -271,5 +298,9 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
 export async function loadNetFile(filepath: string): Promise<BNGLModel> {
   // This is a placeholder - actual implementation depends on runtime environment
   // In Node.js, use fs.readFileSync; in browser, use fetch
-  throw new Error('loadNetFile not implemented - use parseNetFile with file content');
+  throw new Error(
+    'loadNetFile (direct file loading) is not available in this environment. ' +
+    'Use parseNetFile(content) instead, passing the .net file content as a string. ' +
+    'In Node.js, read the file with fs.readFileSync first; in the browser, use fetch or FileReader.'
+  );
 }

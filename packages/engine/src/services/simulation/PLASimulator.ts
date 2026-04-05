@@ -482,12 +482,12 @@ export class PLASimulator {
     const reactions: PLAReaction[] = (model.reactions || []).map(r => {
       const reactantIndices = r.reactants.map(name => {
         const idx = speciesMap.get(name);
-        if (idx === undefined) throw new Error(`Species "${name}" not found`);
+        if (idx === undefined) throw new Error(`PLA simulation error: species "${name}" referenced in a reaction was not found in the model species list. Ensure all reactant and product species are defined in the seed species block.`);
         return idx;
       });
       const productIndices = r.products.map(name => {
         const idx = speciesMap.get(name);
-        if (idx === undefined) throw new Error(`Species "${name}" not found`);
+        if (idx === undefined) throw new Error(`PLA simulation error: species "${name}" referenced in a reaction was not found in the model species list. Ensure all reactant and product species are defined in the seed species block.`);
         return idx;
       });
 

@@ -382,7 +382,14 @@ export async function simulate(
         await loadEvaluator();
       } catch (e: any) {
         console.error('[Worker] Failed to load SafeExpressionEvaluator module:', e?.message ?? String(e));
-        throw new Error('Failed to initialize expression evaluator', { cause: e });
+        throw new Error(
+          'Failed to initialize the expression evaluator needed for functional rates ' +
+          '(e.g., Michaelis-Menten, Hill functions). ' +
+          'This may indicate the SafeExpressionEvaluator module could not be loaded in the current runtime. ' +
+          'If running in a browser worker, ensure the evaluator bundle is included. ' +
+          `Original error: ${e?.message ?? String(e)}`,
+          { cause: e }
+        );
       }
     }
   }
@@ -2681,7 +2688,12 @@ export async function simulate(
     } satisfies SimulationResults;
   }
 
-  throw new Error('Simulation finished without producing results');
+  throw new Error(
+    'Simulation finished without producing results. ' +
+    'This can happen if all simulation phases were skipped (e.g., t_end <= t_start), ' +
+    'or an internal error prevented data collection. ' +
+    'Check that your simulate() action specifies a positive time span and that network generation succeeded.'
+  );
 }
 
 

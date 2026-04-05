@@ -467,7 +467,7 @@ describe('Task 3: Hybrid Model Generation', () => {
       reactionRules: [{ reactants: ['A()'], products: [], rate: '1', isBidirectional: false }],
     };
 
-    await expect(generateHybridModel(model)).rejects.toThrow('zero molecule type definitions');
+    await expect(generateHybridModel(model)).rejects.toThrow('no molecule type definitions');
   });
 
   it('should serialize hybrid model to BNGL', async () => {

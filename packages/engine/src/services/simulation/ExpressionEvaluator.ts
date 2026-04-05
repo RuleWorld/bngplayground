@@ -232,7 +232,11 @@ export async function loadEvaluator(): Promise<void> {
       const mod = await import('../../utils/safeExpressionEvaluator');
       SafeExpressionEvaluatorRef = mod.SafeExpressionEvaluator;
     } catch (e: any) {
-      throw new Error(`Failed to load SafeExpressionEvaluator: ${e?.message ?? String(e)}`);
+      throw new Error(
+        `Failed to load the SafeExpressionEvaluator module: ${e?.message ?? String(e)}. ` +
+        'This module is required for evaluating functional rate expressions (e.g., Michaelis-Menten, Hill). ' +
+        'If you do not need functional rates, ensure all rate constants are numeric literals.'
+      );
     }
   }
 }

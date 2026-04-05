@@ -464,6 +464,23 @@ function parseCsv(content: string): DatPoint[] {
   return points;
 }
 
+/**
+ * Extract the last simulation phase from a multi-phase web output.
+ * Multi-phase models (equilibration + stimulation) produce concatenated time series
+ * where the time resets to 0 at each new phase. BNG2 .gdat typically only contains the
+ * last phase, so we need to extract it for a fair comparison.
+ */
+function extractLastPhase(points: DatPoint[]): DatPoint[] {
+  if (points.length < 2) return points;
+  let lastResetIdx = 0;
+  for (let i = 1; i < points.length; i++) {
+    if (points[i].time < points[i - 1].time - 1e-10) {
+      lastResetIdx = i;
+    }
+  }
+  return lastResetIdx > 0 ? points.slice(lastResetIdx) : points;
+}
+
 function reactionSignature(rxn: ParsedReaction, speciesList: ParsedSpecies[]): string {
   const idxToName = new Map(speciesList.map((s) => [s.index, canonicalizePattern(s.name)]));
   const lhs = rxn.reactants.map((i) => idxToName.get(i) ?? `?${i}`).sort().join(' + ');
@@ -1363,9 +1380,9 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
     log(`      Read Web CDAT:  ${preparedFiles.webCdat} (${webCdatRaw.length} bytes)`);
     
     const bng2Cdat = parseDat(bng2CdatRaw);
-    let webCdat = parseDat(webCdatRaw);
+    let webCdat = extractLastPhase(parseDat(webCdatRaw));
     log(`      BNG2 Dat: ${bng2Cdat.length} timepoints, Web Dat: ${webCdat.length} timepoints`);
-    
+
     if (bng2Net && webNet) {
       log(`      Aligning Web CDAT species indices to BNG2 species indices...`);
       webCdat = alignCdat(webCdat, webNet, bng2Net);
@@ -1399,11 +1416,19 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
     const webGdatRaw = readTextFileWithRetry(preparedFiles.webGdat!);
     log(`      Read BNG2 GDAT: ${preparedFiles.bng2Gdat} (${bng2GdatRaw.length} bytes)`);
     log(`      Read Web GDAT:  ${preparedFiles.webGdat} (${webGdatRaw.length} bytes)`);
-    
+
     const bng2Gdat = parseDat(bng2GdatRaw);
-    const webSeries = preparedFiles.webGdat!.toLowerCase().endsWith('.csv') ? parseCsv(webGdatRaw) : parseDat(webGdatRaw);
+    const webSeriesRaw = preparedFiles.webGdat!.toLowerCase().endsWith('.csv') ? parseCsv(webGdatRaw) : parseDat(webGdatRaw);
+    // Multi-phase handling: the web output may contain multiple simulation phases
+    // (e.g., equilibration then stimulation) concatenated with time resets.
+    // BNG2 .gdat typically contains only the LAST phase. Extract the last phase
+    // from the web output to match.
+    let webSeries = extractLastPhase(webSeriesRaw);
+    if (webSeries.length < webSeriesRaw.length) {
+      log(`      [MultiPhase] Extracted last phase: ${webSeries.length} timepoints (was ${webSeriesRaw.length})`);
+    }
     log(`      BNG2 Gdat: ${bng2Gdat.length} timepoints, Web series: ${webSeries.length} timepoints`);
-    
+
     const gdatComparison = compareTimeSeries(bng2Gdat, webSeries);
     gdatDiffs = gdatComparison.diffs;
     gdatComparable = gdatComparison.comparable;

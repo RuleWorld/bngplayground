@@ -290,5 +290,9 @@ export async function writeBNGLFile(model: BNGLModel, filepath: string, options:
   const content = writeBNGL(model, options);
   // This is a placeholder - actual implementation depends on runtime environment
   // In Node.js, use fs.writeFileSync; in browser, trigger download
-  throw new Error('writeBNGLFile not implemented - use writeBNGL to get content');
+  throw new Error(
+    'writeBNGLFile (direct file writing) is not available in this environment. ' +
+    'Use writeBNGL(model, options) to get the BNGL content as a string, then write it yourself. ' +
+    'In the browser, use the export/download feature in the UI instead.'
+  );
 }

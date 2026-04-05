@@ -66,7 +66,11 @@ const OPERATOR_RE = /^(\w+)\s*(>=|<=|==|!=|>|<)\s*([+-]?(?:\d+\.?\d*|\.\d+)(?:[e
 function parseCondition(when: string): CellDecisionRule['condition'] {
   const match = when.trim().match(OPERATOR_RE);
   if (!match) {
-    throw new Error(`Cannot parse decision condition: "${when}"`);
+    throw new Error(
+      `Cannot parse multiscale decision condition: "${when}". ` +
+      'Expected format: "observable operator threshold" (e.g., "pERK > 0.5"). ' +
+      'Supported operators: >, <, >=, <=, ==, !=.'
+    );
   }
   return {
     observable: match[1],
@@ -140,7 +144,12 @@ function parseAction(then: string): CellAction {
     };
   }
 
-  throw new Error(`Cannot parse decision action: "${then}"`);
+  throw new Error(
+    `Cannot parse multiscale decision action: "${then}". ` +
+    'Supported actions: divide, die, secrete(species, rate), stop_secrete(species), ' +
+    'chemotaxis(species, speed), migrate(random|chemotaxis, speed), change_type(typeName), ' +
+    'set_parameter(name, value).'
+  );
 }
 
 // ---------------------------------------------------------------------------

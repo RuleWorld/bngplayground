@@ -303,7 +303,11 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
 const importModuleFromUrl = async (url: string): Promise<any> => {
   const response = await fetch(url);
   if (!response.ok) {
-    throw new Error(`HTTP ${response.status} while fetching ${url}`);
+    throw new Error(
+      `Failed to download NFsim module from ${url} (HTTP ${response.status}). ` +
+      'Ensure the NFsim JS/WASM files are deployed at the expected location. ' +
+      'Check your server configuration and network connectivity.'
+    );
   }
   const text = await response.text();
   const blobUrl = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
@@ -340,7 +344,11 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
         const module = await factory(moduleArg);
         const runtime = createRuntimeFromModule(module);
         if (!runtime) {
-          throw new Error('NFsim module factory did not provide a compatible runtime. Expected run(xml, options).');
+          throw new Error(
+            'NFsim module factory loaded successfully but did not produce a compatible runtime. ' +
+            'The runtime must export a run(xml, options) function. ' +
+            'This usually means the nfsim.js build is incompatible with this version of the simulator.'
+          );
         }
         setGlobalRuntime(runtime);
         return runtime;
@@ -361,7 +369,11 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
           const module = await factoryFn(moduleArg);
           const runtime = createRuntimeFromModule(module) ?? createRuntimeFromModule(mod);
           if (!runtime) {
-            throw new Error('NFsim JS module loaded but no compatible runtime was found. Export run(xml, options) or runNFsim(xml, options).');
+            throw new Error(
+              'NFsim JS module loaded and initialized, but the resulting object does not expose a compatible runtime. ' +
+              'Expected exports: run(xml, options) or runNFsim(xml, options). ' +
+              'Rebuild the NFsim WASM module or check that the correct nfsim.js file is being served.'
+            );
           }
           setGlobalRuntime(runtime);
           return runtime;
@@ -373,10 +385,20 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
           return directRuntime;
         }
 
-        throw new Error('NFsim JS module loaded but no factory/runtime was found.');
+        throw new Error(
+          'NFsim JS module was loaded but contains no recognized factory or runtime. ' +
+          'Expected a default export function, createNFsimModule, or NFsimModule export. ' +
+          'Ensure the correct nfsim.js file is deployed.'
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : String(error);
-        throw new Error(`NFsim runtime loader failed. Ensure ${url} exists and exports a run(xml, options) function or a factory (default export). (${message})`, { cause: error });
+        throw new Error(
+          `NFsim runtime loader failed while loading from ${url}: ${message}. ` +
+          'Ensure the file exists at that URL, is a valid JavaScript module, and exports either ' +
+          'a run(xml, options) function or a factory (default export). ' +
+          'If running locally, check that the NFsim WASM build files are present in the public directory.',
+          { cause: error }
+        );
       }
     })();
   }

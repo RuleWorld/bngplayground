@@ -40,13 +40,20 @@ const TOKEN_CANDIDATE_REGEX = /(?:@[A-Za-z0-9_]+(?::|::))?(?:[A-Za-z_][A-Za-z0-9
 export function parseObservablePattern(pattern: string): SpeciesGraph {
   const trimmed = pattern.trim();
   if (!trimmed) {
-    throw new Error('Observable pattern cannot be empty');
+    throw new Error(
+      'Observable pattern cannot be empty. ' +
+      'Provide a valid BNGL species pattern (e.g., "A(b!1).B(a!1)" or "A(b~p)").'
+    );
   }
 
   try {
     return BNGLParser.parseSpeciesGraph(trimmed);
   } catch (e: any) {
-    throw new Error(`Invalid BNGL pattern "${pattern}": ${e.message}`);
+    throw new Error(
+      `Invalid BNGL pattern "${pattern}": ${e.message}. ` +
+      'Check the pattern syntax - molecules are joined by ".", components are in parentheses, ' +
+      'and bonds use "!" (e.g., "A(b!1).B(a!1)").'
+    );
   }
 }
 

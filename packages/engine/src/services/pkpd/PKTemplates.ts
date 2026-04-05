@@ -724,7 +724,10 @@ export function generatePKModel(config: PKModelConfig): PKModelResult {
       result = generatePBPKMinimal(config);
       break;
     default:
-      throw new Error(`Unknown PK model type: ${(config as any).type}`);
+      throw new Error(
+        `Unknown PK model type: "${(config as any).type}". ` +
+        'Supported types: one_compartment, two_compartment, three_compartment, tmdd, pbpk_minimal.'
+      );
   }
 
   // Inject PD parameter lines if requested
