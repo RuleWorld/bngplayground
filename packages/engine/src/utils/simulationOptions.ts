@@ -73,7 +73,7 @@ export function resolveAutoMethod(model: BNGLModel, method: SimulationOptions['m
   const phases = model.simulationPhases ?? [];
   if (phases.length > 0) {
     const firstMethod = phases[0].method;
-    if (firstMethod === 'nf' || firstMethod === 'ssa' || firstMethod === 'pla' || firstMethod === 'psa' || firstMethod === 'ode') {
+    if (firstMethod === 'nf' || firstMethod === 'nfsim' || firstMethod === 'ssa' || firstMethod === 'pla' || firstMethod === 'psa' || firstMethod === 'ode') {
       return firstMethod;
     }
   }
