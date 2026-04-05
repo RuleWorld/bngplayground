@@ -42,8 +42,6 @@ for path, content in files.items():
         rel_dir = path
         if rel_dir.startswith('examples/'):
             rel_dir = rel_dir[len('examples/'):]
-        else:
-            rel_dir = rel_dir
         # create target path
         # put extracted file in same subdirectory as the FILE; use sanitize minimal
         out_dir = TARGET_BASE / rel_dir
