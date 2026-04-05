@@ -23,9 +23,9 @@ echo "Using emcc: $(which emcc)"
 mkdir -p ./_deps
 
 if [ ! -d "$SUITESPARSE_SRC/.git" ]; then
-    echo "Fetching SuiteSparse (stable branch)..."
+    echo "Fetching SuiteSparse (v7.3.0 tag)..."
     rm -rf "$SUITESPARSE_SRC"
-    git clone --depth 1 --branch stable https://github.com/DrTimothyAldenDavis/SuiteSparse.git "$SUITESPARSE_SRC"
+    git clone --depth 1 --branch v7.3.0 https://github.com/DrTimothyAldenDavis/SuiteSparse.git "$SUITESPARSE_SRC"
 fi
 
 if [ "${FORCE_SUITESPARSE_REBUILD:-0}" = "1" ] || [ ! -f "$SUITESPARSE_INSTALL/lib/libklu.a" ]; then
