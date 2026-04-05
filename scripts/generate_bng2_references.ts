@@ -22,6 +22,10 @@ const GDAT_DIR = path.resolve('tests/fixtures/gdat');
 const NET_DIR = path.resolve('tests/fixtures/net');
 const WORK_DIR = path.resolve('artifacts/bng2_workdir');
 
+// Certain models are currently excluded from reference generation by path substring.
+// This allows us to skip known-problematic families (e.g., Mallela models).
+const EXCLUDED_MODEL_PATH_SUBSTRING = 'Mallela';
+
 const args = process.argv.slice(2);
 let limit = Infinity;
 let timeoutMs = 120_000;
@@ -63,7 +67,7 @@ function findBnglFiles(): Map<string, string> {
 // Use the manifest to find ALL bng2_compatible models, not just those in the parity report
 const MANIFEST = path.resolve('artifacts/rulehub-export/manifest.json');
 const manifest: Array<{ id: string; path: string; bng2_compatible: boolean }> = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-const bng2Models = manifest.filter(m => m.bng2_compatible && !m.path?.includes('Mallela'));
+const bng2Models = manifest.filter(m => m.bng2_compatible && !m.path?.includes(EXCLUDED_MODEL_PATH_SUBSTRING));
 
 const existingGdat = new Set(
   fs.readdirSync(GDAT_DIR).filter(f => f.endsWith('.gdat')).map(f => normalizeKey(f.replace('.gdat', '')))
