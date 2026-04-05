@@ -15,6 +15,10 @@ import { BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../src/constants';
 import { generateExpandedNetwork } from '@bngplayground/engine';
 import { resolveRuleHubRoot } from '../helpers/rulehub';
 
+function normalizeKey(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
 console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
 const RULEHUB_EXAMPLES_DIR = join(resolveRuleHubRoot(process.cwd()), 'Contributed', 'BNGPlayground_Examples');
 console.error(`[DEBUG-ENTRY] RuleHub examples exists: ${fs.existsSync(RULEHUB_EXAMPLES_DIR)}`);
@@ -69,7 +73,7 @@ function runBNG2EnsureSBML(modelPath: string, outdir: string): boolean {
     encoding: 'utf-8',
     timeout: 120000,
   });
-  return result.status === 0 && true;
+  return result.status === 0;
 }
 
 
@@ -227,7 +231,7 @@ function getBnglFiles(dir: string): string[] {
     const fullPath = path.join(dir, item.name);
     if (item.isDirectory()) {
       files = files.concat(getBnglFiles(fullPath));
-    } else if (item.name.endsWith('.bngl')) {
+    } else if (item.name.toLowerCase().endsWith('.bngl')) {
       files.push(path.resolve(fullPath));
     }
   }
@@ -506,9 +510,8 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           refGdatPath = join(temp, `${modelKey}.gdat`);
           if (!fs.existsSync(refGdatPath)) {
             // Search for candidate in bng_test_output by normalized key
-            const norm = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
             const candidates = fs.existsSync(BNG_OUTPUT_DIR) ? fs.readdirSync(BNG_OUTPUT_DIR).filter(f => f.toLowerCase().endsWith('.gdat')) : [];
-            const matched = candidates.find(c => norm(c).includes(norm(modelKey)));
+            const matched = candidates.find(c => normalizeKey(c).includes(normalizeKey(modelKey)));
             if (matched) refGdatPath = join(BNG_OUTPUT_DIR, matched);
             else {
               console.warn('Reference GDAT not found for', modelKey, '- skipping');
@@ -585,10 +588,18 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
           const failing = issues.filter(it => it.maxAbs > (modelAbsTol + 1e-12) || it.maxRel > (modelRelTol + 1e-12));
           if (failing.length > 0) {
             try {
+              // Helper: write simulation CSV once to avoid duplicated logic
+              const writeSimCsv = (filePath: string, headers: string[], rows: string[][]) => {
+                const csvContent = [headers.join(',')]
+                  .concat(rows.map(row => row.join(',')))
+                  .join('\n');
+                fs.writeFileSync(filePath, csvContent, 'utf8');
+              };
+
               // Write simulation CSV
               const simCsvPath = join(process.cwd(), 'artifacts', 'diagnostics', `${modelKey}-sim.csv`);
-              const simCsv = [simHeaders.join(',')].concat(results.data.map(r => simHeaders.map(h => (r[h] ?? '')).join(','))).join('\n');
-              fs.writeFileSync(simCsvPath, simCsv, 'utf8');
+              // Prefer the row-array representation used elsewhere (simDataRows) when writing CSV
+              writeSimCsv(simCsvPath, simHeaders, simDataRows);
 
               // Write reference GDAT (if available)
               if (refGdatPath && fs.existsSync(refGdatPath)) {
@@ -607,13 +618,6 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
               // Write diff summary
               const diffPath = join(process.cwd(), 'artifacts', 'diagnostics', `${modelKey}-diff.json`);
               fs.writeFileSync(diffPath, JSON.stringify({ model: modelKey, issues, matchedIndicesCount: matchedIndices.length, generatedAt: new Date().toISOString(), options: options }, null, 2), 'utf8');
-
-              // DEBUG: Write simulation CSV
-              const csvPath = join(process.cwd(), 'artifacts', 'diagnostics', `${modelKey}-sim.csv`);
-              const csvContent = [simHeaders.join(',')].concat(
-                simDataRows.map(row => row.join(','))
-              ).join('\n');
-              fs.writeFileSync(csvPath, csvContent, 'utf8');
 
               console.info('Wrote diagnostics for', modelKey, 'to artifacts/diagnostics');
             } catch (e) {

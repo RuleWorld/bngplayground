@@ -118,7 +118,7 @@ for rel in sorted(set(files)):
     except Exception as e:
         print('ERROR', e, src_url)
         failed.append((rel, 'ERROR %s' % e))
-    time.sleep(0.05)  # be polite
+    time.sleep(0.05)  # rate-limit requests to avoid overwhelming the GitHub raw content endpoint
 
 print('\nSummary:')
 print('  fetched:', len(ok))

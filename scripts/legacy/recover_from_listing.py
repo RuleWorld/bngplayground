@@ -10,6 +10,7 @@ Produces `recovery_from_listing.txt` and `still_missing_after_listing.txt`.
 import os
 import re
 import sys
+import traceback
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -127,8 +128,10 @@ for name in failed:
                 log_lines.append(f'RECOVERED_FROM_LISTING_FALLBACK\t{name_norm}\t{match_path}\tfallback={fallback.name}\terr={e}\n')
                 recovered.append(name_norm)
             except Exception as e2:
+                tb = traceback.format_exc()
                 print('Failed to write file for', name_norm, 'error:', e2)
                 log_lines.append(f'FAILED_WRITE\t{name_norm}\t{match_path}\terr={e2}\n')
+                log_lines.append(f'FAILED_WRITE_TRACEBACK\t{name_norm}\t{match_path}\n{tb}\n')
                 still_missing.append(name_norm)
     else:
         print('Not found in listing:', name_norm)

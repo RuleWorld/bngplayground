@@ -47,6 +47,7 @@ COLORS = {
 }
 
 PAPER_DIR = os.path.join('artifacts', 'paper')
+MAX_PLOT_POINTS = 50000
 
 # ── Figure 7: Validation Scatter ────────────────────────────────────────────
 
@@ -80,12 +81,12 @@ def generate_fig7():
         return
 
     # Downsample if huge (>50k) for rendering speed, using random subsample
-    if len(xs) > 50000:
+    if len(xs) > MAX_PLOT_POINTS:
         rng = np.random.default_rng(42)
-        idx = rng.choice(len(xs), size=50000, replace=False)
+        idx = rng.choice(len(xs), size=MAX_PLOT_POINTS, replace=False)
         xs_plot = xs[idx]
         ys_plot = ys[idx]
-        print(f"  Downsampled to 50,000 points for rendering")
+        print(f"  Downsampled to {MAX_PLOT_POINTS:,} points for rendering")
     else:
         xs_plot = xs
         ys_plot = ys
