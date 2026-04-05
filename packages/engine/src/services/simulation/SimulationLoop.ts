@@ -228,10 +228,7 @@ export async function simulate(
   };
 
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
-  const debugLog = 'artifacts/logs/direct_debug.log';
-  // if (VERBOSE_SIM_DEBUG) fs.appendFileSync(debugLog, '[DEBUG_TRACE] Entering simulate function\n');
   const simulationStartTime = performance.now();
-  // if (VERBOSE_SIM_DEBUG) fs.appendFileSync(debugLog, `[Worker Diagnostic] simulate() entry. stabLimDet from options: ${options.stabLimDet}\n`);
   // ... using simulationStartTime later ...
   callbacks.checkCancelled();
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
@@ -1847,6 +1844,40 @@ export async function simulate(
       // Start from BNG2 default internally, but allow escalation to a high ceiling.
       // A low cap (2000) prematurely aborts stiff equilibration phases (e.g., An_2009).
       maxSteps: options.maxSteps ?? 5_000_000,
+      // Optional progress callback for long-running simulations.
+      // If the caller provides options.onStep, forward it to the solver.
+      // Otherwise, when using the large default maxSteps, install a basic warning
+      // callback that can be triggered by the underlying solver as the limit is
+      // approached or reached.
+      onStep: options.onStep
+        ? options.onStep
+        : (options.maxSteps === undefined
+          ? (() => {
+              let warnedApproaching = false;
+              let warnedReached = false;
+              return (currentStep: number, maxSteps: number) => {
+                // Only warn when we are close to or at the configured maximum.
+                if (maxSteps > 0) {
+                  const fraction = currentStep / maxSteps;
+                  if (!warnedReached && currentStep >= maxSteps) {
+                    warnedReached = true;
+                    console.warn(
+                      `[SimulationLoop] Reached maxSteps=${maxSteps} (default). ` +
+                      `Simulation may have been running for a long time. ` +
+                      `Consider lowering maxSteps or loosening tolerances if this is unexpected.`
+                    );
+                  } else if (!warnedApproaching && fraction >= 0.9) {
+                    warnedApproaching = true;
+                    console.warn(
+                      `[SimulationLoop] Approaching maxSteps=${maxSteps} (default, 90% used). ` +
+                      `If your simulation appears to run for a very long time, ` +
+                      `consider adjusting maxSteps or solver settings.`
+                    );
+                  }
+                }
+              };
+            })()
+          : undefined),
       // Keep a small nonzero floor in Node/WASM to avoid infinitesimal-step stalls.
       minStep: options.minStep ?? 1e-15,
       maxStep: options.maxStep ?? 0,  // 0 = no limit (matches BNG2)
