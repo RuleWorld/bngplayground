@@ -15,7 +15,7 @@ import { execSync } from 'child_process';
 
 const BNG2_PATH = 'C:/Users/Achyudhan/anaconda3/envs/Research/Lib/site-packages/bionetgen/bng-win';
 const BNG2_PL = path.join(BNG2_PATH, 'BNG2.pl');
-const PERL2_DIR = path.join(BNG2_PATH, 'Perl2');
+const BNG_PERL_LIB_DIR = path.join(BNG2_PATH, 'Perl2');
 
 const PARITY_REPORT = path.resolve('artifacts/parity_layer_report.deterministic.json');
 const GDAT_DIR = path.resolve('tests/fixtures/gdat');
