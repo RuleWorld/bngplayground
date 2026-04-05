@@ -2014,36 +2014,32 @@ export async function simulate(
       // Logging can go here if needed
     }
 
-    // Auto-detect KLU sparse solver for large models (>= 50 species).
-    // For these models the Jacobian is typically sparse, and KLU direct factorization
-    // is much faster than dense LU.  For smaller models dense is preferred to avoid
-    // the overhead of sparse bookkeeping.
-    const KLU_SPARSE_SPECIES_THRESHOLD = 50;
-    const autoSparseEligible =
-      numSpecies >= KLU_SPARSE_SPECIES_THRESHOLD &&
-      allMassAction &&
-      // Respect explicit user opt-out
-      options.sparse !== false;
+    // Auto-select analytical Jacobian for large mass-action models (>= 50 species).
+    // NOTE: KLU sparse solver (cvode_sparse) is disabled for auto-selection because
+    // the WASM _init_solver_sparse path has memory access issues. When explicitly
+    // requested via solver='cvode_sparse', it will still be attempted. For auto mode,
+    // we use cvode_jac (analytical Jacobian with dense solver) which provides 2-4x
+    // speedup on stiff systems without the WASM sparse path.
+    const AUTO_JAC_SPECIES_THRESHOLD = 50;
+    const autoJacEligible =
+      numSpecies >= AUTO_JAC_SPECIES_THRESHOLD &&
+      allMassAction;
 
     if (solverType === 'auto') {
       if (useAdaptiveCvodeTuning) {
-        if (stiffConfig.useSparse || autoSparseEligible) {
-          solverType = 'cvode_sparse';
-        } else if (stiffConfig.useAnalyticalJacobian) {
+        if (stiffConfig.useAnalyticalJacobian || autoJacEligible) {
           solverType = 'cvode_jac';
         }
       } else {
-        solverType = autoSparseEligible ? 'cvode_sparse' : 'cvode';
+        solverType = autoJacEligible ? 'cvode_jac' : 'cvode';
       }
     } else if (solverType === 'cvode') {
-      if (usePresetCvodeTuning && stiffConfig.useSparse) {
-        solverType = 'cvode_sparse';
-      } else if (usePresetCvodeTuning && stiffConfig.useAnalyticalJacobian && allMassAction) {
+      if (usePresetCvodeTuning && stiffConfig.useAnalyticalJacobian && allMassAction) {
         solverType = 'cvode_jac';
-      } else if (autoSparseEligible) {
-        // Auto-upgrade dense CVODE to sparse KLU for large models
-        solverType = 'cvode_sparse';
-        console.log(`[SimulationLoop] Auto-selecting KLU sparse solver for ${numSpecies}-species model (threshold: ${KLU_SPARSE_SPECIES_THRESHOLD})`);
+      } else if (autoJacEligible) {
+        // Auto-upgrade dense CVODE to analytical Jacobian for large models
+        solverType = 'cvode_jac';
+        console.log(`[SimulationLoop] Auto-selecting analytical Jacobian for ${numSpecies}-species model (threshold: ${AUTO_JAC_SPECIES_THRESHOLD})`);
       }
     }
 
