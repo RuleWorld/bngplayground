@@ -11,15 +11,18 @@
 
 - BNGL editor + parser (client-side ANTLR4)
 - Network generation and simulation in the browser (Web Worker + WASM)
-- **Primary Solver**: CVODE (SUNDIALS) for stiff ODEs, RK4/RK45 for non-stiff systems
-- **Large Network Support**: Symmetry reduction using **Nauty** WASM for fast canonical labeling
+- **ODE Solvers**: CVODE (SUNDIALS) for stiff ODEs, Rosenbrock23 with automatic fallback, RK4/RK45 for non-stiff systems
+- **Stochastic Solvers**: SSA (Gillespie), PLA (partitioned leaping), PSA (hybrid ODE/SSA via Haseltine-Rawlings adaptive scaling)
 - **Network-Free Simulation**: Integrated **NFsim** (WASM) for efficient simulation without network generation
-  - **Multi-Compartment Support (cBNGL)**: Full support for compartmentalized models with molecule transport in both ODE and stochastic solvers
+- **Large Network Support**: Symmetry reduction using **Nauty** WASM for fast canonical labeling
+- **Multi-Compartment Support (cBNGL)**: Full support for compartmentalized models with molecule transport
 - **Visual Designer**: Construct models using a structured visual interface
 - **What-If Comparison Mode**: Run baseline vs modified-parameter simulations and compare trajectories in real-time
 - **Enhanced Example Gallery**: 250+ verified models (fetched from RuleHub) with semantic-search powered by TensorFlow.js
 - Interactive charts (series toggle / isolate, zoom, export)
-- Analysis tabs: parameter scan, identifiability (FIM), steady state, parameter estimation, flux analysis, verification, and more
+- **Analysis Modules**: Parameter scan, dose-response, perturbation screen, linear noise approximation, first passage time, NFsim post-processing, identifiability (FIM), steady state, parameter estimation, flux analysis, verification
+- **Bayesian Inference**: ABC-SMC parameter estimation with posterior predictive simulation and credible bands
+- **MCP Server**: 27 tool endpoints for programmatic model analysis (parse, simulate, sensitivity, inference, etc.)
 
 ## Quick Start
 
@@ -69,7 +72,7 @@ Build outputs land in `public/nfsim.js` and `public/nfsim.wasm` automatically.
 1. Pick a model from the Example Gallery (or paste your own BNGL).
 2. Edit BNGL in the editor.
 3. Click **Parse** to (re)parse the model.
-4. Run a simulation (ODE or SSA) and explore results in the tabs.
+4. Run a simulation (ODE, SSA, PLA, PSA, or NFsim) and explore results in the tabs.
 
 ## Example Gallery + Semantic Search
 
@@ -97,7 +100,8 @@ We maintain high fidelity with canonical BioNetGen (`BNG2.pl`) and provide high-
 - **Scalability**: Accelerated by **Nauty (WASM)** for fast symmetry reduction and canonical labeling in large reaction networks.
 - **Network-Free**: Native **NFsim** support for simulating models that are too large for network expansion.
 - **Multi-Compartment**: Full support for **cBNGL** (Compartmental BioNetGen) across both ODE and stochastic solvers.
-- **High Fidelity**: Extensively verified against canonical BioNetGen (`BNG2.pl`) with 100+ models achieving perfect numerical agreement.
+- **Hybrid Simulation**: PSA (Partitioned Stochastic Algorithm) adaptively partitions species between ODE and SSA based on copy number.
+- **Validated**: 165 models verified against BNG2.pl/run_network at R² = 1.0000000000 across 912 observables (see `artifacts/paper/`).
 
 Search capabilities include:
 
@@ -197,8 +201,9 @@ bionetgen-web-simulator/
 │           ├── parser/       # ANTLR4 BNGL parser implementation
 │           ├── services/
 │           │   ├── graph/    # Network generation, matching, canonicalization (Nauty)
-│           │   ├── simulation/ # ODE/SSA/NFsim solvers + SimulationLoop
-│           │   ├── analysis/ # Network analysis, FIM, steady state
+│           │   ├── simulation/ # ODE/SSA/PLA/PSA/NFsim solvers + SimulationLoop
+│           │   ├── analysis/ # Dose-response, LNA, FPT, perturbation, FIM, flux, steady state
+│           │   ├── inference/ # ABC-SMC, posterior predictive
 │           │   ├── parity/   # BNG2.pl regression testing utilities
 │           │   └── debugger/ # Rule-firing diagnostics
 │           └── utils/        # Shared utility functions
@@ -241,8 +246,10 @@ bionetgen-web-simulator/
 - `graph/NetworkGenerator.ts`: rule-based network expansion
 - `graph/core/`: Species, Rxn, Matcher, canonical labeling (Nauty)
 - `simulation/ODESolver.ts`: CVODE WASM integration (primary stiff solver)
+- `simulation/PSASimulator.ts`: Hybrid ODE/SSA partitioned stochastic algorithm
 - `simulation/nfsim/`: NFsim adapter and result parsing
-- `analysis/`: parameter estimation, FIM, flux analysis, steady-state detection
+- `analysis/`: dose-response, LNA, first passage time, perturbation screen, NFsim post-processing, FIM, flux, steady-state
+- `inference/`: ABC-SMC Bayesian inference, posterior predictive simulation
 
 - **Concurrency**: Distributed Web Worker pool for parsing, network generation, and simulation, ensuring 0 ms UI lag even during stiff ODE solving.
 - **WASM Acceleration**: Native-speed solvers for CVODE, NFsim, and Nauty (canonical labeling).
