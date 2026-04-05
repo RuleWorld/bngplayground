@@ -17,8 +17,11 @@ ln -sf "$EMSDK_PYTHON/python.exe" "$TMPBIN/python"
 ln -sf "$EMSDK_PYTHON/python.exe" "$TMPBIN/python3"
 export PATH="$TMPBIN:$PATH"
 
-NFSIM_SRC="/c/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/temp/nfsim"
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+
+# Allow overriding NFsim source directory via environment; default to repo-relative path
+: "${NFSIM_SRC:="$SCRIPT_DIR/../nfsim"}"
+
 BUILD_DIR="$SCRIPT_DIR/build_ems"
 POST_JS="$SCRIPT_DIR/nfsim_post.js"
 
