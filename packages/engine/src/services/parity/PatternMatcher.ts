@@ -180,7 +180,6 @@ function countMoleculeEmbeddings(patMol: string, specMol: string): number {
 export function isSpeciesMatch(speciesStr: string, pattern: string): boolean {
     const rawPat = normalizeLegacySuffixCompartment(pattern.trim());
     const rawSpec = normalizeLegacySuffixCompartment(speciesStr.trim());
-    const isMultiMoleculePattern = rawPat.includes('.');
     const patPrefixComp = rawPat.match(/^@([A-Za-z0-9_]+)::?/)?.[1] ?? null;
     if (patPrefixComp) {
         const specComp = getCompartment(rawSpec);
@@ -256,7 +255,6 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
 // --- Helper: Count Matches for Molecules Observable ---
 export function countPatternMatches(speciesStr: string, patternStr: string): number {
     const normalizedPattern = normalizeLegacySuffixCompartment(patternStr.trim());
-    const isMultiMoleculePattern = normalizedPattern.includes('.');
     const patPrefixComp = normalizedPattern.match(/^@([A-Za-z0-9_]+)::?/)?.[1] ?? null;
     if (patPrefixComp) {
         const specComp = getCompartment(speciesStr);

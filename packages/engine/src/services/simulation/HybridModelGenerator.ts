@@ -204,7 +204,6 @@ export class HybridModelGenerator {
     log.push(`Added ${popTypes.length} population types to molecule types.`);
 
     // Step 4: Copy seed species, replacing with population molecules 
-    const popTypeNames = new Set(popTypes.map(pt => pt.name));
     const species: BNGLSpecies[] = [];
 
     for (const sp of model.species) {

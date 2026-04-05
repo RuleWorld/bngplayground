@@ -142,7 +142,6 @@ function testOscillates(results: SimulationResults): boolean {
     // Check each non-time observable for oscillations via zero-crossings of derivative
     if (results.data.length < 3) return false;
 
-    const timeKey = results.headers[0];
     for (let col = 1; col < results.headers.length; col++) {
         const name = results.headers[col];
         const values: number[] = [];

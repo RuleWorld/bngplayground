@@ -1407,9 +1407,6 @@ class VF2State {
     tMolIdx: number,
     tCompIdx: number
   ): boolean {
-    const patternMol = this.pattern.molecules[pMolIdx];
-    const targetMol = this.target.molecules[tMolIdx];
-
     // BioNetGen compartment matching semantics:
     // - If pattern specifies a compartment, target must be in the same compartment
     // - If pattern does NOT specify a compartment (undefined/null), it matches ANY compartment

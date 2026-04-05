@@ -12,8 +12,6 @@ import { parseBNGLWithANTLR } from '@bngplayground/engine';
 
 const DEFAULT_INDRA_API_BASE = 'https://api.indra.bio';
 const DEFAULT_INDRA_DB_BASE = 'https://db.indra.bio';
-const INDRA_API_PROXY_BASE = '/api/indra';
-const INDRA_DB_PROXY_BASE = '/api/indra-db';
 const DEFAULT_TIMEOUT_MS = 30_000;
 const DB_TIMEOUT_MS = 45_000;
 const INDRA_DEBUG = true;

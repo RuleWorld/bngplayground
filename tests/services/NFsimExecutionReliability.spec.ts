@@ -240,8 +240,6 @@ describe('NFsim Execution Reliability', () => {
     });
 
     it('should handle module reset correctly', async () => {
-      const initialHealth = executionWrapper.getModuleHealth();
-      
       await executionWrapper.resetModule();
       
       const resetHealth = executionWrapper.getModuleHealth();

@@ -6,7 +6,7 @@ import { spawnSync } from 'node:child_process';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 
-import { resolveBNG2Paths, resolveBNGValidateDir } from '../../tools/bng2-paths';
+import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { BNGLModel, SimulationOptions } from '../../types';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '@bngplayground/engine';
@@ -23,7 +23,6 @@ console.error(`[DEBUG-ENTRY] CWD: ${process.cwd()}`);
 const RULEHUB_EXAMPLES_DIR = join(resolveRuleHubRoot(process.cwd()), 'Contributed', 'BNGPlayground_Examples');
 console.error(`[DEBUG-ENTRY] RuleHub examples exists: ${fs.existsSync(RULEHUB_EXAMPLES_DIR)}`);
 
-const VALIDATE_DIR = resolveBNGValidateDir();
 const BNG_OUTPUT_DIR = 'bng_test_output';
 
 const paths = resolveBNG2Paths();
@@ -245,7 +244,6 @@ function applyActionsToModel(model: any, actions: BnglAction[]) {
   const concChanges: any[] = []; // concentrationChanges
 
   let currentPhaseIdx = -1;
-  let virtualTime = 0;
 
   for (const action of actions) {
     if (action.type === 'simulate') {
@@ -264,13 +262,6 @@ function applyActionsToModel(model: any, actions: BnglAction[]) {
         suffix: args.suffix,
         print_functions: !!args.print_functions
       };
-
-      // Update virtual time for next phase tracking (if needed)
-      if (args.continue) {
-        virtualTime = tEndArg;
-      } else {
-        virtualTime = tEndArg;
-      }
 
       phases.push(phase);
     } else if (action.type === 'setParameter') {
@@ -477,8 +468,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
 
           // If no actions found, fallback to default single-phase options
           if (!parsedModel.simulationPhases || parsedModel.simulationPhases.length === 0) {
-            const simCall = parseActionsFromBngl(bnglText).find(a => a.type === 'simulate'); // Re-scan just in case
-            // ... existing fallback logic or just default
+            // Fallback to default single-phase options
             const baseOptions = {
               method: 'ode',
               t_end: 100,

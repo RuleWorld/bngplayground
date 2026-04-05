@@ -188,8 +188,6 @@ function formatSci(n: number): string {
 
 const passCount = passingModels.length + thresholdOnly.length;
 const passRateStr = (passCount / reports.length * 100).toFixed(1);
-const maxRelErrStr = maxRelErr > 0 ? formatSci(maxRelErr) : '---';
-
 const latex = `\\begin{table}[h]
 \\centering
 \\caption{Parity validation of the BioNetGen Playground against BNG2.pl across RuleHub models.}

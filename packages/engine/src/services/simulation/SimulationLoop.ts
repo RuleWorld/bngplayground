@@ -270,6 +270,7 @@ export async function simulate(
 
   const allSsa = phases.every(p => p.method === 'ssa') || options.method === 'ssa';
   const allPla = phases.every(p => p.method === 'pla') || options.method === 'pla';
+  const allPsa = phases.every(p => p.method === 'psa') || options.method === 'psa';
 
   // -------------------------------------------------------------------------
   // 2. Prepare Reactions (Optimization & Parity)
@@ -625,7 +626,7 @@ export async function simulate(
     }
   };
 
-  const isOde = !allSsa && !allPla && options.method !== 'ssa' && options.method !== 'pla';
+  const isOde = !allSsa && !allPla && !allPsa && options.method !== 'ssa' && options.method !== 'pla' && options.method !== 'psa';
   const hasHeterogeneousSpeciesVolumes = Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
   // The amount-space branch fixes CVODE parity for compartment models whose rates
   // depend on observables/functions. Keep pure mass-action compartment models on
@@ -944,6 +945,21 @@ export async function simulate(
       return parametersUpdated;
     };
 
+
+    if (allPsa) {
+      // PSA (Partitioned Stochastic Algorithm / Haseltine-Rawlings adaptive scaling)
+      const { simulatePSA } = await import('./PSASimulator');
+      const psaModel = {
+        ...model,
+        species: model.species.map((s, i) => ({ ...s, initialConcentration: state[i] }))
+      };
+      const psaOptions = {
+        ...options,
+        poplevel: (options as any).poplevel ?? phases[0]?.poplevel ?? 100,
+      };
+      const result = await simulatePSA(psaModel, psaOptions);
+      return result;
+    }
 
     if (allPla) {
       // PLA is fully stochastic hybrid model generator
@@ -1453,8 +1469,6 @@ export async function simulate(
       console.error('[Worker Debug] SimulationLoop: Failed to import ODESolver', err);
       throw err;
     }
-
-    const canJIT = typeof Function !== 'undefined';
 
     let derivatives: (y: Float64Array, dydt: Float64Array) => void;
 

@@ -382,9 +382,6 @@ export interface GeneratorProgress {
   timeElapsed: number;
 }
 
-// Debug flag for volume scaling
-const DEBUG_VOLUME_SCALE = false; // Set to true to debug cBNGL volume scaling
-
 export class NetworkGenerator {
   private options: GeneratorOptions;
   // NEW: map Molecule name -> set of species indices that contain that molecule

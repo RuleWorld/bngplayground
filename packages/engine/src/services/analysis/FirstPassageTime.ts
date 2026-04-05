@@ -67,12 +67,9 @@ function findCrossingTime(
     const prev = values[i - 1];
     const curr = values[i];
 
-    let crossed = false;
-    if (direction === 'above') {
-      crossed = curr >= threshold && prev < threshold;
-    } else {
-      crossed = curr <= threshold && prev > threshold;
-    }
+    const crossed = direction === 'above'
+      ? curr >= threshold && prev < threshold
+      : curr <= threshold && prev > threshold;
 
     if (crossed) {
       const dv = curr - prev;

@@ -145,8 +145,7 @@ function _simplify(expr: SymExpr, depth: number): SymExpr {
       if (nCoeff !== 1 || dCoeff !== 1) {
         const gcdVal = gcdNum(Math.abs(nCoeff), Math.abs(dCoeff));
         if (gcdVal > 1) {
-          const newNum = scaleExpr(num, nCoeff / (gcdVal * Math.sign(nCoeff) * Math.sign(dCoeff) > 0 ? gcdVal : -gcdVal));
-          // simpler: just divide both coefficients
+          // Divide both coefficients by their GCD
           return _simplify(symDiv(
             replaceCoeff(num, nCoeff / gcdVal),
             replaceCoeff(den, dCoeff / gcdVal)

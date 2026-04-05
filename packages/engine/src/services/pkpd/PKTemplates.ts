@@ -647,8 +647,6 @@ function generatePBPKMinimal(config: PKModelConfig): PKModelResult {
 function generatePDBlock(config: PKModelConfig): string {
   if (!config.includePD || !config.pdModel) return '';
 
-  const drug = config.drugName;
-
   switch (config.pdModel) {
     case 'direct_emax': {
       return [

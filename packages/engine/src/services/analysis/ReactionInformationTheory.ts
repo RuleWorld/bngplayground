@@ -279,7 +279,6 @@ function computeTE(
 
     // Add pseudocounts
     const totalPseudoFull = nStates * nStates * 2 * pseudo;
-    const totalPseudoReduced = nStates * 2 * pseudo;
 
     let te = 0;
     for (let yH = 0; yH < nStates; yH++) {
