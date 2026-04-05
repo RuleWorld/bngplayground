@@ -14,7 +14,7 @@ export const CheatsheetModal: React.FC<CheatsheetModalProps> = ({ isOpen, onClos
             <div className="bg-white dark:bg-slate-900 dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700 dark:border-slate-700">
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-700 dark:border-slate-800">
                     <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">BioNetGen Cheatsheet</h2>
-                    <button onClick={onClose} className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
+                    <button onClick={onClose} aria-label="Close cheatsheet" className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200">
                         <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
