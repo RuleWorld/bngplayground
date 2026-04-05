@@ -481,6 +481,71 @@ function extractLastPhase(points: DatPoint[]): DatPoint[] {
   return lastResetIdx > 0 ? points.slice(lastResetIdx) : points;
 }
 
+/**
+ * Find all suffixed BNG2 GDAT files for a multi-phase model.
+ * BNG2 produces separate files per simulate() call when suffix=> is used:
+ *   model.gdat, model_2.gdat, model_3.gdat, model_4.gdat, ...
+ * Returns them in natural order (base first, then _2, _3, etc.).
+ */
+function findAllSuffixedGdats(baseGdatPath: string): string[] {
+  const dir = path.dirname(baseGdatPath);
+  const baseName = path.basename(baseGdatPath, '.gdat');
+  const baseKey = normalizeKey(baseName);
+
+  if (!fs.existsSync(dir)) return [baseGdatPath];
+
+  const allGdats = fs.readdirSync(dir).filter((f) => f.endsWith('.gdat'));
+  const matching: Array<{ path: string; order: number }> = [];
+
+  for (const f of allGdats) {
+    const stem = f.replace('.gdat', '');
+    const stemKey = normalizeKey(stem);
+
+    // Exact base match (no suffix)
+    if (stemKey === baseKey) {
+      matching.push({ path: path.join(dir, f), order: 0 });
+      continue;
+    }
+
+    // Suffixed match: baseName_N or baseName_suffix
+    // Check for numeric suffix: model_2, model_3, etc.
+    const suffixMatch = stemKey.match(new RegExp(`^${baseKey.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}_(\\d+)$`));
+    if (suffixMatch) {
+      matching.push({ path: path.join(dir, f), order: parseInt(suffixMatch[1], 10) });
+      continue;
+    }
+
+    // Also match method suffixes: model_ode, model_equil, model_stim, etc.
+    // These should be ordered by filename naturally
+    if (stemKey.startsWith(baseKey + '_')) {
+      // Non-numeric suffix — assign order 100+ to sort after numeric
+      matching.push({ path: path.join(dir, f), order: 100 + allGdats.indexOf(f) });
+    }
+  }
+
+  if (matching.length <= 1) return [baseGdatPath];
+
+  // Sort by order (base=0, _2=2, _3=3, ..., _equil=100+, _stim=101+, ...)
+  matching.sort((a, b) => a.order - b.order);
+  return matching.map((m) => m.path);
+}
+
+/**
+ * Concatenate multiple BNG2 GDAT files (from multi-phase simulate calls)
+ * into a single DatPoint[] array for comparison against the playground's
+ * full concatenated CSV output.
+ */
+function concatenateMultiPhaseGdats(gdatPaths: string[]): DatPoint[] {
+  const allPoints: DatPoint[] = [];
+  for (const gp of gdatPaths) {
+    if (!fs.existsSync(gp)) continue;
+    const raw = readTextFileWithRetry(gp);
+    const points = parseDat(raw);
+    allPoints.push(...points);
+  }
+  return allPoints;
+}
+
 function reactionSignature(rxn: ParsedReaction, speciesList: ParsedSpecies[]): string {
   const idxToName = new Map(speciesList.map((s) => [s.index, canonicalizePattern(s.name)]));
   const lhs = rxn.reactants.map((i) => idxToName.get(i) ?? `?${i}`).sort().join(' + ');
@@ -1412,20 +1477,43 @@ async function analyzeModel(modelName: string, files: ModelFiles, opts: CliOptio
 
   if (gdatFilesCompared && deterministicLike) {
     log(`    [Parity] Comparing observable trajectories (GDAT)...`);
-    const bng2GdatRaw = readTextFileWithRetry(preparedFiles.bng2Gdat!);
     const webGdatRaw = readTextFileWithRetry(preparedFiles.webGdat!);
-    log(`      Read BNG2 GDAT: ${preparedFiles.bng2Gdat} (${bng2GdatRaw.length} bytes)`);
     log(`      Read Web GDAT:  ${preparedFiles.webGdat} (${webGdatRaw.length} bytes)`);
 
-    const bng2Gdat = parseDat(bng2GdatRaw);
+    // Multi-phase handling: BNG2 may produce separate suffixed .gdat files per
+    // simulate() call (e.g., model.gdat, model_2.gdat, model_3.gdat).
+    // The playground concatenates ALL phases into a single CSV.
+    // Strategy: find all suffixed BNG2 gdats and concatenate them in order,
+    // then compare against the full (non-extracted) web CSV.
+    const allBng2GdatPaths = findAllSuffixedGdats(preparedFiles.bng2Gdat!);
+    const isMultiPhaseRef = allBng2GdatPaths.length > 1;
+
+    let bng2Gdat: DatPoint[];
+    if (isMultiPhaseRef) {
+      bng2Gdat = concatenateMultiPhaseGdats(allBng2GdatPaths);
+      log(`      [MultiPhase] Concatenated ${allBng2GdatPaths.length} BNG2 GDAT files: ${allBng2GdatPaths.map((p) => path.basename(p)).join(', ')}`);
+      log(`      Combined BNG2 GDAT: ${bng2Gdat.length} timepoints`);
+    } else {
+      const bng2GdatRaw = readTextFileWithRetry(preparedFiles.bng2Gdat!);
+      log(`      Read BNG2 GDAT: ${preparedFiles.bng2Gdat} (${bng2GdatRaw.length} bytes)`);
+      bng2Gdat = parseDat(bng2GdatRaw);
+    }
+
     const webSeriesRaw = preparedFiles.webGdat!.toLowerCase().endsWith('.csv') ? parseCsv(webGdatRaw) : parseDat(webGdatRaw);
-    // Multi-phase handling: the web output may contain multiple simulation phases
-    // (e.g., equilibration then stimulation) concatenated with time resets.
-    // BNG2 .gdat typically contains only the LAST phase. Extract the last phase
-    // from the web output to match.
-    let webSeries = extractLastPhase(webSeriesRaw);
-    if (webSeries.length < webSeriesRaw.length) {
-      log(`      [MultiPhase] Extracted last phase: ${webSeries.length} timepoints (was ${webSeriesRaw.length})`);
+
+    // For multi-phase BNG2 references, use the FULL web output (all phases).
+    // For single-phase BNG2 references, extract the last phase from the web
+    // output to handle models where the web includes equilibration phases that
+    // BNG2 omits.
+    let webSeries: DatPoint[];
+    if (isMultiPhaseRef) {
+      webSeries = webSeriesRaw;
+      log(`      [MultiPhase] Using full web output: ${webSeries.length} timepoints`);
+    } else {
+      webSeries = extractLastPhase(webSeriesRaw);
+      if (webSeries.length < webSeriesRaw.length) {
+        log(`      [MultiPhase] Extracted last phase: ${webSeries.length} timepoints (was ${webSeriesRaw.length})`);
+      }
     }
     log(`      BNG2 Gdat: ${bng2Gdat.length} timepoints, Web series: ${webSeries.length} timepoints`);
 
