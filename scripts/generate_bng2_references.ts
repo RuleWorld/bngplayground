@@ -15,12 +15,16 @@ import { execSync } from 'child_process';
 
 const BNG2_PATH = 'C:/Users/Achyudhan/anaconda3/envs/Research/Lib/site-packages/bionetgen/bng-win';
 const BNG2_PL = path.join(BNG2_PATH, 'BNG2.pl');
-const PERL2_DIR = path.join(BNG2_PATH, 'Perl2');
+const BNG_PERL_LIB_DIR = path.join(BNG2_PATH, 'Perl2');
 
 const PARITY_REPORT = path.resolve('artifacts/parity_layer_report.deterministic.json');
 const GDAT_DIR = path.resolve('tests/fixtures/gdat');
 const NET_DIR = path.resolve('tests/fixtures/net');
 const WORK_DIR = path.resolve('artifacts/bng2_workdir');
+
+// Certain models are currently excluded from reference generation by path substring.
+// This allows us to skip known-problematic families (e.g., Mallela models).
+const EXCLUDED_MODEL_PATH_SUBSTRING = 'Mallela';
 
 const args = process.argv.slice(2);
 let limit = Infinity;
@@ -63,7 +67,7 @@ function findBnglFiles(): Map<string, string> {
 // Use the manifest to find ALL bng2_compatible models, not just those in the parity report
 const MANIFEST = path.resolve('artifacts/rulehub-export/manifest.json');
 const manifest: Array<{ id: string; path: string; bng2_compatible: boolean }> = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-const bng2Models = manifest.filter(m => m.bng2_compatible && !m.path?.includes('Mallela'));
+const bng2Models = manifest.filter(m => m.bng2_compatible && !m.path?.includes(EXCLUDED_MODEL_PATH_SUBSTRING));
 
 const existingGdat = new Set(
   fs.readdirSync(GDAT_DIR).filter(f => f.endsWith('.gdat')).map(f => normalizeKey(f.replace('.gdat', '')))
@@ -94,8 +98,14 @@ for (const entry of needGdat) {
   const modelName: string = entry.model;
   const key = normalizeKey(modelName);
 
+  type EntryWithPath = { path: string };
+  const hasPath = (e: unknown): e is EntryWithPath =>
+    !!e && typeof (e as any).path === 'string';
+
   // Try manifest path first, then file walker fallback
-  const manifestPath = (entry as any).path ? path.resolve('artifacts/rulehub-export', (entry as any).path) : null;
+  const manifestPath = hasPath(entry)
+    ? path.resolve('artifacts/rulehub-export', entry.path)
+    : null;
   const bnglPath = (manifestPath && fs.existsSync(manifestPath)) ? manifestPath : bnglFiles.get(key);
   if (!bnglPath || !fs.existsSync(bnglPath)) { skipped++; continue; }
 
