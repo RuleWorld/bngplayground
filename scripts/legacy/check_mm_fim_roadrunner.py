@@ -98,7 +98,7 @@ def configure_integrator(rr: roadrunner.RoadRunner, config: SimulationConfig) ->
         try:
             integrator.setValue('variable_step_size', False)
         except RuntimeError:
-            pass
+            pass  # not all integrators support this setting
     elif name.startswith('rk'):
         # Ensure we use fixed steps that align with the Node RK4 implementation when possible.
         for key in ('variable_step_size', 'adaptive'):  # integrator-specific naming
@@ -134,17 +134,17 @@ def normalise_initial_conditions(rr: roadrunner.RoadRunner) -> None:
             try:
                 rr.setValue(f'init({sid})', value)
             except RuntimeError:
-                pass
+                pass  # species ID not settable in this model
 
     # Use BNGL parameters for free enzyme/substrate when available; fall back to defaults.
     try:
         set_init('E(s)', float(rr.getValue('E_0')))
     except RuntimeError:
-        pass
+        pass  # E_0 parameter not defined, use default
     try:
         set_init('S(e)', float(rr.getValue('S_0')))
     except RuntimeError:
-        pass
+        pass  # S_0 parameter not defined, use default
 
     # Product and complex start at zero in the Node baseline.
     set_init('P()', 0.0)

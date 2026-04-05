@@ -73,14 +73,6 @@ export const createCVodeModule: CvodeLoader = async (moduleArg?: unknown) => {
     cachedLoader = candidate as CvodeLoader;
   }
 
-  if (!cachedLoader) {
-    throw new Error(
-      'Failed to resolve CVODE loader: no cached loader is available. ' +
-      'The cvode_loader.js module must be loaded before calling this function. ' +
-      'Ensure the CVODE WASM build files are installed correctly.'
-    );
-  }
-
   const config = {
     ...(typeof moduleArg === 'object' && moduleArg ? (moduleArg as Record<string, unknown>) : {}),
     locateFile: (path: string) => {

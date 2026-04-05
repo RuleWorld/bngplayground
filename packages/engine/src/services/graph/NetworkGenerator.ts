@@ -2806,7 +2806,7 @@ export class NetworkGenerator {
       // correction (BNG2 semantics for embedding-degenerate cases match the
       // baseline multiplicity = totalDegeneracy / ruleSymmetryFactor).
       const embCounts: number[] = [];
-      for (const [speciesIdx, count] of speciesCountInGroup.entries()) {
+      for (const [speciesIdx, _count] of speciesCountInGroup.entries()) {
         const repPatternIdx = group.find((pIdx) => currentSpeciesIndices[pIdx] === speciesIdx)!;
         const emb = Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx], reactantSpeciesList[repPatternIdx].graph, currentMatches[repPatternIdx]));
         embCounts.push(emb);
@@ -3258,7 +3258,7 @@ export class NetworkGenerator {
     const matchedReactantKeys = new Set<string>();
     for (let i = 0; i < matches.length; i++) {
       const map = matches[i];
-      for (const [patMolIdx, tgtMolIdx] of map.moleculeMap.entries()) {
+      for (const [_patMolIdx, tgtMolIdx] of map.moleculeMap.entries()) {
         matchedReactantKeys.add(`${i}:${tgtMolIdx}`);
       }
     }

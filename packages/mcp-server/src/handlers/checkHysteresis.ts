@@ -93,11 +93,9 @@ export async function handleCheckHysteresis(args: ToolArgs): Promise<ToolResult<
             updateMassActionRates(runModel);
             
             // Use carried state from previous step (or final forward state for first step)
-            if (currentState) {
-                for (const sp of runModel.species) {
-                    if (currentState[sp.name] !== undefined) {
-                        sp.initialConcentration = currentState[sp.name];
-                    }
+            for (const sp of runModel.species) {
+                if (currentState[sp.name] !== undefined) {
+                    sp.initialConcentration = currentState[sp.name];
                 }
             }
             

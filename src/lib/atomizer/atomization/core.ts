@@ -945,7 +945,7 @@ export function buildSpeciesCompositionTable(
   }
 
   // Add naming-based dependencies
-  for (const [modification, pairs] of namingAnalysis.pairClassification) {
+  for (const [_modification, pairs] of namingAnalysis.pairClassification) {
     for (const [baseName, derivedName] of pairs) {
       const derivedId = speciesIds.find(id => {
         const sp = model.species.get(id);

@@ -95,7 +95,6 @@ def generate_fig7():
 
     # Determine if log scale is appropriate
     pos_x = xs_plot[xs_plot > 0]
-    pos_y = ys_plot[ys_plot > 0]
     use_log = len(pos_x) > len(xs_plot) * 0.5 and pos_x.max() / pos_x.min() > 100
 
     if use_log:
@@ -138,8 +137,6 @@ def generate_fig7():
     ss_res = np.sum((ys - xs) ** 2)
     ss_tot = np.sum((ys - np.mean(ys)) ** 2)
     r2 = 1 - ss_res / ss_tot if ss_tot > 0 else 1.0
-    max_rel = np.max(np.abs(ys - xs) / np.maximum(np.abs(xs), 1e-30))
-
     n_obs = data.get('nObservables', n_total)
     ax.text(0.05, 0.95,
             f'{n_models} models, {n_obs} observables\n$R^2$ = {r2:.10f}',
@@ -194,11 +191,11 @@ def generate_fig8():
     x = np.arange(len(models))
     width = 0.35
 
-    bars1 = ax.bar(x - width / 2, playground_times, width,
-                   label='Playground', color=COLORS['blue'], edgecolor='white', linewidth=0.3)
+    ax.bar(x - width / 2, playground_times, width,
+           label='Playground', color=COLORS['blue'], edgecolor='white', linewidth=0.3)
     if any(t > 0 for t in bng2_times):
-        bars2 = ax.bar(x + width / 2, bng2_times, width,
-                       label='BNG2.pl', color=COLORS['orange'], edgecolor='white', linewidth=0.3)
+        ax.bar(x + width / 2, bng2_times, width,
+               label='BNG2.pl', color=COLORS['orange'], edgecolor='white', linewidth=0.3)
 
     ax.set_xticks(x)
     ax.set_xticklabels(models, rotation=45, ha='right', fontsize=8)

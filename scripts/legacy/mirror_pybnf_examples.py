@@ -72,8 +72,6 @@ failed = []
 from urllib.parse import quote
 import time
 
-import re
-
 def sanitize_path(p):
     # make filenames safe for Windows by replacing problematic characters
     s = p.replace('\\', '/')
@@ -241,9 +239,9 @@ with open(RECOVERY_LOG, 'w', encoding='utf-8') as logfh:
                     recovered.append(rel)
                     found = True
                 except Exception:
-                    pass
+                    pass  # recovery attempt failed, try next search result
         except Exception:
-            pass
+            pass  # search API call failed, fall through to still_missing
         if not found:
             logfh.write(f"STILL_MISSING\t{rel}\t{msg}\n")
             still_failed.append((rel, msg))
