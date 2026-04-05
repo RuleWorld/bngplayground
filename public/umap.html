@@ -506,8 +506,8 @@
                 });
             }
 
-            const time = Date.now() * 0.003;            // Node size multiplier (controlled by slider)
-            const nodeSize = parseFloat(document.getElementById('nodeSize')?.value || '1');            sorted.forEach(({ m, p, i }) => {
+            const nodeSize = parseFloat(document.getElementById('nodeSize')?.value || '1'); // Node size multiplier (controlled by slider)
+            sorted.forEach(({ m, p, i }) => {
                 const x = cx + (p[0] - (xMin + xMax) / 2) * scale;
                 const y = cy + (p[1] - (yMin + yMax) / 2) * scale;
                 const isHovered = i === hoveredIdx;
@@ -521,6 +521,7 @@
 
                 // Pulsing highlight for selected model
                 if (isSelected) {
+                    const time = Date.now() * 0.003;
                     const pulse = (Math.sin(time * 2) + 1) * 0.5;
                     ctx.beginPath();
                     ctx.arc(x, y, r * (1.2 + pulse * 0.8), 0, Math.PI * 2);
