@@ -346,11 +346,27 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 		copiedFiles.push(path.basename(dstBngl));
 	}
 
+	// Copy all produced files. For suffixed outputs (e.g., model_ODE.gdat from
+	// simulate({suffix=>"ODE",...})), also create a canonical unsuffixed copy
+	// (model.gdat) so the parity checker can find it by safeName.
+	let hasCanonicalGdat = false;
 	for (const f of producedFiles) {
 		const src = path.join(workDir, f);
 		const dst = path.join(BNG_TEST_OUTPUT_DIR, f);
 		fs.copyFileSync(src, dst);
 		copiedFiles.push(f);
+		if (f === `${safeName}.gdat`) hasCanonicalGdat = true;
+	}
+	if (!hasCanonicalGdat) {
+		// BNG2 produced suffixed gdat(s) but no unsuffixed one.
+		// Copy the first suffixed gdat as the canonical reference.
+		const firstGdat = producedFiles.find((f) => f.endsWith('.gdat'));
+		if (firstGdat) {
+			const src = path.join(workDir, firstGdat);
+			const canonicalDst = path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.gdat`);
+			fs.copyFileSync(src, canonicalDst);
+			copiedFiles.push(`${safeName}.gdat (alias of ${firstGdat})`);
+		}
 	}
 
 	return {
