@@ -2014,12 +2014,10 @@ export async function simulate(
       // Logging can go here if needed
     }
 
-    // Auto-select analytical Jacobian for large mass-action models (>= 50 species).
-    // NOTE: KLU sparse solver (cvode_sparse) is disabled for auto-selection because
-    // the WASM _init_solver_sparse path has memory access issues. When explicitly
-    // requested via solver='cvode_sparse', it will still be attempted. For auto mode,
-    // we use cvode_jac (analytical Jacobian with dense solver) which provides 2-4x
-    // speedup on stiff systems without the WASM sparse path.
+    // Auto-select solver for large mass-action models (>= 50 species).
+    // For models with 50+ species, use analytical Jacobian (cvode_jac) by default.
+    // KLU sparse (cvode_sparse) requires a WASM rebuild with the fixed init_solver_sparse
+    // and is only used when explicitly requested or when stiffConfig enables it.
     const AUTO_JAC_SPECIES_THRESHOLD = 50;
     const autoJacEligible =
       numSpecies >= AUTO_JAC_SPECIES_THRESHOLD &&
@@ -2027,19 +2025,21 @@ export async function simulate(
 
     if (solverType === 'auto') {
       if (useAdaptiveCvodeTuning) {
-        if (stiffConfig.useAnalyticalJacobian || autoJacEligible) {
+        if (stiffConfig.useSparse) {
+          solverType = 'cvode_sparse';
+        } else if (stiffConfig.useAnalyticalJacobian || autoJacEligible) {
           solverType = 'cvode_jac';
         }
       } else {
         solverType = autoJacEligible ? 'cvode_jac' : 'cvode';
       }
     } else if (solverType === 'cvode') {
-      if (usePresetCvodeTuning && stiffConfig.useAnalyticalJacobian && allMassAction) {
+      if (usePresetCvodeTuning && stiffConfig.useSparse) {
+        solverType = 'cvode_sparse';
+      } else if (usePresetCvodeTuning && stiffConfig.useAnalyticalJacobian && allMassAction) {
         solverType = 'cvode_jac';
       } else if (autoJacEligible) {
-        // Auto-upgrade dense CVODE to analytical Jacobian for large models
         solverType = 'cvode_jac';
-        console.log(`[SimulationLoop] Auto-selecting analytical Jacobian for ${numSpecies}-species model (threshold: ${AUTO_JAC_SPECIES_THRESHOLD})`);
       }
     }
 
