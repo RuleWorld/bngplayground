@@ -167,9 +167,12 @@ test-results/
 
 # Workspace repositories (Root-relative to avoid matching source)
 /nfsim/
+/nfsim-src/
 /bionetgen/
 /bionetgen_repo/
 /nfsim_repo/
+/diffeq/
+/ordinarydiffeq/
 /nfsim-contribution/
 
 # Workspace configurations
