@@ -310,11 +310,47 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
     );
   }
   const text = await response.text();
+
+  // nfsim.js is a CJS/IIFE module that assigns `createNFsimModule` as a var.
+  // Dynamic import() of a blob URL treats it as ESM, so CJS module.exports
+  // and local vars are not accessible. Instead, evaluate the script via a
+  // <script> tag (browser) or Function() (worker) so the factory lands on
+  // globalThis or can be captured.
+  const globalAny = globalThis as any;
+  const prevFactory = globalAny.createNFsimModule;
+
+  // Strategy 1: <script> tag in main thread (has document)
+  if (typeof document !== 'undefined') {
+    await new Promise<void>((resolve, reject) => {
+      const blobUrl = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+      const script = document.createElement('script');
+      script.src = blobUrl;
+      script.onload = () => { URL.revokeObjectURL(blobUrl); resolve(); };
+      script.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Failed to execute nfsim.js via script tag')); };
+      document.head.appendChild(script);
+    });
+  } else {
+    // Strategy 2: Worker context — use Function() to evaluate in global scope
+    const fn = new Function(text);
+    fn();
+  }
+
+  // After evaluation, createNFsimModule should be on globalThis
+  if (typeof globalAny.createNFsimModule === 'function') {
+    return { default: globalAny.createNFsimModule, createNFsimModule: globalAny.createNFsimModule };
+  }
+
+  // Fallback: try blob URL import (may work for true ESM nfsim builds)
   const blobUrl = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
   try {
-    return await import(/* @vite-ignore */ blobUrl);
+    const mod = await import(/* @vite-ignore */ blobUrl);
+    return mod;
   } finally {
     URL.revokeObjectURL(blobUrl);
+    // Restore previous factory if we clobbered it
+    if (prevFactory && !globalAny.createNFsimModule) {
+      globalAny.createNFsimModule = prevFactory;
+    }
   }
 };
 

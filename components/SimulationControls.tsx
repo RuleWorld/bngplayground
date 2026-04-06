@@ -274,12 +274,12 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
               <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
                 Simulation Method
               </label>
-              <div className="flex gap-1 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-900/50 p-1 rounded-md">
+              <div className="flex flex-wrap gap-1 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-900/50 p-1 rounded-md">
                 {['default', 'ode', 'ssa', 'pla', 'psa', 'nf'].map(m => (
                   <button
                     key={m}
                     onClick={() => setMethod(m as any)}
-                    className={`flex-1 px-2 py-1.5 text-xs font-medium rounded transition-all ${method === m
+                    className={`flex-1 min-w-[3rem] px-2 py-1.5 text-xs font-medium rounded transition-all ${method === m
                       ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 text-teal-700 dark:text-teal-400 shadow-sm'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
                       }`}
