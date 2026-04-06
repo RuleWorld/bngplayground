@@ -24,6 +24,7 @@ import {
   TranslationException,
 } from '../utils/helpers';
 import { SCTEntry, SpeciesCompositionTable } from '../config/types';
+import { SafeExpressionEvaluator } from '@bngplayground/engine';
 
 const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
 const RATE_RULE_META_PREFIX = '__rate_rule__';
@@ -2356,12 +2357,16 @@ function checkMassAction(
 
   try {
 
-    const keys = Object.keys(context);
-    const values = Object.values(context);
-
     const varList = Array.from(vars);
-
     const results: number[] = [];
+
+    let compiledFunc: (context: Record<string, number>) => number;
+    try {
+      const evalExprV = jsEvalExpr.replace(/\^/g, '**');
+      compiledFunc = SafeExpressionEvaluator.compile(evalExprV);
+    } catch (e) {
+      return null;
+    }
 
     for (let i = 0; i < 3; i++) {
       const localContext = { ...context };
@@ -2374,13 +2379,8 @@ function checkMassAction(
         localContext[v] = Math.random() * 1000 + 1;
       }
 
-      const allKeys = [...keys, 'V', ...varList];
-      const allValues = [...values, localContext['V'], ...varList.map(v => localContext[v])];
-
       try {
-        const evalExprV = jsEvalExpr.replace(/\^/g, '**');
-        const f = new Function(...allKeys, `return ${evalExprV};`);
-        const result = f(...allValues);
+        const result = compiledFunc(localContext);
 
         if (!Number.isFinite(result) || Number.isNaN(result)) return null;
         results.push(result);
