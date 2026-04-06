@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useId } from 'react';
 import { Button } from './ui/Button';
 import { generateShareUrl } from '../src/utils/shareUrl';
 
@@ -15,6 +15,10 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
     const [showModal, setShowModal] = useState(false);
     const [shareUrl, setShareUrl] = useState('');
     const [nameInput, setNameInput] = useState(modelName ?? '');
+
+    const nameInputId = useId();
+    const shareUrlId = useId();
+    const embedCodeId = useId();
 
     React.useEffect(() => {
         setNameInput(modelName ?? '');
@@ -58,7 +62,7 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                 className={className}
                 title="Share this model"
             >
-                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-4 h-4 mr-1.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />
                 </svg>
                 Share
@@ -87,10 +91,11 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
 
                         <div className="space-y-4">
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label htmlFor={nameInputId} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Model Name (optional)
                                 </label>
                                 <input
+                                    id={nameInputId}
                                     type="text"
                                     value={nameInput}
                                     onChange={(e) => {
@@ -107,11 +112,12 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label htmlFor={shareUrlId} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Shareable Link
                                 </label>
                                 <div className="flex gap-2">
                                     <input
+                                        id={shareUrlId}
                                         type="text"
                                         readOnly
                                         value={shareUrl}
@@ -128,10 +134,11 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                                <label htmlFor={embedCodeId} className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
                                     Embed Code
                                 </label>
                                 <textarea
+                                    id={embedCodeId}
                                     readOnly
                                     value={embedCode}
                                     rows={2}
