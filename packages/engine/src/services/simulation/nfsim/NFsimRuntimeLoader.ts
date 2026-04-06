@@ -311,18 +311,30 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
   }
   const text = await response.text();
 
-  // nfsim.js is a CJS/IIFE module that assigns `createNFsimModule` as a var.
-  // Dynamic import() of a blob URL treats it as ESM, so CJS module.exports
-  // and local vars are not accessible. Instead, evaluate the script via a
-  // <script> tag (browser) or Function() (worker) so the factory lands on
-  // globalThis or can be captured.
+  // nfsim.js is an Emscripten IIFE: `var createNFsimModule = (() => { ... })();`
+  // This creates a local `var`, not a global. Dynamic import() treats blob URLs
+  // as ESM where local vars aren't exported. We need to evaluate the script so
+  // createNFsimModule is accessible.
+  //
+  // Strategy: append a line that explicitly assigns the factory to globalThis,
+  // then evaluate via importScripts (worker), <script> tag (main thread), or
+  // indirect eval (fallback). This works because the IIFE assigns to `var
+  // createNFsimModule` which is in the top-level scope of the evaluated script.
   const globalAny = globalThis as any;
-  const prevFactory = globalAny.createNFsimModule;
+  const augmented = text + '\n;if(typeof createNFsimModule!=="undefined")self.createNFsimModule=createNFsimModule;\n';
 
-  // Strategy 1: <script> tag in main thread (has document)
-  if (typeof document !== 'undefined') {
+  // Strategy 1: importScripts (available in Web Workers — synchronous, reliable)
+  if (typeof (globalThis as any).importScripts === 'function') {
+    const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
+    try {
+      (globalThis as any).importScripts(blobUrl);
+    } finally {
+      URL.revokeObjectURL(blobUrl);
+    }
+  } else if (typeof document !== 'undefined') {
+    // Strategy 2: <script> tag in main thread
     await new Promise<void>((resolve, reject) => {
-      const blobUrl = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
+      const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
       const script = document.createElement('script');
       script.src = blobUrl;
       script.onload = () => { URL.revokeObjectURL(blobUrl); resolve(); };
@@ -330,12 +342,11 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
       document.head.appendChild(script);
     });
   } else {
-    // Strategy 2: Worker context — use Function() to evaluate in global scope
-    const fn = new Function(text);
-    fn();
+    // Strategy 3: indirect eval — evaluates in global scope (not Function() which creates local scope)
+    (0, eval)(augmented);
   }
 
-  // After evaluation, createNFsimModule should be on globalThis
+  // After evaluation, createNFsimModule should be on globalThis/self
   if (typeof globalAny.createNFsimModule === 'function') {
     return { default: globalAny.createNFsimModule, createNFsimModule: globalAny.createNFsimModule };
   }
@@ -347,10 +358,6 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
     return mod;
   } finally {
     URL.revokeObjectURL(blobUrl);
-    // Restore previous factory if we clobbered it
-    if (prevFactory && !globalAny.createNFsimModule) {
-      globalAny.createNFsimModule = prevFactory;
-    }
   }
 };
 
