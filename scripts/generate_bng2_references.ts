@@ -15,8 +15,8 @@ import { execSync } from 'child_process';
 
 const BNG2_PATH = 'C:/Users/Achyudhan/anaconda3/envs/Research/Lib/site-packages/bionetgen/bng-win';
 const BNG2_PL = path.join(BNG2_PATH, 'BNG2.pl');
-const GDAT_DIR = path.resolve('tests/fixtures/gdat');
-const NET_DIR = path.resolve('tests/fixtures/net');
+const GDAT_DIR = path.resolve(process.env.BNG_OUTPUT_DIR || 'bng_test_output');
+const NET_DIR = path.resolve(process.env.BNG_OUTPUT_DIR || 'bng_test_output');
 const WORK_DIR = path.resolve('artifacts/bng2_workdir');
 
 // Certain models are currently excluded from reference generation by path substring.

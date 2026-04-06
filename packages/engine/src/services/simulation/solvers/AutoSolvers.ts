@@ -9,6 +9,9 @@ import { Rosenbrock23Solver } from './Rosenbrock23Solver';
 import { RK45Solver, FastRK4Solver } from './RK45Solver';
 import { CVODESolver } from './CVODESolver';
 import { SparseODESolver } from '../../analysis/SparseODESolver';
+import { buildJacobianFunction, isPurelyMassAction } from '../AnalyticalJacobian';
+import type { JacobianReaction } from '../AnalyticalJacobian';
+import { CompositeAutoSolver } from '../StiffnessDetector';
 
 /**
  * Auto-switching solver: starts with RK45, switches to Rosenbrock23 if stiffness detected
@@ -227,9 +230,24 @@ export async function createSolver(
     case 'cvode_sparse':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, true);
-    case 'cvode_jac':
+    case 'cvode_jac': {
       await CVODESolver.init();
-      return new CVODESolver(n, f, opts, false, (options as any).jacobian);
+      let jacobian = (options as any).jacobian;
+      // Auto-build analytical Jacobian from reaction data when no explicit Jacobian is provided
+      if (!jacobian && (options as any).reactions) {
+        const reactions = (options as any).reactions as JacobianReaction[];
+        const useAnalytical = (options as any).useAnalyticalJacobian !== false;
+        if (useAnalytical && isPurelyMassAction(reactions)) {
+          jacobian = buildJacobianFunction(reactions, n);
+          console.log('[createSolver] Auto-generated analytical Jacobian for', n, 'species,', reactions.length, 'mass-action reactions');
+        } else if (useAnalytical) {
+          // Hybrid: analytical for mass-action + FD for functional
+          jacobian = buildJacobianFunction(reactions, n, f);
+          console.log('[createSolver] Auto-generated hybrid Jacobian for', n, 'species,', reactions.length, 'reactions (includes functional rates)');
+        }
+      }
+      return new CVODESolver(n, f, opts, false, jacobian);
+    }
     case 'cvode_adams':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, false, undefined, true);
@@ -249,10 +267,61 @@ export async function createSolver(
     case 'webgpu_rk4':
       console.warn('[ODESolver] webgpu_rk4 selected - using CPU FastRK4 fallback.');
       return new FastRK4Solver(n, f, opts);
+    case 'auto_detect': {
+      // Stiffness-detecting composite solver: probes stiffness at startup
+      // and re-probes periodically, switching between solvers as needed.
+      await CVODESolver.init();
+      const compositeFactory = async (solverName: SolverOptions['solver']) => {
+        // Reuse createSolver but avoid infinite recursion on auto_detect
+        return createSolver(n, f, { ...options, solver: solverName });
+      };
+      const composite = new CompositeAutoSolver(n, f, opts as SolverOptions, compositeFactory);
+      // Return an adapter that lazily initializes and delegates
+      return {
+        integrate(y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void): SolverResult {
+          // CompositeAutoSolver.integrate is async; we need a sync wrapper.
+          // For the synchronous integrate interface, do the initial probe synchronously
+          // by using the detector directly and picking a solver.
+          // This is a pragmatic bridge — full async usage goes through composite.integrate().
+          throw new Error(
+            'auto_detect solver must be used via createAutoDetectSolver() which returns an async integrate. ' +
+            'Use the CompositeAutoSolver directly for async integration.',
+          );
+        },
+        destroy() {
+          composite.destroy();
+        },
+        /** Direct access to the underlying CompositeAutoSolver for async usage. */
+        composite,
+      } as any;
+    }
     case 'auto':
-    default:
+    default: {
       await CVODESolver.init();
       const useAdams = opts.useAdams ?? false;
       return new CVODEAutoSolver(n, f, opts as SolverOptions, new CVODESolver(n, f, opts, false, undefined, useAdams));
+    }
   }
+}
+
+/**
+ * Create an auto-detect solver that probes stiffness and selects the best solver.
+ *
+ * Unlike createSolver, this returns a CompositeAutoSolver whose integrate() is async
+ * and re-probes periodically during integration. Use this when you want full
+ * stiffness-detection-driven solver switching.
+ */
+export async function createAutoDetectSolver(
+  n: number,
+  f: DerivativeFunction,
+  options: Partial<SolverOptions> = {},
+): Promise<CompositeAutoSolver> {
+  const opts = { ...DEFAULT_OPTIONS, ...options, solver: 'auto_detect' as const };
+  await CVODESolver.init();
+
+  const factory = async (solverName: SolverOptions['solver']) => {
+    return createSolver(n, f, { ...opts, solver: solverName });
+  };
+
+  return new CompositeAutoSolver(n, f, opts as SolverOptions, factory);
 }

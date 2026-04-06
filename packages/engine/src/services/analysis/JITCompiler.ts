@@ -232,6 +232,14 @@ export class JITCompiler {
         return normalized;
     }
 
+    /**
+     * Maximum number of observables per JIT-compiled chunk.
+     * Each chunk stays within V8 TurboFan's optimization threshold
+     * (~1000-2000 operations). With ~15-20 terms per observable,
+     * 64 observables yields ~960-1280 operations per function.
+     */
+    static readonly OBSERVABLE_CHUNK_SIZE = 64;
+
     compileObservables(
         observables: JITObservableDefinition[],
         nSpecies: number,
@@ -252,51 +260,23 @@ export class JITCompiler {
             return cached;
         }
 
-        let source = '';
-        source += `if (!speciesVolumes) { speciesVolumes = new Float64Array(${nSpecies}); speciesVolumes.fill(1.0); }\n`;
-
-        for (let i = 0; i < observables.length; i++) {
-            const obs = observables[i];
-            const terms: string[] = [];
-            for (let j = 0; j < obs.indices.length; j++) {
-                const idx = this.normalizeSpeciesIndex(obs.indices[j], nSpecies, i, 'reactant', j);
-                const coeff = Number(obs.coefficients[j]);
-                const explicitVolume = obs.volumes && j < obs.volumes.length ? Number(obs.volumes[j]) : null;
-                const volumeExpr = explicitVolume === null || Number.isNaN(explicitVolume)
-                    ? `speciesVolumes[${idx}]`
-                    : `${explicitVolume}`;
-                const speciesExpr = useAmounts
-                    ? `(y[${idx}] * ${volumeExpr})`
-                    : `y[${idx}]`;
-                terms.push(`(${speciesExpr}) * ${coeff}`);
-            }
-
-            source += `output[${i}] = ${terms.length > 0 ? terms.join(' + ') : '0.0'};\n`;
-        }
-
-        const fullSource = `(function(y, output, speciesVolumes) {\n${source}})`;
+        const chunkSize = JITCompiler.OBSERVABLE_CHUNK_SIZE;
+        const needsChunking = observables.length > chunkSize;
 
         let evaluate: CompiledObservableEvaluator;
-        try {
-            evaluate = eval(fullSource) as CompiledObservableEvaluator;
-        } catch (error) {
-            console.error('[JITCompiler] Failed to compile observable evaluator:', error);
-            console.error('[JITCompiler] Observable source:', fullSource);
-            evaluate = (y, output, speciesVolumes) => {
-                const fallbackVolumes = speciesVolumes ?? new Float64Array(nSpecies).fill(1.0);
-                for (let i = 0; i < observables.length; i++) {
-                    let sum = 0;
-                    const obs = observables[i];
-                    for (let j = 0; j < obs.indices.length; j++) {
-                        const idx = Number(obs.indices[j]);
-                        const coeff = Number(obs.coefficients[j]);
-                        const explicitVolume = obs.volumes && j < obs.volumes.length ? Number(obs.volumes[j]) : fallbackVolumes[idx];
-                        const value = useAmounts ? (y[idx] * explicitVolume) : y[idx];
-                        sum += value * coeff;
-                    }
-                    output[i] = sum;
-                }
-            };
+        let fullSource: string;
+
+        if (needsChunking) {
+            // Chunked compilation: split observables into multiple functions
+            // to stay within V8 TurboFan's optimization threshold
+            const compiledResult = this.compileObservablesChunked(observables, nSpecies, useAmounts, chunkSize);
+            evaluate = compiledResult.evaluate;
+            fullSource = compiledResult.sourceCode;
+        } else {
+            // Single function for small observable counts
+            const compiledResult = this.compileObservablesSingle(observables, nSpecies, useAmounts, 0);
+            evaluate = compiledResult.evaluate;
+            fullSource = compiledResult.sourceCode;
         }
 
         const result: JITCompiledObservableFunction = {
@@ -313,6 +293,108 @@ export class JITCompiler {
         this.observableCache.set(signature, result);
 
         return result;
+    }
+
+    /**
+     * Compile a single chunk of observables into one function.
+     * The outputOffset parameter controls which output[] indices this chunk writes to.
+     */
+    private compileObservablesSingle(
+        observables: JITObservableDefinition[],
+        nSpecies: number,
+        useAmounts: boolean,
+        outputOffset: number
+    ): { evaluate: CompiledObservableEvaluator; sourceCode: string } {
+        let source = '';
+        source += `if (!speciesVolumes) { speciesVolumes = new Float64Array(${nSpecies}); speciesVolumes.fill(1.0); }\n`;
+
+        for (let i = 0; i < observables.length; i++) {
+            const obs = observables[i];
+            const terms: string[] = [];
+            for (let j = 0; j < obs.indices.length; j++) {
+                const idx = this.normalizeSpeciesIndex(obs.indices[j], nSpecies, outputOffset + i, 'reactant', j);
+                const coeff = Number(obs.coefficients[j]);
+                const explicitVolume = obs.volumes && j < obs.volumes.length ? Number(obs.volumes[j]) : null;
+                const volumeExpr = explicitVolume === null || Number.isNaN(explicitVolume)
+                    ? `speciesVolumes[${idx}]`
+                    : `${explicitVolume}`;
+                const speciesExpr = useAmounts
+                    ? `(y[${idx}] * ${volumeExpr})`
+                    : `y[${idx}]`;
+                terms.push(`(${speciesExpr}) * ${coeff}`);
+            }
+
+            source += `output[${outputOffset + i}] = ${terms.length > 0 ? terms.join(' + ') : '0.0'};\n`;
+        }
+
+        const fullSource = `(function(y, output, speciesVolumes) {\n${source}})`;
+
+        let evaluate: CompiledObservableEvaluator;
+        try {
+            evaluate = eval(fullSource) as CompiledObservableEvaluator;
+        } catch (error) {
+            console.error('[JITCompiler] Failed to compile observable evaluator chunk:', error);
+            evaluate = this.buildFallbackEvaluator(observables, nSpecies, useAmounts, outputOffset);
+        }
+
+        return { evaluate, sourceCode: fullSource };
+    }
+
+    /**
+     * Compile observables in chunks, each staying within V8 TurboFan limits.
+     * Returns a composite evaluator that calls each chunk sequentially.
+     */
+    private compileObservablesChunked(
+        observables: JITObservableDefinition[],
+        nSpecies: number,
+        useAmounts: boolean,
+        chunkSize: number
+    ): { evaluate: CompiledObservableEvaluator; sourceCode: string } {
+        const chunks: CompiledObservableEvaluator[] = [];
+        const sourceParts: string[] = [];
+
+        for (let offset = 0; offset < observables.length; offset += chunkSize) {
+            const end = Math.min(offset + chunkSize, observables.length);
+            const chunkObs = observables.slice(offset, end);
+            const compiled = this.compileObservablesSingle(chunkObs, nSpecies, useAmounts, offset);
+            chunks.push(compiled.evaluate);
+            sourceParts.push(`// Chunk ${Math.floor(offset / chunkSize)} (observables ${offset}-${end - 1})\n${compiled.sourceCode}`);
+        }
+
+        // Composite evaluator: call each chunk sequentially
+        const evaluate: CompiledObservableEvaluator = (y, output, speciesVolumes) => {
+            for (let c = 0; c < chunks.length; c++) {
+                chunks[c](y, output, speciesVolumes);
+            }
+        };
+
+        return { evaluate, sourceCode: sourceParts.join('\n\n') };
+    }
+
+    /**
+     * Build an interpreted fallback evaluator for a chunk of observables.
+     */
+    private buildFallbackEvaluator(
+        observables: JITObservableDefinition[],
+        nSpecies: number,
+        useAmounts: boolean,
+        outputOffset: number
+    ): CompiledObservableEvaluator {
+        return (y, output, speciesVolumes) => {
+            const fallbackVolumes = speciesVolumes ?? new Float64Array(nSpecies).fill(1.0);
+            for (let i = 0; i < observables.length; i++) {
+                let sum = 0;
+                const obs = observables[i];
+                for (let j = 0; j < obs.indices.length; j++) {
+                    const idx = Number(obs.indices[j]);
+                    const coeff = Number(obs.coefficients[j]);
+                    const explicitVolume = obs.volumes && j < obs.volumes.length ? Number(obs.volumes[j]) : fallbackVolumes[idx];
+                    const value = useAmounts ? (y[idx] * explicitVolume) : y[idx];
+                    sum += value * coeff;
+                }
+                output[outputOffset + i] = sum;
+            }
+        };
     }
 
 

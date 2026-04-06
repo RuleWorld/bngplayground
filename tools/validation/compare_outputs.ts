@@ -77,10 +77,11 @@ interface ReferenceModelInfo {
 
 // Project layout: compare exported browser CSVs in <repo>/web_output against
 // precomputed BNG2 outputs in <repo>/bng_test_output.
+// bng_test_output/ is the single source of truth for BNG2 reference outputs.
 const WEB_OUTPUT_DIR = path.join(PROJECT_ROOT, 'web_output');
 const BNG_OUTPUT_DIR = process.env.BNG_OUTPUT_DIR
   ? path.resolve(PROJECT_ROOT, process.env.BNG_OUTPUT_DIR)
-  : path.join(PROJECT_ROOT, 'tests', 'fixtures', 'gdat');
+  : path.join(PROJECT_ROOT, 'bng_test_output');
 
 const SESSION_DIR = path.join(PROJECT_ROOT, 'artifacts', 'SESSION_2026_02_10_web_output_parity');
 

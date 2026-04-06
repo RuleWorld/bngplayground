@@ -53,7 +53,7 @@ export interface SolverOptions {
   minStep: number;
   maxStep: number;
   initialStep?: number;
-  solver: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse' | 'sparse_implicit' | 'webgpu_rk4';
+  solver: 'auto' | 'auto_detect' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse' | 'sparse_implicit' | 'webgpu_rk4';
   jacobianRowMajor?: (y: Float64Array, J: Float64Array) => void;
   stabLimDet?: boolean;
   maxOrd?: number;
@@ -65,6 +65,10 @@ export interface SolverOptions {
   rootFunction?: (t: number, y: Float64Array, gout: Float64Array) => void;
   numRoots?: number;
   networkByteCode?: import('../services/analysis/JITCompiler').NetworkByteCode;
+  /** Enable analytical Jacobian generation from reaction data. Default: true for mass-action, false for functional rates. */
+  useAnalyticalJacobian?: boolean;
+  /** Reaction data for analytical Jacobian auto-generation (set by SimulationLoop). */
+  reactions?: unknown[];
 }
 
 export interface SolverResult {

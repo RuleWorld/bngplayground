@@ -64,6 +64,9 @@ export class RK45Solver {
   private readonly e6 = 22 / 525;
   private readonly e7 = -1 / 40;
 
+  // FSAL: when true, k1 already contains f(y_n) from the previous accepted step's k7
+  private fsalValid: boolean = false;
+
   constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}) {
     this.n = n;
     this.f = f;
@@ -98,8 +101,11 @@ export class RK45Solver {
     const yNew = this.yNew;
     const yErr = this.yErr;
 
-    // Stage 1
-    this.f(y, this.k1);
+    // Stage 1 — FSAL: skip if k1 already contains f(y) from the previous step's k7
+    if (!this.fsalValid) {
+      this.f(y, this.k1);
+    }
+    this.fsalValid = false; // Invalidate for next call
 
     // Stage 2
     for (let i = 0; i < n; i++) {
@@ -224,6 +230,10 @@ export class RK45Solver {
         y.set(result.yNew);
         steps++;
         consecutiveRejections = 0;
+        // FSAL: k7 = f(yNew) from Dormand-Prince is exactly k1 for the next step.
+        // Copy k7 into k1 so the next step() call can skip the Stage 1 evaluation.
+        this.k1.set(this.k7);
+        this.fsalValid = true;
       } else {
         consecutiveRejections++;
         // If too many rejections, might be stiff - signal to switch solver

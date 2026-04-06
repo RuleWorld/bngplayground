@@ -75,6 +75,8 @@ export const PROFILE_DATA = {
   isDuplicateReactionCount: 0,
   degeneracy: 0,
   degeneracyCount: 0,
+  speciesDedup: 0,
+  speciesDedupCount: 0,
 };
 
 export function resetProfileData() {
@@ -90,6 +92,7 @@ export function printProfileData() {
   console.log(`  applyTransformation: ${(PROFILE_DATA.applyTransformation / 1000).toFixed(3)}s (${PROFILE_DATA.applyTransformationCount} calls)`);
   console.log(`  isDuplicateReaction: ${(PROFILE_DATA.isDuplicateReaction / 1000).toFixed(3)}s (${PROFILE_DATA.isDuplicateReactionCount} calls)`);
   console.log(`  degeneracy: ${(PROFILE_DATA.degeneracy / 1000).toFixed(3)}s (${PROFILE_DATA.degeneracyCount} calls)`);
+  console.log(`  speciesDedup: ${(PROFILE_DATA.speciesDedup / 1000).toFixed(3)}s (${PROFILE_DATA.speciesDedupCount} calls)`);
   console.log('================================\n');
 }
 
@@ -3240,6 +3243,8 @@ export class NetworkGenerator {
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[]
   ): SpeciesGraph[] | null {
+    const _profStart = profilingEnabled ? performance.now() : 0;
+    try {
     if (shouldLogNetworkGenerator) {
       debugNetworkLog(
         `[applyTransformation] Rule ${rule.name}, ${reactantGraphs.length} reactants -> ${rule.products.length} products`
@@ -3887,11 +3892,17 @@ export class NetworkGenerator {
     }
 
     return productGraphs;
+    } finally {
+      if (profilingEnabled) {
+        PROFILE_DATA.applyTransformation += performance.now() - _profStart;
+        PROFILE_DATA.applyTransformationCount++;
+      }
+    }
   }
 
   /**
    * Build a product graph by applying a rule transformation.
-   * 
+   *
    * BioNetGen semantics:
    * 1. For each reactant pattern, only the MATCHED molecules participate in the transformation
    * 2. Molecules connected via explicit bonds (!+) in the pattern are preserved
@@ -5605,15 +5616,18 @@ export class NetworkGenerator {
     queue: SpeciesGraph[],
     signal?: AbortSignal
   ): Species {
+    const _dedupStart = profilingEnabled ? performance.now() : 0;
     const canonical = profiledCanonicalize(graph);
 
     if (speciesMap.has(canonical)) {
+      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
       return speciesMap.get(canonical)!;
     }
 
     const isomorphic = this.findIsomorphicSpecies(graph, speciesByFingerprint);
     if (isomorphic) {
       speciesMap.set(canonical, isomorphic);
+      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
       return isomorphic;
     }
 
@@ -5645,6 +5659,7 @@ export class NetworkGenerator {
       throw new DOMException('Network generation cancelled', 'AbortError');
     }
 
+    if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
     return species;
   }
 

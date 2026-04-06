@@ -20,7 +20,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 
-const FIXTURES_DIR = path.resolve('tests/fixtures/gdat');
+const FIXTURES_DIR = path.resolve(process.env.BNG_OUTPUT_DIR || 'bng_test_output');
 const WEB_OUTPUT_DIR = path.resolve('web_output');
 const PARITY_REPORT = path.resolve('artifacts/parity_layer_report.deterministic.json');
 const OUT_FILE = path.resolve('artifacts/paper/fig7_validation_scatter.json');

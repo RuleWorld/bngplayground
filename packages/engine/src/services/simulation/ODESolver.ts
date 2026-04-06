@@ -20,5 +20,9 @@ export { RK45Solver, FastRK4Solver } from './solvers/RK45Solver';
 export { CVODESolver } from './solvers/CVODESolver';
 export type { JacobianFunction } from './solvers/CVODESolver';
 
+// ── Analytical Jacobian generation ─────────────────────────────────
+export { buildJacobianFunction, isPurelyMassAction, computeJacobian, computeFiniteDifferenceJacobian } from '../simulation/AnalyticalJacobian';
+export type { JacobianReaction } from '../simulation/AnalyticalJacobian';
+
 // ── Auto-switching wrappers & factory ───────────────────────────────
 export { AutoSolver, SmartAutoSolver, CVODEAutoSolver, createSolver } from './solvers/AutoSolvers';
