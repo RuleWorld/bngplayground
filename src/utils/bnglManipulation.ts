@@ -91,16 +91,23 @@ export function perturbParameters(code: string, variationPercent: number): strin
 export function perturbParameterOverrides(params: Record<string, number>, variationPercent: number): Record<string, number> {
     const overrides: Record<string, number> = {};
 
+    // ⚡ Bolt Performance Optimization:
+    // Moved variationFactor out of the loop and replaced Object.entries().forEach with a for...in loop
+    // to avoid array allocation in the robustness loop.
+    const variationFactor = variationPercent / 100;
 
-    Object.entries(params).forEach(([name, val]) => {
-        // Avoid perturbing 0 or 1 integers if they look like flags? No, perturb everything.
-        // If value is 0, it stays 0 unless we add additive noise. 
-        // Multiplicative noise on 0 is 0.
-        // Assuming mostly Rate Constants > 0.
+    for (const name in params) {
+        if (Object.prototype.hasOwnProperty.call(params, name)) {
+            const val = params[name];
+            // Avoid perturbing 0 or 1 integers if they look like flags? No, perturb everything.
+            // If value is 0, it stays 0 unless we add additive noise.
+            // Multiplicative noise on 0 is 0.
+            // Assuming mostly Rate Constants > 0.
 
-        const randomFactor = (Math.random() * 2 - 1) * (variationPercent / 100);
-        overrides[name] = val * (1 + randomFactor);
-    });
+            const randomFactor = (Math.random() * 2 - 1) * variationFactor;
+            overrides[name] = val * (1 + randomFactor);
+        }
+    }
 
     return overrides;
 }
