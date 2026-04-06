@@ -21,6 +21,78 @@ const normalizeObservableType = (value?: string): string => {
   return raw;
 };
 
+/**
+ * Expand user-defined function calls inline for NFsim compatibility.
+ * NFsim doesn't support user-defined functions in rate expressions — they must be fully expanded.
+ * Recursively expands nested function calls.
+ */
+function expandUserDefinedFunctions(
+  expr: string,
+  functions: Array<{ name: string; args: string[]; expression: string }>,
+  maxDepth = 10
+): string {
+  if (maxDepth <= 0) return expr; // prevent infinite recursion
+
+  const fnMap = new Map(functions.map(f => [f.name, f]));
+  let expanded = expr;
+  let changed = true;
+
+  while (changed && maxDepth > 0) {
+    changed = false;
+    maxDepth--;
+
+    // Match function calls: fname(arg1, arg2, ...)
+    // Use a regex that handles nested parentheses via counting (simplified: one level)
+    for (const [fnName, fn] of fnMap) {
+      const pattern = new RegExp(`\\b${fnName}\\s*\\(`, 'g');
+      let match: RegExpExecArray | null;
+
+      while ((match = pattern.exec(expanded)) !== null) {
+        const startIdx = match.index;
+        const argsStartIdx = match.index + match[0].length;
+
+        // Find matching closing paren by counting depth
+        let depth = 1;
+        let i = argsStartIdx;
+        const argChars: string[] = [];
+
+        while (i < expanded.length && depth > 0) {
+          const ch = expanded[i];
+          if (ch === '(') depth++;
+          else if (ch === ')') depth--;
+          if (depth > 0) argChars.push(ch);
+          i++;
+        }
+
+        if (depth !== 0) break; // unmatched parens — skip this malformed call
+
+        const argsStr = argChars.join('');
+        const args = argsStr.split(',').map(a => a.trim());
+
+        if (args.length !== fn.args.length) continue; // arg count mismatch — skip
+
+        // Substitute parameters with arguments in the function body
+        let bodyExpanded = fn.expression;
+        for (let j = 0; j < fn.args.length; j++) {
+          const paramName = fn.args[j];
+          const argValue = args[j];
+          // Replace whole-word occurrences of the parameter with the argument
+          const paramPattern = new RegExp(`\\b${paramName}\\b`, 'g');
+          bodyExpanded = bodyExpanded.replace(paramPattern, `(${argValue})`);
+        }
+
+        // Replace the function call with the expanded body
+        const callEnd = i;
+        expanded = expanded.slice(0, startIdx) + `(${bodyExpanded})` + expanded.slice(callEnd);
+        changed = true;
+        break; // restart the while loop to handle the modified string
+      }
+    }
+  }
+
+  return expanded;
+}
+
 export class BNGXMLWriter {
   static write(model: BNGLModel): string {
     const modelId = model.name ? escapeXml(model.name) : 'model';
@@ -64,9 +136,11 @@ export class BNGXMLWriter {
       .join('') +
       synthesizedParameters
       .map(p => {
-        const val = BNGLParser.evaluateExpression(p.expression, evalParams);
-        const valStr = isNaN(val) ? p.expression : String(val);
-        return `      <Parameter id="${escapeXml(p.id)}" type="Constant" value="${escapeXml(valStr)}" expr="${escapeXml(p.expression)}"/>\n`;
+        // Expand user-defined functions for NFsim compatibility
+        const expandedExpr = expandUserDefinedFunctions(p.expression, model.functions || []);
+        const val = BNGLParser.evaluateExpression(expandedExpr, evalParams);
+        const valStr = isNaN(val) ? expandedExpr : String(val);
+        return `      <Parameter id="${escapeXml(p.id)}" type="Constant" value="${escapeXml(valStr)}" expr="${escapeXml(expandedExpr)}"/>\n`;
       })
       .join('');
 
