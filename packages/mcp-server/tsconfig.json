@@ -4,18 +4,24 @@
     "module": "ESNext",
     "moduleResolution": "bundler",
     "lib": [
-      "ES2022"
+      "ES2022",
+      "DOM"
     ],
     "strict": true,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": false,
+    "rootDir": "../..",
     "outDir": "dist",
     "declaration": true,
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
+    "allowImportingTsExtensions": true,
+    "ignoreDeprecations": "5.0",
     "baseUrl": ".",
     "paths": {
+      "@bngplayground/engine": ["../../packages/engine/src/index.ts"],
+      "@bngplayground/engine/*": ["../../packages/engine/src/*"],
       "@grammar/*": ["../../services/grammar/*"]
     }
   },

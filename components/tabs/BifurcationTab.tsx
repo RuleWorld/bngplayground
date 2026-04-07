@@ -135,9 +135,36 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         const speciesIndexMap = new Map<string, number>(
           continuationSpecies.map((s: any, i: number) => [s.name, i])
         );
-        const jit = new engine.JITCompiler(continuationModel);
+        const jit = new engine.JITCompiler();
+        const indexedReactions = (continuationModel.reactions ?? []).map((reaction: any) => new engine.Rxn(
+          reaction.reactants.map((name: string) => {
+            const idx = speciesIndexMap.get(String(name).trim());
+            if (idx === undefined) {
+              throw new Error(`Unknown reactant species: ${String(name)}`);
+            }
+            return idx;
+          }),
+          reaction.products.map((name: string) => {
+            const idx = speciesIndexMap.get(String(name).trim());
+            if (idx === undefined) {
+              throw new Error(`Unknown product species: ${String(name)}`);
+            }
+            return idx;
+          }),
+          reaction.rateConstant,
+          reaction.name,
+          {
+            degeneracy: reaction.degeneracy,
+            propensityFactor: reaction.propensityFactor,
+            statFactor: reaction.statFactor,
+            rateExpression: reaction.rateExpression ?? reaction.rate,
+            productStoichiometries: reaction.productStoichiometries,
+            scalingVolume: reaction.scalingVolume,
+            totalRate: reaction.totalRate,
+          },
+        ));
         const compiled = jit.compileFromRxns(
-          continuationModel.reactions ?? [],
+          indexedReactions,
           nSpecies,
           speciesIndexMap,
           params,
@@ -375,8 +402,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
               />
               <Tooltip
                 cursor={CHART_TOOLTIP_CURSOR}
-                formatter={(value: number, name: string) => [value.toPrecision(4), name]}
-                labelFormatter={(label: number) => `${continuationResult.parameterName} = ${label.toPrecision(4)}`}
+                formatter={(value, name) => [typeof value === 'number' ? value.toPrecision(4) : String(value ?? ''), name]}
+                labelFormatter={(label) => {
+                  const formattedLabel = typeof label === 'number' ? label.toPrecision(4) : String(label ?? '');
+                  return `${continuationResult.parameterName} = ${formattedLabel}`;
+                }}
               />
               {/* Stable branch - solid */}
               <Scatter
