@@ -26,15 +26,16 @@ export const ContactMapTab: React.FC<ContactMapTabProps> = ({ model, results, on
         if (!model) {
             return { nodes: [], edges: [] };
         }
-        return buildContactMap(model.reactionRules, model.moleculeTypes, {
+        return buildContactMap(model.reactionRules ?? [], model.moleculeTypes, {
             getRuleId,
             getRuleLabel,
         });
     }, [model]);
 
     const ruleOverlays = useMemo(() => {
-        if (!model || model.reactionRules.length === 0) return [];
-        return buildRuleOverlays(model.reactionRules, model.moleculeTypes);
+        const reactionRules = model?.reactionRules ?? [];
+        if (!model || reactionRules.length === 0) return [];
+        return buildRuleOverlays(reactionRules, model.moleculeTypes);
     }, [model]);
 
     const snapshots = useMemo(() => {

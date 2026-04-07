@@ -17,7 +17,8 @@
     "resolveJsonModule": true,
     "allowSyntheticDefaultImports": true,
     "allowImportingTsExtensions": true,
-    "ignoreDeprecations": "5.0",
+    "rewriteRelativeImportExtensions": true,
+    "ignoreDeprecations": "6.0",
     "baseUrl": ".",
     "paths": {
       "@bngplayground/engine": ["../../packages/engine/src/index.ts"],

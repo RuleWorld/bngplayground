@@ -400,7 +400,7 @@ function evaluateNumericAst(node: any, symbols: Map<string, number>): number | n
       node.callee?.type === 'Identifier' ? String(node.callee.name || '').toLowerCase() : '';
     const args = (Array.isArray(node.arguments) ? node.arguments : [])
       .map((arg: any) => evaluateNumericAst(arg, symbols));
-    if (args.some((arg) => arg === null)) return null;
+    if (args.some((arg: number | null) => arg === null)) return null;
     const values = args as number[];
     switch (calleeName) {
       case 'pow': return values.length >= 2 ? Math.pow(values[0], values[1]) : null;
@@ -1075,8 +1075,8 @@ function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
     if (isSyntheticRateRuleReaction(rule as Record<string, unknown>)) continue;
     const reactants = Array.isArray(rule?.reactants) ? rule.reactants.map((x: any) => String(x)) : [];
     const products = Array.isArray(rule?.products) ? rule.products.map((x: any) => String(x)) : [];
-    if (reactants.some((name) => isSyntheticRateRuleSpeciesName(name))) continue;
-    if (products.some((name) => isSyntheticRateRuleSpeciesName(name))) continue;
+    if (reactants.some((name: string) => isSyntheticRateRuleSpeciesName(name))) continue;
+    if (products.some((name: string) => isSyntheticRateRuleSpeciesName(name))) continue;
     const resolvedReactants = resolveTerms(reactants);
     const resolvedProducts = resolveTerms(products);
     if (!resolvedReactants || !resolvedProducts) {

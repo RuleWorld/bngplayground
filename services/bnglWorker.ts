@@ -120,10 +120,10 @@ export function mergeSimulationOptionsWithModelActionDefaults(
         };
 
         if (simAction.args['t_end'] !== undefined) {
-          merged.t_end = applyValueIfUnset(merged.t_end, simAction.args['t_end']);
+          merged.t_end = applyValueIfUnset(merged.t_end, simAction.args['t_end']) ?? merged.t_end ?? 10;
         }
         if (simAction.args['n_steps'] !== undefined) {
-          merged.n_steps = applyValueIfUnset(merged.n_steps, simAction.args['n_steps']);
+          merged.n_steps = applyValueIfUnset(merged.n_steps, simAction.args['n_steps']) ?? merged.n_steps ?? 100;
         }
         if (simAction.args['utl'] !== undefined) {
           merged.utl = applyValueIfUnset(merged.utl, simAction.args['utl']);

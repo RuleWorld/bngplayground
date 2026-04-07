@@ -700,7 +700,7 @@ function getBnglPatternHelper(
   const compName = spCompId ? standardizeName(spCompId) : '';
   const compSuffix = compName ? `@${compName}` : '';
 
-  const moleculePatterns = entry.structure.molecules.map(m => {
+  const moleculePatterns = entry.structure.molecules.map((m: Molecule) => {
     // Note: toString(true) for 3D/standard formatting
     const molStr = m.toString(true);
     const withPrefix = molStr.replace(/^(\w+)/, 'M_$1');
@@ -1212,10 +1212,10 @@ export function writeReactionRulesFlat(
     const compId = speciesToCompartment.get(speciesId);
     if (entry?.structure) {
       const molecules = entry.structure.molecules;
-      const hasMoleculeCompartments = molecules.some(m => m.compartment !== '');
+      const hasMoleculeCompartments = molecules.some((m: Molecule) => m.compartment !== '');
 
       if (hasMoleculeCompartments) {
-        return molecules.map(m => {
+        return molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           return molStr.replace(/^(\w+)/, 'M_$1');
         }).join('.');
@@ -1223,13 +1223,13 @@ export function writeReactionRulesFlat(
 
       if (useCompartments && compId) {
         const suffix = `@${standardizeName(compId)}`;
-        return molecules.map(m => {
+        return molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           return molStr.replace(/^(\w+)/, 'M_$1') + suffix;
         }).join('.');
       }
 
-      return molecules.map(m => {
+      return molecules.map((m: Molecule) => {
         const molStr = m.toString(true);
         return molStr.replace(/^(\w+)/, 'M_$1');
       }).join('.');
@@ -1540,7 +1540,7 @@ export function writeReactionRulesAtomized(
         mol.renumberBonds();
 
         const speciesCompSuffix = compId ? `@${standardizeName(compId)}` : '';
-        const pattern = mol.molecules.map(m => {
+        const pattern = mol.molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           if (molStr.includes('@')) return molStr.replace(/^(\w+)/, 'M_$1');
           return molStr.replace(/^(\w+)/, 'M_$1') + speciesCompSuffix;
@@ -1564,7 +1564,7 @@ export function writeReactionRulesAtomized(
       if (translated || (entry && entry.structure)) {
         const mol = translated || entry!.structure!;
         const compSuffix = speciesCompId ? `@${standardizeName(speciesCompId)}` : '';
-        speciesPattern = mol.molecules.map(m => {
+        speciesPattern = mol.molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           if (molStr.includes('@')) return molStr.replace(/^(\w+)/, 'M_$1');
           return molStr.replace(/^(\w+)/, 'M_$1') + compSuffix;
@@ -2002,7 +2002,7 @@ export function generateBNGL(
       const suffix = compId ? `@${standardizeName(compId)}` : '';
 
       if (entry && entry.structure) {
-        const molecules = entry.structure.molecules.map(m => {
+        const molecules = entry.structure.molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           const molWithPrefix = molStr.replace(/^(\w+)/, 'M_$1');
           return molWithPrefix;
@@ -2010,7 +2010,7 @@ export function generateBNGL(
 
         if (!molecules.includes('@') && compId) {
           const compSuffix = `@${standardizeName(compId)}`;
-          bnglPattern = molecules.split('.').map(m => m + compSuffix).join('.');
+          bnglPattern = molecules.split('.').map((m: string) => m + compSuffix).join('.');
         } else {
           bnglPattern = molecules;
         }
@@ -2948,10 +2948,10 @@ export function writeReactionRulesFlat_V2(
     const compId = speciesToCompartment.get(speciesId);
     if (entry?.structure) {
       const molecules = entry.structure.molecules;
-      const hasMoleculeCompartments = molecules.some(m => m.compartment !== '');
+      const hasMoleculeCompartments = molecules.some((m: Molecule) => m.compartment !== '');
 
       if (hasMoleculeCompartments) {
-        return molecules.map(m => {
+        return molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           return molStr.replace(/^(\w+)/, 'M_$1');
         }).join('.');
@@ -2959,13 +2959,13 @@ export function writeReactionRulesFlat_V2(
 
       if (useCompartments && compId) {
         const suffix = `@${standardizeName(compId)}`;
-        return molecules.map(m => {
+        return molecules.map((m: Molecule) => {
           const molStr = m.toString(true);
           return molStr.replace(/^(\w+)/, 'M_$1') + suffix;
         }).join('.');
       }
 
-      return molecules.map(m => {
+      return molecules.map((m: Molecule) => {
         const molStr = m.toString(true);
         return molStr.replace(/^(\w+)/, 'M_$1');
       }).join('.');

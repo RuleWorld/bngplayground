@@ -150,7 +150,7 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
           } catch {
             /* ignore */
           }
-          origConsoleLog(...args);
+          origConsoleLog?.(...args);
         };
         console.error = (...args: any[]) => {
           try {
@@ -158,7 +158,7 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
           } catch {
             /* ignore */
           }
-          origConsoleError(...args);
+          origConsoleError?.(...args);
         };
       }
 
@@ -248,11 +248,11 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         origConsoleError = console.error;
         console.log = (...args: any[]) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
-          origConsoleLog(...args);
+          origConsoleLog?.(...args);
         };
         console.error = (...args: any[]) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
-          origConsoleError(...args);
+          origConsoleError?.(...args);
         };
       }
       try {
@@ -278,11 +278,11 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         origConsoleError = console.error;
         console.log = (...args: any[]) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
-          origConsoleLog(...args);
+          origConsoleLog?.(...args);
         };
         console.error = (...args: any[]) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
-          origConsoleError(...args);
+          origConsoleError?.(...args);
         };
       }
       try {

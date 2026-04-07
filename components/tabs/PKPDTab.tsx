@@ -306,7 +306,7 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
                       label={{ value: 'Concentration', angle: -90, position: 'insideLeft', offset: -10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
                       allowDataOverflow
                     />
-                    <Tooltip cursor={CHART_TOOLTIP_CURSOR} formatter={(v: number) => v.toPrecision(4)} />
+                    <Tooltip cursor={CHART_TOOLTIP_CURSOR} formatter={(v) => (typeof v === 'number' ? v.toPrecision(4) : String(v ?? ''))} />
                     {therapeutic_min !== null && therapeutic_max !== null && (
                       <ReferenceArea y1={therapeutic_min} y2={therapeutic_max} fill="#10b98120" />
                     )}

@@ -20,7 +20,7 @@ export const CartoonTab: React.FC<CartoonTabProps> = ({ model, selectedRuleId, o
       return [];
     }
 
-    return model.reactionRules.map((rule, index) => {
+    return (model.reactionRules ?? []).map((rule, index) => {
       const ruleId = rule.name ?? `rule_${index + 1}`;
       const displayName = rule.name ?? `Rule ${index + 1}`;
       let classification: RuleChangeSummary | null = null;
@@ -44,7 +44,7 @@ export const CartoonTab: React.FC<CartoonTabProps> = ({ model, selectedRuleId, o
     return <div className="text-slate-500 dark:text-slate-400">Parse a model to visualize reaction rules.</div>;
   }
 
-  if (model.reactionRules.length === 0) {
+  if ((model.reactionRules ?? []).length === 0) {
     return <div className="text-slate-500 dark:text-slate-400">This model has no reaction rules defined.</div>;
   }
 

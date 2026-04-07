@@ -35,8 +35,8 @@ export const ModelComparisonPanel: React.FC<ModelComparisonPanelProps> = ({ curr
   const comparison: ModelComparisonResult | null = useMemo(() => {
     if (!currentModel || !comparisonModel) return null;
 
-    const contactMapA = buildContactMap(currentModel.reactionRules, currentModel.moleculeTypes, { getRuleId, getRuleLabel });
-    const contactMapB = buildContactMap(comparisonModel.reactionRules, comparisonModel.moleculeTypes, { getRuleId, getRuleLabel });
+    const contactMapA = buildContactMap(currentModel.reactionRules ?? [], currentModel.moleculeTypes, { getRuleId, getRuleLabel });
+    const contactMapB = buildContactMap(comparisonModel.reactionRules ?? [], comparisonModel.moleculeTypes, { getRuleId, getRuleLabel });
 
     const adjA = buildAdjacencyMatrix(contactMapA);
     const adjB = buildAdjacencyMatrix(contactMapB);

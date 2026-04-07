@@ -25,7 +25,9 @@ function cacheSet(key: string, value: UniProtEntry | null) {
   if (cache.size > CACHE_LIMIT) {
     // delete oldest
     const firstKey = cache.keys().next().value;
-    cache.delete(firstKey);
+    if (firstKey !== undefined) {
+      cache.delete(firstKey);
+    }
   }
 }
 

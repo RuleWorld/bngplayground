@@ -1,5 +1,6 @@
 import type { ReactionRule } from '../../types';
 import type { AtomRuleGraph, AREdge, ARNode } from '../../types/visualization';
+import type { SpeciesGraph } from '@bngplayground/engine';
 import {
   extractAtoms,
   parseSpeciesGraphs,
@@ -527,8 +528,8 @@ export const buildAtomRuleGraph = (
     });
 
     // 1. Structural dependencies (reactants/products)
-    let reactantGraphs = [];
-    let productGraphs = [];
+    let reactantGraphs: SpeciesGraph[] = [];
+    let productGraphs: SpeciesGraph[] = [];
 
     try {
       reactantGraphs = parseSpeciesGraphs(rule.reactants);

@@ -284,7 +284,7 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                     <ReactMarkdown
                       remarkPlugins={[remarkGfm]}
                       components={{
-                        code({ inline, className, children, ...props }) {
+                        code({ inline, className, children, ...props }: any) {
                           if (inline) {
                             return (
                               <code
@@ -301,16 +301,16 @@ export const TutorialModal: React.FC<TutorialModalProps> = ({
                             </pre>
                           );
                         },
-                        h3({ children }) {
+                        h3({ children }: any) {
                           return <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100">{children}</h3>;
                         },
-                        ul({ children }) {
+                        ul({ children }: any) {
                           return <ul className="ml-5 list-disc space-y-1">{children}</ul>;
                         },
-                        ol({ children }) {
+                        ol({ children }: any) {
                           return <ol className="ml-5 list-decimal space-y-1">{children}</ol>;
                         },
-                        p({ children }) {
+                        p({ children }: any) {
                           return <p className="mb-3 last:mb-0">{children}</p>;
                         },
                       }}

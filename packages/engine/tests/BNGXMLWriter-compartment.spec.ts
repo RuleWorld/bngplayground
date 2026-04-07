@@ -358,7 +358,7 @@ end reaction rules
             `;
 
             const model = parseBNGL(bngl);
-            expect(model.reactionRules[0].moveConnected).toBe(true);
+            expect(model.reactionRules?.[0].moveConnected).toBe(true);
 
             const xml = BNGXMLWriter.write(model);
             expect(xml).toContain('moveConnected="1"');

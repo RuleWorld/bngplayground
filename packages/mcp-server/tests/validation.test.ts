@@ -127,7 +127,7 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(result.structuredContent.nodes.length).toBeGreaterThan(0);
         expect(result.structuredContent.edges.length).toBeGreaterThan(0);
         // Nodes: A, B, A.b, B.a
-        const molNames = result.structuredContent.nodes.filter(n => n.type === 'molecule').map(n => n.label);
+        const molNames = (result.structuredContent.nodes as Array<{ type?: string; label?: string }>).filter((n) => n.type === 'molecule').map((n) => n.label);
         expect(molNames).toContain('A');
         expect(molNames).toContain('B');
     });
@@ -282,8 +282,8 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(trace).toBeDefined();
         expect(trace.length).toBeGreaterThan(0);
         // At least one trace entry should have contactMapPath or narrative
-        const hasContactPath = trace.some(t => t.contactMapPath && t.contactMapPath.length > 0);
-        const hasNarrative = trace.some(t => t.narrative && t.narrative.length > 0);
+        const hasContactPath = (trace as Array<{ contactMapPath?: string[] }>).some((t) => t.contactMapPath && t.contactMapPath.length > 0);
+        const hasNarrative = (trace as Array<{ narrative?: string }>).some((t) => t.narrative && t.narrative.length > 0);
         expect(hasContactPath || hasNarrative).toBe(true);
     });
 

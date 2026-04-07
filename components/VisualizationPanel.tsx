@@ -83,6 +83,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [expressions, setExpressions] = useState<CustomExpression[]>([]);
+  const reactionRules = model?.reactionRules ?? [];
 
   // Local active tab state if not controlled
   const [localActiveTab, setLocalActiveTab] = useState(0);
@@ -129,7 +130,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   }, [expressions]);
 
   React.useEffect(() => {
-    if (!model || model.reactionRules.length === 0) {
+    if (!model || reactionRules.length === 0) {
       setSelectedRuleId(null);
       return;
     }
@@ -139,14 +140,14 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         return null;
       }
 
-      const hasRule = model.reactionRules.some((rule, index) => {
+      const hasRule = reactionRules.some((rule, index) => {
         const ruleId = rule.name ?? `rule_${index + 1}`;
         return ruleId === prev;
       });
 
       return hasRule ? prev : null;
     });
-  }, [model]);
+  }, [model, reactionRules]);
 
   // Tab definitions:
   // 0: Time Courses
@@ -175,9 +176,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   }, [bnglCode]);
 
   const influenceGraphData = React.useMemo(() => {
-    if (!model || model.reactionRules.length === 0) return { nodes: [], edges: [] };
-    const overlays = buildRuleOverlays(model.reactionRules, model.moleculeTypes);
-    return computeInfluenceGraph(overlays, model.reactionRules);
+    if (!model || reactionRules.length === 0) return { nodes: [], edges: [] };
+    const overlays = buildRuleOverlays(reactionRules, model.moleculeTypes);
+    return computeInfluenceGraph(overlays, reactionRules);
   }, [model]);
 
   return (

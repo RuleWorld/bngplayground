@@ -261,7 +261,7 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
               <XAxis type="number" tickFormatter={(v) => v.toExponential(1)} />
               <YAxis type="category" dataKey="name" width={70} />
               <Tooltip
-                formatter={(value: number) => value.toExponential(3)}
+                formatter={(value) => (typeof value === 'number' ? value.toExponential(3) : String(value ?? ''))}
                 labelFormatter={(label, payload) => {
                   if (payload && payload[0]) {
                     return payload[0].payload.tooltip;

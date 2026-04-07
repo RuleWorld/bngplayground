@@ -84,7 +84,7 @@ const toError = (type: 'parse' | 'simulate', payload: SerializedWorkerError | un
 };
 
 class BnglService {
-  private worker: Worker;
+  private worker!: Worker;
   private messageId = 0;
   private promises = new Map<number, PendingRequest>();
   private terminated = false;
