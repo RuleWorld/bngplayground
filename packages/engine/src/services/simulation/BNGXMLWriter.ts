@@ -105,6 +105,11 @@ export class BNGXMLWriter {
     const moleculeTypeDefs = this.inferMoleculeTypes(model);
 
     const synthesizedParameters: { id: string; expression: string }[] = [];
+    // Rate expressions that reference observables must be emitted as <Function>
+    // elements (not <Parameter>) so NFsim can resolve them at runtime.
+    const observableDependentRates = new Set<string>();
+
+    const obsNames = new Set(observables.map(o => o.name));
 
     // Pre-pass on reaction rules to collect synthesized rate laws
     reactions.forEach((r, idx) => {
@@ -112,12 +117,18 @@ export class BNGXMLWriter {
       const rates = r.isBidirectional && r.reverseRate !== undefined ? [r.rate, r.reverseRate] : [r.rate];
       rates.forEach((rate, rIdx) => {
         const rateValue = rate !== undefined ? String(rate) : '0';
-        const isComplex = rateValue.length > 0 && 
-          !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
+        const isComplex = rateValue.length > 0 &&
+          !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) &&
           !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
-        
+
         if (isComplex) {
           const pId = rIdx === 0 ? `_func_rate_${baseId}` : `_func_rate_${baseId}_rev`;
+          // Check if expression references any observables
+          const tokens = rateValue.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+          const refsObservable = tokens.some(t => obsNames.has(t));
+          if (refsObservable) {
+            observableDependentRates.add(pId);
+          }
           synthesizedParameters.push({ id: pId, expression: rateValue });
         }
       });
@@ -135,6 +146,7 @@ export class BNGXMLWriter {
       })
       .join('') +
       synthesizedParameters
+      .filter(p => !observableDependentRates.has(p.id))
       .map(p => {
         // Expand user-defined functions for NFsim compatibility
         const expandedExpr = expandUserDefinedFunctions(p.expression, model.functions || []);
@@ -204,11 +216,20 @@ export class BNGXMLWriter {
         const graph = BNGLParser.parseSpeciesGraph(s.name);
         const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `S${idx + 1}`, moleculeTypeDefs, false);
         const compAttr = graph.compartment ? ` compartment="${escapeXml(graph.compartment)}"` : '';
-        return `      <Species id="S${idx + 1}" concentration="${escapeXml(String(s.initialConcentration))}" name="${escapeXml(s.name)}"${compAttr}>\n        ${moleculesXml}\n        ${bondsXml}\n      </Species>\n`;
+        const fixedAttr = s.isConstant ? ' Fixed="1"' : '';
+        return `      <Species id="S${idx + 1}" concentration="${escapeXml(String(s.initialConcentration))}" name="${escapeXml(s.name)}"${compAttr}${fixedAttr}>\n        ${moleculesXml}\n        ${bondsXml}\n      </Species>\n`;
       })
       .join('');
 
+    // Observable-dependent rate expressions are emitted as <Function> elements
+    // so NFsim can resolve observable references at runtime via its function system.
     const synthesizedFunctions: { name: string; expression: string; args: string[] }[] = [];
+    for (const p of synthesizedParameters) {
+      if (observableDependentRates.has(p.id)) {
+        const expandedExpr = expandUserDefinedFunctions(p.expression, model.functions || []);
+        synthesizedFunctions.push({ name: p.id, expression: expandedExpr, args: [] });
+      }
+    }
 
     const reactionRulesXml = reactions
       .flatMap((r, idx) => {
@@ -277,27 +298,35 @@ export class BNGXMLWriter {
             })
             .join('');
 
-          const rateLawType = 'Ele';
           const totalrate = r.totalRate ? '1' : '0';
 
           const rateValue = variant.rate !== undefined ? String(variant.rate) : '0';
           let finalRateValue = rateValue;
-          
+
           // NFsim/BioNetGen XML parity: Complex expressions in rate must be exported as parameters
-          const isComplex = rateValue.length > 0 && 
-            !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
+          const isComplex = rateValue.length > 0 &&
+            !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) &&
             !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
 
           if (isComplex) {
             finalRateValue = `_func_rate_${variant.id}`;
           }
 
+          // If this rate references observables, use Function rate law type so
+          // NFsim resolves observable values at runtime via its function system.
+          const rateLawType = observableDependentRates.has(finalRateValue) ? 'Function' : 'Ele';
+
           const { mapXml, operationsXml } = this.buildRuleOperations(reactantPatternData, productPatternData, {
             deleteMolecules: Boolean(r.deleteMolecules),
             moveConnected: Boolean(r.moveConnected)
           });
 
-          const rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+          let rateLawXml: string;
+          if (rateLawType === 'Function') {
+            rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="Function" name="${finalRateValue}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+          } else {
+            rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+          }
 
           // operationsXml from buildRuleOperations already includes the <ListOfOperations> wrapper — use it directly
           const opsTag = operationsXml;

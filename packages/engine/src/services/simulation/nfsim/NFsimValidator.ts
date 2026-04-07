@@ -74,14 +74,10 @@ export class NFsimValidator {
     const rules = model.reactionRules || [];
     for (const rule of rules) {
       const rate = String(rule.rate ?? '');
-      
-      // Check for TotalRate using standard token check or property
-      if (rate.toLowerCase().includes('totalrate') || rule.totalRate) {
-        errors.push({
-          type: ValidationErrorType.TOTAL_RATE_MODIFIER,
-          message: 'TotalRate modifiers are not supported by NFsim.'
-        });
-      }
+
+      // TotalRate modifiers ARE supported by NFsim (nfsim/src/NFinput/NFinput.cpp
+      // lines 2230-2243, 2707). The parser and XML writer already handle this correctly.
+      // No validation block needed.
 
       // Use ANTLR parser to check for observable dependencies
       // This is robust against substring matches (e.g., parameter "ka" vs observable "a")

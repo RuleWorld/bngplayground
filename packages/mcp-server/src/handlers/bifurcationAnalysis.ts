@@ -12,31 +12,45 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
     const nSpecies = expandedModel.species?.length || 0;
     const params = { ...model.parameters };
     const maxSteps = parsedArgs.max_steps || 500;
+    const parameterName = parsedArgs.parameter;
 
-    // Build RHS function from expanded model using JIT compiler
-    let rhsFactory: any;
+    if (!parameterName) {
+      throw new Error('Bifurcation analysis requires a parameter name.');
+    }
+
+    const speciesIndexMap = new Map<string, number>(
+      (expandedModel.species ?? []).map((species: any, index: number) => [species.name, index])
+    );
+
+    // Build RHS function from expanded model using JIT compiler.
+    // Continuation needs a direct derivative callback, so we compile once and
+    // update the tracked parameter before each RHS evaluation.
+    let rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => void;
     try {
       const jit = new engine.JITCompiler(expandedModel);
-      rhsFactory = (p: Record<string, number>) => {
-        // Update parameters and return compiled RHS
-        const compiledRhs = jit.compileRHS?.() ?? jit.compile?.();
-        return compiledRhs ?? ((t: number, y: Float64Array, dydt: Float64Array) => {
-          for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-        });
+      const reactionRules = expandedModel.reactions ?? [];
+      const compiled = jit.compileFromRxns(reactionRules, nSpecies, speciesIndexMap, params);
+
+      if (!(parameterName in params)) {
+        throw new Error(`Unknown continuation parameter: ${parameterName}`);
+      }
+
+      rhsFn = (y: Float64Array, p: number, dydt: Float64Array) => {
+        params[parameterName] = p;
+        compiled.updateParameters?.(params);
+        compiled.evaluate(0, y, dydt);
       };
     } catch {
       // Fallback: zero RHS (continuation will report no bifurcations)
-      rhsFactory = (_p: Record<string, number>) => {
-        return (t: number, y: Float64Array, dydt: Float64Array) => {
-          for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-        };
+      rhsFn = (_y: Float64Array, _p: number, dydt: Float64Array) => {
+        for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
       };
     }
 
     // Run continuation
     const result = await engine.continuation({
       nSpecies,
-      rhsFn: rhsFactory as any,
+      rhsFn: rhsFn as any,
       initialState: new Float64Array(nSpecies),
       parameterStart: parsedArgs.start_value,
       parameterEnd: parsedArgs.end_value,
