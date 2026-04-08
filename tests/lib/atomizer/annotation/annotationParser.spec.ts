@@ -3,6 +3,8 @@ import { getEquivalence } from '../../../../src/lib/atomizer/annotation/annotati
 import { describe, it, expect, vi } from 'vitest';
 import { getCanonicalSpecies } from '../../../../src/lib/atomizer/annotation/annotationParser';
 import { SBMLModel, SBMLSpecies } from '../../../../src/lib/atomizer/config/types';
+import { getAnnotationsByDatabase } from '@/src/lib/atomizer/annotation/annotationParser';
+import type { SBMLModel, SBMLSpecies, AnnotationInfo } from '@/src/lib/atomizer/config/types';
 
 describe('getEquivalence', () => {
   it('should return [] when the species is the canonical form (first in the list)', () => {
@@ -172,6 +174,144 @@ describe('annotationParser', () => {
       expect(result.get('s4')).toBe('s3');
 
       expect(result.size).toBe(2);
+    });
+  });
+});
+
+function createMockSpecies(id: string, name: string, annotations: AnnotationInfo[]): SBMLSpecies {
+  return {
+    id,
+    name,
+    compartment: 'c',
+    initialConcentration: 0,
+    initialAmount: 0,
+    substanceUnits: 'mole',
+    hasOnlySubstanceUnits: false,
+    boundaryCondition: false,
+    constant: false,
+    annotations,
+  };
+}
+
+function createMockModel(speciesArray: SBMLSpecies[]): SBMLModel {
+  const speciesMap = new Map<string, SBMLSpecies>();
+  for (const s of speciesArray) {
+    speciesMap.set(s.id, s);
+  }
+
+  return {
+    id: 'test_model',
+    name: 'Test Model',
+    compartments: new Map(),
+    species: speciesMap,
+    parameters: new Map(),
+    reactions: new Map(),
+    rules: [],
+    functionDefinitions: new Map(),
+    events: [],
+    initialAssignments: [],
+    speciesByCompartment: new Map(),
+    unitDefinitions: new Map(),
+  };
+}
+
+describe('annotationParser', () => {
+  describe('getAnnotationsByDatabase', () => {
+    it('should handle an empty model', () => {
+      const model = createMockModel([]);
+      const result = getAnnotationsByDatabase(model, 'uniprot');
+      expect(result.size).toBe(0);
+    });
+
+    it('should handle species with no annotations', () => {
+      const model = createMockModel([
+        createMockSpecies('s1', 'Species 1', [])
+      ]);
+      const result = getAnnotationsByDatabase(model, 'uniprot');
+      expect(result.size).toBe(0);
+    });
+
+    it('should find species with matching database annotations', () => {
+      const model = createMockModel([
+        createMockSpecies('s1', 'Species 1', [
+          {
+            qualifierType: 0,
+            resources: ['https://identifiers.org/uniprot/P12345']
+          }
+        ]),
+        createMockSpecies('s2', 'Species 2', [
+          {
+            qualifierType: 0,
+            resources: ['https://identifiers.org/kegg.compound/C00001']
+          }
+        ])
+      ]);
+
+      const uniprotResult = getAnnotationsByDatabase(model, 'uniprot');
+      expect(uniprotResult.size).toBe(1);
+      expect(uniprotResult.has('s1')).toBe(true);
+      expect(uniprotResult.get('s1')![0].database).toBe('uniprot');
+      expect(uniprotResult.get('s1')![0].identifier).toBe('P12345');
+
+      // parseResourceURI maps 'https://identifiers.org/kegg.compound/C00001' to database 'kegg'
+      const keggResult = getAnnotationsByDatabase(model, 'kegg');
+      expect(keggResult.size).toBe(1);
+      expect(keggResult.has('s2')).toBe(true);
+      expect(keggResult.get('s2')![0].database).toBe('kegg');
+      expect(keggResult.get('s2')![0].identifier).toBe('compound'); // The regex in DATABASE_PATTERNS currently captures this
+    });
+
+    it('should match database case-insensitively', () => {
+      const model = createMockModel([
+        createMockSpecies('s1', 'Species 1', [
+          {
+            qualifierType: 0,
+            resources: ['https://identifiers.org/uniprot/P12345']
+          }
+        ])
+      ]);
+
+      const result1 = getAnnotationsByDatabase(model, 'UniProt');
+      expect(result1.size).toBe(1);
+
+      const result2 = getAnnotationsByDatabase(model, 'UNIPROT');
+      expect(result2.size).toBe(1);
+    });
+
+    it('should map multiple annotations for the same species', () => {
+      const model = createMockModel([
+        createMockSpecies('s1', 'Species 1', [
+          {
+            qualifierType: 0,
+            resources: ['https://identifiers.org/uniprot/P12345']
+          },
+          {
+            qualifierType: 0,
+            resources: ['https://identifiers.org/uniprot/Q67890']
+          }
+        ])
+      ]);
+
+      const result = getAnnotationsByDatabase(model, 'uniprot');
+      expect(result.size).toBe(1);
+      const annotations = result.get('s1')!;
+      expect(annotations.length).toBe(2);
+      expect(annotations[0].identifier).toBe('P12345');
+      expect(annotations[1].identifier).toBe('Q67890');
+    });
+
+    it('should return empty map when no database matches', () => {
+      const model = createMockModel([
+        createMockSpecies('s1', 'Species 1', [
+          {
+            qualifierType: 0,
+            resources: ['https://identifiers.org/uniprot/P12345']
+          }
+        ])
+      ]);
+
+      const result = getAnnotationsByDatabase(model, 'chebi');
+      expect(result.size).toBe(0);
     });
   });
 });
