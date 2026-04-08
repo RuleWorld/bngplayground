@@ -1,9 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { getAllAnnotations } from '../../src/lib/atomizer/annotation/annotationParser';
-import { SBMLModel, SBMLSpecies, AnnotationInfo } from '../../src/lib/atomizer/config/types';
-import { annotationsToJSON, ParsedAnnotation } from '../../src/lib/atomizer/annotation/annotationParser';
-import { SBMLModel } from '../../src/lib/atomizer/config/types';
-import { extractUniProtAccessions } from '../../src/lib/atomizer/annotation/annotationParser';
+import {
+  annotationsToJSON,
+  extractUniProtAccessions,
+  findEquivalentSpecies,
+  getAllAnnotations,
+  type ParsedAnnotation,
+} from '../../src/lib/atomizer/annotation/annotationParser';
+import { BiologicalQualifier } from '../../src/lib/atomizer/config/types';
+import type { AnnotationInfo, SBMLModel, SBMLSpecies } from '../../src/lib/atomizer/config/types';
 
 describe('annotationParser', () => {
   describe('getAllAnnotations', () => {
@@ -394,5 +398,192 @@ describe('extractUniProtAccessions', () => {
     const result = extractUniProtAccessions(model);
     expect(result.size).toBe(1);
     expect(result.get('s1')).toEqual(['P11111']);
+  });
+});
+
+function createMockModel(speciesArray: SBMLSpecies[]): SBMLModel {
+  const speciesMap = new Map<string, SBMLSpecies>();
+  for (const s of speciesArray) {
+    speciesMap.set(s.id, s);
+  }
+  return {
+    species: speciesMap,
+  } as unknown as SBMLModel;
+}
+
+function createMockSpecies(id: string, name: string, annotations: AnnotationInfo[]): SBMLSpecies {
+  return {
+    id,
+    name,
+    annotations,
+  } as unknown as SBMLSpecies;
+}
+
+describe('findEquivalentSpecies', () => {
+  it('should return an empty map when there are no species', () => {
+    const model = createMockModel([]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(0);
+  });
+
+  it('should return an empty map when species have no annotations', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', []),
+      createMockSpecies('s2', 'Species 2', []),
+    ]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(0);
+  });
+
+  it('should return an empty map when an annotation is only present on one species', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', [
+        {
+          qualifierType: 1, // biological
+          biologicalQualifier: BiologicalQualifier.BQB_IS, // 0
+          resources: ['uniprot/P12345'],
+        },
+      ]),
+      createMockSpecies('s2', 'Species 2', []),
+    ]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(0);
+  });
+
+  it('should group species that share the same BQB_IS annotation', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+      createMockSpecies('s2', 'Species 2', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+      createMockSpecies('s3', 'Species 3', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['uniprot:P99999'],
+        },
+      ]),
+    ]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(1);
+    expect(result.get('uniprot:P12345')).toEqual(['s1', 's2']);
+  });
+
+  it('should group species that share the same BQB_IS_VERSION_OF annotation', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS_VERSION_OF, // 3
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+      createMockSpecies('s2', 'Species 2', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS_VERSION_OF,
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+    ]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(1);
+    expect(result.get('uniprot:P12345')).toEqual(['s1', 's2']);
+  });
+
+  it('should not group species if they share an annotation with a different qualifier (e.g., BQB_HAS_PART)', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_HAS_PART, // 1
+          resources: ['uniprot/P12345'],
+        },
+      ]),
+      createMockSpecies('s2', 'Species 2', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_HAS_PART,
+          resources: ['uniprot/P12345'],
+        },
+      ]),
+    ]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(0);
+  });
+
+  it('should handle different URI formats that resolve to the same database and identifier', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+      createMockSpecies('s2', 'Species 2', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['identifiers.org/uniprot/P12345'],
+        },
+      ]),
+    ]);
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(1);
+    expect(result.get('uniprot:P12345')).toEqual(['s1', 's2']);
+  });
+
+  it('should group species accurately when multiple annotations exist per species', () => {
+    const model = createMockModel([
+      createMockSpecies('s1', 'Species 1', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_HAS_PART,
+          resources: ['uniprot:P88888'],
+        },
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+      createMockSpecies('s2', 'Species 2', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['uniprot:P12345'],
+        },
+      ]),
+      createMockSpecies('s3', 'Species 3', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS_VERSION_OF,
+          resources: ['kegg.compound:C00001'],
+        },
+      ]),
+      createMockSpecies('s4', 'Species 4', [
+        {
+          qualifierType: 1,
+          biologicalQualifier: BiologicalQualifier.BQB_IS,
+          resources: ['kegg.compound:C00001'],
+        },
+      ]),
+    ]);
+
+    const result = findEquivalentSpecies(model);
+    expect(result.size).toBe(2);
+    expect(result.get('uniprot:P12345')).toEqual(['s1', 's2']);
+    expect(result.get('kegg:compound')).toEqual(['s3', 's4']); // note: parseResourceURI maps kegg.compound:C00001 to database: kegg, identifier: compound
   });
 });
