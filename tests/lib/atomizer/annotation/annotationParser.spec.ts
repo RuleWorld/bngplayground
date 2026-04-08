@@ -5,6 +5,7 @@ import { getCanonicalSpecies } from '../../../../src/lib/atomizer/annotation/ann
 import { SBMLModel, SBMLSpecies } from '../../../../src/lib/atomizer/config/types';
 import { getAnnotationsByDatabase } from '@/src/lib/atomizer/annotation/annotationParser';
 import type { SBMLModel, SBMLSpecies, AnnotationInfo } from '@/src/lib/atomizer/config/types';
+import { annotationsToYAML, ParsedAnnotation } from '../../../../src/lib/atomizer/annotation/annotationParser';
 
 describe('getEquivalence', () => {
   it('should return [] when the species is the canonical form (first in the list)', () => {
@@ -313,5 +314,144 @@ describe('annotationParser', () => {
       const result = getAnnotationsByDatabase(model, 'chebi');
       expect(result.size).toBe(0);
     });
+  });
+});
+
+describe('annotationsToYAML', () => {
+  it('should return an empty string when the annotation map is empty', () => {
+    const model = { species: new Map<string, SBMLSpecies>() } as unknown as SBMLModel;
+    const annotationMap = new Map<string, ParsedAnnotation[]>();
+
+    const result = annotationsToYAML(model, annotationMap);
+    expect(result).toBe('');
+  });
+
+  it('should format a single species with multiple annotations correctly', () => {
+    const species = { id: 's1', name: 'Species 1', annotations: [] } as unknown as SBMLSpecies;
+    const model = { species: new Map([['s1', species]]) } as unknown as SBMLModel;
+
+    const annotations: ParsedAnnotation[] = [
+      {
+        speciesId: 's1',
+        speciesName: 'Species 1',
+        qualifierType: 'biological',
+        qualifier: 'BQB_IS',
+        resources: ['uniprot:P12345'],
+        database: 'uniprot',
+        identifier: 'P12345',
+      },
+      {
+        speciesId: 's1',
+        speciesName: 'Species 1',
+        qualifierType: 'model',
+        qualifier: 'BQM_IS_DESCRIBED_BY',
+        resources: ['pubmed:12345678'],
+        database: 'pubmed',
+        identifier: '12345678',
+      }
+    ];
+
+    const annotationMap = new Map([['s1', annotations]]);
+    const result = annotationsToYAML(model, annotationMap);
+
+    const expected = [
+      's1:',
+      '  name: Species 1',
+      '  annotations:',
+      '    - qualifier: BQB_IS',
+      '      database: uniprot',
+      '      identifier: P12345',
+      '      uri: uniprot:P12345',
+      '    - qualifier: BQM_IS_DESCRIBED_BY',
+      '      database: pubmed',
+      '      identifier: 12345678',
+      '      uri: pubmed:12345678'
+    ].join('\n');
+
+    expect(result).toBe(expected);
+  });
+
+  it('should format multiple species correctly', () => {
+    const species1 = { id: 's1', name: 'Species 1', annotations: [] } as unknown as SBMLSpecies;
+    const species2 = { id: 's2', name: 'Species 2', annotations: [] } as unknown as SBMLSpecies;
+    const model = { species: new Map([['s1', species1], ['s2', species2]]) } as unknown as SBMLModel;
+
+    const annotations1: ParsedAnnotation[] = [
+      {
+        speciesId: 's1',
+        speciesName: 'Species 1',
+        qualifierType: 'biological',
+        qualifier: 'BQB_IS',
+        resources: ['uniprot:P12345'],
+        database: 'uniprot',
+        identifier: 'P12345',
+      }
+    ];
+
+    const annotations2: ParsedAnnotation[] = [
+      {
+        speciesId: 's2',
+        speciesName: 'Species 2',
+        qualifierType: 'biological',
+        qualifier: 'BQB_HAS_PART',
+        resources: ['go:GO:0001234'],
+        database: 'go',
+        identifier: 'GO:0001234',
+      }
+    ];
+
+    const annotationMap = new Map([['s1', annotations1], ['s2', annotations2]]);
+    const result = annotationsToYAML(model, annotationMap);
+
+    const expected = [
+      's1:',
+      '  name: Species 1',
+      '  annotations:',
+      '    - qualifier: BQB_IS',
+      '      database: uniprot',
+      '      identifier: P12345',
+      '      uri: uniprot:P12345',
+      's2:',
+      '  name: Species 2',
+      '  annotations:',
+      '    - qualifier: BQB_HAS_PART',
+      '      database: go',
+      '      identifier: GO:0001234',
+      '      uri: go:GO:0001234'
+    ].join('\n');
+
+    expect(result).toBe(expected);
+  });
+
+  it('should fallback to speciesId if species is missing in model', () => {
+    // Model doesn't contain 's3'
+    const model = { species: new Map() } as unknown as SBMLModel;
+
+    const annotations: ParsedAnnotation[] = [
+      {
+        speciesId: 's3',
+        speciesName: 'Unknown Species',
+        qualifierType: 'biological',
+        qualifier: 'BQB_IS',
+        resources: ['chebi:CHEBI:12345'],
+        database: 'chebi',
+        identifier: 'CHEBI:12345',
+      }
+    ];
+
+    const annotationMap = new Map([['s3', annotations]]);
+    const result = annotationsToYAML(model, annotationMap);
+
+    const expected = [
+      's3:',
+      '  name: s3',
+      '  annotations:',
+      '    - qualifier: BQB_IS',
+      '      database: chebi',
+      '      identifier: CHEBI:12345',
+      '      uri: chebi:CHEBI:12345'
+    ].join('\n');
+
+    expect(result).toBe(expected);
   });
 });
