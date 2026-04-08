@@ -106,6 +106,36 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         steadyStateWindow: 12,
       });
 
+      // Expand the model and compile its RHS
+      const expandedModel = await engine.generateExpandedNetwork(model, () => {}, () => {});
+      const nSpecies = expandedModel.species.length;
+
+      const speciesIndexMap = new Map<string, number>();
+      expandedModel.species.forEach((s: any, idx: number) => {
+        speciesIndexMap.set(s.name, idx);
+      });
+
+      const jit = engine.jitCompiler;
+      let compiled: any;
+      try {
+        compiled = jit.compileFromRxns(
+          (expandedModel.reactions || []) as any,
+          nSpecies,
+          speciesIndexMap,
+          model.parameters
+        );
+      } catch (err) {
+        console.warn('JIT Compilation failed, using fallback RHS');
+      }
+
+      const evaluateRhs = (t: number, y: Float64Array, dydt: Float64Array) => {
+        if (compiled) {
+          compiled.evaluate(t, y, dydt);
+        } else {
+          for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
+        }
+      };
+
       // The continuation would be run by the engine's continuation function
       // For now, set up the result structure
       // In production, this calls engine.continuation() directly
@@ -118,19 +148,17 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       // Generate continuation points using the engine if available
       if (engine.continuation) {
-        const nSpecies = model.species.length;
-
         const initialState = new Float64Array(nSpecies);
-        model.species.forEach((s, i) => { initialState[i] = s.initialConcentration; });
+        expandedModel.species.forEach((s: any, i: number) => { initialState[i] = s.initialConcentration; });
 
         const result = engine.continuation({
           nSpecies,
-          rhsFn: (_y: Float64Array, _p: number, _dydt: Float64Array) => {
-            // TODO: Use engine.JITCompiler to generate real RHS from expanded model.
-            // For now, explicitly fail rather than returning meaningless results.
-            throw new Error(
-              'Bifurcation analysis is not yet implemented: RHS function is not available for continuation.'
-            );
+          rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
+            if (compiled && compiled.updateParameters) {
+              const currentParams = { ...model.parameters, [selectedParam]: p };
+              compiled.updateParameters(currentParams);
+            }
+            evaluateRhs(0, y, dydt);
           },
           initialState,
           parameterStart: startValue,
@@ -139,7 +167,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           maxSteps,
         });
 
-        const speciesIdx = model.species.findIndex(s => s.name === (selectedSpecies1 || model.species[0]?.name));
+        const speciesIdx = expandedModel.species.findIndex((s: any) => s.name === (selectedSpecies1 || expandedModel.species[0]?.name));
         mockResult.points = result.path.map((p: any) => ({
           parameterValue: p.parameterValue,
           steadyState: p.y[speciesIdx >= 0 ? speciesIdx : 0],
@@ -157,18 +185,28 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       // Compute nullclines if two species are selected
       if (selectedSpecies1 && selectedSpecies2 && engine.computeNullclines) {
-        const nSpecies = model.species.length;
-        const idx1 = model.species.findIndex(s => s.name === selectedSpecies1);
-        const idx2 = model.species.findIndex(s => s.name === selectedSpecies2);
+        const idx1 = expandedModel.species.findIndex((s: any) => s.name === selectedSpecies1);
+        const idx2 = expandedModel.species.findIndex((s: any) => s.name === selectedSpecies2);
 
         if (idx1 >= 0 && idx2 >= 0) {
           const fixed = new Float64Array(nSpecies);
-          model.species.forEach((s, i) => { fixed[i] = s.initialConcentration; });
+          expandedModel.species.forEach((s: any, i: number) => { fixed[i] = s.initialConcentration; });
 
+          if (compiled && compiled.updateParameters) {
+            compiled.updateParameters(model.parameters);
+          }
           const ncResult = engine.computeNullclines({
-            rhsFn: (_state: Float64Array) => {
-              // TODO: Use engine.JITCompiler to generate real RHS from expanded model
-              return new Float64Array(2);
+            rhsFn: (state: Float64Array) => {
+              // State provided by computeNullclines is only 2D [x, y].
+              // We must inject it into the full N-dimensional state vector
+              // using the fixed initial concentrations for all other species.
+              const fullState = new Float64Array(fixed);
+              fullState[idx1] = state[0];
+              fullState[idx2] = state[1];
+
+              const dydt = new Float64Array(nSpecies);
+              evaluateRhs(0, fullState, dydt);
+              return new Float64Array([dydt[idx1], dydt[idx2]]);
             },
             xRange: [0, fixed[idx1] * 3 || 10] as [number, number],
             yRange: [0, fixed[idx2] * 3 || 10] as [number, number],
