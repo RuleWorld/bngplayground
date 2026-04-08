@@ -1,9 +1,11 @@
 import { describe, it, expect } from 'vitest';
 import {
   annotationsToYAML,
+  getAnnotationsByQualifier,
   getCanonicalSpecies,
   getEquivalence,
   parseSpeciesAnnotations,
+  type ParsedAnnotation,
 } from '../../../../src/lib/atomizer/annotation/annotationParser';
 import { getAnnotationsByDatabase } from '@/src/lib/atomizer/annotation/annotationParser';
 import type { AnnotationInfo, SBMLModel, SBMLSpecies } from '@/src/lib/atomizer/config/types';
@@ -581,5 +583,136 @@ describe('annotationParser', () => {
 
       expect(result).toHaveLength(0);
     });
+  });
+});
+
+describe('annotationParser - getAnnotationsByQualifier', () => {
+  const mockSpecies1: SBMLSpecies = {
+    id: 's1',
+    name: 'Species 1',
+    compartment: 'c',
+    initialConcentration: 0,
+    initialAmount: 0,
+    substanceUnits: '',
+    hasOnlySubstanceUnits: false,
+    boundaryCondition: false,
+    constant: false,
+    annotations: [
+      {
+        qualifierType: 1, // biological
+        biologicalQualifier: 0, // BQB_IS
+        resources: ['uniprot/P12345'],
+      },
+      {
+        qualifierType: 1, // biological
+        biologicalQualifier: 1, // BQB_HAS_PART
+        resources: ['go/GO:0000001'],
+      },
+    ],
+  };
+
+  const mockSpecies2: SBMLSpecies = {
+    id: 's2',
+    name: 'Species 2',
+    compartment: 'c',
+    initialConcentration: 0,
+    initialAmount: 0,
+    substanceUnits: '',
+    hasOnlySubstanceUnits: false,
+    boundaryCondition: false,
+    constant: false,
+    annotations: [
+      {
+        qualifierType: 0, // model
+        modelQualifier: 1, // BQM_IS_DESCRIBED_BY
+        resources: ['pubmed/123456'],
+      },
+    ],
+  };
+
+  const mockSpecies3: SBMLSpecies = {
+    id: 's3',
+    name: 'Species 3',
+    compartment: 'c',
+    initialConcentration: 0,
+    initialAmount: 0,
+    substanceUnits: '',
+    hasOnlySubstanceUnits: false,
+    boundaryCondition: false,
+    constant: false,
+    annotations: [],
+  };
+
+  const mockModel = {
+    id: 'm1',
+    name: 'Test Model',
+    compartments: new Map(),
+    species: new Map([
+      ['s1', mockSpecies1],
+      ['s2', mockSpecies2],
+      ['s3', mockSpecies3],
+    ]),
+    parameters: new Map(),
+    reactions: new Map(),
+    rules: [],
+    functionDefinitions: new Map(),
+    events: [],
+    initialAssignments: [],
+    speciesByCompartment: new Map(),
+    unitDefinitions: new Map(),
+  } as unknown as SBMLModel;
+
+  it('should return all biological annotations when no specific qualifier is provided', () => {
+    const result = getAnnotationsByQualifier(mockModel, 'biological');
+
+    expect(result.size).toBe(1);
+    expect(result.has('s1')).toBe(true);
+    expect(result.get('s1')).toHaveLength(2);
+    expect(result.get('s1')![0].qualifier).toBe('BQB_IS');
+    expect(result.get('s1')![1].qualifier).toBe('BQB_HAS_PART');
+  });
+
+  it('should return all model annotations when no specific qualifier is provided', () => {
+    const result = getAnnotationsByQualifier(mockModel, 'model');
+
+    expect(result.size).toBe(1);
+    expect(result.has('s2')).toBe(true);
+    expect(result.get('s2')).toHaveLength(1);
+    expect(result.get('s2')![0].qualifier).toBe('BQM_IS_DESCRIBED_BY');
+  });
+
+  it('should return biological annotations matching a specific qualifier', () => {
+    const result = getAnnotationsByQualifier(mockModel, 'biological', 'BQB_IS');
+
+    expect(result.size).toBe(1);
+    expect(result.has('s1')).toBe(true);
+    expect(result.get('s1')).toHaveLength(1);
+    expect(result.get('s1')![0].qualifier).toBe('BQB_IS');
+  });
+
+  it('should return model annotations matching a specific qualifier', () => {
+    const result = getAnnotationsByQualifier(mockModel, 'model', 'BQM_IS_DESCRIBED_BY');
+
+    expect(result.size).toBe(1);
+    expect(result.has('s2')).toBe(true);
+    expect(result.get('s2')).toHaveLength(1);
+    expect(result.get('s2')![0].qualifier).toBe('BQM_IS_DESCRIBED_BY');
+  });
+
+  it('should return an empty map if no annotations match the specific qualifier', () => {
+    const result = getAnnotationsByQualifier(mockModel, 'biological', 'BQB_HAS_VERSION');
+
+    expect(result.size).toBe(0);
+  });
+
+  it('should return an empty map if no annotations match the qualifier type', () => {
+    const emptyModel = {
+      ...mockModel,
+      species: new Map([['s3', mockSpecies3]]),
+    } as unknown as SBMLModel;
+
+    const result = getAnnotationsByQualifier(emptyModel, 'biological');
+
+    expect(result.size).toBe(0);
   });
 });
