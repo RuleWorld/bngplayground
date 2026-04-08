@@ -65,6 +65,9 @@ export const Tab: React.FC<TabProps> = ({ children, isActive, onClick }) => {
   const inactiveClasses = 'border-transparent text-slate-500 hover:text-slate-700 hover:border-stone-300 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:border-slate-600';
   return (
     <button
+      type="button"
+      role="tab"
+      aria-selected={isActive}
       onClick={onClick}
       className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${isActive ? activeClasses : inactiveClasses}`}
     >
@@ -81,11 +84,11 @@ export const TabList: React.FC<{ children: React.ReactNode }> = ({ children }) =
   const { activeIndex, setActiveIndex } = context;
 
   const items = flattenChildren(children);
-  let tabIndex = -1;
+  let currentTabIndex = 0;
 
   return (
     <div className="border-b border-stone-200 dark:border-slate-700">
-      <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs">
+      <nav className="-mb-px flex space-x-6 overflow-x-auto" aria-label="Tabs" role="tablist">
         {items.map((child, itemIdx) => {
           // Keys are required here because we're returning an array from `map`.
           const explicitKey = React.isValidElement(child) ? child.key : null;
@@ -97,8 +100,9 @@ export const TabList: React.FC<{ children: React.ReactNode }> = ({ children }) =
             return React.cloneElement(child, { key });
           }
 
-          tabIndex += 1;
-          const currentIndex = tabIndex;
+          const currentIndex = currentTabIndex;
+          currentTabIndex++;
+
           const label = typeof child.props.children === 'string' ? child.props.children : undefined;
           const key = explicitKey ?? `tab-${label ?? currentIndex}`;
 
@@ -122,5 +126,5 @@ export const TabPanels: React.FC<{ children: React.ReactNode[] | React.ReactNode
 };
 
 export const TabPanel: React.FC<{ children: React.ReactNode; className?: string }> = ({ children, className }) => {
-  return <div className={`h-full ${className || ''}`}>{children}</div>;
+  return <div role="tabpanel" className={`h-full ${className || ''}`}>{children}</div>;
 };
