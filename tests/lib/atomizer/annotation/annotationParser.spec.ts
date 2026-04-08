@@ -1,11 +1,13 @@
 import { describe, it, expect } from 'vitest';
-import { getEquivalence } from '../../../../src/lib/atomizer/annotation/annotationParser';
-import { describe, it, expect, vi } from 'vitest';
-import { getCanonicalSpecies } from '../../../../src/lib/atomizer/annotation/annotationParser';
-import { SBMLModel, SBMLSpecies } from '../../../../src/lib/atomizer/config/types';
+import {
+  annotationsToYAML,
+  getCanonicalSpecies,
+  getEquivalence,
+  parseSpeciesAnnotations,
+} from '../../../../src/lib/atomizer/annotation/annotationParser';
 import { getAnnotationsByDatabase } from '@/src/lib/atomizer/annotation/annotationParser';
-import type { SBMLModel, SBMLSpecies, AnnotationInfo } from '@/src/lib/atomizer/config/types';
-import { annotationsToYAML, ParsedAnnotation } from '../../../../src/lib/atomizer/annotation/annotationParser';
+import type { AnnotationInfo, SBMLModel, SBMLSpecies } from '@/src/lib/atomizer/config/types';
+import { BiologicalQualifier, ModelQualifier } from '../../../../src/lib/atomizer/config/types';
 
 describe('getEquivalence', () => {
   it('should return [] when the species is the canonical form (first in the list)', () => {
@@ -453,5 +455,131 @@ describe('annotationsToYAML', () => {
     ].join('\n');
 
     expect(result).toBe(expected);
+  });
+});
+
+describe('annotationParser', () => {
+  describe('parseSpeciesAnnotations', () => {
+    it('should parse biological annotations correctly', () => {
+      const species = {
+        id: 's1',
+        name: 'Species 1',
+        annotations: [
+          {
+            qualifierType: 1,
+            biologicalQualifier: BiologicalQualifier.BQB_IS,
+            resources: ['uniprot/P12345'],
+          },
+        ],
+      } as SBMLSpecies;
+
+      const result = parseSpeciesAnnotations(species);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        speciesId: 's1',
+        speciesName: 'Species 1',
+        qualifierType: 'biological',
+        qualifier: 'BQB_IS',
+        resources: ['uniprot/P12345'],
+        database: 'uniprot',
+        identifier: 'P12345',
+      });
+    });
+
+    it('should parse model annotations correctly', () => {
+      const species = {
+        id: 's2',
+        name: 'Species 2',
+        annotations: [
+          {
+            qualifierType: 0,
+            modelQualifier: ModelQualifier.BQM_IS_DESCRIBED_BY,
+            resources: ['pubmed/1234567'],
+          },
+        ],
+      } as SBMLSpecies;
+
+      const result = parseSpeciesAnnotations(species);
+
+      expect(result).toHaveLength(1);
+      expect(result[0]).toEqual({
+        speciesId: 's2',
+        speciesName: 'Species 2',
+        qualifierType: 'model',
+        qualifier: 'BQM_IS_DESCRIBED_BY',
+        resources: ['pubmed/1234567'],
+        database: 'pubmed',
+        identifier: '1234567',
+      });
+    });
+
+    it('should handle missing qualifiers gracefully', () => {
+      const species = {
+        id: 's3',
+        name: 'Species 3',
+        annotations: [
+          {
+            qualifierType: 1, // biological
+            resources: ['chebi/CHEBI:12345'],
+          },
+          {
+            qualifierType: 0, // model
+            resources: ['doi/10.1234/test'],
+          },
+        ],
+      } as SBMLSpecies;
+
+      const result = parseSpeciesAnnotations(species);
+
+      expect(result).toHaveLength(2);
+      expect(result[0].qualifier).toBe('BQB_UNKNOWN'); // Default 13
+      expect(result[0].database).toBe('chebi');
+      expect(result[0].identifier).toBe('12345');
+
+      expect(result[1].qualifier).toBe('BQM_UNKNOWN'); // Default 5
+      expect(result[1].database).toBe('doi');
+      expect(result[1].identifier).toBe('10.1234/test');
+    });
+
+    it('should handle multiple resources in a single annotation', () => {
+      const species = {
+        id: 's4',
+        name: 'Species 4',
+        annotations: [
+          {
+            qualifierType: 1,
+            biologicalQualifier: BiologicalQualifier.BQB_IS_VERSION_OF,
+            resources: ['uniprot/P12345', 'uniprot/Q54321'],
+          },
+        ],
+      } as SBMLSpecies;
+
+      const result = parseSpeciesAnnotations(species);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toMatchObject({
+        qualifier: 'BQB_IS_VERSION_OF',
+        resources: ['uniprot/P12345'],
+        identifier: 'P12345',
+      });
+      expect(result[1]).toMatchObject({
+        qualifier: 'BQB_IS_VERSION_OF',
+        resources: ['uniprot/Q54321'],
+        identifier: 'Q54321',
+      });
+    });
+
+    it('should return an empty array if there are no annotations', () => {
+      const species = {
+        id: 's5',
+        name: 'Species 5',
+        annotations: [],
+      } as SBMLSpecies;
+
+      const result = parseSpeciesAnnotations(species);
+
+      expect(result).toHaveLength(0);
+    });
   });
 });
