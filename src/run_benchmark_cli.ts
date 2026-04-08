@@ -2,7 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { createRequire } from 'module';
-import { parseBNGLWithANTLR, NetworkGenerator, BNGLParser, GraphCanonicalizer } from '@bngplayground/engine';
+import { parseBNGLWithANTLR, NetworkGenerator, BNGLParser, GraphCanonicalizer, SafeExpressionEvaluator } from '@bngplayground/engine';
 import type { BNGLModel } from '../types';
 import modelsList from './gdat_models.json';
 import { collectBnglFilesRecursive, resolveRuleHubRoot } from '../tools/rulehubLocal';
@@ -241,31 +241,22 @@ export async function simulateModel(inputModel: BNGLModel, t_end: number, n_step
     console.log(`[DEBUG] Observable mapping:`);
     observableMaps.forEach(m => console.log(`  ${m.name}: matched ${m.indices.length} species`));
 
-    const evaluateExpressionRaw = (expr: string, params: Record<string, number>, obsValues: Record<string, number>): number => {
-        try {
-            let evalExpr = expr;
-            // Replace params (longest first to avoid substring issues?)
-            // Better: use word boundary regex
-            for (const [k, v] of Object.entries(params)) {
-                const regex = new RegExp(`\\b${k}\\b`, 'g');
-                evalExpr = evalExpr.replace(regex, String(v));
-            }
-            // Replace observables
-            for (const [k, v] of Object.entries(obsValues)) {
-                const regex = new RegExp(`\\b${k}\\b`, 'g');
-                evalExpr = evalExpr.replace(regex, String(v));
-            }
-            // BNGL math
-            evalExpr = evalExpr.replace(/\^/g, '**');
-            evalExpr = evalExpr.replace(/\b_pi\b/g, String(Math.PI));
-            evalExpr = evalExpr.replace(/\b_e\b/g, String(Math.E));
-            evalExpr = evalExpr.replace(/\bexp\(/g, 'Math.exp(');
-            evalExpr = evalExpr.replace(/\bln\(/g, 'Math.log(');
-            evalExpr = evalExpr.replace(/\bsqrt\(/g, 'Math.sqrt(');
+    // Pre-compile rate expressions using SafeExpressionEvaluator
+    const paramNames = Object.keys(inputModel.parameters);
+    const obsNames = inputModel.observables.map(o => o.name);
+    const allowedVars = [...paramNames, ...obsNames];
 
-            return new Function(`return ${evalExpr}`)();
-        } catch (e) { return 0; }
-    };
+    const compiledRates: Array<((context: Record<string, number>) => number) | null> = reactions.map(rxn => {
+        if (rxn.rateExpression) {
+            try {
+                return SafeExpressionEvaluator.compile(rxn.rateExpression, allowedVars);
+            } catch (e) {
+                console.error(`[Sim] Failed to compile rate expression: ${rxn.rateExpression}`, e);
+                return () => 0;
+            }
+        }
+        return null;
+    });
 
     // Derivatives function (dynamic)
     const simStartTime = Date.now();
@@ -289,11 +280,14 @@ export async function simulateModel(inputModel: BNGLModel, t_end: number, n_step
             currentObservables[map.name] = sum;
         }
 
+        const evalContext = { ...inputModel.parameters, ...currentObservables };
+
         for (let i = 0; i < reactions.length; i++) {
             const rxn = reactions[i];
             let velocity = 0;
             if (rxn.rateExpression) {
-                velocity = evaluateExpressionRaw(rxn.rateExpression, inputModel.parameters, currentObservables);
+                const compiled = compiledRates[i];
+                velocity = compiled ? compiled(evalContext) : 0;
             } else {
                 velocity = rxn.rate;
             }
