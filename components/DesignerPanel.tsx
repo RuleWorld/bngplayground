@@ -707,7 +707,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 <a
                   href={INDRA_DOCS_URL}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                 >
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Docs</div>
@@ -717,7 +717,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 <a
                   href={INDRA_API_URL}
                   target="_blank"
-                  rel="noreferrer"
+                  rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                 >
                   <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Live API</div>

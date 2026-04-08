@@ -715,7 +715,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               />
               <p className="text-[10px] text-slate-500 mt-0.5">
                 PyBioNetFit-compatible BPSL constraints. See{' '}
-                <a href="https://pybnf.readthedocs.io" target="_blank" rel="noreferrer" className="underline">docs</a>.
+                <a href="https://pybnf.readthedocs.io" target="_blank" rel="noopener noreferrer" className="underline">docs</a>.
               </p>
             </div>
           </div>
