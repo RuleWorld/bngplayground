@@ -42,7 +42,7 @@ async function initializeBackend(): Promise<void> {
       backendInitialized = true;
     } catch (e) {
       console.error('Failed to initialize any TensorFlow.js backend:', e);
-      throw new Error('No TensorFlow.js backend available. Neural ODE features are unavailable.');
+      throw new Error('No TensorFlow.js backend available. Neural ODE features are unavailable.', { cause: e });
     }
   })();
 
@@ -378,6 +378,59 @@ export class NeuralODESurrogate {
   }
   
   /**
+   * Predict concentrations for a batch of parameters and time points
+   * Uses native TF tensor batching to avoid JS iteration overhead
+   */
+  predictBatch(paramSets: number[][], timePoints: number[]): number[][][] {
+    if (!this.model) {
+      throw new Error('Model not trained yet. Call train() first.');
+    }
+
+    if (!this.isNormalized) {
+      throw new Error('Model normalization parameters not set. Train the model first.');
+    }
+
+    return tf.tidy(() => {
+      const tMin = 0; // Assuming time starts at 0
+      const tMax = Math.max(...timePoints);
+      const normalizedTime = timePoints.map(t => (t - tMin) / (tMax - tMin + 1e-7));
+
+      // Flatten the inputs for the entire batch into a single 2D array
+      const inputs: number[][] = [];
+      for (const params of paramSets) {
+        const normalizedParams = params.map((p, i) =>
+          (p - this.paramMean[i]) / (this.paramStd[i] + 1e-7)
+        );
+        for (const t of normalizedTime) {
+          inputs.push([...normalizedParams, t]);
+        }
+      }
+
+      const inputTensor = tf.tensor2d(inputs);
+      const predictions = this.model!.predict(inputTensor) as tf.Tensor2D;
+
+      // Denormalize the whole batch in one operation
+      const mean = tf.tensor1d(this.concMean);
+      const std = tf.tensor1d(this.concStd);
+      const unnormalized = tf.add(tf.mul(predictions, std), mean);
+      const denormalized = tf.exp(unnormalized); // Reverse log transform
+
+      const flatConcentrations = denormalized.arraySync() as number[][];
+
+      // Re-chunk the flat output into [nParamSets, nTimePoints, nSpecies]
+      const results: number[][][] = [];
+      const nTimePoints = timePoints.length;
+      for (let i = 0; i < paramSets.length; i++) {
+        const startIdx = i * nTimePoints;
+        const endIdx = startIdx + nTimePoints;
+        results.push(flatConcentrations.slice(startIdx, endIdx));
+      }
+
+      return results;
+    });
+  }
+
+  /**
    * Predict concentrations for given parameters and time points
    */
   predict(params: number[], timePoints: number[]): PredictionResult {
@@ -438,14 +491,11 @@ export class NeuralODESurrogate {
     for (let i = 0; i < paramSets.length; i += batchSize) {
       const batch = paramSets.slice(i, Math.min(i + batchSize, paramSets.length));
       
-      const batchResults = await Promise.all(
-        batch.map(params => {
-          const result = this.predict(params, timePoints);
-          return result.concentrations;
-        })
-      );
-      
+      const batchResults = this.predictBatch(batch, timePoints);
       results.push(...batchResults);
+
+      // Yield to keep UI responsive
+      await tf.nextFrame();
     }
     
     return results;
