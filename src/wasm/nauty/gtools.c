@@ -371,34 +371,37 @@ writeline(FILE *f, char *s)
    that name.
 */
 
+DYNALLSTAT(char,getline_s,getline_s_sz);
+
 char*
 getline(FILE *f)     /* read a line with error checking */
 /* includes \n (if present) and \0.  Immediate EOF causes NULL return. */
 {
-    DYNALLSTAT(char,s,s_sz);
     int c;
     long i;
 
-    DYNALLOC1(char,s,s_sz,5000,"getline");
+    DYNALLOC1(char,getline_s,getline_s_sz,5000,"getline");
 
     FLOCKFILE(f);
     i = 0;
     while ((c = GETC(f)) != EOF && c != '\n')
     {
-        if (i == s_sz-3)
-            DYNREALLOC(char,s,s_sz,3*(s_sz/2)+10000,"getline");
-        s[i++] = c;
+        if (i == getline_s_sz-3)
+            DYNREALLOC(char,getline_s,getline_s_sz,3*(getline_s_sz/2)+10000,"getline");
+        getline_s[i++] = c;
     }
     FUNLOCKFILE(f);
 
     if (i == 0 && c == EOF) return NULL;
 
-    if (c == '\n') s[i++] = '\n';
-    s[i] = '\0';
-    return s;
+    if (c == '\n') getline_s[i++] = '\n';
+    getline_s[i] = '\0';
+    return getline_s;
 }
 
 /****************************************************************************/
+
+DYNALLSTAT(unsigned char,getecline_s,getecline_s_sz);
 
 char*
 getecline(FILE *f)     /* read an edge_code line */
@@ -407,7 +410,6 @@ getecline(FILE *f)     /* read an edge_code line */
     size_t headsize,bodysize;
     int sizesize,edgesize;
     int c1,c,i;
-    DYNALLSTAT(unsigned char,s,s_sz);
 
     FLOCKFILE(f);
     if ((c1 = GETC(f)) == EOF) return NULL;
@@ -438,21 +440,21 @@ getecline(FILE *f)     /* read an edge_code line */
 	}
     }
 
-    DYNALLOC1(unsigned char,s,s_sz,headsize+bodysize,"getecline");
+    DYNALLOC1(unsigned char,getecline_s,getecline_s_sz,headsize+bodysize,"getecline");
 
-    s[0] = c1;
+    getecline_s[0] = c1;
     if (c1 > 0)
     {
-	s[1] = (sizesize << 4) + edgesize;
+	getecline_s[1] = (sizesize << 4) + edgesize;
 	for (i = 0; i < sizesize; ++i)
-	    s[headsize-1-i] = (bodysize >> 8*i) & 0xFF;
+	    getecline_s[headsize-1-i] = (bodysize >> 8*i) & 0xFF;
     }
 
-    if (bodysize > 0 && fread(s+headsize,bodysize,1,f) != bodysize)
+    if (bodysize > 0 && fread(getecline_s+headsize,bodysize,1,f) != bodysize)
 	gt_abort("Incomplete edge_code line");
 
     FUNLOCKFILE(f);
-    return (char*)s;
+    return (char*)getecline_s;
 }
 
 int
@@ -484,6 +486,11 @@ graphsize(char *s)
             n = (n << 6) | (*p++ - BIAS6);
 	}
     }
+
+#if MAXN
+    if (n > MAXN) gt_abort(">E graphsize: graph size exceeds MAXN\n");
+#endif
+
     return n;
 }
 
@@ -1854,6 +1861,22 @@ stringcopy(char *s)   /* duplicate string */
         scopy[i] = s[i];
 
     return scopy;
+}
+
+/*****************************************************************************
+*                                                                            *
+*  gtools_check() checks that this file is compiled compatibly with the      *
+*  given parameters.   If not, call exit(1).                                 *
+*                                                                            *
+*****************************************************************************/
+
+void
+gtools_freemem(void)
+{
+    DYNFREE(getline_s,getline_s_sz);
+    DYNFREE(getecline_s,getecline_s_sz);
+    DYNFREE(gcode,gcode_sz);
+    DYNFREE(buff,buff_sz);
 }
 
 /*****************************************************************************
