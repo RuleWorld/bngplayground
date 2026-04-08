@@ -1,21 +1,21 @@
 export type ActionType =
-  | 'binds'
-  | 'phosphorylates'
-  | 'dephosphorylates'
-  | 'synthesizes'
-  | 'degrades'
-  | 'dimerizes'
-  | 'translocates'
-  | 'activates'
-  | 'inhibits'
-  | 'cleaves'
-  | 'ubiquitinates'
-  | 'deubiquitinates'
-  | 'methylates'
-  | 'demethylates'
-  | 'acetylates'
-  | 'deacetylates'
-  | 'unknown';
+  | "binds"
+  | "phosphorylates"
+  | "dephosphorylates"
+  | "synthesizes"
+  | "degrades"
+  | "dimerizes"
+  | "translocates"
+  | "activates"
+  | "inhibits"
+  | "cleaves"
+  | "ubiquitinates"
+  | "deubiquitinates"
+  | "methylates"
+  | "demethylates"
+  | "acetylates"
+  | "deacetylates"
+  | "unknown";
 
 export interface Agent {
   name: string;
@@ -34,7 +34,15 @@ export type ParseError = {
   endColumn: number;
 };
 
-export type SentenceType = 'DEFINITION' | 'COMPARTMENT' | 'INTERACTION' | 'INITIALIZATION' | 'SIMULATION' | 'COMMENT' | 'INVALID';
+export type SentenceType =
+  | "DEFINITION"
+  | "COMPARTMENT"
+  | "INTERACTION"
+  | "INITIALIZATION"
+  | "SIMULATION"
+  | "COMMENT"
+  | "OBSERVABLE"
+  | "INVALID";
 
 export interface BaseSentence {
   id: string; // unique ID for tracking (useful for React keys)
@@ -45,19 +53,19 @@ export interface BaseSentence {
 }
 
 export interface CompartmentSentence extends BaseSentence {
-  type: 'COMPARTMENT';
+  type: "COMPARTMENT";
   name: string;
   volume?: number;
   dimension?: number;
 }
 
 export interface DefinitionSentence extends BaseSentence {
-  type: 'DEFINITION';
+  type: "DEFINITION";
   agent: Agent;
 }
 
 export interface InteractionSentence extends BaseSentence {
-  type: 'INTERACTION';
+  type: "INTERACTION";
   subject: MoleculeInstance;
   action: ActionType;
   object: MoleculeInstance;
@@ -70,23 +78,29 @@ export interface InteractionSentence extends BaseSentence {
 }
 
 export interface InitializationSentence extends BaseSentence {
-  type: 'INITIALIZATION';
+  type: "INITIALIZATION";
   molecule: MoleculeInstance;
   count: string; // "100", "E0"
 }
 
 export interface SimulationSentence extends BaseSentence {
-  type: 'SIMULATION';
+  type: "SIMULATION";
   duration: number; // t_end
   steps: number; // n_steps
 }
 
+export interface ObservableSentence extends BaseSentence {
+  type: "OBSERVABLE";
+  pattern: string;
+  name?: string;
+}
+
 export interface CommentSentence extends BaseSentence {
-  type: 'COMMENT';
+  type: "COMMENT";
 }
 
 export interface InvalidSentence extends BaseSentence {
-  type: 'INVALID';
+  type: "INVALID";
 }
 
 export type BioSentence =
@@ -95,5 +109,6 @@ export type BioSentence =
   | InteractionSentence
   | InitializationSentence
   | SimulationSentence
+  | ObservableSentence
   | CommentSentence
   | InvalidSentence;
