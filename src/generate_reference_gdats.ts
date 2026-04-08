@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execFileSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 // ESM-compatible __dirname
@@ -147,11 +147,18 @@ simulate({method=>"ode",t_end=>100,n_steps=>100})
         }
 
         // Run BNG2.pl
-        execFileSync('perl', [BNG2_PATH, path.basename(bnglToRun)], {
+        const result = spawnSync('perl', [BNG2_PATH, path.basename(bnglToRun)], {
             cwd: tempDir,
             timeout: 120000, // 2 min timeout
             stdio: ['pipe', 'pipe', 'pipe']
         });
+
+        if (result.error) {
+            throw result.error;
+        }
+        if (result.status !== 0) {
+            throw new Error(`Process exited with status ${result.status}`);
+        }
 
         // Find generated GDAT file
         const tempFiles = fs.readdirSync(tempDir);

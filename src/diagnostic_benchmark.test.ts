@@ -6,7 +6,7 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 
 import { parseBNGL } from '../services/parseBNGL';
 import { NetworkGenerator, BNGLParser } from '@bngplayground/engine';
@@ -96,7 +96,18 @@ describe('Diagnostic Benchmark: Kozer_2014', () => {
             fs.copyFileSync(modelData.path, tempBngl);
 
             const bngStart = Date.now();
-            execSync(`perl "${bng2Path}" "${tempBngl}"`, { cwd: tempDir, timeout: 60000, stdio: 'ignore' });
+            const result = spawnSync('perl', [bng2Path, tempBngl], {
+                cwd: tempDir,
+                timeout: 60000,
+                stdio: 'ignore'
+            });
+
+            if (result.error) {
+                throw result.error;
+            }
+            if (result.status !== 0) {
+                throw new Error(`Process exited with status ${result.status}`);
+            }
             const bngTime = Date.now() - bngStart;
 
             console.log(`BNG2.pl Time: ${bngTime}ms`);
