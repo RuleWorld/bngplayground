@@ -18,8 +18,7 @@ export async function loadTransformersPipeline(): Promise<PipelineFactory> {
       let imported: any;
       try {
         // Indirect dynamic import to avoid bundler static analysis
-         
-        imported = await new Function('moduleName', 'return import(moduleName)')(moduleName);
+        imported = await import(/* @vite-ignore */ moduleName);
       } catch (e) {
         // Fallback to direct import (useful for test runners that mock the module)
         imported = await import(moduleName);
@@ -41,10 +40,9 @@ export async function loadTransformersPipeline(): Promise<PipelineFactory> {
 
     // Helper to attempt importing an ES module (dynamic import) and fallback to inserting a module <script>
     const importModule = async (src: string) => {
-      // Try dynamic import via an indirect Function to avoid bundler static resolution
+      // Try dynamic import while avoiding bundler static resolution
       try {
-         
-        const mod = await new Function('s', 'return import(s)')(src);
+        const mod = await import(/* @vite-ignore */ src);
         return mod;
       } catch (err) {
         // Fallback: inject a module script that assigns the module to a temporary window symbol
