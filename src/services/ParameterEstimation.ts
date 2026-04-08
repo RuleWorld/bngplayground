@@ -230,8 +230,8 @@ export class VariationalParameterEstimator {
     // Gradient-free update: sample candidates from current variational distribution,
     // pick the best objective, and nudge (mu, logSigma) toward it.
     const elboHistory: number[] = [];
-    let mu = this.mu.arraySync() as number[];
-    let logSigma = this.logSigma.arraySync() as number[];
+    const mu = this.mu.arraySync() as number[];
+    const logSigma = this.logSigma.arraySync() as number[];
 
     const candidatesPerIter = Math.max(2, batchSize);
     const step = Math.max(0.001, Math.min(0.2, learningRate));
@@ -272,11 +272,13 @@ export class VariationalParameterEstimator {
       elboHistory.push(elboValue);
 
       if (bestParamsIter) {
-        const targetMu = bestParamsIter.map((p) => Math.log(Math.max(p, 1e-12)));
-        mu = mu.map((m, i) => (1 - step) * m + step * targetMu[i]);
-
-        // Anneal uncertainty slowly to encourage convergence
-        logSigma = logSigma.map((ls) => clamp(ls - 0.002, logSigmaMin, logSigmaMax));
+        // Optimize loop: avoid .map() allocations and remove redundant Math.max
+        // bestParamsIter values are generated via Math.exp(), so they are strictly positive
+        for (let i = 0; i < mu.length; i++) {
+          mu[i] = (1 - step) * mu[i] + step * Math.log(bestParamsIter[i]);
+          // Anneal uncertainty slowly to encourage convergence
+          logSigma[i] = clamp(logSigma[i] - 0.002, logSigmaMin, logSigmaMax);
+        }
 
         this.mu.assign(tf.tensor1d(mu));
         this.logSigma.assign(tf.tensor1d(logSigma));
