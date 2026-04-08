@@ -3,6 +3,7 @@ import { getAllAnnotations } from '../../src/lib/atomizer/annotation/annotationP
 import { SBMLModel, SBMLSpecies, AnnotationInfo } from '../../src/lib/atomizer/config/types';
 import { annotationsToJSON, ParsedAnnotation } from '../../src/lib/atomizer/annotation/annotationParser';
 import { SBMLModel } from '../../src/lib/atomizer/config/types';
+import { extractUniProtAccessions } from '../../src/lib/atomizer/annotation/annotationParser';
 
 describe('annotationParser', () => {
   describe('getAllAnnotations', () => {
@@ -271,5 +272,127 @@ describe('annotationParser', () => {
 
       expect(parsedResult).toEqual({});
     });
+  });
+});
+
+describe('extractUniProtAccessions', () => {
+  const createMockSpecies = (id: string, annotations: AnnotationInfo[]): SBMLSpecies => {
+    return {
+      id,
+      name: id,
+      compartment: 'c',
+      initialConcentration: 0,
+      initialAmount: 0,
+      substanceUnits: '',
+      hasOnlySubstanceUnits: false,
+      boundaryCondition: false,
+      constant: false,
+      annotations,
+    } as SBMLSpecies;
+  };
+
+  const createMockModel = (species: Map<string, SBMLSpecies>): SBMLModel => {
+    return {
+      id: 'mock',
+      name: 'mock',
+      compartments: new Map(),
+      species,
+      parameters: new Map(),
+      reactions: new Map(),
+      rules: [],
+      functionDefinitions: new Map(),
+      events: [],
+      initialAssignments: [],
+      speciesByCompartment: new Map(),
+      unitDefinitions: new Map(),
+    } as SBMLModel;
+  };
+
+  it('should return an empty map if no species have UniProt annotations', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', [
+      { qualifierType: 1, resources: ['kegg.compound/C00001'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(0);
+  });
+
+  it('should extract UniProt accessions for species with UniProt annotations', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', [
+      { qualifierType: 1, resources: ['uniprot/P12345', 'kegg.compound/C00001'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(1);
+    expect(result.get('s1')).toEqual(['P12345']);
+  });
+
+  it('should handle multiple UniProt accessions for a single species', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', [
+      { qualifierType: 1, resources: ['uniprot/P12345', 'uniprot/Q67890'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(1);
+    expect(result.get('s1')).toEqual(['P12345', 'Q67890']);
+  });
+
+  it('should handle multiple species with UniProt accessions', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', [
+      { qualifierType: 1, resources: ['uniprot/P12345'] }
+    ]));
+    speciesMap.set('s2', createMockSpecies('s2', [
+      { qualifierType: 1, resources: ['uniprot:Q67890'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(2);
+    expect(result.get('s1')).toEqual(['P12345']);
+    expect(result.get('s2')).toEqual(['Q67890']);
+  });
+
+  it('should ignore species without annotations', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', []));
+    speciesMap.set('s2', createMockSpecies('s2', [
+      { qualifierType: 1, resources: ['uniprot/P12345'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(1);
+    expect(result.get('s2')).toEqual(['P12345']);
+  });
+
+  it('should correctly parse UniProt identifiers using identifiers.org URL format', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', [
+      { qualifierType: 1, resources: ['https://identifiers.org/uniprot/P99999'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(1);
+    expect(result.get('s1')).toEqual(['P99999']);
+  });
+
+  it('should correctly parse UniProt identifiers using URN format', () => {
+    const speciesMap = new Map<string, SBMLSpecies>();
+    speciesMap.set('s1', createMockSpecies('s1', [
+      { qualifierType: 1, resources: ['urn:miriam:uniprot:P11111'] }
+    ]));
+    const model = createMockModel(speciesMap);
+
+    const result = extractUniProtAccessions(model);
+    expect(result.size).toBe(1);
+    expect(result.get('s1')).toEqual(['P11111']);
   });
 });
