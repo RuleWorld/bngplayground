@@ -1,10 +1,12 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   extractGOTerms,
+  getAnnotationsByQualifier,
   getLibSBMLInstance,
   SBML2JSON,
   setLibSBMLInstanceForTest,
 } from '../../../../src/lib/atomizer/parser/sbmlParser';
+import { BiologicalQualifier, ModelQualifier, type AnnotationInfo } from '../../../../src/lib/atomizer/config/types';
 import * as helpers from '../../../../src/lib/atomizer/utils/helpers';
 
 describe('sbmlParser', () => {
@@ -418,5 +420,90 @@ describe('SBML2JSON', () => {
         fwd_rate: 'if(A > 0, (k1)/A, 0)'
       });
     });
+  });
+});
+
+describe('getAnnotationsByQualifier', () => {
+  it('should return empty array for empty annotations list', () => {
+    const annotations: AnnotationInfo[] = [];
+    const result = getAnnotationsByQualifier(annotations, BiologicalQualifier.BQB_IS, true);
+    expect(result).toEqual([]);
+  });
+
+  it('should return correct biological qualifier items', () => {
+    const annotations: AnnotationInfo[] = [
+      {
+        qualifierType: 1, // Biological
+        biologicalQualifier: BiologicalQualifier.BQB_IS,
+        resources: ['uniprot:P12345', 'uniprot:Q67890'],
+      },
+      {
+        qualifierType: 1, // Biological
+        biologicalQualifier: BiologicalQualifier.BQB_HAS_PART,
+        resources: ['go:GO:0005515'],
+      }
+    ];
+
+    const result = getAnnotationsByQualifier(annotations, BiologicalQualifier.BQB_IS, true);
+    expect(result).toEqual(['uniprot:P12345', 'uniprot:Q67890']);
+  });
+
+  it('should return correct model qualifier items', () => {
+    const annotations: AnnotationInfo[] = [
+      {
+        qualifierType: 0, // Model
+        modelQualifier: ModelQualifier.BQM_IS_DESCRIBED_BY,
+        resources: ['pubmed:12345678'],
+      },
+      {
+        qualifierType: 1, // Biological
+        biologicalQualifier: BiologicalQualifier.BQB_IS,
+        resources: ['uniprot:P12345'],
+      }
+    ];
+
+    const result = getAnnotationsByQualifier(annotations, ModelQualifier.BQM_IS_DESCRIBED_BY, false);
+    expect(result).toEqual(['pubmed:12345678']);
+  });
+
+  it('should not mix up qualifier types and identifiers', () => {
+    // Both biological and model qualifiers have numeric enums.
+    // They could accidentally match if the boolean isBiological is ignored.
+    const annotations: AnnotationInfo[] = [
+      {
+        qualifierType: 1, // Biological
+        biologicalQualifier: 1 as BiologicalQualifier, // BQB_HAS_PART
+        resources: ['biological:1'],
+      },
+      {
+        qualifierType: 0, // Model
+        modelQualifier: 1 as ModelQualifier, // BQM_IS_DESCRIBED_BY
+        resources: ['model:1'],
+      }
+    ];
+
+    const biologicalResult = getAnnotationsByQualifier(annotations, 1 as BiologicalQualifier, true);
+    expect(biologicalResult).toEqual(['biological:1']);
+
+    const modelResult = getAnnotationsByQualifier(annotations, 1 as ModelQualifier, false);
+    expect(modelResult).toEqual(['model:1']);
+  });
+
+  it('should correctly combine resources from multiple matching annotations', () => {
+    const annotations: AnnotationInfo[] = [
+      {
+        qualifierType: 1, // Biological
+        biologicalQualifier: BiologicalQualifier.BQB_IS,
+        resources: ['uniprot:P1'],
+      },
+      {
+        qualifierType: 1, // Biological
+        biologicalQualifier: BiologicalQualifier.BQB_IS,
+        resources: ['uniprot:P2'],
+      }
+    ];
+
+    const result = getAnnotationsByQualifier(annotations, BiologicalQualifier.BQB_IS, true);
+    expect(result).toEqual(['uniprot:P1', 'uniprot:P2']);
   });
 });
