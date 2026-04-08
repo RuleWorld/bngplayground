@@ -938,19 +938,24 @@ export async function simulate(
 
       // Re-evaluate dependent params
       if (parametersUpdated && model.paramExpressions) {
+        // ⚡ Bolt Optimization: Evaluate observables ONCE outside the loop and use for...in instead of Object.entries()
+        // to avoid repeated array allocations and redundant calculations during phase updates.
+        const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
         for (let pass = 0; pass < 10; pass++) {
           let anyChanged = false;
-          for (const [name, expr] of Object.entries(model.paramExpressions)) {
-            try {
-              const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
-              const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
-              if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
+          for (const name in model.paramExpressions) {
+            if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
+              const expr = model.paramExpressions[name];
+              try {
+                const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
+                if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
 
-                model.parameters[name] = val;
-                anyChanged = true;
+                  model.parameters[name] = val;
+                  anyChanged = true;
+                }
+              } catch (e: any) {
+                /* ignore */
               }
-            } catch (e: any) {
-              /* ignore */
             }
           }
           if (!anyChanged) break;
