@@ -118,6 +118,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
             onClick={handleClear}
             className="absolute right-24 top-1/2 -translate-y-1/2 p-1 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             title="Clear search"
+            aria-label="Clear search"
           >
             <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
