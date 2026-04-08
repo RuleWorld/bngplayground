@@ -1,21 +1,26 @@
 // @ts-nocheck
+import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
+import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
+import { GraphMatcher } from '../../src/services/graph/core/Matcher';
 import { describe, it, expect } from 'vitest';
-import { parseQuery, type VerificationQuery } from '../../src/services/verification/QueryParser';
-import {
-  checkAbstractReachability,
-  enumerateAbstractComplexes,
-  type ContactMap,
-  type ContactNode,
-  type ContactEdge,
-} from '../../src/services/verification/ContactMapReachability';
 import {
   boundedReachabilityCheck,
   checkDeadlock,
   checkRuleFires,
-  parseSpeciesString,
-  canonicalizeSpecies,
-  speciesMatchesPattern,
 } from '../../src/services/verification/BoundedVerifier';
+
+import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
+import {
+  parseMoleculeTokens,
+  extractBindingRequirements,
+  extractMoleculeNames,
+  checkAbstractReachability,
+  enumerateAbstractComplexes,
+} from '../../src/services/verification/ContactMapReachability';
+import { parseQuery } from '../../src/services/verification/QueryParser';
+import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
+import { GraphMatcher } from '../../src/services/graph/core/Matcher';
+
 import {
   checkFiniteContactMap,
   fullReachabilityCheck,
@@ -331,85 +336,85 @@ describe('ContactMapReachability', () => {
  *  3. BoundedVerifier tests
  * ================================================================ */
 describe('BoundedVerifier', () => {
-  describe('parseSpeciesString', () => {
+  describe('BNGLParser.parseSpeciesGraph', () => {
     it('parses a simple molecule', () => {
-      const mols = parseSpeciesString('A(b)');
-      expect(mols).toHaveLength(1);
-      expect(mols[0].name).toBe('A');
-      expect(mols[0].components).toHaveLength(1);
-      expect(mols[0].components[0].name).toBe('b');
+      const mols = BNGLParser.parseSpeciesGraph('A(b)', true);
+      expect(mols.molecules).toHaveLength(1);
+      expect(mols.molecules[0].name).toBe('A');
+      expect(mols.molecules[0].components).toHaveLength(1);
+      expect(mols.molecules[0].components[0].name).toBe('b');
     });
 
     it('parses a complex with bonds', () => {
-      const mols = parseSpeciesString('A(b!1).B(a!1)');
-      expect(mols).toHaveLength(2);
-      expect(mols[0].name).toBe('A');
-      expect(mols[0].components[0].bondLabel).toBe('1');
-      expect(mols[1].name).toBe('B');
-      expect(mols[1].components[0].bondLabel).toBe('1');
+      const mols = BNGLParser.parseSpeciesGraph('A(b!1).B(a!1)', true);
+      expect(mols.molecules).toHaveLength(2);
+      expect(mols.molecules[0].name).toBe('A');
+      expect(Array.from(mols.molecules[0].components[0].edges.keys())[0]).toBe(1);
+      expect(mols.molecules[1].name).toBe('B');
+      expect(Array.from(mols.molecules[1].components[0].edges.keys())[0]).toBe(1);
     });
 
     it('parses states and bonds together', () => {
-      const mols = parseSpeciesString('A(s~u,b!1).B(a!1)');
-      expect(mols[0].components).toHaveLength(2);
-      const sComp = mols[0].components.find(c => c.name === 's');
+      const mols = BNGLParser.parseSpeciesGraph('A(s~u,b!1).B(a!1)', true);
+      expect(mols.molecules[0].components).toHaveLength(2);
+      const sComp = mols.molecules[0].components.find(c => c.name === 's');
       expect(sComp?.state).toBe('u');
-      const bComp = mols[0].components.find(c => c.name === 'b');
-      expect(bComp?.bondLabel).toBe('1');
+      const bComp = mols.molecules[0].components.find(c => c.name === 'b');
+      expect(Array.from(bComp?.edges.keys())[0]).toBe(1);
     });
 
     it('parses molecule with no components', () => {
-      const mols = parseSpeciesString('Trash()');
-      expect(mols).toHaveLength(1);
-      expect(mols[0].name).toBe('Trash');
-      expect(mols[0].components).toHaveLength(0);
+      const mols = BNGLParser.parseSpeciesGraph('Trash()', true);
+      expect(mols.molecules).toHaveLength(1);
+      expect(mols.molecules[0].name).toBe('Trash');
+      expect(mols.molecules[0].components).toHaveLength(0);
     });
   });
 
-  describe('canonicalizeSpecies', () => {
+  describe('GraphCanonicalizer.canonicalize', () => {
     it('produces same canonical form for reordered molecules', () => {
-      const m1 = parseSpeciesString('A(b!1).B(a!1)');
-      const m2 = parseSpeciesString('B(a!1).A(b!1)');
-      expect(canonicalizeSpecies(m1)).toBe(canonicalizeSpecies(m2));
+      const m1 = BNGLParser.parseSpeciesGraph('A(b!1).B(a!1)', true);
+      const m2 = BNGLParser.parseSpeciesGraph('B(a!1).A(b!1)', true);
+      expect(GraphCanonicalizer.canonicalize(m1)).toBe(GraphCanonicalizer.canonicalize(m2));
     });
 
     it('distinguishes different species', () => {
-      const m1 = parseSpeciesString('A(s~u)');
-      const m2 = parseSpeciesString('A(s~p)');
-      expect(canonicalizeSpecies(m1)).not.toBe(canonicalizeSpecies(m2));
+      const m1 = BNGLParser.parseSpeciesGraph('A(s~u)', true);
+      const m2 = BNGLParser.parseSpeciesGraph('A(s~p)', true);
+      expect(GraphCanonicalizer.canonicalize(m1)).not.toBe(GraphCanonicalizer.canonicalize(m2));
     });
   });
 
-  describe('speciesMatchesPattern', () => {
+  describe('GraphMatcher.matchesPattern', () => {
     it('matches identical species', () => {
-      const species = parseSpeciesString('A(b!1,s~u).B(a!1)');
-      const pattern = parseSpeciesString('A(b!1,s~u).B(a!1)');
-      expect(speciesMatchesPattern(species, pattern)).toBe(true);
+      const species = BNGLParser.parseSpeciesGraph('A(b!1,s~u).B(a!1)', true);
+      const pattern = BNGLParser.parseSpeciesGraph('A(b!1,s~u).B(a!1)', true);
+      expect(GraphMatcher.matchesPattern(pattern, species)).toBe(true);
     });
 
     it('matches with wildcard state (pattern omits state)', () => {
-      const species = parseSpeciesString('A(s~u)');
-      const pattern = parseSpeciesString('A(s)');
+      const species = BNGLParser.parseSpeciesGraph('A(s~u)', true);
+      const pattern = BNGLParser.parseSpeciesGraph('A(s)', true);
       // Pattern doesn't specify state, so any state matches
-      expect(speciesMatchesPattern(species, pattern)).toBe(true);
+      expect(GraphMatcher.matchesPattern(pattern, species)).toBe(true);
     });
 
     it('rejects wrong state', () => {
-      const species = parseSpeciesString('A(s~u)');
-      const pattern = parseSpeciesString('A(s~p)');
-      expect(speciesMatchesPattern(species, pattern)).toBe(false);
+      const species = BNGLParser.parseSpeciesGraph('A(s~u)', true);
+      const pattern = BNGLParser.parseSpeciesGraph('A(s~p)', true);
+      expect(GraphMatcher.matchesPattern(pattern, species)).toBe(false);
     });
 
     it('matches when pattern is subset of species', () => {
-      const species = parseSpeciesString('A(b!1,s~u).B(a!1)');
-      const pattern = parseSpeciesString('A(s~u)');
-      expect(speciesMatchesPattern(species, pattern)).toBe(true);
+      const species = BNGLParser.parseSpeciesGraph('A(b!1,s~u).B(a!1)', true);
+      const pattern = BNGLParser.parseSpeciesGraph('A(s~u)', true);
+      expect(GraphMatcher.matchesPattern(pattern, species)).toBe(true);
     });
 
     it('rejects when pattern requires more molecules', () => {
-      const species = parseSpeciesString('A(b)');
-      const pattern = parseSpeciesString('A(b!1).B(a!1)');
-      expect(speciesMatchesPattern(species, pattern)).toBe(false);
+      const species = BNGLParser.parseSpeciesGraph('A(b)', true);
+      const pattern = BNGLParser.parseSpeciesGraph('A(b!1).B(a!1)', true);
+      expect(GraphMatcher.matchesPattern(pattern, species)).toBe(false);
     });
   });
 
@@ -430,7 +435,7 @@ describe('BoundedVerifier', () => {
           {
             name: 'bind',
             reactants: ['A(b)', 'B(a)'],
-            products: ['A(b!1).B(a!1)'],
+            products: ['A(b!1,s~u).B(a!1)'],
             rate: '1',
             isBidirectional: false,
           },
@@ -592,7 +597,7 @@ describe('BoundedVerifier', () => {
           {
             name: 'bind',
             reactants: ['A(b)', 'B(a)'],
-            products: ['A(b!1).B(a!1)'],
+            products: ['A(b!1,s~u).B(a!1)'],
             rate: '1',
             isBidirectional: false,
           },
@@ -796,7 +801,7 @@ describe('Cross-layer consistency', () => {
         {
           name: 'bind',
           reactants: ['A(b)', 'B(a)'],
-          products: ['A(b!1).B(a!1)'],
+          products: ['A(b!1,s~u).B(a!1)'],
           rate: '1',
           isBidirectional: false,
         },
