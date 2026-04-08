@@ -467,13 +467,31 @@ export class NeuralODESurrogate {
       predictions.push(pred.concentrations);
     }
     
-    // Compute metrics
+    // Compute true means per species (Pass 1)
+    const trueSums = new Array(this.nSpecies).fill(0);
+    const nSamples = predictions.length;
+    const nTimePoints = testData.timePoints.length;
+    let totalCount = 0;
+
+    for (let i = 0; i < nSamples; i++) {
+      for (let t = 0; t < nTimePoints; t++) {
+        for (let s = 0; s < this.nSpecies; s++) {
+          trueSums[s] += testData.concentrations[i][t][s];
+        }
+        totalCount++;
+      }
+    }
+
+    const trueMeans = trueSums.map(sum => sum / totalCount);
+
+    // Compute metrics (Pass 2)
     let totalMSE = 0;
     let totalMAE = 0;
-    const r2PerSpecies: number[] = new Array(this.nSpecies).fill(0);
+    const ssResPerSpecies = new Array(this.nSpecies).fill(0);
+    const ssTotPerSpecies = new Array(this.nSpecies).fill(0);
     
-    for (let i = 0; i < predictions.length; i++) {
-      for (let t = 0; t < testData.timePoints.length; t++) {
+    for (let i = 0; i < nSamples; i++) {
+      for (let t = 0; t < nTimePoints; t++) {
         for (let s = 0; s < this.nSpecies; s++) {
           const pred = predictions[i][t][s];
           const true_val = testData.concentrations[i][t][s];
@@ -481,47 +499,23 @@ export class NeuralODESurrogate {
           
           totalMSE += error * error;
           totalMAE += Math.abs(error);
+
+          ssResPerSpecies[s] += error * error;
+          ssTotPerSpecies[s] += (true_val - trueMeans[s]) ** 2;
         }
       }
     }
     
-    const nTotal = predictions.length * testData.timePoints.length * this.nSpecies;
+    const nTotal = totalCount * this.nSpecies;
     const mse = totalMSE / nTotal;
     const mae = totalMAE / nTotal;
     
-    // Compute R² per species
+    const r2PerSpecies: number[] = new Array(this.nSpecies);
     for (let s = 0; s < this.nSpecies; s++) {
-      let ssRes = 0;
-      let ssTot = 0;
-      const meanTrue = this.computeMeanForSpecies(testData.concentrations, s);
-      
-      for (let i = 0; i < predictions.length; i++) {
-        for (let t = 0; t < testData.timePoints.length; t++) {
-          const pred = predictions[i][t][s];
-          const true_val = testData.concentrations[i][t][s];
-          ssRes += (true_val - pred) ** 2;
-          ssTot += (true_val - meanTrue) ** 2;
-        }
-      }
-      
-      r2PerSpecies[s] = 1 - ssRes / (ssTot + 1e-10);
+      r2PerSpecies[s] = 1 - ssResPerSpecies[s] / (ssTotPerSpecies[s] + 1e-10);
     }
     
     return { mse, mae, r2: r2PerSpecies };
-  }
-  
-  private computeMeanForSpecies(concentrations: number[][][], speciesIdx: number): number {
-    let sum = 0;
-    let count = 0;
-    
-    for (const sample of concentrations) {
-      for (const timepoint of sample) {
-        sum += timepoint[speciesIdx];
-        count++;
-      }
-    }
-    
-    return sum / count;
   }
   
   /**
