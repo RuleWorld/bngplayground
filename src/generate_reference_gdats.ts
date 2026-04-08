@@ -7,7 +7,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 // ESM-compatible __dirname
@@ -147,7 +147,7 @@ simulate({method=>"ode",t_end=>100,n_steps=>100})
         }
 
         // Run BNG2.pl
-        execSync(`perl "${BNG2_PATH}" "${path.basename(bnglToRun)}"`, {
+        execFileSync('perl', [BNG2_PATH, path.basename(bnglToRun)], {
             cwd: tempDir,
             timeout: 120000, // 2 min timeout
             stdio: ['pipe', 'pipe', 'pipe']
