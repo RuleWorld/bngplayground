@@ -9,6 +9,7 @@
 import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 import { getExpressionDependencies } from '../../parser/ExpressionDependencies';
+import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 
 /**
  * CSR format sparse matrix info
@@ -193,9 +194,15 @@ export function generateAnalyticalJacobian(
   // Pre-process reactions to handle complex rates vs simple rates
   const rxnRateExprs = reactions.map(rxn => {
     if (rxn.rateExpression) {
-      const translated = ExpressionTranslator.translate(rxn.rateExpression);
       // Check for illegal patterns or y dependencies
       const deps = getExpressionDependencies(rxn.rateExpression);
+
+      // SECURITY: Validate AST structure to prevent code injection via new Function
+      if (!SafeExpressionEvaluator.isSafe(rxn.rateExpression, Array.from(deps))) {
+        throw new Error(`[SparseJacobian] Unsafe rate expression detected: ${rxn.rateExpression}`);
+      }
+
+      const translated = ExpressionTranslator.translate(rxn.rateExpression);
       const hasSpeciesDep = Array.from(deps).some(d => d.startsWith('s') && !isNaN(parseInt(d.substring(1))));
       
       return { 

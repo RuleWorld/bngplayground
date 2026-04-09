@@ -29,6 +29,7 @@ describe('Functional Rates Security', () => {
       evaluateConstant: (_expression: string) => 1.0,
       getReferencedVariables: (_expression: string) => [],
       compile: (_expression: string, _variables: string[]) => (_context: unknown) => 1.0,
+      isSafe: (expression: string, _variables: string[]) => expression === '1.0', // Basic valid check
     };
 
     setFeatureFlags({ functionalRatesEnabled: true });
@@ -43,6 +44,7 @@ describe('Functional Rates Security', () => {
       evaluateConstant: (_expression: string) => 1.0,
       getReferencedVariables: (_expression: string) => ['A'],
       compile: (_expression: string, _variables: string[]) => (context: { A: number }) => context.A * 2,
+      isSafe: (expression: string, _variables: string[]) => expression === 'A*2',
     };
 
     setFeatureFlags({ functionalRatesEnabled: true });

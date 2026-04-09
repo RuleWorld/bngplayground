@@ -1256,6 +1256,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
           <a 
             href="https://en.wikipedia.org/wiki/Identifiability_analysis" 
             target="_blank"
+            rel="noopener noreferrer"
             className="text-teal-600 hover:underline"
           >
             Learn more about identifiability analysis →

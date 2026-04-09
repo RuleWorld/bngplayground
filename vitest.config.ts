@@ -43,7 +43,6 @@ export default defineConfig({
       'tests/polymer-sim.spec.ts',
       'tests/nfsim*.spec.ts',
       'tests/services/NFsim*.spec.ts',
-      'tests/atomizer/*.spec.ts',
       'tests/ui/editorpanel.spec.tsx',
       'tests/playwright/**/*.{test,spec}.ts',
       'tests/playwright/**/*.{test,spec}.tsx',

@@ -20,22 +20,10 @@
  */
 
 import type { BNGLModel, ReactionRule, BNGLSpecies, BNGLMoleculeType } from '../../types';
-import {
-  parseSpeciesString,
-  canonicalizeSpecies,
-  speciesMatchesPattern,
-  type ParsedMolecule,
-  type ParsedComponent,
-} from './PatternMatcher';
-
-// Re-export pattern matching utilities so the public API is preserved
-export {
-  parseSpeciesString,
-  canonicalizeSpecies,
-  speciesMatchesPattern,
-  type ParsedMolecule,
-  type ParsedComponent,
-} from './PatternMatcher';
+import { BNGLParser } from '../graph/core/BNGLParser';
+import { GraphCanonicalizer } from '../graph/core/Canonical';
+import { GraphMatcher } from '../graph/core/Matcher';
+import { SpeciesGraph } from '../graph/core/SpeciesGraph';
 
 /* ---------- Configuration & result types ---------- */
 
@@ -67,7 +55,7 @@ const DEFAULT_CONFIG: Required<BoundedVerificationConfig> = {
 
 export interface InternalSpecies {
   canonical: string;        // Canonical string form for dedup
-  molecules: ParsedMolecule[];
+  graph: SpeciesGraph;
   generatedBy?: string;     // Rule name that generated this species
   parentSpecies?: string[]; // Canonical forms of parents
   index: number;
@@ -75,8 +63,8 @@ export interface InternalSpecies {
 
 interface ParsedRule {
   name: string;
-  reactantPatterns: ParsedMolecule[][];   // Each reactant is a list of molecules
-  productPatterns: ParsedMolecule[][];    // Each product is a list of molecules
+  reactantPatterns: SpeciesGraph[];   // Each reactant is a list of molecules
+  productPatterns: SpeciesGraph[];    // Each product is a list of molecules
   isBidirectional: boolean;
 }
 
@@ -88,8 +76,8 @@ interface ParsedRule {
 function parseRule(rule: ReactionRule): ParsedRule {
   return {
     name: rule.name || '(unnamed)',
-    reactantPatterns: rule.reactants.map(r => parseSpeciesString(r)),
-    productPatterns: rule.products.map(p => parseSpeciesString(p)),
+    reactantPatterns: rule.reactants.map(r => BNGLParser.parseSpeciesGraph(r, true)),
+    productPatterns: rule.products.map(p => BNGLParser.parseSpeciesGraph(p, true)),
     isBidirectional: rule.isBidirectional,
   };
 }
@@ -101,11 +89,11 @@ function parseRule(rule: ReactionRule): ParsedRule {
 function applyUnimolecularRule(
   rule: ParsedRule,
   species: InternalSpecies
-): ParsedMolecule[][] {
+): SpeciesGraph[] {
   if (rule.reactantPatterns.length !== 1) return [];
 
   const reactantPattern = rule.reactantPatterns[0];
-  if (!speciesMatchesPattern(species.molecules, reactantPattern)) return [];
+  if (!GraphMatcher.matchesPattern(reactantPattern, species.graph)) return [];
 
   return rule.productPatterns;
 }
@@ -118,16 +106,16 @@ function applyBimolecularRule(
   rule: ParsedRule,
   species1: InternalSpecies,
   species2: InternalSpecies
-): ParsedMolecule[][] {
+): SpeciesGraph[] {
   if (rule.reactantPatterns.length !== 2) return [];
 
   const [pat1, pat2] = rule.reactantPatterns;
 
   // Try both orderings
-  const match1 = speciesMatchesPattern(species1.molecules, pat1) &&
-                  speciesMatchesPattern(species2.molecules, pat2);
-  const match2 = speciesMatchesPattern(species1.molecules, pat2) &&
-                  speciesMatchesPattern(species2.molecules, pat1);
+  const match1 = GraphMatcher.matchesPattern(pat1, species1.graph) &&
+                 GraphMatcher.matchesPattern(pat2, species2.graph);
+  const match2 = GraphMatcher.matchesPattern(pat2, species1.graph) &&
+                 GraphMatcher.matchesPattern(pat1, species2.graph);
 
   if (!match1 && !match2) return [];
 
@@ -164,12 +152,12 @@ function initializeSpecies(model: BNGLModel): {
   let speciesCount = 0;
 
   for (const seed of model.species) {
-    const molecules = parseSpeciesString(seed.name);
-    const canonical = canonicalizeSpecies(molecules);
+    const graph = BNGLParser.parseSpeciesGraph(seed.name, true);
+    const canonical = GraphCanonicalizer.canonicalize(graph);
     if (!speciesMap.has(canonical)) {
       speciesMap.set(canonical, {
         canonical,
-        molecules,
+        graph,
         index: speciesCount++,
       });
     }
@@ -194,7 +182,7 @@ export function boundedReachabilityCheck(
   config: BoundedVerificationConfig = {}
 ): BoundedVerificationResult {
   const cfg = { ...DEFAULT_CONFIG, ...config };
-  const targetMolecules = parseSpeciesString(pattern);
+  const targetGraph = BNGLParser.parseSpeciesGraph(pattern, true);
 
   const rules = (model.reactionRules || []).map(parseRule);
   const allRules = buildAllRules(rules);
@@ -206,7 +194,7 @@ export function boundedReachabilityCheck(
 
   // Check if any seed matches target
   for (const sp of speciesMap.values()) {
-    if (speciesMatchesPattern(sp.molecules, targetMolecules)) {
+    if (GraphMatcher.matchesPattern(targetGraph, sp.graph)) {
       return {
         reachable: true,
         witness: {
@@ -245,12 +233,12 @@ export function boundedReachabilityCheck(
           const products = applyUnimolecularRule(rule, species);
           if (products.length > 0) {
             reactionsGenerated++;
-            for (const prodMols of products) {
-              const canonical = canonicalizeSpecies(prodMols);
+            for (const prodGraph of products) {
+              const canonical = GraphCanonicalizer.canonicalize(prodGraph);
               if (!speciesMap.has(canonical)) {
                 const newSp: InternalSpecies = {
                   canonical,
-                  molecules: prodMols,
+                  graph: prodGraph,
                   generatedBy: rule.name,
                   parentSpecies: [species.canonical],
                   index: speciesCount++,
@@ -258,7 +246,7 @@ export function boundedReachabilityCheck(
                 speciesMap.set(canonical, newSp);
                 nextFrontier.push(newSp);
 
-                if (speciesMatchesPattern(prodMols, targetMolecules)) {
+                if (GraphMatcher.matchesPattern(targetGraph, prodGraph)) {
                   return {
                     reachable: true,
                     witness: {
@@ -286,12 +274,12 @@ export function boundedReachabilityCheck(
             const products = applyBimolecularRule(rule, species, other);
             if (products.length > 0) {
               reactionsGenerated++;
-              for (const prodMols of products) {
-                const canonical = canonicalizeSpecies(prodMols);
+              for (const prodGraph of products) {
+                const canonical = GraphCanonicalizer.canonicalize(prodGraph);
                 if (!speciesMap.has(canonical)) {
                   const newSp: InternalSpecies = {
                     canonical,
-                    molecules: prodMols,
+                    graph: prodGraph,
                     generatedBy: rule.name,
                     parentSpecies: [species.canonical, other.canonical],
                     index: speciesCount++,
@@ -299,7 +287,7 @@ export function boundedReachabilityCheck(
                   speciesMap.set(canonical, newSp);
                   nextFrontier.push(newSp);
 
-                  if (speciesMatchesPattern(prodMols, targetMolecules)) {
+                  if (GraphMatcher.matchesPattern(targetGraph, prodGraph)) {
                     return {
                       reachable: true,
                       witness: {
@@ -393,7 +381,7 @@ export function checkDeadlock(
       if (anyRuleFires) break;
       if (rule.reactantPatterns.length === 1) {
         for (const sp of allSpeciesList) {
-          if (speciesMatchesPattern(sp.molecules, rule.reactantPatterns[0])) {
+          if (GraphMatcher.matchesPattern(rule.reactantPatterns[0], sp.graph)) {
             anyRuleFires = true;
             break;
           }
@@ -402,10 +390,10 @@ export function checkDeadlock(
         for (const sp1 of allSpeciesList) {
           if (anyRuleFires) break;
           for (const sp2 of allSpeciesList) {
-            const match1 = speciesMatchesPattern(sp1.molecules, rule.reactantPatterns[0]) &&
-                           speciesMatchesPattern(sp2.molecules, rule.reactantPatterns[1]);
-            const match2 = speciesMatchesPattern(sp1.molecules, rule.reactantPatterns[1]) &&
-                           speciesMatchesPattern(sp2.molecules, rule.reactantPatterns[0]);
+            const match1 = GraphMatcher.matchesPattern(rule.reactantPatterns[0], sp1.graph) &&
+                           GraphMatcher.matchesPattern(rule.reactantPatterns[1], sp2.graph);
+            const match2 = GraphMatcher.matchesPattern(rule.reactantPatterns[1], sp1.graph) &&
+                           GraphMatcher.matchesPattern(rule.reactantPatterns[0], sp2.graph);
             if (match1 || match2) {
               anyRuleFires = true;
               break;
@@ -440,12 +428,12 @@ export function checkDeadlock(
           const products = applyUnimolecularRule(rule, species);
           if (products.length > 0) {
             reactionsGenerated++;
-            for (const prodMols of products) {
-              const canonical = canonicalizeSpecies(prodMols);
+            for (const prodGraph of products) {
+              const canonical = GraphCanonicalizer.canonicalize(prodGraph);
               if (!speciesMap.has(canonical)) {
                 const newSp: InternalSpecies = {
                   canonical,
-                  molecules: prodMols,
+                  graph: prodGraph,
                   generatedBy: rule.name,
                   index: speciesCount++,
                 };
@@ -460,12 +448,12 @@ export function checkDeadlock(
             const products = applyBimolecularRule(rule, species, other);
             if (products.length > 0) {
               reactionsGenerated++;
-              for (const prodMols of products) {
-                const canonical = canonicalizeSpecies(prodMols);
+              for (const prodGraph of products) {
+                const canonical = GraphCanonicalizer.canonicalize(prodGraph);
                 if (!speciesMap.has(canonical)) {
                   const newSp: InternalSpecies = {
                     canonical,
-                    molecules: prodMols,
+                    graph: prodGraph,
                     generatedBy: rule.name,
                     index: speciesCount++,
                   };
@@ -554,12 +542,12 @@ export function checkRuleFires(
           const products = applyUnimolecularRule(rule, species);
           if (products.length > 0) {
             reactionsGenerated++;
-            for (const prodMols of products) {
-              const canonical = canonicalizeSpecies(prodMols);
+            for (const prodGraph of products) {
+              const canonical = GraphCanonicalizer.canonicalize(prodGraph);
               if (!speciesMap.has(canonical)) {
                 const newSp: InternalSpecies = {
                   canonical,
-                  molecules: prodMols,
+                  graph: prodGraph,
                   generatedBy: rule.name,
                   index: speciesCount++,
                 };
@@ -574,12 +562,12 @@ export function checkRuleFires(
             const products = applyBimolecularRule(rule, species, other);
             if (products.length > 0) {
               reactionsGenerated++;
-              for (const prodMols of products) {
-                const canonical = canonicalizeSpecies(prodMols);
+              for (const prodGraph of products) {
+                const canonical = GraphCanonicalizer.canonicalize(prodGraph);
                 if (!speciesMap.has(canonical)) {
                   const newSp: InternalSpecies = {
                     canonical,
-                    molecules: prodMols,
+                    graph: prodGraph,
                     generatedBy: rule.name,
                     index: speciesCount++,
                   };
@@ -624,17 +612,17 @@ function doesRuleFire(
 ): string[] | null {
   if (rule.reactantPatterns.length === 1) {
     for (const sp of allSpecies) {
-      if (speciesMatchesPattern(sp.molecules, rule.reactantPatterns[0])) {
+      if (GraphMatcher.matchesPattern(rule.reactantPatterns[0], sp.graph)) {
         return [sp.canonical];
       }
     }
   } else if (rule.reactantPatterns.length === 2) {
     for (const sp1 of allSpecies) {
       for (const sp2 of allSpecies) {
-        const match1 = speciesMatchesPattern(sp1.molecules, rule.reactantPatterns[0]) &&
-                        speciesMatchesPattern(sp2.molecules, rule.reactantPatterns[1]);
-        const match2 = speciesMatchesPattern(sp1.molecules, rule.reactantPatterns[1]) &&
-                        speciesMatchesPattern(sp2.molecules, rule.reactantPatterns[0]);
+        const match1 = GraphMatcher.matchesPattern(rule.reactantPatterns[0], sp1.graph) &&
+                        GraphMatcher.matchesPattern(rule.reactantPatterns[1], sp2.graph);
+        const match2 = GraphMatcher.matchesPattern(rule.reactantPatterns[1], sp1.graph) &&
+                        GraphMatcher.matchesPattern(rule.reactantPatterns[0], sp2.graph);
         if (match1 || match2) {
           return sp1.canonical === sp2.canonical
             ? [sp1.canonical]

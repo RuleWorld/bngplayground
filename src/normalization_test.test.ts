@@ -2,7 +2,6 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
 import { BNGLParser, NetworkGenerator, GraphCanonicalizer } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL';
 

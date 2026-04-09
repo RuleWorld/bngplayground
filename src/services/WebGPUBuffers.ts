@@ -153,12 +153,15 @@ export async function readSSAResults(
   encoder.copyBufferToBuffer(buffers.totalReactions, 0, buffers.readbackReactionsBuffer, 0, reactionsSize);
   device.queue.submit([encoder.finish()]);
 
-  // Map and copy
-  await buffers.readbackBuffer.mapAsync(GPUMapMode.READ);
+  // Map both buffers concurrently to pipeline GPU readbacks
+  await Promise.all([
+    buffers.readbackBuffer.mapAsync(GPUMapMode.READ),
+    buffers.readbackReactionsBuffer.mapAsync(GPUMapMode.READ),
+  ]);
+
   const rawOutput = new Float32Array(buffers.readbackBuffer.getMappedRange().slice(0));
   buffers.readbackBuffer.unmap();
 
-  await buffers.readbackReactionsBuffer.mapAsync(GPUMapMode.READ);
   const totalReactions = new Uint32Array(buffers.readbackReactionsBuffer.getMappedRange().slice(0));
   buffers.readbackReactionsBuffer.unmap();
 

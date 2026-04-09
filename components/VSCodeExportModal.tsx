@@ -182,7 +182,7 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
             <div className="mt-4 rounded border border-slate-100 bg-slate-50 p-3 text-sm dark:border-slate-800 dark:bg-slate-900/50">
               <strong>VS Code opened but model did not appear?</strong>
               <ul className="mt-2 list-inside list-disc text-xs">
-                <li>Ensure the <a href="https://marketplace.visualstudio.com/items?itemName=als251.bngl" target="_blank" rel="noreferrer" className="text-blue-500 underline">BioNetGen extension</a> is installed.</li>
+                <li>Ensure the <a href="https://marketplace.visualstudio.com/items?itemName=als251.bngl" target="_blank" rel="noopener noreferrer" className="text-blue-500 underline">BioNetGen extension</a> is installed.</li>
                 <li>If installed, try the command palette action for opening an imported model or re-run this action.</li>
                 <li>Alternatively, download the BNGL file and open it in VS Code manually.</li>
               </ul>
