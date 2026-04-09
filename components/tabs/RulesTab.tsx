@@ -34,10 +34,12 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
   const insights = useMemo(() => buildRegulatoryInsights(model), [model]);
 
   const ruleClassifications = useMemo(() => {
-    if (!model) {
+    const currentModel = model;
+    if (!currentModel) {
       return {} as Record<string, RuleChangeSummary>;
     }
-    return model.reactionRules.reduce((acc, rule, index) => {
+    const reactionRules = currentModel.reactionRules ?? [];
+    return reactionRules.reduce((acc, rule, index) => {
       const ruleId = getRuleId(rule, index);
       const ruleName = getRuleLabel(rule, index);
       try {
@@ -121,7 +123,8 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
 
   const selectedRuleImpact = selectedRuleId && insights ? insights.ruleImpacts[selectedRuleId] : null;
   const selectedRuleClassification = selectedRuleId ? ruleClassifications[selectedRuleId] : null;
-  const selectedRuleComment = selectedRuleId && model ? model.reactionRules.find((r, i) => getRuleId(r, i) === selectedRuleId)?.comment : null;
+  const reactionRules = model?.reactionRules ?? [];
+  const selectedRuleComment = selectedRuleId && model ? reactionRules.find((r, i) => getRuleId(r, i) === selectedRuleId)?.comment : null;
   const selectedAtomMeta = selectedAtomId && insights ? insights.atomMetadata[selectedAtomId] : null;
   const atomSpecies = selectedAtomId && insights ? insights.atomToSpecies[selectedAtomId] ?? [] : [];
   const atomUsage = selectedAtomId && insights ? insights.atomRuleUsage[selectedAtomId] : undefined;
@@ -130,7 +133,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
     return <div className="text-slate-500 dark:text-slate-400">Parse a model to inspect rules.</div>;
   }
 
-  if (model.reactionRules.length === 0) {
+  if (reactionRules.length === 0) {
     return <div className="text-slate-500 dark:text-slate-400">This model has no reaction rules.</div>;
   }
 
@@ -168,8 +171,8 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
           onChange={(e) => onSelectRule?.(e.target.value)}
           className="flex-1 max-w-md px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
         >
-          <option value="" disabled>Select a rule ({model.reactionRules.length} available)</option>
-          {model.reactionRules.map((rule, index) => {
+          <option value="" disabled>Select a rule ({reactionRules.length} available)</option>
+          {reactionRules.map((rule, index) => {
             const id = getRuleId(rule, index);
             const label = getRuleLabel(rule, index);
             // Build reaction representation from reactants/products if reactionString not available
@@ -185,7 +188,7 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
         {selectedRuleId && (
           <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400">
             {(() => {
-              const rule = model.reactionRules.find((r, i) => getRuleId(r, i) === selectedRuleId);
+              const rule = reactionRules.find((r, i) => getRuleId(r, i) === selectedRuleId);
               if (!rule) return '';
               return rule.reactionString || `${rule.reactants.join(' + ')} → ${rule.products.join(' + ')}`;
             })()}

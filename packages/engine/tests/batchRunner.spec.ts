@@ -9,6 +9,7 @@ function createBaseModel(): BNGLModel {
         moleculeTypes: [],
         species: [{ name: 'A()', initialConcentration: 100 }],
         observables: [{ name: 'A_total', type: 'molecules', pattern: 'A()' }],
+        reactions: [],
         reactionRules: [{
             reactants: ['A()'],
             products: [],

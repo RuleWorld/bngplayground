@@ -65,6 +65,7 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
           console.log('[spatialWorker] Starting simulation.run()');
           const result = await simulation.run((snapshot: SpatialSnapshot) => {
             if (cancelled) return;
+            if (!snapshot.positions) return;
 
             // Transfer the positions buffer for zero-copy
             const transferable = snapshot.positions.buffer;

@@ -620,7 +620,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
                       <CartesianGrid strokeDasharray="3 3" stroke="rgba(100,116,139,0.2)" />
                       <XAxis dataKey="degree" label={{ value: 'Degree', position: 'insideBottom', offset: -14, fontSize: 11 }} tick={{ fontSize: 10 }} />
                       <YAxis label={{ value: 'Nodes', angle: -90, position: 'insideLeft', offset: 10, fontSize: 11 }} tick={{ fontSize: 10 }} allowDecimals={false} />
-                      <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value: number) => [value, 'Nodes']} labelFormatter={(d) => `Degree: ${d}`} />
+                      <Tooltip contentStyle={{ fontSize: 12 }} formatter={(value) => [typeof value === 'number' ? value : Number(value ?? 0), 'Nodes']} labelFormatter={(d) => `Degree: ${d}`} />
                       <Bar dataKey="count" radius={[3, 3, 0, 0]}>
                         {degreeHistogram.map((_entry, idx) => (
                           <Cell key={idx} fill={communityColor(idx, degreeHistogram.length)} />

@@ -217,7 +217,8 @@ export async function generateExpandedNetwork(
 
     // BNG2 Rule: Rules are expanded from the model definition.
     // We map over each rule to determine if it uses functional rates (non-mass action).
-    const rules = inputModel.reactionRules.flatMap((r) => {
+    const reactionRules = inputModel.reactionRules ?? [];
+    const rules = reactionRules.flatMap((r) => {
         // BNG2 Semantics: The first reactant often defines the "substrate" variable in rate laws.
         // E.g., for "A() -> B() k_cat*A", we need to map "A" to the runtime observable.
         const forwardSubstrateVar = r.reactants.length > 0
@@ -794,7 +795,7 @@ export async function generateExpandedNetwork(
             };
         });
     } catch (e) {
-        console.warn('[NetworkExpansion] Failed to pre-compute concrete observables:', e?.message ?? e);
+        console.warn('[NetworkExpansion] Failed to pre-compute concrete observables:', e instanceof Error ? e.message : e);
     }
 
     return generatedModel;

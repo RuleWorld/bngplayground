@@ -278,8 +278,8 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                       const modelId = await bnglService.prepareModel(model);
                       const res = await bnglService.simulateCached(modelId, {}, {
                         method: 'ode',
-                        t_end: model.simulationOptions.t_end || 10,
-                        n_steps: model.simulationOptions.n_steps || 100,
+                        t_end: (model.simulationOptions ?? {}).t_end || 10,
+                        n_steps: (model.simulationOptions ?? {}).n_steps || 100,
                       });
                       
                       const obsNames = model.observables.map(o => o.name);
@@ -452,8 +452,8 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                         />
                         <Tooltip 
                           contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#334155', fontSize: '11px' }}
-                          labelFormatter={(label: number) => `value: ${formatValue(label)}`}
-                          formatter={(v: number) => [formatValue(v), 'SSR']}
+                          labelFormatter={(label) => `value: ${formatValue(typeof label === 'number' ? label : Number(label ?? 0))}`}
+                          formatter={(v) => [formatValue(typeof v === 'number' ? v : Number(v ?? 0)), 'SSR']}
                         />
                         <ReferenceLine y={results.threshold} stroke="#f43f5e" strokeDasharray="6 4" strokeWidth={2} label={{ value: 'χ² Threshold', position: 'right', fill: '#f43f5e', fontSize: 10, fontWeight: 'black' }} />
                         

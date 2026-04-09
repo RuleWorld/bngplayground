@@ -326,7 +326,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
                       cursor={{ fill: 'rgba(245, 158, 11, 0.05)' }}
                       contentStyle={{ backgroundColor: 'rgba(15, 23, 42, 0.95)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px', boxShadow: '0 20px 25px -5px rgb(0 0 0 / 0.1)' }}
                       itemStyle={{ fontWeight: 'bold' }}
-                      formatter={(v: number) => [formatValue(v), 'Index']}
+                      formatter={(v) => [formatValue(typeof v === 'number' ? v : Number(v ?? 0)), 'Index']}
                     />
                     <Legend 
                       verticalAlign="top" 

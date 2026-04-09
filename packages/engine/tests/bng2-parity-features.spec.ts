@@ -345,6 +345,7 @@ describe('Task 3: Hybrid Model Generation', () => {
       { type: 'molecules', name: 'Rtot', pattern: 'R()' },
       { type: 'molecules', name: 'RP', pattern: 'R(state~P)' },
     ],
+    reactions: [],
     reactionRules: [
       {
         name: 'binding',
@@ -429,6 +430,8 @@ describe('Task 3: Hybrid Model Generation', () => {
         { name: 'B(s1,s2,s3,s4)', initialConcentration: 10 },
       ],
       observables: [],
+      reactions: [],
+      reactionRules: [],
     };
 
     const types = HybridModelGenerator.inferPopulationTypes(model);
@@ -464,6 +467,7 @@ describe('Task 3: Hybrid Model Generation', () => {
       moleculeTypes: [],
       species: [{ name: 'A()', initialConcentration: 100 }],
       observables: [],
+      reactions: [],
       reactionRules: [{ reactants: ['A()'], products: [], rate: '1', isBidirectional: false }],
     };
 

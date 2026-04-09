@@ -109,20 +109,51 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       // Expand the model and compile its RHS
       const expandedModel = await engine.generateExpandedNetwork(model, () => {}, () => {});
       const nSpecies = expandedModel.species.length;
+      const params: Record<string, number> = {
+        ...(expandedModel.parameters ?? model.parameters),
+      };
 
       const speciesIndexMap = new Map<string, number>();
       expandedModel.species.forEach((s: any, idx: number) => {
         speciesIndexMap.set(s.name, idx);
       });
 
-      const jit = engine.jitCompiler;
+      const indexedReactions = (expandedModel.reactions ?? []).map((reaction: any) => new engine.Rxn(
+        reaction.reactants.map((name: string) => {
+          const idx = speciesIndexMap.get(String(name).trim());
+          if (idx === undefined) {
+            throw new Error(`Unknown reactant species: ${String(name)}`);
+          }
+          return idx;
+        }),
+        reaction.products.map((name: string) => {
+          const idx = speciesIndexMap.get(String(name).trim());
+          if (idx === undefined) {
+            throw new Error(`Unknown product species: ${String(name)}`);
+          }
+          return idx;
+        }),
+        reaction.rateConstant,
+        reaction.name,
+        {
+          degeneracy: reaction.degeneracy,
+          propensityFactor: reaction.propensityFactor,
+          statFactor: reaction.statFactor,
+          rateExpression: reaction.rateExpression ?? reaction.rate,
+          productStoichiometries: reaction.productStoichiometries,
+          scalingVolume: reaction.scalingVolume,
+          totalRate: reaction.totalRate,
+        },
+      ));
+
+      const jit = new engine.JITCompiler();
       let compiled: any;
       try {
         compiled = jit.compileFromRxns(
-          (expandedModel.reactions || []) as any,
+          indexedReactions,
           nSpecies,
           speciesIndexMap,
-          model.parameters
+          params
         );
       } catch (err) {
         console.warn('JIT Compilation failed, using fallback RHS');
@@ -150,13 +181,16 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       if (engine.continuation) {
         const initialState = new Float64Array(nSpecies);
         expandedModel.species.forEach((s: any, i: number) => { initialState[i] = s.initialConcentration; });
+        if (!(selectedParam in params)) {
+          throw new Error(`Unknown continuation parameter: ${selectedParam}`);
+        }
 
         const result = engine.continuation({
           nSpecies,
           rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
-            if (compiled && compiled.updateParameters) {
-              const currentParams = { ...model.parameters, [selectedParam]: p };
-              compiled.updateParameters(currentParams);
+            params[selectedParam] = p;
+            if (compiled?.updateParameters) {
+              compiled.updateParameters(params);
             }
             evaluateRhs(0, y, dydt);
           },
@@ -392,8 +426,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
               />
               <Tooltip
                 cursor={CHART_TOOLTIP_CURSOR}
-                formatter={(value: number, name: string) => [value.toPrecision(4), name]}
-                labelFormatter={(label: number) => `${continuationResult.parameterName} = ${label.toPrecision(4)}`}
+                formatter={(value, name) => [typeof value === 'number' ? value.toPrecision(4) : String(value ?? ''), name]}
+                labelFormatter={(label) => {
+                  const formattedLabel = typeof label === 'number' ? label.toPrecision(4) : String(label ?? '');
+                  return `${continuationResult.parameterName} = ${formattedLabel}`;
+                }}
               />
               {/* Stable branch - solid */}
               <Scatter

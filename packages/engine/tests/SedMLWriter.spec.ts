@@ -11,6 +11,7 @@ const mockModel: BNGLModel = {
     { name: 'A_total', type: 'Molecules', pattern: 'A()' },
     { name: 'B_total', type: 'Molecules', pattern: 'B()' },
   ],
+  reactions: [],
   reactionRules: [],
   compartments: [],
   functions: [],

@@ -36,6 +36,7 @@
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
+    "ignoreDeprecations": "6.0",
     "noEmit": true,
     "noUnusedLocals": false,
     "noUnusedParameters": false,
@@ -43,7 +44,8 @@
   },
   "include": [
     "**/*.ts",
-    "**/*.tsx"
+    "**/*.tsx",
+    "**/*.d.ts"
   ],
   "exclude": [
     "node_modules",
@@ -59,6 +61,7 @@
     "src/parser/generated",
     "src/wasm",
     "nfsim",
+    "wasm-nfsim/build_ems",
     "artifacts",
     "tests/**",
     "tools/**"

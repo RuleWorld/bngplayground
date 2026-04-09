@@ -112,7 +112,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
   const observableNames = useMemo(() => (model ? model.observables.map((obs) => obs.name) : []), [model]);
 
   const speciesMap = useMemo(() => {
-    const map = new Map<string, typeof model.species[0]>();
+    const map = new Map<string, NonNullable<BNGLModel['species']>[number]>();
     if (model) {
       model.species.forEach(s => map.set(s.name, s));
     }

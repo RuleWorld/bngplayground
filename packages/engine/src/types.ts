@@ -132,8 +132,8 @@ export interface BNGLModel {
     observables: BNGLObservable[];
     limitations?: string[];
     actions?: BNGLAction[];
-    reactions?: BNGLReaction[];
-    reactionRules?: ReactionRule[];
+    reactions: BNGLReaction[];
+    reactionRules: ReactionRule[];
     compartments?: BNGLCompartment[];
     functions?: BNGLFunction[];
     networkOptions?: {

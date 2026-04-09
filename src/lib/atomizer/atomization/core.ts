@@ -1099,13 +1099,13 @@ export function reconcileSCT(sct: SpeciesCompositionTable, moleculeTypes: Molecu
     for (const mol of entry.structure.molecules) {
       const type = typeMap.get(mol.name);
       if (type) {
-        const typeCounts = new Counter<string>(type.components.map(c => c.name));
-        const molCounts = new Counter<string>(mol.components.map(c => c.name));
+        const typeCounts = new Counter<string>(type.components.map((c: Component) => c.name));
+        const molCounts = new Counter<string>(mol.components.map((c: Component) => c.name));
 
         for (const [name, count] of typeCounts.entries()) {
           const diff = count - (molCounts.get(name) || 0);
           if (diff > 0) {
-            const template = type.components.find(c => c.name === name)!;
+            const template = type.components.find((c: Component) => c.name === name)!;
             for (let i = 0; i < diff; i++) {
               const newComp = template.copy();
               newComp.bonds = [];
@@ -1141,20 +1141,20 @@ export function getMoleculeTypes(sct: SpeciesCompositionTable): Molecule[] {
         const existing = moleculeTypes.get(mol.name)!;
         // Count existing components by name
         const existingCounts = new Counter<string>(existing.components.map(c => c.name));
-        const molCounts = new Counter<string>(mol.components.map(c => c.name));
+        const molCounts = new Counter<string>(mol.components.map((c: Component) => c.name));
 
         for (const [name, count] of molCounts.entries()) {
           const diff = count - (existingCounts.get(name) || 0);
           if (diff > 0) {
             // Add missing components
-            const template = mol.components.find(c => c.name === name)!;
+            const template = mol.components.find((c: Component) => c.name === name)!;
             for (let i = 0; i < diff; i++) {
               existing.addComponent(template.copy());
             }
           }
           // Merge states for existing components
-          const existingComps = existing.components.filter(c => c.name === name);
-          const molComps = mol.components.filter(c => c.name === name);
+          const existingComps = existing.components.filter((c: Component) => c.name === name);
+          const molComps = mol.components.filter((c: Component) => c.name === name);
           for (let i = 0; i < Math.min(existingComps.length, molComps.length); i++) {
             for (const state of molComps[i].states) {
               existingComps[i].addState(state, false);

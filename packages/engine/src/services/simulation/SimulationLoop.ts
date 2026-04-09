@@ -43,6 +43,13 @@ interface ConcreteReaction {
   ruleName?: string;
 }
 
+interface ConcreteObservable {
+  name: string;
+  indices: Int32Array | number[];
+  coefficients: Float64Array | number[];
+  volumes?: Float64Array | number[];
+}
+
 /**
  * Resolves the sequence of simulation phases to execute based on the model and options.
  *
@@ -77,7 +84,7 @@ export function resolveSimulationPhasesForRun(model: BNGLModel, options: Simulat
       method: options.method === 'default' ? 'ode' : options.method,
       t_start: 0,
       t_end: options.t_end,
-      n_steps: normalizedNSteps,
+      n_steps: normalizedNSteps ?? options.n_steps ?? 100,
       continue: false,
       atol: options.atol ?? 1e-8,
       rtol: options.rtol ?? 1e-8,
@@ -289,6 +296,8 @@ export async function simulate(
     parameterChanges.forEach(c => changingParameterNames.add(c.parameter));
   }
 
+  const reactions = model.reactions ?? [];
+
   // fs.appendFileSync(debugLog, `[SimulationLoop] Species Map:\n`);
   // model.species.forEach((s, i) => {
   //   fs.appendFileSync(debugLog, `  Species ${i}: ${s.name}\n`);
@@ -301,7 +310,7 @@ export async function simulate(
 
   const functionNames = new Set((model.functions || []).map(f => f.name));
 
-  const concreteReactions: ConcreteReaction[] = model.reactions.map((r: BNGLReaction) => {
+  const concreteReactions: ConcreteReaction[] = reactions.map((r: BNGLReaction) => {
     // Map string names to integer indices.
     const reactantIndices = r.reactants.map(name => {
       const idx = speciesMap.get(name);
@@ -398,7 +407,7 @@ export async function simulate(
   // 3. Pre-process Observables
   // Prefer concrete observables attached to the model (produced earlier by NetworkExpansion). If not present,
   // fall back to dynamic matching here (legacy behavior).
-  const concreteObservables = (model as any).concreteObservables ? (model as any).concreteObservables : model.observables.map(obs => {
+  const concreteObservables: ConcreteObservable[] = (model as any).concreteObservables ? (model as any).concreteObservables : model.observables.map(obs => {
     const splitPatternsSafe = (patternStr: string): string[] => {
       const commaChunks: string[] = [];
       let current = '';
@@ -515,10 +524,10 @@ export async function simulate(
   // BioNetGen scales ODE rates by an anchor compartment volume. For mixed-dimension
   // reactants (e.g. 3D + 2D), anchoring to the lower-dimensional compartment yields
   // closer parity with cBNGL transport/binding models.
-  const reactionReactingVolumes = new Float64Array(model.reactions.length);
+  const reactionReactingVolumes = new Float64Array(reactions.length);
   const compartmentMapForDim = new Map((inputModel.compartments ?? []).map(c => [c.name, c]));
 
-  model.reactions.forEach((r, idx) => {
+  reactions.forEach((r, idx) => {
     const declaredScalingVolume = r.scalingVolume;
     if (typeof declaredScalingVolume === 'number' && Number.isFinite(declaredScalingVolume) && declaredScalingVolume > 0) {
       reactionReactingVolumes[idx] = declaredScalingVolume;
@@ -2820,7 +2829,7 @@ export async function simulate(
 
       if (conservationTemplate && currentSolverType !== 'sparse' && currentSolverType !== 'sparse_implicit') {
         const conservation = getPhaseConservationAnalysis();
-        if (conservation.laws.length > 0 && conservation.independentSpecies.length > 0 && conservation.independentSpecies.length < numSpecies) {
+        if (conservation && conservation.laws.length > 0 && conservation.independentSpecies.length > 0 && conservation.independentSpecies.length < numSpecies) {
           const reducedSystem = createReducedSystem(conservation, numSpecies);
           phaseDerivatives = reducedSystem.transformDerivatives(derivatives);
           phaseState = reducedSystem.reduce(y);
@@ -2865,8 +2874,9 @@ export async function simulate(
         solver = persistedSolver!;
       } else {
         // Dispose any stale persisted solver before creating a new one.
-        if (persistedSolver) {
-          persistedSolver.destroy?.();
+        const staleSolver = persistedSolver as unknown as { destroy?: () => void } | undefined;
+        if (staleSolver) {
+          staleSolver.destroy?.();
           persistedSolver = undefined;
         }
         try {
@@ -3086,8 +3096,9 @@ export async function simulate(
     }
 
     // Clean up any persisted solver that was not consumed (e.g. early break due to error).
-    if (persistedSolver) {
-      persistedSolver.destroy?.();
+    const leftoverSolver = persistedSolver as unknown as { destroy?: () => void } | undefined;
+    if (leftoverSolver) {
+      leftoverSolver.destroy?.();
     }
 
     const odeTime = performance.now() - odeStart;

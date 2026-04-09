@@ -21,7 +21,8 @@ export const RegulatoryTab: React.FC<RegulatoryTabProps> = ({ model, selectedRul
     if (!model) {
       return { nodes: [], edges: [] };
     }
-    return buildAtomRuleGraph(model.reactionRules, {
+    const reactionRules = model.reactionRules ?? [];
+    return buildAtomRuleGraph(reactionRules, {
       getRuleId,
       getRuleLabel,
       observables: model.observables.map(o => ({ name: o.name, pattern: o.pattern })),
@@ -35,7 +36,7 @@ export const RegulatoryTab: React.FC<RegulatoryTabProps> = ({ model, selectedRul
     return <div className="text-slate-500 dark:text-slate-400">Parse a model to inspect regulatory structure.</div>;
   }
 
-  if (model.reactionRules.length === 0) {
+  if ((model.reactionRules ?? []).length === 0) {
     return <div className="text-slate-500 dark:text-slate-400">This model has no reaction rules to analyse.</div>;
   }
 

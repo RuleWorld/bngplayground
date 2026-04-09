@@ -9,6 +9,7 @@ describe('SBMLWriter', () => {
     parameters: { k1: 0.1 },
     moleculeTypes: [{ name: 'AKT', components: ['Y~U~P'] }],
     species: [{ name: 'AKT(Y~U)', initialConcentration: 100 }],
+    reactions: [],
     reactionRules: [
       {
         name: 'r1',

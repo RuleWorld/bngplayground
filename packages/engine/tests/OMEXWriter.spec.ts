@@ -8,6 +8,7 @@ const mockModel: BNGLModel = {
   moleculeTypes: [],
   species: [],
   observables: [{ name: 'A', type: 'Molecules', pattern: 'A()' }],
+  reactions: [],
   reactionRules: [],
   compartments: [],
   functions: [],

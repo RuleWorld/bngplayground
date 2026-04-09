@@ -20,11 +20,11 @@ export async function handleMultiscaleSimulation(args: ToolArgs): Promise<ToolRe
     return createToolResult({
       populationSummary: result.populationTimeSeries,
       finalCellCount: finalCounts,
-      totalCells: Object.values(finalCounts).reduce((a: number, b: number) => a + b, 0),
+      totalCells: Object.values(finalCounts).reduce((a: number, b) => a + Number(b), 0),
       meanObservables: finalSnapshot?.meanObservables || {},
       nSnapshots: result.snapshots.length,
       lineageSize: result.cellLineage.length,
-      technical: `Simulated ${config.cellTypes.length} cell type(s) for ${config.tEnd}s. Final population: ${Object.values(finalCounts).reduce((a: number, b: number) => a + b, 0)} cells.`,
+      technical: `Simulated ${config.cellTypes.length} cell type(s) for ${config.tEnd}s. Final population: ${Object.values(finalCounts).reduce((a: number, b) => a + Number(b), 0)} cells.`,
       biological: `Population dynamics: ${Object.entries(finalCounts).map(([type, count]) => `${type}: ${count}`).join(', ')}.`,
       strategic: 'Multi-scale models bridge intracellular BNGL models with cell-population dynamics — essential for tumor growth, immune response, and tissue-level phenomena.',
     });

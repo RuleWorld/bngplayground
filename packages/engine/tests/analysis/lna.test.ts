@@ -19,6 +19,7 @@ function makeModel(
     species,
     observables: [],
     reactions,
+    reactionRules: [],
   };
 }
 

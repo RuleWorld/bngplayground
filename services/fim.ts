@@ -86,9 +86,13 @@ export async function computeFIM(
     const t0 = performance.now();
     modelId = await bnglService.prepareModel(model, { signal });
     const t1 = performance.now();
+    if (typeof modelId !== 'number') {
+      throw new Error('Failed to prepare model for FIM computation');
+    }
+    const preparedModelId = modelId;
 
     // baseline simulation (no overrides)
-    const baseline = await bnglService.simulateCached(modelId, undefined, simulationOptions, { signal });
+    const baseline = await bnglService.simulateCached(preparedModelId, undefined, simulationOptions, { signal });
 
     // Determine observables and timepoints
     const T = baseline.data.length;
@@ -160,7 +164,7 @@ export async function computeFIM(
     const simStartTime = performance.now();
     const perturbResults = await Promise.all(
       perturbJobs.map(job =>
-        bnglService.simulateCached(modelId, { [job.param]: job.val }, simulationOptions, { signal })
+        bnglService.simulateCached(preparedModelId, { [job.param]: job.val as number } as Record<string, number>, simulationOptions, { signal })
       )
     );
     totalSimMs = performance.now() - simStartTime;
@@ -609,10 +613,10 @@ export async function computeFIM(
             // perform a short re-optimization of other parameters at this fixed value
             const baseParams: Record<string, number> = {};
             for (const pn of parameterNames) baseParams[pn] = model.parameters[pn];
-            const out = await reoptimizeAtFixed(modelId, idx, val, baseParams, { maxIter: 30, maxEvals: 120, initialStep: 0.25 });
+            const out = await reoptimizeAtFixed(preparedModelId, idx, val, baseParams, { maxIter: 30, maxEvals: 120, initialStep: 0.25 });
             ssrArr.push(out.ssr);
           } else {
-            const res = await recordSim(() => bnglService.simulateCached(modelId, { [name]: val }, simulationOptions, { signal }));
+            const res = await recordSim(() => bnglService.simulateCached(preparedModelId, { [name]: val as number } as Record<string, number>, simulationOptions, { signal }));
             const vec: number[] = [];
             for (let ti = 0; ti < (includeAllTimepoints ? res.data.length : 1); ti++) {
               const rIdx = includeAllTimepoints ? ti : res.data.length - 1;

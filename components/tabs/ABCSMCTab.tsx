@@ -85,6 +85,7 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
 
   const handleRun = async () => {
     if (!model || !canRun) return;
+    const simulationOptions = model.simulationOptions ?? {};
 
     setIsRunning(true);
     setError(null);
@@ -334,11 +335,12 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                    onClick={async () => {
                      if (!model) return;
                      try {
+                       const simulationOptions = model.simulationOptions ?? {};
                        const modelId = await bnglService.prepareModel(model);
                        const res = await bnglService.simulateCached(modelId, {}, {
                          method: 'ode',
-                         t_end: model.simulationOptions.t_end || 10,
-                         n_steps: model.simulationOptions.n_steps || 100,
+                        t_end: simulationOptions.t_end || 10,
+                        n_steps: simulationOptions.n_steps || 100,
                        });
                        
                        const obsNames = model.observables.map(o => o.name);
@@ -448,8 +450,8 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                           <Tooltip 
                             contentStyle={{ backgroundColor: 'rgba(30, 41, 59, 0.95)', border: 'none', borderRadius: '12px', color: '#fff', fontSize: '11px' }}
                             itemStyle={{ color: '#818cf8', fontWeight: 'bold' }}
-                            formatter={(val: number) => [val.toFixed(4), 'Density']}
-                            labelFormatter={(val: number) => `Value: ${formatValue(val)}`}
+                            formatter={(val) => [typeof val === 'number' ? val.toFixed(4) : String(val ?? ''), 'Density']}
+                            labelFormatter={(val) => `Value: ${formatValue(typeof val === 'number' ? val : Number(val ?? 0))}`}
                           />
                           <Line 
                             type="stepAfter" 

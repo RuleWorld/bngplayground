@@ -52,7 +52,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
 
     const mapping: Record<string, string[]> = {};
 
-    model.reactionRules.forEach((rule, index) => {
+    (model.reactionRules ?? []).forEach((rule, index) => {
       const label = rule.name ?? `Rule ${index + 1}`;
       const register = (paramName?: string) => {
         if (!paramName) return;

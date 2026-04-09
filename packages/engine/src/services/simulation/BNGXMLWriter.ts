@@ -21,6 +21,78 @@ const normalizeObservableType = (value?: string): string => {
   return raw;
 };
 
+/**
+ * Expand user-defined function calls inline for NFsim compatibility.
+ * NFsim doesn't support user-defined functions in rate expressions — they must be fully expanded.
+ * Recursively expands nested function calls.
+ */
+function expandUserDefinedFunctions(
+  expr: string,
+  functions: Array<{ name: string; args: string[]; expression: string }>,
+  maxDepth = 10
+): string {
+  if (maxDepth <= 0) return expr; // prevent infinite recursion
+
+  const fnMap = new Map(functions.map(f => [f.name, f]));
+  let expanded = expr;
+  let changed = true;
+
+  while (changed && maxDepth > 0) {
+    changed = false;
+    maxDepth--;
+
+    // Match function calls: fname(arg1, arg2, ...)
+    // Use a regex that handles nested parentheses via counting (simplified: one level)
+    for (const [fnName, fn] of fnMap) {
+      const pattern = new RegExp(`\\b${fnName}\\s*\\(`, 'g');
+      let match: RegExpExecArray | null;
+
+      while ((match = pattern.exec(expanded)) !== null) {
+        const startIdx = match.index;
+        const argsStartIdx = match.index + match[0].length;
+
+        // Find matching closing paren by counting depth
+        let depth = 1;
+        let i = argsStartIdx;
+        const argChars: string[] = [];
+
+        while (i < expanded.length && depth > 0) {
+          const ch = expanded[i];
+          if (ch === '(') depth++;
+          else if (ch === ')') depth--;
+          if (depth > 0) argChars.push(ch);
+          i++;
+        }
+
+        if (depth !== 0) break; // unmatched parens — skip this malformed call
+
+        const argsStr = argChars.join('');
+        const args = argsStr.split(',').map(a => a.trim());
+
+        if (args.length !== fn.args.length) continue; // arg count mismatch — skip
+
+        // Substitute parameters with arguments in the function body
+        let bodyExpanded = fn.expression;
+        for (let j = 0; j < fn.args.length; j++) {
+          const paramName = fn.args[j];
+          const argValue = args[j];
+          // Replace whole-word occurrences of the parameter with the argument
+          const paramPattern = new RegExp(`\\b${paramName}\\b`, 'g');
+          bodyExpanded = bodyExpanded.replace(paramPattern, `(${argValue})`);
+        }
+
+        // Replace the function call with the expanded body
+        const callEnd = i;
+        expanded = expanded.slice(0, startIdx) + `(${bodyExpanded})` + expanded.slice(callEnd);
+        changed = true;
+        break; // restart the while loop to handle the modified string
+      }
+    }
+  }
+
+  return expanded;
+}
+
 export class BNGXMLWriter {
   static write(model: BNGLModel): string {
     const modelId = model.name ? escapeXml(model.name) : 'model';
@@ -33,6 +105,11 @@ export class BNGXMLWriter {
     const moleculeTypeDefs = this.inferMoleculeTypes(model);
 
     const synthesizedParameters: { id: string; expression: string }[] = [];
+    // Rate expressions that reference observables must be emitted as <Function>
+    // elements (not <Parameter>) so NFsim can resolve them at runtime.
+    const observableDependentRates = new Set<string>();
+
+    const obsNames = new Set(observables.map(o => o.name));
 
     // Pre-pass on reaction rules to collect synthesized rate laws
     reactions.forEach((r, idx) => {
@@ -40,12 +117,18 @@ export class BNGXMLWriter {
       const rates = r.isBidirectional && r.reverseRate !== undefined ? [r.rate, r.reverseRate] : [r.rate];
       rates.forEach((rate, rIdx) => {
         const rateValue = rate !== undefined ? String(rate) : '0';
-        const isComplex = rateValue.length > 0 && 
-          !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
+        const isComplex = rateValue.length > 0 &&
+          !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) &&
           !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
-        
+
         if (isComplex) {
           const pId = rIdx === 0 ? `_func_rate_${baseId}` : `_func_rate_${baseId}_rev`;
+          // Check if expression references any observables
+          const tokens = rateValue.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+          const refsObservable = tokens.some(t => obsNames.has(t));
+          if (refsObservable) {
+            observableDependentRates.add(pId);
+          }
           synthesizedParameters.push({ id: pId, expression: rateValue });
         }
       });
@@ -63,10 +146,13 @@ export class BNGXMLWriter {
       })
       .join('') +
       synthesizedParameters
+      .filter(p => !observableDependentRates.has(p.id))
       .map(p => {
-        const val = BNGLParser.evaluateExpression(p.expression, evalParams);
-        const valStr = isNaN(val) ? p.expression : String(val);
-        return `      <Parameter id="${escapeXml(p.id)}" type="Constant" value="${escapeXml(valStr)}" expr="${escapeXml(p.expression)}"/>\n`;
+        // Expand user-defined functions for NFsim compatibility
+        const expandedExpr = expandUserDefinedFunctions(p.expression, model.functions || []);
+        const val = BNGLParser.evaluateExpression(expandedExpr, evalParams);
+        const valStr = isNaN(val) ? expandedExpr : String(val);
+        return `      <Parameter id="${escapeXml(p.id)}" type="Constant" value="${escapeXml(valStr)}" expr="${escapeXml(expandedExpr)}"/>\n`;
       })
       .join('');
 
@@ -130,11 +216,20 @@ export class BNGXMLWriter {
         const graph = BNGLParser.parseSpeciesGraph(s.name);
         const { moleculesXml, bondsXml } = this.serializeMolecules(graph, `S${idx + 1}`, moleculeTypeDefs, false);
         const compAttr = graph.compartment ? ` compartment="${escapeXml(graph.compartment)}"` : '';
-        return `      <Species id="S${idx + 1}" concentration="${escapeXml(String(s.initialConcentration))}" name="${escapeXml(s.name)}"${compAttr}>\n        ${moleculesXml}\n        ${bondsXml}\n      </Species>\n`;
+        const fixedAttr = s.isConstant ? ' Fixed="1"' : '';
+        return `      <Species id="S${idx + 1}" concentration="${escapeXml(String(s.initialConcentration))}" name="${escapeXml(s.name)}"${compAttr}${fixedAttr}>\n        ${moleculesXml}\n        ${bondsXml}\n      </Species>\n`;
       })
       .join('');
 
+    // Observable-dependent rate expressions are emitted as <Function> elements
+    // so NFsim can resolve observable references at runtime via its function system.
     const synthesizedFunctions: { name: string; expression: string; args: string[] }[] = [];
+    for (const p of synthesizedParameters) {
+      if (observableDependentRates.has(p.id)) {
+        const expandedExpr = expandUserDefinedFunctions(p.expression, model.functions || []);
+        synthesizedFunctions.push({ name: p.id, expression: expandedExpr, args: [] });
+      }
+    }
 
     const reactionRulesXml = reactions
       .flatMap((r, idx) => {
@@ -203,27 +298,35 @@ export class BNGXMLWriter {
             })
             .join('');
 
-          const rateLawType = 'Ele';
           const totalrate = r.totalRate ? '1' : '0';
 
           const rateValue = variant.rate !== undefined ? String(variant.rate) : '0';
           let finalRateValue = rateValue;
-          
+
           // NFsim/BioNetGen XML parity: Complex expressions in rate must be exported as parameters
-          const isComplex = rateValue.length > 0 && 
-            !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) && 
+          const isComplex = rateValue.length > 0 &&
+            !/^[A-Za-z_][A-Za-z0-9_]*$/.test(rateValue) &&
             !/^-?\d+(\.\d+)?([eE][+-]?\d+)?$/.test(rateValue);
 
           if (isComplex) {
             finalRateValue = `_func_rate_${variant.id}`;
           }
 
+          // If this rate references observables, use Function rate law type so
+          // NFsim resolves observable values at runtime via its function system.
+          const rateLawType = observableDependentRates.has(finalRateValue) ? 'Function' : 'Ele';
+
           const { mapXml, operationsXml } = this.buildRuleOperations(reactantPatternData, productPatternData, {
             deleteMolecules: Boolean(r.deleteMolecules),
             moveConnected: Boolean(r.moveConnected)
           });
 
-          const rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+          let rateLawXml: string;
+          if (rateLawType === 'Function') {
+            rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="Function" name="${finalRateValue}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+          } else {
+            rateLawXml = `\n      <RateLaw id="${ruleId}_RateLaw" type="${rateLawType}" totalrate="${totalrate}">\n        <ListOfRateConstants>\n          <RateConstant value="${finalRateValue}"/>\n        </ListOfRateConstants>\n      </RateLaw>`;
+          }
 
           // operationsXml from buildRuleOperations already includes the <ListOfOperations> wrapper — use it directly
           const opsTag = operationsXml;

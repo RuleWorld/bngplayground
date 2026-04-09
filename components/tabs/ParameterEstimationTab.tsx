@@ -261,13 +261,14 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
 
   const handleAutoGenerateInput = async () => {
     if (!model) return;
+    const simulationOptions = model.simulationOptions ?? {};
 
     try {
       const modelId = await bnglService.prepareModel(model);
       const res = await bnglService.simulateCached(modelId, {}, {
         method: 'ode',
-        t_end: model.simulationOptions.t_end || 10,
-        n_steps: model.simulationOptions.n_steps || 100,
+        t_end: simulationOptions.t_end || 10,
+        n_steps: simulationOptions.n_steps || 100,
       });
 
       const obsNames = model.observables.map(o => o.name);
@@ -1019,7 +1020,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                     />
                     <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fontWeight: 'bold' }} />
                     <Tooltip 
-                      formatter={(v: any, name: string) => {
+                      formatter={(v: any, name?: string) => {
                         // Filter out 'name' keys and other internal Recharts properties that might leak into tooltip
                         if (name === 'name' || name === 'Parameter' || name === 'range') return null;
                         
@@ -1150,7 +1151,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                         tick={{ fontSize: 11, fill: 'currentColor' }}
                         tickLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
                         axisLine={{ stroke: 'currentColor', strokeOpacity: 0.5 }}
-                        tickFormatter={(v: number) => {
+                        tickFormatter={(v) => {
                           if (!Number.isFinite(v)) return '';
                           const exp = Math.round(v);
                           const mantissa = Math.pow(10, v - exp);
