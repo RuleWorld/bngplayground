@@ -81,20 +81,24 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
     return baseData.map((point, i) => {
       const merged: Record<string, number> = { time: point.time };
 
+      // ⚡ Bolt Performance Optimization:
+      // Avoid Object.keys().forEach in inner loop over data arrays
+      // to prevent large array allocations when processing simulation results.
+
       // Add base results
-      Object.keys(point).forEach(key => {
-        if (key !== 'time') {
+      for (const key in point) {
+        if (key !== 'time' && Object.prototype.hasOwnProperty.call(point, key)) {
           merged[`${key} (base)`] = point[key];
         }
-      });
+      }
 
       // Add comparison results
       if (compData[i]) {
-        Object.keys(compData[i]).forEach(key => {
-          if (key !== 'time') {
+        for (const key in compData[i]) {
+          if (key !== 'time' && Object.prototype.hasOwnProperty.call(compData[i], key)) {
             merged[`${key} (${comparisonFactor}×)`] = compData[i][key];
           }
-        });
+        }
       }
 
       return merged;

@@ -159,11 +159,21 @@ export class VariationalParameterEstimator {
     const scale = 0.9 + 0.2 * (1 / (1 + Math.exp(-(paramSum / Math.max(1, params.length)) * 0.01)));
     const phase = (paramSum % 1000) * 0.001;
 
+    // Pre-calculate wobble arrays based on timepoints to avoid Math.sin in inner loop
+    const timePointsCount = this.data.timePoints.length;
+    const wobbleCache = new Float64Array(timePointsCount);
+    for (let i = 0; i < timePointsCount; i++) {
+      wobbleCache[i] = 1 + 0.02 * Math.sin(phase + i * 0.1);
+    }
+
     for (const [obsName, obsData] of this.data.observables) {
-      const pred = obsData.map((v, i) => {
-        const wobble = 1 + 0.02 * Math.sin(phase + i * 0.1);
-        return v * scale * wobble;
-      });
+      const len = obsData.length;
+      const pred = new Array(len);
+      for (let i = 0; i < len; i++) {
+        // Use cached wobble if available, fallback for arrays longer than timePoints
+        const wobble = i < timePointsCount ? wobbleCache[i] : (1 + 0.02 * Math.sin(phase + i * 0.1));
+        pred[i] = obsData[i] * scale * wobble;
+      }
       result.set(obsName, pred);
     }
     return result;
@@ -220,8 +230,8 @@ export class VariationalParameterEstimator {
     // Gradient-free update: sample candidates from current variational distribution,
     // pick the best objective, and nudge (mu, logSigma) toward it.
     const elboHistory: number[] = [];
-    let mu = this.mu.arraySync() as number[];
-    let logSigma = this.logSigma.arraySync() as number[];
+    const mu = this.mu.arraySync() as number[];
+    const logSigma = this.logSigma.arraySync() as number[];
 
     const candidatesPerIter = Math.max(2, batchSize);
     const step = Math.max(0.001, Math.min(0.2, learningRate));
@@ -262,11 +272,13 @@ export class VariationalParameterEstimator {
       elboHistory.push(elboValue);
 
       if (bestParamsIter) {
-        const targetMu = bestParamsIter.map((p) => Math.log(Math.max(p, 1e-12)));
-        mu = mu.map((m, i) => (1 - step) * m + step * targetMu[i]);
-
-        // Anneal uncertainty slowly to encourage convergence
-        logSigma = logSigma.map((ls) => clamp(ls - 0.002, logSigmaMin, logSigmaMax));
+        // Optimize loop: avoid .map() allocations and remove redundant Math.max
+        // bestParamsIter values are generated via Math.exp(), so they are strictly positive
+        for (let i = 0; i < mu.length; i++) {
+          mu[i] = (1 - step) * mu[i] + step * Math.log(bestParamsIter[i]);
+          // Anneal uncertainty slowly to encourage convergence
+          logSigma[i] = clamp(logSigma[i] - 0.002, logSigmaMin, logSigmaMax);
+        }
 
         this.mu.assign(tf.tensor1d(mu));
         this.logSigma.assign(tf.tensor1d(logSigma));

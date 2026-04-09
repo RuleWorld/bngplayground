@@ -947,19 +947,24 @@ export async function simulate(
 
       // Re-evaluate dependent params
       if (parametersUpdated && model.paramExpressions) {
+        // ⚡ Bolt Optimization: Evaluate observables ONCE outside the loop and use for...in instead of Object.entries()
+        // to avoid repeated array allocations and redundant calculations during phase updates.
+        const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
         for (let pass = 0; pass < 10; pass++) {
           let anyChanged = false;
-          for (const [name, expr] of Object.entries(model.paramExpressions)) {
-            try {
-              const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
-              const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
-              if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
+          for (const name in model.paramExpressions) {
+            if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
+              const expr = model.paramExpressions[name];
+              try {
+                const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
+                if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
 
-                model.parameters[name] = val;
-                anyChanged = true;
+                  model.parameters[name] = val;
+                  anyChanged = true;
+                }
+              } catch (e: any) {
+                /* ignore */
               }
-            } catch (e: any) {
-              /* ignore */
             }
           }
           if (!anyChanged) break;
@@ -2310,30 +2315,42 @@ export async function simulate(
 
         for (let r = 0; r < concreteReactions.length; r++) {
           const rxn = concreteReactions[r];
-          const k = rxn.rateConstant;
+          // 🔒 SECURITY FIX: Strictly sanitize all variables interpolated into the JIT string.
+          // This prevents code injection if any model properties were manipulated to contain
+          // arbitrary strings. Number() ensures only numerical representations are concatenated,
+          // totally neutralizing string-based payloads while keeping the fast JIT logic intact.
+          const k = Number(rxn.rateConstant) || 0;
           const reactants = rxn.reactants;
           const reactantCounts = reactantCountMaps[r];
-          const volR = reactionReactingVolumes[r] || 1.0;
-          const propensity = rxn.propensityFactor ?? 1;
-          const degeneracy = rxn.degeneracy ?? 1;
+          const volR = Number(reactionReactingVolumes[r]) || 1.0;
+          const propensity = Number(rxn.propensityFactor ?? 1);
+          const degeneracy = Number(rxn.degeneracy ?? 1);
 
           // Velocity base: k * volR * propensity * degeneracy
           const base = k * propensity * degeneracy * volR;
+          if (!Number.isFinite(base)) continue;
 
-          for (const [speciesK, orderK] of reactantCounts) {
+          for (const [speciesKRaw, orderKRaw] of reactantCounts) {
+            const speciesK = Number(speciesKRaw);
+            const orderK = Number(orderKRaw);
+
             // dv = d(ReactionVelocity) / d(y[speciesK])
             // ReactionVelocity = base * Product_i( y[i] * Vol_i / volR )
             // d(Velocity) / d(y[speciesK]) = base * orderK * (y[speciesK]^(orderK-1)) * (Vol_speciesK / volR)^orderK * Product_j!=K(...)
 
             let velocityTerm = `${base}`;
             for (let rj = 0; rj < reactants.length; rj++) {
-              const ridx = reactants[rj];
-              const scale = solverVolumes[ridx] / volR;
-              velocityTerm += ` * (y[${ridx}] * ${scale})`;
+              const ridx = Number(reactants[rj]);
+              const scale = Number(solverVolumes[ridx]) / volR;
+              if (Number.isFinite(ridx) && Number.isFinite(scale)) {
+                velocityTerm += ` * (y[${ridx}] * ${scale})`;
+              }
             }
 
             // Differentiate via power rule: d(y^n)/dy = n * (y^n)/y
-            const scaleK = solverVolumes[speciesK] / volR;
+            const scaleK = Number(solverVolumes[speciesK]) / volR;
+            if (!Number.isFinite(scaleK)) continue;
+
             lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] * ${scaleK} : 0.0;`);
 
             // Special case for order 1 to avoid /y[speciesK] when y is 0
@@ -2341,9 +2358,11 @@ export async function simulate(
               let partialProduct = `${base} * ${scaleK}`;
               for (let rj = 0; rj < reactants.length; rj++) {
                 if (reactants[rj] !== speciesK) {
-                  const ridx = reactants[rj];
-                  const scale = solverVolumes[ridx] / volR;
-                  partialProduct += ` * (y[${ridx}] * ${scale})`;
+                  const ridx = Number(reactants[rj]);
+                  const scale = Number(solverVolumes[ridx]) / volR;
+                  if (Number.isFinite(ridx) && Number.isFinite(scale)) {
+                    partialProduct += ` * (y[${ridx}] * ${scale})`;
+                  }
                 }
               }
               lines.push(`if (y[${speciesK}] <= 1e-100) dv = ${partialProduct};`);
@@ -2352,32 +2371,40 @@ export async function simulate(
             if (columnMajor) {
               // Reactants
               for (let rj = 0; rj < reactants.length; rj++) {
-                const sIdx = reactants[rj];
-                if (!model.species[sIdx].isConstant) {
-                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${solverVolumes[sIdx]};`);
+                const sIdx = Number(reactants[rj]);
+                if (Number.isFinite(sIdx) && !model.species[sIdx]?.isConstant) {
+                  const sv = Number(solverVolumes[sIdx]) || 1.0;
+                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${sv};`);
                 }
               }
               // Products
               for (let pj = 0; pj < rxn.products.length; pj++) {
-                const pIdx = rxn.products[pj];
-                if (!model.species[pIdx].isConstant) {
-                  const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1;
-                  lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${solverVolumes[pIdx]};`);
+                const pIdx = Number(rxn.products[pj]);
+                if (Number.isFinite(pIdx) && !model.species[pIdx]?.isConstant) {
+                  const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
+                  const sv = Number(solverVolumes[pIdx]) || 1.0;
+                  if (Number.isFinite(stoich)) {
+                    lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${sv};`);
+                  }
                 }
               }
             } else {
               // Row Major
               for (let rj = 0; rj < reactants.length; rj++) {
-                const sIdx = reactants[rj];
-                if (!model.species[sIdx].isConstant) {
-                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${solverVolumes[sIdx]};`);
+                const sIdx = Number(reactants[rj]);
+                if (Number.isFinite(sIdx) && !model.species[sIdx]?.isConstant) {
+                  const sv = Number(solverVolumes[sIdx]) || 1.0;
+                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${sv};`);
                 }
               }
               for (let pj = 0; pj < rxn.products.length; pj++) {
-                const pIdx = rxn.products[pj];
-                if (!model.species[pIdx].isConstant) {
-                  const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1;
-                  lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${solverVolumes[pIdx]};`);
+                const pIdx = Number(rxn.products[pj]);
+                if (Number.isFinite(pIdx) && !model.species[pIdx]?.isConstant) {
+                  const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
+                  const sv = Number(solverVolumes[pIdx]) || 1.0;
+                  if (Number.isFinite(stoich)) {
+                    lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${sv};`);
+                  }
                 }
               }
             }

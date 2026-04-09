@@ -76,11 +76,16 @@ export class ODESolverAdapter {
     // Extract observables at specified time points
     const result = new Map<string, number[]>();
     
+    const data = simulationResult.data;
+    const simTime = data ? data.map((row: any) => row.time) : [];
+    const timeIndices = timePoints.map(t => this.findClosestTimeIndex(simTime, t));
+
     for (const obsName of observableNames) {
       const obsData = this.extractObservable(
         simulationResult,
         obsName,
-        timePoints
+        timePoints,
+        timeIndices
       );
       result.set(obsName, obsData);
     }
@@ -113,7 +118,8 @@ export class ODESolverAdapter {
   private extractObservable(
     simulationResult: any, // SimulationResults from @bngplayground/engine
     observableName: string,
-    timePoints: number[]
+    timePoints: number[],
+    timeIndices?: number[]
   ): number[] {
     const values: number[] = [];
     const data = simulationResult.data;
@@ -122,9 +128,12 @@ export class ODESolverAdapter {
       return timePoints.map(() => 0);
     }
 
-    for (const t of timePoints) {
+    const simTime = !timeIndices ? data.map((row: any) => row.time) : [];
+
+    for (let i = 0; i < timePoints.length; i++) {
+      const t = timePoints[i];
       // Find closest time point in simulation result
-      const idx = this.findClosestTimeIndex(data.map((row: any) => row.time), t);
+      const idx = timeIndices ? timeIndices[i] : this.findClosestTimeIndex(simTime, t);
 
       // Extract observable value at that time
       const value = data[idx]?.[observableName] ?? 0;
@@ -138,18 +147,32 @@ export class ODESolverAdapter {
    * Find index of closest time point
    */
   private findClosestTimeIndex(timePoints: number[], targetTime: number): number {
-    let minDiff = Infinity;
-    let closestIdx = 0;
+    if (timePoints.length === 0) return 0;
 
-    for (let i = 0; i < timePoints.length; i++) {
-      const diff = Math.abs(timePoints[i] - targetTime);
-      if (diff < minDiff) {
-        minDiff = diff;
-        closestIdx = i;
+    let left = 0;
+    let right = timePoints.length - 1;
+
+    if (targetTime <= timePoints[left]) return left;
+    if (targetTime >= timePoints[right]) return right;
+
+    while (left <= right) {
+      const mid = (left + right) >> 1;
+
+      if (timePoints[mid] === targetTime) {
+        return mid;
+      }
+
+      if (timePoints[mid] < targetTime) {
+        left = mid + 1;
+      } else {
+        right = mid - 1;
       }
     }
 
-    return closestIdx;
+    const diffRight = Math.abs(timePoints[right] - targetTime);
+    const diffLeft = Math.abs(timePoints[left] - targetTime);
+
+    return diffRight < diffLeft ? right : left;
   }
 
   /**

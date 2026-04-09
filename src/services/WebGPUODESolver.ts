@@ -174,49 +174,54 @@ export class WebGPUODESolver {
       const rxn = this.reactions[i];
 
       // Compute rate = k * product(conc[reactant]^stoich)
-      let rateExpr = `rate_constants[${rxn.rateConstantIndex}u]`;
-      for (let j = 0; j < rxn.reactantIndices.length; j++) {
+      let rateExpr = "rate_constants[" + rxn.rateConstantIndex + "u]";
+      const rLen = rxn.reactantIndices.length;
+      for (let j = 0; j < rLen; j++) {
         const idx = rxn.reactantIndices[j];
         const stoich = rxn.reactantStoich[j];
         if (stoich === 1) {
-          rateExpr += ` * concentrations[${idx}u]`;
+          rateExpr += " * concentrations[" + idx + "u]";
         } else {
-          rateExpr += ` * pow(concentrations[${idx}u], ${stoich.toFixed(1)})`;
+          rateExpr += " * pow(concentrations[" + idx + "u], " + stoich.toFixed(1) + ")";
         }
       }
-      reactionCode += `  let rate_${i} = ${rateExpr};\n`;
+      reactionCode += "  let rate_" + i + " = " + rateExpr + ";\n";
     }
 
     // Build species derivative computation using if-else (more compatible than switch)
     // Pre-compute derivative expressions for each species
-    const derivExprs: string[] = [];
+    const derivExprs: string[] = new Array(this.nSpecies);
     for (let s = 0; s < this.nSpecies; s++) {
-      let derivExpr = '0.0';
-      for (let i = 0; i < this.reactions.length; i++) {
-        const rxn = this.reactions[i];
-        // Subtract for reactants
-        const reactantIdx = rxn.reactantIndices.indexOf(s);
-        if (reactantIdx >= 0) {
-          const stoich = rxn.reactantStoich[reactantIdx];
-          derivExpr += ` - ${stoich.toFixed(1)} * rate_${i}`;
-        }
-        // Add for products
-        const productIdx = rxn.productIndices.indexOf(s);
-        if (productIdx >= 0) {
-          const stoich = rxn.productStoich[productIdx];
-          derivExpr += ` + ${stoich.toFixed(1)} * rate_${i}`;
-        }
+      derivExprs[s] = "0.0";
+    }
+
+    for (let i = 0; i < this.reactions.length; i++) {
+      const rxn = this.reactions[i];
+
+      // Subtract for reactants
+      const rLen = rxn.reactantIndices.length;
+      for (let j = 0; j < rLen; j++) {
+        const s = rxn.reactantIndices[j];
+        const stoich = rxn.reactantStoich[j];
+        derivExprs[s] += " - " + stoich.toFixed(1) + " * rate_" + i;
       }
-      derivExprs.push(derivExpr);
+
+      // Add for products
+      const pLen = rxn.productIndices.length;
+      for (let j = 0; j < pLen; j++) {
+        const s = rxn.productIndices[j];
+        const stoich = rxn.productStoich[j];
+        derivExprs[s] += " + " + stoich.toFixed(1) + " * rate_" + i;
+      }
     }
 
     // Generate if-else chain for species index
     let speciesCode = '';
     for (let s = 0; s < this.nSpecies; s++) {
       if (s === 0) {
-        speciesCode += `  if (species_idx == 0u) {\n    dydt = ${derivExprs[s]};\n  }`;
+        speciesCode += "  if (species_idx == 0u) {\n    dydt = " + derivExprs[s] + ";\n  }";
       } else {
-        speciesCode += ` else if (species_idx == ${s}u) {\n    dydt = ${derivExprs[s]};\n  }`;
+        speciesCode += " else if (species_idx == " + s + "u) {\n    dydt = " + derivExprs[s] + ";\n  }";
       }
     }
 

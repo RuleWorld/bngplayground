@@ -265,6 +265,7 @@ let libsbml: any = null;
 let initPromise: Promise<void> | null = null;
 
 export const getLibSBMLInstance = (): any | null => libsbml;
+export const setLibSBMLInstanceForTest = (instance: any) => { libsbml = instance; };
 
 const isAbortLikeError = (err: unknown): boolean => {
   const msg = err instanceof Error ? err.message : String(err ?? '');

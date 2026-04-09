@@ -14,13 +14,13 @@ import type { BNGLModel } from '../../types';
 import {
   boundedReachabilityCheck,
   checkDeadlock as boundedCheckDeadlock,
-  parseSpeciesString,
-  canonicalizeSpecies,
-  speciesMatchesPattern,
   type BoundedVerificationConfig,
   type BoundedVerificationResult,
-  type ParsedMolecule,
 } from './BoundedVerifier';
+import { BNGLParser } from '../graph/core/BNGLParser';
+import { GraphCanonicalizer } from '../graph/core/Canonical';
+import { GraphMatcher } from '../graph/core/Matcher';
+import { SpeciesGraph } from '../graph/core/SpeciesGraph';
 import {
   type ContactMap,
   type ContactEdge,
@@ -222,7 +222,7 @@ export function countReachableSpecies(
   speciesExplored: number;
   matchingSpecies: string[];
 } {
-  const targetMolecules = parseSpeciesString(moleculeType);
+  const targetGraph = BNGLParser.parseSpeciesGraph(moleculeType, true);
 
   // Determine limits
   let finiteness: { isFinite: boolean } | undefined;
@@ -237,8 +237,8 @@ export function countReachableSpecies(
   // Run full expansion and collect matches
   const rules = (model.reactionRules || []).map(rule => ({
     name: rule.name || '(unnamed)',
-    reactantPatterns: rule.reactants.map(r => parseSpeciesString(r)),
-    productPatterns: rule.products.map(p => parseSpeciesString(p)),
+    reactantPatterns: rule.reactants.map(r => BNGLParser.parseSpeciesGraph(r, true)),
+    productPatterns: rule.products.map(p => BNGLParser.parseSpeciesGraph(p, true)),
     isBidirectional: rule.isBidirectional,
   }));
 
@@ -255,30 +255,30 @@ export function countReachableSpecies(
     }
   }
 
-  const speciesMap = new Map<string, ParsedMolecule[]>();
+  const speciesMap = new Map<string, SpeciesGraph>();
   const matchingSpecies: string[] = [];
   let speciesCount = 0;
   let reactionsGenerated = 0;
 
   // Initialize with seeds
   for (const seed of model.species) {
-    const molecules = parseSpeciesString(seed.name);
-    const canonical = canonicalizeSpecies(molecules);
+    const graph = BNGLParser.parseSpeciesGraph(seed.name, true);
+    const canonical = GraphCanonicalizer.canonicalize(graph);
     if (!speciesMap.has(canonical)) {
-      speciesMap.set(canonical, molecules);
+      speciesMap.set(canonical, graph);
       speciesCount++;
-      if (speciesMatchesPattern(molecules, targetMolecules)) {
+      if (GraphMatcher.matchesPattern(targetGraph, graph)) {
         matchingSpecies.push(canonical);
       }
     }
   }
 
-  let frontier = [...speciesMap.entries()].map(([c, m]) => ({ canonical: c, molecules: m }));
+  let frontier = [...speciesMap.entries()].map(([c, m]) => ({ canonical: c, graph: m }));
   let iteration = 0;
 
   while (frontier.length > 0 && iteration < config.maxIterations) {
     iteration++;
-    const nextFrontier: Array<{ canonical: string; molecules: ParsedMolecule[] }> = [];
+    const nextFrontier: Array<{ canonical: string; graph: SpeciesGraph }> = [];
 
     for (const species of frontier) {
       if (speciesCount >= config.maxSpecies || reactionsGenerated >= config.maxReactions) {
@@ -293,15 +293,15 @@ export function countReachableSpecies(
 
       for (const rule of allRules) {
         if (rule.reactantPatterns.length === 1) {
-          if (speciesMatchesPattern(species.molecules, rule.reactantPatterns[0])) {
+          if (GraphMatcher.matchesPattern(rule.reactantPatterns[0], species.graph)) {
             reactionsGenerated++;
-            for (const prodMols of rule.productPatterns) {
-              const canonical = canonicalizeSpecies(prodMols);
+            for (const prodGraph of rule.productPatterns) {
+              const canonical = GraphCanonicalizer.canonicalize(prodGraph);
               if (!speciesMap.has(canonical)) {
-                speciesMap.set(canonical, prodMols);
+                speciesMap.set(canonical, prodGraph);
                 speciesCount++;
-                nextFrontier.push({ canonical, molecules: prodMols });
-                if (speciesMatchesPattern(prodMols, targetMolecules)) {
+                nextFrontier.push({ canonical, graph: prodGraph });
+                if (GraphMatcher.matchesPattern(targetGraph, prodGraph)) {
                   matchingSpecies.push(canonical);
                 }
               }

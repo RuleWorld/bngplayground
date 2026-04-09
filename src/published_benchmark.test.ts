@@ -8,7 +8,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync, spawnSync } from 'child_process';
+import { spawnSync } from 'child_process';
 
 import { parseBNGLStrict, NetworkGenerator, NautyService, BNGLParser, BNGXMLWriter } from '@bngplayground/engine';
 import { resolveBNG2Paths, hasBNG2 as checkHasBNG2 } from '../tools/bng2-paths';
@@ -110,12 +110,19 @@ function checkBNG2Parse(modelPath: string, tempDir: string): { success: boolean;
         
         // Try to run BNG2.pl with a short timeout
         try {
-            execSync(`perl "${BNG2_PATH}" "${testFile}"`, {
+            const result = spawnSync('perl', [BNG2_PATH, testFile], {
                 timeout: 60000,  // 60 second timeout
                 cwd: tempDir,
                 stdio: ['pipe', 'pipe', 'pipe'],
                 encoding: 'utf-8'
             });
+
+            if (result.error) {
+                throw result.error;
+            }
+            if (result.status !== 0) {
+                throw new Error(`Process exited with status ${result.status}`);
+            }
             
             // Check if output files were created (.gdat and .net)
             const gdatFile = path.join(tempDir, `${modelName}_check.gdat`);
@@ -421,11 +428,18 @@ describe.skipIf(!hasBNG2)('Full Published Models Benchmark', () => {
 
                 const bngStart = Date.now();
                 // Run BNG2.pl - capture time
-                execSync(`perl "${bng2Path}" "${tempBnglPath}"`, {
+                const proc = spawnSync('perl', [bng2Path, tempBnglPath], {
                     cwd: tempDir,
                     timeout: 60000, // 60s timeout for BNG2
                     stdio: 'ignore'
                 });
+
+                if (proc.error) {
+                    throw proc.error;
+                }
+                if (proc.status !== 0) {
+                    throw new Error(`Process exited with status ${proc.status}`);
+                }
                 result.bng2TimeMs = Date.now() - bngStart;
 
                 // Try to read .net file for stats

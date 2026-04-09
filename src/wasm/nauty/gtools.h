@@ -152,6 +152,7 @@ fprintf(stderr,"   Use %s -help to see more detailed instructions.\n",argv[0])
 extern "C" {
 #endif
  
+extern void gtools_freemem(void);
 extern void gtools_check(int,int,int,int);
 extern FILE *opengraphfile(char*,int*,boolean,long);
 extern void writeline(FILE*,char*);
