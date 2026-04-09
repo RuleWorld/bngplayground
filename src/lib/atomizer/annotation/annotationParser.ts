@@ -79,8 +79,8 @@ export function parseSpeciesAnnotations(
   for (const ann of species.annotations) {
     const qualifierType = ann.qualifierType === 1 ? 'biological' : 'model';
     const qualifier = ann.qualifierType === 1
-      ? BIOLOGICAL_QUALIFIER_NAMES[ann.biologicalQualifier || 13]
-      : MODEL_QUALIFIER_NAMES[ann.modelQualifier || 5];
+      ? BIOLOGICAL_QUALIFIER_NAMES[ann.biologicalQualifier ?? 13]
+      : MODEL_QUALIFIER_NAMES[ann.modelQualifier ?? 5];
 
     for (const resource of ann.resources) {
       const { database, identifier } = parseResourceURI(resource);
