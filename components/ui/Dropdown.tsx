@@ -15,7 +15,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  // Handle click outside
+  // Handle click outside and Escape key
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -27,8 +27,19 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
         setIsOpen(false);
       }
     };
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(prev => prev ? false : prev);
+      }
+    };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    document.addEventListener('keydown', handleEsc);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+      document.removeEventListener('keydown', handleEsc);
+    };
   }, []);
 
   // Calculate position
@@ -113,8 +124,20 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
 
   return (
     <>
-      <div className="inline-block" ref={triggerRef} onClick={() => setIsOpen(!isOpen)}>
-        {trigger}
+      <div className="inline-block" ref={triggerRef}>
+        {React.isValidElement<{ onClick?: React.MouseEventHandler, 'aria-expanded'?: boolean, 'aria-haspopup'?: string }>(trigger)
+          ? React.cloneElement(trigger, {
+              onClick: (e: React.MouseEvent) => {
+                setIsOpen(!isOpen);
+                // Call the original onClick if it exists
+                if (trigger.props.onClick) {
+                  trigger.props.onClick(e);
+                }
+              },
+              'aria-expanded': isOpen,
+              'aria-haspopup': 'menu',
+            })
+          : <span onClick={() => setIsOpen(!isOpen)}>{trigger}</span>}
       </div>
       {isOpen && ReactDOM.createPortal(
         <div
