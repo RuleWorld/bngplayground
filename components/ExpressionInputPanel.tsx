@@ -177,6 +177,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
     <div className="border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 pt-3 mt-3">
       <button
         onClick={() => setIsExpanded(!isExpanded)}
+        aria-expanded={isExpanded}
         className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
       >
         <span className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
