@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
 import { BNGLModel, SimulationResults } from '../types';
 import { CHART_COLORS } from '../src/utils/chartColors';
@@ -546,7 +546,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
 
   const chartMarginBottom = 36;
 
-  const handleToggleSeries = (name: string) => {
+  const handleToggleSeries = useCallback((name: string) => {
     const newVisibleSpecies = new Set(visibleSpecies);
     if (newVisibleSpecies.has(name)) {
       newVisibleSpecies.delete(name);
@@ -554,9 +554,9 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       newVisibleSpecies.add(name);
     }
     onVisibleSpeciesChange(newVisibleSpecies);
-  };
+  }, [visibleSpecies, onVisibleSpeciesChange]);
 
-  const handleLegendHighlight = (name: string) => {
+  const handleLegendHighlight = useCallback((name: string) => {
     // If only this one is currently visible, toggle back to showing all
     if (visibleSpecies.size === 1 && visibleSpecies.has(name)) {
       // Restore all from the current filtered list (or all available headers)
@@ -565,7 +565,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       // Isolate just this one
       onVisibleSpeciesChange(new Set([name]));
     }
-  };
+  }, [visibleSpecies, speciesToPlot, onVisibleSpeciesChange]);
 
 
 
