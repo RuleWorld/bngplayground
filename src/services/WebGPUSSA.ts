@@ -412,12 +412,13 @@ export function runCPUSSAEnsemble(config: GPUSSAConfig): GPUSSAResult {
   }
 
   // Pre-compute reactant multiplicity per reaction
-  const reactantMults: Array<Map<number, number>> = reactions.map((rxn) => {
+  // Stored as arrays of [speciesIndex, multiplicity] for faster iteration during propensity calculation
+  const reactantMultPairs: Array<Array<[number, number]>> = reactions.map((rxn) => {
     const m = new Map<number, number>();
     for (const sp of rxn.reactants) {
       m.set(sp, (m.get(sp) || 0) + 1);
     }
-    return m;
+    return Array.from(m.entries());
   });
 
   // Output array: nTrajectories * nOutputPoints * nSpecies
@@ -465,10 +466,13 @@ export function runCPUSSAEnsemble(config: GPUSSAConfig): GPUSSAResult {
   // -----------------------------------------------------------------------
   function computePropensity(rxnIdx: number, state: Float64Array): number {
     const rxn = reactions[rxnIdx];
-    const mults = reactantMults[rxnIdx];
+    const mults = reactantMultPairs[rxnIdx];
     let a = rxn.rateConstant;
 
-    for (const [sp, count] of mults) {
+    for (let i = 0; i < mults.length; i++) {
+      const pair = mults[i];
+      const sp = pair[0];
+      const count = pair[1];
       const x = state[sp];
       if (count === 1) {
         a *= x;
