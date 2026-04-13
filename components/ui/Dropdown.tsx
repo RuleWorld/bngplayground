@@ -27,8 +27,11 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
         setIsOpen(false);
       }
     };
+
     document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   // Calculate position
@@ -98,10 +101,35 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
     }
   }, [isOpen, updatePosition]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isOpen]);
+
   return (
     <>
-      <div className="inline-block" ref={triggerRef} onClick={() => setIsOpen(!isOpen)}>
-        {trigger}
+      <div className="inline-block" ref={triggerRef}>
+        {React.isValidElement<{ onClick?: React.MouseEventHandler, 'aria-expanded'?: boolean, 'aria-haspopup'?: string }>(trigger)
+          ? React.cloneElement(trigger, {
+              onClick: (e: React.MouseEvent) => {
+                setIsOpen((prev) => !prev);
+                // Call the original onClick if it exists
+                if (trigger.props.onClick) {
+                  trigger.props.onClick(e);
+                }
+              },
+              'aria-expanded': isOpen,
+              'aria-haspopup': 'menu',
+            })
+          : <span onClick={() => setIsOpen((prev) => !prev)}>{trigger}</span>}
       </div>
       {isOpen && ReactDOM.createPortal(
         <div

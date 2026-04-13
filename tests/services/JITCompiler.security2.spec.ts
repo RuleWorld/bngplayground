@@ -16,6 +16,6 @@ describe('JITCompiler Security', () => {
 
         expect(() => {
             jitCompiler.compile(reactions, 2, {});
-        }).toThrow(/Security Error: Unsafe mathematical expression detected/);
+        }).toThrow(/Security Error: Failed to parse expression/);
     });
 });

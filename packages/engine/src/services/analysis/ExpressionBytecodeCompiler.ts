@@ -114,7 +114,9 @@ export function compileExpressionToBytecode(
     functions?: JITFunctionDefinition[]
 ): { bytecode: Uint8Array; usesParameters: boolean } | null {
     try {
-        const expandedExpr = expandZeroArgFunctions(expr, functions).replace(/\^/g, '**');
+        const expandedExpr = expandZeroArgFunctions(expr, functions)
+            .replace(/\^/g, '**')
+            .replace(/\bMath\./g, '');
         const ast = jsep(expandedExpr);
         const bytes: number[] = [];
         let usesParameters = false;

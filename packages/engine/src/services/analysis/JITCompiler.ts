@@ -14,6 +14,7 @@
 import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 import { OpCode } from '../simulation/ExpressionCompiler';
+import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import jsep from 'jsep';
 
 const OP_STOP = 0xFF;
@@ -216,64 +217,19 @@ export class JITCompiler {
         return parameters ? Object.keys(parameters).sort() : [];
     }
 
-    /**
-     * Strictly validate that a mathematical expression only contains safe
-     * operations, preventing arbitrary JS code injection before JIT eval().
-     */
-    private validateSafeExpression(expr: string): void {
-        let ast: any;
+    private normalizeExpressionForValidation(expr: string): string {
+        return expr.replace(/\^/g, '**').replace(/\bMath\./g, '');
+    }
+
+    private assertSafeRateExpression(expr: string, parameterNames: string[]): void {
+        const normalizedExpr = this.normalizeExpressionForValidation(expr);
         try {
-            // jsep itself throws on many invalid constructs (e.g., mismatched brackets)
-            ast = jsep(expr);
-        } catch (error: any) {
-            throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected - ${error.message}`);
+            // compile() validates syntax, AST allowlist, and unknown variables.
+            SafeExpressionEvaluator.compile(normalizedExpr, parameterNames);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`);
         }
-
-        const checkNode = (node: any): void => {
-            if (!node) return;
-            switch (node.type) {
-                case 'Literal':
-                case 'Identifier':
-                    break;
-                case 'BinaryExpression':
-                case 'LogicalExpression':
-                    checkNode(node.left);
-                    checkNode(node.right);
-                    break;
-                case 'UnaryExpression':
-                    checkNode(node.argument);
-                    break;
-                case 'CallExpression':
-                    let name = '';
-                    if (node.callee.type === 'Identifier') {
-                        name = node.callee.name.toLowerCase();
-                    } else if (node.callee.type === 'MemberExpression' && node.callee.object.name === 'Math' && node.callee.property.type === 'Identifier') {
-                        name = node.callee.property.name.toLowerCase();
-                    } else {
-                        throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected - Invalid function call target`);
-                    }
-
-                    const allowedFns = new Set([
-                        'sat', 'log', 'ln', 'exp', 'log10', 'sqrt', 'abs', 'sin', 'cos',
-                        'ceil', 'floor', 'rint', 'round', 'tan', 'asin', 'acos', 'atan',
-                        'max', 'min', 'if', 'not', 'pow'
-                    ]);
-                    if (!allowedFns.has(name)) {
-                        throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected - Unsupported mathematical function: ${name}`);
-                    }
-                    node.arguments.forEach(checkNode);
-                    break;
-                case 'MemberExpression':
-                    checkNode(node.object);
-                    if (node.property.type !== 'Literal' && node.property.type !== 'Identifier') {
-                        throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected - Invalid member expression property`);
-                    }
-                    break;
-                default:
-                    throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected - Unsupported expression construct: ${node.type}`);
-            }
-        };
-        checkNode(ast);
     }
 
     private normalizeSpeciesIndex(
@@ -518,7 +474,7 @@ export class JITCompiler {
             } else {
                 const rxnStr = rxn.rateConstant.toString();
                 // Security check before translating and interpolating
-                this.validateSafeExpression(rxnStr.replace(/\^/g, '**'));
+                this.assertSafeRateExpression(rxnStr, parameterNames);
                 rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
@@ -855,7 +811,7 @@ export class JITCompiler {
                     } else {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
-                        this.validateSafeExpression(rxnStr.replace(/\^/g, '**'));
+                        this.assertSafeRateExpression(rxnStr, paramKeys);
                         const translated = ExpressionTranslator.translate(rxnStr);
                         // Avoid collisions with the time variable parameter by using a unique placeholder
                         const translatedSafe = translated.replace(/\bt\b/g, '__t__');
@@ -1085,7 +1041,9 @@ export class JITCompiler {
         functions?: JITFunctionDefinition[]
     ): { bytecode: Uint8Array; usesParameters: boolean } | null {
         try {
-            const expandedExpr = this.expandZeroArgFunctions(expr, functions).replace(/\^/g, '**');
+            const expandedExpr = this.normalizeExpressionForValidation(
+                this.expandZeroArgFunctions(expr, functions)
+            );
             const ast = jsep(expandedExpr);
             const bytes: number[] = [];
             let usesParameters = false;

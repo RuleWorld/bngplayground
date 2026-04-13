@@ -8,6 +8,7 @@
  */
 
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
+import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import type { NetworkByteCode } from './JITCompiler';
 import {
     compileExpressionToBytecode,
@@ -36,6 +37,21 @@ function normalizeSpeciesIndex(
         );
     }
     return normalized;
+}
+
+function normalizeExpressionForValidation(expr: string): string {
+    return expr.replace(/\^/g, '**').replace(/\bMath\./g, '');
+}
+
+function assertSafeRateExpression(expr: string, paramNames: string[]): void {
+    const normalizedExpr = normalizeExpressionForValidation(expr);
+    try {
+        // compile() validates syntax, AST allowlist, and unknown variables.
+        SafeExpressionEvaluator.compile(normalizedExpr, paramNames);
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(`[JITByteCodeGenerator] Security Error: ${reason} (rate: ${expr})`);
+    }
 }
 
 /**
@@ -72,6 +88,14 @@ export function compileToByteCode(
         !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
 
     try {
+        // Validate parameter keys to prevent object destructuring injection
+        const paramKeys = Object.keys(parameters || {});
+        for (const key of paramKeys) {
+            if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)) {
+                throw new Error(`[JITByteCodeGenerator] Security Error: Invalid parameter key ${key}`);
+            }
+        }
+
         // 1. Prepare observables
         const nObservables = observables?.length || 0;
         const obsOffsets = new Int32Array(nObservables + 1);
@@ -144,12 +168,14 @@ export function compileToByteCode(
                     k = 0;
                 } else {
                     // Try to evaluate expression
-                    const translated = ExpressionTranslator.translate(rxn.rateConstant.toString());
+                    const rxnStr = rxn.rateConstant.toString();
+                    assertSafeRateExpression(rxnStr, paramKeys);
+                    const translated = ExpressionTranslator.translate(rxnStr);
                     // Avoid collisions with the time variable parameter by using a unique placeholder
                     const translatedSafe = translated.replace(/\bt\b/g, '__t__');
                     // Simple evaluation for parameters
                     try {
-                        const evaluator = new Function('params', `const {${Object.keys(parameters || {}).join(',')}} = params; return ${translatedSafe};`);
+                        const evaluator = new Function('params', `const {${paramKeys.join(',')}} = params; return ${translatedSafe};`);
                         k = evaluator(parameters || {});
                         if (isNaN(k) || !isFinite(k)) return null;
                     } catch {
