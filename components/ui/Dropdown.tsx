@@ -98,6 +98,19 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
     }
   }, [isOpen, updatePosition]);
 
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const handleEsc = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        setIsOpen(false);
+      }
+    };
+
+    document.addEventListener('keydown', handleEsc);
+    return () => document.removeEventListener('keydown', handleEsc);
+  }, [isOpen]);
+
   return (
     <>
       <div className="inline-block" ref={triggerRef} onClick={() => setIsOpen(!isOpen)}>

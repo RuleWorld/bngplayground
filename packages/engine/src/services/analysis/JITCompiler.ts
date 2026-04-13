@@ -221,6 +221,17 @@ export class JITCompiler {
         return expr.replace(/\^/g, '**').replace(/\bMath\./g, '');
     }
 
+    private assertSafeRateExpression(expr: string, parameterNames: string[]): void {
+        const normalizedExpr = this.normalizeExpressionForValidation(expr);
+        try {
+            // compile() validates syntax, AST allowlist, and unknown variables.
+            SafeExpressionEvaluator.compile(normalizedExpr, parameterNames);
+        } catch (error) {
+            const reason = error instanceof Error ? error.message : String(error);
+            throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`);
+        }
+    }
+
     private normalizeSpeciesIndex(
         rawIndex: number | string,
         nSpecies: number,
@@ -463,10 +474,7 @@ export class JITCompiler {
             } else {
                 const rxnStr = rxn.rateConstant.toString();
                 // Security check before translating and interpolating
-                const exprForCheck = this.normalizeExpressionForValidation(rxnStr);
-                if (!SafeExpressionEvaluator.isSafe(exprForCheck, parameterNames)) {
-                    throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected in rate: ${rxnStr}`);
-                }
+                this.assertSafeRateExpression(rxnStr, parameterNames);
                 rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
@@ -803,10 +811,7 @@ export class JITCompiler {
                     } else {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
-                        const exprForCheck = this.normalizeExpressionForValidation(rxnStr);
-                        if (!SafeExpressionEvaluator.isSafe(exprForCheck, paramKeys)) {
-                            throw new Error(`[JITCompiler] Security Error: Unsafe mathematical expression detected in rate: ${rxnStr}`);
-                        }
+                        this.assertSafeRateExpression(rxnStr, paramKeys);
                         const translated = ExpressionTranslator.translate(rxnStr);
                         // Avoid collisions with the time variable parameter by using a unique placeholder
                         const translatedSafe = translated.replace(/\bt\b/g, '__t__');

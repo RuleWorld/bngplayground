@@ -39,6 +39,21 @@ function normalizeSpeciesIndex(
     return normalized;
 }
 
+function normalizeExpressionForValidation(expr: string): string {
+    return expr.replace(/\^/g, '**').replace(/\bMath\./g, '');
+}
+
+function assertSafeRateExpression(expr: string, paramNames: string[]): void {
+    const normalizedExpr = normalizeExpressionForValidation(expr);
+    try {
+        // compile() validates syntax, AST allowlist, and unknown variables.
+        SafeExpressionEvaluator.compile(normalizedExpr, paramNames);
+    } catch (error) {
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new Error(`[JITByteCodeGenerator] Security Error: ${reason} (rate: ${expr})`);
+    }
+}
+
 /**
  * Compile a reaction network into a compact bytecode representation for
  * WASM interpretation.
@@ -154,9 +169,7 @@ export function compileToByteCode(
                 } else {
                     // Try to evaluate expression
                     const rxnStr = rxn.rateConstant.toString();
-                    if (!SafeExpressionEvaluator.isSafe(rxnStr.replace(/\^/g, '**'), paramKeys)) {
-                        throw new Error(`[JITByteCodeGenerator] Security Error: Unsafe mathematical expression detected in rate: ${rxnStr}`);
-                    }
+                    assertSafeRateExpression(rxnStr, paramKeys);
                     const translated = ExpressionTranslator.translate(rxnStr);
                     // Avoid collisions with the time variable parameter by using a unique placeholder
                     const translatedSafe = translated.replace(/\bt\b/g, '__t__');
