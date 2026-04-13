@@ -15,7 +15,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
   const dropdownRef = useRef<HTMLDivElement>(null);
   const [coords, setCoords] = useState<{ top: number; left: number }>({ top: 0, left: 0 });
 
-  // Handle click outside and Escape key
+  // Handle click outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (
@@ -28,17 +28,9 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
       }
     };
 
-    const handleEsc = (event: KeyboardEvent) => {
-      if (event.key === 'Escape') {
-        setIsOpen(prev => prev ? false : prev);
-      }
-    };
-
     document.addEventListener('mousedown', handleClickOutside);
-    document.addEventListener('keydown', handleEsc);
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
-      document.removeEventListener('keydown', handleEsc);
     };
   }, []);
 
@@ -128,7 +120,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
         {React.isValidElement<{ onClick?: React.MouseEventHandler, 'aria-expanded'?: boolean, 'aria-haspopup'?: string }>(trigger)
           ? React.cloneElement(trigger, {
               onClick: (e: React.MouseEvent) => {
-                setIsOpen(!isOpen);
+                setIsOpen((prev) => !prev);
                 // Call the original onClick if it exists
                 if (trigger.props.onClick) {
                   trigger.props.onClick(e);
@@ -137,7 +129,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
               'aria-expanded': isOpen,
               'aria-haspopup': 'menu',
             })
-          : <span onClick={() => setIsOpen(!isOpen)}>{trigger}</span>}
+          : <span onClick={() => setIsOpen((prev) => !prev)}>{trigger}</span>}
       </div>
       {isOpen && ReactDOM.createPortal(
         <div
