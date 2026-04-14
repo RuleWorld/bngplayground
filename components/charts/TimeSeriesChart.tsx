@@ -39,6 +39,8 @@ interface TimeSeriesChartProps {
   animationDuration?: number;
   allowZoom?: boolean;
   allowScale?: boolean;
+  xAxisDomain?: [number | string, number | string];
+  yAxisDomain?: [number | string, number | string];
 }
 
 type ZoomDomain = {
@@ -46,6 +48,18 @@ type ZoomDomain = {
   x2: number | 'dataMax';
   y1: number | 'dataMin';
   y2: number | 'dataMax';
+}
+
+function buildEquidistantTicks(min: number, max: number, count = 6): number[] {
+  if (!Number.isFinite(min) || !Number.isFinite(max)) return [];
+  if (max <= min) return [min];
+
+  const step = (max - min) / (count - 1);
+  const ticks: number[] = [];
+  for (let i = 0; i < count; i++) {
+    ticks.push(min + step * i);
+  }
+  return ticks;
 }
 
 /**
@@ -68,6 +82,8 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   animationDuration = 300,
   allowZoom = true,
   allowScale = true,
+  xAxisDomain,
+  yAxisDomain,
 }) => {
   const [zoomHistory, setZoomHistory] = useState<ZoomDomain[]>([]);
   const [selection, setSelection] = useState<ZoomDomain | null>(null);
@@ -149,6 +165,46 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
   const displayXLabel = xAxisScale === 'log' ? `log(${xAxisLabel})` : xAxisLabel;
   const displayYLabel = yAxisScale === 'log' ? `log(${yAxisLabel})` : yAxisLabel;
 
+  const effectiveXAxisDomain = useMemo<[number, number] | undefined>(() => {
+    if (currentDomain && typeof currentDomain.x1 === 'number' && typeof currentDomain.x2 === 'number') {
+      return [Math.min(currentDomain.x1, currentDomain.x2), Math.max(currentDomain.x1, currentDomain.x2)];
+    }
+
+    if (Array.isArray(xAxisDomain) && typeof xAxisDomain[0] === 'number' && typeof xAxisDomain[1] === 'number') {
+      const lo = Math.min(xAxisDomain[0], xAxisDomain[1]);
+      const hi = Math.max(xAxisDomain[0], xAxisDomain[1]);
+
+      if (xAxisScale === 'log') {
+        const positiveRaw = data
+          .map((point) => Number(point?.[xAxisKey]))
+          .filter((value) => Number.isFinite(value) && value > 0);
+
+        if (positiveRaw.length === 0) return undefined;
+
+        const fallbackMin = Math.min(...positiveRaw);
+        const fallbackMax = Math.max(...positiveRaw);
+        const minRaw = lo > 0 ? lo : fallbackMin;
+        const maxRaw = hi > 0 ? hi : fallbackMax;
+        const domainMin = Math.log10(Math.min(minRaw, maxRaw));
+        const domainMax = Math.log10(Math.max(minRaw, maxRaw));
+        return [domainMin, domainMax];
+      }
+
+      return [lo, hi];
+    }
+
+    const values = plotData
+      .map((point) => Number(point?.[displayXKey]))
+      .filter((value) => Number.isFinite(value));
+    if (values.length === 0) return undefined;
+    return [Math.min(...values), Math.max(...values)];
+  }, [currentDomain, xAxisDomain, xAxisScale, data, xAxisKey, plotData, displayXKey]);
+
+  const xTicks = useMemo(() => {
+    if (!effectiveXAxisDomain) return undefined;
+    return buildEquidistantTicks(effectiveXAxisDomain[0], effectiveXAxisDomain[1]);
+  }, [effectiveXAxisDomain]);
+
   // Manual legend payload to keep it outside the SVG coordinate space (avoids squishing)
   const legendPayload = useMemo(() => series.map(s => ({
     value: s.name,
@@ -178,11 +234,13 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
             <XAxis
               dataKey={displayXKey}
               type="number"
+              ticks={xTicks}
+              interval="preserveStartEnd"
               tickFormatter={(v) => formatValue(xAxisScale === 'log' ? Math.pow(10, Number(v)) : Number(v))}
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
               tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
-              domain={currentDomain ? [currentDomain.x1, currentDomain.x2] : ['auto', 'auto']}
+              domain={effectiveXAxisDomain ?? ['auto', 'auto']}
               allowDataOverflow={true}
               label={{
                 value: displayXLabel,
@@ -199,7 +257,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
               tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
-              domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : [0, 'auto']}
+              domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : (yAxisDomain ?? [0, 'auto'])}
               allowDataOverflow={true}
               label={{
                 value: displayYLabel,

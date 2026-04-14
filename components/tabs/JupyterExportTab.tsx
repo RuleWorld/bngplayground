@@ -6,7 +6,7 @@
  */
 
 import React, { useState } from 'react';
-import { BNGLModel } from '../../types';
+import { BNGLModel, SimulationResults } from '../../types';
 import { generateJupyterNotebookContent } from '../../src/utils/jupyterExport';
 import { downloadTextFile } from '../../src/utils/download';
 import { Card } from '../ui/Card';
@@ -14,9 +14,10 @@ import { Card } from '../ui/Card';
 interface JupyterExportTabProps {
   model: BNGLModel | null;
   bnglCode?: string;
+  results?: SimulationResults | null;
 }
 
-export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglCode = '' }) => {
+export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglCode = '', results = null }) => {
   const [isExporting, setIsExporting] = useState(false);
 
   const handleExport = () => {
@@ -28,7 +29,7 @@ export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglC
       const modelName = model?.name || 'model';
       const cleanName = modelName.replace(/[^a-z0-9]/gi, '_').toLowerCase();
       
-      const content = generateJupyterNotebookContent(codeToExport, cleanName);
+      const content = generateJupyterNotebookContent(codeToExport, cleanName, { simulationResults: results });
       
       downloadTextFile(
         content,

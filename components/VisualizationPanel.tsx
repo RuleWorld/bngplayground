@@ -658,7 +658,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               plotDescription="The preview window shows the exact code that will be generated. Once exported, you can run this in VS Code, Google Colab, or locally."
             />
             <ErrorBoundary label="tab:jupyter-export">
-              <JupyterExportTab model={model} bnglCode={bnglCode} />
+              <JupyterExportTab model={model} bnglCode={bnglCode} results={results} />
             </ErrorBoundary>
           </div>
         )}
