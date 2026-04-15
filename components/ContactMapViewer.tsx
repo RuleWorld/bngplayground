@@ -450,6 +450,17 @@ function applyPackedLayout(
   layout.run();
 }
 
+const forcePostLayoutRedraw = (cy: cytoscape.Core) => {
+  // Compound-node edge routing can occasionally remain visually stale until
+  // the first user interaction; force a deterministic refresh after layout.
+  cy.resize();
+  cy.fit(undefined, 30);
+  cy.style().update();
+  cy.elements().forEach((ele) => {
+    ele.emit('position');
+  });
+};
+
 export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, selectedRuleId, onSelectRule, ruleOverlay, dynamicSnapshot }) => {
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [layoutDone, setLayoutDone] = useState(false);
@@ -511,6 +522,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
           animate: false,
           shouldApply: () => layoutSequenceRef.current === layoutSequence,
           onDone: () => {
+          forcePostLayoutRedraw(cy);
           setTimeout(() => {
             if (layoutSequenceRef.current !== layoutSequence) return;
             setLayoutDone(true);
@@ -583,6 +595,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
           shouldApply: () => layoutSequenceRef.current === layoutSequence,
           onDone: () => {
             if (layoutSequenceRef.current !== layoutSequence) return;
+            forcePostLayoutRedraw(cy);
             setLayoutDone(true);
             setIsLayoutRunning(false);
           },

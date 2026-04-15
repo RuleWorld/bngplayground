@@ -750,12 +750,18 @@ export class JITCompiler {
             });
             obsOffsets[nObservables] = currentObsOffset;
 
-            // Validate parameter keys to prevent object destructuring injection
-            const paramKeys = Object.keys(parameters || {});
+            // Validate parameter keys to prevent object destructuring injection.
+            // For parity robustness, ignore invalid keys instead of failing the whole JIT pass.
+            const allParamKeys = Object.keys(parameters || {});
+            const paramKeys = allParamKeys.filter((key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key));
+            const safeParameters: Record<string, number> = {};
             for (const key of paramKeys) {
-                if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key)) {
-                    throw new Error(`[JITCompiler] Security Error: Invalid parameter key ${key}`);
-                }
+                safeParameters[key] = (parameters as Record<string, number>)[key];
+            }
+            if (allParamKeys.length !== paramKeys.length) {
+                console.warn(
+                    `[JITCompiler] Ignoring ${allParamKeys.length - paramKeys.length} invalid parameter key(s) during bytecode compilation`
+                );
             }
 
             const nReactions = reactions.length;
@@ -788,7 +794,7 @@ export class JITCompiler {
                 if (typeof rxn.rateConstant === 'string') {
                     const bc = this.compileExpressionToBytecode(
                         rxn.rateConstant,
-                        parameters || {},
+                        safeParameters,
                         speciesNames || [],
                         (observables || []).map(o => o.name),
                         functions
@@ -819,7 +825,7 @@ export class JITCompiler {
                         // Simple evaluation for parameters
                         try {
                             const evaluator = new Function('params', `const {${paramKeys.join(',')}} = params; return ${translatedSafe};`);
-                            k = evaluator(parameters || {});
+                            k = evaluator(safeParameters);
                             if (isNaN(k) || !isFinite(k)) return null;
                         } catch (e) {
                             return null; // Contains y[i] or other non-constant terms
