@@ -11,6 +11,7 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { bnglService } from '../services/bnglService';
 import { CHART_COLORS } from '../src/utils/chartColors';
 import { TimeSeriesChart, TimeSeriesSeries } from './charts/TimeSeriesChart';
+import { getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 
 interface ComparisonPanelProps {
   model: BNGLModel | null;
@@ -30,6 +31,11 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
   const observableNames = useMemo(() => {
     return model?.observables?.map((o) => o.name) ?? [];
+  }, [model]);
+
+  const defaultComparisonOptions = useMemo(() => {
+    if (!model) return null;
+    return getSimulationOptionsFromParsedModel(model, 'default');
   }, [model]);
 
   const runComparison = useCallback(async () => {
@@ -55,12 +61,15 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
       };
 
       // Run simulation with modified model
-      const results = await bnglService.simulate(modifiedModel, {
-        method: 'ode',
-        t_end: 100,
-        n_steps: 100,
-        solver: 'auto',
-      }, { description: `Comparison: ${selectedParam} × ${comparisonFactor}` });
+      const results = await bnglService.simulate(
+        modifiedModel,
+        defaultComparisonOptions ?? {
+          method: 'default',
+          t_end: 100,
+          n_steps: 100,
+        },
+        { description: `Comparison: ${selectedParam} × ${comparisonFactor}` }
+      );
 
       setComparisonResults(results);
     } catch (err) {
@@ -69,7 +78,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
     } finally {
       setIsComparing(false);
     }
-  }, [model, selectedParam, comparisonFactor]);
+  }, [model, selectedParam, comparisonFactor, defaultComparisonOptions]);
 
   // Merge base and comparison results for plotting
   const mergedData = useMemo(() => {
