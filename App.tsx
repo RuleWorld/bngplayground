@@ -65,6 +65,7 @@ function App() {
   const [code, setCode] = useState<string>(INITIAL_BNGL_CODE);
   // Refs for editor/code diffing and debounce timer for parameter-only edits
   const codeRef = useRef<string>(INITIAL_BNGL_CODE);
+  const lastParsedCodeRef = useRef<string>(normalizeCode(INITIAL_BNGL_CODE));
   const paramPatchTimerRef = useRef<number | null>(null);
   const [model, setModel] = useState<BNGLModel | null>(null);
   const [results, setResults] = useState<SimulationResults | null>(null);
@@ -264,6 +265,7 @@ function App() {
       const baseMessage = hasValidationErrors
         ? 'Model parsed with validation issues. Review the warnings panel.'
         : 'Model parsed successfully!';
+      lastParsedCodeRef.current = normalizeCode(source);
       setStatus({ type: statusType, message: `${baseMessage}${lintSummaryMessage}` });
       return parsedModel;
     } catch (error) {
@@ -284,7 +286,24 @@ function App() {
   }, []);
 
   const handleSimulate = useCallback(async (options: SimulationOptions, modelOverride?: BNGLModel) => {
-    const targetModel = modelOverride || model;
+    let targetModel = modelOverride || model;
+
+    // Auto-parse on run when no parsed model exists or editor code has changed.
+    if (!modelOverride) {
+      const currentCode = normalizeCode(codeRef.current);
+      const needsParse = !targetModel || currentCode !== lastParsedCodeRef.current;
+
+      if (needsParse) {
+        if (!currentCode) {
+          setStatus({ type: 'warning', message: 'Please enter a model before simulating.' });
+          return;
+        }
+        const parsedModel = await handleParse(codeRef.current);
+        if (!parsedModel) return;
+        targetModel = parsedModel;
+      }
+    }
+
     if (!targetModel) {
       setStatus({ type: 'warning', message: 'Please parse a model before simulating.' });
       return;
@@ -367,7 +386,7 @@ function App() {
       }
       setIsSimulating(false);
     }
-  }, [model]);
+  }, [model, handleParse]);
 
   const handleQuickRun = async () => {
     const parsedModel = await handleParse();
