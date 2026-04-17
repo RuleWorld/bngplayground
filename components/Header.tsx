@@ -117,7 +117,8 @@ export const Header: React.FC<HeaderProps> = ({
                 trigger={
                   <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-400 
                                      dark:hover:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700 rounded transition-colors"
-                    title="Help & Resources">
+                    title="Help & Resources"
+                    aria-label="Help & Resources">
                     <QuestionMarkCircleIcon className="w-5 h-5" />
                   </button>
                 }
