@@ -54,20 +54,33 @@ describe('JITCompiler Security Correctness', () => {
         expect(bytecode?.exprBytecode.length).toBeGreaterThan(0);
     });
 
-    it('should reject invalid parameter keys', () => {
-        const reactions = [
-            {
-                reactantIndices: [0],
-                reactantStoich: [1],
-                productIndices: [1],
-                productStoich: [1],
-                rateConstant: 1.0,
-                scalingVolume: 1
-            }
-        ];
+    it('should filter invalid parameter keys and continue compilation', () => {
+        const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => undefined);
+        try {
+            const reactions = [
+                {
+                    reactantIndices: [0],
+                    reactantStoich: [1],
+                    productIndices: [1],
+                    productStoich: [1],
+                    rateConstant: 1.0,
+                    scalingVolume: 1
+                }
+            ];
 
-        // compileToByteCode catches its own internal errors and returns null on failure!
-        expect(jitCompiler.compileToByteCode(reactions, 2, { "a} = params; process.exit(1); const {b": 1.5 })).toBeNull();
+            // Invalid keys (including injection attempts) are now filtered out silently.
+            // Compilation succeeds with only valid identifier keys.
+            const result = jitCompiler.compileToByteCode(reactions, 2, { "a} = params; process.exit(1); const {b": 1.5 });
+            expect(result).not.toBeNull();
+            
+            // Verify warning was logged for filtered keys
+            const warnCalls = consoleSpy.mock.calls
+                .map((call) => call.map((arg) => String(arg)).join(' '))
+                .join('\n');
+            expect(warnCalls).toMatch(/Ignoring.*invalid parameter key/);
+        } finally {
+            consoleSpy.mockRestore();
+        }
     });
 
     it('should preserve descriptive JITByteCodeGenerator security reason in logs', () => {

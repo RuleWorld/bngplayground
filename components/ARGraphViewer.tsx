@@ -12,7 +12,7 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 cytoscape.use(dagre);
 cytoscape.use(fcose);
 
-type LayoutType = 'hierarchical' | 'cose' | 'fcose' | 'grid' | 'concentric' | 'breadthfirst' | 'circle';
+type LayoutType = 'hierarchical' | 'cose' | 'fcose' | 'grid' | 'concentric' | 'breadthfirst';
 
 const LAYOUT_CONFIGS: Record<LayoutType, any> = {
   hierarchical: {
@@ -99,16 +99,6 @@ const LAYOUT_CONFIGS: Record<LayoutType, any> = {
     avoidOverlap: true,
     spacingFactor: 1.5,
     circle: false,
-    nodeDimensionsIncludeLabels: true,
-  },
-  circle: {
-    name: 'circle',
-    animate: true,
-    animationDuration: 300,
-    padding: 40,
-    fit: true,
-    avoidOverlap: true,
-    spacingFactor: 1.5,
     nodeDimensionsIncludeLabels: true,
   },
 };
@@ -377,9 +367,6 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
           </Button>
           <Button variant={activeLayout === 'breadthfirst' ? 'primary' : 'subtle'} onClick={() => runLayout('breadthfirst')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Breadth-first Tree">
             {isLayoutRunning && activeLayout === 'breadthfirst' ? <LoadingSpinner className="w-3 h-3" /> : '⊢ Tree'}
-          </Button>
-          <Button variant={activeLayout === 'circle' ? 'primary' : 'subtle'} onClick={() => runLayout('circle')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Circle Layout">
-            {isLayoutRunning && activeLayout === 'circle' ? <LoadingSpinner className="w-3 h-3" /> : '○ Circle'}
           </Button>
         </div>
         <div className="flex items-center gap-1">

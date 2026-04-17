@@ -11,6 +11,7 @@ import { LoadingSpinner } from './ui/LoadingSpinner';
 import { bnglService } from '../services/bnglService';
 import { CHART_COLORS } from '../src/utils/chartColors';
 import { TimeSeriesChart, TimeSeriesSeries } from './charts/TimeSeriesChart';
+import { BNGLParser, getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 
 interface ComparisonPanelProps {
   model: BNGLModel | null;
@@ -32,6 +33,11 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
     return model?.observables?.map((o) => o.name) ?? [];
   }, [model]);
 
+  const defaultComparisonOptions = useMemo(() => {
+    if (!model) return null;
+    return getSimulationOptionsFromParsedModel(model, 'default');
+  }, [model]);
+
   const runComparison = useCallback(async () => {
     if (!model || !selectedParam) return;
 
@@ -45,22 +51,88 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
       const newValue = originalValue * comparisonFactor;
 
-      // Create modified model with new parameter value
+      // Create modified model with new parameter value and re-resolve dependent expressions.
+      const resolvedParameters: Record<string, number> = {
+        ...model.parameters,
+        [selectedParam]: newValue,
+      };
+
+      const paramExpressions = (model as unknown as { paramExpressions?: Record<string, string> }).paramExpressions ?? {};
+      for (let pass = 0; pass < 10; pass += 1) {
+        let changed = false;
+        for (const [name, expr] of Object.entries(paramExpressions)) {
+          // Keep user-selected perturbation as authoritative even if it has an expression.
+          if (name === selectedParam) continue;
+          try {
+            const evaluated = BNGLParser.evaluateExpression(expr, new Map(Object.entries(resolvedParameters)));
+            if (Number.isFinite(evaluated) && resolvedParameters[name] !== evaluated) {
+              resolvedParameters[name] = evaluated;
+              changed = true;
+            }
+          } catch {
+            // Best-effort: unresolved expressions are left as-is.
+          }
+        }
+        if (!changed) break;
+      }
+
+      const functionMap = new Map(
+        (model.functions ?? []).map((fn) => [fn.name, { args: fn.args, expr: fn.expression }])
+      );
+
+      const updatedSpecies = (model.species ?? []).map((species) => {
+        const nextSpecies = { ...species };
+
+        if (species.initialExpression) {
+          try {
+            const evaluated = BNGLParser.evaluateExpression(
+              species.initialExpression,
+              new Map(Object.entries(resolvedParameters)),
+              new Set(),
+              functionMap
+            );
+            if (Number.isFinite(evaluated)) {
+              nextSpecies.initialConcentration = evaluated;
+            }
+          } catch {
+            // Keep original concentration if expression evaluation fails.
+          }
+        }
+
+        // Keep parity with worker-side override behavior for amount-like parameters.
+        if (species.name === selectedParam) {
+          nextSpecies.initialConcentration = newValue;
+        }
+
+        return nextSpecies;
+      });
+
+      const updatedReactions = (model.reactions ?? []).map((reaction) => {
+        const rateKey = reaction.rate;
+        const resolvedRate = resolvedParameters[rateKey] ?? Number.parseFloat(String(rateKey));
+        return {
+          ...reaction,
+          rateConstant: Number.isFinite(resolvedRate) ? resolvedRate : reaction.rateConstant,
+        };
+      });
+
       const modifiedModel = {
         ...model,
-        parameters: {
-          ...model.parameters,
-          [selectedParam]: newValue,
-        },
+        parameters: resolvedParameters,
+        species: updatedSpecies,
+        reactions: updatedReactions,
       };
 
       // Run simulation with modified model
-      const results = await bnglService.simulate(modifiedModel, {
-        method: 'ode',
-        t_end: 100,
-        n_steps: 100,
-        solver: 'auto',
-      }, { description: `Comparison: ${selectedParam} × ${comparisonFactor}` });
+      const results = await bnglService.simulate(
+        modifiedModel,
+        defaultComparisonOptions ?? {
+          method: 'default',
+          t_end: 100,
+          n_steps: 100,
+        },
+        { description: `Comparison: ${selectedParam} × ${comparisonFactor}` }
+      );
 
       setComparisonResults(results);
     } catch (err) {
@@ -69,7 +141,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
     } finally {
       setIsComparing(false);
     }
-  }, [model, selectedParam, comparisonFactor]);
+  }, [model, selectedParam, comparisonFactor, defaultComparisonOptions]);
 
   // Merge base and comparison results for plotting
   const mergedData = useMemo(() => {

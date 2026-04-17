@@ -87,6 +87,7 @@ class BnglService {
   private worker!: Worker;
   private messageId = 0;
   private promises = new Map<number, PendingRequest>();
+  private ignoredResponseIds = new Set<number>();
   private terminated = false;
   private lastCachedModelId?: number;
   private progressListeners = new Set<(payload: any) => void>();
@@ -102,6 +103,7 @@ class BnglService {
     this.terminated = false;
     this.messageId = 0;
     this.promises = new Map();
+    this.ignoredResponseIds = new Set();
 
     this.worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
       const { id, type, payload } = event.data ?? {};
@@ -164,6 +166,10 @@ class BnglService {
       }
 
       if (!this.promises.has(id)) {
+        if (this.ignoredResponseIds.has(id)) {
+          this.ignoredResponseIds.delete(id);
+          return;
+        }
         console.warn('[BnglService] Received response for unknown message id:', event.data);
         return;
       }
@@ -226,10 +232,21 @@ class BnglService {
     }
   }
 
+  private markResponseAsIgnorable(id: number) {
+    this.ignoredResponseIds.add(id);
+    if (this.ignoredResponseIds.size > 2048) {
+      const oldest = this.ignoredResponseIds.values().next().value;
+      if (typeof oldest === 'number') {
+        this.ignoredResponseIds.delete(oldest);
+      }
+    }
+  }
+
   private rejectAllPending(message: string) {
     const err = new Error(message);
     this.promises.forEach((pending, requestId) => {
       this.promises.delete(requestId);
+      this.markResponseAsIgnorable(requestId);
       pending.cleanup();
       pending.reject(err);
     });
@@ -272,6 +289,7 @@ class BnglService {
             return;
           }
           this.promises.delete(id);
+          this.markResponseAsIgnorable(id);
           cleanup();
           this.sendCancel(id);
           const timeoutError = new Error(`${options?.description ?? type} timed out after ${timeoutMs} ms`);
@@ -283,6 +301,7 @@ class BnglService {
       if (signal) {
         if (signal.aborted) {
           this.promises.delete(id);
+          this.markResponseAsIgnorable(id);
           cleanup();
           this.sendCancel(id);
           reject(new DOMException(signal.reason ?? 'The operation was aborted.', 'AbortError'));
@@ -294,6 +313,7 @@ class BnglService {
             return;
           }
           this.promises.delete(id);
+          this.markResponseAsIgnorable(id);
           cleanup();
           this.sendCancel(id);
           reject(new DOMException(signal.reason ?? 'The operation was aborted.', 'AbortError'));
@@ -339,6 +359,7 @@ class BnglService {
     const cancellation = new DOMException(reason ?? 'Requests cancelled', 'AbortError');
     this.promises.forEach((pending, requestId) => {
       this.promises.delete(requestId);
+      this.markResponseAsIgnorable(requestId);
       this.sendCancel(requestId);
       pending.cleanup();
       pending.reject(cancellation);

@@ -11,6 +11,7 @@ import {
     CartesianGrid
 } from 'recharts';
 import { BNGLModel, SimulationResults, SimulationOptions } from '../../types';
+import { resolveSimulationControlDefaults } from '../SimulationControls';
 import {
     bnglWorkerPool,
     getSharedEnsembleFeatureVector,
@@ -51,6 +52,8 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
     const runEnsemble = async () => {
         if (!model) return;
 
+        const defaults = resolveSimulationControlDefaults(model, method);
+
         setIsSimulating(true);
         setProgress(0);
         setError(null);
@@ -64,8 +67,8 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         try {
             const options: SimulationOptions = {
                 method,
-                t_end: model.simulationOptions?.t_end ?? 100,
-                n_steps: model.simulationOptions?.n_steps ?? 100,
+                t_end: Number(defaults.tEnd) || 100,
+                n_steps: Number(defaults.nSteps) || 100,
                 includeInfluence: false, // Disable DIN for maximum speed in explorer
                 includeSpeciesData: false,
                 // Stochastic seed (SSA, PLA, PSA, NFsim)
@@ -149,6 +152,14 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         });
     }, [selectedRunIdx, runs, ensembleResults]);
 
+    const chartTimeDomain = useMemo<[number, number] | undefined>(() => {
+        if (chartData.length === 0) return undefined;
+        const firstTime = Number(chartData[0]?.time ?? 0);
+        const lastTime = Number(chartData[chartData.length - 1]?.time ?? firstTime);
+        if (!Number.isFinite(firstTime) || !Number.isFinite(lastTime)) return undefined;
+        return [firstTime, lastTime];
+    }, [chartData]);
+
     const observables = useMemo(() => {
         if (!ensembleResults) return [];
         const headers = isSharedEnsembleResultsHandle(ensembleResults)
@@ -224,14 +235,11 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     {/* Seed input for stochastic methods */}
                     {(method === 'ssa' || method === 'pla' || method === 'psa') && (
                         <div className="flex items-center gap-2">
-                            <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                            <label
+                                className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
+                                title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
+                            >
                                 Seed
-                                <span
-                                    className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
-                                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
-                                >
-                                    i
-                                </span>
                             </label>
                             <input
                                 type="number"
@@ -247,14 +255,11 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     {/* PSA-specific: poplevel */}
                     {method === 'psa' && (
                         <div className="flex items-center gap-2">
-                            <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                            <label
+                                className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
+                                title="Population threshold: species above this count use scaled propensities (ODE-like), below use exact SSA. Default: 100."
+                            >
                                 Pop Level
-                                <span
-                                    className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
-                                    title="Population threshold: species above this count use scaled propensities (ODE-like), below use exact SSA. Default: 100."
-                                >
-                                    i
-                                </span>
                             </label>
                             <input
                                 type="number"
@@ -271,14 +276,11 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     {method === 'nf' && (
                         <>
                             <div className="flex items-center gap-2">
-                                <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                <label
+                                    className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
+                                    title="Universal Traversal Limit: controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto."
+                                >
                                     UTL
-                                    <span
-                                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
-                                        title="Universal Traversal Limit: controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto."
-                                    >
-                                        i
-                                    </span>
                                 </label>
                                 <input
                                     type="number"
@@ -290,14 +292,11 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                 />
                             </div>
                             <div className="flex items-center gap-2">
-                                <label className="text-sm text-slate-600 dark:text-slate-400 flex items-center gap-1">
+                                <label
+                                    className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
+                                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
+                                >
                                     Seed
-                                    <span
-                                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-xs"
-                                        title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
-                                    >
-                                        i
-                                    </span>
                                 </label>
                                 <input
                                     type="number"
@@ -456,6 +455,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                     visibleSeries={visibleObservables}
                                     onSeriesToggle={toggleObservable}
                                     onSeriesIsolate={isolateObservable}
+                                    xAxisDomain={chartTimeDomain}
                                 />
                             ) : (
                                 <div className="h-full flex flex-col items-center justify-center opacity-30 text-slate-400 italic text-sm text-center">

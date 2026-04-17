@@ -3,7 +3,12 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { BNGLModel, SimulationResults } from '../../types';
 import { Card } from '../ui/Card';
 import { Select } from '../ui/Select';
-import { CHART_COLORS } from '../../src/utils/chartColors';
+
+const FLUX_COLORS = {
+  production: '#22c55e',
+  consumption: '#ef4444',
+  neutral: '#3b82f6',
+} as const;
 
 interface FluxAnalysisTabProps {
   model: BNGLModel | null;
@@ -156,11 +161,11 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
   const getBarColor = (direction: string) => {
     switch (direction) {
       case 'production':
-        return '#22c55e'; // green
+        return FLUX_COLORS.production;
       case 'consumption':
-        return '#ef4444'; // red
+        return FLUX_COLORS.consumption;
       default:
-        return CHART_COLORS[0]; // blue
+        return FLUX_COLORS.neutral;
     }
   };
 
@@ -237,15 +242,15 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
           {selectedSpecies && (
             <div className="flex items-center gap-4 text-sm">
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-green-500"></span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: FLUX_COLORS.production }}></span>
                 Production
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-red-500"></span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: FLUX_COLORS.consumption }}></span>
                 Consumption
               </span>
               <span className="flex items-center gap-1">
-                <span className="w-3 h-3 rounded-full bg-blue-500"></span>
+                <span className="w-3 h-3 rounded-full" style={{ backgroundColor: FLUX_COLORS.neutral }}></span>
                 Neutral/Catalytic
               </span>
             </div>

@@ -28,7 +28,7 @@ export const RegulatoryTab: React.FC<RegulatoryTabProps> = ({ model, selectedRul
       observables: model.observables.map(o => ({ name: o.name, pattern: o.pattern })),
       functions: model.functions?.map(f => ({ name: f.name, expression: f.expression })),
       includeRateLawDeps: false,  // we don't show parameters like ka/kd in regulatory view
-      atomization: 'bng2',        // use BNG2-style patterns (Atomic Patterns) for parity
+      atomization: 'bng2',        // strict BNG2 atomic-pattern parity
     });
   }, [model]);
 

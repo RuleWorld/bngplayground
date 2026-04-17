@@ -262,7 +262,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
               left: coords.left,
               zIndex: 9999,
             }}
-            className="w-72 max-h-[85vh] overflow-y-auto p-4 bg-white dark:bg-slate-900 dark:bg-slate-800 
+            className="w-[22rem] sm:w-96 max-h-[85vh] overflow-y-auto p-4 bg-white dark:bg-slate-900 dark:bg-slate-800 
                           border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 animate-in fade-in zoom-in-95 duration-100"
           >
             <div className="flex items-center justify-between mb-3">
@@ -316,9 +316,9 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
             {/* SSA-specific options */}
             {method === 'ssa' && (
               <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
-                <div className="flex items-center justify-between">
-                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1">
-                    Track Rule Influence
+                <div className="flex items-center justify-between gap-3">
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1 min-w-0">
+                    <span className="truncate">Track Rule Influence</span>
                     <span
                       className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
                       title="Enables Dynamic Influence Network (DIN) visualization. Disabling this makes SSA significantly faster."
@@ -330,28 +330,25 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     type="checkbox"
                     checked={includeInfluence}
                     onChange={e => setIncludeInfluence(e.target.checked)}
-                    className="w-3.5 h-3.5 text-indigo-600 border-slate-300 dark:border-slate-600 rounded focus:ring-indigo-500"
+                    className="w-3.5 h-3.5 shrink-0 text-indigo-600 border-slate-300 dark:border-slate-600 rounded focus:ring-indigo-500"
                   />
                 </div>
                 <div className="text-[10px] text-slate-500 dark:text-slate-400 italic">
                   Required for the "Dynamics Graph" visualization.
                 </div>
                 <div>
-                  <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                  <label
+                    className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
+                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
+                  >
                     Seed
-                    <span
-                      className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                      title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
-                    >
-                      i
-                    </span>
                   </label>
                   <input
                     type="number"
                     value={ssaSeed}
                     onChange={e => setSsaSeed(e.target.value)}
                     placeholder="Random"
-                    className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                   />
                 </div>
               </div>
@@ -364,21 +361,18 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   <strong>PLA Parameters</strong> - Partitioned-leaping algorithm
                 </div>
                 <div>
-                  <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                  <label
+                    className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
+                    title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
+                  >
                     Seed
-                    <span
-                      className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                      title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
-                    >
-                      i
-                    </span>
                   </label>
                   <input
                     type="number"
                     value={plaSeed}
                     onChange={e => setPlaSeed(e.target.value)}
                     placeholder="Random"
-                    className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                   />
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 p-2 rounded">
@@ -395,41 +389,35 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   <strong>PSA Parameters</strong> - Hybrid ODE/SSA with adaptive scaling
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    <label
+                      className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
+                      title="Population threshold: Species with counts above this value are simulated with scaled propensities (ODE-like), while species below are simulated with exact SSA. Default: 100."
+                    >
                       Pop Level
-                      <span
-                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        title="Population threshold: Species with counts above this value are simulated with scaled propensities (ODE-like), while species below are simulated with exact SSA. Default: 100."
-                      >
-                        i
-                      </span>
                     </label>
                     <input
                       type="number"
                       value={poplevel}
                       onChange={e => setPoplevel(e.target.value)}
                       placeholder="100"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    <label
+                      className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
+                      title="Random seed for the stochastic component. Leave empty for default seed."
+                    >
                       Seed
-                      <span
-                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        title="Random seed for the stochastic component. Leave empty for default seed."
-                      >
-                        i
-                      </span>
                     </label>
                     <input
                       type="number"
                       value={psaSeed}
                       onChange={e => setPsaSeed(e.target.value)}
                       placeholder="12345"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                     />
                   </div>
                 </div>
@@ -494,27 +482,24 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   <strong>NFsim Parameters</strong> - Network-free stochastic simulation
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    <label
+                      className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
+                      title="Universal Traversal Limit: Controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto-optimization."
+                    >
                       UTL
-                      <span
-                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        title="Universal Traversal Limit: Controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto-optimization."
-                      >
-                        ⓘ
-                      </span>
                     </label>
                     <input
                       type="number"
                       value={utl}
                       onChange={e => setUtl(e.target.value)}
                       placeholder="Auto"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1 min-w-0">
                       GML
                       <span
                         className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -528,14 +513,14 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={gml}
                       onChange={e => setGml(e.target.value)}
                       placeholder="1000000"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                     />
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1 min-w-0">
                       Equilibrate
                       <span
                         className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -549,25 +534,22 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={equilibrate}
                       onChange={e => setEquilibrate(e.target.value)}
                       placeholder="0"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1">
+                    <label
+                      className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
+                      title="Random seed: Set for reproducible stochastic simulations. Leave empty for random seed."
+                    >
                       Seed
-                      <span
-                        className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
-                        title="Random seed: Set for reproducible stochastic simulations. Leave empty for random seed."
-                      >
-                        ⓘ
-                      </span>
                     </label>
                     <input
                       type="number"
                       value={nfsimSeed}
                       onChange={e => setNfsimSeed(e.target.value)}
                       placeholder="Random"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
                     />
                   </div>
                 </div>

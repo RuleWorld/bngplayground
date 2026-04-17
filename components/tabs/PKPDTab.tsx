@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useMemo } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
+import { bnglService } from '../../services/bnglService';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Card } from '../ui/Card';
@@ -15,7 +16,7 @@ import {
 interface PKPDTabProps {
   model: BNGLModel | null;
   results: SimulationResults | null;
-  onSimulate: (options: SimulationOptions) => void;
+  onSimulate: (options: SimulationOptions, modelOverride?: BNGLModel) => void;
   onCodeChange: (code: string) => void;
   isSimulating: boolean;
 }
@@ -107,14 +108,22 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
           route,
           parameters: { Dose: dose },
         });
+
+        if (!result?.bnglCode?.trim()) {
+          throw new Error('PK model generator returned empty BNGL output.');
+        }
+
+        const parsedModel = await bnglService.parse(result.bnglCode, {
+          description: 'Parse generated PK model',
+        });
+
         onCodeChange(result.bnglCode);
-        // Auto-simulate after generating model so charts populate
-        setTimeout(() => {
-          const tEnd = dosingEvents.length > 1
-            ? dosingEvents[dosingEvents.length - 1].time + (dosingInterval || 24) * 2
-            : 48;
-          onSimulate({ method: 'ode', t_end: tEnd, n_steps: 500 });
-        }, 500);
+
+        // Auto-simulate after generating model so charts populate.
+        const tEnd = dosingEvents.length > 1
+          ? dosingEvents[dosingEvents.length - 1].time + (dosingInterval || 24) * 2
+          : 48;
+        onSimulate({ method: 'ode', t_end: tEnd, n_steps: 500 }, parsedModel);
       }
     } catch (err: any) {
       setError(err.message || 'Model generation failed');
@@ -290,11 +299,13 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
               </button>
             </div>
             {chartData.length > 0 ? (
-              <>
-                <ResponsiveContainer width="100%" height="85%">
-                  <LineChart data={chartData} margin={{ ...CHART_MARGIN, bottom: 35 }}>
+              <div className="h-full min-h-0 flex flex-col">
+                <div className="flex-1 min-h-[220px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <LineChart data={chartData} margin={{ ...CHART_MARGIN, bottom: 35 }}>
                     <CartesianGrid {...CHART_GRID} />
                     <XAxis dataKey="time" type="number" tickCount={10}
+                      domain={['dataMin', 'dataMax']}
                       axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
                       tickFormatter={(v: number) => formatValue(v)}
                       label={{ value: 'Time (hr)', position: 'insideBottom', offset: -12, ...CHART_AXIS_LABEL_STYLE }} />
@@ -317,8 +328,9 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
                       <Line key={name} type="monotone" dataKey={name}
                         stroke={CHART_COLORS[i % CHART_COLORS.length]} strokeWidth={2.25} dot={false} />
                     ))}
-                  </LineChart>
-                </ResponsiveContainer>
+                    </LineChart>
+                  </ResponsiveContainer>
+                </div>
                 {/* External legend — matches TimeSeriesChart pattern */}
                 <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
                   {observableNames.map((name, i) => (
@@ -328,7 +340,7 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
                     </span>
                   ))}
                 </div>
-              </>
+              </div>
             ) : (
               <div className="h-full flex items-center justify-center text-slate-400 text-sm">
                 Generate a model and run simulation to see results.

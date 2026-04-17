@@ -52,12 +52,12 @@
         .loading { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; background: var(--bg-primary); }
         .spinner { width: 50px; height: 50px; border: 3px solid var(--border-color); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; margin-bottom: 20px; }
         @keyframes spin { to { transform: rotate(360deg); } }
-        .legend { position: absolute; top: 80px; right: 20px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 10px; padding: 12px 16px; font-size: 12px; backdrop-filter: blur(10px); display: flex; flex-wrap: wrap; gap: 10px; max-width: 500px; transition: background 0.3s; }
-        .legend-item { display: flex; align-items: center; gap: 8px; padding: 6px 12px; cursor: pointer; border-radius: 6px; transition: all 0.15s; background: var(--bg-tertiary); border: 1px solid transparent; }
+        .legend { position: absolute; top: 80px; right: 20px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 10px; font-size: 11px; backdrop-filter: blur(10px); display: flex; flex-wrap: wrap; gap: 6px; max-width: 380px; transition: background 0.3s; }
+        .legend-item { display: flex; align-items: center; gap: 6px; padding: 4px 8px; cursor: pointer; border-radius: 5px; transition: all 0.15s; background: var(--bg-tertiary); border: 1px solid transparent; }
         .legend-item:hover { background: rgba(20,184,166,0.2); border-color: var(--accent); }
         .legend-item.active { background: rgba(20,184,166,0.3); border-color: var(--accent); }
-        .legend-dot { width: 12px; height: 12px; border-radius: 50%; box-shadow: 0 0 4px currentColor; }
-        .legend-label { color: var(--text-primary); font-size: 12px; white-space: nowrap; font-weight: 500; }
+        .legend-dot { width: 9px; height: 9px; border-radius: 50%; box-shadow: 0 0 3px currentColor; }
+        .legend-label { color: var(--text-primary); font-size: 11px; white-space: nowrap; font-weight: 500; }
         .info { position: absolute; bottom: 20px; right: 20px; color: var(--text-muted); font-size: 11px; text-align: right; }
         .theme-btn { font-size: 18px; padding: 6px 10px; }
         .help { position: absolute; bottom: 20px; left: 20px; background: var(--bg-secondary); border: 1px solid var(--border-color); border-radius: 8px; padding: 8px 12px; font-size: 11px; color: var(--text-secondary); max-width: 280px; }
@@ -80,7 +80,6 @@
                   <span id="nodeSizeVal" style="font-size:12px;color:var(--text-secondary);min-width:30px;text-align:center">1.0x</span>
                 </label>
                 <button id="btn-theme" class="btn theme-btn" title="Toggle light/dark mode">🌙</button>
-                <button class="btn" onclick="history.back()">← Back</button>
             </div>
         </div>
         <div class="viz">
