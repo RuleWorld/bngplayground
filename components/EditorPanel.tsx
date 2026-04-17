@@ -392,6 +392,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         <div className="border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800/50 overflow-hidden">
           <button
             onClick={() => setIsParamsOpen(!isParamsOpen)}
+            aria-expanded={isParamsOpen}
+            aria-controls="parameter-sliders-panel"
             className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700/50 transition-colors"
           >
             <span>Parameter Sliders</span>
@@ -399,7 +401,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
           </button>
 
           {isParamsOpen && (
-            <div className="border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 p-2">
+            <div id="parameter-sliders-panel" className="border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 p-2">
               <ParameterPanel code={code} onCodeChange={onCodeChange} />
             </div>
           )}
