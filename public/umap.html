@@ -616,7 +616,8 @@
                 selectedIdx = hoveredIdx;
                 const m = models[selectedIdx];
                 if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'LOAD_MODEL', id: m.id }, '*');
+                    // SECURITY: Restrict postMessage target origin to prevent info leakage
+                    window.parent.postMessage({ type: 'LOAD_MODEL', id: m.id }, window.location.origin);
                 } else {
                     const targetPath = window.location.pathname.replace(/umap\.html$/, '');
                     window.location.href = `${window.location.origin}${targetPath}?model=${encodeURIComponent(m.id)}`;
@@ -702,7 +703,8 @@
             } else if (e.key === 'Enter' && selectedIdx >= 0) {
                 const m = models[selectedIdx];
                 if (window.parent !== window) {
-                    window.parent.postMessage({ type: 'LOAD_MODEL', id: m.id }, '*');
+                    // SECURITY: Restrict postMessage target origin to prevent info leakage
+                    window.parent.postMessage({ type: 'LOAD_MODEL', id: m.id }, window.location.origin);
                 } else {
                     const targetPath = window.location.pathname.replace(/umap\.html$/, '');
                     window.location.href = `${window.location.origin}${targetPath}?model=${encodeURIComponent(m.id)}`;

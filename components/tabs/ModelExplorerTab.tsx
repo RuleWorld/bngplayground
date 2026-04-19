@@ -19,6 +19,9 @@ export const ModelExplorerTab: React.FC<ModelExplorerTabProps> = ({ onLoadModel 
 
     useEffect(() => {
         const handleMessage = async (event: MessageEvent) => {
+            // SECURITY: Validate message origin to prevent cross-origin message spoofing
+            if (event.origin !== window.location.origin) return;
+
             if (event.data?.type === 'LOAD_MODEL' && event.data.id) {
                 const example = await findCatalogExampleByQuery(event.data.id);
                 if (example) {
