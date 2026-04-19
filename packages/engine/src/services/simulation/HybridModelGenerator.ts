@@ -315,7 +315,7 @@ export class HybridModelGenerator {
       reactions: [],
       populationMaps: popMaps,
       populationTypes: popTypes,
-      actions: opts.actions.map(a => ({ type: a.replace(/\(.*\)$/, ''), args: {} })),
+      actions: opts.actions.map(a => ({ type: stripTrailingCallSuffix(a), args: {} })),
     };
 
     // Serialize to BNGL
@@ -481,6 +481,16 @@ function isSimplePatternMatch(speciesStr: string, patternStr: string): boolean {
     // Fallback to exact match if matcher fails
     return speciesStr === patternStr;
   }
+}
+
+function stripTrailingCallSuffix(value: string): string {
+  const openParen = value.indexOf('(');
+  const closeParen = value.lastIndexOf(')');
+  if (openParen === -1 || closeParen !== value.length - 1 || closeParen < openParen) {
+    return value;
+  }
+
+  return value.slice(0, openParen).trim();
 }
 
 // ────────────────────────────────────────────────────────────────────

@@ -225,14 +225,18 @@ export class JITCompiler {
     }
 
     private normalizeExpressionForValidation(expr: string): string {
-        return expr.replace(/\^/g, '**').replace(/\bMath\./g, '');
+        return expr
+            .replace(/\^/g, '**')
+            .replace(/\bMath\./g, '')
+            .replace(/\bt\b/g, '__t__');
     }
 
     private assertSafeRateExpression(expr: string, parameterNames: string[]): void {
         const normalizedExpr = this.normalizeExpressionForValidation(expr);
+        const expressionVariableNames = [...parameterNames, '__t__'];
         try {
             // compile() validates syntax, AST allowlist, and unknown variables.
-            SafeExpressionEvaluator.compile(normalizedExpr, parameterNames);
+            SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`);
@@ -352,13 +356,7 @@ export class JITCompiler {
 
         const fullSource = `(function(y, output, speciesVolumes) {\n${source}})`;
 
-        let evaluate: CompiledObservableEvaluator;
-        try {
-            evaluate = eval(fullSource) as CompiledObservableEvaluator;
-        } catch (error) {
-            console.error('[JITCompiler] Failed to compile observable evaluator chunk:', error);
-            evaluate = this.buildFallbackEvaluator(observables, nSpecies, useAmounts, outputOffset);
-        }
+        const evaluate = this.buildFallbackEvaluator(observables, nSpecies, useAmounts, outputOffset);
 
         return { evaluate, sourceCode: fullSource };
     }
@@ -454,6 +452,15 @@ export class JITCompiler {
         // Build the function source code
         let source = '';
 
+        const parameterVector = this.buildParameterVector(parameterNames, parameters);
+        const parameterContext: Record<string, number> = {};
+        for (let i = 0; i < parameterNames.length; i++) {
+            parameterContext[parameterNames[i]] = parameterVector[i];
+        }
+
+        const rateEvaluators: Array<(ctx: Record<string, number>) => number> = new Array(reactions.length);
+        const expressionVariableNames = [...parameterNames, '__t__'];
+
         const isConstantSpecies = (idx: number): boolean =>
             !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
 
@@ -479,10 +486,13 @@ export class JITCompiler {
             let rateExpr: string;
             if (typeof rxn.rateConstant === 'number') {
                 rateExpr = rxn.rateConstant.toString();
+                rateEvaluators[i] = () => rxn.rateConstant as number;
             } else {
                 const rxnStr = rxn.rateConstant.toString();
                 // Security check before translating and interpolating
                 this.assertSafeRateExpression(rxnStr, parameterNames);
+                const normalizedExpr = this.normalizeExpressionForValidation(rxnStr);
+                rateEvaluators[i] = SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
                 rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
@@ -603,34 +613,58 @@ export class JITCompiler {
         // Create the function
         const fullSource = `(function(params) {\nreturn function(__t__, y, dydt, speciesVolumes) {\n${source}}\n})`;
 
-        let evaluate: CompiledRHS;
-        const parameterVector = this.buildParameterVector(parameterNames, parameters);
-        try {
-            const factory = eval(fullSource) as (params: Float64Array) => CompiledRHS;
-            evaluate = factory(parameterVector);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            const contextSummary = {
-                modelName: debugContext?.modelName ?? 'unknown',
-                analysis: debugContext?.analysis ?? 'unknown',
-                parameterName: debugContext?.parameterName ?? 'n/a',
-                callsite: debugContext?.callsite ?? 'unknown',
-                nSpecies,
-                nReactions: reactions.length,
-                nParameters: parameterNames.length,
-                reactionRateSample: reactions.slice(0, 3).map((rxn) => String(rxn.rateConstant)),
-                configSignature,
-            };
-            console.error('[JITCompiler] Failed to compile RHS function. Falling back to zero RHS.', {
-                ...contextSummary,
-                error: errorMessage,
-            });
-            console.debug('[JITCompiler] Generated RHS source (truncated):', fullSource.slice(0, 1000));
-            // Fallback to a generic implementation
-            evaluate = (_t, _y, dydt, _speciesVolumes) => {
-                for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-            };
-        }
+        const fallbackVolumes = new Float64Array(nSpecies);
+        fallbackVolumes.fill(1.0);
+
+        const evaluate: CompiledRHS = (_t, y, dydt, speciesVolumes) => {
+            for (let i = 0; i < nSpecies; i++) dydt[i] = 0.0;
+
+            const resolvedVolumes = speciesVolumes ?? fallbackVolumes;
+            parameterContext.__t__ = _t;
+
+            for (let i = 0; i < reactions.length; i++) {
+                const rxn = reactions[i];
+                let rate = rateEvaluators[i](parameterContext);
+                if (!Number.isFinite(rate)) continue;
+
+                if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
+                    rate *= (rxn as any).statisticalFactor;
+                }
+
+                const vAnchor = rxn.scalingVolume || 1.0;
+                let velocity = rate * vAnchor;
+
+                for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
+                    const stoich = rxn.reactantStoich[j];
+                    const scale = resolvedVolumes[idx] / vAnchor;
+                    const scaledY = y[idx] * scale;
+                    if (stoich === 1) {
+                        velocity *= scaledY;
+                    } else if (stoich === 2) {
+                        velocity *= scaledY * scaledY;
+                    } else {
+                        velocity *= Math.pow(scaledY, stoich);
+                    }
+                }
+
+                for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
+                    if (!isConstantSpecies(idx)) {
+                        const stoich = rxn.reactantStoich[j];
+                        dydt[idx] -= (velocity * stoich) / resolvedVolumes[idx];
+                    }
+                }
+
+                for (let j = 0; j < rxn.productIndices.length; j++) {
+                    const idx = this.normalizeSpeciesIndex(rxn.productIndices[j], nSpecies, i, 'product', j);
+                    if (!isConstantSpecies(idx)) {
+                        const stoich = rxn.productStoich[j];
+                        dydt[idx] += (velocity * stoich) / resolvedVolumes[idx];
+                    }
+                }
+            }
+        };
 
         const result: JITCompiledFunction = {
             evaluate,
@@ -641,6 +675,9 @@ export class JITCompiler {
             parameterNames,
             updateParameters: (nextParameters?: Record<string, number>) => {
                 this.updateParameterVector(parameterVector, parameterNames, nextParameters);
+                for (let i = 0; i < parameterNames.length; i++) {
+                    parameterContext[parameterNames[i]] = parameterVector[i];
+                }
             }
         };
 
@@ -851,16 +888,13 @@ export class JITCompiler {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
                         this.assertSafeRateExpression(rxnStr, paramKeys);
-                        const translated = ExpressionTranslator.translate(rxnStr);
-                        // Avoid collisions with the time variable parameter by using a unique placeholder
-                        const translatedSafe = translated.replace(/\bt\b/g, '__t__');
+                        const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
 
-                        // Simple evaluation for parameters
                         try {
-                            const evaluator = new Function('params', `const {${paramKeys.join(',')}} = params; return ${translatedSafe};`);
+                            const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
                             k = evaluator(safeParameters);
-                            if (isNaN(k) || !isFinite(k)) return null;
-                        } catch (e) {
+                            if (Number.isNaN(k) || !Number.isFinite(k)) return null;
+                        } catch {
                             return null; // Contains y[i] or other non-constant terms
                         }
                     }

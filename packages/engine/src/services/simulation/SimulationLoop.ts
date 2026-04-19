@@ -2298,7 +2298,6 @@ export async function simulate(
     let jacobianRowMajor: ((y: Float64Array, J: Float64Array) => void) | undefined;
 
     if (allMassAction) {
-      // Precompute, JIT logic
       const reactantCountMaps: Map<number, number>[] = concreteReactions.map(rxn => {
         const counts = new Map<number, number>();
         for (let j = 0; j < rxn.reactants.length; j++) {
@@ -2308,117 +2307,119 @@ export async function simulate(
         return counts;
       });
 
-      const buildJITJacobian = (columnMajor: boolean): ((y: Float64Array, J: Float64Array) => void) => {
-        const lines: string[] = [];
-        lines.push('J.fill(0);');
-        lines.push('var v, dv;');
+      const buildSafeJacobian = (columnMajor: boolean): ((y: Float64Array, J: Float64Array) => void) => {
+        const reactionBase = new Float64Array(concreteReactions.length);
+        const reactionAnchorVolume = new Float64Array(concreteReactions.length);
+        const reactionReactantScale: Float64Array[] = new Array(concreteReactions.length);
+        const reactionUniqueSpecies: Int32Array[] = new Array(concreteReactions.length);
+        const reactionUniqueOrders: Int32Array[] = new Array(concreteReactions.length);
 
         for (let r = 0; r < concreteReactions.length; r++) {
           const rxn = concreteReactions[r];
-          // 🔒 SECURITY FIX: Strictly sanitize all variables interpolated into the JIT string.
-          // This prevents code injection if any model properties were manipulated to contain
-          // arbitrary strings. Number() ensures only numerical representations are concatenated,
-          // totally neutralizing string-based payloads while keeping the fast JIT logic intact.
-          const k = Number(rxn.rateConstant) || 0;
-          const reactants = rxn.reactants;
-          const reactantCounts = reactantCountMaps[r];
           const volR = Number(reactionReactingVolumes[r]) || 1.0;
           const propensity = Number(rxn.propensityFactor ?? 1);
           const degeneracy = Number(rxn.degeneracy ?? 1);
+          const rateConstant = Number(rxn.rateConstant) || 0;
+          const base = rateConstant * propensity * degeneracy * volR;
 
-          // Velocity base: k * volR * propensity * degeneracy
-          const base = k * propensity * degeneracy * volR;
-          if (!Number.isFinite(base)) continue;
+          reactionBase[r] = Number.isFinite(base) ? base : 0;
+          reactionAnchorVolume[r] = volR;
 
-          for (const [speciesKRaw, orderKRaw] of reactantCounts) {
-            const speciesK = Number(speciesKRaw);
-            const orderK = Number(orderKRaw);
+          const scales = new Float64Array(rxn.reactants.length);
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            const ridx = rxn.reactants[j];
+            scales[j] = (Number(solverVolumes[ridx]) || 1.0) / volR;
+          }
+          reactionReactantScale[r] = scales;
 
-            // dv = d(ReactionVelocity) / d(y[speciesK])
-            // ReactionVelocity = base * Product_i( y[i] * Vol_i / volR )
-            // d(Velocity) / d(y[speciesK]) = base * orderK * (y[speciesK]^(orderK-1)) * (Vol_speciesK / volR)^orderK * Product_j!=K(...)
+          const uniqueSpecies = new Int32Array(reactantCountMaps[r].size);
+          const uniqueOrders = new Int32Array(reactantCountMaps[r].size);
+          let u = 0;
+          for (const [speciesIdx, order] of reactantCountMaps[r]) {
+            uniqueSpecies[u] = speciesIdx;
+            uniqueOrders[u] = order;
+            u++;
+          }
+          reactionUniqueSpecies[r] = uniqueSpecies;
+          reactionUniqueOrders[r] = uniqueOrders;
+        }
 
-            let velocityTerm = `${base}`;
-            for (let rj = 0; rj < reactants.length; rj++) {
-              const ridx = Number(reactants[rj]);
-              const scale = Number(solverVolumes[ridx]) / volR;
-              if (Number.isFinite(ridx) && Number.isFinite(scale)) {
-                velocityTerm += ` * (y[${ridx}] * ${scale})`;
-              }
+        return (y: Float64Array, J: Float64Array) => {
+          J.fill(0);
+
+          for (let r = 0; r < concreteReactions.length; r++) {
+            const rxn = concreteReactions[r];
+            const reactants = rxn.reactants;
+            const reactantScale = reactionReactantScale[r];
+
+            let velocityTerm = reactionBase[r];
+            if (!Number.isFinite(velocityTerm) || velocityTerm === 0) continue;
+
+            for (let j = 0; j < reactants.length; j++) {
+              velocityTerm *= y[reactants[j]] * reactantScale[j];
             }
 
-            // Differentiate via power rule: d(y^n)/dy = n * (y^n)/y
-            const scaleK = Number(solverVolumes[speciesK]) / volR;
-            if (!Number.isFinite(scaleK)) continue;
+            const uniqueSpecies = reactionUniqueSpecies[r];
+            const uniqueOrders = reactionUniqueOrders[r];
+            const volR = reactionAnchorVolume[r];
 
-            lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] * ${scaleK} : 0.0;`);
+            for (let u = 0; u < uniqueSpecies.length; u++) {
+              const speciesK = uniqueSpecies[u];
+              const orderK = uniqueOrders[u];
+              const scaleK = (Number(solverVolumes[speciesK]) || 1.0) / volR;
+              if (!Number.isFinite(scaleK)) continue;
 
-            // Special case for order 1 to avoid /y[speciesK] when y is 0
-            if (orderK === 1) {
-              let partialProduct = `${base} * ${scaleK}`;
-              for (let rj = 0; rj < reactants.length; rj++) {
-                if (reactants[rj] !== speciesK) {
-                  const ridx = Number(reactants[rj]);
-                  const scale = Number(solverVolumes[ridx]) / volR;
-                  if (Number.isFinite(ridx) && Number.isFinite(scale)) {
-                    partialProduct += ` * (y[${ridx}] * ${scale})`;
+              let dv = 0.0;
+              const yk = y[speciesK];
+              if (yk > 1e-100) {
+                dv = orderK * velocityTerm / yk * scaleK;
+              } else if (orderK === 1) {
+                let partialProduct = reactionBase[r] * scaleK;
+                for (let j = 0; j < reactants.length; j++) {
+                  const ridx = reactants[j];
+                  if (ridx !== speciesK) {
+                    partialProduct *= y[ridx] * reactantScale[j];
                   }
                 }
+                dv = partialProduct;
               }
-              lines.push(`if (y[${speciesK}] <= 1e-100) dv = ${partialProduct};`);
-            }
 
-            if (columnMajor) {
-              // Reactants
-              for (let rj = 0; rj < reactants.length; rj++) {
-                const sIdx = Number(reactants[rj]);
-                if (Number.isFinite(sIdx) && !model.species[sIdx]?.isConstant) {
-                  const sv = Number(solverVolumes[sIdx]) || 1.0;
-                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${sv};`);
+              if (!Number.isFinite(dv) || dv === 0) continue;
+
+              for (let j = 0; j < reactants.length; j++) {
+                const sIdx = reactants[j];
+                if (model.species[sIdx]?.isConstant) continue;
+                const sv = Number(solverVolumes[sIdx]) || 1.0;
+                if (columnMajor) {
+                  J[sIdx + speciesK * numSpecies] -= dv / sv;
+                } else {
+                  J[sIdx * numSpecies + speciesK] -= dv / sv;
                 }
               }
-              // Products
+
               for (let pj = 0; pj < rxn.products.length; pj++) {
                 const pIdx = Number(rxn.products[pj]);
-                if (Number.isFinite(pIdx) && !model.species[pIdx]?.isConstant) {
-                  const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
-                  const sv = Number(solverVolumes[pIdx]) || 1.0;
-                  if (Number.isFinite(stoich)) {
-                    lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${sv};`);
-                  }
-                }
-              }
-            } else {
-              // Row Major
-              for (let rj = 0; rj < reactants.length; rj++) {
-                const sIdx = Number(reactants[rj]);
-                if (Number.isFinite(sIdx) && !model.species[sIdx]?.isConstant) {
-                  const sv = Number(solverVolumes[sIdx]) || 1.0;
-                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${sv};`);
-                }
-              }
-              for (let pj = 0; pj < rxn.products.length; pj++) {
-                const pIdx = Number(rxn.products[pj]);
-                if (Number.isFinite(pIdx) && !model.species[pIdx]?.isConstant) {
-                  const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
-                  const sv = Number(solverVolumes[pIdx]) || 1.0;
-                  if (Number.isFinite(stoich)) {
-                    lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${sv};`);
-                  }
+                if (!Number.isFinite(pIdx) || model.species[pIdx]?.isConstant) continue;
+                const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
+                if (!Number.isFinite(stoich)) continue;
+                const sv = Number(solverVolumes[pIdx]) || 1.0;
+                if (columnMajor) {
+                  J[pIdx + speciesK * numSpecies] += (dv * stoich) / sv;
+                } else {
+                  J[pIdx * numSpecies + speciesK] += (dv * stoich) / sv;
                 }
               }
             }
           }
-        }
-        return new Function('y', 'J', lines.join('\n')) as (y: Float64Array, J: Float64Array) => void;
+        };
       };
 
       if (concreteReactions.length < 2000) {
         try {
-          jacobianColMajor = buildJITJacobian(true);
-          jacobianRowMajor = buildJITJacobian(false);
-        } catch (e) {
-          // ignore
+          jacobianColMajor = buildSafeJacobian(true);
+          jacobianRowMajor = buildSafeJacobian(false);
+        } catch {
+          // Keep fallback solver behavior when Jacobian setup fails.
         }
       }
     }

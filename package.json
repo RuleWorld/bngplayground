@@ -26,6 +26,7 @@
     "generate:embeddings": "tsx tools/build/generateEmbeddings.mjs",
     "generate:manifest": "node -e \"console.error('Manifest generation lives in the RuleHub repo. Run it there.'); process.exit(1)\"",
     "generate:web-output": "node scripts/generate_web_output_playwright.mjs",
+    "benchmark:functional-rates": "tsx scripts/benchmark_functional_rate_fast_path.ts",
     "clean:web-output:artifacts": "node scripts/clean_web_output_artifacts.mjs",
     "test:share-link": "node scripts/playwright_share_link_test.mjs",
     "parity:cycle2:full": "node scripts/run_parity_cycle2.mjs",

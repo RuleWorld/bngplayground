@@ -21,6 +21,85 @@ const normalizeObservableType = (value?: string): string => {
   return raw;
 };
 
+function parseObservableConstraint(pattern: string): { cleanPattern: string; relation?: string; quantity?: string } {
+  const trimmed = pattern.trim();
+  const operators = ['==', '<=', '>=', '!=', '<', '>'];
+
+  for (const operator of operators) {
+    const operatorIndex = trimmed.lastIndexOf(operator);
+    if (operatorIndex <= 0) continue;
+
+    const quantityText = trimmed.slice(operatorIndex + operator.length).trim();
+    if (!quantityText || !/^[0-9]+$/.test(quantityText)) continue;
+
+    const cleanPattern = trimmed.slice(0, operatorIndex).trimEnd();
+    if (cleanPattern.length === 0) continue;
+
+    return {
+      cleanPattern,
+      relation: operator,
+      quantity: quantityText,
+    };
+  }
+
+  return { cleanPattern: trimmed };
+}
+
+function isIdentifierChar(ch: string | undefined): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    ch === '_' ||
+    ch === '$'
+  );
+}
+
+function replaceWholeWord(source: string, target: string, replacement: string): string {
+  let result = '';
+
+  for (let i = 0; i < source.length; ) {
+    if (
+      source.startsWith(target, i) &&
+      !isIdentifierChar(source[i - 1]) &&
+      !isIdentifierChar(source[i + target.length])
+    ) {
+      result += replacement;
+      i += target.length;
+      continue;
+    }
+
+    result += source[i];
+    i++;
+  }
+
+  return result;
+}
+
+function findFunctionCallStart(source: string, fnName: string, fromIndex: number): number {
+  let searchIndex = fromIndex;
+
+  while (true) {
+    const startIdx = source.indexOf(fnName, searchIndex);
+    if (startIdx === -1) return -1;
+
+    if (isIdentifierChar(source[startIdx - 1])) {
+      searchIndex = startIdx + 1;
+      continue;
+    }
+
+    let cursor = startIdx + fnName.length;
+    while (cursor < source.length && /\s/.test(source[cursor])) {
+      cursor++;
+    }
+
+    if (source[cursor] === '(') return startIdx;
+    searchIndex = startIdx + 1;
+  }
+}
+
 /**
  * Expand user-defined function calls inline for NFsim compatibility.
  * NFsim doesn't support user-defined functions in rate expressions — they must be fully expanded.
@@ -44,12 +123,16 @@ function expandUserDefinedFunctions(
     // Match function calls: fname(arg1, arg2, ...)
     // Use a regex that handles nested parentheses via counting (simplified: one level)
     for (const [fnName, fn] of fnMap) {
-      const pattern = new RegExp(`\\b${fnName}\\s*\\(`, 'g');
-      let match: RegExpExecArray | null;
+      let searchFrom = 0;
 
-      while ((match = pattern.exec(expanded)) !== null) {
-        const startIdx = match.index;
-        const argsStartIdx = match.index + match[0].length;
+      while (true) {
+        const startIdx = findFunctionCallStart(expanded, fnName, searchFrom);
+        if (startIdx === -1) break;
+        let openParenIdx = startIdx + fnName.length;
+        while (openParenIdx < expanded.length && /\s/.test(expanded[openParenIdx])) {
+          openParenIdx++;
+        }
+        const argsStartIdx = openParenIdx + 1;
 
         // Find matching closing paren by counting depth
         let depth = 1;
@@ -77,14 +160,14 @@ function expandUserDefinedFunctions(
           const paramName = fn.args[j];
           const argValue = args[j];
           // Replace whole-word occurrences of the parameter with the argument
-          const paramPattern = new RegExp(`\\b${paramName}\\b`, 'g');
-          bodyExpanded = bodyExpanded.replace(paramPattern, `(${argValue})`);
+          bodyExpanded = replaceWholeWord(bodyExpanded, paramName, `(${argValue})`);
         }
 
         // Replace the function call with the expanded body
         const callEnd = i;
         expanded = expanded.slice(0, startIdx) + `(${bodyExpanded})` + expanded.slice(callEnd);
         changed = true;
+        searchFrom = startIdx + bodyExpanded.length + 2;
         break; // restart the while loop to handle the modified string
       }
     }
@@ -349,11 +432,11 @@ export class BNGXMLWriter {
             let constraintAttrs = '';
             if (obsType === 'Species') {
               // Try to extract from pattern string first (precedence)
-              const m = pattern.match(/^(.*?)\s*(==|<=|>=|<|>|!=)\s*(\d+)\s*$/);
+              const parsedConstraint = parseObservableConstraint(pattern);
               let cleanPattern = pattern;
-              if (m) {
-                cleanPattern = m[1];
-                constraintAttrs = ` relation="${escapeXml(m[2])}" quantity="${m[3]}"`;
+              if (parsedConstraint.relation && parsedConstraint.quantity) {
+                cleanPattern = parsedConstraint.cleanPattern;
+                constraintAttrs = ` relation="${escapeXml(parsedConstraint.relation)}" quantity="${parsedConstraint.quantity}"`;
               } else if (obs.countFilter !== undefined) {
                 // Fallback to observable-level filter if present
                 const rel = obs.countRelation || '>';
