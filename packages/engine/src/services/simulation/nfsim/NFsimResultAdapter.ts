@@ -1,6 +1,13 @@
 import type { BNGLModel, SimulationResults } from '../../../types';
 import { parseGdat, type GdatData } from '../GdatParser';
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function toSafeKey(raw: string): string | null {
+  return SAFE_OBJECT_KEY_PATTERN.test(raw) && !UNSAFE_OBJECT_KEYS.has(raw) ? raw : null;
+}
+
 const normalizeHeaders = (headers: string[], model: BNGLModel): string[] => {
   if (!headers.includes('time')) return ['time', ...headers];
   const observableNames = model.observables?.map((o) => o.name) ?? [];
@@ -20,9 +27,10 @@ export class NFsimResultAdapter {
     const data = parsed.data.map((row) => {
       const mapped: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const header of headers) {
-        if (header === '__proto__' || header === 'constructor' || header === 'prototype') continue;
-        const value = row[header] ?? row[parsed.headers[headers.indexOf(header)]];
-        Object.defineProperty(mapped, header, {
+        const safeHeader = toSafeKey(header);
+        if (!safeHeader) continue;
+        const value = row[safeHeader] ?? row[parsed.headers[headers.indexOf(header)]];
+        Object.defineProperty(mapped, safeHeader, {
           value: typeof value === 'number' ? value : Number(value ?? 0),
           writable: true,
           enumerable: true,
@@ -37,9 +45,10 @@ export class NFsimResultAdapter {
       const sp: Record<string, number> = Object.create(null) as Record<string, number>;
       sp.time = row.time ?? 0;
       for (const name of speciesHeaders) {
-        if (name === '__proto__' || name === 'constructor' || name === 'prototype') continue;
-        Object.defineProperty(sp, name, {
-          value: row[name] ?? 0,
+        const safeName = toSafeKey(name);
+        if (!safeName) continue;
+        Object.defineProperty(sp, safeName, {
+          value: row[safeName] ?? 0,
           writable: true,
           enumerable: true,
           configurable: true,

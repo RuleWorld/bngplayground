@@ -48,9 +48,20 @@ interface PLAReaction {
 }
 
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function isSafeObjectKey(key: string): boolean {
-  return !UNSAFE_OBJECT_KEYS.has(key);
+  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
+}
+
+function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 /**
@@ -556,9 +567,9 @@ export class PLASimulator {
           for (let j = 0; j < info.indices.length; j++) {
             sum += currentState[info.indices[j]] * info.coefficients[j];
           }
-          row[obs.name] = sum;
+          setSafeNumberField(row, obs.name, sum);
         } else {
-          row[obs.name] = 0;
+          setSafeNumberField(row, obs.name, 0);
         }
       }
       return row;

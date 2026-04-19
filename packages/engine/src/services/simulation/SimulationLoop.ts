@@ -51,9 +51,10 @@ interface ConcreteObservable {
 }
 
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
 function isSafeObjectKey(key: string): boolean {
-  return !UNSAFE_OBJECT_KEYS.has(key);
+  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
 }
 
 function setSafeNumericField(target: Record<string, number>, key: string, value: number): void {
@@ -822,8 +823,7 @@ export async function simulate(
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
     const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
     for (const name of observableNames) {
-      if (name === '__proto__' || name === 'constructor' || name === 'prototype') continue;
-      observableValuesRecord[name] = 0;
+      setSafeNumericField(observableValuesRecord, name, 0);
     }
 
     // --- Observable evaluation strategy selection ---
@@ -998,7 +998,7 @@ export async function simulate(
       for (const change of parameterChanges) {
 
         if (change.afterPhaseIndex === targetPhaseIdx - 1) {
-          if (change.parameter === '__proto__' || change.parameter === 'constructor' || change.parameter === 'prototype') {
+          if (!isSafeObjectKey(change.parameter)) {
             continue;
           }
           const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
@@ -1038,7 +1038,7 @@ export async function simulate(
           let anyChanged = false;
           for (const name in model.paramExpressions) {
             if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
-                if (name === '__proto__' || name === 'constructor' || name === 'prototype') {
+                if (!isSafeObjectKey(name)) {
                   continue;
                 }
               const expr = model.paramExpressions[name];

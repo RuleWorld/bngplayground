@@ -825,6 +825,9 @@ export class JITCompiler {
                     currentObsOffset++;
                 }
             });
+            if (nObservables < 0 || nObservables >= obsOffsets.length) {
+                throw new Error(`[JITCompiler] obsOffsets index out of range: ${nObservables}`);
+            }
             obsOffsets[nObservables] = currentObsOffset;
 
             // Validate parameter keys to prevent object destructuring injection.
@@ -833,7 +836,12 @@ export class JITCompiler {
             const paramKeys = allParamKeys.filter((key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key));
             const safeParameters: Record<string, number> = Object.create(null) as Record<string, number>;
             for (const key of paramKeys) {
-                safeParameters[key] = (parameters as Record<string, number>)[key];
+                Object.defineProperty(safeParameters, key, {
+                    value: (parameters as Record<string, number>)[key],
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                });
             }
             if (allParamKeys.length !== paramKeys.length) {
                 console.warn(
@@ -958,8 +966,14 @@ export class JITCompiler {
             const speciesOffsets = new Int32Array(nSpecies + 1);
             let totalStoichEntries = 0;
             for (let s = 0; s < nSpecies; s++) {
+                if (s < 0 || s >= speciesOffsets.length) {
+                    throw new Error(`[JITCompiler] speciesOffsets index out of range: ${s}`);
+                }
                 speciesOffsets[s] = totalStoichEntries;
                 totalStoichEntries += speciesRxnEntries[s].length;
+            }
+            if (nSpecies < 0 || nSpecies >= speciesOffsets.length) {
+                throw new Error(`[JITCompiler] speciesOffsets terminal index out of range: ${nSpecies}`);
             }
             speciesOffsets[nSpecies] = totalStoichEntries;
 
@@ -1014,8 +1028,14 @@ export class JITCompiler {
             const jacRowPtr = new Int32Array(nSpecies + 1);
             let totalJacEntries = 0;
             for (let i = 0; i < nSpecies; i++) {
+                if (i < 0 || i >= jacRowPtr.length) {
+                    throw new Error(`[JITCompiler] jacRowPtr index out of range: ${i}`);
+                }
                 jacRowPtr[i] = totalJacEntries;
                 totalJacEntries += jacRows[i].size;
+            }
+            if (nSpecies < 0 || nSpecies >= jacRowPtr.length) {
+                throw new Error(`[JITCompiler] jacRowPtr terminal index out of range: ${nSpecies}`);
             }
             jacRowPtr[nSpecies] = totalJacEntries;
 
