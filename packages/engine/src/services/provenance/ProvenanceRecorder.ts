@@ -252,7 +252,11 @@ export class ProvenanceRecorder {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 function generateUuid(): string {
-  // RFC4122 v4 — not crypto-grade, fine for identifiers.
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  // Fallback for environments without randomUUID.
   const rnd = (): number => Math.floor(Math.random() * 0x10000);
   const h = (n: number, len: number): string => n.toString(16).padStart(len, '0');
   return `${h(rnd(), 4)}${h(rnd(), 4)}-${h(rnd(), 4)}-${h((rnd() & 0x0fff) | 0x4000, 4)}-${h((rnd() & 0x3fff) | 0x8000, 4)}-${h(rnd(), 4)}${h(rnd(), 4)}${h(rnd(), 4)}`;
