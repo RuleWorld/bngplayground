@@ -26,6 +26,7 @@ describe('urlStateCodec — readable form', () => {
     const url1 = encodeSessionUrl({ tab: 'time-courses', params: { kr: 1, kf: 2 } });
     const url2 = encodeSessionUrl({ tab: 'time-courses', params: { kf: 2, kr: 1 } });
     expect(url1).toBe(url2);
+    expect(url1).not.toContain('model=');
   });
 
   it('round-trips simulation config', () => {
@@ -48,13 +49,15 @@ describe('urlStateCodec — readable form', () => {
   it('omits default tab from URL', () => {
     const url = encodeSessionUrl({ tab: 'time-courses' });
     expect(url).toBe('#/session?');
+    expect(decodeSessionUrl(url).session).toEqual({ tab: 'time-courses' });
   });
 
   it('recovers from malformed params without throwing', () => {
     const { session, warnings } = decodeSessionUrl('#/session?tab=time-courses&params=kf:notanumber,,kr:0.01');
     expect(session.params).toEqual({ kr: 0.01 });
-    expect(warnings.some((warning: string) => warning.includes('non-numeric'))).toBe(true);
-    expect(warnings.some((warning: string) => warning.includes('malformed'))).toBe(true);
+    expect(warnings.length).toBeGreaterThanOrEqual(2);
+    expect(warnings.some((warning: string) => /non-numeric/i.test(warning))).toBe(true);
+    expect(warnings.some((warning: string) => /malformed/i.test(warning))).toBe(true);
   });
 
   it('ignores unknown tab ids and falls back to default', () => {
@@ -98,7 +101,7 @@ describe('urlStateCodec — compact form', () => {
 
     const short: Session = { tab: 'time-courses', embeddedSource: 'ab' };
     const urlU = encodeSessionUrl(short, { forceCompact: true });
-    // Short payload likely expands under deflate overhead → 'u:' prefix chosen.
+    // Short payload may choose either representation; verify compact encoding and successful round-trip.
     expect(urlU).toMatch(/^#\/session\?p=[du]:/);
     expect(decodeSessionUrl(urlU).session.embeddedSource).toBe('ab');
   });
@@ -136,14 +139,11 @@ describe('urlStateCodec — pathological inputs', () => {
   });
 
   it('rejects schema-invalid payload', () => {
-    // Build a fake JSON-ish string and manually encode it in compact form.
-    const badJson = JSON.stringify({ tab: 42 });  // tab must be string
-    const buf = new TextEncoder().encode(badJson);
-    const b64 =
-      typeof Buffer !== 'undefined'
-        ? Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
-        : btoa(String.fromCharCode(...buf)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    const { session, warnings } = decodeSessionUrl(`#/session?p=u:${b64}`);
+    // Use the production encoder to build compact form, but bypass typing
+    // to inject a schema-invalid payload (tab must be string).
+    const invalidSession = { tab: 42 };
+    const url = encodeSessionUrl(invalidSession as unknown as Session, { forceCompact: true });
+    const { session, warnings } = decodeSessionUrl(url);
     expect(session.tab).toBe('time-courses');
     expect(warnings.some((warning: string) => warning.includes('schema'))).toBe(true);
   });
