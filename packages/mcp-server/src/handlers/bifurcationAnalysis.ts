@@ -88,6 +88,9 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
     if (!parameterName) {
       throw new Error('Bifurcation analysis requires a parameter name.');
     }
+    if (!(parameterName in params)) {
+      throw new Error(`Unknown continuation parameter: ${parameterName}`);
+    }
 
     const speciesIndexMap = new Map<string, number>(
       ((expandedModel.species ?? []) as ExpandedSpecies[]).map((species: ExpandedSpecies, index: number) => [species.name, index])
@@ -106,10 +109,6 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
         parameterName,
         callsite: 'mcp-server.handleBifurcationAnalysis',
       });
-
-      if (!(parameterName in params)) {
-        throw new Error(`Unknown continuation parameter: ${parameterName}`);
-      }
 
       rhsFn = (y: Float64Array, p: number, dydt: Float64Array) => {
         params[parameterName] = p;
@@ -160,9 +159,9 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
       totalPoints: result.path.length,
       stablePoints: result.path.filter((p: EngineContinuationPoint) => p.stable).length,
       unstablePoints: result.path.filter((p: EngineContinuationPoint) => !p.stable).length,
-      technical: `Continuation along ${parsedArgs.parameter} from ${parsedArgs.start_value} to ${parsedArgs.end_value}. Found ${result.bifurcations.length} bifurcation(s).`,
+      technical: `Continuation along ${parameterName} from ${parameterStart} to ${parameterEnd}. Found ${result.bifurcations.length} bifurcation(s).`,
       biological: result.bifurcations.length > 0
-        ? `Qualitative behavior changes detected: ${result.bifurcations.map((b: EngineBifurcation) => `${b.type} at ${parsedArgs.parameter}=${b.parameterValue.toPrecision(4)}`).join('; ')}.`
+        ? `Qualitative behavior changes detected: ${result.bifurcations.map((b: EngineBifurcation) => `${b.type} at ${parameterName}=${b.parameterValue.toPrecision(4)}`).join('; ')}.`
         : `No bifurcations detected in the parameter range. The system maintains qualitative stability.`,
       strategic: 'Bifurcation analysis reveals parameter thresholds where the system changes qualitative behavior (oscillation onset, bistability, etc.).',
     });
