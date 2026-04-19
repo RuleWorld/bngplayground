@@ -55,12 +55,12 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="bg-white dark:bg-slate-900 dark:bg-slate-800 border-b border-stone-200 dark:border-slate-700 shadow-sm sticky top-0 z-40">
+      <header className="bg-white dark:bg-slate-800 border-b border-stone-200 dark:border-slate-700 shadow-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-3.5">
             {/* Logo + Title */}
             <div className="flex items-center gap-3">
-              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded bg-white dark:bg-slate-900 shadow-sm ring-1 ring-slate-200 dark:bg-slate-700 dark:ring-slate-600">
+              <div className="relative flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded bg-white dark:bg-slate-900 shadow-sm ring-1 ring-slate-200 dark:ring-slate-600">
                 <img
                   src="/bngplayground/logo.png"
                   alt="BioNetGen Visualizer logo"
@@ -75,11 +75,11 @@ export const Header: React.FC<HeaderProps> = ({
                 </h1>
 
                 {/* Subtle Mode Switcher */}
-                <div className="flex border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded overflow-hidden">
+                <div className="flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
                   <button
                     onClick={() => onViewModeChange('code')}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'code'
-                      ? 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-700 text-teal-700 dark:text-teal-400'
+                      ? 'bg-slate-100 dark:bg-slate-800/50 text-teal-700 dark:text-teal-400'
                       : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
                       }`}
                   >
@@ -115,7 +115,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Help Dropdown */}
               <Dropdown
                 trigger={
-                  <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-400 
+                  <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700
                                      dark:hover:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700 rounded transition-colors"
                     title="Help & Resources"
                     aria-label="Help & Resources">
