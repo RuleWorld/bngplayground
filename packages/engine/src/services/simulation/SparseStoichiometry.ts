@@ -121,6 +121,9 @@ export function buildCSRStoichiometry(
       if (pos >= nnz) {
         throw new Error('[SparseStoichiometry] CSR position overflow while building matrix');
       }
+      if (col < 0 || col >= numReactions) {
+        throw new Error(`[SparseStoichiometry] Column index out of bounds: ${col}`);
+      }
       colIdx[pos] = col;
       values[pos] = val;
       pos++;
@@ -155,7 +158,11 @@ export function sparseCSRDgemv(
     const start = rowPtr[i];
     const end = rowPtr[i + 1];
     for (let p = start; p < end; p++) {
-      sum += values[p] * reactionVelocities[colIdx[p]];
+      const col = colIdx[p];
+      if (col < 0 || col >= reactionVelocities.length) {
+        throw new Error(`[SparseStoichiometry] Invalid reaction velocity index: ${col}`);
+      }
+      sum += values[p] * reactionVelocities[col];
     }
     dydt[i] += sum;
   }

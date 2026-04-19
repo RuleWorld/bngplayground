@@ -818,8 +818,14 @@ export class JITCompiler {
 
             let currentObsOffset = 0;
             (observables || []).forEach((obs, i) => {
+                if (i < 0 || i >= obsOffsets.length) {
+                    throw new Error(`[JITCompiler] obsOffsets index out of range: ${i}`);
+                }
                 obsOffsets[i] = currentObsOffset;
                 for (let j = 0; j < obs.indices.length; j++) {
+                    if (currentObsOffset < 0 || currentObsOffset >= obsSpeciesIdx.length || currentObsOffset >= obsCoeffs.length) {
+                        throw new Error(`[JITCompiler] observable entry index out of range: ${currentObsOffset}`);
+                    }
                     obsSpeciesIdx[currentObsOffset] = obs.indices[j];
                     obsCoeffs[currentObsOffset] = obs.coefficients[j];
                     currentObsOffset++;
@@ -925,6 +931,9 @@ export class JITCompiler {
                 reactantOffsets[i] = currentReactantOffset;
 
                 for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    if (currentReactantOffset < 0 || currentReactantOffset >= reactantIdx.length || currentReactantOffset >= reactantStoich.length) {
+                        throw new Error(`[JITCompiler] reactant entry index out of range: ${currentReactantOffset}`);
+                    }
                     reactantIdx[currentReactantOffset] = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                     reactantStoich[currentReactantOffset] = rxn.reactantStoich[j];
                     currentReactantOffset++;
@@ -983,6 +992,9 @@ export class JITCompiler {
             let currentStoichOffset = 0;
             for (let s = 0; s < nSpecies; s++) {
                 for (const entry of speciesRxnEntries[s]) {
+                    if (currentStoichOffset < 0 || currentStoichOffset >= speciesRxnIdx.length || currentStoichOffset >= speciesStoich.length) {
+                        throw new Error(`[JITCompiler] stoichiometry entry index out of range: ${currentStoichOffset}`);
+                    }
                     speciesRxnIdx[currentStoichOffset] = entry.rxnIdx;
                     speciesStoich[currentStoichOffset] = entry.stoich;
                     currentStoichOffset++;
@@ -1059,11 +1071,17 @@ export class JITCompiler {
                 const sortedCols = Array.from(rowMap.keys()).sort((a, b) => a - b);
 
                 for (const j of sortedCols) {
+                    if (currentJacEntry < 0 || currentJacEntry >= jacColIdx.length || currentJacEntry >= jacContribOffsets.length) {
+                        throw new Error(`[JITCompiler] Jacobian entry index out of range: ${currentJacEntry}`);
+                    }
                     jacColIdx[currentJacEntry] = j;
                     jacContribOffsets[currentJacEntry] = currentContribOffset;
 
                     const contribs = rowMap.get(j)!;
                     for (const contrib of contribs) {
+                        if (currentContribOffset < 0 || currentContribOffset >= jacContribRxnIdx.length || currentContribOffset >= jacContribCoeffs.length) {
+                            throw new Error(`[JITCompiler] Jacobian contribution index out of range: ${currentContribOffset}`);
+                        }
                         jacContribRxnIdx[currentContribOffset] = contrib.rxnIdx;
                         jacContribCoeffs[currentContribOffset] = contrib.coeff;
                         currentContribOffset++;
