@@ -108,13 +108,35 @@ function validateAgainstMoleculeTypes(candidate: CandidateRule, molMap: MolMap):
   // Parse the rule to extract molecule references
   const ruleStr = candidate.rule;
 
-  // Extract molecule patterns like MolName(comp~state, comp!1, ...)
-  const molPatternRegex = /([A-Za-z_]\w*)\(([^)]*)\)/g;
-  let match: RegExpExecArray | null;
+  const parseMoleculeInstances = (text: string): Array<{ name: string; components: string }> => {
+    const out: Array<{ name: string; components: string }> = [];
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] !== '(') continue;
+      let nameEnd = i - 1;
+      while (nameEnd >= 0 && /\s/.test(text[nameEnd])) nameEnd--;
+      let nameStart = nameEnd;
+      while (nameStart >= 0 && /[A-Za-z0-9_]/.test(text[nameStart])) nameStart--;
+      const name = text.slice(nameStart + 1, nameEnd + 1);
+      if (!/^[A-Za-z_]\w*$/.test(name)) continue;
 
-  while ((match = molPatternRegex.exec(ruleStr)) !== null) {
-    const molName = match[1];
-    const compStr = match[2];
+      let depth = 1;
+      let j = i + 1;
+      while (j < text.length && depth > 0) {
+        if (text[j] === '(') depth++;
+        else if (text[j] === ')') depth--;
+        j++;
+      }
+      if (depth !== 0) continue;
+      const components = text.slice(i + 1, j - 1);
+      out.push({ name, components });
+      i = j - 1;
+    }
+    return out;
+  };
+
+  for (const parsed of parseMoleculeInstances(ruleStr)) {
+    const molName = parsed.name;
+    const compStr = parsed.components;
 
     // Check molecule exists
     if (!molMap[molName]) return false;
@@ -126,7 +148,7 @@ function validateAgainstMoleculeTypes(candidate: CandidateRule, molMap: MolMap):
     for (const token of compTokens) {
       // Extract component name, optional state, optional bond
       // Formats: compName, compName~state, compName!bond, compName~state!bond
-      const compMatch = token.match(/^([A-Za-z_]\w*)(?:~([A-Za-z_]\w+))?(?:![0-9+?])?$/);
+      const compMatch = /^([A-Za-z_]\w*)(?:~([A-Za-z_]\w+))?(?:![0-9+?])?$/.exec(token);
       if (!compMatch) continue; // Skip if can't parse (may be valid BNGL we don't handle)
 
       const compName = compMatch[1];

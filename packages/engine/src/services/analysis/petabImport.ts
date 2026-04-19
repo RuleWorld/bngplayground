@@ -65,25 +65,31 @@ function parseSimpleYAML(text: string): Record<string, unknown> {
   let currentKey = '';
   let currentList: string[] | null = null;
 
+  const stripComment = (line: string): string => {
+    const idx = line.indexOf('#');
+    return idx >= 0 ? line.slice(0, idx) : line;
+  };
+
   for (const rawLine of text.split('\n')) {
-    const line = rawLine.replace(/#.*$/, '').trimEnd();
+    const line = stripComment(rawLine).trimEnd();
     if (!line.trim()) continue;
 
-    if (line.match(/^\s+-\s+/)) {
-      const value = line.replace(/^\s+-\s+/, '').trim();
+    const leftTrimmed = line.trimStart();
+    if (leftTrimmed.startsWith('- ')) {
+      const value = leftTrimmed.slice(2).trim();
       if (currentList) {
         currentList.push(value);
       }
       continue;
     }
 
-    const kvMatch = line.match(/^(\w[\w\s]*?):\s*(.*)$/);
-    if (kvMatch) {
+    const colonIdx = line.indexOf(':');
+    if (colonIdx > 0) {
       if (currentList && currentKey) {
         result[currentKey] = currentList;
       }
-      currentKey = kvMatch[1].trim();
-      const value = kvMatch[2].trim();
+      currentKey = line.slice(0, colonIdx).trim();
+      const value = line.slice(colonIdx + 1).trim();
       if (value) {
         result[currentKey] = value;
         currentList = null;

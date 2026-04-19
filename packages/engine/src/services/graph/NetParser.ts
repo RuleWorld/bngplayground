@@ -159,14 +159,22 @@ function parseSpeciesLine(line: string, model: BNGLModel, lineNum: number): void
   // The pattern may contain spaces, so we can't just split on whitespace
   // Typical format: "1 A(b!1).B(a!1) 100"
 
-  const match = line.match(/^(\d+)\s+(.+?)\s+([\d.eE+-]+)$/);
-  if (!match) {
+  const trimmed = line.trim();
+  const firstSpace = trimmed.search(/\s/);
+  if (firstSpace <= 0) {
+    throw new Error(`Invalid species format (expected: index pattern concentration)`);
+  }
+  const indexToken = trimmed.slice(0, firstSpace).trim();
+  const rest = trimmed.slice(firstSpace).trim();
+  const lastSpace = rest.lastIndexOf(' ');
+  if (lastSpace <= 0) {
     throw new Error(`Invalid species format (expected: index pattern concentration)`);
   }
 
-  const index = parseInt(match[1]);
-  const pattern = match[2].trim();
-  const concentration = parseFloat(match[3]);
+  const pattern = rest.slice(0, lastSpace).trim();
+  const concentrationToken = rest.slice(lastSpace + 1).trim();
+  const index = parseInt(indexToken, 10);
+  const concentration = parseFloat(concentrationToken);
 
   if (isNaN(index) || isNaN(concentration)) {
     throw new Error(`Invalid species: index or concentration not a number`);
@@ -262,22 +270,35 @@ function parseObservableLine(line: string, model: BNGLModel, lineNum: number): v
  */
 function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): void {
   // Format: index name(args) = expression
-  const match = line.match(/^(\d+)\s+(\w+)\s*\(([^)]*)\)\s*=\s*(.+)$/);
-  if (!match) {
+  const trimmed = line.trim();
+  const firstSpace = trimmed.search(/\s/);
+  if (firstSpace <= 0) {
     throw new Error(
       `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
       `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
 
-  const index = parseInt(match[1]);
-  const name = match[2];
-  const argsStr = match[3].trim();
-  const expression = match[4].trim();
+  const indexToken = trimmed.slice(0, firstSpace).trim();
+  const rhs = trimmed.slice(firstSpace).trim();
+  const openParen = rhs.indexOf('(');
+  const closeParen = rhs.indexOf(')', openParen + 1);
+  const eqIdx = rhs.indexOf('=', closeParen + 1);
+  if (openParen <= 0 || closeParen <= openParen || eqIdx <= closeParen) {
+    throw new Error(
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
+    );
+  }
+
+  const index = parseInt(indexToken, 10);
+  const name = rhs.slice(0, openParen).trim();
+  const argsStr = rhs.slice(openParen + 1, closeParen).trim();
+  const expression = rhs.slice(eqIdx + 1).trim();
 
   if (isNaN(index)) {
     throw new Error(
-      `Invalid function in .net file at line ${lineNum}: the function index "${match[1]}" is not a valid number.`
+      `Invalid function in .net file at line ${lineNum}: the function index "${indexToken}" is not a valid number.`
     );
   }
 

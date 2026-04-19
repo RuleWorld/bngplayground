@@ -1,8 +1,6 @@
 import type { BNGLModel, BNGLObservable, ReactionRule } from '../../types';
 import type { Atom, DebuggerNetwork, RuleBlockerReport, RuleBlockerDetails, RuleBlockerSuggestion } from './types';
 
-const COMPONENT_REGEX = /(\w+)(?:~([A-Za-z0-9_]+))?(?:!([0-9+?]+))?/;
-
 const dedupeAtoms = (atoms: Atom[]): Atom[] => {
   const seen = new Map<string, Atom>();
   for (const atom of atoms) {
@@ -53,27 +51,72 @@ const atomQueryString = (atom: Atom): string => {
   }
 };
 
+const parseMoleculePattern = (molecule: string): { name: string; components: string } | null => {
+  const open = molecule.indexOf('(');
+  const close = molecule.lastIndexOf(')');
+  if (open <= 0 || close <= open) return null;
+  const name = molecule.slice(0, open).trim();
+  const components = molecule.slice(open + 1, close);
+  return name ? { name, components } : null;
+};
+
+const parseComponentToken = (token: string): { componentName: string; state?: string; bond?: string } | null => {
+  const trimmed = token.trim();
+  if (!trimmed) return null;
+
+  const firstSpecial = (() => {
+    const idxState = trimmed.indexOf('~');
+    const idxBond = trimmed.indexOf('!');
+    if (idxState < 0) return idxBond;
+    if (idxBond < 0) return idxState;
+    return Math.min(idxState, idxBond);
+  })();
+
+  const componentName = (firstSpecial >= 0 ? trimmed.slice(0, firstSpecial) : trimmed).trim();
+  if (!componentName) return null;
+
+  let state: string | undefined;
+  let bond: string | undefined;
+  const stateIdx = trimmed.indexOf('~');
+  const bondIdx = trimmed.indexOf('!');
+
+  if (stateIdx >= 0) {
+    const stateEnd = bondIdx > stateIdx ? bondIdx : trimmed.length;
+    const parsed = trimmed.slice(stateIdx + 1, stateEnd).trim();
+    if (parsed) state = parsed;
+  }
+  if (bondIdx >= 0) {
+    const parsed = trimmed.slice(bondIdx + 1).trim();
+    if (parsed) bond = parsed;
+  }
+
+  return { componentName, state, bond };
+};
+
 const collectAtomsFromPattern = (pattern: string): Atom[] => {
   const atoms: Atom[] = [];
   const molecules = pattern.split('+').map((segment) => segment.trim()).filter(Boolean);
 
   for (const molecule of molecules) {
-    const match = molecule.match(/(\w+)\(([^)]*)\)/);
-    if (!match) {
+    const parsedMolecule = parseMoleculePattern(molecule);
+    if (!parsedMolecule) {
       atoms.push({ kind: 'molecule', molecule: molecule });
       continue;
     }
-    const [, moleculeName, rawComponents] = match;
+    const moleculeName = parsedMolecule.name;
+    const rawComponents = parsedMolecule.components;
     atoms.push({ kind: 'molecule', molecule: moleculeName });
 
     const componentParts = rawComponents.split(',').map((part) => part.trim()).filter(Boolean);
 
     for (const component of componentParts) {
-      const compMatch = component.match(COMPONENT_REGEX);
-      if (!compMatch) {
+      const parsedComponent = parseComponentToken(component);
+      if (!parsedComponent) {
         continue;
       }
-      const [, componentName, state, bond] = compMatch;
+      const componentName = parsedComponent.componentName;
+      const state = parsedComponent.state;
+      const bond = parsedComponent.bond;
       atoms.push({
         kind: 'componentState',
         molecule: moleculeName,

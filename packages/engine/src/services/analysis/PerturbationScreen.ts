@@ -198,44 +198,51 @@ function replaceSpeciesConcentration(
   speciesLine: string,
   fraction: number,
 ): string {
-  // Find the block (try "seed species" first, fall back to "species")
-  let blockName = 'seed species';
-  let blockRegex = new RegExp(
-    `(begin\\s+${blockName}\\s*\\n)([\\s\\S]*?)(\\nend\\s+${blockName})`,
-    'i',
-  );
-  let blockMatch = code.match(blockRegex);
+  const findBlock = (input: string, blockName: string) => {
+    const lower = input.toLowerCase();
+    const beginToken = `begin ${blockName}`;
+    const endToken = `end ${blockName}`;
+    const beginIdx = lower.indexOf(beginToken);
+    if (beginIdx < 0) return null;
+    const beginLineEnd = input.indexOf('\n', beginIdx);
+    const bodyStart = beginLineEnd >= 0 ? beginLineEnd + 1 : input.length;
+    const bodyEnd = lower.indexOf(endToken, bodyStart);
+    if (bodyEnd < 0) return null;
+    return { bodyStart, bodyEnd };
+  };
+  const replaceNumericTail = (line: string, nextValue: string): string => {
+    let end = line.length - 1;
+    while (end >= 0 && /\s/.test(line[end])) end--;
+    let start = end;
+    while (start >= 0 && /[0-9eE+\-.]/.test(line[start])) start--;
+    if (end >= 0 && start < end) {
+      return `${line.slice(0, start + 1)}${nextValue}`;
+    }
+    return line;
+  };
 
-  if (!blockMatch) {
-    blockName = 'species';
-    blockRegex = new RegExp(
-      `(begin\\s+${blockName}\\s*\\n)([\\s\\S]*?)(\\nend\\s+${blockName})`,
-      'i',
-    );
-    blockMatch = code.match(blockRegex);
-  }
-  if (!blockMatch) return code;
+  const block = findBlock(code, 'seed species') ?? findBlock(code, 'species');
+  if (!block) return code;
 
-  const blockBody = blockMatch[2];
+  const blockBody = code.slice(block.bodyStart, block.bodyEnd);
   const lines = blockBody.split('\n');
   let replaced = false;
   const newLines = lines.map((l) => {
     if (!replaced && l.trim() === speciesLine) {
       replaced = true;
-      // Replace the last number on the line with the scaled value
-      const concMatch = l.match(/^(.*\s)([\d.eE+-]+)\s*$/);
-      if (concMatch) {
-        const originalConc = parseFloat(concMatch[2]);
+      const tokens = l.trim().split(/\s+/);
+      const candidate = tokens.length > 0 ? parseFloat(tokens[tokens.length - 1]) : NaN;
+      if (Number.isFinite(candidate)) {
+        const originalConc = candidate;
         const newConc = originalConc * fraction;
-        return concMatch[1] + newConc.toString();
+        return replaceNumericTail(l, newConc.toString());
       }
-      // Fallback: just set it to 0
-      return l.replace(/([\d.eE+-]+)\s*$/, (fraction === 0 ? '0' : String(fraction)));
+      return replaceNumericTail(l, fraction === 0 ? '0' : String(fraction));
     }
     return l;
   });
 
-  return code.replace(blockRegex, blockMatch[1] + newLines.join('\n') + blockMatch[3]);
+  return `${code.slice(0, block.bodyStart)}${newLines.join('\n')}${code.slice(block.bodyEnd)}`;
 }
 
 /**
@@ -244,23 +251,37 @@ function replaceSpeciesConcentration(
 function zeroSpeciesContaining(code: string, token: string): string {
   // Try "seed species" then "species"
   for (const blockName of ['seed species', 'species']) {
-    const blockRegex = new RegExp(
-      `(begin\\s+${blockName}\\s*\\n)([\\s\\S]*?)(\\nend\\s+${blockName})`,
-      'i',
-    );
-    const blockMatch = code.match(blockRegex);
-    if (!blockMatch) continue;
+    const lower = code.toLowerCase();
+    const beginToken = `begin ${blockName}`;
+    const endToken = `end ${blockName}`;
+    const beginIdx = lower.indexOf(beginToken);
+    if (beginIdx < 0) continue;
+    const beginLineEnd = code.indexOf('\n', beginIdx);
+    const bodyStart = beginLineEnd >= 0 ? beginLineEnd + 1 : code.length;
+    const bodyEnd = lower.indexOf(endToken, bodyStart);
+    if (bodyEnd < 0) continue;
 
-    const blockBody = blockMatch[2];
+    const replaceNumericTail = (line: string, nextValue: string): string => {
+      let end = line.length - 1;
+      while (end >= 0 && /\s/.test(line[end])) end--;
+      let start = end;
+      while (start >= 0 && /[0-9eE+\-.]/.test(line[start])) start--;
+      if (end >= 0 && start < end) {
+        return `${line.slice(0, start + 1)}${nextValue}`;
+      }
+      return line;
+    };
+
+    const blockBody = code.slice(bodyStart, bodyEnd);
     const lines = blockBody.split('\n');
     const newLines = lines.map((l) => {
       const trimmed = l.trim();
       if (trimmed && !trimmed.startsWith('#') && trimmed.includes(token)) {
-        return l.replace(/([\d.eE+-]+)\s*$/, '0');
+        return replaceNumericTail(l, '0');
       }
       return l;
     });
-    code = code.replace(blockRegex, blockMatch[1] + newLines.join('\n') + blockMatch[3]);
+    code = `${code.slice(0, bodyStart)}${newLines.join('\n')}${code.slice(bodyEnd)}`;
   }
   return code;
 }
