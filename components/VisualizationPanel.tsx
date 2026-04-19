@@ -60,7 +60,7 @@ const TabButton: React.FC<{
     onClick={onClick}
     className={`whitespace-nowrap py-2 px-3 border-b-2 font-medium text-sm transition-colors ${active
       ? 'border-teal-600 text-teal-600 dark:text-teal-400 dark:border-teal-400'
-      : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:text-slate-200 dark:hover:border-slate-600'
+      : 'border-transparent text-slate-500 hover:text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:hover:text-slate-200 dark:hover:border-slate-600'
       }`}
   >
     {children}
