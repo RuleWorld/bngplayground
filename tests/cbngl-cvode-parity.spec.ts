@@ -6,7 +6,7 @@ import { fileURLToPath } from 'node:url';
 
 import { describe, expect, it, vi } from 'vitest';
 
-import { generateExpandedNetwork, simulate } from '@bngplayground/engine';
+import { generateExpandedNetwork, simulate } from '../packages/engine/src/index';
 
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/utils/simulationOptions.ts';
@@ -15,8 +15,9 @@ import { findRuleHubModelPath } from './helpers/rulehub.ts';
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');
-const bng2Available = hasBNG2();
-const maybeItBng2 = bng2Available ? it : it.skip;
+const bng2PathsAtLoad = resolveBNG2Paths();
+const bng2PathAtLoad = process.env.BNG2_PATH ?? bng2PathsAtLoad.bng2pl;
+const maybeItBng2 = bng2PathAtLoad && hasBNG2() ? it : it.skip;
 
 function generateReferenceGdatWithBng2(modelPath: string): string {
   const bng2Paths = resolveBNG2Paths();
@@ -125,14 +126,14 @@ describe('cBNGL_simple CVODE parity', () => {
     const fastResult = await simulate(
       0,
       expanded,
-      { ...baseOptions, solver: 'cvode', adaptiveCvodeTuning: false, enableNativeBytecode: true },
+      { ...baseOptions, solver: 'cvode', adaptiveCvodeTuning: false, enableNativeBytecode: true } as any,
       callbacks
     );
 
     const slowResult = await simulate(
       1,
       expanded,
-      { ...baseOptions, solver: 'cvode', adaptiveCvodeTuning: false, disableNativeBytecode: true },
+      { ...baseOptions, solver: 'cvode', adaptiveCvodeTuning: false, disableNativeBytecode: true } as any,
       callbacks
     );
 

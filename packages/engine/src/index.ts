@@ -53,6 +53,20 @@ export type { PSAOptions } from './services/simulation/PSASimulator';
 export { HybridModelGenerator, generateHybridModel } from './services/simulation/HybridModelGenerator';
 export type { HybridModelOptions, HybridModelResult } from './services/simulation/HybridModelGenerator';
 export { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from './services/simulation/cvodeStiffConfig';
+export { analyzeQSSA, applyQSSAReduction } from './services/analysis/QSSAPreprocessor';
+export type { QSSAOptions, QSSAResult, QSSACandidate, QSSAReductionResult } from './services/analysis/QSSAPreprocessor';
+
+// ── Conserved Moiety Detector ──────────────────────────────────────────
+export {
+    detectConservedMoieties,
+    computeConservationConstants,
+    reduceSystem,
+} from './services/analysis/ConservedMoietyDetector';
+export type {
+    ReactionEntry,
+    ConservedMoiety,
+    ReducedSystemInfo,
+} from './services/analysis/ConservedMoietyDetector';
 
 // ── NFsim ──────────────────────────────────────────────────────────
 export { runNFsimSimulation, validateModelForNFsim } from './services/simulation/nfsim/NFsimRunner';

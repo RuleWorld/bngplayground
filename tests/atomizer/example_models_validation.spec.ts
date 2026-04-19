@@ -52,6 +52,13 @@ const EXAMPLES = (() => {
 })();
 
 describe('Example models validation (BNG->SBML->convert->parse)', () => {
+  if (EXAMPLES.length === 0) {
+    it('skips when no RuleHub example models are available', () => {
+      console.warn('[example_models_validation] No models found under', RULEHUB_EXAMPLES_DIR, '- skipping suite');
+    });
+    return;
+  }
+
   for (const model of EXAMPLES) {
     it(`${basename(model)} -> converted BNGL parsed OK`, { timeout: 180000 }, async () => {
       const temp = mkdtempSync(join(tmpdir(), 'bng-examples-'));

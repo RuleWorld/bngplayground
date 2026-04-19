@@ -53,6 +53,12 @@ import { handleCompareModels } from './handlers/compareModels.js';
 import { handleSearchStructure } from './handlers/searchStructure.js';
 import { handlePKPD } from './handlers/pkpd.js';
 import { handleMultiscaleSimulation } from './handlers/multiscaleSimulation.js';
+import { handlePerturbationScreen } from './handlers/perturbationScreen.js';
+import { handleDoseResponse } from './handlers/doseResponse.js';
+import { handleFirstPassageTime } from './handlers/firstPassageTime.js';
+import { handleLnaAnalysis } from './handlers/lnaAnalysis.js';
+import { handleReactionInformationFlow } from './handlers/reactionInformationFlow.js';
+import { handleQssaReduction } from './handlers/qssaReduction.js';
 
 const server = new Server(
   {
@@ -528,6 +534,115 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         description: 'Run multi-scale simulation combining intracellular BNGL models with cell-agent decisions and extracellular diffusion',
         inputSchema: { type: 'object', properties: { definition: { type: 'object', description: 'Multi-scale model definition' }, max_cells: { type: 'number' } }, required: ['definition'] },
       },
+      {
+        name: 'perturbation_screen',
+        description: 'Run a systematic in-silico perturbation screen (rule knockout, species knockdown, molecule knockout, or pairwise rule combinations) and rank each perturbation by its deviation from the wild-type trajectory. Returns per-target deviation scores per observable plus optional synthetic-lethal pair detection.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL model code' },
+            observables: { type: 'array', items: { type: 'string' }, minItems: 1 },
+            perturbations: { type: 'array', items: { type: 'string', enum: ['rule_knockout', 'species_knockdown', 'molecule_knockout', 'pairwise_rules'] }, minItems: 1 },
+            t_end: { type: 'number', minimum: 0 },
+            n_steps: { type: 'integer', minimum: 1 },
+            knockdown_fraction: { type: 'number', minimum: 0, maximum: 1 },
+            metric: { type: 'string', enum: ['max_absolute', 'integral_absolute', 'endpoint', 'rmsd'] },
+            max_pairwise: { type: 'integer', minimum: 1 },
+            method: { type: 'string', enum: ['ode', 'ssa', 'nf', 'default'] },
+            solver: { type: 'string', enum: ['auto', 'cvode', 'cvode_auto', 'cvode_sparse', 'cvode_jac', 'rosenbrock23', 'rk45', 'rk4', 'webgpu_rk4'] },
+          },
+          required: ['code', 'observables', 'perturbations', 't_end', 'n_steps'],
+        },
+      },
+      {
+        name: 'dose_response',
+        description: 'Steady-state dose–response analysis with Hill fitting and optional bifurcation detection. Sweeps an input parameter across a range, finds steady state at each dose, and fits the Hill equation.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            input_parameter: { type: 'string', description: 'Name of the parameter to sweep (must be declared in model.parameters)' },
+            input_min: { type: 'number' },
+            input_max: { type: 'number' },
+            observables: { type: 'array', items: { type: 'string' }, minItems: 1 },
+            n_points: { type: 'integer', minimum: 1 },
+            log_scale: { type: 'boolean' },
+            method: { type: 'string', enum: ['simulate', 'rootfind'] },
+            t_end: { type: 'number', minimum: 0 },
+            tolerance: { type: 'number', minimum: 0 },
+            detect_bifurcations: { type: 'boolean' },
+          },
+          required: ['code', 'input_parameter', 'input_min', 'input_max', 'observables'],
+        },
+      },
+      {
+        name: 'first_passage_time',
+        description: 'From an ensemble of SSA trajectories, compute first-passage-time distributions (mean, median, std, CV, percentiles) for threshold crossings on observables.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            thresholds: { type: 'array', items: { type: 'object', properties: { observable: { type: 'string' }, value: { type: 'number' }, direction: { type: 'string', enum: ['above', 'below'] }, label: { type: 'string' } }, required: ['observable', 'value', 'direction'] }, minItems: 1 },
+            n_trajectories: { type: 'integer', minimum: 1 },
+            t_end: { type: 'number', minimum: 0 },
+            n_steps: { type: 'integer', minimum: 1 },
+            seed: { type: 'integer' },
+          },
+          required: ['code', 'thresholds', 'n_trajectories', 't_end', 'n_steps'],
+        },
+      },
+      {
+        name: 'lna_analysis',
+        description: 'Linear Noise Approximation (van Kampen system-size expansion) for analytical mean and covariance estimation. Supports steady-state and time-course modes.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            mode: { type: 'string', enum: ['steady_state', 'time_course'] },
+            volume: { type: 'number', minimum: 0 },
+            t_end: { type: 'number', minimum: 0 },
+            n_steps: { type: 'integer', minimum: 1 },
+            include_covariance_matrix: { type: 'boolean' },
+          },
+          required: ['code'],
+        },
+      },
+      {
+        name: 'reaction_information_flow',
+        description: 'Information-theoretic analysis of SSA reaction firing logs: per-reaction entropy, mutual information, transfer entropy, phase locking, and empirical causal graph. Optionally compares to the structural rule graph.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            t_end: { type: 'number', minimum: 0 },
+            n_steps: { type: 'integer', minimum: 1 },
+            seed: { type: 'integer' },
+            bin_width: { type: 'number', minimum: 0 },
+            n_shuffles: { type: 'integer', minimum: 1 },
+            history_length: { type: 'integer', minimum: 1, maximum: 8 },
+            min_co_firings: { type: 'integer', minimum: 0 },
+            compare_structural_graph: { type: 'boolean' },
+            max_firing_events: { type: 'integer', minimum: 1 },
+          },
+          required: ['code', 't_end', 'n_steps'],
+        },
+      },
+      {
+        name: 'qssa_reduction',
+        description: 'Identify fast-reaction candidates and optionally apply a quasi-steady-state reduction. Mode "analyze" lists candidates; mode "apply" returns the reduced model.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            mode: { type: 'string', enum: ['analyze', 'apply'] },
+            fast_slow_threshold: { type: 'number', minimum: 0 },
+            min_fast_reactions: { type: 'integer', minimum: 1 },
+            species_to_eliminate: { type: 'array', items: { type: 'string' } },
+            generate_reduced_model: { type: 'boolean' },
+          },
+          required: ['code'],
+        },
+      },
     ],
   };
 });
@@ -589,6 +704,18 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
       return handlePKPD(args);
     case 'multiscale_simulation':
       return handleMultiscaleSimulation(args);
+    case 'perturbation_screen':
+      return handlePerturbationScreen(args);
+    case 'dose_response':
+      return handleDoseResponse(args);
+    case 'first_passage_time':
+      return handleFirstPassageTime(args);
+    case 'lna_analysis':
+      return handleLnaAnalysis(args);
+    case 'reaction_information_flow':
+      return handleReactionInformationFlow(args);
+    case 'qssa_reduction':
+      return handleQssaReduction(args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

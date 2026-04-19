@@ -34,6 +34,10 @@ export const simulateArgsSchema = z.object({
     max_reactions: positiveInt.optional(),
     max_iterations: positiveInt.optional(),
     max_agg: positiveInt.optional(),
+    record_firings: z.boolean().optional()
+        .describe('Record reaction firing events during SSA (enables reaction_information_flow downstream). Only meaningful when method="ssa".'),
+    max_firing_events: positiveInt.optional()
+        .describe('Cap on the SSA firing log size (default 100000)'),
 }).strict();
 
 export const parameterScanArgsSchema = z.object({

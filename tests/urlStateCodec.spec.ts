@@ -1,0 +1,150 @@
+/**
+ * urlStateCodec.spec.ts — round-trip + graceful-degradation tests.
+ */
+
+import { describe, it, expect } from 'vitest';
+import { encodeSessionUrl, decodeSessionUrl } from '../src/services/routing/urlStateCodec';
+import type { Session } from '../src/services/routing/sessionSchema';
+
+describe('urlStateCodec — readable form', () => {
+  it('round-trips a minimal session', () => {
+    const s: Session = { tab: 'abc-smc', modelId: 'jak_stat' };
+    const url = encodeSessionUrl(s);
+    expect(url).toBe('#/session?tab=abc-smc&model=jak_stat');
+    expect(decodeSessionUrl(url).session).toEqual(s);
+  });
+
+  it('round-trips parameters', () => {
+    const s: Session = { tab: 'parameter-scan', modelId: 'toggle', params: { kf: 0.12, kr: 0.03 } };
+    const url = encodeSessionUrl(s);
+    const { session, warnings } = decodeSessionUrl(url);
+    expect(warnings).toEqual([]);
+    expect(session.params).toEqual({ kf: 0.12, kr: 0.03 });
+  });
+
+  it('emits parameters in canonical (sorted) order', () => {
+    const url1 = encodeSessionUrl({ tab: 'time-courses', params: { kr: 1, kf: 2 } });
+    const url2 = encodeSessionUrl({ tab: 'time-courses', params: { kf: 2, kr: 1 } });
+    expect(url1).toBe(url2);
+  });
+
+  it('round-trips simulation config', () => {
+    const s: Session = {
+      tab: 'time-courses',
+      simulation: { method: 'ssa', tEnd: 100, nSteps: 1000, seed: 42 },
+    };
+    const url = encodeSessionUrl(s);
+    const decoded = decodeSessionUrl(url);
+    expect(decoded.session.simulation).toEqual({ method: 'ssa', tEnd: 100, nSteps: 1000, seed: 42 });
+  });
+
+  it('handles URLs with leading # or #/', () => {
+    const s: Session = { tab: 'bifurcation', modelId: 'toggle' };
+    const url = encodeSessionUrl(s);
+    expect(decodeSessionUrl(url).session).toEqual(s);
+    expect(decodeSessionUrl(url.replace('#/session', 'session')).session).toEqual(s);
+  });
+
+  it('omits default tab from URL', () => {
+    const url = encodeSessionUrl({ tab: 'time-courses' });
+    expect(url).toBe('#/session?');
+  });
+
+  it('recovers from malformed params without throwing', () => {
+    const { session, warnings } = decodeSessionUrl('#/session?tab=time-courses&params=kf:notanumber,,kr:0.01');
+    expect(session.params).toEqual({ kr: 0.01 });
+    expect(warnings.some((warning: string) => warning.includes('non-numeric'))).toBe(true);
+    expect(warnings.some((warning: string) => warning.includes('malformed'))).toBe(true);
+  });
+
+  it('ignores unknown tab ids and falls back to default', () => {
+    const { session, warnings } = decodeSessionUrl('#/session?tab=unknown-future-tab');
+    expect(session.tab).toBe('time-courses');
+    expect(warnings.some((warning: string) => warning.toLowerCase().includes('unknown tab'))).toBe(true);
+  });
+
+  it('URL-encodes special chars in model name', () => {
+    const s: Session = { tab: 'time-courses', modelId: 'my model/with spaces & symbols' };
+    const url = encodeSessionUrl(s);
+    expect(decodeSessionUrl(url).session.modelId).toBe(s.modelId);
+  });
+});
+
+describe('urlStateCodec — compact form', () => {
+  it('switches to compact form for embedded source', () => {
+    const big = 'begin model\n' + 'begin parameters\n' + 'k 1.0\n'.repeat(50) + 'end parameters\nend model\n';
+    const s: Session = { tab: 'time-courses', embeddedSource: big };
+    const url = encodeSessionUrl(s);
+    expect(url).toMatch(/^#\/session\?p=/);
+    const decoded = decodeSessionUrl(url);
+    expect(decoded.format).toBe('compact');
+    expect(decoded.session.embeddedSource).toBe(big);
+  });
+
+  it('forces compact form when requested', () => {
+    const s: Session = { tab: 'abc-smc' };
+    const url = encodeSessionUrl(s, { forceCompact: true });
+    expect(url).toMatch(/^#\/session\?p=/);
+    expect(decodeSessionUrl(url).session).toEqual(s);
+  });
+
+  it('uses deflate for large repetitive content and uncompressed for short content', () => {
+    const repetitive: Session = {
+      tab: 'time-courses',
+      embeddedSource: 'A'.repeat(10000),
+    };
+    const urlD = encodeSessionUrl(repetitive, { forceCompact: true });
+    expect(urlD).toMatch(/^#\/session\?p=d:/);
+
+    const short: Session = { tab: 'time-courses', embeddedSource: 'ab' };
+    const urlU = encodeSessionUrl(short, { forceCompact: true });
+    // Short payload likely expands under deflate overhead → 'u:' prefix chosen.
+    expect(urlU).toMatch(/^#\/session\?p=[du]:/);
+    expect(decodeSessionUrl(urlU).session.embeddedSource).toBe('ab');
+  });
+
+  it('round-trips large session including params + source', () => {
+    const params = Object.fromEntries(
+      Array.from({ length: 50 }, (_, i) => [`k_${i}`, Math.random() * 10]),
+    );
+    const s: Session = {
+      tab: 'abc-smc',
+      modelId: 'fceri_gamma2',
+      params,
+      simulation: { method: 'ode', tEnd: 100, nSteps: 1000 },
+      embeddedSource: 'begin model\n' + 'line\n'.repeat(200) + 'end model\n',
+    };
+    const url = encodeSessionUrl(s);
+    const { session, warnings } = decodeSessionUrl(url);
+    expect(warnings).toEqual([]);
+    expect(session.tab).toBe('abc-smc');
+    expect(Object.keys(session.params ?? {}).length).toBe(50);
+  });
+});
+
+describe('urlStateCodec — pathological inputs', () => {
+  it('returns default session for empty URL', () => {
+    const { session, format } = decodeSessionUrl('');
+    expect(format).toBe('default');
+    expect(session.tab).toBe('time-courses');
+  });
+
+  it('handles truncated compact payload gracefully', () => {
+    const { session, warnings } = decodeSessionUrl('#/session?p=d:garbage');
+    expect(session.tab).toBe('time-courses');
+    expect(warnings.length).toBeGreaterThan(0);
+  });
+
+  it('rejects schema-invalid payload', () => {
+    // Build a fake JSON-ish string and manually encode it in compact form.
+    const badJson = JSON.stringify({ tab: 42 });  // tab must be string
+    const buf = new TextEncoder().encode(badJson);
+    const b64 =
+      typeof Buffer !== 'undefined'
+        ? Buffer.from(buf).toString('base64').replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '')
+        : btoa(String.fromCharCode(...buf)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const { session, warnings } = decodeSessionUrl(`#/session?p=u:${b64}`);
+    expect(session.tab).toBe('time-courses');
+    expect(warnings.some((warning: string) => warning.includes('schema'))).toBe(true);
+  });
+});

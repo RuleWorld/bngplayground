@@ -47,11 +47,18 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
       };
     }
 
+    // Build initial state from seed species concentrations
+    const initialState = new Float64Array(
+      (expandedModel.species ?? []).map(
+        (s: any) => s?.initialConcentration ?? s?.initialAmount ?? 0
+      )
+    );
+
     // Run continuation
     const result = await engine.continuation({
       nSpecies,
       rhsFn: rhsFn as any,
-      initialState: new Float64Array(nSpecies),
+      initialState,
       parameterStart: parsedArgs.start_value,
       parameterEnd: parsedArgs.end_value,
       stepSize: (parsedArgs.end_value - parsedArgs.start_value) / maxSteps,
