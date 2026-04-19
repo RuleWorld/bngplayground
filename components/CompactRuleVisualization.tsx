@@ -8,7 +8,7 @@ const operationStyles: Record<RuleOperation['type'], string> = {
   unbind: 'bg-rose-500 text-white',
   state_change: 'bg-sky-500 text-white',
   add_molecule: 'bg-violet-500 text-white',
-  remove_molecule: 'bg-slate-50 dark:bg-slate-900/50 text-white',
+  remove_molecule: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100',
 };
 
 const operationLabel: Record<RuleOperation['type'], string> = {

@@ -159,7 +159,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
   if (!model) {
     return (
-      <div className="text-slate-500 dark:text-slate-400 p-4">
+      <div className="text-slate-500 dark:text-slate-300 p-4">
         Parse a model to run temporal information-theoretic analysis.
       </div>
     );
@@ -196,7 +196,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
             <Button variant="danger" onClick={onCancelSimulation}>Cancel</Button>
           )}
           {firingLog && (
-            <span className="text-xs text-slate-500 dark:text-slate-400">
+            <span className="text-xs text-slate-500 dark:text-slate-300">
               {firingLog.length.toLocaleString()} firing events recorded
             </span>
           )}
@@ -237,7 +237,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Reaction Firing Piano Roll
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+          <p className="text-xs text-slate-500 dark:text-slate-300 mb-3">
             Each row is a reaction channel. Vertical ticks mark individual firing events.
             <b> Look for:</b> dense bands (high activity), gaps (quiescent periods), and
             correlated patterns between rows (reactions that fire together).
@@ -324,7 +324,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Mutual Information Between Reactions
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          <p className="text-xs text-slate-500 dark:text-slate-300 mb-4">
             Mutual information (MI) measures how much knowing one reaction's firing pattern tells you about another's.
             <b> Normalized MI</b> ranges from 0 (independent) to 1 (perfectly correlated).
             <b> p-value</b> tests significance via shuffle — values below 0.05 (*) indicate the coupling is unlikely due to chance.
@@ -394,7 +394,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Transfer Entropy — Directed Information Flow
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          <p className="text-xs text-slate-500 dark:text-slate-300 mb-4">
             Transfer entropy (TE) measures <b>directional causality</b>: how much knowing reaction A's past reduces
             uncertainty about reaction B's future. <b>Net Flow</b> = TE(A→B) − TE(B→A).
             Positive (green) means A drives B; negative (red) means B drives A.
@@ -452,7 +452,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Structural vs. Empirical Causal Graph
           </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+          <p className="text-xs text-slate-500 dark:text-slate-300 mb-4">
             Compares causality encoded in your BNGL rules (structural) with causality discovered from the SSA dynamics (empirical).
             <b> Concordant</b> = both agree. <b>Structural Only</b> = rule exists but doesn't matter dynamically.
             <b className="text-amber-600"> Emergent</b> = causal coupling discovered by dynamics that isn't in any single rule — <i>the most scientifically interesting category</i>.
@@ -507,7 +507,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
       {/* Empty state */}
       {!firingLog && !isSimulating && (
-        <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-300 text-sm">
           Run an SSA simulation with firing log to begin temporal analysis.
         </div>
       )}

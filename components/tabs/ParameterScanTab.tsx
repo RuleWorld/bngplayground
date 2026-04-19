@@ -911,7 +911,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
                 );
               })}
             </Select>
-            <div className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="text-xs text-slate-500 dark:text-slate-300">
               {parameterTypeMap[parameter1] === 'species'
                 ? `Numbers correspond to the initial concentration/amount of the selected species. This value is injected directly into the simulator; changing the underlying parameter (${speciesMap.get(parameter1)?.initialExpression || parameter1}) outside of the scan UI will not automatically update the species.`
                 : 'Numbers correspond to the value of the selected model parameter.'}
@@ -947,7 +947,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
                   );
                 })}
               </Select>
-              <div className="text-xs text-slate-500 dark:text-slate-400">
+              <div className="text-xs text-slate-500 dark:text-slate-300">
                 {parameterTypeMap[parameter2] === 'species'
                   ? `Numbers correspond to the initial concentration/amount of the selected species. This value is injected directly into the simulator; changing the underlying parameter (${speciesMap.get(parameter2)?.initialExpression || parameter2}) outside of the scan UI will not automatically update the species.`
                   : 'Numbers correspond to the value of the selected model parameter.'}
@@ -999,7 +999,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
         </div>
 
         <div className="flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400">
+          <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
             <span>Select an observable:</span>
             <Select
               value={selectedObservable}
@@ -1040,7 +1040,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
             <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
               🚀 Neural ODE Surrogate (Beta)
             </h4>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-xs text-slate-500 dark:text-slate-300 mt-1">
               Train a neural network to approximate ODE simulations for 100x faster parameter sweeps
             </p>
           </div>
@@ -1160,7 +1160,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
 
         {surrogateStatus === 'training' && (
           <div className="w-full">
-            <div className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+            <div className="text-xs text-slate-500 dark:text-slate-300 mb-1">
               {surrogateProgress.phase === 'data'
                 ? `Generating training data: ${surrogateProgress.current} / ${surrogateProgress.total}`
                 : `Training surrogate: Epoch ${surrogateProgress.current} / ${surrogateProgress.total}`}
@@ -1177,15 +1177,15 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
         {surrogateMetrics && surrogateStatus === 'ready' && (
           <div className="grid grid-cols-3 gap-4 text-center">
             <div className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded p-2">
-              <div className="text-xs text-slate-500 dark:text-slate-400">MSE</div>
+              <div className="text-xs text-slate-500 dark:text-slate-300">MSE</div>
               <div className="text-sm font-medium">{surrogateMetrics.mse.toExponential(2)}</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded p-2">
-              <div className="text-xs text-slate-500 dark:text-slate-400">MAE</div>
+              <div className="text-xs text-slate-500 dark:text-slate-300">MAE</div>
               <div className="text-sm font-medium">{surrogateMetrics.mae.toExponential(2)}</div>
             </div>
             <div className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded p-2">
-              <div className="text-xs text-slate-500 dark:text-slate-400">Mean R²</div>
+              <div className="text-xs text-slate-500 dark:text-slate-300">Mean R²</div>
               <div className="text-sm font-medium">
                 {(surrogateMetrics.r2.reduce((a, b) => a + b, 0) / surrogateMetrics.r2.length).toFixed(3)}
               </div>
@@ -1193,7 +1193,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
           </div>
         )}
 
-        <div className="text-xs text-slate-500 dark:text-slate-400">
+        <div className="text-xs text-slate-500 dark:text-slate-300">
           💡 Tip: Train a surrogate once, then run unlimited parameter sweeps instantly.
           Best for exploring large parameter spaces.
         </div>
@@ -1233,7 +1233,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
       )}
 
       {guardMessage ? (
-        <div className="text-slate-500 dark:text-slate-400">{guardMessage}</div>
+        <div className="text-slate-500 dark:text-slate-300">{guardMessage}</div>
       ) : oneDResult && oneDResult.values.length > 0 && (
         <Card className="space-y-6">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">1D Scan Results</h3>
@@ -1264,10 +1264,10 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
               />
             </div>
           ) : (
-            <p className="text-sm text-slate-500 dark:text-slate-400">Select an observable to visualize the scan.</p>
+            <p className="text-sm text-slate-500 dark:text-slate-300">Select an observable to visualize the scan.</p>
           )}
 
-          <div className="text-center text-xs text-slate-500 dark:text-slate-400">
+          <div className="text-center text-xs text-slate-500 dark:text-slate-300">
             Drag on the chart to zoom. Double-click to reset view.
           </div>
 
@@ -1297,7 +1297,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
         <Card className="space-y-6">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">2D Scan Heatmap</h3>
           <div>
-            <div className="mb-3 text-sm text-slate-500 dark:text-slate-400">Heatmap of {selectedObservable} across {twoDResult.parameterNames[0]} and {twoDResult.parameterNames[1]}</div>
+            <div className="mb-3 text-sm text-slate-500 dark:text-slate-300">Heatmap of {selectedObservable} across {twoDResult.parameterNames[0]} and {twoDResult.parameterNames[1]}</div>
             <div className="w-full h-[520px]">
               <HeatmapChart
                 data={heatmapPoints}
@@ -1307,7 +1307,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
               />
             </div>
           </div>
-          <div className="text-xs text-slate-500 dark:text-slate-400">
+          <div className="text-xs text-slate-500 dark:text-slate-300">
             Range: {formatNumber(heatmapData.min)} – {formatNumber(heatmapData.max)} ({selectedObservable})
           </div>
           <div className="flex gap-2 justify-end">

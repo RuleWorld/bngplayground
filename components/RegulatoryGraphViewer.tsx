@@ -197,7 +197,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
             width: 'label',
             height: 'label',
             padding: '8px',
-            color: '#000000',
+            color: theme === 'dark' ? '#F8FAFC' : '#111827',
             'text-valign': 'center',
             'text-halign': 'center',
             label: 'data(label)',
@@ -214,7 +214,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
             width: 'label',
             height: 'label',
             padding: '8px',
-            color: '#000000',
+            color: theme === 'dark' ? '#F8FAFC' : '#111827',
             'text-valign': 'center',
             'text-halign': 'center',
             label: 'data(label)',
@@ -235,16 +235,16 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
         {
           selector: 'edge[type = "reactant"]',
           style: {
-            'line-color': '#000000', // BNG yEd black
-            'target-arrow-color': '#000000',
+            'line-color': theme === 'dark' ? '#cbd5e1' : '#000000', // BNG yEd black
+            'target-arrow-color': theme === 'dark' ? '#cbd5e1' : '#000000',
             'target-arrow-shape': 'triangle', // BNG 'standard'
           },
         },
         {
           selector: 'edge[type = "product"]',
           style: {
-            'line-color': '#000000', // BNG yEd black
-            'target-arrow-color': '#000000',
+            'line-color': theme === 'dark' ? '#cbd5e1' : '#000000', // BNG yEd black
+            'target-arrow-color': theme === 'dark' ? '#cbd5e1' : '#000000',
             'target-arrow-shape': 'triangle', // BNG 'standard'
           },
         },

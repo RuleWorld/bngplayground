@@ -645,7 +645,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
     if (active && payload && payload.length) {
       return (
         <div className="bg-white/95 dark:bg-slate-900/95 p-3 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl backdrop-blur-sm min-w-[160px] text-xs">
-          <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
+          <div className="text-[10px] font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
             {xAxisLabel}: {typeof label === 'number' ? formatAxisValue(label, 'x') : label}
           </div>
           <div className="flex flex-col gap-1.5 max-h-64 overflow-y-auto pr-2 custom-scrollbar">

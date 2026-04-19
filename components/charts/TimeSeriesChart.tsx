@@ -366,7 +366,7 @@ const CustomTooltip = ({ active, payload, label, xAxisLabel, xAxisScale, yAxisSc
     
     return (
       <div className="bg-white/95 dark:bg-slate-900/95 p-3 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl backdrop-blur-sm min-w-[160px]">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
+        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
           {xAxisLabel}: {formatValue(displayLabel)}
         </div>
         <div className="space-y-1.5">

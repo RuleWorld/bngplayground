@@ -277,7 +277,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
         width: 'label',
         height: 'label',
         'min-width': 20,
-        'min-height': 20,
+            color: textColor,
         shape: 'ellipse',
         'z-index': 25,
         'z-index-compare': 'manual',

@@ -184,7 +184,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
             'text-halign': 'center',
             'text-valign': 'center', // Center labels inside nodes
             'font-size': '14px',
-            color: '#000000', // Black text since backgrounds are light
+            color: colors.textColor,
             'text-wrap': 'none', // DO NOT WRAP OR CLIP
             'text-max-width': '10000px', // Prevent internal Cytoscape word-wrap checks from truncating width measurements at punctuation like dots
             padding: '10px',
