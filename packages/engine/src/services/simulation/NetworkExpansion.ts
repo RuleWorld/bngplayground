@@ -181,7 +181,7 @@ export async function generateExpandedNetwork(
     // Reference: BNG2 RxnRule.pm – local function expansion.
     interface LocalFnDef {
         contextVar: string;
-        observablePatterns: Record<string, string>; // obsName -> pattern string
+        observablePatterns: Array<{ name: string; pattern: string }>;
         bodyTemplate: string; // expression with obsName(var) refs replaced by just obsName
     }
     const localFunctionMap = new Map<string, LocalFnDef>();
@@ -190,7 +190,7 @@ export async function generateExpandedNetwork(
             const contextVar = fn.args[0];
             const escapedCtx = contextVar.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
             const obsCallRe = new RegExp(`\\b([A-Za-z_][A-Za-z0-9_]*)\\s*\\(\\s*${escapedCtx}\\s*\\)`, 'g');
-            const observablePatterns: Record<string, string> = {};
+            const observablePatterns: Array<{ name: string; pattern: string }> = [];
             let bodyTemplate = fn.expression;
             let callMatch: RegExpExecArray | null;
             // Reset lastIndex for global regex on each function
@@ -202,12 +202,12 @@ export async function generateExpandedNetwork(
                     if (!isSafeObjectKey(obsName)) {
                         continue;
                     }
-                    observablePatterns[obsName] = obs.pattern;
+                    observablePatterns.push({ name: obsName, pattern: obs.pattern });
                     // strip the "(var)" from body template so result is just obsName
                     bodyTemplate = bodyTemplate.replace(callMatch[0], obsName);
                 }
             }
-            if (Object.keys(observablePatterns).length > 0) {
+            if (observablePatterns.length > 0) {
                 localFunctionMap.set(fn.name, { contextVar, observablePatterns, bodyTemplate });
             }
         }

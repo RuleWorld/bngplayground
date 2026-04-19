@@ -461,11 +461,13 @@ export class NetworkGenerator {
    */
   private evaluateLocalFunctionForSpecies(
     reactantGraph: SpeciesGraph,
-    localFnCtx: { observablePatterns: Record<string, string>; bodyTemplate: string }
+    localFnCtx: { observablePatterns: Array<{ name: string; pattern: string }>; bodyTemplate: string }
   ): number | null {
     try {
-      const obsValues: Record<string, number> = {};
-      for (const [obsName, obsPat] of Object.entries(localFnCtx.observablePatterns)) {
+      const obsValues = new Map<string, number>();
+      for (const obsEntry of localFnCtx.observablePatterns) {
+        const obsName = obsEntry.name;
+        const obsPat = obsEntry.pattern;
         // Parse the observable pattern and count how many times it embeds in the reactant species.
         const patGraph = BNGLParser.parseSpeciesGraph(obsPat);
         const maps = GraphMatcher.findAllMaps(patGraph, reactantGraph, {
@@ -477,12 +479,12 @@ export class NetworkGenerator {
           const d = countEmbeddingDegeneracy(patGraph, reactantGraph, map);
           total += Number.isFinite(d) && d > 0 ? d : 1;
         }
-        obsValues[obsName] = total;
+        obsValues.set(obsName, total);
       }
 
       // Substitute observable counts into the function body template.
       let localExpr = localFnCtx.bodyTemplate;
-      for (const [obsName, obsVal] of Object.entries(obsValues)) {
+      for (const [obsName, obsVal] of obsValues.entries()) {
         const escapedName = obsName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         localExpr = localExpr.replace(new RegExp(`\\b${escapedName}\\b`, 'g'), String(obsVal));
       }
@@ -1848,7 +1850,7 @@ export class NetworkGenerator {
       // BNG2 generates per-reaction constant parameters __R1_local1, __R1_local2, etc.
       // We replicate this by computing the per-species rate now, at network-generation time.
       const localFnCtx = (rule as any).localFunctionContext as {
-        observablePatterns: Record<string, string>;
+        observablePatterns: Array<{ name: string; pattern: string }>;
         bodyTemplate: string;
       } | undefined;
       if (localFnCtx) {

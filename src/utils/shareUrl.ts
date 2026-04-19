@@ -57,8 +57,8 @@ export function generateShareUrl(
   return url.toString();
 }
 
-function parseHashParams(hash: string): Record<string, string> {
-  const params: Record<string, string> = Object.create(null) as Record<string, string>;
+function parseHashParams(hash: string): { model?: string; name?: string; modelId?: string } {
+  const params: { model?: string; name?: string; modelId?: string } = {};
   const parts = hash.split('&');
   for (const part of parts) {
     if (!part) continue;
@@ -66,9 +66,10 @@ function parseHashParams(hash: string): Record<string, string> {
     const rawValue = rest.join('=');
     if (!rawKey) continue;
     const key = decodeURIComponent(rawKey);
-    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     const value = decodeURIComponent(rawValue ?? '');
-    params[key] = value;
+    if (key === 'model') params.model = value;
+    else if (key === 'name') params.name = value;
+    else if (key === 'modelId') params.modelId = value;
   }
   return params;
 }
