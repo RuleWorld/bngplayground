@@ -18,8 +18,9 @@ export class NFsimResultAdapter {
     const parsed = typeof gdat === 'string' ? parseGdat(gdat) : gdat;
     const headers = normalizeHeaders(parsed.headers, model);
     const data = parsed.data.map((row) => {
-      const mapped: Record<string, number> = {};
+      const mapped: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const header of headers) {
+        if (header === '__proto__' || header === 'constructor' || header === 'prototype') continue;
         const value = row[header] ?? row[parsed.headers[headers.indexOf(header)]];
         mapped[header] = typeof value === 'number' ? value : Number(value ?? 0);
       }
@@ -28,8 +29,10 @@ export class NFsimResultAdapter {
 
     const speciesHeaders = model.species.map((s) => s.name);
     const speciesData = data.map((row) => {
-      const sp: Record<string, number> = { time: row.time ?? 0 };
+      const sp: Record<string, number> = Object.create(null) as Record<string, number>;
+      sp.time = row.time ?? 0;
       for (const name of speciesHeaders) {
+        if (name === '__proto__' || name === 'constructor' || name === 'prototype') continue;
         sp[name] = row[name] ?? 0;
       }
       return sp;

@@ -770,20 +770,24 @@ export async function simulate(
       }
     }
 
-    const dataBySuffix: Record<string, Record<string, number>[]> = {};
-    const speciesDataBySuffix: Record<string, Record<string, number>[]> = {};
+    const dataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
+    const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const includeSpeciesData = options.includeSpeciesData ?? true;
 
     const getSuffixDataArray = (suffix?: string) => {
       const candidateKey = suffix ?? '__default__';
-      const key = isSafeObjectKey(candidateKey) ? candidateKey : '__default__';
+      const key = candidateKey === '__proto__' || candidateKey === 'constructor' || candidateKey === 'prototype'
+        ? '__default__'
+        : candidateKey;
       if (!dataBySuffix[key]) dataBySuffix[key] = [];
       return dataBySuffix[key];
     };
 
     const getSuffixSpeciesDataArray = (suffix?: string) => {
       const candidateKey = suffix ?? '__default__';
-      const key = isSafeObjectKey(candidateKey) ? candidateKey : '__default__';
+      const key = candidateKey === '__proto__' || candidateKey === 'constructor' || candidateKey === 'prototype'
+        ? '__default__'
+        : candidateKey;
       if (!speciesDataBySuffix[key]) speciesDataBySuffix[key] = [];
       return speciesDataBySuffix[key];
     };
@@ -802,9 +806,11 @@ export async function simulate(
 
     const observableNames = concreteObservables.map((obs) => obs.name);
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
-    const observableValuesRecord = Object.fromEntries(
-      observableNames.map((name) => [name, 0])
-    ) as Record<string, number>;
+    const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
+    for (const name of observableNames) {
+      if (name === '__proto__' || name === 'constructor' || name === 'prototype') continue;
+      observableValuesRecord[name] = 0;
+    }
 
     // --- Observable evaluation strategy selection ---
     // For large models (100+ observables), use CSR sparse evaluation to avoid
@@ -888,7 +894,7 @@ export async function simulate(
       const buffer = evaluateObservablesIntoBuffer(currentState);
       for (let i = 0; i < observableNames.length; i++) {
         const name = observableNames[i];
-        if (isSafeObjectKey(name)) {
+        if (name !== '__proto__' && name !== 'constructor' && name !== 'prototype') {
           observableValuesRecord[name] = buffer[i];
         }
       }
@@ -896,11 +902,11 @@ export async function simulate(
     };
 
     const evaluateFunctionsForOutput = (currentState: Float64Array, observableValues: Record<string, number>) => {
-      if (!shouldPrintFunctions) return {} as Record<string, number>;
-      const results: Record<string, number> = {};
+      if (!shouldPrintFunctions) return Object.create(null) as Record<string, number>;
+      const results: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const f of model.functions || []) {
         if (f.args && f.args.length > 0) continue;
-        if (!isSafeObjectKey(f.name)) continue;
+        if (f.name === '__proto__' || f.name === 'constructor' || f.name === 'prototype') continue;
         try {
           results[f.name] = evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions);
         } catch {
@@ -974,7 +980,7 @@ export async function simulate(
       for (const change of parameterChanges) {
 
         if (change.afterPhaseIndex === targetPhaseIdx - 1) {
-          if (!isSafeObjectKey(change.parameter)) {
+          if (change.parameter === '__proto__' || change.parameter === 'constructor' || change.parameter === 'prototype') {
             continue;
           }
           const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
@@ -1014,7 +1020,7 @@ export async function simulate(
           let anyChanged = false;
           for (const name in model.paramExpressions) {
             if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
-                if (!isSafeObjectKey(name)) {
+                if (name === '__proto__' || name === 'constructor' || name === 'prototype') {
                   continue;
                 }
               const expr = model.paramExpressions[name];
@@ -1779,22 +1785,24 @@ export async function simulate(
         // creating { ...context, ...rxnContext } per reaction.
         // Eliminates ~5M object allocations per simulation.
         // ---------------------------------------------------------------
-        const rateContext: Record<string, number> = {};
+        const rateContext: Record<string, number> = Object.create(null) as Record<string, number>;
         // Initialize with parameters
         for (let i = 0; i < parameterNames.length; i++) {
-          rateContext[parameterNames[i]] = model.parameters[parameterNames[i]];
+          const parameterName = parameterNames[i];
+          if (parameterName === '__proto__' || parameterName === 'constructor' || parameterName === 'prototype') continue;
+          rateContext[parameterName] = model.parameters[parameterName];
         }
         // Initialize observable slots
         for (let i = 0; i < observableNames.length; i++) {
           const observableName = observableNames[i];
-          if (isSafeObjectKey(observableName)) {
+          if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
             rateContext[observableName] = 0;
           }
         }
         // Initialize species name slots
         for (let k = 0; k < model.species.length; k++) {
           const speciesName = model.species[k].name;
-          if (isSafeObjectKey(speciesName)) {
+          if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
             rateContext[speciesName] = 0;
           }
         }
@@ -1810,14 +1818,14 @@ export async function simulate(
           const obsValues = evaluateObservablesFast(yIn);
           for (let i = 0; i < observableNames.length; i++) {
             const observableName = observableNames[i];
-            if (isSafeObjectKey(observableName)) {
+            if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
               rateContext[observableName] = obsValues[observableName];
             }
           }
           // Update species values in the mutable context (in-place)
           for (let k = 0; k < model.species.length; k++) {
             const speciesName = model.species[k].name;
-            if (isSafeObjectKey(speciesName)) {
+            if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
               rateContext[speciesName] = odeUsesAmountState
                 ? yIn[k]
                 : (yIn[k] * speciesVolumes[k]);
@@ -2855,9 +2863,9 @@ export async function simulate(
           // Add NFsim results to output data
           if (recordThisPhase) {
             for (const row of nfsimResults.data) {
-              const adjustedRow: Record<string, number> = {};
+              const adjustedRow: Record<string, number> = Object.create(null) as Record<string, number>;
               for (const [key, value] of Object.entries(row)) {
-                if (!isSafeObjectKey(key)) {
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
                   continue;
                 }
                 if (key === 'time') {

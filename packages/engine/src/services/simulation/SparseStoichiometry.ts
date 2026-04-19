@@ -118,10 +118,16 @@ export function buildCSRStoichiometry(
     }
     entries.sort((a, b) => a[0] - b[0]);
     for (const [col, val] of entries) {
+      if (pos >= nnz) {
+        throw new Error('[SparseStoichiometry] CSR position overflow while building matrix');
+      }
       colIdx[pos] = col;
       values[pos] = val;
       pos++;
     }
+  }
+  if (numSpecies >= rowPtr.length) {
+    throw new Error('[SparseStoichiometry] Invalid rowPtr terminal index');
   }
   rowPtr[numSpecies] = pos;
 

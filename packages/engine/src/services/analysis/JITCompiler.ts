@@ -831,7 +831,7 @@ export class JITCompiler {
             // For parity robustness, ignore invalid keys instead of failing the whole JIT pass.
             const allParamKeys = Object.keys(parameters || {});
             const paramKeys = allParamKeys.filter((key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key));
-            const safeParameters: Record<string, number> = {};
+            const safeParameters: Record<string, number> = Object.create(null) as Record<string, number>;
             for (const key of paramKeys) {
                 safeParameters[key] = (parameters as Record<string, number>)[key];
             }

@@ -58,7 +58,7 @@ export function generateShareUrl(
 }
 
 function parseHashParams(hash: string): Record<string, string> {
-  const params: Record<string, string> = {};
+  const params: Record<string, string> = Object.create(null) as Record<string, string>;
   const parts = hash.split('&');
   for (const part of parts) {
     if (!part) continue;
@@ -66,6 +66,7 @@ function parseHashParams(hash: string): Record<string, string> {
     const rawValue = rest.join('=');
     if (!rawKey) continue;
     const key = decodeURIComponent(rawKey);
+    if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
     const value = decodeURIComponent(rawValue ?? '');
     params[key] = value;
   }

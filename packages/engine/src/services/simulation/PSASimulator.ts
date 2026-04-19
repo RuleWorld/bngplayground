@@ -402,9 +402,9 @@ export class PSASimulator {
     }
 
     const evaluateObservables = (currentState: Float64Array): Record<string, number> => {
-      const row: Record<string, number> = {};
+      const row: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const obs of model.observables) {
-        if (!isSafeObjectKey(obs.name)) continue;
+        if (obs.name === '__proto__' || obs.name === 'constructor' || obs.name === 'prototype') continue;
         const info = observableIndices.get(obs.name);
         if (info) {
           let sum = 0;

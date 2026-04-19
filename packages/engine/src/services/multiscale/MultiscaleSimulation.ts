@@ -365,13 +365,15 @@ export function multiscaleSimulation(
           break;
         }
         case 'secrete': {
-          if (isSafeObjectKey(action.species)) {
+          if (action.species !== '__proto__' && action.species !== 'constructor' && action.species !== 'prototype') {
             cell.secretionRates[action.species] = action.rate;
           }
           break;
         }
         case 'stop_secrete': {
-          delete cell.secretionRates[action.species];
+          if (action.species !== '__proto__' && action.species !== 'constructor' && action.species !== 'prototype') {
+            delete cell.secretionRates[action.species];
+          }
           break;
         }
         case 'change_type': {
@@ -380,7 +382,7 @@ export function multiscaleSimulation(
         }
         case 'set_parameter': {
           // Store as observable for simplicity
-          if (isSafeObjectKey(action.parameter)) {
+          if (action.parameter !== '__proto__' && action.parameter !== 'constructor' && action.parameter !== 'prototype') {
             cell.observables[action.parameter] = action.value;
           }
           break;
