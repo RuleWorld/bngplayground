@@ -333,13 +333,13 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mr-2">Scale</span>
           <button
             onClick={() => { setXAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
-            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             X: {xAxisScale.toUpperCase()}
           </button>
           <button
             onClick={() => { setYAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
-            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             Y: {yAxisScale.toUpperCase()}
           </button>
@@ -349,7 +349,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
           {zoomHistory.length > 0 && (
             <button
               onClick={() => setZoomHistory([])}
-              className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 underline underline-offset-2"
+              className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 underline underline-offset-2"
             >
               Reset View
             </button>

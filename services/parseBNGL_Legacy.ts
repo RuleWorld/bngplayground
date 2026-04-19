@@ -13,7 +13,7 @@
  */
 
 import type { BNGLModel } from '../types.ts';
-import { BNGLParser } from '@bngplayground/engine';
+import { BNGLParser, SafeExpressionEvaluator } from '@bngplayground/engine';
 
 // Runtime deprecation warning - fires once on first use
 let _deprecationWarned = false;
@@ -346,8 +346,12 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
           evalExpr = evalExpr.replace(new RegExp(`\\b${escaped}\\b`, 'g'), resolvedValue.toString());
         }
         
+        evalExpr = evalExpr.replace(/\^/g, '**');
+        evalExpr = evalExpr.replace(/\b_pi\b/g, String(Math.PI));
+        evalExpr = evalExpr.replace(/\b_e\b/g, String(Math.E));
+
         try {
-          const value = new Function(`return ${evalExpr}`)();
+          const value = SafeExpressionEvaluator.evaluateConstant(evalExpr);
           if (typeof value === 'number' && !isNaN(value) && isFinite(value)) {
             resolvedParams[name] = value;
             logDebug('[parseBNGL] parameter', name, value);

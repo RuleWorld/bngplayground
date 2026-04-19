@@ -349,7 +349,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
     <div className="flex flex-col h-full min-h-0 gap-2">
       <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-1">
-          <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Layout:</span>
+          <span className="text-xs text-slate-500 dark:text-slate-300 mr-1">Layout:</span>
           <Button variant={activeLayout === 'hierarchical' ? 'primary' : 'subtle'} onClick={() => runLayout('hierarchical')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Hierarchical (yED-like)">
             {isLayoutRunning && activeLayout === 'hierarchical' ? <LoadingSpinner className="w-3 h-3" /> : '↓ Hier'}
           </Button>
@@ -373,7 +373,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
           <Button variant="subtle" onClick={() => cyRef.current?.fit()} className="text-xs h-6 px-2">Fit</Button>
           <Button variant="subtle" onClick={() => runLayout()} disabled={isLayoutRunning} className="text-xs h-6 px-2">Redo</Button>
           <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
-          <span className="text-xs text-slate-500 dark:text-slate-400">Export:</span>
+          <span className="text-xs text-slate-500 dark:text-slate-300">Export:</span>
           <Button variant="subtle" onClick={() => {
             const blob = cyRef.current?.png({ output: 'blob', scale: 2, full: true }) as Blob;
             const url = URL.createObjectURL(blob);
@@ -392,14 +392,14 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
         {!layoutDone && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white dark:bg-slate-900/70 rounded-lg">
             <LoadingSpinner className="w-8 h-8 text-[#CC99FF]" />
-            <span className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-400 animate-pulse">Computing Layout...</span>
+            <span className="mt-3 text-sm font-medium text-slate-600 dark:text-slate-300 animate-pulse">Computing Layout...</span>
           </div>
         )}
         <div ref={containerRef} className={`h-full w-full rounded-lg transition-opacity duration-300 ${layoutDone ? 'opacity-100' : 'opacity-0'}`} />
       </div>
 
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">
-        <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Legend</h4>
+        <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase">Legend</h4>
         <div className="flex items-center gap-4 text-xs flex-wrap">
           <div className="flex items-center gap-2">
             <div className="w-4 h-3 rounded-full bg-[#CC99FF] border border-[#999999]" />

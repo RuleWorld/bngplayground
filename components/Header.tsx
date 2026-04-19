@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({
                     onClick={() => onViewModeChange('code')}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'code'
                       ? 'bg-slate-100 dark:bg-slate-800/50 text-teal-700 dark:text-teal-400'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                      : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                       }`}
                   >
                     Code
@@ -90,7 +90,7 @@ export const Header: React.FC<HeaderProps> = ({
                     onClick={() => onViewModeChange('design')}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'design'
                       ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                      : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                       }`}
                   >
                     Designer Mode
@@ -115,7 +115,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Help Dropdown */}
               <Dropdown
                 trigger={
-                  <button className="p-2 text-slate-500 dark:text-slate-400 hover:text-slate-700
+                  <button className="p-2 text-slate-500 dark:text-slate-300 hover:text-slate-700
                                      dark:hover:text-slate-200 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700 rounded transition-colors"
                     title="Help & Resources"
                     aria-label="Help & Resources">
@@ -214,7 +214,7 @@ export const Header: React.FC<HeaderProps> = ({
               {/* Theme Toggle */}
               <button
                 onClick={toggleTheme}
-                className="p-2 rounded text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700 hover:text-amber-500 transition-colors"
+                className="p-2 rounded text-slate-500 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-700 hover:text-amber-500 transition-colors"
                 aria-label="Toggle theme"
               >
                 {theme === 'light' ? <MoonIcon className="w-5 h-5" /> : <SunIcon className="w-5 h-5" />}

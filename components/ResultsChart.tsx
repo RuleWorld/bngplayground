@@ -828,13 +828,13 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
         <div className="flex items-center gap-2">
           <div className="inline-flex gap-1 p-0.5 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 rounded-md">
             <button
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'all' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'all' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
               onClick={() => setFilterMode('all')}
             >
               All
             </button>
             <button
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'search' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-200' : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300'}`}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'search' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
               onClick={() => setFilterMode('search')}
             >
               Search
@@ -851,17 +851,17 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
           
           {/* Scale toggles */}
           <div className="flex items-center gap-1 ml-2 pl-2 border-l border-slate-200 dark:border-slate-700 dark:border-slate-700">
-            <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Scale:</span>
+            <span className="text-xs text-slate-500 dark:text-slate-300 mr-1">Scale:</span>
             <button
               onClick={handleXScaleChange}
-              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               title="Toggle X-axis scale (resets zoom)"
             >
               X: {xAxisScale === 'log' ? 'Log' : 'Linear'}
             </button>
             <button
               onClick={handleYScaleChange}
-              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               title="Toggle Y-axis scale (resets zoom)"
             >
               Y: {yAxisScale === 'log' ? 'Log' : 'Linear'}
@@ -873,7 +873,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
           {/* Reset View Button */}
           <button
             onClick={() => { setZoomHistory([]); setSelection(null); onVisibleSpeciesChange(new Set(speciesToPlot)); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 transition-colors"
+            className="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 transition-colors"
           >
             Reset View
           </button>

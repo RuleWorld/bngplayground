@@ -254,8 +254,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               onClick={() => setNetworkViewMode('regulatory')}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'regulatory'
-                ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                  ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
+                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                 }`}
             >
               Regulatory
@@ -264,7 +264,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onClick={() => setNetworkViewMode('contact')}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'contact'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                 }`}
             >
               Contact Map
@@ -274,7 +274,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onClick={() => setNetworkViewMode('rules')}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'rules'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                 }`}
             >
               Rules
@@ -284,7 +284,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onClick={() => setNetworkViewMode('influence')}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'influence'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                 }`}
             >
               Influence
@@ -293,7 +293,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onClick={() => setNetworkViewMode('analysis')}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'analysis'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
-                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300'
+                : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                 }`}
             >
               Analysis
@@ -684,7 +684,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 13 && (
           // Legacy tab — redirect user to Network → Analysis view
-          <div className="h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-400">
+          <div className="h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-300">
             Network Analysis has moved to the
             <button
               className="mx-1 underline text-teal-600 dark:text-teal-400"

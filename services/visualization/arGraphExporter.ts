@@ -1,4 +1,5 @@
 import type { AtomRuleGraph } from '../../types/visualization';
+import { escapeXml } from '@bngplayground/engine';
 
 export interface ExportArGraphOptions {
   /**
@@ -25,12 +26,7 @@ export const exportArGraphToGraphML = (
   graph: AtomRuleGraph,
   options: ExportArGraphOptions = {},
 ): string => {
-  const esc = (s: string) =>
-    String(s)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
+  const esc = (s: string) => escapeXml(String(s));
 
   // assign stable numeric ids sorted by type & label for parity with BNG2.pl
   const sortedNodes = [...graph.nodes].sort((a, b) => {
@@ -100,7 +96,7 @@ export const exportArGraphToGraphML = (
     const lineColor = colorMap[edgeType] ?? '#000000';
     const srcNum = src.startsWith('n') ? src.slice(1) : src;
     const idx = edgeIdxBySource.get(src) ?? 0;
-    const eid = `n${srcNum}::e${idx}`;
+    const eid = esc(`n${srcNum}::e${idx}`);
     edgeIdxBySource.set(src, idx + 1);
     xml += `    <edge id="${eid}" source="${src}" target="${tgt}">
       <data key="d1">

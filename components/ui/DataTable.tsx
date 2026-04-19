@@ -12,7 +12,7 @@ export const DataTable: React.FC<DataTableProps> = ({ headers, rows }) => {
         <thead className="bg-slate-50 dark:bg-slate-800">
           <tr>
             {headers.map((header, index) => (
-              <th key={index} scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-300 uppercase tracking-wider">
+              <th key={index} scope="col" className="px-6 py-3 text-left text-xs font-medium text-slate-500 dark:text-slate-200 uppercase tracking-wider">
                 {header}
               </th>
             ))}
@@ -22,14 +22,14 @@ export const DataTable: React.FC<DataTableProps> = ({ headers, rows }) => {
           {rows.length > 0 ? rows.map((row, rowIndex) => (
             <tr key={rowIndex} className="hover:bg-slate-50 dark:hover:bg-slate-800/50">
               {row.map((cell, cellIndex) => (
-                <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-200">
+                <td key={cellIndex} className="px-6 py-4 whitespace-nowrap text-sm text-slate-700 dark:text-slate-100">
                   {cell}
                 </td>
               ))}
             </tr>
           )) : (
             <tr>
-              <td colSpan={headers.length} className="text-center px-6 py-4 text-sm text-slate-500 dark:text-slate-400">
+              <td colSpan={headers.length} className="text-center px-6 py-4 text-sm text-slate-500 dark:text-slate-300">
                 No data available.
               </td>
             </tr>

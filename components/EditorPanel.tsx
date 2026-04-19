@@ -210,7 +210,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
            className="whitespace-nowrap flex items-center gap-3 mt-4 mb-auto pointer-events-none select-none"
            style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
          >
-            <span className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-400 dark:text-slate-500">BNGL Editor</span>
+            <span className="text-[10px] uppercase tracking-[0.2em] font-black text-slate-400 dark:text-slate-300">BNGL Editor</span>
             {loadedModelName && (
                <span className="text-sm font-bold text-teal-600 dark:text-teal-400 max-h-[300px] truncate">{loadedModelName}</span>
             )}
@@ -280,7 +280,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                 </span>
               )}
               {loadedModelName && (
-                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 truncate max-w-[120px]" title={loadedModelName}>
+                <span className="text-[10px] font-bold text-slate-500 dark:text-slate-300 bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded-full border border-slate-200 dark:border-slate-700 truncate max-w-[120px]" title={loadedModelName}>
                   {loadedModelName}
                 </span>
               )}
@@ -351,7 +351,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             <Dropdown trigger={
               <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" disabled={!modelExists && !code?.trim()} title="Export current model">
                 <span>Export</span>
-                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-400" />
+                <ChevronDownIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-300" />
               </Button>
             }>
               <DropdownItem onClick={() => onExportBNGL?.()} disabled={!code?.trim()}>Export BNGL</DropdownItem>

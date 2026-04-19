@@ -78,7 +78,7 @@ export function SimulationModal({
         {isSimulating && model && (
           <div className="h-64 w-full mb-4 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded overflow-hidden relative bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900">
             <ParticleAnimation type={simulationMethod as 'nfsim' | 'ode' | 'ssa' | 'multiphase'} />
-            <div className="absolute bottom-2 right-2 text-xs text-slate-400 dark:text-slate-500 dark:text-slate-400 bg-white dark:bg-slate-900/80 dark:bg-slate-800/80 px-2 py-1 rounded">
+            <div className="absolute bottom-2 right-2 text-xs text-slate-400 dark:text-slate-300 bg-white dark:bg-slate-900/80 dark:bg-slate-800/80 px-2 py-1 rounded">
               {simulationLabel ?? (simulationMethod === 'nfsim' 
                 ? 'Network-Free Stochastic' 
                 : simulationMethod === 'ssa' 

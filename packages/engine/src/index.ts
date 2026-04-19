@@ -109,6 +109,7 @@ export type { BPSLConstraint, BPSLResult, BPSLConstraintResult, ConstraintType }
 
 // ── Utils ───────────────────────────────────────────────────────────
 export { SafeExpressionEvaluator } from './utils/safeExpressionEvaluator';
+export { escapeXml } from './utils/xmlUtils';
 export { SeededRandom } from './utils/random';
 export { resolveAutoMethod, getSimulationOptionsFromParsedModel } from './utils/simulationOptions';
 export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './utils/multiPhaseSimulation';
