@@ -1,7 +1,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
@@ -31,8 +31,7 @@ for (const model of models) {
     try {
         // Run BNG2.pl
         // We use --outdir to specify where output goes
-        const cmd = `perl "${BNG2_PATH}" --outdir "${OUTPUT_DIR}" "${bnglPath}"`;
-        execSync(cmd, { stdio: 'pipe', timeout: 900000 }); // 15 minute timeout per model
+        execFileSync('perl', [BNG2_PATH, '--outdir', OUTPUT_DIR, bnglPath], { stdio: 'pipe', timeout: 900000 }); // 15 minute timeout per model
         
         // BNG2.pl generates .net, .cdat, .gdat in the output dir
         // We'll leave them there for the parity comparison script to find
