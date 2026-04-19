@@ -2,7 +2,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { BNGXMLWriter } from '../packages/engine/src/index';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import * as path from 'path';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
 import { findRuleHubModelPath } from './helpers/rulehub';
@@ -53,11 +53,14 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
         const outputFileName = 'polymer_nf.gdat';
         const speciesFileName = 'polymer_nf.species';
         const expectedGdatPath = path.join(testDir, outputFileName);
-        const cmd = `"${nfsimPath}" -xml "polymer.xml" -sim 1 -oSteps 20 -cb -o "${outputFileName}" -ss "${speciesFileName}"`;
         let nfsimOutput = '';
 
         try {
-            nfsimOutput = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe', cwd: testDir }) ?? '';
+            nfsimOutput = execFileSync(
+                nfsimPath,
+                ['-xml', 'polymer.xml', '-sim', '1', '-oSteps', '20', '-cb', '-o', outputFileName, '-ss', speciesFileName],
+                { encoding: 'utf-8', stdio: 'pipe', cwd: testDir }
+            ) ?? '';
             if (nfsimOutput.trim()) {
                 console.log(nfsimOutput);
             }
@@ -129,8 +132,7 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
 
         console.log('Testing BNG2.pl compatibility...');
         try {
-            const cmd = `perl "${bng2plPath}" "${bnglFileName}" --xml`;
-            execSync(cmd, { encoding: 'utf-8', cwd: testDir, stdio: 'inherit', timeout: 30000 });
+            execFileSync('perl', [bng2plPath, bnglFileName, '--xml'], { encoding: 'utf-8', cwd: testDir, stdio: 'inherit', timeout: 30000 });
 
             // Check if XML was generated
             const bng2XmlPath = path.join(testDir, 'polymer_for_bng2.xml');

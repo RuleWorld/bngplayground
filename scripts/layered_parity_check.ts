@@ -1,7 +1,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync, execSync } from 'child_process';
 import type { BNGLModel, GeneratorProgress } from '../types.ts';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { generateExpandedNetwork } from '@bngplayground/engine';
@@ -1209,9 +1209,8 @@ async function ensureGeneratedArtifacts(modelName: string, files: ModelFiles, op
     const netPath = path.join(WEB_OUTPUT_DIR, `${safeModelName}.net`);
     log(`    [Artifacts] Exporting network for ${modelName} to ${netPath}...`);
     try {
-      const cmd = `npx -y tsx scripts/export_net.ts "${files.bnglPath}" "${netPath}"`;
-      log(`    Executing: ${cmd}`);
-      execSync(cmd, {
+      log(`    Executing: npx -y tsx scripts/export_net.ts "${files.bnglPath}" "${netPath}"`);
+      execFileSync('npx', ['-y', 'tsx', 'scripts/export_net.ts', files.bnglPath, netPath], {
         cwd: ROOT,
         stdio: VERBOSE ? 'inherit' : 'pipe',
         maxBuffer: 50 * 1024 * 1024,

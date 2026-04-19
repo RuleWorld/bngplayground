@@ -1,8 +1,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { parseBNGL } from '../services/parseBNGL';
 import { buildContactMap } from '../services/visualization/contactMapBuilder';
@@ -10,8 +9,6 @@ import { resolveBNG2Paths } from '../../tools/bng2-paths';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-
-const execAsync = promisify(exec);
 
 const BNG2_PATH = resolveBNG2Paths().bng2pl;
 const RULEHUB_ROOT = process.env.RULEHUB_ROOT
@@ -165,8 +162,7 @@ async function runTest() {
 
       fs.writeFileSync(tempFilePath, bnglContentForBNG);
 
-      const cmd = `perl "${BNG2_PATH}" "${tempFilePath}"`;
-      await execAsync(cmd, { cwd: TEMP_DIR });
+      execFileSync('perl', [BNG2_PATH, tempFilePath], { cwd: TEMP_DIR, stdio: 'pipe' });
 
       // 2. Parse BNG Output
       const dirFiles = fs.readdirSync(TEMP_DIR);

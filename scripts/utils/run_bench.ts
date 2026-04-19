@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { parseBNGL } from '../../services/parseBNGL';
 import { NetworkGenerator } from '../../packages/engine/src/services/graph/NetworkGenerator';
 import { NautyService } from '../../packages/engine/src/services/graph/core/NautyService';
@@ -182,7 +182,7 @@ async function runBenchmarks() {
                 fs.writeFileSync(tempBnglPath, bnglForBng2);
 
                 const bngStart = Date.now();
-                execSync(`perl "${bng2Path}" "${tempBnglPath}"`, {
+                execFileSync('perl', [bng2Path, tempBnglPath], {
                     cwd: tempDir,
                     timeout: 60000, 
                     stdio: 'ignore'
