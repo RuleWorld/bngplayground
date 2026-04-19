@@ -1094,6 +1094,78 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     return;
   }
 
+  private findClosingParen(text: string, openIdx: number): number {
+    let depth = 0;
+    for (let i = openIdx; i < text.length; i++) {
+      const ch = text[i];
+      if (ch === '(') depth++;
+      if (ch === ')') {
+        depth--;
+        if (depth === 0) return i;
+      }
+    }
+    return -1;
+  }
+
+  private parseNamedValueCall(text: string, command: string): { name: string; rawValue: string } | null {
+    const lower = text.toLowerCase();
+    const cmd = command.toLowerCase();
+    if (!lower.startsWith(cmd)) return null;
+
+    const openIdx = text.indexOf('(');
+    if (openIdx < 0) return null;
+    const closeIdx = this.findClosingParen(text, openIdx);
+    if (closeIdx <= openIdx) return null;
+
+    const args = text.slice(openIdx + 1, closeIdx).trim();
+    if (!args.startsWith('"')) return null;
+
+    let quoteEnd = -1;
+    for (let i = 1; i < args.length; i++) {
+      if (args[i] === '"' && args[i - 1] !== '\\') {
+        quoteEnd = i;
+        break;
+      }
+    }
+    if (quoteEnd < 1) return null;
+
+    const name = args.slice(1, quoteEnd);
+    let cursor = quoteEnd + 1;
+    while (cursor < args.length && /\s/.test(args[cursor])) cursor++;
+    if (args[cursor] !== ',') return null;
+    const rawValue = args.slice(cursor + 1).trim();
+    return { name, rawValue };
+  }
+
+  private parseOptionalLabelAction(text: string, command: string): string | undefined {
+    const lower = text.toLowerCase();
+    const cmd = command.toLowerCase();
+    if (!lower.startsWith(cmd)) return undefined;
+    const openIdx = text.indexOf('(');
+    if (openIdx < 0) return undefined;
+    const closeIdx = this.findClosingParen(text, openIdx);
+    if (closeIdx <= openIdx) return undefined;
+
+    const args = text.slice(openIdx + 1, closeIdx).trim();
+    if (!args) return undefined;
+
+    // saveX("label")
+    if ((args.startsWith('"') && args.endsWith('"')) || (args.startsWith("'") && args.endsWith("'"))) {
+      return args.slice(1, -1).trim() || undefined;
+    }
+
+    // saveX({label=>"label"}) or saveX(label=>"label")
+    const labelArrowIdx = args.toLowerCase().indexOf('label=>');
+    if (labelArrowIdx < 0) return undefined;
+    const after = args.slice(labelArrowIdx + 'label=>'.length).trim();
+    if (after.length < 2) return undefined;
+    const quote = after[0];
+    if (quote !== '"' && quote !== "'") return undefined;
+    const end = after.indexOf(quote, 1);
+    if (end < 1) return undefined;
+    return after.slice(1, end).trim() || undefined;
+  }
+
   // Handle setConcentration/addConcentration/setParameter commands
   visitSet_cmd(ctx: Parser.Set_cmdContext): void {
     // Grammar: SETCONCENTRATION/SETPARAMETER LPAREN DBQUOTES ... DBQUOTES COMMA (expression | DBQUOTES...) RPAREN
@@ -1101,10 +1173,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const text = ctx.text;
 
     // Handle setConcentration("Species", value)
-    const concMatch = text.match(/setConcentration\s*\(\s*"([^"]+)"\s*,\s*(.+)\s*\)/i);
-    if (concMatch) {
-      const species = concMatch[1];
-      let value: string | number = concMatch[2].trim();
+    const concCall = this.parseNamedValueCall(text, 'setConcentration');
+    if (concCall) {
+      const species = concCall.name;
+      let value: string | number = concCall.rawValue;
 
       // Try to parse as number or evaluate expression
       if (value.startsWith('"') && value.endsWith('"')) {
@@ -1140,10 +1212,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     }
 
     // Handle setParameter("ParamName", value)
-    const paramMatch = text.match(/setParameter\s*\(\s*"([^"]+)"\s*,\s*(.+?)\s*\)/i);
-    if (paramMatch) {
-      const parameter = paramMatch[1];
-      let value: string | number = paramMatch[2].trim();
+    const paramCall = this.parseNamedValueCall(text, 'setParameter');
+    if (paramCall) {
+      const parameter = paramCall.name;
+      let value: string | number = paramCall.rawValue;
 
       // Try to parse as number or expression
       if (value.startsWith('"') && value.endsWith('"')) {
@@ -1169,10 +1241,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     }
 
     // Handle addConcentration (similar to setConcentration but additive)
-    const addMatch = text.match(/addConcentration\s*\(\s*"([^"]+)"\s*,\s*(.+?)\s*\)/i);
-    if (addMatch) {
-      const species = addMatch[1];
-      let value: string | number = addMatch[2].trim();
+    const addCall = this.parseNamedValueCall(text, 'addConcentration');
+    if (addCall) {
+      const species = addCall.name;
+      let value: string | number = addCall.rawValue;
 
       if (value.startsWith('"') && value.endsWith('"')) {
         value = value.slice(1, -1);
@@ -1206,10 +1278,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.SAVECONCENTRATIONS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: saveConcentrations("label")
-      const saveText = ctx.text;
-      const saveLabelMatch = saveText.match(/saveConcentrations\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) || 
-                             saveText.match(/saveConcentrations\s*\(\s*["']([^"']+)["']\s*\)/i);
-      const saveLabel = saveLabelMatch ? saveLabelMatch[1] : undefined;
+      const saveLabel = this.parseOptionalLabelAction(ctx.text, 'saveConcentrations');
       this.concentrationChanges.push({
         species: '',
         value: 0,
@@ -1224,10 +1293,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.RESETCONCENTRATIONS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: resetConcentrations("label")
-      const resetText = ctx.text;
-      const resetLabelMatch = resetText.match(/resetConcentrations\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) || 
-                              resetText.match(/resetConcentrations\s*\(\s*["']([^"']+)["']\s*\)/i);
-      const resetLabel = resetLabelMatch ? resetLabelMatch[1] : undefined;
+      const resetLabel = this.parseOptionalLabelAction(ctx.text, 'resetConcentrations');
       this.concentrationChanges.push({
         species: '',
         value: 0,
@@ -1242,10 +1308,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.SAVEPARAMETERS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: saveParameters("label") or saveParameters({label=>"label"})
-      const saveText = ctx.text;
-      const saveLabelMatch = saveText.match(/saveParameters\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) ||
-                             saveText.match(/saveParameters\s*\(\s*["']([^"']+)["']\s*\)/i);
-      const saveLabel = saveLabelMatch ? saveLabelMatch[1] : undefined;
+      const saveLabel = this.parseOptionalLabelAction(ctx.text, 'saveParameters');
       this.parameterChanges.push({
         parameter: '',
         value: 0,
@@ -1260,10 +1323,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.RESETPARAMETERS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: resetParameters("label") or resetParameters({label=>"label"})
-      const resetText = ctx.text;
-      const resetLabelMatch = resetText.match(/resetParameters\s*\(\s*[{"']?\s*label\s*=>\s*["']([^"']+)["']\s*}?\s*\)/i) ||
-                              resetText.match(/resetParameters\s*\(\s*["']([^"']+)["']\s*\)/i);
-      const resetLabel = resetLabelMatch ? resetLabelMatch[1] : undefined;
+      const resetLabel = this.parseOptionalLabelAction(ctx.text, 'resetParameters');
       this.parameterChanges.push({
         parameter: '',
         value: 0,
