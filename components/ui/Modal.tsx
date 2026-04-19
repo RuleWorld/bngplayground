@@ -40,7 +40,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         role="dialog"
     >
       <div
-        className={`bg-white dark:bg-slate-800 rounded-lg shadow-xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh]`}
+        className={`bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 rounded-lg shadow-xl w-full ${sizeClasses[size]} flex flex-col max-h-[90vh]`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex justify-between items-center p-4 border-b border-stone-200 dark:border-slate-700">
@@ -53,7 +53,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             <XIcon className="w-6 h-6" />
           </button>
         </div>
-        <div className="p-6 overflow-y-auto">
+        <div className="p-6 overflow-y-auto text-slate-700 dark:text-slate-200">
             {children}
         </div>
       </div>

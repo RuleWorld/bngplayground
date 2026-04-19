@@ -263,7 +263,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
               zIndex: 9999,
             }}
             className="w-[22rem] sm:w-96 max-h-[85vh] overflow-y-auto p-4 bg-white dark:bg-slate-900 dark:bg-slate-800 
-                          border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-lg shadow-2xl ring-1 ring-black ring-opacity-5 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 animate-in fade-in zoom-in-95 duration-100"
+                          border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-lg text-slate-800 dark:text-slate-100 shadow-2xl ring-1 ring-black ring-opacity-5 scrollbar-thin scrollbar-thumb-slate-300 dark:scrollbar-thumb-slate-600 animate-in fade-in zoom-in-95 duration-100"
           >
             <div className="flex items-center justify-between mb-3">
               <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider">
@@ -283,7 +283,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     onClick={() => setMethod(m as any)}
                     className={`px-1 py-1.5 text-xs font-medium rounded transition-all text-center ${method === m
                       ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 text-teal-700 dark:text-teal-400 shadow-sm'
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+                      : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
                       }`}
                   >
                     {m === 'default' ? 'Auto' : m === 'nf' ? 'NFsim' : m === 'psa' ? 'PSA' : m.toUpperCase()}
@@ -299,7 +299,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   type="number"
                   value={tEnd}
                   onChange={e => setTEnd(e.target.value)}
-                  className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                  className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
               <div>
@@ -308,7 +308,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   type="number"
                   value={nSteps}
                   onChange={e => setNSteps(e.target.value)}
-                  className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                  className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
             </div>
@@ -348,7 +348,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     value={ssaSeed}
                     onChange={e => setSsaSeed(e.target.value)}
                     placeholder="Random"
-                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
               </div>
@@ -372,7 +372,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     value={plaSeed}
                     onChange={e => setPlaSeed(e.target.value)}
                     placeholder="Random"
-                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                   />
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 p-2 rounded">
@@ -402,7 +402,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={poplevel}
                       onChange={e => setPoplevel(e.target.value)}
                       placeholder="100"
-                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                   <div>
@@ -417,7 +417,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={psaSeed}
                       onChange={e => setPsaSeed(e.target.value)}
                       placeholder="12345"
-                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -458,7 +458,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={atol}
                       onChange={e => setAtol(e.target.value)}
                       placeholder="1e-6"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                   <div>
@@ -468,7 +468,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={rtol}
                       onChange={e => setRtol(e.target.value)}
                       placeholder="1e-3"
-                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600"
+                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -495,7 +495,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={utl}
                       onChange={e => setUtl(e.target.value)}
                       placeholder="Auto"
-                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                   <div>
@@ -513,7 +513,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={gml}
                       onChange={e => setGml(e.target.value)}
                       placeholder="1000000"
-                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                 </div>
@@ -534,7 +534,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={equilibrate}
                       onChange={e => setEquilibrate(e.target.value)}
                       placeholder="0"
-                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                   <div>
@@ -549,7 +549,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       value={nfsimSeed}
                       onChange={e => setNfsimSeed(e.target.value)}
                       placeholder="Random"
-                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                     />
                   </div>
                 </div>

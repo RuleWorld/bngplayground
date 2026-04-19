@@ -140,7 +140,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
             position: 'absolute',
             zIndex: 9999
           }}
-          className="w-auto min-w-[14rem] rounded-md shadow-lg bg-white dark:bg-slate-800 ring-1 ring-black ring-opacity-5 focus:outline-none"
+          className="w-auto min-w-[14rem] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 shadow-lg ring-1 ring-black/5 focus:outline-none"
           onClick={() => setIsOpen(false)}
         >
           <div className="py-1" role="menu" aria-orientation="vertical">
@@ -157,7 +157,7 @@ export const DropdownItem: React.FC<React.ButtonHTMLAttributes<HTMLButtonElement
   return (
     <button
       {...props}
-      className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700"
+      className="block w-full text-left px-4 py-2 text-sm text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700 focus:bg-slate-100 dark:focus:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed"
       role="menuitem"
     />
   );
