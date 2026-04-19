@@ -17,7 +17,7 @@ import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { NautyService } from '@bngplayground/engine';
 import { createSolver } from '@bngplayground/engine';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { resolveBNG2Paths } from '../bng2-paths';
 import { findRuleHubModelPath, resolveRuleHubRoot } from '../rulehubLocal';
 
@@ -224,7 +224,7 @@ function runBNG2ForTiming(modelPath: string, modelName: string, tempDir: string)
     fs.writeFileSync(tempBnglPath, bnglContent);
 
     const start = performance.now();
-    execSync(`perl BNG2.pl "${tempBnglPath}"`, {
+    execFileSync('perl', ['BNG2.pl', tempBnglPath], {
       cwd: BNG2_DIR,
       timeout: 120000,
       stdio: 'ignore'

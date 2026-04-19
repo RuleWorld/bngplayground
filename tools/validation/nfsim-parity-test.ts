@@ -9,7 +9,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { createRequire } from 'module';
 import { fileURLToPath } from 'url';
 import { resolveBNG2Paths } from '../bng2-paths';
@@ -144,7 +144,7 @@ end model
     console.log(`  BNG2.pl: ${BNG2_PATH}`);
 
     try {
-        const result = execSync(`perl "${BNG2_PATH}" "${bnglPath}"`, {
+        const result = execFileSync('perl', [BNG2_PATH, bnglPath], {
             cwd: modelDir,
             encoding: 'utf8',
             timeout: 120000
@@ -179,7 +179,7 @@ end model
     fs.writeFileSync(xmlBnglPath, bnglForXml);
 
     try {
-        execSync(`perl "${BNG2_PATH}" "${xmlBnglPath}"`, {
+        execFileSync('perl', [BNG2_PATH, xmlBnglPath], {
             cwd: modelDir,
             encoding: 'utf8',
             timeout: 60000
