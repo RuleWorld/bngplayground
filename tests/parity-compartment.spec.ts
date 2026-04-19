@@ -1,3 +1,4 @@
+/// <reference types="node" />
 import { describe, it, expect } from 'vitest';
 import { BNGXMLWriter } from '../packages/engine/src/index';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
@@ -120,9 +121,9 @@ simulate({method=>"nf", t_end=>10, n_steps=>20})
 
         expect(fs.existsSync(gdatPath)).toBe(true);
         const gdat = fs.readFileSync(gdatPath, 'utf-8');
-        const lines = gdat.trim().split('\n').filter(l => l.trim().length > 0);
+        const lines = gdat.trim().split('\n').filter((l: string) => l.trim().length > 0);
 
-        const headersLine = lines.find(l => l.startsWith('#'));
+        const headersLine = lines.find((l: string) => l.startsWith('#'));
         expect(headersLine).toBeDefined();
 
         const headers = headersLine!.substring(1).trim().split(/\s+/);

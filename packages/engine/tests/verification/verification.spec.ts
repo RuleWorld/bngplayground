@@ -8,8 +8,6 @@ import {
   checkDeadlock,
   checkRuleFires,
 } from '../../src/services/verification/BoundedVerifier';
-
-import { BNGLParser } from '../../src/services/graph/core/BNGLParser';
 import {
   parseMoleculeTokens,
   extractBindingRequirements,
@@ -18,8 +16,6 @@ import {
   enumerateAbstractComplexes,
 } from '../../src/services/verification/ContactMapReachability';
 import { parseQuery } from '../../src/services/verification/QueryParser';
-import { GraphCanonicalizer } from '../../src/services/graph/core/Canonical';
-import { GraphMatcher } from '../../src/services/graph/core/Matcher';
 
 import {
   checkFiniteContactMap,
