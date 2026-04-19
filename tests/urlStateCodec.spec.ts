@@ -56,14 +56,34 @@ describe('urlStateCodec — readable form', () => {
     const { session, warnings } = decodeSessionUrl('#/session?tab=time-courses&params=kf:notanumber,,kr:0.01');
     expect(session.params).toEqual({ kr: 0.01 });
     expect(warnings.length).toBeGreaterThanOrEqual(2);
-    expect(warnings.some((warning: string) => /non-numeric/i.test(warning))).toBe(true);
-    expect(warnings.some((warning: string) => /malformed/i.test(warning))).toBe(true);
+    const warningsLower = warnings.map((warning: string) => warning.toLowerCase());
+
+    // Ensure non-numeric segment is specifically identified (kf:notanumber).
+    expect(
+      warningsLower.some((warning: string) => warning.includes('kf') && /non[-\s]?numeric|not\s*a\s*number|nan/.test(warning))
+    ).toBe(true);
+
+    // Ensure empty/malformed segment from ",," is specifically identified.
+    expect(
+      warningsLower.some((warning: string) => warning.includes(',,') || warning.includes('empty') || warning.includes('malformed'))
+    ).toBe(true);
   });
 
   it('ignores unknown tab ids and falls back to default', () => {
     const { session, warnings } = decodeSessionUrl('#/session?tab=unknown-future-tab');
     expect(session.tab).toBe('time-courses');
     expect(warnings.some((warning: string) => warning.toLowerCase().includes('unknown tab'))).toBe(true);
+  });
+
+  it('falls back to default for empty or missing tab values', () => {
+    const emptyTab = decodeSessionUrl('#/session?tab=');
+    expect(emptyTab.session.tab).toBe('time-courses');
+
+    const missingTab = decodeSessionUrl('#/session');
+    expect(missingTab.session.tab).toBe('time-courses');
+
+    const emptyQuery = decodeSessionUrl('#/session?');
+    expect(emptyQuery.session.tab).toBe('time-courses');
   });
 
   it('URL-encodes special chars in model name', () => {
@@ -75,7 +95,13 @@ describe('urlStateCodec — readable form', () => {
 
 describe('urlStateCodec — compact form', () => {
   it('switches to compact form for embedded source', () => {
-    const big = 'begin model\n' + 'begin parameters\n' + 'k 1.0\n'.repeat(50) + 'end parameters\nend model\n';
+    // Keep this payload large enough to reliably exercise compact encoding.
+    const REPEAT_LINES_TO_TRIGGER_COMPACT = 50;
+    const big =
+      'begin model\n' +
+      'begin parameters\n' +
+      'k 1.0\n'.repeat(REPEAT_LINES_TO_TRIGGER_COMPACT) +
+      'end parameters\nend model\n';
     const s: Session = { tab: 'time-courses', embeddedSource: big };
     const url = encodeSessionUrl(s);
     expect(url).toMatch(/^#\/session\?p=/);
@@ -92,9 +118,11 @@ describe('urlStateCodec — compact form', () => {
   });
 
   it('uses deflate for large repetitive content and uncompressed for short content', () => {
+    // Keep this payload large and highly repetitive so compact encoding selects deflate.
+    const LARGE_REPETITIVE_SOURCE_LENGTH = 10_000;
     const repetitive: Session = {
       tab: 'time-courses',
-      embeddedSource: 'A'.repeat(10000),
+      embeddedSource: 'A'.repeat(LARGE_REPETITIVE_SOURCE_LENGTH),
     };
     const urlD = encodeSessionUrl(repetitive, { forceCompact: true });
     expect(urlD).toMatch(/^#\/session\?p=d:/);
@@ -108,7 +136,7 @@ describe('urlStateCodec — compact form', () => {
 
   it('round-trips large session including params + source', () => {
     const params = Object.fromEntries(
-      Array.from({ length: 50 }, (_, i) => [`k_${i}`, Math.random() * 10]),
+      Array.from({ length: 50 }, (_, i) => [`k_${i}`, i * 0.2]),
     );
     const s: Session = {
       tab: 'abc-smc',

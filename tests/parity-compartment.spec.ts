@@ -14,10 +14,11 @@ const paths = resolveBNG2Paths();
  * 
  * This test verifies that:
  * 1. NFsim correctly parses compartment information from BNGXML.
- * 2. Volume-based rate scaling is applied for bimolecular reactions.
+ * 2. The compartmental reaction model runs and produces expected qualitative outcomes
+ *    (product formation and molecule conservation).
  * 
- * The test uses a simple A + B -> C reaction in a compartment with volume V=2.
- * The expected effective rate should be k/V = 0.5 (half of the base rate).
+ * The model uses A + B -> C in a compartment with volume V=2. This test does not
+ * assert a specific quantitative effective rate.
  */
 describe.skipIf(!hasNFsim())('NFsim Compartment Parity', () => {
     const testDir = 'temp_parity_compartment';
@@ -94,7 +95,7 @@ simulate({method=>"nf", t_end=>10, n_steps=>20})
         let nfsimOutput = '';
 
         try {
-            nfsimOutput = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' }) ?? '';
+            nfsimOutput = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' });
             if (nfsimOutput.trim()) {
                 console.log(nfsimOutput);
             }
@@ -128,7 +129,7 @@ simulate({method=>"nf", t_end=>10, n_steps=>20})
 
         const headers = headersLine!.substring(1).trim().split(/\s+/);
         const lastLineStr = lines[lines.length - 1];
-        const values = lastLineStr.match(/[+-]?\d?\.?\d+(?:e[+-]?\d+)?/gi) || [];
+        const values = lastLineStr.match(/[+-]?(?:\d+\.?\d*|\.\d+)(?:e[+-]?\d+)?/gi) || [];
 
         const getVal = (name: string) => {
             const idx = headers.indexOf(name);
