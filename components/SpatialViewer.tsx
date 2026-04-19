@@ -61,17 +61,37 @@ export const SpatialViewer: React.FC<SpatialViewerProps> = ({
 
   const [moleculeCount, setMoleculeCount] = useState(0);
   const [simTime, setSimTime] = useState(0);
+  const [rendererError, setRendererError] = useState<string | null>(null);
 
   // Initialize Three.js scene
   useEffect(() => {
     if (!containerRef.current) return;
 
+    // Some browser/CI environments have WebGL disabled or unavailable.
+    // Fail gracefully so the Spatial tab does not repeatedly throw.
+    if (typeof window !== 'undefined') {
+      const probeCanvas = document.createElement('canvas');
+      const gl = probeCanvas.getContext('webgl2') || probeCanvas.getContext('webgl');
+      if (!gl) {
+        setRendererError('WebGL is unavailable in this browser/environment. Spatial rendering is disabled.');
+        return;
+      }
+    }
+
     // Renderer
-    const renderer = new THREE.WebGLRenderer({
-      antialias: true,
-      alpha: true,
-      powerPreference: 'high-performance',
-    });
+    let renderer: THREE.WebGLRenderer;
+    try {
+      renderer = new THREE.WebGLRenderer({
+        antialias: true,
+        alpha: true,
+        powerPreference: 'high-performance',
+      });
+      setRendererError(null);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      setRendererError(`Unable to initialize WebGL renderer: ${message}`);
+      return;
+    }
     renderer.setSize(width, height);
     renderer.setPixelRatio(Math.min(typeof window !== 'undefined' ? window.devicePixelRatio : 1, 2));
     renderer.setClearColor(0x0a0a1a, 1);
@@ -275,10 +295,19 @@ export const SpatialViewer: React.FC<SpatialViewerProps> = ({
 
   return (
     <div className="relative" style={{ width, height }}>
-      <div ref={containerRef} className="w-full h-full" />
+      {rendererError ? (
+        <div className="w-full h-full flex items-center justify-center bg-slate-950 text-slate-300 px-6 text-center">
+          <div>
+            <div className="text-sm font-semibold mb-2">Spatial Viewer Unavailable</div>
+            <div className="text-xs text-slate-400">{rendererError}</div>
+          </div>
+        </div>
+      ) : (
+        <div ref={containerRef} className="w-full h-full" />
+      )}
 
       {/* HUD overlay */}
-      <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-xs font-mono text-gray-300 space-y-0.5 pointer-events-none">
+      {!rendererError && <div className="absolute top-2 left-2 bg-black/60 backdrop-blur-sm rounded-lg px-3 py-2 text-xs font-mono text-gray-300 space-y-0.5 pointer-events-none">
         <div>
           <span className="text-primary-400">Time:</span>{' '}
           {simTime.toExponential(2)} s
@@ -293,10 +322,10 @@ export const SpatialViewer: React.FC<SpatialViewerProps> = ({
             <span className="text-green-400">Simulating</span>
           </div>
         )}
-      </div>
+      </div>}
 
       {/* Species legend */}
-      <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs font-mono text-gray-300 max-h-48 overflow-y-auto"
+      {!rendererError && <div className="absolute bottom-3 left-3 bg-black/80 backdrop-blur-sm rounded-lg px-3 py-2 text-xs font-mono text-gray-300 max-h-48 overflow-y-auto"
         style={{ scrollbarWidth: 'thin', scrollbarColor: '#374151 transparent' }}>
         <div className="text-primary-400 mb-1.5 text-[10px] uppercase tracking-wider">Species</div>
         {Array.from(speciesNames.entries()).map(([id, name]) => (
@@ -321,7 +350,7 @@ export const SpatialViewer: React.FC<SpatialViewerProps> = ({
             </span>
           </div>
         ))}
-      </div>
+      </div>}
     </div>
   );
 };

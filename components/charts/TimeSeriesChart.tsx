@@ -220,7 +220,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
     >
       {/* Main Chart Area */}
       <div className="flex-1 min-h-[160px] relative">
-        <ResponsiveContainer width="100%" height="100%">
+        <ResponsiveContainer width="100%" height="100%" minWidth={0} minHeight={160}>
           <ComposedChart 
             data={plotData} 
             margin={{ ...margin, bottom: 25 }} // Axis labels need some space but not legend anymore

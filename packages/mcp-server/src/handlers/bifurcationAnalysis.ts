@@ -29,7 +29,12 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
     try {
       const jit = new engine.JITCompiler(expandedModel);
       const reactionRules = expandedModel.reactions ?? [];
-      const compiled = jit.compileFromRxns(reactionRules, nSpecies, speciesIndexMap, params);
+      const compiled = jit.compileFromRxns(reactionRules, nSpecies, speciesIndexMap, params, {
+        modelName: model.name ?? 'unnamed-model',
+        analysis: 'bifurcation-mcp',
+        parameterName,
+        callsite: 'mcp-server.handleBifurcationAnalysis',
+      });
 
       if (!(parameterName in params)) {
         throw new Error(`Unknown continuation parameter: ${parameterName}`);

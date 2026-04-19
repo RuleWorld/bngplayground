@@ -153,10 +153,23 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           indexedReactions,
           nSpecies,
           speciesIndexMap,
-          params
+          params,
+          {
+            modelName: model.name ?? 'unnamed-model',
+            analysis: 'bifurcation',
+            parameterName: selectedParam,
+            callsite: 'BifurcationTab.handleRunContinuation',
+          }
         );
       } catch (err) {
-        console.warn('JIT Compilation failed, using fallback RHS');
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        console.warn('[BifurcationTab] JIT compilation failed, using fallback RHS', {
+          modelName: model.name ?? 'unnamed-model',
+          parameterName: selectedParam,
+          nSpecies,
+          nReactions: indexedReactions.length,
+          error: errorMessage,
+        });
       }
 
       const evaluateRhs = (t: number, y: Float64Array, dydt: Float64Array) => {

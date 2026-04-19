@@ -148,6 +148,13 @@ export interface JITCompiledFunction {
     parameterNames?: string[];
 }
 
+export interface JITCompileDebugContext {
+    modelName?: string;
+    analysis?: string;
+    parameterName?: string;
+    callsite?: string;
+}
+
 /**
  * JIT Compiler for ODE RHS functions
  */
@@ -432,7 +439,8 @@ export class JITCompiler {
         }>,
         nSpecies: number,
         parameters?: Record<string, number>,
-        constantSpeciesMask?: boolean[]
+        constantSpeciesMask?: boolean[],
+        debugContext?: JITCompileDebugContext
     ): JITCompiledFunction {
         const parameterNames = this.extractParameterNames(parameters);
         const configSignature = this.buildReactionSignature(reactions, nSpecies, parameterNames, constantSpeciesMask);
@@ -601,8 +609,23 @@ export class JITCompiler {
             const factory = eval(fullSource) as (params: Float64Array) => CompiledRHS;
             evaluate = factory(parameterVector);
         } catch (error) {
-            console.error('[JITCompiler] Failed to compile RHS function:', error);
-            console.error('[JITCompiler] Source:', fullSource);
+            const errorMessage = error instanceof Error ? error.message : String(error);
+            const contextSummary = {
+                modelName: debugContext?.modelName ?? 'unknown',
+                analysis: debugContext?.analysis ?? 'unknown',
+                parameterName: debugContext?.parameterName ?? 'n/a',
+                callsite: debugContext?.callsite ?? 'unknown',
+                nSpecies,
+                nReactions: reactions.length,
+                nParameters: parameterNames.length,
+                reactionRateSample: reactions.slice(0, 3).map((rxn) => String(rxn.rateConstant)),
+                configSignature,
+            };
+            console.error('[JITCompiler] Failed to compile RHS function. Falling back to zero RHS.', {
+                ...contextSummary,
+                error: errorMessage,
+            });
+            console.debug('[JITCompiler] Generated RHS source (truncated):', fullSource.slice(0, 1000));
             // Fallback to a generic implementation
             evaluate = (_t, _y, dydt, _speciesVolumes) => {
                 for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
@@ -628,7 +651,16 @@ export class JITCompiler {
         }
         this.cache.set(configSignature, result);
 
-        console.log(`[JITCompiler] Compiled RHS for ${nSpecies} species, ${reactions.length} reactions`);
+        console.log('[JITCompiler] Compiled RHS successfully', {
+            modelName: debugContext?.modelName ?? 'unknown',
+            analysis: debugContext?.analysis ?? 'unknown',
+            parameterName: debugContext?.parameterName ?? 'n/a',
+            callsite: debugContext?.callsite ?? 'unknown',
+            nSpecies,
+            nReactions: reactions.length,
+            nParameters: parameterNames.length,
+            configSignature,
+        });
 
         return result;
     }
@@ -640,7 +672,8 @@ export class JITCompiler {
         reactions: Rxn[],
         nSpecies: number,
         speciesIndexMap: Map<string, number>,
-        parameters?: Record<string, number>
+        parameters?: Record<string, number>,
+        debugContext?: JITCompileDebugContext
     ): JITCompiledFunction {
         const resolveSpeciesIndex = (rawIndex: number | string): number => {
             if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
@@ -696,7 +729,7 @@ export class JITCompiler {
             };
         });
 
-        return this.compile(simpleReactions, nSpecies, parameters);
+        return this.compile(simpleReactions, nSpecies, parameters, undefined, debugContext);
     }
 
     /**
