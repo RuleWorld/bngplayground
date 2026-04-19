@@ -789,52 +789,16 @@ export function isJITSafe(expandedExpr: string, knownVars: Set<string>): boolean
 }
 
 /**
- * Convert an expanded expression into a JS function body string.
+ * Compile a rate expression to the secure fast path.
  *
- * Replaces:
- *  - `^` with `**` (JS exponentiation)
- *  - Known math function names with their `Math.*` equivalents
- *  - Variable references with `ctx.varName` property access
- *
- * @returns A function body string suitable for `new Function('ctx', body)`.
- */
-function buildJITFunctionBody(expandedExpr: string, knownVars: Set<string>): string {
-  let body = expandedExpr;
-
-  // Replace ^ with ** for JS exponentiation (but not inside identifiers)
-  body = body.split('^').join('**');
-
-  // Replace function calls: funcName( -> Math.funcName(
-  for (const [name, jsName] of Object.entries(JIT_ALLOWED_FUNCTIONS)) {
-    let searchFrom = 0;
-    while (true) {
-      const startIdx = findFunctionCallStart(body, name, searchFrom);
-      if (startIdx === -1) break;
-      body = body.slice(0, startIdx) + `${jsName}(` + body.slice(startIdx + name.length + 1);
-      searchFrom = startIdx + jsName.length + 1;
-    }
-  }
-
-  // Replace variable references with ctx.varName
-  // Process longest names first to avoid partial replacements
-  const sortedVars = Array.from(knownVars).sort((a, b) => b.length - a.length);
-  for (const v of sortedVars) {
-    body = replaceWholeWord(body, v, `ctx.${v}`);
-  }
-
-  return `return ${body};`;
-}
-
-/**
- * Compile a rate expression to a native JS function via `new Function()`.
- *
- * This gives ~16.7x speedup over the AST-walk evaluator by producing a direct
- * JavaScript function that V8 can JIT-optimize.
+ * Priority order:
+ *  1. Bytecode VM (no dynamic code generation)
+ *  2. SafeExpressionEvaluator fallback
  *
  * @param expandedExpr - The pre-expanded expression (macros already inlined).
  * @param varNames - All variable names available in the evaluation context.
- * @param enableJIT - Whether JIT compilation is enabled (default: true).
- * @returns The JIT-compiled function, or `null` if the expression cannot be JIT-compiled.
+ * @param enableJIT - Whether functional-rate precompilation is enabled (default: true).
+ * @returns The compiled function, or `null` if the expression cannot be compiled.
  */
 export function compileRateToJIT(
   expandedExpr: string,
@@ -848,17 +812,9 @@ export function compileRateToJIT(
     return null;
   }
 
-  // Security posture default: keep dynamic-code path disabled unless explicitly opted in.
-  if (getFeatureFlags().enableJitFastPath) {
-    try {
-      const body = buildJITFunctionBody(expandedExpr, knownVars);
-      // Audited dynamic-code primitive, gated by feature flag + strict expression allowlist.
-      const nativeFn = new Function('ctx', body) as (ctx: Record<string, number>) => number;
-      return (ctx: Record<string, number>) => nativeFn(ctx);
-    } catch {
-      // Fall through to bytecode VM fallback.
-    }
-  }
+  // Dynamic-code emission via `new Function` was removed to satisfy CodeQL
+  // and keep this path strictly non-evaluative.
+  void getFeatureFlags().enableJitFastPath;
 
   // Secure default fast path: compile once to bytecode and execute via a static VM.
   const bytecodeProgram = compileRateToBytecodeProgram(expandedExpr, varNames);

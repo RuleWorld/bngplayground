@@ -124,7 +124,24 @@ function parseParameters(lines: string[]): Map<string, string> {
         // name value  or  name=value  or  name  value  # comment
         const stripped = stripInlineComment(line);
         if (!stripped) continue;
-        const parts = stripped.split(/\s*=\s*|\s+/).filter(Boolean);
+        const eqIdx = stripped.indexOf('=');
+
+        if (eqIdx >= 0) {
+            const left = collapseWhitespace(stripped.slice(0, eqIdx));
+            const right = collapseWhitespace(stripped.slice(eqIdx + 1));
+            if (!left) continue;
+
+            const leftParts = left.split(' ').filter(Boolean);
+            if (leftParts.length === 0) continue;
+
+            const name = leftParts[0];
+            const leftRemainder = leftParts.slice(1).join(' ');
+            const expr = [leftRemainder, right].filter(Boolean).join(' ').trim();
+            m.set(name, expr);
+            continue;
+        }
+
+        const parts = collapseWhitespace(stripped).split(' ').filter(Boolean);
         if (parts.length >= 2) {
             m.set(parts[0], parts.slice(1).join(' '));
         } else if (parts.length === 1) {
