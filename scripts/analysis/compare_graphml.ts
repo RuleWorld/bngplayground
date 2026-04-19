@@ -5,7 +5,7 @@ console.log('compare_graphml.ts start');
 import fs from 'fs';
 import path from 'path';
 import { promisify } from 'util';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import { fileURLToPath } from 'url';
 import { parseGraphML } from '../utils/brute_force_viz';
 import { parseBNGL } from '../../services/parseBNGL';
@@ -41,7 +41,7 @@ function getCompatibleModels(): string[] {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const execAsync = promisify(exec);
+const execFileAsync = promisify(execFile);
 const TEMP_DIR = path.resolve(__dirname, '../temp_bng_output');
 const BNG2_PATH = resolveBNG2Paths().bng2pl;
 
@@ -134,7 +134,7 @@ async function maybeGenerateGraphML(file: string): Promise<string> {
 
   fs.writeFileSync(tempFile, content);
   try {
-    await execAsync(`perl "${BNG2_PATH}" "${tempFile}"`, { cwd: TEMP_DIR });
+    await execFileAsync('perl', [BNG2_PATH, tempFile], { cwd: TEMP_DIR });
   } catch (err: any) {
     // If it produced the file, we don't care about subsequent errors
     const dirFiles = fs.readdirSync(TEMP_DIR);
