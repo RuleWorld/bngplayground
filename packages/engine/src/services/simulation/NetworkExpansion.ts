@@ -20,6 +20,12 @@ import { containsRateLawMacro, evaluateFunctionalRate, expandRateLawMacros } fro
 import { formatSpeciesList } from '../parity/ParityService';
 import { isFunctionalRateExpr, countPatternMatches, isSpeciesMatch, removeCompartment, getCompartment } from '../parity/PatternMatcher';
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key: string): boolean {
+    return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
 /**
  * Main entry point for network generation.
  * Coordinates input parsing, rule expansion, and network generation.
@@ -193,6 +199,9 @@ export async function generateExpandedNetwork(
                 const obsName = callMatch[1];
                 const obs = inputModel.observables.find((o) => o.name === obsName);
                 if (obs) {
+                    if (!isSafeObjectKey(obsName)) {
+                        continue;
+                    }
                     observablePatterns[obsName] = obs.pattern;
                     // strip the "(var)" from body template so result is just obsName
                     bodyTemplate = bodyTemplate.replace(callMatch[0], obsName);
@@ -525,9 +534,9 @@ export async function generateExpandedNetwork(
             const seedG = BNGLParser.parseSpeciesGraph(sp.name);
             const canon = GraphCanonicalizer.canonicalize(seedG);
             seedMap.set(canon, { isConstant: !!sp.isConstant });
-            if (VERBOSE_NETEXP_DEBUG) console.log(`[NetworkExpansion] Seed: '${sp.name}' -> Canonical: '${canon}', Constant: ${sp.isConstant}`);
+            if (VERBOSE_NETEXP_DEBUG) console.log('[NetworkExpansion] Seed:', sp.name, '-> Canonical:', canon, 'Constant:', !!sp.isConstant);
         } catch (e) {
-            console.warn(`[NetworkExpansion] Could not parse seed species '${sp.name}':`, e);
+            console.warn('[NetworkExpansion] Could not parse seed species:', sp.name, e);
         }
     }
 

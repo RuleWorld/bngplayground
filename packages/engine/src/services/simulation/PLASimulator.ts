@@ -47,6 +47,12 @@ interface PLAReaction {
   propensity: number;
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key: string): boolean {
+  return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
 /**
  * Configuration options governing the behavior of the Partitioned Leaping Algorithm (PLA).
  */
@@ -543,6 +549,7 @@ export class PLASimulator {
     const evaluateObservables = (currentState: Float64Array): Record<string, number> => {
       const row: Record<string, number> = {};
       for (const obs of model.observables) {
+        if (!isSafeObjectKey(obs.name)) continue;
         const info = observableIndices.get(obs.name);
         if (info) {
           let sum = 0;

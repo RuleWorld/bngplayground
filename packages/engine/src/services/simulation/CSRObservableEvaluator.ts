@@ -81,6 +81,9 @@ export function buildCSRObservableMatrix(
       const specIdx = typeof obs.indices[j] === 'string'
         ? parseInt(obs.indices[j] as unknown as string, 10)
         : obs.indices[j] as number;
+      if (!Number.isInteger(specIdx) || specIdx < 0 || specIdx >= numSpecies) {
+        throw new Error(`Invalid observable species index: ${specIdx}`);
+      }
       colIdx[pos] = specIdx;
       values[pos] = typeof obs.coefficients[j] === 'string'
         ? parseFloat(obs.coefficients[j] as unknown as string)

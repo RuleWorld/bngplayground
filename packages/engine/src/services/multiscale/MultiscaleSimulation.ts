@@ -69,6 +69,12 @@ export interface MultiscaleResult {
   };
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key: string): boolean {
+  return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
 // ---------------------------------------------------------------------------
 // RK4 stepper – generic 4th-order Runge-Kutta
 // ---------------------------------------------------------------------------
@@ -214,7 +220,9 @@ export function multiscaleSimulation(
     counts: {},
   };
   for (const ct of config.cellTypes) {
-    popTs.counts[ct.name] = [];
+    if (isSafeObjectKey(ct.name)) {
+      popTs.counts[ct.name] = [];
+    }
   }
 
   // ---- Helper: take a snapshot ----
@@ -224,18 +232,23 @@ export function multiscaleSimulation(
     const obsCounts: Record<string, number> = {};
 
     for (const ct of config.cellTypes) {
-      popCounts[ct.name] = 0;
-      obsAccum[ct.name] = {};
-      obsCounts[ct.name] = 0;
+      if (isSafeObjectKey(ct.name)) {
+        popCounts[ct.name] = 0;
+        obsAccum[ct.name] = {};
+        obsCounts[ct.name] = 0;
+      }
     }
 
     for (const cell of cells) {
       if (cell.phase === 'dead') continue;
+      if (!isSafeObjectKey(cell.cellType)) continue;
       popCounts[cell.cellType] = (popCounts[cell.cellType] ?? 0) + 1;
       obsCounts[cell.cellType] = (obsCounts[cell.cellType] ?? 0) + 1;
       if (!obsAccum[cell.cellType]) obsAccum[cell.cellType] = {};
       for (const [key, val] of Object.entries(cell.observables)) {
-        obsAccum[cell.cellType][key] = (obsAccum[cell.cellType][key] ?? 0) + val;
+        if (isSafeObjectKey(key)) {
+          obsAccum[cell.cellType][key] = (obsAccum[cell.cellType][key] ?? 0) + val;
+        }
       }
     }
 
@@ -352,7 +365,9 @@ export function multiscaleSimulation(
           break;
         }
         case 'secrete': {
-          cell.secretionRates[action.species] = action.rate;
+          if (isSafeObjectKey(action.species)) {
+            cell.secretionRates[action.species] = action.rate;
+          }
           break;
         }
         case 'stop_secrete': {
@@ -365,7 +380,9 @@ export function multiscaleSimulation(
         }
         case 'set_parameter': {
           // Store as observable for simplicity
-          cell.observables[action.parameter] = action.value;
+          if (isSafeObjectKey(action.parameter)) {
+            cell.observables[action.parameter] = action.value;
+          }
           break;
         }
       }
@@ -406,7 +423,9 @@ export function multiscaleSimulation(
       if (typeDef.uptake) {
         for (const u of typeDef.uptake) {
           const conc = grid.getConcentration(cell.position, u.species);
-          cell.observables[u.intracellularParameter] = conc * u.scalingFactor;
+          if (isSafeObjectKey(u.intracellularParameter)) {
+            cell.observables[u.intracellularParameter] = conc * u.scalingFactor;
+          }
         }
       }
 
@@ -414,7 +433,9 @@ export function multiscaleSimulation(
       if (typeDef.secretion) {
         for (const s of typeDef.secretion) {
           const obsVal = cell.observables[s.intracellularObservable] ?? 0;
-          cell.secretionRates[s.species] = obsVal * s.scalingFactor;
+          if (isSafeObjectKey(s.species)) {
+            cell.secretionRates[s.species] = obsVal * s.scalingFactor;
+          }
         }
       }
     }

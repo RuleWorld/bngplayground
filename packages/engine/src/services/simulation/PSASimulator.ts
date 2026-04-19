@@ -55,6 +55,12 @@ interface PSAReaction {
   ruleName?: string;
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key: string): boolean {
+  return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
 // ────────────────────────────────────────────────────────────────────
 // PSASimulator
 // ────────────────────────────────────────────────────────────────────
@@ -398,6 +404,7 @@ export class PSASimulator {
     const evaluateObservables = (currentState: Float64Array): Record<string, number> => {
       const row: Record<string, number> = {};
       for (const obs of model.observables) {
+        if (!isSafeObjectKey(obs.name)) continue;
         const info = observableIndices.get(obs.name);
         if (info) {
           let sum = 0;

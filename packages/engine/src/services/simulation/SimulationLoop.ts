@@ -50,6 +50,57 @@ interface ConcreteObservable {
   volumes?: Float64Array | number[];
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key: string): boolean {
+  return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
+function setSafeNumericField(target: Record<string, number>, key: string, value: number): void {
+  if (isSafeObjectKey(key)) {
+    target[key] = value;
+  }
+}
+
+function extractIfConditions(expression: string): string[] {
+  const conditions: string[] = [];
+  let idx = 0;
+
+  while (idx < expression.length) {
+    const ifIndex = expression.indexOf('if(', idx);
+    if (ifIndex < 0) break;
+
+    const condStart = ifIndex + 3;
+    let depth = 1;
+    let cursor = condStart;
+    let commaAtDepthOne = -1;
+
+    while (cursor < expression.length && depth > 0) {
+      const ch = expression[cursor];
+      if (ch === '(') {
+        depth += 1;
+      } else if (ch === ')') {
+        depth -= 1;
+      } else if (ch === ',' && depth === 1) {
+        commaAtDepthOne = cursor;
+        break;
+      }
+      cursor += 1;
+    }
+
+    if (commaAtDepthOne > condStart) {
+      const cond = expression.slice(condStart, commaAtDepthOne).trim();
+      if (cond.length > 0 && !conditions.includes(cond)) {
+        conditions.push(cond);
+      }
+    }
+
+    idx = ifIndex + 3;
+  }
+
+  return conditions;
+}
+
 /**
  * Resolves the sequence of simulation phases to execute based on the model and options.
  *
@@ -724,13 +775,15 @@ export async function simulate(
     const includeSpeciesData = options.includeSpeciesData ?? true;
 
     const getSuffixDataArray = (suffix?: string) => {
-      const key = suffix ?? '__default__';
+      const candidateKey = suffix ?? '__default__';
+      const key = isSafeObjectKey(candidateKey) ? candidateKey : '__default__';
       if (!dataBySuffix[key]) dataBySuffix[key] = [];
       return dataBySuffix[key];
     };
 
     const getSuffixSpeciesDataArray = (suffix?: string) => {
-      const key = suffix ?? '__default__';
+      const candidateKey = suffix ?? '__default__';
+      const key = isSafeObjectKey(candidateKey) ? candidateKey : '__default__';
       if (!speciesDataBySuffix[key]) speciesDataBySuffix[key] = [];
       return speciesDataBySuffix[key];
     };
@@ -834,7 +887,10 @@ export async function simulate(
     const evaluateObservablesFast = (currentState: Float64Array) => {
       const buffer = evaluateObservablesIntoBuffer(currentState);
       for (let i = 0; i < observableNames.length; i++) {
-        observableValuesRecord[observableNames[i]] = buffer[i];
+        const name = observableNames[i];
+        if (isSafeObjectKey(name)) {
+          observableValuesRecord[name] = buffer[i];
+        }
       }
       return observableValuesRecord;
     };
@@ -844,6 +900,7 @@ export async function simulate(
       const results: Record<string, number> = {};
       for (const f of model.functions || []) {
         if (f.args && f.args.length > 0) continue;
+        if (!isSafeObjectKey(f.name)) continue;
         try {
           results[f.name] = evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions);
         } catch {
@@ -917,6 +974,9 @@ export async function simulate(
       for (const change of parameterChanges) {
 
         if (change.afterPhaseIndex === targetPhaseIdx - 1) {
+          if (!isSafeObjectKey(change.parameter)) {
+            continue;
+          }
           const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
           let newVal: number;
           if (typeof change.value === 'number') newVal = change.value;
@@ -954,6 +1014,9 @@ export async function simulate(
           let anyChanged = false;
           for (const name in model.paramExpressions) {
             if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
+                if (!isSafeObjectKey(name)) {
+                  continue;
+                }
               const expr = model.paramExpressions[name];
               try {
                 const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
@@ -1244,7 +1307,7 @@ export async function simulate(
           const obsValues = evaluateObservablesFast(state);
           appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
           const speciesPoint0: Record<string, number> = { time: outT0 };
-          for (let i = 0; i < numSpecies; i++) speciesPoint0[speciesHeaders[i]] = state[i];
+          for (let i = 0; i < numSpecies; i++) setSafeNumericField(speciesPoint0, speciesHeaders[i], state[i]);
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
         }
         let totalEvents = 0;
@@ -1448,7 +1511,7 @@ export async function simulate(
               if (outT >= nextTOut || totalEvents >= maxEvents) {
                 appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
                 const sp: Record<string, number> = { time: outT };
-                for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
+                for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
                 if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
               }
@@ -1473,7 +1536,7 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(state);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
             const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
+            for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
             if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
             nextOutIdx++;
@@ -1723,11 +1786,17 @@ export async function simulate(
         }
         // Initialize observable slots
         for (let i = 0; i < observableNames.length; i++) {
-          rateContext[observableNames[i]] = 0;
+          const observableName = observableNames[i];
+          if (isSafeObjectKey(observableName)) {
+            rateContext[observableName] = 0;
+          }
         }
         // Initialize species name slots
         for (let k = 0; k < model.species.length; k++) {
-          rateContext[model.species[k].name] = 0;
+          const speciesName = model.species[k].name;
+          if (isSafeObjectKey(speciesName)) {
+            rateContext[speciesName] = 0;
+          }
         }
         // Initialize ridxN slots
         for (let j = 0; j < maxReactants; j++) {
@@ -1740,13 +1809,19 @@ export async function simulate(
           // Update observable values in the mutable context (in-place)
           const obsValues = evaluateObservablesFast(yIn);
           for (let i = 0; i < observableNames.length; i++) {
-            rateContext[observableNames[i]] = obsValues[observableNames[i]];
+            const observableName = observableNames[i];
+            if (isSafeObjectKey(observableName)) {
+              rateContext[observableName] = obsValues[observableName];
+            }
           }
           // Update species values in the mutable context (in-place)
           for (let k = 0; k < model.species.length; k++) {
-            rateContext[model.species[k].name] = odeUsesAmountState
-              ? yIn[k]
-              : (yIn[k] * speciesVolumes[k]);
+            const speciesName = model.species[k].name;
+            if (isSafeObjectKey(speciesName)) {
+              rateContext[speciesName] = odeUsesAmountState
+                ? yIn[k]
+                : (yIn[k] * speciesVolumes[k]);
+            }
           }
 
           for (let i = 0; i < concreteReactions.length; i++) {
@@ -2269,11 +2344,10 @@ export async function simulate(
       const rootExprs: string[] = [];
       if (model.functions) {
         for (const func of model.functions) {
-          const matches = func.expression.matchAll(/if\s*\(([^,]+),/gi);
-          for (const match of matches) {
-            const cond = match[1].trim();
-            if (!rootExprs.includes(cond)) rootExprs.push(cond);
-          }
+            const extracted = extractIfConditions(func.expression);
+            for (const cond of extracted) {
+              if (!rootExprs.includes(cond)) rootExprs.push(cond);
+            }
         }
       }
 
@@ -2558,7 +2632,7 @@ export async function simulate(
             const wgpuSuffix = phases[0]?.suffix;
             appendDataRow(wgpuSuffix, { time, ...obsValues });
             const sp: Record<string, number> = { time };
-            for (let j = 0; j < numSpecies; j++) sp[speciesHeaders[j]] = conc[j];
+            for (let j = 0; j < numSpecies; j++) setSafeNumericField(sp, speciesHeaders[j], conc[j]);
             appendSpeciesSnapshot(wgpuSuffix, sp);
           }
           const defaultWgpuSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
@@ -2783,6 +2857,9 @@ export async function simulate(
             for (const row of nfsimResults.data) {
               const adjustedRow: Record<string, number> = {};
               for (const [key, value] of Object.entries(row)) {
+                if (!isSafeObjectKey(key)) {
+                  continue;
+                }
                 if (key === 'time') {
                   adjustedRow[key] = phaseStart + value;
                 } else {
@@ -2900,7 +2977,7 @@ export async function simulate(
         const obsValues = evaluateObservablesFast(y);
         appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
         const s0: Record<string, number> = { time: outT0 };
-        for (let i = 0; i < numSpecies; i++) s0[speciesHeaders[i]] = stateValueToSpeciesOutput(y[i], i);
+        for (let i = 0; i < numSpecies; i++) setSafeNumericField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
         appendSpeciesSnapshot(phase.suffix, s0);
       }
 
@@ -2972,7 +3049,7 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(y);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
             const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = stateValueToSpeciesOutput(y[k], k);
+            for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
             appendSpeciesSnapshot(phase.suffix, sp);
 
             if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
@@ -3087,7 +3164,7 @@ export async function simulate(
         if (lastRecordedT !== finalT) {
           // Record final species state for multi-phase propagation
           const spFinal: Record<string, number> = { time: finalT };
-          for (let k = 0; k < numSpecies; k++) spFinal[speciesHeaders[k]] = stateValueToSpeciesOutput(y[k], k);
+          for (let k = 0; k < numSpecies; k++) setSafeNumericField(spFinal, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
           appendSpeciesSnapshot(phase.suffix, spFinal);
         }
       }

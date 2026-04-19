@@ -800,8 +800,15 @@ export class JITCompiler {
             !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
 
         try {
+            if (!Number.isInteger(nSpecies) || nSpecies <= 0 || nSpecies > 1_000_000) {
+                return null;
+            }
+
             // 1. Prepare observables
             const nObservables = observables?.length || 0;
+            if (!Number.isInteger(nObservables) || nObservables < 0 || nObservables > 1_000_000) {
+                return null;
+            }
             const obsOffsets = new Int32Array(nObservables + 1);
             let totalObsEntries = 0;
             (observables || []).forEach(obs => totalObsEntries += obs.indices.length);
