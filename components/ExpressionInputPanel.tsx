@@ -109,10 +109,12 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
     // Split input by newlines to support bulk add
     const lines = input.split('\n').filter(line => line.trim());
     const newExpressions: CustomExpression[] = [...expressions];
-    const testVars: Record<string, number> = { time: 1 };
-    observableNames.forEach((name) => { if (isSafeObjectKey(name)) testVars[name] = 1; });
-    parameterNames.forEach((name) => { if (isSafeObjectKey(name)) testVars[name] = 1; });
-    speciesNames.forEach((name) => { if (isSafeObjectKey(name)) testVars[name] = 1; });
+    const testVarsMap = new Map<string, number>();
+    testVarsMap.set('time', 1);
+    observableNames.forEach((name) => { if (isSafeObjectKey(name)) testVarsMap.set(name, 1); });
+    parameterNames.forEach((name) => { if (isSafeObjectKey(name)) testVarsMap.set(name, 1); });
+    speciesNames.forEach((name) => { if (isSafeObjectKey(name)) testVarsMap.set(name, 1); });
+    const testVars = Object.fromEntries(testVarsMap.entries());
 
     let addedCount = 0;
     let lastError: string | null = null;

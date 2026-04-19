@@ -436,10 +436,18 @@ export class PLASimulator {
         const rxn = reactions[esRxnIdx];
         // Fire once
         for (let j = 0; j < rxn.reactants.length; j++) {
-          state[rxn.reactants[j]]--;
+          const reactantIndex = rxn.reactants[j];
+          if (reactantIndex < 0 || reactantIndex >= state.length) {
+            throw new Error(`[PLASimulator] Reactant index out of bounds: ${reactantIndex}`);
+          }
+          state[reactantIndex]--;
         }
         for (let j = 0; j < rxn.products.length; j++) {
-          state[rxn.products[j]]++;
+          const productIndex = rxn.products[j];
+          if (productIndex < 0 || productIndex >= state.length) {
+            throw new Error(`[PLASimulator] Product index out of bounds: ${productIndex}`);
+          }
+          state[productIndex]++;
         }
       }
     } else {
@@ -468,10 +476,18 @@ export class PLASimulator {
       if (fireES && esRxnIdx >= 0 && reactions[esRxnIdx].propensity > 0) {
         const rxn = reactions[esRxnIdx];
         for (let j = 0; j < rxn.reactants.length; j++) {
-          state[rxn.reactants[j]]--;
+          const reactantIndex = rxn.reactants[j];
+          if (reactantIndex < 0 || reactantIndex >= state.length) {
+            throw new Error(`[PLASimulator] Reactant index out of bounds: ${reactantIndex}`);
+          }
+          state[reactantIndex]--;
         }
         for (let j = 0; j < rxn.products.length; j++) {
-          state[rxn.products[j]]++;
+          const productIndex = rxn.products[j];
+          if (productIndex < 0 || productIndex >= state.length) {
+            throw new Error(`[PLASimulator] Product index out of bounds: ${productIndex}`);
+          }
+          state[productIndex]++;
         }
       }
     }

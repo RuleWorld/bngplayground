@@ -90,6 +90,9 @@ export function buildCSRObservableMatrix(
       if (!Number.isInteger(specIdx) || specIdx < 0 || specIdx >= numSpecies) {
         throw new Error(`Invalid observable species index: ${specIdx}`);
       }
+        if (pos < 0 || pos >= colIdx.length || pos >= values.length || (volumeFactors && pos >= volumeFactors.length)) {
+          throw new Error(`[CSRObservableEvaluator] observable entry index out of range: ${pos}`);
+        }
       colIdx[pos] = specIdx;
       values[pos] = typeof obs.coefficients[j] === 'string'
         ? parseFloat(obs.coefficients[j] as unknown as string)

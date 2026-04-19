@@ -204,6 +204,9 @@ export class PSASimulator {
     const s = rxn.scaling;
 
     for (const ri of rxn.reactants) {
+      if (ri < 0 || ri >= state.length) {
+        throw new Error(`[PSASimulator] Reactant index out of bounds: ${ri}`);
+      }
       if (!fixedSpecies[ri]) {
         state[ri] -= s;
         if (state[ri] < 1) state[ri] = 0;
@@ -212,6 +215,9 @@ export class PSASimulator {
     }
 
     for (const pi of rxn.products) {
+      if (pi < 0 || pi >= state.length) {
+        throw new Error(`[PSASimulator] Product index out of bounds: ${pi}`);
+      }
       if (!fixedSpecies[pi]) {
         state[pi] += s;
         if (state[pi] <= THRESH_OCC) forceUpdate = true;

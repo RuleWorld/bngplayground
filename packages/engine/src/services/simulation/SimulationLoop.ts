@@ -1489,8 +1489,12 @@ export async function simulate(
               const newProp = calcPropensity(depRxn);
               if (Math.abs(newProp - oldProp) > 1e-18) {
                 const flux = newProp - oldProp;
-                influenceMatrix[reactionIndex * numReactions + depRxn] += flux;
-                windowInfluenceMatrix[reactionIndex * numReactions + depRxn] += flux;
+                const influenceOffset = reactionIndex * numReactions + depRxn;
+                if (influenceOffset < 0 || influenceOffset >= influenceMatrix.length || influenceOffset >= windowInfluenceMatrix.length) {
+                  throw new Error(`[SimulationLoop] Influence index out of bounds: ${influenceOffset}`);
+                }
+                influenceMatrix[influenceOffset] += flux;
+                windowInfluenceMatrix[influenceOffset] += flux;
               }
             }
           }
