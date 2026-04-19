@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { Atomizer } from '../atomizer-ts/src/index';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
@@ -70,19 +70,19 @@ function ensureDirs() {
 
 // Helper to run BNG2.pl
 function runBNG2(args: string[], timeoutMs = 600_000): string {
-    const cmd = `perl "${normalizePath(BNG2_PATH)}" ${args.map(arg => {
+    const normalizedArgs = args.map(arg => {
         if (arg.startsWith('"') && arg.endsWith('"')) {
-            return `"${normalizePath(arg.slice(1, -1))}"`;
+            return normalizePath(arg.slice(1, -1));
         }
-        return arg;
-    }).join(' ')}`;
+        return normalizePath(arg);
+    });
     try {
         // Set PERL5LIB for Windows Perl to find BNG2.pl modules
         const env = {
             ...process.env,
             PERL5LIB: 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\Perl2'
         };
-        const out = execSync(cmd, { stdio: 'pipe', timeout: timeoutMs, env });
+        const out = execFileSync('perl', [normalizePath(BNG2_PATH), ...normalizedArgs], { stdio: 'pipe', timeout: timeoutMs, env });
         return out.toString();
     } catch (e: any) {
         const stderr = e.stderr?.toString() || '';

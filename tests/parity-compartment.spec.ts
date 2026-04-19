@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { BNGXMLWriter } from '../packages/engine/src/index';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import * as path from 'path';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
 
@@ -90,11 +90,10 @@ simulate({method=>"nf", t_end=>10, n_steps=>20})
 
         console.log('Running NFsim...');
         const gdatPath = path.join(testDir, 'compartment_test_nf.gdat');
-        const cmd = `"${nfsimPath}" -xml ${xmlPath} -sim 10 -oSteps 20 -o ${gdatPath}`;
         let nfsimOutput = '';
 
         try {
-            nfsimOutput = execSync(cmd, { encoding: 'utf-8', stdio: 'pipe' }) ?? '';
+            nfsimOutput = execFileSync(nfsimPath, ['-xml', xmlPath, '-sim', '10', '-oSteps', '20', '-o', gdatPath], { encoding: 'utf-8', stdio: 'pipe' }) ?? '';
             if (nfsimOutput.trim()) {
                 console.log(nfsimOutput);
             }

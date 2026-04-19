@@ -28,15 +28,26 @@ export interface CompatibilityAnalysis {
 
 export class NFsimFunctionCompatibility {
   analyzeFunctionCompatibility(xmlContent: string): CompatibilityAnalysis {
-    const functions = (xmlContent.match(/<Function[^>]*>/g) || []).map((_, idx) => ({
-      id: `fn-${idx + 1}`,
-      name: `Function_${idx + 1}`,
+    const functions: FunctionDefinition[] = [];
+    let idx = 0;
+    let pos = 0;
+    while (pos < xmlContent.length) {
+      const start = xmlContent.indexOf('<Function', pos);
+      if (start < 0) break;
+      const end = xmlContent.indexOf('>', start + 9);
+      if (end < 0) break;
+      idx++;
+      functions.push({
+      id: `fn-${idx}`,
+      name: `Function_${idx}`,
       expression: '',
       complexity: 'simple' as FunctionComplexity,
       nfsimCompatible: true,
       issues: [],
       suggestions: []
-    }));
+      });
+      pos = end + 1;
+    }
 
     return this.buildAnalysis(functions);
   }

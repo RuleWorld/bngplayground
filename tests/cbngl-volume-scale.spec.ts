@@ -8,7 +8,7 @@ import { describe, it, expect } from 'vitest';
 import { existsSync, readFileSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { resolve, dirname, join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { execSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseBNGL } from '../services/parseBNGL';
 import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
@@ -224,7 +224,7 @@ describe('cBNGL_simple Volume Scaling', () => {
           const modelFile = join(tempDir, 'model.bngl');
           writeFileSync(modelFile, bnglWithGenerate);
           
-          execSync(`perl "${bng2pl}" "${modelFile}"`, { 
+          execFileSync('perl', [bng2pl, modelFile], { 
             cwd: tempDir,
             stdio: 'ignore', // Keep it quiet
             timeout: 30000 

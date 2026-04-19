@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import fs from 'fs';
 import path from 'path';
-import { exec } from 'child_process';
+import { execFile } from 'child_process';
 import util from 'util';
 import { createRequire } from 'module';
 import { findRuleHubModelPath } from './helpers/rulehub';
@@ -11,7 +11,7 @@ const createNFsimModule = require('../public/nfsim.js');
 import { hasBNG2, resolveBNG2Paths } from '../tools/bng2-paths';
 
 const paths = resolveBNG2Paths();
-const execPromise = util.promisify(exec);
+const execPromise = util.promisify(execFile);
 
 describe.skipIf(!hasBNG2())('Polymer Model Parity (WASM vs BNG2)', () => {
     const modelDir = path.resolve('temp_parity_polymer_wasm');
@@ -30,10 +30,9 @@ describe.skipIf(!hasBNG2())('Polymer Model Parity (WASM vs BNG2)', () => {
     beforeAll(async () => {
         // 1. Generate XML and Reference Data using BNG2.pl
         // We run for a short time to get reference points
-        const cmd = `perl "${bng2Path}" --outdir "${modelDir}" "${bnglPath}"`;
-        console.log(`Running BNG2.pl: ${cmd}`);
+        console.log(`Running BNG2.pl: perl ${bng2Path} --outdir ${modelDir} ${bnglPath}`);
         try {
-            await execPromise(cmd);
+            await execPromise('perl', [bng2Path, '--outdir', modelDir, bnglPath]);
         } catch (e) {
             console.error("BNG2 run failed (might be expected if it doesn't support XML generation directly without flags, checking artifacts anyway)");
         }
