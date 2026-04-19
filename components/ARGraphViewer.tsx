@@ -183,7 +183,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
           style: {
             'text-halign': 'center',
             'text-valign': 'center', // Center labels inside nodes
-            'font-size': 14,
+            'font-size': '14px',
             color: '#000000', // Black text since backgrounds are light
             'text-wrap': 'none', // DO NOT WRAP OR CLIP
             'text-max-width': '10000px', // Prevent internal Cytoscape word-wrap checks from truncating width measurements at punctuation like dots
@@ -223,7 +223,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
             'curve-style': 'bezier',
             'target-arrow-shape': 'triangle',
             'arrow-scale': 1.2,
-            'font-size': 9,
+            'font-size': '9px',
             'line-color': colors.edgeColor,
             'target-arrow-color': colors.edgeColor,
           },

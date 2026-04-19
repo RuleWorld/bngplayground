@@ -163,7 +163,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
       style: {
         'text-halign': 'center',
         'text-valign': 'center',
-        'font-size': 14,
+        'font-size': '14px',
         'text-wrap': 'none',
         'text-max-width': '10000px',
         color: textColor,
@@ -225,7 +225,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
         'border-color': '#6366f1',
         'border-width': 2,
         'border-style': 'dashed',
-        'font-size': 16,
+        'font-size': '16px',
         'font-weight': 700,
         padding: '20px',
       },

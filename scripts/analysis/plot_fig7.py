@@ -167,7 +167,7 @@ def main() -> None:
     args = parse_args()
     data = load_data(args.input)
 
-    fig, (ax_scatter, ax_violin) = plt.subplots(1, 2, figsize=(10, 4.2))
+    _, (ax_scatter, ax_violin) = plt.subplots(1, 2, figsize=(10, 4.2))
     plot_scatter(ax_scatter, data)
     plot_violin(ax_violin, data, args.tier_order)
 

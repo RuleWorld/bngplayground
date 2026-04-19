@@ -640,7 +640,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
       } catch (err: any) {
         // Capture fatal errors for the run and rethrow so tests still fail when assertions fail
         runStatus = runStatus === 'passed' ? 'error' : runStatus;
-        runReason = runReason ?? (err && err.message ? String(err.message) : 'error');
+        runReason = err && err.message ? String(err.message) : 'error';
         throw err;
       } finally {
         const duration = Date.now() - start;

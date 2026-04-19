@@ -200,7 +200,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
             'text-valign': 'center',
             'text-halign': 'center',
             label: 'data(label)',
-            'font-size': 14, // BNG 14pt
+            'font-size': '14px', // BNG 14pt
           },
         },
         {
@@ -217,7 +217,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
             'text-valign': 'center',
             'text-halign': 'center',
             label: 'data(label)',
-            'font-size': 14, // BNG 14pt
+            'font-size': '14px', // BNG 14pt
           },
         },
         {

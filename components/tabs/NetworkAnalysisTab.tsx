@@ -301,7 +301,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
           style: {
             'background-color': 'data(color)',
             label: 'data(label)',
-            'font-size': 10,
+            'font-size': '10px',
             color: '#ffffff',
             'text-valign': 'center',
             'text-halign': 'center',

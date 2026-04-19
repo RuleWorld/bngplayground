@@ -2916,7 +2916,8 @@ export async function simulate(
           phaseDerivatives(solverState, denseF0);
         }
 
-        for (let i = 1; i <= phase_n_steps && !shouldStop; i++) {
+        for (let i = 1; i <= phase_n_steps; i++) {
+          if (shouldStop) break;
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
 
