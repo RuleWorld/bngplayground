@@ -22,7 +22,12 @@ export class NFsimResultAdapter {
       for (const header of headers) {
         if (header === '__proto__' || header === 'constructor' || header === 'prototype') continue;
         const value = row[header] ?? row[parsed.headers[headers.indexOf(header)]];
-        mapped[header] = typeof value === 'number' ? value : Number(value ?? 0);
+        Object.defineProperty(mapped, header, {
+          value: typeof value === 'number' ? value : Number(value ?? 0),
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
       }
       return mapped;
     });
@@ -33,7 +38,12 @@ export class NFsimResultAdapter {
       sp.time = row.time ?? 0;
       for (const name of speciesHeaders) {
         if (name === '__proto__' || name === 'constructor' || name === 'prototype') continue;
-        sp[name] = row[name] ?? 0;
+        Object.defineProperty(sp, name, {
+          value: row[name] ?? 0,
+          writable: true,
+          enumerable: true,
+          configurable: true,
+        });
       }
       return sp;
     });

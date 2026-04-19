@@ -217,44 +217,44 @@ export function multiscaleSimulation(
   let nextOutputTime = 0;
   const popTs: MultiscaleResult['populationTimeSeries'] = {
     time: [],
-    counts: {},
+    counts: Object.create(null) as Record<string, number[]>,
   };
   for (const ct of config.cellTypes) {
-    if (isSafeObjectKey(ct.name)) {
+    if (ct.name !== '__proto__' && ct.name !== 'constructor' && ct.name !== 'prototype') {
       popTs.counts[ct.name] = [];
     }
   }
 
   // ---- Helper: take a snapshot ----
   function takeSnapshot(time: number) {
-    const popCounts: Record<string, number> = {};
-    const obsAccum: Record<string, Record<string, number>> = {};
-    const obsCounts: Record<string, number> = {};
+    const popCounts: Record<string, number> = Object.create(null) as Record<string, number>;
+    const obsAccum: Record<string, Record<string, number>> = Object.create(null) as Record<string, Record<string, number>>;
+    const obsCounts: Record<string, number> = Object.create(null) as Record<string, number>;
 
     for (const ct of config.cellTypes) {
-      if (isSafeObjectKey(ct.name)) {
+      if (ct.name !== '__proto__' && ct.name !== 'constructor' && ct.name !== 'prototype') {
         popCounts[ct.name] = 0;
-        obsAccum[ct.name] = {};
+        obsAccum[ct.name] = Object.create(null) as Record<string, number>;
         obsCounts[ct.name] = 0;
       }
     }
 
     for (const cell of cells) {
       if (cell.phase === 'dead') continue;
-      if (!isSafeObjectKey(cell.cellType)) continue;
+      if (cell.cellType === '__proto__' || cell.cellType === 'constructor' || cell.cellType === 'prototype') continue;
       popCounts[cell.cellType] = (popCounts[cell.cellType] ?? 0) + 1;
       obsCounts[cell.cellType] = (obsCounts[cell.cellType] ?? 0) + 1;
-      if (!obsAccum[cell.cellType]) obsAccum[cell.cellType] = {};
+      if (!obsAccum[cell.cellType]) obsAccum[cell.cellType] = Object.create(null) as Record<string, number>;
       for (const [key, val] of Object.entries(cell.observables)) {
-        if (isSafeObjectKey(key)) {
+        if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
           obsAccum[cell.cellType][key] = (obsAccum[cell.cellType][key] ?? 0) + val;
         }
       }
     }
 
-    const meanObs: Record<string, Record<string, number>> = {};
+    const meanObs: Record<string, Record<string, number>> = Object.create(null) as Record<string, Record<string, number>>;
     for (const [ct, accum] of Object.entries(obsAccum)) {
-      meanObs[ct] = {};
+      meanObs[ct] = Object.create(null) as Record<string, number>;
       const n = obsCounts[ct] || 1;
       for (const [key, sum] of Object.entries(accum)) {
         meanObs[ct][key] = sum / n;
@@ -272,6 +272,7 @@ export function multiscaleSimulation(
 
     popTs.time.push(time);
     for (const ct of config.cellTypes) {
+      if (ct.name === '__proto__' || ct.name === 'constructor' || ct.name === 'prototype') continue;
       popTs.counts[ct.name].push(popCounts[ct.name] ?? 0);
     }
   }
@@ -425,7 +426,7 @@ export function multiscaleSimulation(
       if (typeDef.uptake) {
         for (const u of typeDef.uptake) {
           const conc = grid.getConcentration(cell.position, u.species);
-          if (isSafeObjectKey(u.intracellularParameter)) {
+          if (u.intracellularParameter !== '__proto__' && u.intracellularParameter !== 'constructor' && u.intracellularParameter !== 'prototype') {
             cell.observables[u.intracellularParameter] = conc * u.scalingFactor;
           }
         }
@@ -435,7 +436,7 @@ export function multiscaleSimulation(
       if (typeDef.secretion) {
         for (const s of typeDef.secretion) {
           const obsVal = cell.observables[s.intracellularObservable] ?? 0;
-          if (isSafeObjectKey(s.species)) {
+          if (s.species !== '__proto__' && s.species !== 'constructor' && s.species !== 'prototype') {
             cell.secretionRates[s.species] = obsVal * s.scalingFactor;
           }
         }

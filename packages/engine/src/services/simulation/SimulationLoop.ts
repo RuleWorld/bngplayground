@@ -57,9 +57,23 @@ function isSafeObjectKey(key: string): boolean {
 }
 
 function setSafeNumericField(target: Record<string, number>, key: string, value: number): void {
-  if (isSafeObjectKey(key)) {
-    target[key] = value;
-  }
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
 }
 
 function extractIfConditions(expression: string): string[] {
@@ -779,7 +793,7 @@ export async function simulate(
       const key = candidateKey === '__proto__' || candidateKey === 'constructor' || candidateKey === 'prototype'
         ? '__default__'
         : candidateKey;
-      if (!dataBySuffix[key]) dataBySuffix[key] = [];
+      if (!dataBySuffix[key]) setSafeArrayField(dataBySuffix, key, []);
       return dataBySuffix[key];
     };
 
@@ -788,7 +802,7 @@ export async function simulate(
       const key = candidateKey === '__proto__' || candidateKey === 'constructor' || candidateKey === 'prototype'
         ? '__default__'
         : candidateKey;
-      if (!speciesDataBySuffix[key]) speciesDataBySuffix[key] = [];
+      if (!speciesDataBySuffix[key]) setSafeArrayField(speciesDataBySuffix, key, []);
       return speciesDataBySuffix[key];
     };
 
@@ -895,7 +909,7 @@ export async function simulate(
       for (let i = 0; i < observableNames.length; i++) {
         const name = observableNames[i];
         if (name !== '__proto__' && name !== 'constructor' && name !== 'prototype') {
-          observableValuesRecord[name] = buffer[i];
+          setSafeNumericField(observableValuesRecord, name, buffer[i]);
         }
       }
       return observableValuesRecord;
@@ -908,9 +922,13 @@ export async function simulate(
         if (f.args && f.args.length > 0) continue;
         if (f.name === '__proto__' || f.name === 'constructor' || f.name === 'prototype') continue;
         try {
-          results[f.name] = evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions);
+          setSafeNumericField(
+            results,
+            f.name,
+            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions)
+          );
         } catch {
-          results[f.name] = 0;
+          setSafeNumericField(results, f.name, 0);
         }
       }
       return results;
@@ -995,7 +1013,7 @@ export async function simulate(
           }
           if (model.parameters && model.parameters[change.parameter] !== newVal) {
 
-            model.parameters[change.parameter] = newVal;
+            setSafeNumericField(model.parameters as Record<string, number>, change.parameter, newVal);
 
             // PARITY FIX: If a parameter is explicitly set, we should stop re-evaluating it 
             // from its original expression (if it had one). 
@@ -1028,7 +1046,7 @@ export async function simulate(
                 const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
                 if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
 
-                  model.parameters[name] = val;
+                  setSafeNumericField(model.parameters as Record<string, number>, name, val);
                   anyChanged = true;
                 }
               } catch (e: any) {
@@ -1609,8 +1627,8 @@ export async function simulate(
         if (s.name.includes('s~P') && s.name.includes('loc~nuc')) pstatIndices.push(idx);
       });
       if (pstatIndices.length > 0) {
-        const prodRates: Record<string, number> = {};
-        for (const idx of pstatIndices) prodRates[model.species[idx].name] = 0;
+        const prodRates: Record<string, number> = Object.create(null) as Record<string, number>;
+        for (const idx of pstatIndices) setSafeNumericField(prodRates, model.species[idx].name, 0);
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           let rate = rxn.rateConstant;
@@ -1630,7 +1648,12 @@ export async function simulate(
             for (let j = 0; j < rxn.products.length; j++) {
               const prodIdx = rxn.products[j];
               if (pstatIndices.includes(prodIdx)) {
-                prodRates[model.species[prodIdx].name] += velocity * (rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1);
+                const prodName = model.species[prodIdx].name;
+                setSafeNumericField(
+                  prodRates,
+                  prodName,
+                  (prodRates[prodName] ?? 0) + velocity * (rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1)
+                );
               }
             }
           }
@@ -1790,20 +1813,20 @@ export async function simulate(
         for (let i = 0; i < parameterNames.length; i++) {
           const parameterName = parameterNames[i];
           if (parameterName === '__proto__' || parameterName === 'constructor' || parameterName === 'prototype') continue;
-          rateContext[parameterName] = model.parameters[parameterName];
+          setSafeNumericField(rateContext, parameterName, model.parameters[parameterName]);
         }
         // Initialize observable slots
         for (let i = 0; i < observableNames.length; i++) {
           const observableName = observableNames[i];
           if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
-            rateContext[observableName] = 0;
+            setSafeNumericField(rateContext, observableName, 0);
           }
         }
         // Initialize species name slots
         for (let k = 0; k < model.species.length; k++) {
           const speciesName = model.species[k].name;
           if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
-            rateContext[speciesName] = 0;
+            setSafeNumericField(rateContext, speciesName, 0);
           }
         }
         // Initialize ridxN slots
@@ -1819,16 +1842,18 @@ export async function simulate(
           for (let i = 0; i < observableNames.length; i++) {
             const observableName = observableNames[i];
             if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
-              rateContext[observableName] = obsValues[observableName];
+              setSafeNumericField(rateContext, observableName, obsValues[observableName]);
             }
           }
           // Update species values in the mutable context (in-place)
           for (let k = 0; k < model.species.length; k++) {
             const speciesName = model.species[k].name;
             if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
-              rateContext[speciesName] = odeUsesAmountState
-                ? yIn[k]
-                : (yIn[k] * speciesVolumes[k]);
+              setSafeNumericField(
+                rateContext,
+                speciesName,
+                odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k])
+              );
             }
           }
 
