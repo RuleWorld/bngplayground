@@ -29,6 +29,12 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
 
   // Preload embedding model on mount
   useEffect(() => {
+    const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+    const isFirefox = /firefox/i.test(ua);
+    if (isFirefox) {
+      return;
+    }
+
     setIsModelLoading(true);
     preloadEmbeddingModel();
     // Model loads in background; we'll know it's ready when first search succeeds

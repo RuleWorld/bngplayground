@@ -8,7 +8,7 @@ const operationStyles: Record<RuleOperation['type'], string> = {
   unbind: 'bg-rose-500 text-white',
   state_change: 'bg-sky-500 text-white',
   add_molecule: 'bg-violet-500 text-white',
-  remove_molecule: 'bg-slate-50 dark:bg-slate-900/500 text-white',
+  remove_molecule: 'bg-slate-50 dark:bg-slate-900/50 text-white',
 };
 
 const operationLabel: Record<RuleOperation['type'], string> = {
@@ -95,7 +95,7 @@ export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps
         <span className="text-xs font-mono text-slate-500 dark:text-slate-400">k = {rule.rate}</span>
       </div>
       {classification && (
-        <div className="mb-4 rounded-md border border-slate-100 bg-slate-50 dark:bg-slate-900/50/70 p-2 text-xs text-slate-600 dark:text-slate-400 dark:border-slate-700/70 dark:bg-slate-800/60 dark:text-slate-300">
+        <div className="mb-4 rounded-md border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-700/70 dark:bg-slate-800/60 dark:text-slate-300">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <RuleChangeBadges summary={classification} size="xs" />
           </div>

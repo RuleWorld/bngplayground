@@ -41,6 +41,16 @@ import { setCVodeSensModule } from '../../analysis/DifferentiableSolver';
 
 type DerivativeFunction = (y: Float64Array, dydt: Float64Array) => void;
 
+const WINDOWS_ABS_PATH_RE = /[A-Za-z]:\\(?:[^\\\]\r\n]+\\)*[^\\\]\r\n]+/g;
+const POSIX_ABS_PATH_RE = /\/(?:Users|home)\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+/g;
+
+const sanitizeRuntimeLog = (message: unknown): string => {
+  const text = String(message ?? '');
+  return text
+    .replace(WINDOWS_ABS_PATH_RE, '<local-path>')
+    .replace(POSIX_ABS_PATH_RE, '<local-path>');
+};
+
 const DEFAULT_OPTIONS: SolverOptions = {
   atol: 1e-8,          // Absolute tolerance (matches BNG2 CVODE default)
   rtol: 1e-8,          // Relative tolerance (matches BNG2 CVODE default)
@@ -328,6 +338,12 @@ export class CVODESolver {
         }
 
         this.module = await loader({
+          print: (text: unknown) => {
+            console.log(sanitizeRuntimeLog(text));
+          },
+          printErr: (text: unknown) => {
+            console.error(sanitizeRuntimeLog(text));
+          },
           locateFile: (path: string) => {
             if (path.endsWith('.wasm')) {
               if (isNode) {
