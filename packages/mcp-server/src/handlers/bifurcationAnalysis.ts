@@ -16,12 +16,19 @@ type ExpandedSpecies = {
   initialAmount?: number;
 };
 
+type EngineEigenvalue = {
+  re?: number;
+  im?: number;
+  real?: number;
+  imag?: number;
+};
+
 type EngineContinuationPoint = { stable: boolean };
 type EngineBifurcation = {
   parameterValue: number;
   type: string;
   frequency?: number;
-  criticalEigenvalues?: unknown[];
+  criticalEigenvalues?: EngineEigenvalue[];
 };
 type EngineContinuationResult = {
   bifurcations: EngineBifurcation[];
@@ -52,10 +59,22 @@ type EngineModule = {
   }) => EngineContinuationResult | Promise<EngineContinuationResult>;
 };
 
+function assertEngineModule(module: unknown): asserts module is EngineModule {
+  if (!module || typeof module !== 'object') {
+    throw new Error('Failed to load engine module.');
+  }
+  const maybeModule = module as Partial<EngineModule>;
+  if (typeof maybeModule.JITCompiler !== 'function' || typeof maybeModule.continuation !== 'function') {
+    throw new Error('Engine module is missing required bifurcation analysis exports.');
+  }
+}
+
 export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolResult<any>> {
   const parsedArgs: BifurcationAnalysisArgs = (args ?? {}) as BifurcationAnalysisArgs;
   try {
-    const engine = (await import('@bngplayground/engine')) as unknown as EngineModule;
+    const rawEngine = await import('@bngplayground/engine');
+    assertEngineModule(rawEngine);
+    const engine = rawEngine;
     const model = parseModelOrThrow(parsedArgs.code ?? '');
     const expandedModel = await expandModel(model);
 
