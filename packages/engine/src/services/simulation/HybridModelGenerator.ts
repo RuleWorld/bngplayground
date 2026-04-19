@@ -417,13 +417,33 @@ export class HybridModelGenerator {
         // 1. Strip component groups to avoid misidentifying uppercase states or components
         // 2. Remove compartment prefixes (e.g., @cell:)
         // 3. Split by '.' to handle multi-molecule patterns
-        const strippedPattern = pattern.replace(/\(.*?\)/g, '');
+        const strippedPattern = (() => {
+          let out = '';
+          let depth = 0;
+          for (let i = 0; i < pattern.length; i++) {
+            const ch = pattern[i];
+            if (ch === '(') {
+              depth++;
+              continue;
+            }
+            if (ch === ')') {
+              depth = Math.max(0, depth - 1);
+              continue;
+            }
+            if (depth === 0) out += ch;
+          }
+          return out;
+        })();
         const moleculeNames = strippedPattern.split('.')
           .map(part => {
             const colonIndex = part.indexOf(':');
             return colonIndex !== -1 ? part.substring(colonIndex + 1) : part;
           })
-          .filter(name => name.length > 0 && /^[A-Z]/.test(name)); // Molecules must start with uppercase
+          .filter(name => {
+            if (name.length === 0) return false;
+            const first = name.charCodeAt(0);
+            return first >= 65 && first <= 90;
+          }); // Molecules must start with uppercase
 
         for (const molName of moleculeNames) {
           if (populationMolecules.has(molName)) {

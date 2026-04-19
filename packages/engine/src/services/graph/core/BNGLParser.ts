@@ -318,8 +318,8 @@ export class BNGLParser {
       }
       // Molecule without components, e.g., "A"
       // Validate name starts with letter or underscore (not number)
-      const simpleMatch = baseStr.trim().match(/^[A-Za-z_][A-Za-z0-9_]*$/);
-      if (simpleMatch) {
+      const trimmedBase = baseStr.trim();
+      if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(trimmedBase)) {
         const molecule = new Molecule(baseStr, [], compartment);
         if (label) molecule.label = label;
         return molecule;
@@ -633,11 +633,16 @@ export class BNGLParser {
   static getSeedParameters(bnglCode: string): string[] {
     if (!bnglCode) return [];
 
-    // Find the seed species block
-    const seedMatch = bnglCode.match(/begin\s+seed\s+species[\s\S]*?end\s+seed\s+species/i);
-    if (!seedMatch) return [];
+    // Find the seed species block using deterministic scanning
+    const lower = bnglCode.toLowerCase();
+    const beginToken = 'begin seed species';
+    const endToken = 'end seed species';
+    const beginIdx = lower.indexOf(beginToken);
+    if (beginIdx < 0) return [];
+    const endIdx = lower.indexOf(endToken, beginIdx + beginToken.length);
+    if (endIdx < 0) return [];
 
-    const block = seedMatch[0];
+    const block = bnglCode.slice(beginIdx, endIdx + endToken.length);
     const parameterNames = new Set<string>();
 
     // Parse each line in the block

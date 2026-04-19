@@ -57,10 +57,44 @@ const normalizeLegacySuffixCompartment = (s: string): string => {
     if (!s) return s;
     // Normalize legacy BNGL syntax like `B@EC()` to canonical `B()@EC`.
     // Apply globally to support multi-molecule patterns such as `A@CP().B@PM()`.
-    return s.replace(/([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g, (_m, mol, comp, args) => {
-        const inside = String(args ?? '');
-        return `${mol}(${inside})@${comp}`;
-    });
+    let out = '';
+    for (let i = 0; i < s.length;) {
+        if (!/[A-Za-z_]/.test(s[i])) {
+            out += s[i++];
+            continue;
+        }
+
+        let molEnd = i + 1;
+        while (molEnd < s.length && /[A-Za-z0-9_]/.test(s[molEnd])) molEnd++;
+        if (molEnd >= s.length || s[molEnd] !== '@') {
+            out += s.slice(i, molEnd);
+            i = molEnd;
+            continue;
+        }
+
+        const compStart = molEnd + 1;
+        let compEnd = compStart;
+        while (compEnd < s.length && /[A-Za-z0-9_]/.test(s[compEnd])) compEnd++;
+        if (compEnd >= s.length || s[compEnd] !== '(') {
+            out += s.slice(i, compEnd);
+            i = compEnd;
+            continue;
+        }
+
+        const argStart = compEnd + 1;
+        const argEnd = s.indexOf(')', argStart);
+        if (argEnd < 0) {
+            out += s.slice(i);
+            break;
+        }
+
+        const mol = s.slice(i, molEnd);
+        const comp = s.slice(compStart, compEnd);
+        const inside = s.slice(argStart, argEnd);
+        out += `${mol}(${inside})@${comp}`;
+        i = argEnd + 1;
+    }
+    return out;
 };
 
 export const getCompartment = (s: string) => {
