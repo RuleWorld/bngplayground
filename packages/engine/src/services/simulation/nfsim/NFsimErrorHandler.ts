@@ -75,7 +75,27 @@ export class NFsimErrorHandler {
   }
 
   parseStderr(stderr: string): string[] {
-    return stderr.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+    const result: string[] = [];
+    let start = 0;
+    let index: number;
+    while ((index = stderr.indexOf('\n', start)) !== -1) {
+      let s = start;
+      let e = index;
+      if (e > s && stderr.charCodeAt(e - 1) === 13) e--;
+      while (s < e && stderr.charCodeAt(s) <= 32) s++;
+      while (e > s && stderr.charCodeAt(e - 1) <= 32) e--;
+      if (s < e) result.push(stderr.substring(s, e));
+      start = index + 1;
+    }
+
+    let s = start;
+    let e = stderr.length;
+    if (e > s && stderr.charCodeAt(e - 1) === 13) e--;
+    while (s < e && stderr.charCodeAt(s) <= 32) s++;
+    while (e > s && stderr.charCodeAt(e - 1) <= 32) e--;
+    if (s < e) result.push(stderr.substring(s, e));
+
+    return result;
   }
 
   getErrorStatistics() {

@@ -2234,15 +2234,6 @@ export async function simulate(
     const allMassAction = functionalRateCount === 0;
 
     // Stiffness Analysis
-    let maxRate = -Infinity;
-    let minRate = Infinity;
-    for (const rxn of concreteReactions) {
-      if (rxn.rateConstant > 0) {
-        maxRate = Math.max(maxRate, rxn.rateConstant);
-        minRate = Math.min(minRate, rxn.rateConstant);
-      }
-    }
-    // const rateRatio = minRate > 0 ? maxRate / minRate : 1;
     const methodRates = concreteReactions.map(r => r.rateConstant);
     const stiffnessProfile = analyzeModelStiffness(methodRates, {
       hasFunctionalRates: functionalRateCount > 0,

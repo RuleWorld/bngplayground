@@ -278,33 +278,8 @@ export function buildJacobianFunction(
         rhsFunction(fdYPerturbed, fdDydt1);
 
         // FD approximation: only add contributions from functional reactions.
-        // We compute the full FD column but only add the difference that
-        // functional reactions contribute. Since we already handled mass-action
-        // analytically, and we cannot separate functional contributions from
-        // the full RHS easily, we use a simpler approach: compute full FD for
-        // the functional-rate contributions only.
-        //
-        // However, separating functional-rate contributions from the full RHS
-        // is non-trivial. Instead, for the hybrid approach, we compute the
-        // functional-rate contribution to the Jacobian column by FD:
-        //   J_func[j*N + i] += (f(y+h*e_j) - f(y)) / h - J_mass_action[j*N + i]
-        //
-        // This is equivalent to: full FD Jacobian minus mass-action analytical.
-        // But this is wasteful. A cleaner approach: compute full FD for column j
-        // and ONLY write entries that correspond to species affected by functional reactions.
-
-        // For simplicity and correctness, add the FD delta for ALL species.
-        // The mass-action part was already added above, so subtract it from the
-        // FD estimate to avoid double-counting.
-        //
-        // Actually, the cleanest hybrid approach: compute the full column via FD
-        // and replace what we already computed analytically. But that defeats the
-        // purpose of the analytical Jacobian.
-        //
-        // Best hybrid strategy: for species i that are ONLY affected by mass-action
-        // reactions, the analytical part is exact. For species i that are affected
-        // by at least one functional reaction, we need the FD column entry.
-        // We track which species are "tainted" by functional reactions.
+        // We compute the full FD column and subtract the mass-action analytical contribution.
+        // This isolates the functional-rate contribution and avoids double-counting.
 
         const hInv = 1.0 / h;
         for (let i = 0; i < N; i++) {

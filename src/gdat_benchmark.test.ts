@@ -226,7 +226,6 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
   const rules = inputModel.reactionRules.flatMap((r, i) => {
     const parametersMap = new Map(Object.entries(inputModel.parameters).map(([k, v]) => [k, Number(v)]));
     const rateStr = String(r.rate); // Ensure string
-    // FIX: Skip evaluating Arrhenius strings via generic evaluator to avoid ReferenceError.
     // The NetworkGenerator handles Arrhenius evaluation internally.
     const isArrhenius = /Arrhenius\s*\(/i.test(rateStr);
     const rate = isArrhenius ? 1 : BNGLParser.evaluateExpression(rateStr, parametersMap);
@@ -759,6 +758,7 @@ function recomputeDerivedParameters(
     let changed = false;
     for (const [name, expr] of Object.entries(exprs)) {
       if (overridden.has(name)) continue;
+      if (/Arrhenius\s*\(/i.test(expr)) continue;
       try {
         const val = BNGLParser.evaluateExpression(expr, parametersMap);
         if (Number.isFinite(val)) {
