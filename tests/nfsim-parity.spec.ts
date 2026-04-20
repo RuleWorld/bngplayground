@@ -11,7 +11,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 
 const TEST_DIR = path.join(process.cwd(), 'temp_nfsim_parity');
 const SEED = 12345;
@@ -137,7 +137,7 @@ describe('NFsim WASM Parity', () => {
             // Step 1: Generate XML using BNG2.pl
             console.log(`[${model.name}] Generating XML...`);
             try {
-                execSync(`perl bionetgen_repo/bionetgen/BNG2.pl --xml ${localBngl}`, {
+                execFileSync('perl', ['bionetgen_repo/bionetgen/BNG2.pl', '--xml', localBngl], {
                     cwd: process.cwd(),
                     encoding: 'utf8',
                     timeout: 60000
@@ -165,7 +165,9 @@ describe('NFsim WASM Parity', () => {
                     return;
                 }
 
-                execSync(`${nfsimBin} -xml ${xmlPath} -o ${nativeGdat} -sim ${model.t_end} -oSteps ${model.n_steps} -seed ${SEED} ${cbFlag}`, {
+                const args = ['-xml', xmlPath, '-o', nativeGdat, '-sim', String(model.t_end), '-oSteps', String(model.n_steps), '-seed', String(SEED)];
+                if (cbFlag) args.push(cbFlag);
+                execFileSync(nfsimBin, args, {
                     cwd: process.cwd(),
                     encoding: 'utf8',
                     timeout: 120000

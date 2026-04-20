@@ -142,7 +142,7 @@ export class RxnRule {
       const index = parseInt(argBody.slice(0, commaIdx).trim(), 10);
       const patternStr = argBody.slice(commaIdx + 1).trim();
       if (!Number.isFinite(index) || !patternStr) {
-        console.warn(`Unknown or malformed constraint: ${constraint}`);
+        console.warn('Unknown or malformed constraint:', constraint);
         continue;
       }
 
@@ -162,7 +162,7 @@ export class RxnRule {
           this.includeProducts.push({ productIndex: mappedIndex, pattern });
         }
       } catch (e) {
-        console.warn(`Failed to parse pattern in constraint: ${constraint}`, e);
+        console.warn('Failed to parse pattern in constraint:', constraint, e);
       }
     }
   }

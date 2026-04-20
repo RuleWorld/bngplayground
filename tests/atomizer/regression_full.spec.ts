@@ -422,20 +422,17 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
         const oldLog = console.log, oldWarn = console.warn, oldError = console.error, oldInfo = console.info;
         runLogs = [];
         const logDir = join(process.cwd(), 'artifacts', 'logs');
-        if (!fs.existsSync(logDir)) fs.mkdirSync(logDir, { recursive: true });
+        fs.mkdirSync(logDir, { recursive: true });
         const logFile = join(logDir, `${modelKey}.log`);
-        if (fs.existsSync(logFile)) fs.unlinkSync(logFile);
-        fs.writeFileSync(logFile, '', 'utf8');
+        fs.writeFileSync(logFile, '', { encoding: 'utf8', flag: 'w' });
 
         const diagDir = join(process.cwd(), 'artifacts', 'diagnostics');
-        if (!fs.existsSync(diagDir)) fs.mkdirSync(diagDir, { recursive: true });
+        fs.mkdirSync(diagDir, { recursive: true });
 
         const appendLog = (level: string, ...args: any[]) => {
           try {
             const msg = `[${level.toUpperCase()}] ` + args.map(a => (typeof a === 'object' ? JSON.stringify(a) : String(a))).join(' ') + '\n';
-            if (fs.existsSync(logFile)) {
-              fs.appendFileSync(logFile, msg, 'utf8');
-            }
+            fs.appendFileSync(logFile, msg, 'utf8');
             if (runLogs.length < 100) runLogs.push(msg.trim());
             else if (runLogs.length === 100) runLogs.push('... logs truncated, see ' + logFile);
           } catch (e) { /* silent fail on log write */ }
@@ -678,17 +675,17 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
       // Merge master report with existing master file (if present)
       const masterPath = join(process.cwd(), 'artifacts', 'master_regression_report.json');
       let perModelStore: Record<string, { history: RunSummary[]; latest?: RunSummary }> = {};
-      if (fs.existsSync(masterPath)) {
-        try {
-          const content = readFileSync(masterPath, 'utf8');
-          const parsed = JSON.parse(content);
-          // Handle nested result from previous bug: find the deepest 'perModel'
-          let current = parsed;
-          while (current && current.perModel) {
-            current = current.perModel;
-          }
-          perModelStore = current || {};
-        } catch (e) {
+      try {
+        const content = readFileSync(masterPath, 'utf8');
+        const parsed = JSON.parse(content);
+        // Handle nested result from previous bug: find the deepest 'perModel'
+        let current = parsed;
+        while (current && current.perModel) {
+          current = current.perModel;
+        }
+        perModelStore = current || {};
+      } catch (e: any) {
+        if (e?.code !== 'ENOENT') {
           perModelStore = {};
         }
       }

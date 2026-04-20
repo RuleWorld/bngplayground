@@ -3086,7 +3086,7 @@ export class NetworkGenerator {
         const autos = GraphMatcher.findAllMaps(pattern, pattern);
         patternAutomorphismFactor *= (autos.length || 1);
       } catch (err) {
-        console.warn(`[NetworkGenerator] Failed to compute automorphisms for pattern ${pattern.toString()}`, err);
+        console.warn('[NetworkGenerator] Failed to compute automorphisms for pattern:', pattern.toString(), err);
       }
     }
 

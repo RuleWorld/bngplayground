@@ -308,8 +308,51 @@ export class BNGLParser {
     // Parse name and components
     // FIX: Molecule name must start with letter or underscore (not number or wildcard)
     // Allow '*' for wildcard molecule patterns
-    const match = baseStr.match(/^\s*([A-Za-z_*][A-Za-z0-9_*]*)\s*(?:\(([^)]*)\))?\s*(?:!([+?]))?\s*(?:@([A-Za-z0-9_]+))?\s*$/);
-    if (!match) {
+    const parseMoleculeFields = (input: string): { name: string; componentStr: string; moleculeWildcard?: string; suffixCompartment?: string } | null => {
+      const str = input.trim();
+      if (!str) return null;
+
+      let idx = 0;
+      const first = str[idx];
+      if (!first || !/[A-Za-z_*]/.test(first)) return null;
+      idx++;
+      while (idx < str.length && /[A-Za-z0-9_*]/.test(str[idx])) idx++;
+      const name = str.slice(0, idx);
+
+      while (idx < str.length && /\s/.test(str[idx])) idx++;
+
+      let componentStr = '';
+      if (idx < str.length && str[idx] === '(') {
+        const closeIdx = str.indexOf(')', idx + 1);
+        if (closeIdx < 0) return null;
+        componentStr = str.slice(idx + 1, closeIdx);
+        idx = closeIdx + 1;
+        while (idx < str.length && /\s/.test(str[idx])) idx++;
+      }
+
+      let moleculeWildcard: string | undefined;
+      if (idx + 1 < str.length && str[idx] === '!' && (str[idx + 1] === '+' || str[idx + 1] === '?')) {
+        moleculeWildcard = str[idx + 1];
+        idx += 2;
+        while (idx < str.length && /\s/.test(str[idx])) idx++;
+      }
+
+      let suffixCompartment: string | undefined;
+      if (idx < str.length && str[idx] === '@') {
+        const comp = str.slice(idx + 1).trim();
+        if (!/^[A-Za-z0-9_]+$/.test(comp)) return null;
+        suffixCompartment = comp;
+        idx = str.length;
+      }
+
+      while (idx < str.length && /\s/.test(str[idx])) idx++;
+      if (idx !== str.length) return null;
+
+      return { name, componentStr, moleculeWildcard, suffixCompartment };
+    };
+
+    const parsedFields = parseMoleculeFields(baseStr);
+    if (!parsedFields) {
       // Check if this is a wildcard-only molecule like "*"
       if (baseStr.trim() === '*') {
         const molecule = new Molecule('*', [], compartment);
@@ -332,10 +375,7 @@ export class BNGLParser {
       );
     }
 
-    const name = match[1];
-    const componentStr = match[2] || '';
-    const moleculeWildcard = match[3];
-    const suffixCompartment = match[4];
+    const { name, componentStr, moleculeWildcard, suffixCompartment } = parsedFields;
 
     if (suffixCompartment) {
       compartment = suffixCompartment;
@@ -790,7 +830,7 @@ export class BNGLParser {
     } catch (e) {
       // Silence errors during multi-pass parameter resolution
       if (!(e instanceof ReferenceError)) {
-        console.error(`[evaluateExpression] Failed to evaluate: "${expr}"`, e);
+        console.error('[evaluateExpression] Failed to evaluate expression:', expr, e);
       }
       return NaN;
     }
