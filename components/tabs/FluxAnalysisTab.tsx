@@ -54,7 +54,6 @@ function computeFluxes(
 
     reaction.reactants.forEach((reactant) => {
       // Find the species concentration from the data point
-      // BUG FIX: Default to 0 (not 1) when species not found
       const concentration = speciesDataPoint[reactant] ?? 0;
       const numericConc = typeof concentration === 'number' ? concentration : 0;
       reactantConcentrations.push(numericConc);
