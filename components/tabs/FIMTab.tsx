@@ -93,7 +93,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       setResult(null);
       setError(null);
     } else if (parameterNames.length > 0 && selected.length === 0) {
-      // default: select all if small count, otherwise first 10
+      // Fallback: select all if small count, otherwise first 10
       setSelected(parameterNames.length <= 20 ? parameterNames.slice() : parameterNames.slice(0, 20));
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
