@@ -789,8 +789,9 @@ export async function simulate(
     const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const includeSpeciesData = options.includeSpeciesData ?? true;
 
-    const normalizeSuffixKey = (suffix?: string): string => {
-      const candidate = (suffix ?? '').trim();
+    const normalizeSuffixKey = (suffix?: unknown): string => {
+      const raw = typeof suffix === 'string' ? suffix : (suffix == null ? '' : String(suffix));
+      const candidate = raw.trim();
       if (!candidate || !isSafeObjectKey(candidate)) return '__default__';
       return candidate;
     };
