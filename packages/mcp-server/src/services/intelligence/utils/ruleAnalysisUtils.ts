@@ -3,14 +3,38 @@ import { extractMoleculeNames } from './graphUtils.js';
 
 export function getMoleculeCounts(side: string): Map<string, number> {
     const counts = new Map<string, number>();
-    const tokens = side.split('+').map((token) => token.trim()).filter(Boolean);
-    for (const token of tokens) {
-        const moleculeMatch = token.match(/^([A-Za-z][A-Za-z0-9_]*)\(/);
-        if (!moleculeMatch) {
-            continue;
+    let start = 0;
+    const len = side.length;
+    while (start < len) {
+        let nextPlus = side.indexOf('+', start);
+        if (nextPlus === -1) nextPlus = len;
+
+        let tokenStart = start;
+        while (tokenStart < nextPlus && side.charCodeAt(tokenStart) <= 32) {
+            tokenStart++;
         }
-        const name = moleculeMatch[1];
-        counts.set(name, (counts.get(name) ?? 0) + 1);
+
+        if (tokenStart < nextPlus) {
+            let i = tokenStart;
+            let code = side.charCodeAt(i);
+            if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122)) { // A-Z, a-z
+                i++;
+                while (i < nextPlus) {
+                    code = side.charCodeAt(i);
+                    if ((code >= 65 && code <= 90) || (code >= 97 && code <= 122) || (code >= 48 && code <= 57) || code === 95) { // A-Z, a-z, 0-9, _
+                        i++;
+                    } else {
+                        break;
+                    }
+                }
+                if (i < nextPlus && side.charCodeAt(i) === 40) { // '('
+                    const name = side.substring(tokenStart, i);
+                    counts.set(name, (counts.get(name) ?? 0) + 1);
+                }
+            }
+        }
+
+        start = nextPlus + 1;
     }
     return counts;
 }
