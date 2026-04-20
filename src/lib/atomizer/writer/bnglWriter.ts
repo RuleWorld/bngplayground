@@ -119,8 +119,8 @@ function extractStatisticalFactors(
   const coeff = parseFloat(match[1]);
   const rest = match[2];
 
-  // Note: We keep the trailing parenthesis if present, as the finalRate
-  // construction expects balanced parentheses
+  // Note: The trailing parenthesis is intentionally preserved because
+  // subsequent string building logic relies on it for balanced parentheses.
 
   // Check if coefficient matches statistical factors from reactants
   let expectedStatFactor = 1;
