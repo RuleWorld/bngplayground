@@ -615,11 +615,19 @@ function buildResult(
 
   // Posterior correlations
   const posteriorCorrelations: ABCSMCResult['posteriorCorrelations'] = {};
+  const safeParamKey = (key: string): string => {
+    if (key === '__proto__' || key === 'prototype' || key === 'constructor') {
+      return `param_${key}`;
+    }
+    return key;
+  };
   for (let i = 0; i < d; i++) {
-    posteriorCorrelations[paramNames[i]] = {};
+    const keyI = safeParamKey(paramNames[i]);
+    posteriorCorrelations[keyI] = {};
     const vi = particles.map((p) => p.theta[i]);
     const si = weightedStats(vi, weights);
     for (let j = 0; j < d; j++) {
+      const keyJ = safeParamKey(paramNames[j]);
       const vj = particles.map((p) => p.theta[j]);
       const sj = weightedStats(vj, weights);
       // Weighted correlation
@@ -630,7 +638,7 @@ function buildResult(
       }
       cov /= totalW;
       const denom = si.std * sj.std;
-      posteriorCorrelations[paramNames[i]][paramNames[j]] = denom > 0 ? cov / denom : (i === j ? 1 : 0);
+      posteriorCorrelations[keyI][keyJ] = denom > 0 ? cov / denom : (i === j ? 1 : 0);
     }
   }
 
