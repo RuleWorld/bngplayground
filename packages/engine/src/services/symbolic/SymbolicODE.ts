@@ -4,7 +4,7 @@
  * and bifurcation conditions.
  */
 
-import type { BNGLReaction, BNGLSpecies } from '../../types';
+import type { BNGLReaction } from '../../types';
 import {
   type SymExpr,
   symConst,
@@ -21,13 +21,11 @@ import {
   substitute,
   freeVariables,
   collectTerms,
-  exprToString,
 } from './SymbolicExpr';
 import {
   symbolicGaussianElimination,
   symbolicDeterminant,
   solvePolynomialSystem,
-  resultantOfExprs,
 } from './PolynomialSolver';
 
 // ─── Types ───────────────────────────────────────────────────────────────────
@@ -215,11 +213,6 @@ function _findConservationLaws(
   if (nSpecies === 0) return [];
   const nReactions = stoich[0].length;
 
-  // Transpose: S^T is nReactions x nSpecies
-  const ST: number[][] = Array.from({ length: nReactions }, (_, r) =>
-    Array.from({ length: nSpecies }, (_, s) => stoich[s][r])
-  );
-
   // Row reduce S^T to find which columns are dependent
   // We actually need the left null space of S, which is null(S^T)
   // Augment S^T with identity to track transformations
@@ -306,7 +299,7 @@ function _findConservationLaws(
 export function solveSymbolicSteadyState(
   system: SymbolicODESystem
 ): SymbolicSteadyState {
-  const { speciesNames, rhs, conservationLaws, initialConcentrations, parameterNames } = system;
+  const { speciesNames, rhs, conservationLaws } = system;
   const n = speciesNames.length;
 
   if (n === 0) {
@@ -407,8 +400,6 @@ function _solveLinearSteadyState(
   equations: SymExpr[],
   vars: string[]
 ): Map<string, SymExpr> {
-  const n = vars.length;
-
   // Build augmented matrix [A | -b] for the system A*y + b = 0
   // Each equation is f_i(y) = 0; collect linear coefficients
   const augmented: SymExpr[][] = [];
@@ -593,7 +584,7 @@ export function symbolicSensitivity(
   steadyState: SymbolicSteadyState,
   parameterNamesToAnalyze?: string[]
 ): SymbolicSensitivityResult {
-  const { speciesNames, rhs, parameterNames, conservationLaws, initialConcentrations } = system;
+  const { speciesNames, rhs, parameterNames, conservationLaws } = system;
   const n = speciesNames.length;
   const params = parameterNamesToAnalyze || parameterNames;
 
