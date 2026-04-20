@@ -387,9 +387,13 @@ describe.skipIf(!hasBNG2)('Full Published Models Benchmark', () => {
             });
 
             // FIX: Respect parsed network options (especially maxStoich)
-            let maxStoich: number | Record<string, number> = 500;
+            let maxStoich: number | Map<string, number> = 500;
             if (parsedModel.networkOptions?.maxStoich) {
-                maxStoich = parsedModel.networkOptions.maxStoich;
+                if (typeof parsedModel.networkOptions.maxStoich === 'object') {
+                    maxStoich = new Map(Object.entries(parsedModel.networkOptions.maxStoich));
+                } else {
+                    maxStoich = parsedModel.networkOptions.maxStoich;
+                }
             }
 
             // Limit max species 
