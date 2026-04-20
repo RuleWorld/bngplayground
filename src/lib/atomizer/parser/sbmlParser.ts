@@ -425,7 +425,6 @@ export class SBML2JSON {
       if (compData) {
         if (compData[0] === 3) {
           typeD = '3D';
-          const [outside, inside] = this.getOutsideInsideCompartment(compartmentList, compartment);
           diffusion = `KB*T/(6*PI*mu_${compartment}*Rs)`;
         } else {
           typeD = '2D';
@@ -463,7 +462,7 @@ export class SBML2JSON {
       if ((initialConcentration !== 0 || initialAmount !== 0) && compData) {
         let objectExpr: string;
         if (compData[0] === 2) {
-          const [outside, inside] = this.getOutsideInsideCompartment(compartmentList, compartment);
+          const [, inside] = this.getOutsideInsideCompartment(compartmentList, compartment);
           objectExpr = `${inside.toUpperCase()}[${compartment.toUpperCase()}]`;
         } else {
           objectExpr = compartment;
@@ -876,7 +875,6 @@ export class SBMLParser {
    * Parse SBML string and extract model data
    */
   async parse(sbmlString: string): Promise<SBMLModel> {
-    const start = performance.now();
     let document: any;
     let reader: any;
 
