@@ -129,6 +129,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'BNGL code to simulate',
             },
+            output_mode: {
+              type: 'string',
+              enum: ['full', 'observables_only'],
+              description: 'Response payload mode. Use observables_only for LLM clients unless expanded network payloads are needed.',
+            },
             method: {
               type: 'string',
               enum: [...simulationMethods],

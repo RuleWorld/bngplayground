@@ -60,6 +60,13 @@ The MCP server supports end-to-end BNGL workflows:
 
 The authoritative registry for names/descriptions/input schemas is in `src/index.ts` under `ListToolsRequestSchema`.
 
+## Performance Notes
+
+- `simulate` accepts `output_mode` with values:
+    - `full` (default): returns full simulation payload including expanded network fields.
+    - `observables_only`: omits expanded network and species trajectory payloads for token-efficient LLM use.
+- LLM clients should use `output_mode: "observables_only"` unless expanded network data is explicitly needed.
+
 Or add to your MCP client configuration:
 
 ```json

@@ -78,6 +78,22 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(Number.isInteger(result.structuredContent.data[0].A_free)).toBe(true);
     });
 
+    it('should support observables_only output mode for token-efficient clients', async () => {
+        const result = await handleSimulate({
+            code: simpleModel,
+            method: 'ode',
+            t_end: 1,
+            n_steps: 1,
+            output_mode: 'observables_only',
+        });
+
+        expect(result.structuredContent.data).toBeDefined();
+        expect(result.structuredContent.expandedReactions).toBeUndefined();
+        expect(result.structuredContent.expandedSpecies).toBeUndefined();
+        expect(result.structuredContent.speciesData).toBeUndefined();
+        expect(result.structuredContent.speciesDataBySuffix).toBeUndefined();
+    });
+
     it('should run 1D parameter scan', async () => {
         const result = await handleParameterScan({
             code: simpleModel,
