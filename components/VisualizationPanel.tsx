@@ -346,17 +346,18 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'regulatory' && (
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Regulatory Graph"
-              description="A rule-level view of how reactions influence each other. This is different from a standard species-interaction network; it shows which rules enable (activate) or disable (inhibit) other rules."
+              description="An atom-rule dependency view linking reaction rules to atomic patterns (sites, states, and bonds). This is different from the Influence graph: it shows structural dependencies between rules and patterns rather than activation/inhibition polarity."
               features={[
-                "Activation (green +) and Inhibition (red -) edges",
+                "Directed dependencies between atomic patterns and rules",
+                "Interaction and Context edge types",
                 "Rule-to-observable mapping",
                 "Interactive node dragging and zooming",
                 "Rule classification by reaction type"
               ]}
-              plotDescription="Green edges with '+' symbols represent activation (one rule produces a substrate for another). Red edges with '-' symbols represent inhibition (one rule consumes a substrate needed by another)."
+              plotDescription="Purple nodes are rules and tan nodes are atomic patterns. Arrows indicate dependency flow between rules and patterns (for example, required context vs direct interaction). This plot does not encode activation/inhibition sign semantics."
             />
             <ErrorBoundary label="tab:regulatory">
               <RegulatoryTab
@@ -414,7 +415,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'influence' && (
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Structural Influence Graph"
               description="Shows rule-to-rule causal relationships. An edge from rule A to rule B means A's structural changes can affect B's ability to fire."
