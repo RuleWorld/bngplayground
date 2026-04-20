@@ -1,12 +1,11 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
 import { 
   NFsimParameterOptimizer, 
   getParameterOptimizer, 
   resetParameterOptimizer,
   ModelComplexityMetrics,
-  PerformanceMetrics,
-  OptimizationResult
+  PerformanceMetrics
 } from '@bngplayground/engine';
 import { NFsimExecutionOptions } from '@bngplayground/engine';
 
@@ -34,7 +33,7 @@ describe('NFsim Performance Optimization', () => {
             // the system should automatically optimize UTL and GML parameters to maintain linear scaling performance
             // **Validates: Requirements 2.4, 6.1, 6.5**
 
-            const { xmlContent, complexityLevel, expectedFeatures } = modelData;
+            const { xmlContent } = modelData;
 
             try {
               // Test parameter optimization
@@ -238,10 +237,6 @@ describe('NFsim Performance Optimization', () => {
                   }
                   
                   // Should have reasoning about memory reduction
-                  const hasMemoryReasoning = optimizationResult.reasoning.some(reason => 
-                    reason.toLowerCase().includes('memory') || 
-                    reason.toLowerCase().includes('utl')
-                  );
                   // Note: Memory reasoning may vary based on implementation
                   // The key test is that reasoning is provided
                   expect(optimizationResult.reasoning.length).toBeGreaterThan(0);
@@ -251,11 +246,6 @@ describe('NFsim Performance Optimization', () => {
                 if (avgExecutionTime > 30000) { // 30 seconds
                   expect(optimizationResult.warnings.length).toBeGreaterThan(0);
                   
-                  const hasPerformanceWarning = optimizationResult.warnings.some(warning => 
-                    warning.toLowerCase().includes('slow') || 
-                    warning.toLowerCase().includes('time') ||
-                    warning.toLowerCase().includes('performance')
-                  );
                   // Note: Performance warning content may vary based on implementation
                   // The key test is that warnings are provided for slow runs
                   expect(optimizationResult.warnings.length).toBeGreaterThan(0);

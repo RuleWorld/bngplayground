@@ -1,14 +1,10 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
 import { 
   NFsimFunctionCompatibility, 
   getFunctionCompatibilityChecker, 
-  resetFunctionCompatibilityChecker,
-  FunctionDefinition,
-  CompatibilityAnalysis,
-  ReplacementSuggestion
+  resetFunctionCompatibilityChecker
 } from '@bngplayground/engine';
-import { BNGLModel, BNGLFunction } from '../../types';
 
 describe('NFsim Function Compatibility Validation', () => {
   let functionChecker: NFsimFunctionCompatibility;
@@ -33,7 +29,7 @@ describe('NFsim Function Compatibility Validation', () => {
             // and provide appropriate warnings for unsupported constructs
             // **Validates: Requirements 2.5, 5.4**
 
-            const { xmlContent, functions, expectedCompatibility } = modelData;
+            const { xmlContent, functions } = modelData;
 
             try {
               // Test function compatibility analysis
@@ -267,10 +263,6 @@ describe('NFsim Function Compatibility Validation', () => {
       expect(analysis.incompatibleFunctions).toBeGreaterThan(0);
       
       // Observable dependency might be detected through function issues or critical issues
-      const hasObservableIssue = analysis.functionDefinitions.some(func => 
-        func.issues.some(issue => issue.includes('observable') || issue.includes('Observable'))
-      ) || analysis.criticalIssues.some(issue => issue.includes('observable-dependent') || issue.includes('Observable-dependent'));
-      
       // If not detected as observable-dependent, should still be incompatible due to other issues
       expect(analysis.overallCompatibility).toBe('incompatible');
     });
