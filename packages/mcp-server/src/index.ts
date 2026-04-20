@@ -337,7 +337,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             code: { type: 'string', description: 'BNGL model code' },
-            parameters: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, min: { type: 'number' }, max: { type: 'number' } }, required: ['name', 'min', 'max'] }, description: 'Parameters to analyze with bounds' },
+            parameters: { type: 'array', minItems: 1, items: { type: 'object', properties: { name: { type: 'string' }, min: { type: 'number' }, max: { type: 'number' } }, required: ['name', 'min', 'max'] }, description: 'Parameters to analyze with bounds (must be non-empty)' },
             observables: { type: 'array', items: { type: 'string' }, description: 'Observables to analyze (default: all)' },
             n_samples: { type: 'number', description: 'Saltelli base samples (default: 512)' },
             n_bootstrap: { type: 'number', description: 'Bootstrap replicates (default: 500)' },

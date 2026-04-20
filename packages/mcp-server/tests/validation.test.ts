@@ -37,6 +37,23 @@ begin reaction rules
 end reaction rules
 `;
 
+const seedExpressionModel = `
+begin parameters
+    A0 10
+end parameters
+begin molecule types
+    A()
+end molecule types
+begin seed species
+    A() A0
+end seed species
+begin observables
+    Molecules A_obs A()
+end observables
+begin reaction rules
+end reaction rules
+`;
+
 describe('MCP Server Tools Functional Validation', () => {
     it('should parse BNGL code (parse_bngl)', async () => {
         const result = await handleParseBngl({ code: simpleModel });
@@ -108,6 +125,23 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(result.structuredContent.xValues.length).toBe(3);
         expect(result.structuredContent.observables.Complex).toBeDefined();
         expect(result.structuredContent.observables.Complex.length).toBe(3);
+    });
+
+    it('should re-evaluate seed species expressions during parameter_scan', async () => {
+        const result = await handleParameterScan({
+            code: seedExpressionModel,
+            parameter: 'A0',
+            start: 10,
+            end: 30,
+            steps: 3,
+            t_end: 1,
+            n_steps: 1,
+        });
+
+        expect(result.structuredContent.mode).toBe('1d');
+        expect(result.structuredContent.observables.A_obs.length).toBe(3);
+        expect(result.structuredContent.observables.A_obs[0]).toBeCloseTo(10, 6);
+        expect(result.structuredContent.observables.A_obs[2]).toBeCloseTo(30, 6);
     });
 
     it('should run 2D parameter scan', async () => {

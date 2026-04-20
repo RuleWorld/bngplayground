@@ -1,4 +1,4 @@
-import { computeDoseResponse, loadEvaluator } from '@bngplayground/engine';
+import { computeDoseResponse, loadEvaluator, simulate } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { doseResponseArgsSchema } from '../schemas/index.js';
 import {
@@ -6,8 +6,97 @@ import {
     parseArgs,
     parseModelOrThrow,
     expandModel,
+    cloneExpandedModel,
+    updateMassActionRates,
 } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
+
+function generateDosePoints(min: number, max: number, nPoints: number, logScale: boolean): number[] {
+    const doses = new Array<number>(nPoints);
+    if (logScale && min > 0 && max > 0) {
+        const logMin = Math.log(min);
+        const logMax = Math.log(max);
+        for (let i = 0; i < nPoints; i++) {
+            const frac = nPoints > 1 ? i / (nPoints - 1) : 0;
+            doses[i] = Math.exp(logMin + frac * (logMax - logMin));
+        }
+        return doses;
+    }
+
+    for (let i = 0; i < nPoints; i++) {
+        const frac = nPoints > 1 ? i / (nPoints - 1) : 0;
+        doses[i] = min + frac * (max - min);
+    }
+    return doses;
+}
+
+async function computeDoseResponseBySimulation(
+    expandedModel: any,
+    inputParameter: string,
+    observables: string[],
+    inputMin: number,
+    inputMax: number,
+    nPoints: number,
+    logScale: boolean,
+    tEnd: number,
+): Promise<{ curves: Array<{ observable: string; doses: number[]; responses: number[] }>; failedDoses: number[] }> {
+    const doses = generateDosePoints(inputMin, inputMax, nPoints, logScale);
+    const failedDoses: number[] = [];
+    const responsesByObservable = new Map<string, number[]>();
+    const successfulDoses: number[] = [];
+
+    observables.forEach((obs) => {
+        responsesByObservable.set(obs, []);
+    });
+
+    const simOptions = {
+        method: 'ode',
+        t_end: tEnd,
+        n_steps: 200,
+        solver: 'auto' as const,
+    };
+
+    for (const dose of doses) {
+        try {
+            const runModel = cloneExpandedModel(expandedModel);
+            runModel.parameters[inputParameter] = dose;
+            updateMassActionRates(runModel);
+
+            const simResult = await simulate(0, runModel, simOptions, {
+                checkCancelled: () => { },
+                postMessage: () => { },
+            });
+
+            const finalRow = simResult.data?.[simResult.data.length - 1];
+            if (!finalRow) {
+                failedDoses.push(dose);
+                continue;
+            }
+
+            const values = observables.map((obs) => Number(finalRow[obs]));
+            if (values.some((value) => !Number.isFinite(value))) {
+                failedDoses.push(dose);
+                continue;
+            }
+
+            successfulDoses.push(dose);
+            observables.forEach((obs, index) => {
+                responsesByObservable.get(obs)!.push(values[index]);
+            });
+        } catch {
+            failedDoses.push(dose);
+        }
+    }
+
+    return {
+        curves: observables.map((obs) => ({
+            observable: obs,
+            doses: successfulDoses,
+            responses: responsesByObservable.get(obs) ?? [],
+        })),
+        failedDoses,
+    };
+}
 
 /**
  * dose_response
@@ -53,6 +142,43 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             ));
         }
 
+        const nPoints = parsedArgs.n_points ?? 50;
+        const logScale = parsedArgs.log_scale ?? true;
+        const tEnd = parsedArgs.t_end ?? 1e4;
+
+        if (parsedArgs.method === 'simulate') {
+            const simulated = await computeDoseResponseBySimulation(
+                expanded,
+                parsedArgs.input_parameter,
+                parsedArgs.observables,
+                parsedArgs.input_min,
+                parsedArgs.input_max,
+                nPoints,
+                logScale,
+                tEnd,
+            );
+
+            const totalPoints = simulated.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
+            if (totalPoints === 0) {
+                return createToolResult(structureError(
+                    new Error('dose_response produced no curve points using method="simulate". Try increasing t_end or checking model observables/parameter ranges.'),
+                ));
+            }
+
+            return createToolResult({
+                inputParameter: parsedArgs.input_parameter,
+                methodUsed: 'simulate',
+                failedDoses: simulated.failedDoses,
+                summary: {
+                    nCurves: simulated.curves.length,
+                    nFailed: simulated.failedDoses.length,
+                    nFitted: 0,
+                    nBifurcationPoints: 0,
+                },
+                curves: simulated.curves,
+            });
+        }
+
         const requestedToEngineObservable = new Map<string, string>();
         const modelObservables = model.observables ?? [];
         const speciesNames = new Set((expanded.species ?? []).map((s) => s.name));
@@ -83,6 +209,42 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             detectBifurcations: parsedArgs.detect_bifurcations,
         });
 
+        const totalRootfindPoints = result.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
+        if (totalRootfindPoints === 0) {
+            const simulated = await computeDoseResponseBySimulation(
+                expanded,
+                parsedArgs.input_parameter,
+                parsedArgs.observables,
+                parsedArgs.input_min,
+                parsedArgs.input_max,
+                nPoints,
+                logScale,
+                tEnd,
+            );
+            const totalSimPoints = simulated.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
+
+            if (totalSimPoints === 0) {
+                return createToolResult(structureError(
+                    new Error('dose_response produced empty curves: root-finding did not converge and simulation fallback also failed. Try method="simulate", increasing t_end, or narrowing the input range.'),
+                ));
+            }
+
+            return createToolResult({
+                inputParameter: parsedArgs.input_parameter,
+                methodUsed: 'simulate',
+                fallbackUsed: 'rootfind_to_simulate',
+                warning: 'Root-finding produced no curve points; returned simulation-based fallback curves instead.',
+                failedDoses: simulated.failedDoses,
+                summary: {
+                    nCurves: simulated.curves.length,
+                    nFailed: simulated.failedDoses.length,
+                    nFitted: 0,
+                    nBifurcationPoints: 0,
+                },
+                curves: simulated.curves,
+            });
+        }
+
         const engineToRequestedObservable = new Map<string, string>();
         for (const [requested, engineObservable] of requestedToEngineObservable.entries()) {
             engineToRequestedObservable.set(engineObservable, requested);
@@ -90,6 +252,7 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
 
         return createToolResult({
             inputParameter: result.inputParameter,
+            methodUsed: 'rootfind',
             failedDoses: result.failedDoses,
             summary: {
                 nCurves: result.curves.length,

@@ -10,6 +10,28 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
 
+        const modelParameterNames = new Set(Object.keys(expandedModel.parameters));
+        const unknownParameters = parsedArgs.parameters
+            .map((p: any) => p.name)
+            .filter((name: string) => !modelParameterNames.has(name));
+        if (unknownParameters.length > 0) {
+            throw new Error(`Unknown Sobol parameters: ${unknownParameters.join(', ')}. Available parameters: ${Array.from(modelParameterNames).join(', ')}`);
+        }
+
+        const invalidBounds = parsedArgs.parameters.filter((p: any) => !Number.isFinite(p.min) || !Number.isFinite(p.max) || p.min >= p.max);
+        if (invalidBounds.length > 0) {
+            const details = invalidBounds.map((p: any) => `${p.name} [min=${p.min}, max=${p.max}]`).join('; ');
+            throw new Error(`Invalid Sobol parameter bounds (expected finite min < max): ${details}`);
+        }
+
+        const modelObservableNames = new Set(expandedModel.observables.map((o) => o.name));
+        if (parsedArgs.observables && parsedArgs.observables.length > 0) {
+            const unknownObservables = parsedArgs.observables.filter((name: string) => !modelObservableNames.has(name));
+            if (unknownObservables.length > 0) {
+                throw new Error(`Unknown Sobol observables: ${unknownObservables.join(', ')}. Available observables: ${Array.from(modelObservableNames).join(', ')}`);
+            }
+        }
+
         const simOptions = buildSimulationOptions(parsedArgs);
         await loadEvaluator();
 
@@ -36,6 +58,10 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
             nBootstrap: parsedArgs.n_bootstrap ?? 500,
             logScale: parsedArgs.log_scale,
         });
+
+        if (!results || results.length === 0) {
+            throw new Error('Sobol sensitivity produced no results. Check that requested observables exist and simulation output is non-empty.');
+        }
 
         return createToolResult(results);
     } catch (error) {

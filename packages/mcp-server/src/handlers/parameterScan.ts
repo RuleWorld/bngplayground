@@ -1,8 +1,24 @@
-import { generateRange, simulate, loadEvaluator } from '@bngplayground/engine';
+import { generateRange, simulate, loadEvaluator, BNGLParser } from '@bngplayground/engine';
 import { ToolArgs, ToolResult, ParameterScanResult } from '../types/index.js';
 import { parameterScanArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, buildSimulationOptions, expandModel, assertScannableParameter, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
+
+function reevaluateSeedSpecies(model: any): void {
+  const paramMap = new Map<string, number>(Object.entries(model.parameters ?? {}));
+  const functionMap = new Map<string, { args: string[]; expr: string }>(
+    (model.functions ?? []).map((fn: any) => [fn.name, { args: fn.args ?? [], expr: fn.expression ?? '' }]),
+  );
+
+  for (const species of model.species ?? []) {
+    const expr = typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
+    if (!expr) continue;
+    const evaluated = BNGLParser.evaluateExpression(expr, paramMap, undefined, functionMap);
+    if (Number.isFinite(evaluated)) {
+      species.initialConcentration = evaluated;
+    }
+  }
+}
 
 export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<any>> {
   try {
@@ -44,6 +60,7 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<an
       for (const value of xValues) {
         const runModel = cloneExpandedModel(expandedModel);
         runModel.parameters[parsedArgs.parameter] = value;
+        reevaluateSeedSpecies(runModel);
         updateMassActionRates(runModel);
         const result = await simulate(0, runModel, simulationOptions, {
           checkCancelled: () => { },
@@ -76,6 +93,7 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<an
         const runModel = cloneExpandedModel(expandedModel);
         runModel.parameters[parsedArgs.parameter] = xValues[xIndex];
         runModel.parameters[parsedArgs.parameter2] = yValues[yIndex];
+        reevaluateSeedSpecies(runModel);
         updateMassActionRates(runModel);
         const result = await simulate(0, runModel, simulationOptions, {
           checkCancelled: () => { },

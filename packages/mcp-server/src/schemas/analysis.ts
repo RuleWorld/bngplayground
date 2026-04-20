@@ -7,7 +7,7 @@ export const sobolSensitivityArgsSchema = z.object({
         name: z.string(),
         min: z.number(),
         max: z.number(),
-    })).describe('Parameters to analyze with their bounds'),
+    })).min(1).describe('Parameters to analyze with their bounds (must be non-empty)'),
     observables: z.array(z.string()).optional().describe('Observable names to analyze (default: all)'),
     n_samples: positiveInt.optional().describe('Number of Saltelli base samples (default: 512)'),
     n_bootstrap: positiveInt.optional().describe('Bootstrap replicates for CIs (default: 500)'),
