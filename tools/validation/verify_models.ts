@@ -1,6 +1,5 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
 import { fileURLToPath } from 'url';
 import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
@@ -10,10 +9,6 @@ import { listRuleHubPublishedModelFiles, resolveRuleHubRoot } from '../rulehubLo
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-// Path to BNG2.pl provided by user
-const BNG_PATH = "C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl";
-const PROJECT_ROOT = path.resolve(__dirname, '..');
-
 interface VerificationResult {
   model: string;
   success: boolean;
@@ -22,45 +17,6 @@ interface VerificationResult {
   parserSpecies?: number;
   parserReactions?: number;
   error?: string;
-}
-
-function parseNetFile(netPath: string): { species: number, reactions: number } {
-  const content = fs.readFileSync(netPath, 'utf8');
-  const lines = content.split('\n');
-  let speciesCount = 0;
-  let reactionsCount = 0;
-  let inSpecies = false;
-  let inReactions = false;
-
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith('begin species')) {
-      inSpecies = true;
-      continue;
-    }
-    if (trimmed.startsWith('end species')) {
-      inSpecies = false;
-      continue;
-    }
-    if (trimmed.startsWith('begin reactions')) {
-      inReactions = true;
-      continue;
-    }
-    if (trimmed.startsWith('end reactions')) {
-      inReactions = false;
-      continue;
-    }
-
-    if (inSpecies && trimmed && !trimmed.startsWith('#')) {
-      // Simple check: index followed by species string
-      if (/^\d+\s+/.test(trimmed)) speciesCount++;
-    }
-    if (inReactions && trimmed && !trimmed.startsWith('#')) {
-      // Simple check: index followed by reaction
-      if (/^\d+\s+/.test(trimmed)) reactionsCount++;
-    }
-  }
-  return { species: speciesCount, reactions: reactionsCount };
 }
 
 async function verifyModel(filePath: string): Promise<VerificationResult> {
@@ -116,8 +72,6 @@ async function verifyModel(filePath: string): Promise<VerificationResult> {
         console.error(`[DEBUG] .net file not found at ${netPath}. Skipping comparison.`);
     }
     */
-    const bngStats = { species: 0, reactions: 0 };
-
     // 2. Run Internal Parser
     console.log(`[DEBUG] Starting internal parser...`);
     const bnglCode = fs.readFileSync(filePath, 'utf8');
