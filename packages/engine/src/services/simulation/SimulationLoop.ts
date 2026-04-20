@@ -789,22 +789,28 @@ export async function simulate(
     const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const includeSpeciesData = options.includeSpeciesData ?? true;
 
+    const normalizeSuffixKey = (suffix?: string): string => {
+      const candidate = (suffix ?? '').trim();
+      if (!candidate || !isSafeObjectKey(candidate)) return '__default__';
+      return candidate;
+    };
+
     const getSuffixDataArray = (suffix?: string) => {
-      const candidateKey = suffix ?? '__default__';
-      const key = candidateKey === '__proto__' || candidateKey === 'constructor' || candidateKey === 'prototype'
-        ? '__default__'
-        : candidateKey;
+      const key = normalizeSuffixKey(suffix);
       if (!dataBySuffix[key]) setSafeArrayField(dataBySuffix, key, []);
-      return dataBySuffix[key];
+      if (!dataBySuffix[key]) {
+        setSafeArrayField(dataBySuffix, '__default__', []);
+      }
+      return dataBySuffix[key] || dataBySuffix.__default__;
     };
 
     const getSuffixSpeciesDataArray = (suffix?: string) => {
-      const candidateKey = suffix ?? '__default__';
-      const key = candidateKey === '__proto__' || candidateKey === 'constructor' || candidateKey === 'prototype'
-        ? '__default__'
-        : candidateKey;
+      const key = normalizeSuffixKey(suffix);
       if (!speciesDataBySuffix[key]) setSafeArrayField(speciesDataBySuffix, key, []);
-      return speciesDataBySuffix[key];
+      if (!speciesDataBySuffix[key]) {
+        setSafeArrayField(speciesDataBySuffix, '__default__', []);
+      }
+      return speciesDataBySuffix[key] || speciesDataBySuffix.__default__;
     };
 
     const appendDataRow = (suffix: string | undefined, row: Record<string, number>) => {
