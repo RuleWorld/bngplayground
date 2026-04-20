@@ -314,9 +314,19 @@ export class BNGLParser {
 
       let idx = 0;
       const first = str[idx];
-      if (!first || !/[A-Za-z_*]/.test(first)) return null;
+      if (!first) return null;
+
+      // BNGL molecule wildcard must be a bare "*" only.
+      if (first === '*') {
+        if (str === '*') {
+          return { name: '*', componentStr: '' };
+        }
+        return null;
+      }
+
+      if (!/[A-Za-z_]/.test(first)) return null;
       idx++;
-      while (idx < str.length && /[A-Za-z0-9_*]/.test(str[idx])) idx++;
+      while (idx < str.length && /[A-Za-z0-9_]/.test(str[idx])) idx++;
       const name = str.slice(0, idx);
 
       while (idx < str.length && /\s/.test(str[idx])) idx++;
