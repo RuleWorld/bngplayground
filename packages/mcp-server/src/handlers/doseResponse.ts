@@ -1,4 +1,5 @@
 import { computeDoseResponse, loadEvaluator, simulate } from '@bngplayground/engine';
+import type { SimulationOptions } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { doseResponseArgsSchema } from '../schemas/index.js';
 import {
@@ -49,11 +50,11 @@ async function computeDoseResponseBySimulation(
         responsesByObservable.set(obs, []);
     });
 
-    const simOptions = {
+    const simOptions: SimulationOptions = {
         method: 'ode',
         t_end: tEnd,
         n_steps: 200,
-        solver: 'auto' as const,
+        solver: 'auto',
     };
 
     for (const dose of doses) {
