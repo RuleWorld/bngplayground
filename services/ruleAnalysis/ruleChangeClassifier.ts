@@ -160,15 +160,15 @@ const decideRuleKind = (
   const hasSynth = synthDeg.some((ch) => ch.change === 'synthesized');
   const hasDeg = synthDeg.some((ch) => ch.change === 'degraded');
 
+  if (hasSynth && !hasDeg && !hasBond && !hasState) return 'synthesis';
+  if (hasDeg && !hasSynth && !hasBond && !hasState) return 'degradation';
+
   if (complexChange === 'assoc_nonrev' || complexChange === 'assoc_rev') return 'association';
   if (complexChange === 'dissoc_nonrev' || complexChange === 'dissoc_rev') return 'dissociation';
 
   if (!hasBond && hasState && !hasSynth && !hasDeg) return 'pure_state_change';
   if (hasBond && !hasState && !hasSynth && !hasDeg) return 'pure_binding';
   if (hasBond && hasState && !hasSynth && !hasDeg) return 'binding_and_state_change';
-  if (hasSynth && !hasDeg && !hasBond && !hasState) return 'synthesis';
-  if (hasDeg && !hasSynth && !hasBond && !hasState) return 'degradation';
-
   return 'mixed';
 };
 
