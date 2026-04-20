@@ -3256,7 +3256,7 @@ export class NetworkGenerator {
     const productGraphs: SpeciesGraph[] = [];
     const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules surviving in products
     const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
-    const survivorLocations = new Map<string, { graphIdx: number; molIdx: number }>(); // FIX: Track where survivors ended up
+    const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // FIX: Track where survivors ended up
 
     // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
     const matchedReactantKeys = new Set<string>();
@@ -3421,7 +3421,8 @@ export class NetworkGenerator {
             const mol = subgraph.molecules[i];
             if (mol._sourceKey) {
               usedReactantMolsInReaction.add(mol._sourceKey);
-              survivorLocations.set(mol._sourceKey, { graphIdx, molIdx: i });
+              const [rIdx, mIdx] = mol._sourceKey.split(':').map(Number);
+              survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
             }
           }
         } else if (shouldLogNetworkGenerator) {
@@ -3434,14 +3435,17 @@ export class NetworkGenerator {
     // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
     const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
     if ((rule as any).isMoveConnected) {
-      for (const [sourceKey, loc] of survivorLocations.entries()) {
-        const [rIdxStr, mIdxStr] = sourceKey.split(':');
-        const rIdx = Number(rIdxStr);
-        const mIdx = Number(mIdxStr);
-        const oldMol = reactantGraphs[rIdx].molecules[mIdx];
-        const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
+      for (let ri = 0; ri < reactantGraphs.length; ri++) {
+        const rg = reactantGraphs[ri];
 
-        const changes: { comp: string, state: string }[] = [];
+        // Map of survivors in THIS reactant graph
+        // FIX: Track survivor locations
+        for (const [mIdx, loc] of survivorLocations[ri].entries()) {
+          const oldMol = rg.molecules[mIdx];
+          const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
+          const sourceKey = `${ri}:${mIdx}`;
+
+          const changes: { comp: string, state: string }[] = [];
 
         // Build a lookup map for new components to avoid O(N*M) linear search
         const newComponentsMap = new Map<string, typeof newMol.components[0]>();
@@ -3460,6 +3464,7 @@ export class NetworkGenerator {
           if (shouldLogNetworkGenerator) {
             debugNetworkLog(`[applyTransformation] Recorded MoveConnected delta for ${sourceKey}: ${JSON.stringify(changes)}`);
           }
+        }
         }
       }
     }
@@ -3541,7 +3546,7 @@ export class NetworkGenerator {
                 if (usedReactantMolsInReaction.has(nKey)) {
                   // Connected to a survivor!
                   isAnchoredToSurvivor = true;
-                  const loc = survivorLocations.get(nKey);
+                  const loc = survivorLocations[r].get(nM);
                   if (loc) {
                     anchors.set(nKey, loc);
                     if (anchorGraphIdx === -1) {
