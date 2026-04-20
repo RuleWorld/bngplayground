@@ -409,6 +409,7 @@ export async function computeFIM(
       }
     }
 
+    // (Note: This is an explanatory comment, not commented-out code)
     // Optional: approximate 1D profile-likelihood-like scans. This is a cheap heuristic: we
     // vary each target parameter along a grid and compute a simple SSR to the baseline 'data'.
     // This does NOT perform re-optimization of other parameters and is therefore only
