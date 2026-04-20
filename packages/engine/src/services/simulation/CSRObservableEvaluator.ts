@@ -115,7 +115,7 @@ export function buildCSRObservableMatrix(
   if (numObservables < 0 || numObservables >= rowPtr.length) {
     throw new Error(`[CSRObservableEvaluator] rowPtr terminal index out of range: ${numObservables}`);
   }
-  rowPtr[numObservables] = pos;
+  rowPtr.set([pos], numObservables);
 
   return { rowPtr, colIdx, values, volumeFactors, nnz, numObservables, numSpecies };
 }

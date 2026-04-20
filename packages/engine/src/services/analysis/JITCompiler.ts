@@ -834,7 +834,7 @@ export class JITCompiler {
             if (nObservables < 0 || nObservables >= obsOffsets.length) {
                 throw new Error(`[JITCompiler] obsOffsets index out of range: ${nObservables}`);
             }
-            obsOffsets[nObservables] = currentObsOffset;
+            obsOffsets.set([currentObsOffset], nObservables);
 
             // Validate parameter keys to prevent object destructuring injection.
             // For parity robustness, ignore invalid keys instead of failing the whole JIT pass.
@@ -987,7 +987,7 @@ export class JITCompiler {
             if (nSpecies < 0 || nSpecies >= speciesOffsets.length) {
                 throw new Error(`[JITCompiler] speciesOffsets terminal index out of range: ${nSpecies}`);
             }
-            speciesOffsets[nSpecies] = totalStoichEntries;
+            speciesOffsets.set([totalStoichEntries], nSpecies);
 
             const speciesRxnIdx = new Int32Array(totalStoichEntries);
             const speciesStoich = new Float64Array(totalStoichEntries);
@@ -1052,7 +1052,7 @@ export class JITCompiler {
             if (nSpecies < 0 || nSpecies >= jacRowPtr.length) {
                 throw new Error(`[JITCompiler] jacRowPtr terminal index out of range: ${nSpecies}`);
             }
-            jacRowPtr[nSpecies] = totalJacEntries;
+            jacRowPtr.set([totalJacEntries], nSpecies);
 
             const jacColIdx = new Int32Array(totalJacEntries);
             const jacContribOffsets = new Int32Array(totalJacEntries + 1);

@@ -132,7 +132,7 @@ export function buildCSRStoichiometry(
   if (numSpecies >= rowPtr.length) {
     throw new Error('[SparseStoichiometry] Invalid rowPtr terminal index');
   }
-  rowPtr[numSpecies] = pos;
+  rowPtr.set([pos], numSpecies);
 
   return { rowPtr, colIdx, values, nnz, numSpecies, numReactions };
 }
