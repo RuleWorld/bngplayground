@@ -32,6 +32,10 @@ npm run build
 npm run dev
 ```
 
+## MCP Client Installation
+
+Installation instructions for MCP clients (Claude Desktop, Cursor, Copilot) are in the repository's [docs/mcp-server.md](docs/mcp-server.md).
+
 ## Scripts
 
 | Command | Description |
