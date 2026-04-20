@@ -4510,7 +4510,11 @@ export class NetworkGenerator {
                 const endpointA = `${mapping.reactantIdx}:${molStr}.${compStr}`;
                 const endpointB = `${mapping.reactantIdx}:${partnerKey}`;
                 const bondKey = endpointPairKey(endpointA, endpointB);
-                if (brokenBondPairs.has(bondKey)) {
+                if (
+                  brokenBondPairs.has(bondKey) ||
+                  brokenBondPairs.has(endpointPairKey(endpointA, endpointA)) ||
+                  brokenBondPairs.has(endpointPairKey(endpointB, endpointB))
+                ) {
                   // Skip this bond - it's being broken by the rule
                   // Optimized: don't log inside tight loop unless debugging
                   // if (shouldLogNetworkGenerator) {
@@ -4974,11 +4978,15 @@ export class NetworkGenerator {
           const mol2Key = `${r}:${partnerMolIdx}`;
           if (!includedMols.has(mol1Key) || !includedMols.has(mol2Key)) continue;
 
-          // FIX: Check if this specific bond is BROKEN by the rule transformation
+          // Check if this specific bond is BROKEN by the rule transformation
           const bondEndpoint1 = `${r}:${molIdx}.${compIdx}`;
           const bondEndpoint2 = `${r}:${partnerMolIdx}.${partnerCompIdx}`;
           const brokenPairKey = endpointPairKey(bondEndpoint1, bondEndpoint2);
-          if (brokenBondPairs.has(brokenPairKey)) {
+          if (
+            brokenBondPairs.has(brokenPairKey) ||
+            brokenBondPairs.has(endpointPairKey(bondEndpoint1, bondEndpoint1)) ||
+            brokenBondPairs.has(endpointPairKey(bondEndpoint2, bondEndpoint2))
+          ) {
             // This bond should NOT be recreated - it's being broken by the rule
             if (shouldLogNetworkGenerator) {
               debugNetworkLog(`[buildProductGraph] SKIPPING broken bond ${bondEndpoint1} - ${bondEndpoint2}`);
