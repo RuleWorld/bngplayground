@@ -316,17 +316,15 @@ export class BNGLParser {
       const first = str[idx];
       if (!first) return null;
 
-      // BNGL molecule wildcard must be a bare "*" only.
+      // BNGL wildcard molecule name is "*".
+      // It may be followed by components/wildcards/compartment, but not identifier characters (e.g. "*abc").
       if (first === '*') {
-        if (str === '*') {
-          return { name: '*', componentStr: '' };
-        }
-        return null;
+        idx = 1;
+      } else {
+        if (!/[A-Za-z_]/.test(first)) return null;
+        idx++;
+        while (idx < str.length && /[A-Za-z0-9_]/.test(str[idx])) idx++;
       }
-
-      if (!/[A-Za-z_]/.test(first)) return null;
-      idx++;
-      while (idx < str.length && /[A-Za-z0-9_]/.test(str[idx])) idx++;
       const name = str.slice(0, idx);
 
       while (idx < str.length && /\s/.test(str[idx])) idx++;
