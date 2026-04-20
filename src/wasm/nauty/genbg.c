@@ -1,6 +1,5 @@
 /* genbg.c : version 1.7; B D McKay, Nov 29, 2008. */
 
-/* TODO: consider colour swaps */
 
 #define USAGE \
 "genbg [-c -ugsn -vq -lzF] [-Z#] [-d#|-d#:#] [-D#|-D#:#] n1 n2 \n\
