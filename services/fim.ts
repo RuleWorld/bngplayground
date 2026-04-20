@@ -1,7 +1,7 @@
 import type { BNGLModel, SimulationOptions } from '../types';
 import { bnglService } from './bnglService';
 import { EigenvalueDecomposition, Matrix } from 'ml-matrix';
-import { jacobiEigenDecomposition, normInv, chi2Quantile } from './math/fimUtils';
+import { jacobiEigenDecomposition, chi2Quantile } from './math/fimUtils';
 
 type FIMResult = {
   eigenvalues: number[];
@@ -237,11 +237,8 @@ export async function computeFIM(
       // works reliably in the browser and Web Workers. If EVD fails, fall back to Jacobi.
       try {
         const mat = new Matrix(F);
-        // @ts-ignore - access to realEigenvalues and eigenvectorMatrix
         const evd = new EigenvalueDecomposition(mat);
-        // @ts-ignore
         const vals: number[] = evd.realEigenvalues ? evd.realEigenvalues.slice() : [];
-        // @ts-ignore
         const Vmat: Matrix | undefined = evd.eigenvectorMatrix;
         if (vals && Vmat) {
           const pairs = vals.map((v, i) => ({ val: v, vec: Vmat.getColumn(i) as number[] }));
@@ -328,11 +325,8 @@ export async function computeFIM(
       let corrVecs: number[][] = [];
       try {
         const corrMat = new Matrix(correlations);
-        // @ts-ignore
         const evdCorr = new EigenvalueDecomposition(corrMat);
-        // @ts-ignore
         corrVals = evdCorr.realEigenvalues ? evdCorr.realEigenvalues.slice() : [];
-        // @ts-ignore
         const Vc: Matrix | undefined = evdCorr.eigenvectorMatrix;
         if (corrVals && Vc) {
           const pairs = corrVals.map((v, i) => ({ val: v, vec: Vc.getColumn(i) as number[] }));
@@ -409,11 +403,12 @@ export async function computeFIM(
       }
     }
 
-    // (Note: This is an explanatory comment, not commented-out code)
-    // Optional: approximate 1D profile-likelihood-like scans. This is a cheap heuristic: we
-    // vary each target parameter along a grid and compute a simple SSR to the baseline 'data'.
-    // This does NOT perform re-optimization of other parameters and is therefore only
-    // an approximate diagnostic for global identifiability.
+    /**
+     * Optional: approximate 1D profile-likelihood-like scans. This is a cheap heuristic: we
+     * vary each target parameter along a grid and compute a simple SSR to the baseline 'data'.
+     * This does NOT perform re-optimization of other parameters and is therefore only
+     * an approximate diagnostic for global identifiability.
+     */
     const profileApprox: Record<string, { grid: number[]; ssr: number[]; min: number; flat: boolean }> = {};
     const profileApproxExtended: Record<
       string,
