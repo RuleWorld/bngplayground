@@ -6,7 +6,7 @@
  * with optional structure inference (atomization).
  */
 
-import { Species, Molecule, Component, Databases } from './core/structures';
+import { Species, Molecule, Databases } from './core/structures';
 import {
   AtomizerOptions,
   DEFAULT_ATOMIZER_OPTIONS,
@@ -30,17 +30,10 @@ import {
 } from './atomization/core';
 import {
   generateBNGL,
-  writeParameters,
-  writeCompartments,
-  writeMoleculeTypes,
-  writeSeedSpecies,
-  writeObservables,
-  writeReactionRulesFlat,
 } from './writer/bnglWriter';
 import {
   logger,
   standardizeName,
-  LogLevel,
 } from './utils/helpers';
 
 // =============================================================================
