@@ -4,7 +4,7 @@ import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
-import type { ModelVersion, VersionDAG, SemanticDiff } from '@bngplayground/engine';
+import type { ModelVersion, VersionDAG } from '@bngplayground/engine';
 
 interface VersionHistoryTabProps {
   model: BNGLModel | null;
@@ -16,12 +16,11 @@ interface VersionHistoryTabProps {
 }
 
 export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
-  model, bnglCode, onCodeChange, results, onSimulate, isSimulating,
+  model, bnglCode, onCodeChange,
 }) => {
   const [dag, setDag] = useState<VersionDAG | null>(null);
   const [selectedVersion, setSelectedVersion] = useState<ModelVersion | null>(null);
   const [compareVersionId, setCompareVersionId] = useState<string | null>(null);
-  const [bisectionProperty, setBisectionProperty] = useState<string>('');
   const [bisectionObservable, setBisectionObservable] = useState<string>('');
   const [bisectionThreshold, setBisectionThreshold] = useState<number>(0);
   const [bisectionResult, setBisectionResult] = useState<any>(null);
@@ -238,10 +237,16 @@ export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
                     </Button>
                     <Button variant="secondary"
                       onClick={() => setCompareVersionId(selectedVersion.id)}>
-                      Compare From Here
+                      {compareVersionId === selectedVersion.id ? 'Compare Baseline Set' : 'Compare From Here'}
                     </Button>
                   </div>
                 </div>
+
+                {compareVersionId && (
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mb-3">
+                    Comparison baseline: {compareVersionId.slice(0, 8)}
+                  </p>
+                )}
 
                 {/* Semantic Diff */}
                 <div className="space-y-2">

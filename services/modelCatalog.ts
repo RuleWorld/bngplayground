@@ -40,21 +40,6 @@ function normalizeLookupValue(value: string): string {
   return value.trim().toLowerCase().replace(/\.bngl$/i, '');
 }
 
-function toDisplayName(value: string): string {
-  return value
-    .replace(/[_-]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .replace(/\b\w/g, (match) => match.toUpperCase());
-}
-
-function compareExamples(a: CatalogExample, b: CatalogExample): number {
-  const originRank = (origin?: string) => (origin === 'published' ? 0 : origin === 'tutorial' ? 1 : 2);
-  const byOrigin = originRank(a.origin) - originRank(b.origin);
-  if (byOrigin !== 0) return byOrigin;
-  return a.name.localeCompare(b.name);
-}
-
 function mapEntry(entry: ManifestEntry): CatalogExample {
   return {
     id: entry.id,

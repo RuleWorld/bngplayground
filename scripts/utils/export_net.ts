@@ -1,7 +1,5 @@
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical.ts';
-import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
-import type { GeneratorOptions } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
 import { NetworkExporter } from '../packages/engine/src/services/graph/NetworkExporter.ts';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { generateExpandedNetwork } from '@bngplayground/engine';
