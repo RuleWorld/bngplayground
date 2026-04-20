@@ -17,6 +17,24 @@ export interface NetFileParseResult {
 }
 
 /**
+ * Optimized helper to parse comma-separated strings
+ * avoids allocations of split().map().filter()
+ */
+function parseCommaSeparated(str: string, filterEmpty: boolean = true): string[] {
+  const result: string[] = [];
+  let start = 0;
+  let end = 0;
+  while ((end = str.indexOf(',', start)) !== -1) {
+    const part = str.substring(start, end).trim();
+    if (part || !filterEmpty) result.push(part);
+    start = end + 1;
+  }
+  const lastPart = str.substring(start).trim();
+  if (lastPart || !filterEmpty) result.push(lastPart);
+  return result;
+}
+
+/**
  * Parse a BioNetGen .net file into a BNGLModel
  * @param content The full text content of the .net file
  * @returns Parse result with model and any errors/warnings
@@ -210,8 +228,8 @@ function parseReactionLine(line: string, model: BNGLModel, lineNum: number): voi
     );
   }
 
-  const reactants = parts[1].split(',').map(s => s.trim()).filter(s => s);
-  const products = parts[2].split(',').map(s => s.trim()).filter(s => s);
+  const reactants = parseCommaSeparated(parts[1]);
+  const products = parseCommaSeparated(parts[2]);
   const rateExpr = parts[3];
   const label = parts.length > 4 ? parts.slice(4).join(' ').trim() : undefined;
 
@@ -302,7 +320,7 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
     );
   }
 
-  const args = argsStr ? argsStr.split(',').map(a => a.trim()) : [];
+  const args = argsStr ? parseCommaSeparated(argsStr, false) : [];
 
   model.functions!.push({
     name,
