@@ -3932,9 +3932,6 @@ export class NetworkGenerator {
 
     const productGraph = new SpeciesGraph();
 
-    // FIX: Function check priority for compartment:
-    // 1. Explicit in product pattern (@cell:P)
-    // 2. Inherited from first reactant (if any)
     if (pattern.compartment) {
       productGraph.compartment = pattern.compartment;
     } else if (reactantGraphs.length > 0) {
