@@ -402,7 +402,25 @@ export class PSASimulator {
 
       let patterns = [obs.pattern];
       if (obs.pattern.includes(',') && !obs.pattern.includes('(')) {
-        patterns = obs.pattern.split(',').map(p => p.trim()).filter(Boolean);
+        patterns = [];
+        let inWord = false;
+        let wordStart = 0;
+        let wordEnd = 0;
+        const pLen = obs.pattern.length;
+        for (let i = 0; i < pLen; i++) {
+          const char = obs.pattern.charCodeAt(i);
+          if (char === 44) { // ','
+            if (inWord) patterns.push(obs.pattern.substring(wordStart, wordEnd + 1));
+            inWord = false;
+          } else if (char !== 32) { // ' '
+            if (!inWord) {
+              inWord = true;
+              wordStart = i;
+            }
+            wordEnd = i;
+          }
+        }
+        if (inWord) patterns.push(obs.pattern.substring(wordStart, wordEnd + 1));
       }
 
       for (let i = 0; i < numSpecies; i++) {

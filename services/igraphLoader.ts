@@ -87,11 +87,11 @@ async function _loadModule(): Promise<IgraphModule> {
       return path;
     },
     // Provide a custom instantiateWasm so the module never needs to fall back
-    // to readAsync — which is undefined in module-type Web Workers because the
-    // Emscripten-generated detector uses `typeof importScripts` (only true for
-    // classic workers). Fetching + instantiating manually avoids that path.
+    // to readAsync - which is undefined in module-type Web Workers because the
+    // Emscripten-generated detector uses a typeof check on importScripts (only true
+    // for classic workers). Fetching and instantiating manually avoids that path.
     // IMPORTANT: Emscripten's old-style instantiateWasm contract requires the
-    // callback to return {} synchronously and call receiveInstance asynchronously.
+    // callback to return an empty object synchronously and call receiveInstance asynchronously.
     instantiateWasm: (
       imports: WebAssembly.Imports,
       receiveInstance: (instance: WebAssembly.Instance) => void,

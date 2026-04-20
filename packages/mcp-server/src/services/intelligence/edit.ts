@@ -166,13 +166,14 @@ export function applyModelEdits(
                 const blockMatch = ensured.match(/begin\s+parameters([\s\S]*?)end\s+parameters/m);
                 if (!blockMatch) break;
 
-                const paramLines = blockMatch[1].split('\n').map(l => l.trim()).filter(l => l.length > 0 && !l.startsWith('#'));
+                const text = blockMatch[1];
+                const regex = /^[ \t]*([^#\s]+)[ \t]+([^#\s]+)/gm;
+                let match;
                 let modified = 0;
-                for (const line of paramLines) {
-                    const parts = line.split(/\s+/);
-                    if (parts.length < 2) continue;
-                    const name = parts[0];
-                    const value = Number(parts[1]);
+
+                while ((match = regex.exec(text)) !== null) {
+                    const name = match[1];
+                    const value = Number(match[2]);
                     if (!Number.isFinite(value)) continue;
                     const factor = 1 + (range / 100) * (2 * rng.next() - 1);
                     const newValue = value * factor;

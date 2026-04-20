@@ -537,10 +537,6 @@ export class GraphCanonicalizer {
       // For Nauty: graph.molecules[sourceIdx] is the correct molecule
       const mol = graph.molecules[sourceIdx];
 
-
-      // Debug: Log the molecule being used at each position
-      // if (graph.molecules[0]?.name === 'APC') console.log(`[Canonical Debug] canIdx=${_canIdx} sourceIdx=${sourceIdx} molecule=${mol.name}`);
-
       return this.moleculeToStringNew(
         mol,
         bondMapping,

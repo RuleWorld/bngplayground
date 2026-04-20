@@ -3256,7 +3256,7 @@ export class NetworkGenerator {
     const productGraphs: SpeciesGraph[] = [];
     const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules surviving in products
     const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
-    const survivorLocations = new Map<string, { graphIdx: number; molIdx: number }>(); // FIX: Track where survivors ended up
+    const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // FIX: Track where survivors ended up
 
     // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
     const matchedReactantKeys = new Set<string>();
@@ -3421,7 +3421,8 @@ export class NetworkGenerator {
             const mol = subgraph.molecules[i];
             if (mol._sourceKey) {
               usedReactantMolsInReaction.add(mol._sourceKey);
-              survivorLocations.set(mol._sourceKey, { graphIdx, molIdx: i });
+              const [rIdx, mIdx] = mol._sourceKey.split(':').map(Number);
+              survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
             }
           }
         } else if (shouldLogNetworkGenerator) {
@@ -3434,14 +3435,17 @@ export class NetworkGenerator {
     // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
     const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
     if ((rule as any).isMoveConnected) {
-      for (const [sourceKey, loc] of survivorLocations.entries()) {
-        const [rIdxStr, mIdxStr] = sourceKey.split(':');
-        const rIdx = Number(rIdxStr);
-        const mIdx = Number(mIdxStr);
-        const oldMol = reactantGraphs[rIdx].molecules[mIdx];
-        const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
+      for (let ri = 0; ri < reactantGraphs.length; ri++) {
+        const rg = reactantGraphs[ri];
 
-        const changes: { comp: string, state: string }[] = [];
+        // Map of survivors in THIS reactant graph
+        // FIX: Track survivor locations
+        for (const [mIdx, loc] of survivorLocations[ri].entries()) {
+          const oldMol = rg.molecules[mIdx];
+          const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
+          const sourceKey = `${ri}:${mIdx}`;
+
+          const changes: { comp: string, state: string }[] = [];
 
         // Build a lookup map for new components to avoid O(N*M) linear search
         const newComponentsMap = new Map<string, typeof newMol.components[0]>();
@@ -3460,6 +3464,7 @@ export class NetworkGenerator {
           if (shouldLogNetworkGenerator) {
             debugNetworkLog(`[applyTransformation] Recorded MoveConnected delta for ${sourceKey}: ${JSON.stringify(changes)}`);
           }
+        }
         }
       }
     }
@@ -3541,7 +3546,7 @@ export class NetworkGenerator {
                 if (usedReactantMolsInReaction.has(nKey)) {
                   // Connected to a survivor!
                   isAnchoredToSurvivor = true;
-                  const loc = survivorLocations.get(nKey);
+                  const loc = survivorLocations[r].get(nM);
                   if (loc) {
                     anchors.set(nKey, loc);
                     if (anchorGraphIdx === -1) {
@@ -3927,9 +3932,6 @@ export class NetworkGenerator {
 
     const productGraph = new SpeciesGraph();
 
-    // FIX: Function check priority for compartment:
-    // 1. Explicit in product pattern (@cell:P)
-    // 2. Inherited from first reactant (if any)
     if (pattern.compartment) {
       productGraph.compartment = pattern.compartment;
     } else if (reactantGraphs.length > 0) {
@@ -4491,7 +4493,6 @@ export class NetworkGenerator {
           for (let cIdx = 0; cIdx < currentMol.components.length; cIdx++) {
             const key = `${molIdx}.${cIdx}`;
             const [molStr, compStr] = [String(molIdx), String(cIdx)];
-            // const keyMolIdx = molIdx;
 
             const partnerKeys = reactantGraph.adjacency.get(key);
             if (!partnerKeys) continue;
@@ -4505,12 +4506,12 @@ export class NetworkGenerator {
                 const endpointA = `${mapping.reactantIdx}:${molStr}.${compStr}`;
                 const endpointB = `${mapping.reactantIdx}:${partnerKey}`;
                 const bondKey = endpointPairKey(endpointA, endpointB);
-                if (brokenBondPairs.has(bondKey)) {
+                if (
+                  brokenBondPairs.has(bondKey) ||
+                  brokenBondPairs.has(endpointPairKey(endpointA, endpointA)) ||
+                  brokenBondPairs.has(endpointPairKey(endpointB, endpointB))
+                ) {
                   // Skip this bond - it's being broken by the rule
-                  // Optimized: don't log inside tight loop unless debugging
-                  // if (shouldLogNetworkGenerator) {
-                  //   debugNetworkLog(`[buildProductGraph] Skipping broken bond at ${bondKey}`);
-                  // }
                   continue;
                 }
 
@@ -4969,11 +4970,15 @@ export class NetworkGenerator {
           const mol2Key = `${r}:${partnerMolIdx}`;
           if (!includedMols.has(mol1Key) || !includedMols.has(mol2Key)) continue;
 
-          // FIX: Check if this specific bond is BROKEN by the rule transformation
+          // Check if this specific bond is BROKEN by the rule transformation
           const bondEndpoint1 = `${r}:${molIdx}.${compIdx}`;
           const bondEndpoint2 = `${r}:${partnerMolIdx}.${partnerCompIdx}`;
           const brokenPairKey = endpointPairKey(bondEndpoint1, bondEndpoint2);
-          if (brokenBondPairs.has(brokenPairKey)) {
+          if (
+            brokenBondPairs.has(brokenPairKey) ||
+            brokenBondPairs.has(endpointPairKey(bondEndpoint1, bondEndpoint1)) ||
+            brokenBondPairs.has(endpointPairKey(bondEndpoint2, bondEndpoint2))
+          ) {
             // This bond should NOT be recreated - it's being broken by the rule
             if (shouldLogNetworkGenerator) {
               debugNetworkLog(`[buildProductGraph] SKIPPING broken bond ${bondEndpoint1} - ${bondEndpoint2}`);

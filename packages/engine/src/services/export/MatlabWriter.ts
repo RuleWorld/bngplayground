@@ -443,7 +443,20 @@ export class MatlabWriter {
       const group: ObservableGroup = { name: obs.name, entries: [] };
 
       // Simple substring/exact pattern matching
-      const patterns = (obs.pattern || '').split(',').map(p => p.trim()).filter(Boolean);
+      // Optimized string split to prevent intermediate array allocations
+      const patterns: string[] = [];
+      const str = obs.pattern || '';
+      let start = 0;
+      const len = str.length;
+      while (start < len) {
+        let end = str.indexOf(',', start);
+        if (end === -1) end = len;
+        const part = str.substring(start, end).trim();
+        if (part) {
+          patterns.push(part);
+        }
+        start = end + 1;
+      }
 
       for (let i = 0; i < species.length; i++) {
         const speciesName = species[i].name;

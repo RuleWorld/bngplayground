@@ -1020,14 +1020,14 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                     />
                     <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fontWeight: 'bold' }} />
                     <Tooltip 
-                      formatter={(v: any, name?: string) => {
+                      formatter={(v: any, name?: string | number) => {
                         // Filter out 'name' keys and other internal Recharts properties that might leak into tooltip
-                        if (name === 'name' || name === 'Parameter' || name === 'range') return null;
+                        if (name === 'name' || name === 'Parameter' || name === 'range') return [];
                         
                         if (Array.isArray(v)) {
                           return [`${formatValue(v[0])} - ${formatValue(v[1])}`, '95% CI'];
                         }
-                        return [formatValue(v), name];
+                        return [formatValue(v), String(name)];
                       }}
                       contentStyle={{ 
                         backgroundColor: 'rgba(255, 255, 255, 0.95)', 

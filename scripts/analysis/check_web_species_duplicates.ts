@@ -20,8 +20,9 @@ async function checkDuplicates() {
     const lines = content.split('\n').map(l => l.trim()).filter(l => l.length > 0);
 
     console.log(`Checking ${lines.length} species from web_species.txt (WITH NAUTY)`);
-    // Fix: Use isInitialized (getter) not isReady()
-    console.log(`Nauty Ready: ${NautyService.getInstance().isInitialized}`);
+    if (!NautyService.getInstance().isInitialized) {
+        throw new Error('Nauty failed to initialize');
+    }
 
     const canonicalMap = new Map<string, string>(); // Canonical(Parsed) -> OriginalString (first encounter)
     let duplicates = 0;
