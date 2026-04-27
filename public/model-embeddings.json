@@ -3,7 +3,7 @@
   "model": "Xenova/all-MiniLM-L6-v2",
   "dimensions": 384,
   "count": 690,
-  "generated": "2026-04-13T12:05:36.559Z",
+  "generated": "2026-04-27T12:34:02.088Z",
   "hasUMAP": true,
   "models": [
     {
