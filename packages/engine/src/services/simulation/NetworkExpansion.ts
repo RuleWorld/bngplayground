@@ -26,8 +26,7 @@ function isSafeObjectKey(key: string): boolean {
     return !UNSAFE_OBJECT_KEYS.has(key);
 }
 
-// Helper: Fast whitespace removal for performance-critical string parsing
-function removeWhitespace(s: string): string {
+function stripWhitespace(s: string): string {
     let result = '';
     for (let i = 0; i < s.length; i++) {
         if (s.charCodeAt(i) > 32) {
@@ -94,7 +93,7 @@ export async function generateExpandedNetwork(
 
     // Helper: Remove whitespace from comparison strings.
     // BNG2 is generally whitespace-insensitive for pattern matching.
-    const normalizePattern = (s: string): string => removeWhitespace(s);
+    const normalizePattern = (s: string): string => stripWhitespace(s);
 
     // Helper: Identify if a reactant pattern string maps to a defined Observable.
     // BNG2 Logic: In rate laws, "A()" might refer to the concentration of observable "A".
@@ -153,7 +152,7 @@ export async function generateExpandedNetwork(
         if (!Number.isFinite(volume) || volume <= 0 || Math.abs(volume - 1) < 1e-12) return evaluated;
         const hasNaLikeToken = /\bNa\b/.test(expression) || /\bquantity_to_number_factor\b/.test(expression);
         if (!hasNaLikeToken) return evaluated;
-        const compact = removeWhitespace(expression);
+        const compact = stripWhitespace(expression);
         const hasVolumeToken = compact.includes(volumeKey);
         const hasVolumeInDenominator = compact.includes(`/${volumeKey}`);
         if (!hasVolumeToken || hasVolumeInDenominator) return evaluated;
@@ -710,14 +709,42 @@ export async function generateExpandedNetwork(
     const molToSpecies = new Map<string, Set<number>>();
     generatedSpecies.forEach((s, idx) => {
         // Extract base molecule names from the string representation
-        const mols = s.name.split('.').map(m => {
-            const bare = m.replace(/^@[^:]+::?/, '').replace(/@[^@]+$/, '');
-            return bare.split('(')[0];
-        });
-        mols.forEach(m => {
+        const parts = s.name.split('.');
+        const mols: string[] = [];
+        for (let i = 0; i < parts.length; i++) {
+            let m = parts[i];
+
+            // replace(/^@[^:]+::?/, '')
+            if (m.charCodeAt(0) === 64) { // '@'
+                const colonIdx = m.indexOf(':');
+                if (colonIdx > 0) {
+                    if (m.charCodeAt(colonIdx + 1) === 58) { // ':'
+                        m = m.substring(colonIdx + 2);
+                    } else {
+                        m = m.substring(colonIdx + 1);
+                    }
+                }
+            }
+
+            // replace(/@[^@]+$/, '')
+            const lastAtIdx = m.lastIndexOf('@');
+            if (lastAtIdx !== -1) {
+                m = m.substring(0, lastAtIdx);
+            }
+
+            // split('(')[0]
+            const parenIdx = m.indexOf('(');
+            if (parenIdx !== -1) {
+                m = m.substring(0, parenIdx);
+            }
+
+            mols.push(m);
+        }
+        for (let i = 0; i < mols.length; i++) {
+            const m = mols[i];
             if (!molToSpecies.has(m)) molToSpecies.set(m, new Set());
             molToSpecies.get(m)!.add(idx);
-        });
+        }
     });
 
     try {
@@ -753,7 +780,18 @@ export async function generateExpandedNetwork(
                 // Optimization Step 1: Filter Candidates
                 // Remove compartment tags to find base molecules required by the pattern.
                 const cleanPat = removeCompartment(trimmedPat);
-                const patMols = cleanPat.split('.').map(m => m.split('(')[0]).filter(Boolean);
+                const patParts = cleanPat.split('.');
+                const patMols: string[] = [];
+                for (let j = 0; j < patParts.length; j++) {
+                    let m = patParts[j];
+                    const parenIdx = m.indexOf('(');
+                    if (parenIdx !== -1) {
+                        m = m.substring(0, parenIdx);
+                    }
+                    if (m) {
+                        patMols.push(m);
+                    }
+                }
 
                 let candidates: Iterable<number> = generatedSpecies.keys();
 
