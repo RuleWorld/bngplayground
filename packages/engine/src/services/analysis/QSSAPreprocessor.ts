@@ -191,8 +191,22 @@ export function analyzeQSSA(
     
     candidates.sort((a, b) => b.ratio - a.ratio);
     
-    const qssaCount = candidates.filter(c => c.recommendation === 'QSSA').length;
-    const conservationCount = candidates.filter(c => c.recommendation === 'CONSERVATION').length;
+    // ⚡ Bolt Optimization: Replace O(N) chained array methods (.filter().length, .filter().slice().map())
+    // with a single loop to calculate counts and extract the top QSSA candidates.
+    let qssaCount = 0;
+    let conservationCount = 0;
+    const topQssaCandidates: string[] = [];
+
+    for (const c of candidates) {
+        if (c.recommendation === 'QSSA') {
+            qssaCount++;
+            if (topQssaCandidates.length < 3) {
+                topQssaCandidates.push(c.species);
+            }
+        } else if (c.recommendation === 'CONSERVATION') {
+            conservationCount++;
+        }
+    }
     
     let summary: string;
     if (qssaCount === 0 && conservationCount === 0) {
@@ -200,22 +214,17 @@ export function analyzeQSSA(
     } else {
         summary = `Found ${qssaCount} QSSA candidate${qssaCount !== 1 ? 's' : ''} and ${conservationCount} conservation law${conservationCount !== 1 ? 's' : ''}.`;
         if (qssaCount > 0) {
-            summary += ` Consider using QSSA for: ${candidates.filter(c => c.recommendation === 'QSSA').slice(0, 3).map(c => c.species).join(', ')}${qssaCount > 3 ? '...' : ''}.`;
+            summary += ` Consider using QSSA for: ${topQssaCandidates.join(', ')}${qssaCount > 3 ? '...' : ''}.`;
         }
     }
     
     let reducedModel: QSSAResult['reducedModel'] | undefined;
     
     if (opts.generateReducedModel && qssaCount > 0) {
-        const eliminated = candidates
-            .filter(c => c.recommendation === 'QSSA')
-            .slice(0, 3)
-            .map(c => c.species);
-        
         reducedModel = {
-            eliminatedSpecies: eliminated,
-            modifiedReactions: eliminated.length * 2,
-            estimatedSpeedup: Math.pow(2, eliminated.length),
+            eliminatedSpecies: topQssaCandidates,
+            modifiedReactions: topQssaCandidates.length * 2,
+            estimatedSpeedup: Math.pow(2, topQssaCandidates.length),
         };
     }
     
@@ -247,7 +256,11 @@ export function applyQSSAReduction(
     
     // Build stoichiometric matrix from reactions
     const speciesNames = (model.species ?? []).map(s => s.name);
-    const speciesIndex = new Map(speciesNames.map((name, i) => [name, i]));
+    // ⚡ Bolt Optimization: Populate speciesIndex iteratively to avoid intermediate array allocations
+    const speciesIndex = new Map<string, number>();
+    for (let i = 0; i < speciesNames.length; i++) {
+        speciesIndex.set(speciesNames[i], i);
+    }
     const nSpecies = speciesNames.length;
     
     const reactions = model.reactionRules ?? [];
@@ -287,9 +300,14 @@ export function applyQSSAReduction(
     
     // Compute left null space to find conservation laws
     const conservationLaws: Array<{ conservedTotal: number; species: string[]; coefficients: number[] }> = [];
-    const eliminatedIndices = new Set(
-        speciesToEliminate.map(name => speciesIndex.get(name)).filter((i): i is number => i !== undefined)
-    );
+    // ⚡ Bolt Optimization: Use a loop instead of .map().filter() to populate eliminatedIndices safely
+    const eliminatedIndices = new Set<number>();
+    for (const name of speciesToEliminate) {
+        const idx = speciesIndex.get(name);
+        if (idx !== undefined) {
+            eliminatedIndices.add(idx);
+        }
+    }
     
     // For each eliminated species, derive its conservation law from reactions
     // QSSA: the fast species reaches equilibrium much faster than other species
