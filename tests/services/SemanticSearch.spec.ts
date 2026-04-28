@@ -170,6 +170,16 @@ describe('Semantic Search Service', () => {
             const ready = await isSemanticSearchReady();
             expect(ready).toBe(false);
         });
+
+        it('should return false if index fetch is not ok', async () => {
+            vi.spyOn(global, 'fetch').mockResolvedValue({
+                ok: false,
+                status: 404
+            } as Response);
+
+            const ready = await isSemanticSearchReady();
+            expect(ready).toBe(false);
+        });
     });
 
     describe('resetSemanticSearchState', () => {
