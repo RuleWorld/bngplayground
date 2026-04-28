@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cosineSimilarity, semanticSearch, isSemanticSearchReady, resetSemanticSearchState } from '../../services/semanticSearch';
+import { cosineSimilarity, semanticSearch, isSemanticSearchReady, resetSemanticSearchState, _internalState } from '../../services/semanticSearch';
 
 // Mock fetching the index
 const mockIndex = {
@@ -151,6 +151,31 @@ describe('Semantic Search Service', () => {
 
             const ready = await isSemanticSearchReady();
             expect(ready).toBe(false);
+        });
+    });
+
+    describe('resetSemanticSearchState', () => {
+        it('should reset all internal state variables to defaults', () => {
+            // Set internal state to dummy values
+            _internalState.embedder = { dummy: true };
+            _internalState.embeddingsIndex = { dummy: true } as any;
+            _internalState.isLoading = true;
+            _internalState.loadError = new Error('Test error');
+
+            // Verify they were set
+            expect(_internalState.embedder).not.toBeNull();
+            expect(_internalState.embeddingsIndex).not.toBeNull();
+            expect(_internalState.isLoading).toBe(true);
+            expect(_internalState.loadError).not.toBeNull();
+
+            // Call reset
+            resetSemanticSearchState();
+
+            // Verify they were reset
+            expect(_internalState.embedder).toBeNull();
+            expect(_internalState.embeddingsIndex).toBeNull();
+            expect(_internalState.isLoading).toBe(false);
+            expect(_internalState.loadError).toBeNull();
         });
     });
 });
