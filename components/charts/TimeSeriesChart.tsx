@@ -66,7 +66,7 @@ function buildEquidistantTicks(min: number, max: number, count = 6): number[] {
  * Standard TimeSeriesChart for BioNetGen simulation results.
  * Abstracted for UI consistency across the app.
  */
-export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
+export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
   data,
   series,
   visibleSeries,
@@ -175,14 +175,21 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       const hi = Math.max(xAxisDomain[0], xAxisDomain[1]);
 
       if (xAxisScale === 'log') {
-        const positiveRaw = data
-          .map((point) => Number(point?.[xAxisKey]))
-          .filter((value) => Number.isFinite(value) && value > 0);
+        let fallbackMin = Infinity;
+        let fallbackMax = -Infinity;
+        let hasData = false;
 
-        if (positiveRaw.length === 0) return undefined;
+        for (let i = 0; i < data.length; i++) {
+          const val = Number(data[i]?.[xAxisKey]);
+          if (Number.isFinite(val) && val > 0) {
+            hasData = true;
+            if (val < fallbackMin) fallbackMin = val;
+            if (val > fallbackMax) fallbackMax = val;
+          }
+        }
 
-        const fallbackMin = Math.min(...positiveRaw);
-        const fallbackMax = Math.max(...positiveRaw);
+        if (!hasData) return undefined;
+
         const minRaw = lo > 0 ? lo : fallbackMin;
         const maxRaw = hi > 0 ? hi : fallbackMax;
         const domainMin = Math.log10(Math.min(minRaw, maxRaw));
@@ -193,11 +200,21 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       return [lo, hi];
     }
 
-    const values = plotData
-      .map((point) => Number(point?.[displayXKey]))
-      .filter((value) => Number.isFinite(value));
-    if (values.length === 0) return undefined;
-    return [Math.min(...values), Math.max(...values)];
+    let valMin = Infinity;
+    let valMax = -Infinity;
+    let hasValidValues = false;
+
+    for (let i = 0; i < plotData.length; i++) {
+      const val = Number(plotData[i]?.[displayXKey]);
+      if (Number.isFinite(val)) {
+        hasValidValues = true;
+        if (val < valMin) valMin = val;
+        if (val > valMax) valMax = val;
+      }
+    }
+
+    if (!hasValidValues) return undefined;
+    return [valMin, valMax];
   }, [currentDomain, xAxisDomain, xAxisScale, data, xAxisKey, plotData, displayXKey]);
 
   const xTicks = useMemo(() => {
@@ -358,7 +375,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       )}
     </div>
   );
-};
+});
 
 const CustomTooltip = ({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: any) => {
   if (active && payload && payload.length) {
