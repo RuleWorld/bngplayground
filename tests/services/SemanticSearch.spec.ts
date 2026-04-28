@@ -43,6 +43,11 @@ vi.mock('@xenova/transformers', () => ({
     pipeline: (...args: any[]) => mockPipeline(...args)
 }));
 
+export const mockLoadTransformersPipeline = vi.fn();
+vi.mock('@/src/utils/transformersLoader', () => ({
+    loadTransformersPipeline: () => mockLoadTransformersPipeline()
+}));
+
 describe('Semantic Search Service', () => {
 
     beforeEach(() => {
@@ -85,6 +90,8 @@ describe('Semantic Search Service', () => {
         let fetchSpy: any;
 
         beforeEach(() => {
+            mockLoadTransformersPipeline.mockResolvedValue((...args: any[]) => mockPipeline(...args));
+
             // Setup default successful fetch for search tests
             fetchSpy = vi.spyOn(global, 'fetch');
             fetchSpy.mockResolvedValue({
@@ -132,6 +139,17 @@ describe('Semantic Search Service', () => {
             } as Response);
 
             await expect(semanticSearch('test')).rejects.toThrow('Failed to load embeddings index: 404');
+        });
+
+        it('should handle embedding model load failure by throwing and setting loadError', async () => {
+            // Override the default mock to throw an error
+            mockLoadTransformersPipeline.mockRejectedValue(new Error('Failed to load transformers'));
+
+            await expect(semanticSearch('test')).rejects.toThrow('Failed to load transformers');
+
+            // If the search failed, subsequent attempts to load embedder should immediately throw the cached loadError
+            // Calling it again without waiting for fetch will trigger the cached error branch
+            await expect(semanticSearch('test')).rejects.toThrow('Failed to load transformers');
         });
     });
 
