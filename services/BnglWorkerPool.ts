@@ -30,7 +30,6 @@ export const canUseSharedArrayBuffer = (): boolean => {
 };
 
 /**
- * 🛡️ Sentinel: Security Enhancement
  * Uses cryptographically secure random number generator to prevent predictability
  * in inter-process communication IDs.
  */
