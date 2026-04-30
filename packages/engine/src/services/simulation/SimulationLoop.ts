@@ -586,7 +586,6 @@ export async function simulate(
     speciesVolumes[idx] = vol;
   });
 
-  // PARITY FIX: Pre-calculate reacting volumes for each reaction.
   // BioNetGen scales ODE rates by an anchor compartment volume. For mixed-dimension
   // reactants (e.g. 3D + 2D), anchoring to the lower-dimensional compartment yields
   // closer parity with cBNGL transport/binding models.
