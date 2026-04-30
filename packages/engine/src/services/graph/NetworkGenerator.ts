@@ -5316,11 +5316,13 @@ export class NetworkGenerator {
         } // End of fallback if (candidateIdx === -1) block
 
         if (candidateIdx === -1) {
-          // BNG2 PARITY FIX: Before creating a new component, check if this molecule
-          // was cloned from a reactant. If so, the component MUST already exist —
-          // the bond-state compatibility filter was too strict. Do a relaxed search
-          // accepting ANY available same-name component regardless of bond state.
-          // BNG2 uses direct pointer maps (MapF) and never creates duplicate components.
+          /*
+           * BNG2 PARITY NOTE: Before creating a new component, check if this molecule
+           * was cloned from a reactant. If so, the component MUST already exist —
+           * the bond-state compatibility filter was too strict. Do a relaxed search
+           * accepting ANY available same-name component regardless of bond state.
+           * BNG2 uses direct pointer maps (MapF) and never creates duplicate components.
+           */
           const isReactantMapped = productPatternToReactant.has(pMolIdx);
           if (isReactantMapped) {
             // Relaxed fallback: accept any unused component with matching name

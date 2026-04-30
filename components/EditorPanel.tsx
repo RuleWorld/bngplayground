@@ -222,6 +222,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                 onClick={(e) => { e.stopPropagation(); setIsGalleryOpen(true); }} 
                 className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-teal-600 hover:scale-110 active:scale-95 transition-all" 
                 title="Models"
+                aria-label="Models"
               >
                   <span className="text-xl">🧬</span>
                </button>
@@ -240,6 +241,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                 }} 
                 className="w-11 h-11 flex items-center justify-center rounded-full bg-teal-600 shadow-lg border border-teal-500 text-white hover:scale-110 active:scale-95 transition-all" 
                 title="Quick Run"
+                aria-label="Quick Run"
                 disabled={isSimulating}
               >
                   {isSimulating ? <LoadingSpinner className="w-5 h-5" /> : <span className="text-xl">▶</span>}
