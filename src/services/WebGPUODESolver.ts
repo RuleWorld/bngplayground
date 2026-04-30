@@ -358,27 +358,30 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
     let steps = 0;
     let outputIdx = 0;
 
+    // Create a single large read buffer for all required outputs
+    // Add 1 in case we need to capture a final state that doesn't align with outputTimes
+    const maxOutputs = outputTimes.length + 1;
+    const allReadBuf = createReadBuffer(device, maxOutputs * this.nSpecies * 4);
+    let capturedOutputs = 0;
+
     // Main integration loop
     console.log(`[WebGPU] Starting integration: t=${t}, tEnd=${tEnd}, baseDt=${baseDt}, maxSteps=${this.options.maxSteps}, outputTimes.length=${outputTimes.length}`);
     while (t < tEnd && steps < this.options.maxSteps && outputIdx < outputTimes.length) {
       // Check if we need to output at this time
       while (outputIdx < outputTimes.length && outputTimes[outputIdx] <= t) {
-        // Read current state and store
-        const readBuf = createReadBuffer(device, this.nSpecies * 4);
+        // Queue copy to the large read buffer
         const commandEncoder = device.createCommandEncoder();
         commandEncoder.copyBufferToBuffer(
           this.concentrationBuffer!,
           0,
-          readBuf,
-          0,
+          allReadBuf,
+          capturedOutputs * this.nSpecies * 4,
           this.nSpecies * 4
         );
         device.queue.submit([commandEncoder.finish()]);
 
-        const state = await readBuffer(readBuf);
-        results.push(state);
         times.push(outputTimes[outputIdx]);
-        readBuf.destroy();
+        capturedOutputs++;
         outputIdx++;
       }
 
@@ -414,27 +417,36 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
     
     // Debug: why did loop exit?
     console.log(`[WebGPU] Loop exited: t=${t} >= tEnd=${tEnd}? ${t >= tEnd}; steps=${steps} >= maxSteps=${this.options.maxSteps}? ${steps >= this.options.maxSteps}; outputIdx=${outputIdx} >= outputTimes.length=${outputTimes.length}? ${outputIdx >= outputTimes.length}`);
-    console.log(`[WebGPU] Collected ${results.length} output points`);
+    console.log(`[WebGPU] Collected ${capturedOutputs} output points`);
 
 
     // Capture final state if needed
     if (outputIdx < outputTimes.length) {
-      const readBuf = createReadBuffer(device, this.nSpecies * 4);
       const commandEncoder = device.createCommandEncoder();
       commandEncoder.copyBufferToBuffer(
         this.concentrationBuffer!,
         0,
-        readBuf,
-        0,
+        allReadBuf,
+        capturedOutputs * this.nSpecies * 4,
         this.nSpecies * 4
       );
       device.queue.submit([commandEncoder.finish()]);
 
-      const state = await readBuffer(readBuf);
-      results.push(state);
       times.push(t);
-      readBuf.destroy();
+      capturedOutputs++;
     }
+
+    // Now await the single large buffer read at the end
+    const flatStates = await readBuffer(allReadBuf);
+
+    // Slice out the individual states from the flat buffer
+    for (let i = 0; i < capturedOutputs; i++) {
+      const start = i * this.nSpecies;
+      const end = start + this.nSpecies;
+      results.push(flatStates.slice(start, end));
+    }
+
+    allReadBuf.destroy();
 
     const gpuTime = performance.now() - startTime;
 

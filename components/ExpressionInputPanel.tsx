@@ -186,6 +186,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
+        aria-controls="custom-expressions-panel"
         className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
       >
         <span className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
@@ -198,7 +199,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
       </button>
 
       {isExpanded && (
-        <div className="mt-3 space-y-3 pl-4">
+        <div id="custom-expressions-panel" className="mt-3 space-y-3 pl-4">
           {/* Mode toggle */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 dark:text-slate-400">Mode:</span>

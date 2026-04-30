@@ -1,0 +1,17 @@
+<<<<<<< SEARCH
+    // SECURITY: Validate expression to prevent code injection via new Function
+    if (/[;{}=\\`$\[\]]/.test(expandedExpr)) {
+      console.warn(`[getCompiledRateFunction] Unsafe characters detected in expression: '${expandedExpr}'`);
+      const zeroFn = () => 0;
+      compiledRateFunctions.set(expandedExpr, zeroFn);
+      return zeroFn;
+    }
+=======
+    // SECURITY: Validate expression to prevent code injection via new Function
+    if (/[;{}=\\`$\[\]]/.test(expandedExpr)) {
+      console.warn(`[getCompiledRateFunction] Unsafe characters detected in expression: '${expandedExpr}'`);
+      const zeroFn = () => 0;
+      compiledRateFunctions.set(expandedExpr, zeroFn);
+      return zeroFn;
+    }
+>>>>>>> REPLACE
