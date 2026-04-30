@@ -209,3 +209,15 @@ export async function getAllModels(): Promise<SearchResult[]> {
     score: 1,
   }));
 }
+
+// EXPORT FOR TESTING ONLY
+export const _internalState = {
+    get embedder() { return embedder; },
+    set embedder(v) { embedder = v; },
+    get embeddingsIndex() { return embeddingsIndex; },
+    set embeddingsIndex(v) { embeddingsIndex = v; },
+    get isLoading() { return isLoading; },
+    set isLoading(v) { isLoading = v; },
+    get loadError() { return loadError; },
+    set loadError(v) { loadError = v; }
+};

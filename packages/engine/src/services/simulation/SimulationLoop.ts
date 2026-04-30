@@ -586,7 +586,6 @@ export async function simulate(
     speciesVolumes[idx] = vol;
   });
 
-  // PARITY FIX: Pre-calculate reacting volumes for each reaction.
   // BioNetGen scales ODE rates by an anchor compartment volume. For mixed-dimension
   // reactants (e.g. 3D + 2D), anchoring to the lower-dimensional compartment yields
   // closer parity with cBNGL transport/binding models.
@@ -1268,7 +1267,6 @@ export async function simulate(
           if (change.afterPhaseIndex !== phaseIdx - 1) continue;
           const mode = change.mode ?? 'set';
 
-          // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
           if (mode === 'save') {
             const label = change.label ?? DEFAULT_CONC_LABEL;
             concentrationCache.set(label, new Float64Array(state));
@@ -2761,7 +2759,6 @@ export async function simulate(
         if (change.afterPhaseIndex !== phaseIdx - 1) continue;
         const mode = change.mode ?? 'set';
 
-        // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
         if (mode === 'save') {
           const label = change.label ?? DEFAULT_CONC_LABEL;
           concentrationCache.set(label, new Float64Array(y));

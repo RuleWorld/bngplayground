@@ -48,6 +48,8 @@ const MASS_ACTION_SKIP_EXPR_LEN = Number(
   (typeof process !== 'undefined' && process.env?.BNGL_SKIP_MASS_ACTION_EXPR_LEN) || '2000'
 );
 let transportLogCount = 0;
+
+const SATURATION_SUBSTRATE_REGEX = /_c_([a-zA-Z0-9_]+)\(\)|([a-zA-Z0-9_]+)_amt/g;
 let missingKineticLogCount = 0;
 
 const logTransportInfo = (message: string): void => {
@@ -1355,11 +1357,18 @@ export function writeReactionRulesFlat(
     const hasDenominator = denominatorContent.includes('+');
     let satSubstrate: string | null = null;
     if (hasDenominator) {
-      for (const spId of reactantCounts.keys()) {
-        const spName = standardizeName(spId);
-        if (denominatorContent.includes(`${spName}_amt`) || denominatorContent.includes(`_c_${spName}()`)) {
-          satSubstrate = spId;
-          break;
+      SATURATION_SUBSTRATE_REGEX.lastIndex = 0;
+      let match;
+      while ((match = SATURATION_SUBSTRATE_REGEX.exec(denominatorContent)) !== null) {
+        const foundName = match[1] || match[2];
+        if (foundName) {
+          for (const spId of reactantCounts.keys()) {
+            if (standardizeName(spId) === foundName) {
+              satSubstrate = spId;
+              break;
+            }
+          }
+          if (satSubstrate) break;
         }
       }
     }
@@ -1427,11 +1436,18 @@ export function writeReactionRulesFlat(
       const hasDenominator = denominatorContent.includes('+');
       let satSubstrate: string | null = null;
       if (hasDenominator) {
-        for (const spId of reactantCounts.keys()) {
-          const spName = standardizeName(spId);
-          if (denominatorContent.includes(`${spName}_amt`) || denominatorContent.includes(`_c_${spName}()`)) {
-            satSubstrate = spId;
-            break;
+        SATURATION_SUBSTRATE_REGEX.lastIndex = 0;
+        let match;
+        while ((match = SATURATION_SUBSTRATE_REGEX.exec(denominatorContent)) !== null) {
+          const foundName = match[1] || match[2];
+          if (foundName) {
+            for (const spId of reactantCounts.keys()) {
+              if (standardizeName(spId) === foundName) {
+                satSubstrate = spId;
+                break;
+              }
+            }
+            if (satSubstrate) break;
           }
         }
       }
