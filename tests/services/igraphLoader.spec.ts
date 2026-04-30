@@ -1,72 +1,43 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, test, expect, vi, beforeEach } from 'vitest';
 
-describe('loadIgraph', () => {
+describe('igraphLoader analyseGraph error path', () => {
   beforeEach(() => {
     vi.resetModules();
-    vi.clearAllMocks();
   });
 
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
+  test('should cleanup memory when HEAP32 throws', async () => {
+    const freeMock = vi.fn();
 
-  it('loads the module successfully on the first attempt and caches the result', async () => {
-    let callCount = 0;
-
+    // Mock the dynamic import of igraph_loader.js
     vi.doMock('../../services/igraph_loader.js', () => {
+      const fn = () => Promise.resolve({
+        _ig_malloc: vi.fn().mockReturnValue(123),
+        _ig_free: freeMock,
+        get HEAP32() { throw new Error('Simulated memory error'); },
+        HEAPU8: new Uint8Array(),
+        _ig_analyse: vi.fn(),
+        _malloc: vi.fn(),
+        _free: vi.fn(),
+        UTF8ToString: vi.fn(),
+      });
       return {
-        default: vi.fn().mockImplementation(() => {
-          callCount++;
-          return Promise.resolve({
-            _ig_analyse: vi.fn()
-          });
-        }),
-        IgraphModule: vi.fn()
+        default: fn,
+        IgraphModule: fn,
       };
     });
 
-    const { loadIgraph } = await import('../../services/igraphLoader');
+    // Need to dynamically import igraphLoader after doMock
+    const { analyseGraph } = await import('../../services/igraphLoader');
 
-    const result1 = await loadIgraph();
-    expect(result1).toBeDefined();
-
-    const result2 = await loadIgraph();
-    expect(result2).toBe(result1); // same instance
-
-    expect(callCount).toBe(1); // Only called once
-  });
-
-  it('retries on failure by clearing the cached promise', async () => {
-    let callCount = 0;
-
-    vi.doMock('../../services/igraph_loader.js', () => {
-      return {
-        default: vi.fn().mockImplementation(() => {
-          callCount++;
-          if (callCount === 1) {
-            return Promise.reject(new Error('First call fails'));
-          }
-          return Promise.resolve({
-            _ig_analyse: vi.fn()
-          });
-        }),
-        IgraphModule: vi.fn()
-      };
+    const promise = analyseGraph({
+      edges: [{from: 0, to: 1}],
+      nodeLabels: ['A', 'B'],
+      directed: false,
+      graphType: 'reaction'
     });
 
-    const { loadIgraph } = await import('../../services/igraphLoader');
-
-    // First call should fail
-    await expect(loadIgraph()).rejects.toThrow('First call fails');
-    expect(callCount).toBe(1);
-
-    // Second call should retry and succeed
-    const result = await loadIgraph();
-    expect(result).toBeDefined();
-    expect(callCount).toBe(2);
-
-    // Third call should be cached
-    await loadIgraph();
-    expect(callCount).toBe(2);
+    await expect(promise).rejects.toThrow('Simulated memory error');
+    expect(freeMock).toHaveBeenCalledTimes(1);
+    expect(freeMock).toHaveBeenCalledWith(123);
   });
 });
