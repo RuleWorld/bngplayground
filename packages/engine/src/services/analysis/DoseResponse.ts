@@ -16,10 +16,10 @@
  *   5. Optionally detect bifurcations from eigenvalue sign changes.
  */
 
-import { findSteadyState } from './SteadyStateFinder';
-import type { SteadyStateConfig, SteadyState } from './SteadyStateFinder';
-import { nelderMead } from '../optimization/nelderMead';
-import type { BNGLModel, BNGLReaction, BNGLSpecies } from '../../types';
+import { findSteadyState } from "./SteadyStateFinder";
+import type { SteadyStateConfig, SteadyState } from "./SteadyStateFinder";
+import { nelderMead } from "../optimization/nelderMead";
+import type { BNGLModel, BNGLReaction, BNGLSpecies } from "../../types";
 
 // ── Public interfaces ──────────────────────────────────────────────
 
@@ -38,7 +38,7 @@ export interface DoseResponseConfig {
   /** Observable names to track. */
   observables: string[];
   /** Steady-state method: 'rootfind' (Newton) or 'simulate' (default 'rootfind'). */
-  method?: 'simulate' | 'rootfind';
+  method?: "simulate" | "rootfind";
   /** End time for simulation method (default 1e4). */
   t_end?: number;
   /** Newton convergence tolerance (default 1e-6). */
@@ -67,7 +67,7 @@ export interface DoseResponseCurve {
   hillFit?: HillFit;
   bifurcationPoints?: Array<{
     dose: number;
-    type: 'saddle-node' | 'hopf';
+    type: "saddle-node" | "hopf";
     response: number;
   }>;
 }
@@ -230,12 +230,12 @@ function resolveObservable(
   if (modelObs) {
     const obs = modelObs as unknown as Record<string, unknown>;
     if (
-      Array.isArray(obs['speciesIndices']) &&
-      Array.isArray(obs['coefficients'])
+      Array.isArray(obs["speciesIndices"]) &&
+      Array.isArray(obs["coefficients"])
     ) {
       return {
-        speciesIndices: obs['speciesIndices'] as number[],
-        coefficients: obs['coefficients'] as number[],
+        speciesIndices: obs["speciesIndices"] as number[],
+        coefficients: obs["coefficients"] as number[],
       };
     }
   }
@@ -280,44 +280,16 @@ async function fitHillEquation(
     return { n: 1, ec50: 1, baseline: 0, maximum: 0, r2: 0 };
   }
 
-  // Initial guesses.
-  const baseline0 = responses[0];
-  const maximum0 = responses[nData - 1];
-  const halfMax = (baseline0 + maximum0) / 2;
+  const { baseline0, maximum0, ec50Guess } = getInitialHillGuesses(
+    doses,
+    responses,
+    nData,
+  );
 
-  // Find dose closest to half-max for EC50 initial guess.
-  let ec50Guess = (doses[0] + doses[nData - 1]) / 2;
-  let minDist = Infinity;
-  for (let i = 0; i < nData; i++) {
-    const dist = Math.abs(responses[i] - halfMax);
-    if (dist < minDist) {
-      minDist = dist;
-      ec50Guess = doses[i];
-    }
-  }
-  if (ec50Guess <= 0) ec50Guess = 1;
-
-  // x = [n, ec50, baseline, maximum]
   const x0 = [1, ec50Guess, baseline0, maximum0];
-
-  const objectiveFn = async (x: number[]): Promise<number> => {
-    const hillN = x[0];
-    const hillEC50 = Math.abs(x[1]); // enforce positive
-    const hillBaseline = x[2];
-    const hillMaximum = x[3];
-
-    let sse = 0;
-    for (let i = 0; i < nData; i++) {
-      const d = doses[i];
-      const dN = Math.pow(Math.max(d, 0), hillN);
-      const ec50N = Math.pow(Math.max(hillEC50, 1e-30), hillN);
-      const predicted =
-        hillBaseline + (hillMaximum - hillBaseline) * dN / (ec50N + dN);
-      const residual = responses[i] - predicted;
-      sse += residual * residual;
-    }
-    return sse;
-  };
+  const syncObjectiveFn = createHillObjective(doses, responses, nData);
+  const objectiveFn = async (x: number[]): Promise<number> =>
+    syncObjectiveFn(x);
 
   const result = await nelderMead(objectiveFn, x0, {
     maxEval: 5000,
@@ -330,26 +302,15 @@ async function fitHillEquation(
   const fittedBaseline = result.x[2];
   const fittedMaximum = result.x[3];
 
-  // Compute R^2.
-  let mean = 0;
-  for (let i = 0; i < nData; i++) mean += responses[i];
-  mean /= nData;
-
-  let sst = 0;
-  let sse = 0;
-  for (let i = 0; i < nData; i++) {
-    sst += (responses[i] - mean) * (responses[i] - mean);
-    const d = doses[i];
-    const dN = Math.pow(Math.max(d, 0), fittedN);
-    const ec50N = Math.pow(Math.max(fittedEC50, 1e-30), fittedN);
-    const predicted =
-      fittedBaseline +
-      (fittedMaximum - fittedBaseline) * dN / (ec50N + dN);
-    const residual = responses[i] - predicted;
-    sse += residual * residual;
-  }
-
-  const r2 = sst > 1e-30 ? 1 - sse / sst : 0;
+  const r2 = calculateHillR2(
+    fittedN,
+    fittedEC50,
+    fittedBaseline,
+    fittedMaximum,
+    doses,
+    responses,
+    nData,
+  );
 
   return {
     n: fittedN,
@@ -371,10 +332,10 @@ function detectBifurcationPoints(
   doses: number[],
   steadyStates: Array<SteadyState | null>,
   observableMapping: ObservableMapping,
-): Array<{ dose: number; type: 'saddle-node' | 'hopf'; response: number }> {
+): Array<{ dose: number; type: "saddle-node" | "hopf"; response: number }> {
   const bifurcations: Array<{
     dose: number;
-    type: 'saddle-node' | 'hopf';
+    type: "saddle-node" | "hopf";
     response: number;
   }> = [];
 
@@ -408,7 +369,7 @@ function detectBifurcationPoints(
 
       bifurcations.push({
         dose: interpDose,
-        type: isHopf ? 'hopf' : 'saddle-node',
+        type: isHopf ? "hopf" : "saddle-node",
         response,
       });
     }
@@ -595,15 +556,52 @@ export function computeDoseResponse(
  * Synchronous Hill equation fit using a simple iterative Nelder-Mead
  * implemented inline (avoids the async wrapper).
  */
-function fitHillEquationSync(
-  doses: number[],
-  responses: number[],
-): HillFit {
+function fitHillEquationSync(doses: number[], responses: number[]): HillFit {
   const nData = doses.length;
   if (nData < 2) {
     return { n: 1, ec50: 1, baseline: 0, maximum: 0, r2: 0 };
   }
 
+  const { baseline0, maximum0, ec50Guess } = getInitialHillGuesses(
+    doses,
+    responses,
+    nData,
+  );
+
+  const x0 = [1, ec50Guess, baseline0, maximum0];
+  const objective = createHillObjective(doses, responses, nData);
+
+  const bestX = nelderMeadSync(objective, x0);
+
+  const fittedN = bestX[0];
+  const fittedEC50 = Math.abs(bestX[1]);
+  const fittedBaseline = bestX[2];
+  const fittedMaximum = bestX[3];
+
+  const r2 = calculateHillR2(
+    fittedN,
+    fittedEC50,
+    fittedBaseline,
+    fittedMaximum,
+    doses,
+    responses,
+    nData,
+  );
+
+  return {
+    n: fittedN,
+    ec50: fittedEC50,
+    baseline: fittedBaseline,
+    maximum: fittedMaximum,
+    r2,
+  };
+}
+
+function getInitialHillGuesses(
+  doses: number[],
+  responses: number[],
+  nData: number,
+) {
   const baseline0 = responses[0];
   const maximum0 = responses[nData - 1];
   const halfMax = (baseline0 + maximum0) / 2;
@@ -619,8 +617,15 @@ function fitHillEquationSync(
   }
   if (ec50Guess <= 0) ec50Guess = 1;
 
-  // Objective: sum of squared errors.
-  function objective(x: number[]): number {
+  return { baseline0, maximum0, ec50Guess };
+}
+
+function createHillObjective(
+  doses: number[],
+  responses: number[],
+  nData: number,
+) {
+  return function objective(x: number[]): number {
     const hillN = x[0];
     const hillEC50 = Math.abs(x[1]);
     const hillBaseline = x[2];
@@ -632,19 +637,50 @@ function fitHillEquationSync(
       const dN = Math.pow(Math.max(d, 0), hillN);
       const ec50N = Math.pow(Math.max(hillEC50, 1e-30), hillN);
       const predicted =
-        hillBaseline + (hillMaximum - hillBaseline) * dN / (ec50N + dN);
+        hillBaseline + ((hillMaximum - hillBaseline) * dN) / (ec50N + dN);
       const residual = responses[i] - predicted;
       sse += residual * residual;
     }
     return sse;
+  };
+}
+
+function calculateHillR2(
+  fittedN: number,
+  fittedEC50: number,
+  fittedBaseline: number,
+  fittedMaximum: number,
+  doses: number[],
+  responses: number[],
+  nData: number,
+) {
+  let mean = 0;
+  for (let i = 0; i < nData; i++) mean += responses[i];
+  mean /= nData;
+
+  let sst = 0;
+  let sse = 0;
+  for (let i = 0; i < nData; i++) {
+    sst += (responses[i] - mean) * (responses[i] - mean);
+    const d = doses[i];
+    const dN = Math.pow(Math.max(d, 0), fittedN);
+    const ec50N = Math.pow(Math.max(fittedEC50, 1e-30), fittedN);
+    const predicted =
+      fittedBaseline + ((fittedMaximum - fittedBaseline) * dN) / (ec50N + dN);
+    const residual = responses[i] - predicted;
+    sse += residual * residual;
   }
 
-  // Inline synchronous Nelder-Mead for 4 parameters.
-  const dim = 4;
-  const x0 = [1, ec50Guess, baseline0, maximum0];
-  const maxIter = 5000;
-  const ftol = 1e-10;
+  return sst > 1e-30 ? 1 - sse / sst : 0;
+}
 
+function nelderMeadSync(
+  objective: (x: number[]) => number,
+  x0: number[],
+  dim: number = 4,
+  maxIter: number = 5000,
+  ftol: number = 1e-10,
+) {
   // Build initial simplex.
   const simplex: number[][] = Array.from({ length: dim + 1 }, () => [...x0]);
   for (let i = 0; i < dim; i++) {
@@ -753,37 +789,5 @@ function fitHillEquationSync(
     if (fVal[i] < fVal[bestIdx]) bestIdx = i;
   }
 
-  const fittedN = simplex[bestIdx][0];
-  const fittedEC50 = Math.abs(simplex[bestIdx][1]);
-  const fittedBaseline = simplex[bestIdx][2];
-  const fittedMaximum = simplex[bestIdx][3];
-
-  // Compute R^2.
-  let mean = 0;
-  for (let i = 0; i < nData; i++) mean += responses[i];
-  mean /= nData;
-
-  let sst = 0;
-  let sse = 0;
-  for (let i = 0; i < nData; i++) {
-    sst += (responses[i] - mean) * (responses[i] - mean);
-    const d = doses[i];
-    const dN = Math.pow(Math.max(d, 0), fittedN);
-    const ec50N = Math.pow(Math.max(fittedEC50, 1e-30), fittedN);
-    const predicted =
-      fittedBaseline +
-      (fittedMaximum - fittedBaseline) * dN / (ec50N + dN);
-    const residual = responses[i] - predicted;
-    sse += residual * residual;
-  }
-
-  const r2 = sst > 1e-30 ? 1 - sse / sst : 0;
-
-  return {
-    n: fittedN,
-    ec50: fittedEC50,
-    baseline: fittedBaseline,
-    maximum: fittedMaximum,
-    r2,
-  };
+  return simplex[bestIdx];
 }

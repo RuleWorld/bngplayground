@@ -56,29 +56,37 @@ const DEFAULT_OPTIONS: Required<QSSAOptions> = {
     generateReducedModel: false,
 };
 
-function findMatchingSpeciesName(pattern: string, availableSpecies: string[]): string | undefined {
+function findMatchingSpeciesName(pattern: string, availableSpecies: string[], availableSpeciesSet?: Set<string>): string | undefined {
+    // ⚡ Bolt Optimization: Use fast path with Set if provided to skip expensive closure/array overhead
+    if (availableSpeciesSet) {
+        if (availableSpeciesSet.has(pattern)) return pattern;
+    } else {
+        if (availableSpecies.includes(pattern)) return pattern;
+    }
+
     // Attempt multiple resolution strategies to match canonical strings
-    const graph = BNGLParser.parseSpeciesGraph(pattern, false);
-    const toStringMatch = graph.toString();
-    if (availableSpecies.includes(toStringMatch)) return toStringMatch;
+    try {
+        const graph = BNGLParser.parseSpeciesGraph(pattern, false);
+        const toStringMatch = graph.toString();
+        if (availableSpeciesSet ? availableSpeciesSet.has(toStringMatch) : availableSpecies.includes(toStringMatch)) return toStringMatch;
 
-    // Canonical form
-    const canonMatch = GraphCanonicalizer.canonicalize(graph);
-    if (availableSpecies.includes(canonMatch)) return canonMatch;
+        // Canonical form
+        const canonMatch = GraphCanonicalizer.canonicalize(graph);
+        if (availableSpeciesSet ? availableSpeciesSet.has(canonMatch) : availableSpecies.includes(canonMatch)) return canonMatch;
 
-    // Direct match (maybe exact string)
-    if (availableSpecies.includes(pattern)) return pattern;
-
-    // Check against canonical forms of available species to be completely safe
-    for (const sp of availableSpecies) {
-        try {
-            const spGraph = BNGLParser.parseSpeciesGraph(sp, false);
-            if (GraphCanonicalizer.canonicalize(spGraph) === canonMatch) {
-                return sp;
+        // Check against canonical forms of available species to be completely safe
+        for (const sp of availableSpecies) {
+            try {
+                const spGraph = BNGLParser.parseSpeciesGraph(sp, false);
+                if (GraphCanonicalizer.canonicalize(spGraph) === canonMatch) {
+                    return sp;
+                }
+            } catch {
+                // Ignore parse errors on available species
             }
-        } catch {
-            // Ignore parse errors on available species
         }
+    } catch {
+        // Ignore parsing errors for exact matches
     }
 
     return undefined;
@@ -111,6 +119,11 @@ export function analyzeQSSA(
             if (numVal < minRate) minRate = numVal;
         }
     }
+
+    // ⚡ Bolt Optimization: Pre-compute the set of available species for O(1) lookups
+    const availableSpeciesArray = Object.keys(speciesReactionMap);
+    const availableSpeciesSet = new Set(availableSpeciesArray);
+
     for (const rule of reactionRules) {
         let rateValue: number;
         
@@ -128,9 +141,10 @@ export function analyzeQSSA(
         
         const isFast = rateValue >= maxRate / opts.fastSlowThreshold;
         
+
         const allMols = [...rule.reactants, ...rule.products];
         for (const molExpr of allMols) {
-            const canonicalMatch = findMatchingSpeciesName(molExpr, Object.keys(speciesReactionMap));
+            const canonicalMatch = findMatchingSpeciesName(molExpr, availableSpeciesArray, availableSpeciesSet);
             if (canonicalMatch && speciesReactionMap[canonicalMatch]) {
                 if (isFast) {
                     speciesReactionMap[canonicalMatch].fast++;
@@ -151,7 +165,7 @@ export function analyzeQSSA(
         const ratio = totalReactions > 0 ? data.fast / totalReactions : 0;
         
         let recommendation: QSSACandidate['recommendation'] = 'NONE';
-        let rationale = '';
+        let rationale: string;
         
         if (ratio >= 0.7 && data.fast >= opts.minFastReactions) {
             recommendation = 'QSSA';
@@ -177,31 +191,40 @@ export function analyzeQSSA(
     
     candidates.sort((a, b) => b.ratio - a.ratio);
     
-    const qssaCount = candidates.filter(c => c.recommendation === 'QSSA').length;
-    const conservationCount = candidates.filter(c => c.recommendation === 'CONSERVATION').length;
+    // ⚡ Bolt Optimization: Replace O(N) chained array methods (.filter().length, .filter().slice().map())
+    // with a single loop to calculate counts and extract the top QSSA candidates.
+    let qssaCount = 0;
+    let conservationCount = 0;
+    const topQssaCandidates: string[] = [];
+
+    for (const c of candidates) {
+        if (c.recommendation === 'QSSA') {
+            qssaCount++;
+            if (topQssaCandidates.length < 3) {
+                topQssaCandidates.push(c.species);
+            }
+        } else if (c.recommendation === 'CONSERVATION') {
+            conservationCount++;
+        }
+    }
     
-    let summary = '';
+    let summary: string;
     if (qssaCount === 0 && conservationCount === 0) {
         summary = 'No QSSA candidates found. Model appears well-balanced or lacks fast-slow separation.';
     } else {
         summary = `Found ${qssaCount} QSSA candidate${qssaCount !== 1 ? 's' : ''} and ${conservationCount} conservation law${conservationCount !== 1 ? 's' : ''}.`;
         if (qssaCount > 0) {
-            summary += ` Consider using QSSA for: ${candidates.filter(c => c.recommendation === 'QSSA').slice(0, 3).map(c => c.species).join(', ')}${qssaCount > 3 ? '...' : ''}.`;
+            summary += ` Consider using QSSA for: ${topQssaCandidates.join(', ')}${qssaCount > 3 ? '...' : ''}.`;
         }
     }
     
     let reducedModel: QSSAResult['reducedModel'] | undefined;
     
     if (opts.generateReducedModel && qssaCount > 0) {
-        const eliminated = candidates
-            .filter(c => c.recommendation === 'QSSA')
-            .slice(0, 3)
-            .map(c => c.species);
-        
         reducedModel = {
-            eliminatedSpecies: eliminated,
-            modifiedReactions: eliminated.length * 2,
-            estimatedSpeedup: Math.pow(2, eliminated.length),
+            eliminatedSpecies: topQssaCandidates,
+            modifiedReactions: topQssaCandidates.length * 2,
+            estimatedSpeedup: Math.pow(2, topQssaCandidates.length),
         };
     }
     
@@ -233,12 +256,19 @@ export function applyQSSAReduction(
     
     // Build stoichiometric matrix from reactions
     const speciesNames = (model.species ?? []).map(s => s.name);
-    const speciesIndex = new Map(speciesNames.map((name, i) => [name, i]));
+    // ⚡ Bolt Optimization: Populate speciesIndex iteratively to avoid intermediate array allocations
+    const speciesIndex = new Map<string, number>();
+    for (let i = 0; i < speciesNames.length; i++) {
+        speciesIndex.set(speciesNames[i], i);
+    }
     const nSpecies = speciesNames.length;
     
     const reactions = model.reactionRules ?? [];
     const nReactions = reactions.length;
     
+    // ⚡ Bolt Optimization: Pre-compute the set of available species for O(1) lookups
+    const availableSpeciesSet = new Set(speciesNames);
+
     // Build stoichiometric matrix N[species][reaction]
     const N: number[][] = Array.from({ length: nSpecies }, () => Array(nReactions).fill(0));
     
@@ -247,7 +277,7 @@ export function applyQSSAReduction(
         
         // Products add to stoichiometry
         for (const prod of rule.products) {
-            const spName = findMatchingSpeciesName(prod, speciesNames);
+            const spName = findMatchingSpeciesName(prod, speciesNames, availableSpeciesSet);
             if (spName !== undefined) {
                 const idx = speciesIndex.get(spName);
                 if (idx !== undefined) {
@@ -258,7 +288,7 @@ export function applyQSSAReduction(
         
         // Reactants subtract from stoichiometry
         for (const reac of rule.reactants) {
-            const spName = findMatchingSpeciesName(reac, speciesNames);
+            const spName = findMatchingSpeciesName(reac, speciesNames, availableSpeciesSet);
             if (spName !== undefined) {
                 const idx = speciesIndex.get(spName);
                 if (idx !== undefined) {
@@ -270,16 +300,20 @@ export function applyQSSAReduction(
     
     // Compute left null space to find conservation laws
     const conservationLaws: Array<{ conservedTotal: number; species: string[]; coefficients: number[] }> = [];
-    const eliminatedIndices = new Set(
-        speciesToEliminate.map(name => speciesIndex.get(name)).filter((i): i is number => i !== undefined)
-    );
+    // ⚡ Bolt Optimization: Use a loop instead of .map().filter() to populate eliminatedIndices safely
+    const eliminatedIndices = new Set<number>();
+    for (const name of speciesToEliminate) {
+        const idx = speciesIndex.get(name);
+        if (idx !== undefined) {
+            eliminatedIndices.add(idx);
+        }
+    }
     
     // For each eliminated species, derive its conservation law from reactions
     // QSSA: the fast species reaches equilibrium much faster than other species
     // We express eliminated species as algebraic functions of independent species
     
     const notes: string[] = [];
-    const modifiedReactions: string[] = [];
     
     // Build modified model - keep all rules but mark eliminated species as dependent
     // In true QSSA, we'd replace d[X]/dt = 0 with algebraic constraint
@@ -290,11 +324,11 @@ export function applyQSSAReduction(
     
     for (const rule of reactions) {
         const hasEliminatedReactant = rule.reactants.some(r => {
-            const spName = findMatchingSpeciesName(r, speciesNames);
+            const spName = findMatchingSpeciesName(r, speciesNames, availableSpeciesSet);
             return spName && eliminatedSet.has(spName);
         });
         const hasEliminatedProduct = rule.products.some(p => {
-            const spName = findMatchingSpeciesName(p, speciesNames);
+            const spName = findMatchingSpeciesName(p, speciesNames, availableSpeciesSet);
             return spName && eliminatedSet.has(spName);
         });
         
