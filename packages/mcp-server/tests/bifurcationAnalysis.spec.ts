@@ -201,6 +201,19 @@ describe('bifurcation_analysis handler', () => {
         expect(body.technical).toContain('2.5');
     }, 30000);
 
+    it('reports defaulted parameter bounds in the technical summary', async () => {
+        const result = await handleBifurcationAnalysis({
+            code: BRUSSELATOR_MODEL,
+            parameter: 'b',
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.technical).toContain('b');
+        expect(body.technical).toContain('0');
+        expect(body.technical).toContain('1');
+        expect(body.technical).not.toContain('undefined');
+    }, 30000);
+
     it('returns biological interpretation', async () => {
         const result = await handleBifurcationAnalysis({
             code: BRUSSELATOR_MODEL,
