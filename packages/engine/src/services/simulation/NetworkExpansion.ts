@@ -709,11 +709,12 @@ export async function generateExpandedNetwork(
     const molToSpecies = new Map<string, Set<number>>();
     generatedSpecies.forEach((s, idx) => {
         // Extract base molecule names from the string representation
+        // ⚡ Bolt Optimization: Use fast index-based parsing instead of chained array
+        // methods (.split.map) and regular expressions to avoid allocation overhead in hot loops.
         const parts = s.name.split('.');
         const mols: string[] = [];
         for (let i = 0; i < parts.length; i++) {
             let m = parts[i];
-
             // replace(/^@[^:]+::?/, '')
             if (m.charCodeAt(0) === 64) { // '@'
                 const colonIdx = m.indexOf(':');
