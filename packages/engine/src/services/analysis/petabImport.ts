@@ -135,26 +135,15 @@ function parseTSV(text: string): Record<string, string>[] {
   return rows;
 }
 
-export function parsePEtab(files: Map<string, string>): PEtabProblem {
-  const warnings: string[] = [];
-
-  const findFile = (suffix: string): string | undefined => {
-    for (const [name, content] of files) {
-      if (name.toLowerCase().endsWith(suffix.toLowerCase())) return content;
-    }
-    return undefined;
-  };
-
-  const yamlContent = findFile('.yaml') ?? findFile('.yml');
-  if (yamlContent) {
-    try {
-      parseSimpleYAML(yamlContent);
-    } catch {
-      warnings.push('Failed to parse YAML problem file; using filename heuristics.');
-    }
+function findFile(files: Map<string, string>, suffix: string): string | undefined {
+  for (const [name, content] of files) {
+    if (name.toLowerCase().endsWith(suffix.toLowerCase())) return content;
   }
+  return undefined;
+}
 
-  const paramText = findFile('parameters.tsv') ?? findFile('_parameters.tsv');
+function parseParameters(files: Map<string, string>): PEtabParameter[] {
+  const paramText = findFile(files, 'parameters.tsv') ?? findFile(files, '_parameters.tsv');
   if (!paramText) {
     throw new Error(
       'PEtab import failed: no parameters.tsv file was found in the provided archive. ' +
@@ -184,8 +173,11 @@ export function parsePEtab(files: Map<string, string>): PEtabProblem {
       priorParameters: row.objectivePriorParameters || row.initializationPriorParameters,
     });
   }
+  return parameters;
+}
 
-  const measText = findFile('measurements.tsv') ?? findFile('_measurements.tsv');
+function parseMeasurements(files: Map<string, string>): ExperimentalDataPoint[] {
+  const measText = findFile(files, 'measurements.tsv') ?? findFile(files, '_measurements.tsv');
   if (!measText) {
     throw new Error(
       'PEtab import failed: no measurements.tsv file was found in the provided archive. ' +
@@ -230,9 +222,12 @@ export function parsePEtab(files: Map<string, string>): PEtabProblem {
     }
     measurements.push({ time: t, values });
   }
+  return measurements;
+}
 
+function parseConditions(files: Map<string, string>): Map<string, Record<string, number>> {
   const conditions = new Map<string, Record<string, number>>();
-  const condText = findFile('conditions.tsv') ?? findFile('_conditions.tsv');
+  const condText = findFile(files, 'conditions.tsv') ?? findFile(files, '_conditions.tsv');
   if (condText) {
     const condRows = parseTSV(condText);
     for (const row of condRows) {
@@ -248,9 +243,12 @@ export function parsePEtab(files: Map<string, string>): PEtabProblem {
       conditions.set(condId, overrides);
     }
   }
+  return conditions;
+}
 
+function parseObservables(files: Map<string, string>): PEtabObservable[] {
   const observables: PEtabObservable[] = [];
-  const obsText = findFile('observables.tsv') ?? findFile('_observables.tsv');
+  const obsText = findFile(files, 'observables.tsv') ?? findFile(files, '_observables.tsv');
   if (obsText) {
     const obsRows = parseTSV(obsText);
     for (const row of obsRows) {
@@ -265,6 +263,25 @@ export function parsePEtab(files: Map<string, string>): PEtabProblem {
       });
     }
   }
+  return observables;
+}
+
+export function parsePEtab(files: Map<string, string>): PEtabProblem {
+  const warnings: string[] = [];
+
+  const yamlContent = findFile(files, '.yaml') ?? findFile(files, '.yml');
+  if (yamlContent) {
+    try {
+      parseSimpleYAML(yamlContent);
+    } catch {
+      warnings.push('Failed to parse YAML problem file; using filename heuristics.');
+    }
+  }
+
+  const parameters = parseParameters(files);
+  const measurements = parseMeasurements(files);
+  const conditions = parseConditions(files);
+  const observables = parseObservables(files);
 
   const paramBounds: ParamBounds[] = parameters
     .filter((p) => p.estimate)
