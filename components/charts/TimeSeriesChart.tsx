@@ -377,7 +377,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
   );
 });
 
-const CustomTooltip = ({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: any) => {
+const CustomTooltip = React.memo(({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: any) => {
   if (active && payload && payload.length) {
     const displayLabel = xAxisScale === 'log' ? Math.pow(10, Number(label)) : Number(label);
     
@@ -406,4 +406,4 @@ const CustomTooltip = ({ active, payload, label, xAxisLabel, xAxisScale, yAxisSc
     );
   }
   return null;
-};
+});
