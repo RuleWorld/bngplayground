@@ -208,6 +208,7 @@ export class WorkerPool {
     } else {
       taskId = `${Date.now().toString(36)}-${Math.random().toString(36).substring(7)}`;
     }
+
     const task: WorkerTask<T> = { id: taskId, type, data };
 
     return new Promise((resolve, reject) => {
