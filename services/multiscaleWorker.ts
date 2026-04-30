@@ -24,6 +24,12 @@ export type MultiscaleWorkerResponse =
 let cancelled = false;
 
 self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
+  const origin = (event as MessageEvent).origin;
+  const expectedOrigin = typeof self.location?.origin === 'string' ? self.location.origin : '';
+  if (typeof origin === 'string' && origin.length > 0 && expectedOrigin.length > 0 && origin !== expectedOrigin) {
+    return;
+  }
+
   const msg = event.data;
 
   try {

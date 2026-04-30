@@ -24,7 +24,6 @@
  */
 
 import {
-  errorNorm,
   hasInvalidValues,
   type SolverOptions,
   type SolverResult,
@@ -41,11 +40,7 @@ export type { SolverOptions, SolverResult, DerivativeFunction };
 const GAMMA = 2 - Math.SQRT2; // ~0.5857864376
 
 /** Derived constants for BDF2 stage */
-const GAMMA_INV = 1 / GAMMA;
 const ONE_MINUS_GAMMA = 1 - GAMMA;
-const BDF2_DENOM = GAMMA * (2 - GAMMA) / (2 * ONE_MINUS_GAMMA); // coefficient for BDF2
-const W_BDF2 = ONE_MINUS_GAMMA / (GAMMA * (2 - GAMMA)); // BDF2 weight for y_n
-const W_BDF2_GAMMA = 1 / (GAMMA * (2 - GAMMA)); // BDF2 weight for y_gamma (unused directly)
 
 // ── LU Solver (row-major, partial pivoting) ──────────────────────────
 
@@ -499,7 +494,6 @@ export class TRBDF2Solver {
     errNorm: number;
   } {
     const n = this.n;
-    const { atol, rtol } = this.options;
 
     // FSAL: skip f0 evaluation if we already have f(y_n) from the previous
     // accepted step (fNew was copied into f0 at the end of the integrate loop).

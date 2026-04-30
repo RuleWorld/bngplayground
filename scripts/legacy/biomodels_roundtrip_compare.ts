@@ -14,6 +14,23 @@ import { simulate } from '@bngplayground/engine';
 import { exportToSBML } from '../../services/exportSBML';
 import type { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 
+function sanitizeModelIdForPath(id: string): string {
+  if (!/^[A-Za-z0-9._-]+$/.test(id)) {
+    throw new Error(`Unsafe model ID for filesystem operations: ${id}`);
+  }
+  return id;
+}
+
+function resolvePathUnderDir(baseDir: string, ...segments: string[]): string {
+  const base = path.resolve(baseDir);
+  const resolved = path.resolve(base, ...segments);
+  const rel = path.relative(base, resolved);
+  if (rel.startsWith('..') || path.isAbsolute(rel)) {
+    throw new Error(`Path escapes output directory: ${resolved}`);
+  }
+  return resolved;
+}
+
 type RoundtripResult = {
   modelId: string;
   ok: boolean;
@@ -3152,19 +3169,20 @@ async function runBatchMode() {
     };
 
     const runChildForId = async (id: string): Promise<RoundtripResult> => {
-      const modelDir = path.join(effectiveOutDir, id);
+      const safeId = sanitizeModelIdForPath(id);
+      const modelDir = resolvePathUnderDir(effectiveOutDir, safeId);
       await fs.mkdir(modelDir, { recursive: true });
       await Promise.allSettled([
-        fs.rm(path.join(modelDir, 'result.json'), { force: true }),
-        fs.rm(path.join(modelDir, 'roundtrip.sbml.xml'), { force: true }),
+        fs.rm(resolvePathUnderDir(modelDir, 'result.json'), { force: true }),
+        fs.rm(resolvePathUnderDir(modelDir, 'roundtrip.sbml.xml'), { force: true }),
       ]);
-      const childLogPath = path.join(modelDir, 'child.log');
+      const childLogPath = resolvePathUnderDir(modelDir, 'child.log');
       await fs.writeFile(childLogPath, '', 'utf8');
 
       const tsxCli = path.resolve(process.cwd(), 'node_modules', 'tsx', 'dist', 'cli.mjs');
       const child = spawn(
         process.execPath,
-        [tsxCli, 'scripts/biomodels_roundtrip_compare.ts', '--single', id, '--outdir', effectiveOutDir],
+        [tsxCli, 'scripts/biomodels_roundtrip_compare.ts', '--single', safeId, '--outdir', effectiveOutDir],
         { cwd: process.cwd(), stdio: ['ignore', 'pipe', 'pipe'] }
       );
 
@@ -3173,7 +3191,7 @@ async function runBatchMode() {
       const timer = setTimeout(async () => {
         if (childExited) return;
         timedOut = true;
-        console.error(`[roundtrip] ${id} exceeded ${PER_MODEL_TIMEOUT_MS}ms; killing child PID ${child.pid}`);
+        console.error(`[roundtrip] ${safeId} exceeded ${PER_MODEL_TIMEOUT_MS}ms; killing child PID ${child.pid}`);
         await killProcessTree(child.pid ?? 0);
       }, PER_MODEL_TIMEOUT_MS);
       if (typeof (timer as any).unref === 'function') {
@@ -3189,7 +3207,7 @@ async function runBatchMode() {
         } catch (error) {
           const code = (error as any)?.code;
           if (code !== 'EPIPE') {
-            console.error(`[roundtrip] stream write failed for ${id}:`, error);
+            console.error(`[roundtrip] stream write failed for ${safeId}:`, error);
           }
         }
       };
@@ -3197,14 +3215,14 @@ async function runBatchMode() {
       child.stdout.on('data', (d) => {
         const s = String(d);
         if (STREAM_CHILD_LOGS) {
-          safeWrite(process.stdout, `[child:${id}] ${s}`);
+          safeWrite(process.stdout, `[child:${safeId}] ${s}`);
         }
         void appendLog(s);
       });
       child.stderr.on('data', (d) => {
         const s = String(d);
         if (STREAM_CHILD_LOGS) {
-          safeWrite(process.stderr, `[child:${id}:err] ${s}`);
+          safeWrite(process.stderr, `[child:${safeId}:err] ${s}`);
         }
         void appendLog(s);
       });
@@ -3216,14 +3234,14 @@ async function runBatchMode() {
       childExited = true;
       clearTimeout(timer);
 
-      const resultPath = path.join(modelDir, 'result.json');
+      const resultPath = resolvePathUnderDir(modelDir, 'result.json');
       let result: RoundtripResult;
       try {
         const raw = await fs.readFile(resultPath, 'utf8');
         result = JSON.parse(raw) as RoundtripResult;
       } catch {
         result = {
-          modelId: id,
+          modelId: safeId,
           ok: false,
           timedOut,
           error: timedOut

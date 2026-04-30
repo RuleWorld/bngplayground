@@ -118,34 +118,51 @@ export class RxnRule {
    */
   applyConstraints(constraints: string[], parser: (str: string) => SpeciesGraph) {
     for (const constraint of constraints) {
-      // Match constraint type, index, and pattern
-      // Example: exclude_reactants(1, A(b~P))
-      const match = constraint.match(/^(exclude_reactants|include_reactants|exclude_products|include_products)\s*\(\s*(\d+)\s*,\s*(.+)\s*\)$/);
-      if (match) {
-        const type = match[1];
-        const index = parseInt(match[2], 10);
-        const patternStr = match[3];
-
-        try {
-          const pattern = parser(patternStr);
-
-          // BNGL uses 1-based indexing, convert to 0-based
-          const mappedIndex = index - 1;
-
-          if (type === 'exclude_reactants') {
-            this.excludeReactants.push({ reactantIndex: mappedIndex, pattern });
-          } else if (type === 'include_reactants') {
-            this.includeReactants.push({ reactantIndex: mappedIndex, pattern });
-          } else if (type === 'exclude_products') {
-            this.excludeProducts.push({ productIndex: mappedIndex, pattern });
-          } else if (type === 'include_products') {
-            this.includeProducts.push({ productIndex: mappedIndex, pattern });
-          }
-        } catch (e) {
-          console.warn(`Failed to parse pattern in constraint: ${constraint}`, e);
-        }
-      } else {
+      const trimmed = constraint.trim();
+      const openIdx = trimmed.indexOf('(');
+      const closeIdx = trimmed.lastIndexOf(')');
+      if (openIdx <= 0 || closeIdx <= openIdx) {
         console.warn(`Unknown or malformed constraint: ${constraint}`);
+        continue;
+      }
+
+      const type = trimmed.slice(0, openIdx).trim();
+      if (!['exclude_reactants', 'include_reactants', 'exclude_products', 'include_products'].includes(type)) {
+        console.warn(`Unknown or malformed constraint: ${constraint}`);
+        continue;
+      }
+
+      const argBody = trimmed.slice(openIdx + 1, closeIdx).trim();
+      const commaIdx = argBody.indexOf(',');
+      if (commaIdx <= 0) {
+        console.warn(`Unknown or malformed constraint: ${constraint}`);
+        continue;
+      }
+
+      const index = parseInt(argBody.slice(0, commaIdx).trim(), 10);
+      const patternStr = argBody.slice(commaIdx + 1).trim();
+      if (!Number.isFinite(index) || !patternStr) {
+        console.warn('Unknown or malformed constraint:', constraint);
+        continue;
+      }
+
+      try {
+        const pattern = parser(patternStr);
+
+        // BNGL uses 1-based indexing, convert to 0-based
+        const mappedIndex = index - 1;
+
+        if (type === 'exclude_reactants') {
+          this.excludeReactants.push({ reactantIndex: mappedIndex, pattern });
+        } else if (type === 'include_reactants') {
+          this.includeReactants.push({ reactantIndex: mappedIndex, pattern });
+        } else if (type === 'exclude_products') {
+          this.excludeProducts.push({ productIndex: mappedIndex, pattern });
+        } else if (type === 'include_products') {
+          this.includeProducts.push({ productIndex: mappedIndex, pattern });
+        }
+      } catch (e) {
+        console.warn('Failed to parse pattern in constraint:', constraint, e);
       }
     }
   }

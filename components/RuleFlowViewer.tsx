@@ -61,7 +61,7 @@ export const RuleFlowViewer: React.FC<RuleFlowViewerProps> = ({ graph, selectedR
             label: 'data(label)',
             'text-halign': 'center',
             'text-valign': 'center',
-            'font-size': 11,
+            'font-size': '11px',
             shape: 'round-rectangle',
             width: 150,
             height: 46,
@@ -101,7 +101,7 @@ export const RuleFlowViewer: React.FC<RuleFlowViewerProps> = ({ graph, selectedR
             'target-arrow-color': '#cbd5f5',
             'target-arrow-shape': 'triangle',
             'curve-style': 'bezier',
-            'font-size': 9,
+            'font-size': '9px',
             // label mapping is done only for edges that actually have a label
             'text-background-color': '#f8fafc',
             'text-background-opacity': 0.8,

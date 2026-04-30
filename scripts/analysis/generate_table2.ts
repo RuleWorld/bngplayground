@@ -220,15 +220,28 @@ ${failureList}
 }
 
 function escapeTex(s: string): string {
-  return s
-    .replace(/\\/g, '\\textbackslash{}')
-    .replace(/&/g, '\\&')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_')
-    .replace(/#/g, '\\#')
-    .replace(/\$/g, '\\$')
-    .replace(/\^/g, '\\^{}')
-    .replace(/~/g, '\\~{}');
+  return s.replace(/[\\&%_#$^~]/g, (ch) => {
+    switch (ch) {
+      case '\\':
+        return '\\textbackslash{}';
+      case '&':
+        return '\\&';
+      case '%':
+        return '\\%';
+      case '_':
+        return '\\_';
+      case '#':
+        return '\\#';
+      case '$':
+        return '\\$';
+      case '^':
+        return '\\^{}';
+      case '~':
+        return '\\~{}';
+      default:
+        return ch;
+    }
+  });
 }
 
 // ── Main ──────────────────────────────────────────────────────────────────

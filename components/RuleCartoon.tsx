@@ -180,13 +180,13 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
     <button type="button" className={containerClasses} onClick={handleSelect}>
       <div className="mb-3 flex items-center justify-between gap-4">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{displayName}</span>
-        <span className="text-xs font-mono text-slate-500 dark:text-slate-400">{rule.rate}</span>
+        <span className="text-xs font-mono text-slate-500 dark:text-slate-300">{rule.rate}</span>
       </div>
       {rule.comment && (
-        <div className="mb-2 text-xs text-slate-500 dark:text-slate-400 italic">{rule.comment}</div>
+        <div className="mb-2 text-xs text-slate-500 dark:text-slate-300 italic">{rule.comment}</div>
       )}
       {classification && (
-        <div className="mb-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/80 p-2 text-xs text-slate-600 dark:text-slate-400 shadow-inner dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
+        <div className="mb-4 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900/80 p-2 text-xs text-slate-600 dark:text-slate-300 shadow-inner dark:border-slate-700 dark:bg-slate-900/60 dark:text-slate-300">
           <div className="mb-1 flex flex-wrap items-center gap-2">
             <RuleChangeBadges summary={classification} size="xs" />
           </div>
@@ -205,7 +205,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
           ))}
         </div>
 
-        <div className="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-400">
+        <div className="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-300">
           <svg className="h-6 w-16" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M2 12H60M60 12L52 4M60 12L52 20"
@@ -226,7 +226,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
                   strokeLinejoin="round"
                 />
               </svg>
-              <span className="font-mono text-xs text-slate-500 dark:text-slate-400">{rule.reverseRate}</span>
+              <span className="font-mono text-xs text-slate-500 dark:text-slate-300">{rule.reverseRate}</span>
             </>
           )}
         </div>

@@ -65,7 +65,7 @@ export function getExpressionDependencies(expression: string): Set<string> {
         return visitor.dependencies;
     } catch (e) {
         // Fallback or explicit warning
-        console.warn(`[getExpressionDependencies] Failed to parse '${expression}':`, e);
+        console.warn('[getExpressionDependencies] Failed to parse expression:', expression, e);
         return new Set();
     }
 }

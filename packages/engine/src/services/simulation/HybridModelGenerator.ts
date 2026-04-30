@@ -315,7 +315,7 @@ export class HybridModelGenerator {
       reactions: [],
       populationMaps: popMaps,
       populationTypes: popTypes,
-      actions: opts.actions.map(a => ({ type: a.replace(/\(.*\)$/, ''), args: {} })),
+      actions: opts.actions.map(a => ({ type: stripTrailingCallSuffix(a), args: {} })),
     };
 
     // Serialize to BNGL
@@ -417,13 +417,33 @@ export class HybridModelGenerator {
         // 1. Strip component groups to avoid misidentifying uppercase states or components
         // 2. Remove compartment prefixes (e.g., @cell:)
         // 3. Split by '.' to handle multi-molecule patterns
-        const strippedPattern = pattern.replace(/\(.*?\)/g, '');
+        const strippedPattern = (() => {
+          let out = '';
+          let depth = 0;
+          for (let i = 0; i < pattern.length; i++) {
+            const ch = pattern[i];
+            if (ch === '(') {
+              depth++;
+              continue;
+            }
+            if (ch === ')') {
+              depth = Math.max(0, depth - 1);
+              continue;
+            }
+            if (depth === 0) out += ch;
+          }
+          return out;
+        })();
         const moleculeNames = strippedPattern.split('.')
           .map(part => {
             const colonIndex = part.indexOf(':');
             return colonIndex !== -1 ? part.substring(colonIndex + 1) : part;
           })
-          .filter(name => name.length > 0 && /^[A-Z]/.test(name)); // Molecules must start with uppercase
+          .filter(name => {
+            if (name.length === 0) return false;
+            const first = name.charCodeAt(0);
+            return first >= 65 && first <= 90;
+          }); // Molecules must start with uppercase
 
         for (const molName of moleculeNames) {
           if (populationMolecules.has(molName)) {
@@ -481,6 +501,16 @@ function isSimplePatternMatch(speciesStr: string, patternStr: string): boolean {
     // Fallback to exact match if matcher fails
     return speciesStr === patternStr;
   }
+}
+
+function stripTrailingCallSuffix(value: string): string {
+  const openParen = value.indexOf('(');
+  const closeParen = value.lastIndexOf(')');
+  if (openParen === -1 || closeParen !== value.length - 1 || closeParen < openParen) {
+    return value;
+  }
+
+  return value.slice(0, openParen).trim();
 }
 
 // ────────────────────────────────────────────────────────────────────

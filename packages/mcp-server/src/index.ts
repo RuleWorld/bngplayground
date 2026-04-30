@@ -129,6 +129,11 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               type: 'string',
               description: 'BNGL code to simulate',
             },
+            output_mode: {
+              type: 'string',
+              enum: ['full', 'observables_only'],
+              description: 'Response payload mode. Use observables_only for LLM clients unless expanded network payloads are needed.',
+            },
             method: {
               type: 'string',
               enum: [...simulationMethods],
@@ -332,7 +337,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           type: 'object',
           properties: {
             code: { type: 'string', description: 'BNGL model code' },
-            parameters: { type: 'array', items: { type: 'object', properties: { name: { type: 'string' }, min: { type: 'number' }, max: { type: 'number' } }, required: ['name', 'min', 'max'] }, description: 'Parameters to analyze with bounds' },
+            parameters: { type: 'array', minItems: 1, items: { type: 'object', properties: { name: { type: 'string' }, min: { type: 'number' }, max: { type: 'number' } }, required: ['name', 'min', 'max'] }, description: 'Parameters to analyze with bounds (must be non-empty)' },
             observables: { type: 'array', items: { type: 'string' }, description: 'Observables to analyze (default: all)' },
             n_samples: { type: 'number', description: 'Saltelli base samples (default: 512)' },
             n_bootstrap: { type: 'number', description: 'Bootstrap replicates (default: 500)' },

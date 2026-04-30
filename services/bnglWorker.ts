@@ -446,6 +446,13 @@ async function parseBNGL(jobId: number, bnglCode: string): Promise<BNGLModel> {
 
 if (typeof ctx.addEventListener === 'function') {
   ctx.addEventListener('message', async (event: MessageEvent<WorkerRequest>) => {
+    const origin = (event as MessageEvent).origin;
+    const expectedOrigin = typeof self.location?.origin === 'string' ? self.location.origin : '';
+    if (typeof origin === 'string' && origin.length > 0 && expectedOrigin.length > 0 && origin !== expectedOrigin) {
+      console.warn('[Worker] Ignoring message from unexpected origin', origin);
+      return;
+    }
+
     const message = event.data;
     if (!message || typeof message !== 'object') {
       console.warn('[Worker] Received malformed message', message);
@@ -475,7 +482,7 @@ if (typeof ctx.addEventListener === 'function') {
         const response: WorkerResponse = { id, type: 'parse_success', payload: model };
         ctx.postMessage(response);
       } catch (error) {
-        console.error(`[Worker] Parse error for job ${id}:`, error);
+        console.error('[Worker] Parse error for job', id, error);
         const response: WorkerResponse = { id, type: 'parse_error', payload: serializeError(error) };
         ctx.postMessage(response);
       } finally {
@@ -494,11 +501,11 @@ if (typeof ctx.addEventListener === 'function') {
         await atomizer.initialize();
         workerVerboseLog('[Worker] Starting atomization...');
         const result = await atomizer.atomize(sbml);
-        workerVerboseLog(`[Worker] Atomization complete ${id}: success=${result.success}`);
+        workerVerboseLog('[Worker] Atomization complete', id, 'success=', result.success);
         const response: WorkerResponse = { id, type: 'atomize_success', payload: result };
         ctx.postMessage(response);
       } catch (error) {
-        console.error(`[Worker] Atomize error for job ${id}:`, error);
+        console.error('[Worker] Atomize error for job', id, error);
         const response: WorkerResponse = { id, type: 'atomize_error', payload: serializeError(error) };
         ctx.postMessage(response);
       } finally {
@@ -550,7 +557,7 @@ if (typeof ctx.addEventListener === 'function') {
               (cached.reactions || []).forEach((r) => {
                 const rateConst = nextModel.parameters[r.rate] ?? Number.parseFloat(r.rate);
                 if (isNaN(rateConst)) {
-                  workerVerboseLog(`[Worker] Unresolved rate parameter: ${r.rate}`);
+                  workerVerboseLog('[Worker] Unresolved rate parameter:', r.rate);
                   // If we can't resolve it, we'll let SimulationLoop handle it (sets to 0) 
                   // but we'll log it here for diagnostics.
                 }
@@ -732,7 +739,7 @@ if (typeof ctx.addEventListener === 'function') {
             }
           }
         } catch (error) {
-          console.error(`[Worker] Simulation error for job ${id}:`, error);
+          console.error('[Worker] Simulation error for job', id, error);
           const response: WorkerResponse = { id, type: 'simulate_error', payload: serializeError(error) };
           safePostMessage(response);
         } finally {
@@ -787,7 +794,7 @@ if (typeof ctx.addEventListener === 'function') {
         const response: WorkerResponse = { id, type: 'cache_model_success', payload: { modelId } };
         safePostMessage(response);
       } catch (error) {
-        console.error(`[Worker] Cache model error for job ${id}:`, error);
+        console.error('[Worker] Cache model error for job', id, error);
         const response: WorkerResponse = { id, type: 'cache_model_error', payload: serializeError(error) };
         safePostMessage(response);
       } finally {
@@ -806,7 +813,7 @@ if (typeof ctx.addEventListener === 'function') {
         const response: WorkerResponse = { id, type: 'release_model_success', payload: { modelId } };
         safePostMessage(response);
       } catch (error) {
-        console.error(`[Worker] Release model error for job ${id}:`, error);
+        console.error('[Worker] Release model error for job', id, error);
         const response: WorkerResponse = { id, type: 'release_model_error', payload: serializeError(error) };
         safePostMessage(response);
       } finally {
@@ -890,7 +897,7 @@ if (typeof ctx.addEventListener === 'function') {
           const response: WorkerResponse = { id, type: 'generate_network_success', payload: generatedModel };
           safePostMessage(response);
         } catch (error) {
-          console.error(`[Worker] Generate network error for job ${id}:`, error);
+          console.error('[Worker] Generate network error for job', id, error);
           const response: WorkerResponse = { id, type: 'generate_network_error', payload: serializeError(error) };
           safePostMessage(response);
         } finally {
@@ -901,7 +908,7 @@ if (typeof ctx.addEventListener === 'function') {
     }
 
     if (type === 'analyse_network') {
-      workerVerboseLog(`[Worker] Received analyse_network request ${id}`);
+      workerVerboseLog('[Worker] Received analyse_network request', id);
       registerJob(id);
       try {
         const analysisPayload = payload as NetworkAnalysisPayload;
@@ -912,7 +919,7 @@ if (typeof ctx.addEventListener === 'function') {
         const response: WorkerResponse = { id, type: 'analyse_network_success', payload: result };
         safePostMessage(response);
       } catch (error) {
-        console.error(`[Worker] Analyse network error for job ${id}:`, error);
+        console.error('[Worker] Analyse network error for job', id, error);
         const response: WorkerResponse = { id, type: 'analyse_network_error', payload: serializeError(error) };
         safePostMessage(response);
       } finally {

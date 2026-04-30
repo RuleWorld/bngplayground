@@ -2700,7 +2700,7 @@ const RAW_MODEL_CATEGORIES: ModelCategory[] = [
       ...NATIVE_TUTORIALS,
       ...TUTORIALS
     ].filter(m => m.tags?.includes('published'))
-      .filter((v, i, a) => a.findIndex(t => t.id === v.id) === i), // deduplicate
+      .filter((set => (v: Example) => set.has(v.id) ? false : !!set.add(v.id))(new Set<string>())), // deduplicate
   },
 
   {

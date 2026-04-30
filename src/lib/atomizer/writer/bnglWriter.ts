@@ -5,7 +5,7 @@
  * Generates BNGL model files from parsed SBML data
  */
 
-import { Species, Molecule, Component, Rule, Action, Databases, readFromString } from '../core/structures';
+import { Species, Molecule, readFromString } from '../core/structures';
 import {
   SBMLModel,
   SBMLReaction,
@@ -18,10 +18,8 @@ import {
 } from '../config/types';
 import {
   standardizeName,
-  convertMathFunction,
   cleanParameterValue,
   logger,
-  TranslationException,
 } from '../utils/helpers';
 import { SCTEntry, SpeciesCompositionTable } from '../config/types';
 import { SafeExpressionEvaluator } from '@bngplayground/engine';
@@ -50,6 +48,8 @@ const MASS_ACTION_SKIP_EXPR_LEN = Number(
   (typeof process !== 'undefined' && process.env?.BNGL_SKIP_MASS_ACTION_EXPR_LEN) || '2000'
 );
 let transportLogCount = 0;
+
+const SATURATION_SUBSTRATE_REGEX = /_c_([a-zA-Z0-9_]+)\(\)|([a-zA-Z0-9_]+)_amt/g;
 let missingKineticLogCount = 0;
 
 const logTransportInfo = (message: string): void => {
@@ -121,8 +121,8 @@ function extractStatisticalFactors(
   const coeff = parseFloat(match[1]);
   const rest = match[2];
 
-  // Note: We keep the trailing parenthesis if present, as the finalRate
-  // construction expects balanced parentheses
+  // Note: The trailing parenthesis is intentionally preserved because
+  // subsequent string building logic relies on it for balanced parentheses.
 
   // Check if coefficient matches statistical factors from reactants
   let expectedStatFactor = 1;
@@ -1357,11 +1357,18 @@ export function writeReactionRulesFlat(
     const hasDenominator = denominatorContent.includes('+');
     let satSubstrate: string | null = null;
     if (hasDenominator) {
-      for (const spId of reactantCounts.keys()) {
-        const spName = standardizeName(spId);
-        if (denominatorContent.includes(`${spName}_amt`) || denominatorContent.includes(`_c_${spName}()`)) {
-          satSubstrate = spId;
-          break;
+      SATURATION_SUBSTRATE_REGEX.lastIndex = 0;
+      let match;
+      while ((match = SATURATION_SUBSTRATE_REGEX.exec(denominatorContent)) !== null) {
+        const foundName = match[1] || match[2];
+        if (foundName) {
+          for (const spId of reactantCounts.keys()) {
+            if (standardizeName(spId) === foundName) {
+              satSubstrate = spId;
+              break;
+            }
+          }
+          if (satSubstrate) break;
         }
       }
     }
@@ -1388,9 +1395,6 @@ export function writeReactionRulesFlat(
       const satPrefix = (vScale !== '1') ? `(${rate}) * ${vScale}` : rate;
       finalRate = (divisor !== '1') ? `(${satPrefix}) / (${divisor})` : satPrefix;
     } else {
-      const reactantIds: string[] = Array.from(reactantCounts.keys());
-
-      let rateAlreadyIncludesReactants = false;
       for (const [spId, stoich] of reactantCounts) {
         const spName = standardizeName(spId);
         const concPattern = new RegExp(`_c_${spName}\\(\\)`, 'i');
@@ -1399,7 +1403,6 @@ export function writeReactionRulesFlat(
           const concMatches = rate.match(new RegExp(`_c_${spName}\\(\\)`, 'gi')) || [];
           const amtMatches = rate.match(new RegExp(`${spName}_amt`, 'gi')) || [];
           if (concMatches.length + amtMatches.length >= stoich) {
-            rateAlreadyIncludesReactants = true;
             break;
           }
         }
@@ -1433,11 +1436,18 @@ export function writeReactionRulesFlat(
       const hasDenominator = denominatorContent.includes('+');
       let satSubstrate: string | null = null;
       if (hasDenominator) {
-        for (const spId of reactantCounts.keys()) {
-          const spName = standardizeName(spId);
-          if (denominatorContent.includes(`${spName}_amt`) || denominatorContent.includes(`_c_${spName}()`)) {
-            satSubstrate = spId;
-            break;
+        SATURATION_SUBSTRATE_REGEX.lastIndex = 0;
+        let match;
+        while ((match = SATURATION_SUBSTRATE_REGEX.exec(denominatorContent)) !== null) {
+          const foundName = match[1] || match[2];
+          if (foundName) {
+            for (const spId of reactantCounts.keys()) {
+              if (standardizeName(spId) === foundName) {
+                satSubstrate = spId;
+                break;
+              }
+            }
+            if (satSubstrate) break;
           }
         }
       }
@@ -1515,7 +1525,6 @@ export function writeReactionRulesAtomized(
   syntheticRateRuleLines: string[] = []
 ): string {
   const lines: string[] = [];
-  const useCompartments = compartments.size > 0;
   const numericParameterDict = new Map<string, number>(
     Array.from(parameterDict.entries()).map(([k, v]) => [k, Number(v)])
   );
@@ -1999,7 +2008,6 @@ export function generateBNGL(
       let bnglPattern = '';
 
       const compId = speciesToCompartment.get(id);
-      const suffix = compId ? `@${standardizeName(compId)}` : '';
 
       if (entry && entry.structure) {
         const molecules = entry.structure.molecules.map((m: Molecule) => {
@@ -2223,7 +2231,7 @@ function printTranslate(
   tags: string,
   translator: Map<string, Species>
 ): string {
-  const [species, stoich, compartment] = chemical;
+  const [species, stoich] = chemical;
   const tmp: string[] = [];
 
   let app: string;

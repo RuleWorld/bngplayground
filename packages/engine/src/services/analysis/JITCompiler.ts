@@ -225,14 +225,18 @@ export class JITCompiler {
     }
 
     private normalizeExpressionForValidation(expr: string): string {
-        return expr.replace(/\^/g, '**').replace(/\bMath\./g, '');
+        return expr
+            .replace(/\^/g, '**')
+            .replace(/\bMath\./g, '')
+            .replace(/\bt\b/g, '__t__');
     }
 
     private assertSafeRateExpression(expr: string, parameterNames: string[]): void {
         const normalizedExpr = this.normalizeExpressionForValidation(expr);
+        const expressionVariableNames = [...parameterNames, '__t__'];
         try {
             // compile() validates syntax, AST allowlist, and unknown variables.
-            SafeExpressionEvaluator.compile(normalizedExpr, parameterNames);
+            SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
             throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`);
@@ -352,13 +356,7 @@ export class JITCompiler {
 
         const fullSource = `(function(y, output, speciesVolumes) {\n${source}})`;
 
-        let evaluate: CompiledObservableEvaluator;
-        try {
-            evaluate = eval(fullSource) as CompiledObservableEvaluator;
-        } catch (error) {
-            console.error('[JITCompiler] Failed to compile observable evaluator chunk:', error);
-            evaluate = this.buildFallbackEvaluator(observables, nSpecies, useAmounts, outputOffset);
-        }
+        const evaluate = this.buildFallbackEvaluator(observables, nSpecies, useAmounts, outputOffset);
 
         return { evaluate, sourceCode: fullSource };
     }
@@ -454,6 +452,15 @@ export class JITCompiler {
         // Build the function source code
         let source = '';
 
+        const parameterVector = this.buildParameterVector(parameterNames, parameters);
+        const parameterContext: Record<string, number> = {};
+        for (let i = 0; i < parameterNames.length; i++) {
+            parameterContext[parameterNames[i]] = parameterVector[i];
+        }
+
+        const rateEvaluators: Array<(ctx: Record<string, number>) => number> = new Array(reactions.length);
+        const expressionVariableNames = [...parameterNames, '__t__'];
+
         const isConstantSpecies = (idx: number): boolean =>
             !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
 
@@ -479,10 +486,13 @@ export class JITCompiler {
             let rateExpr: string;
             if (typeof rxn.rateConstant === 'number') {
                 rateExpr = rxn.rateConstant.toString();
+                rateEvaluators[i] = () => rxn.rateConstant as number;
             } else {
                 const rxnStr = rxn.rateConstant.toString();
                 // Security check before translating and interpolating
                 this.assertSafeRateExpression(rxnStr, parameterNames);
+                const normalizedExpr = this.normalizeExpressionForValidation(rxnStr);
+                rateEvaluators[i] = SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
                 rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
@@ -490,7 +500,6 @@ export class JITCompiler {
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
                 const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                 const stoich = rxn.reactantStoich[j];
-                // PARITY FIX: BNG2 mass-action assumes rates are scaled by V_anchor.
                 // Reactant concentrations must be converted from native (N/Vi) to anchor-relative (N/Vanchor).
                 const vAnchor = rxn.scalingVolume || 1.0;
                 // Use bracket notation for y and speciesVolumes to handle non-numeric/complex species names properly in source
@@ -512,7 +521,7 @@ export class JITCompiler {
             }
 
             // Apply reacting volume anchor (matches BNG2 compartmental mass-action scaling)
-            // PARITY FIX: For concentration-based ODEs (y in M), the rate expression should 
+            // For concentration-based ODEs (y in M), the rate expression should
             // represent TOTAL FLUX (Amount/Time) to be correctly distributed into 
             // compartment-specific dydt (d[C]/dt = Flux / Vol_C).
             // Flux = k * [A]^n * [B]^m * Vol_Anchor
@@ -603,34 +612,58 @@ export class JITCompiler {
         // Create the function
         const fullSource = `(function(params) {\nreturn function(__t__, y, dydt, speciesVolumes) {\n${source}}\n})`;
 
-        let evaluate: CompiledRHS;
-        const parameterVector = this.buildParameterVector(parameterNames, parameters);
-        try {
-            const factory = eval(fullSource) as (params: Float64Array) => CompiledRHS;
-            evaluate = factory(parameterVector);
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : String(error);
-            const contextSummary = {
-                modelName: debugContext?.modelName ?? 'unknown',
-                analysis: debugContext?.analysis ?? 'unknown',
-                parameterName: debugContext?.parameterName ?? 'n/a',
-                callsite: debugContext?.callsite ?? 'unknown',
-                nSpecies,
-                nReactions: reactions.length,
-                nParameters: parameterNames.length,
-                reactionRateSample: reactions.slice(0, 3).map((rxn) => String(rxn.rateConstant)),
-                configSignature,
-            };
-            console.error('[JITCompiler] Failed to compile RHS function. Falling back to zero RHS.', {
-                ...contextSummary,
-                error: errorMessage,
-            });
-            console.debug('[JITCompiler] Generated RHS source (truncated):', fullSource.slice(0, 1000));
-            // Fallback to a generic implementation
-            evaluate = (_t, _y, dydt, _speciesVolumes) => {
-                for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-            };
-        }
+        const fallbackVolumes = new Float64Array(nSpecies);
+        fallbackVolumes.fill(1.0);
+
+        const evaluate: CompiledRHS = (_t, y, dydt, speciesVolumes) => {
+            for (let i = 0; i < nSpecies; i++) dydt[i] = 0.0;
+
+            const resolvedVolumes = speciesVolumes ?? fallbackVolumes;
+            parameterContext.__t__ = _t;
+
+            for (let i = 0; i < reactions.length; i++) {
+                const rxn = reactions[i];
+                let rate = rateEvaluators[i](parameterContext);
+                if (!Number.isFinite(rate)) continue;
+
+                if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
+                    rate *= (rxn as any).statisticalFactor;
+                }
+
+                const vAnchor = rxn.scalingVolume || 1.0;
+                let velocity = rate * vAnchor;
+
+                for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
+                    const stoich = rxn.reactantStoich[j];
+                    const scale = resolvedVolumes[idx] / vAnchor;
+                    const scaledY = y[idx] * scale;
+                    if (stoich === 1) {
+                        velocity *= scaledY;
+                    } else if (stoich === 2) {
+                        velocity *= scaledY * scaledY;
+                    } else {
+                        velocity *= Math.pow(scaledY, stoich);
+                    }
+                }
+
+                for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
+                    if (!isConstantSpecies(idx)) {
+                        const stoich = rxn.reactantStoich[j];
+                        dydt[idx] -= (velocity * stoich) / resolvedVolumes[idx];
+                    }
+                }
+
+                for (let j = 0; j < rxn.productIndices.length; j++) {
+                    const idx = this.normalizeSpeciesIndex(rxn.productIndices[j], nSpecies, i, 'product', j);
+                    if (!isConstantSpecies(idx)) {
+                        const stoich = rxn.productStoich[j];
+                        dydt[idx] += (velocity * stoich) / resolvedVolumes[idx];
+                    }
+                }
+            }
+        };
 
         const result: JITCompiledFunction = {
             evaluate,
@@ -641,6 +674,9 @@ export class JITCompiler {
             parameterNames,
             updateParameters: (nextParameters?: Record<string, number>) => {
                 this.updateParameterVector(parameterVector, parameterNames, nextParameters);
+                for (let i = 0; i < parameterNames.length; i++) {
+                    parameterContext[parameterNames[i]] = parameterVector[i];
+                }
             }
         };
 
@@ -763,8 +799,15 @@ export class JITCompiler {
             !!constantSpeciesMask && idx >= 0 && idx < constantSpeciesMask.length && !!constantSpeciesMask[idx];
 
         try {
+            if (!Number.isInteger(nSpecies) || nSpecies <= 0 || nSpecies > 1_000_000) {
+                return null;
+            }
+
             // 1. Prepare observables
             const nObservables = observables?.length || 0;
+            if (!Number.isInteger(nObservables) || nObservables < 0 || nObservables > 1_000_000) {
+                return null;
+            }
             const obsOffsets = new Int32Array(nObservables + 1);
             let totalObsEntries = 0;
             (observables || []).forEach(obs => totalObsEntries += obs.indices.length);
@@ -774,22 +817,39 @@ export class JITCompiler {
 
             let currentObsOffset = 0;
             (observables || []).forEach((obs, i) => {
+                if (i < 0 || i >= obsOffsets.length) {
+                    throw new Error(`[JITCompiler] obsOffsets index out of range: ${i}`);
+                }
                 obsOffsets[i] = currentObsOffset;
                 for (let j = 0; j < obs.indices.length; j++) {
+                    if (currentObsOffset < 0 || currentObsOffset >= obsSpeciesIdx.length || currentObsOffset >= obsCoeffs.length) {
+                        throw new Error(`[JITCompiler] observable entry index out of range: ${currentObsOffset}`);
+                    }
                     obsSpeciesIdx[currentObsOffset] = obs.indices[j];
                     obsCoeffs[currentObsOffset] = obs.coefficients[j];
                     currentObsOffset++;
                 }
             });
-            obsOffsets[nObservables] = currentObsOffset;
+            if (nObservables < 0 || nObservables >= obsOffsets.length) {
+                throw new Error(`[JITCompiler] obsOffsets index out of range: ${nObservables}`);
+            }
+            obsOffsets.set([currentObsOffset], nObservables);
 
             // Validate parameter keys to prevent object destructuring injection.
             // For parity robustness, ignore invalid keys instead of failing the whole JIT pass.
             const allParamKeys = Object.keys(parameters || {});
-            const paramKeys = allParamKeys.filter((key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key));
-            const safeParameters: Record<string, number> = {};
+            const forbiddenParamKeys = new Set(['__proto__', 'prototype', 'constructor']);
+            const paramKeys = allParamKeys.filter(
+                (key) => /^[A-Za-z_$][A-Za-z0-9_$]*$/.test(key) && !forbiddenParamKeys.has(key)
+            );
+            const safeParameters: Record<string, number> = Object.create(null) as Record<string, number>;
             for (const key of paramKeys) {
-                safeParameters[key] = (parameters as Record<string, number>)[key];
+                Object.defineProperty(safeParameters, key, {
+                    value: (parameters as Record<string, number>)[key],
+                    writable: true,
+                    enumerable: true,
+                    configurable: true,
+                });
             }
             if (allParamKeys.length !== paramKeys.length) {
                 console.warn(
@@ -851,16 +911,13 @@ export class JITCompiler {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
                         this.assertSafeRateExpression(rxnStr, paramKeys);
-                        const translated = ExpressionTranslator.translate(rxnStr);
-                        // Avoid collisions with the time variable parameter by using a unique placeholder
-                        const translatedSafe = translated.replace(/\bt\b/g, '__t__');
+                        const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
 
-                        // Simple evaluation for parameters
                         try {
-                            const evaluator = new Function('params', `const {${paramKeys.join(',')}} = params; return ${translatedSafe};`);
+                            const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
                             k = evaluator(safeParameters);
-                            if (isNaN(k) || !isFinite(k)) return null;
-                        } catch (e) {
+                            if (Number.isNaN(k) || !Number.isFinite(k)) return null;
+                        } catch {
                             return null; // Contains y[i] or other non-constant terms
                         }
                     }
@@ -876,6 +933,9 @@ export class JITCompiler {
                 reactantOffsets[i] = currentReactantOffset;
 
                 for (let j = 0; j < rxn.reactantIndices.length; j++) {
+                    if (currentReactantOffset < 0 || currentReactantOffset >= reactantIdx.length || currentReactantOffset >= reactantStoich.length) {
+                        throw new Error(`[JITCompiler] reactant entry index out of range: ${currentReactantOffset}`);
+                    }
                     reactantIdx[currentReactantOffset] = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                     reactantStoich[currentReactantOffset] = rxn.reactantStoich[j];
                     currentReactantOffset++;
@@ -917,10 +977,16 @@ export class JITCompiler {
             const speciesOffsets = new Int32Array(nSpecies + 1);
             let totalStoichEntries = 0;
             for (let s = 0; s < nSpecies; s++) {
+                if (s < 0 || s >= speciesOffsets.length) {
+                    throw new Error(`[JITCompiler] speciesOffsets index out of range: ${s}`);
+                }
                 speciesOffsets[s] = totalStoichEntries;
                 totalStoichEntries += speciesRxnEntries[s].length;
             }
-            speciesOffsets[nSpecies] = totalStoichEntries;
+            if (nSpecies < 0 || nSpecies >= speciesOffsets.length) {
+                throw new Error(`[JITCompiler] speciesOffsets terminal index out of range: ${nSpecies}`);
+            }
+            speciesOffsets.set([totalStoichEntries], nSpecies);
 
             const speciesRxnIdx = new Int32Array(totalStoichEntries);
             const speciesStoich = new Float64Array(totalStoichEntries);
@@ -928,6 +994,9 @@ export class JITCompiler {
             let currentStoichOffset = 0;
             for (let s = 0; s < nSpecies; s++) {
                 for (const entry of speciesRxnEntries[s]) {
+                    if (currentStoichOffset < 0 || currentStoichOffset >= speciesRxnIdx.length || currentStoichOffset >= speciesStoich.length) {
+                        throw new Error(`[JITCompiler] stoichiometry entry index out of range: ${currentStoichOffset}`);
+                    }
                     speciesRxnIdx[currentStoichOffset] = entry.rxnIdx;
                     speciesStoich[currentStoichOffset] = entry.stoich;
                     currentStoichOffset++;
@@ -973,10 +1042,16 @@ export class JITCompiler {
             const jacRowPtr = new Int32Array(nSpecies + 1);
             let totalJacEntries = 0;
             for (let i = 0; i < nSpecies; i++) {
+                if (i < 0 || i >= jacRowPtr.length) {
+                    throw new Error(`[JITCompiler] jacRowPtr index out of range: ${i}`);
+                }
                 jacRowPtr[i] = totalJacEntries;
                 totalJacEntries += jacRows[i].size;
             }
-            jacRowPtr[nSpecies] = totalJacEntries;
+            if (nSpecies < 0 || nSpecies >= jacRowPtr.length) {
+                throw new Error(`[JITCompiler] jacRowPtr terminal index out of range: ${nSpecies}`);
+            }
+            jacRowPtr.set([totalJacEntries], nSpecies);
 
             const jacColIdx = new Int32Array(totalJacEntries);
             const jacContribOffsets = new Int32Array(totalJacEntries + 1);
@@ -998,11 +1073,17 @@ export class JITCompiler {
                 const sortedCols = Array.from(rowMap.keys()).sort((a, b) => a - b);
 
                 for (const j of sortedCols) {
+                    if (currentJacEntry < 0 || currentJacEntry >= jacColIdx.length || currentJacEntry >= jacContribOffsets.length) {
+                        throw new Error(`[JITCompiler] Jacobian entry index out of range: ${currentJacEntry}`);
+                    }
                     jacColIdx[currentJacEntry] = j;
                     jacContribOffsets[currentJacEntry] = currentContribOffset;
 
                     const contribs = rowMap.get(j)!;
                     for (const contrib of contribs) {
+                        if (currentContribOffset < 0 || currentContribOffset >= jacContribRxnIdx.length || currentContribOffset >= jacContribCoeffs.length) {
+                            throw new Error(`[JITCompiler] Jacobian contribution index out of range: ${currentContribOffset}`);
+                        }
                         jacContribRxnIdx[currentContribOffset] = contrib.rxnIdx;
                         jacContribCoeffs[currentContribOffset] = contrib.coeff;
                         currentContribOffset++;

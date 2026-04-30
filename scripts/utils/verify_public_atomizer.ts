@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
-import { Atomizer } from '../atomizer-ts/src/index';
+import { execFileSync } from 'child_process';
+import { Atomizer } from '../../atomizer-ts/src/index';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 
 // libsbmljs uses 'self', which is not defined in Node.js
@@ -70,19 +70,19 @@ function ensureDirs() {
 
 // Helper to run BNG2.pl
 function runBNG2(args: string[], timeoutMs = 600_000): string {
-    const cmd = `perl "${normalizePath(BNG2_PATH)}" ${args.map(arg => {
+    const normalizedArgs = args.map(arg => {
         if (arg.startsWith('"') && arg.endsWith('"')) {
-            return `"${normalizePath(arg.slice(1, -1))}"`;
+            return normalizePath(arg.slice(1, -1));
         }
-        return arg;
-    }).join(' ')}`;
+        return normalizePath(arg);
+    });
     try {
         // Set PERL5LIB for Windows Perl to find BNG2.pl modules
         const env = {
             ...process.env,
             PERL5LIB: 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\Perl2'
         };
-        const out = execSync(cmd, { stdio: 'pipe', timeout: timeoutMs, env });
+        const out = execFileSync('perl', [normalizePath(BNG2_PATH), ...normalizedArgs], { stdio: 'pipe', timeout: timeoutMs, env });
         return out.toString();
     } catch (e: any) {
         const stderr = e.stderr?.toString() || '';
@@ -307,7 +307,7 @@ async function verifyModel(modelPath: string) {
         }
 
         console.log(`[Atomizer] Atomizing...`);
-        const atomizer = new Atomizer({ atomize: true, quietMode: true, useId: true, actions: originalActions });
+        const atomizer = new Atomizer({ atomize: true, quietMode: true, useId: true });
         await atomizer.initialize();
         const result = await atomizer.atomize(fs.readFileSync(sbmlFile, 'utf-8'));
         if (!result) {
@@ -390,10 +390,11 @@ async function main() {
 
     // Load existing results if available
     const reportPath = 'public_atomizer_report.json';
-    if (fs.existsSync(reportPath)) {
-        fs.unlinkSync(reportPath);
-        console.log(`Deleted existing report ${reportPath}`);
-    }
+    const writeReport = () => {
+        const tempPath = `${reportPath}.tmp-${process.pid}`;
+        fs.writeFileSync(tempPath, JSON.stringify(allResults, null, 2));
+        fs.renameSync(tempPath, reportPath);
+    };
 
     for (const modelId of passModels) {
         if (modelsFilter.length > 0 && !modelsFilter.includes(modelId)) continue;
@@ -415,10 +416,10 @@ async function main() {
             continue;
         }
         await verifyModel(modelPath);
-        fs.writeFileSync('public_atomizer_report.json', JSON.stringify(allResults, null, 2));
+        writeReport();
     }
 
-    fs.writeFileSync('public_atomizer_report.json', JSON.stringify(allResults, null, 2));
+    writeReport();
     console.log(`\nFinal report saved to public_atomizer_report.json`);
 }
 

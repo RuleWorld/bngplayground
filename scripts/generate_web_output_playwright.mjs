@@ -163,17 +163,25 @@ function cleanOldOutputs(dirPath) {
 }
 
 async function waitForHttpOk(url, timeoutMs = 60_000) {
+  const parsed = new URL(url);
+  if (!['http:', 'https:'].includes(parsed.protocol)) {
+    throw new Error(`Unsupported protocol while waiting for URL: ${parsed.protocol}`);
+  }
+  if (!['localhost', '127.0.0.1', '::1'].includes(parsed.hostname)) {
+    throw new Error(`Refusing to probe non-local host: ${parsed.hostname}`);
+  }
+  const safeUrl = parsed.toString();
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
     try {
-      const res = await fetch(url, { method: 'GET' });
+      const res = await fetch(safeUrl, { method: 'GET' });
       if (res.ok) return;
     } catch {
       // ignore
     }
     await new Promise((r) => setTimeout(r, 250));
   }
-  throw new Error(`Timed out waiting for ${url}`);
+  throw new Error(`Timed out waiting for ${safeUrl}`);
 }
 
 async function waitForPageToSettleAfterNavigation(page, timeoutMs = 120_000) {

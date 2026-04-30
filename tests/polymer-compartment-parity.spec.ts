@@ -1,13 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { BNGXMLWriter } from '@bngplayground/engine';
 import { resolveBNG2Paths } from '../tools/bng2-paths';
 import { findRuleHubModelPath } from './helpers/rulehub';
 
 const DEFAULT_BNG2_PATH = resolveBNG2Paths().bng2pl ?? '';
-const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
 
 /**
  * Parity tests for polymer models with compartments
@@ -89,21 +88,15 @@ describe('Polymer Compartment Parity Tests', () => {
         const outputDir = `temp_parity_${name}`;
 
         const BNG2_PATH = process.env.BNG2_PATH ?? DEFAULT_BNG2_PATH;
-        const PERL_CMD = process.env.PERL_CMD ?? DEFAULT_PERL_CMD;
         
         // Create output directory
-        execSync(`New-Item -ItemType Directory -Force -Path ${outputDir}`, { 
-          shell: 'powershell',
-          stdio: 'pipe'
-        });
+        mkdirSync(outputDir, { recursive: true });
         
         // Run BNG2.pl with NFsim method
         console.log(`\n🔬 Running BNG2.pl simulation for ${name}.bngl...`);
         
-        const bngCommand = `${PERL_CMD} "${BNG2_PATH}" ${bnglPath} --outdir ${outputDir}`;
-        
         try {
-          const output = execSync(bngCommand, {
+          const output = execFileSync('perl', [BNG2_PATH, bnglPath, '--outdir', outputDir], {
             encoding: 'utf-8',
             timeout: 50000,
             stdio: 'pipe'

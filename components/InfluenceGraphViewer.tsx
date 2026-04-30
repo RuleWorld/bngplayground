@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { escapeXml } from '@bngplayground/engine';
 import { useTheme } from '../hooks/useTheme';
 import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
@@ -382,11 +383,11 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
           }} className="text-xs h-6 px-2">PNG</Button>
           <Button variant="subtle" onClick={() => {
             const nodes = graphData.nodes.map((n, i) =>
-              `  <node id="n${i}"><data key="label">${n.ruleName.replace(/&/g,'&amp;').replace(/</g,'&lt;')}</data></node>`
+                `  <node id="n${i}"><data key="label">${escapeXml(n.ruleName)}</data></node>`
             ).join('\n');
             const edges = graphData.edges.map((e, i) => {
               const type = getEdgeType(e.activation, e.inhibition);
-              return `  <edge id="e${i}" source="n${e.sourceRuleIndex}" target="n${e.targetRuleIndex}"><data key="type">${type}</data></edge>`;
+                return `  <edge id="e${i}" source="n${e.sourceRuleIndex}" target="n${e.targetRuleIndex}"><data key="type">${escapeXml(type)}</data></edge>`;
             }).join('\n');
             const graphml = `<?xml version="1.0" encoding="UTF-8"?>\n<graphml xmlns="http://graphml.graphdrawing.org/graphml">\n  <key id="label" for="node" attr.name="label" attr.type="string"/>\n  <key id="type" for="edge" attr.name="type" attr.type="string"/>\n  <graph id="influence" edgedefault="directed">\n${nodes}\n${edges}\n  </graph>\n</graphml>`;
             const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });

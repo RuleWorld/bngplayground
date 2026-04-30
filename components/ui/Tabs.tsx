@@ -61,8 +61,8 @@ interface TabProps {
 }
 
 export const Tab: React.FC<TabProps> = ({ children, isActive, onClick }) => {
-  const activeClasses = 'border-primary text-primary dark:text-primary-400';
-  const inactiveClasses = 'border-transparent text-slate-500 hover:text-slate-700 hover:border-stone-300 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:border-slate-600';
+  const activeClasses = 'border-primary text-primary dark:text-primary-300';
+  const inactiveClasses = 'border-transparent text-slate-500 hover:text-slate-700 hover:border-stone-300 dark:text-slate-300 dark:hover:text-slate-100 dark:hover:border-slate-500';
   return (
     <button
       type="button"

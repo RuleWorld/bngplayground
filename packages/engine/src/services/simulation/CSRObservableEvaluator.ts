@@ -75,12 +75,24 @@ export function buildCSRObservableMatrix(
   // Phase 3: Fill CSR arrays
   let pos = 0;
   for (let i = 0; i < numObservables; i++) {
+    if (i < 0 || i >= rowPtr.length) {
+      throw new Error(`[CSRObservableEvaluator] rowPtr index out of range: ${i}`);
+    }
     rowPtr[i] = pos;
     const obs = observables[i];
     for (let j = 0; j < obs.indices.length; j++) {
+      if (pos < 0 || pos >= nnz) {
+        throw new Error(`[CSRObservableEvaluator] CSR position out of range: ${pos}`);
+      }
       const specIdx = typeof obs.indices[j] === 'string'
         ? parseInt(obs.indices[j] as unknown as string, 10)
         : obs.indices[j] as number;
+      if (!Number.isInteger(specIdx) || specIdx < 0 || specIdx >= numSpecies) {
+        throw new Error(`Invalid observable species index: ${specIdx}`);
+      }
+        if (pos < 0 || pos >= colIdx.length || pos >= values.length || (volumeFactors && pos >= volumeFactors.length)) {
+          throw new Error(`[CSRObservableEvaluator] observable entry index out of range: ${pos}`);
+        }
       colIdx[pos] = specIdx;
       values[pos] = typeof obs.coefficients[j] === 'string'
         ? parseFloat(obs.coefficients[j] as unknown as string)
@@ -100,7 +112,10 @@ export function buildCSRObservableMatrix(
       pos++;
     }
   }
-  rowPtr[numObservables] = pos;
+  if (numObservables < 0 || numObservables >= rowPtr.length) {
+    throw new Error(`[CSRObservableEvaluator] rowPtr terminal index out of range: ${numObservables}`);
+  }
+  rowPtr.set([pos], numObservables);
 
   return { rowPtr, colIdx, values, volumeFactors, nnz, numObservables, numSpecies };
 }

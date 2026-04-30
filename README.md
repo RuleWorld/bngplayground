@@ -22,7 +22,7 @@
 - Interactive charts (series toggle / isolate, zoom, export)
 - **Analysis Modules**: Parameter scan, dose-response, perturbation screen, linear noise approximation, first passage time, NFsim post-processing, identifiability (FIM), steady state, parameter estimation, flux analysis, verification
 - **Bayesian Inference**: ABC-SMC parameter estimation with posterior predictive simulation and credible bands
-- **MCP Server**: 27 tool endpoints for programmatic model analysis (parse, simulate, sensitivity, inference, etc.)
+- **MCP Server**: 33 tool endpoints for programmatic model analysis (parse, simulate, calibration, sensitivity, inference, verification, and multiscale workflows)
 
 ## Quick Start
 
@@ -31,6 +31,23 @@ npm install
 npm run build
 npm run dev
 ```
+
+## MCP Client Installation
+
+Installation instructions for MCP clients (Claude Desktop, Cursor, Copilot) are in the repository's [docs/mcp-server.md](docs/mcp-server.md).
+
+### MCP Capabilities Snapshot
+
+The MCP package (`packages/mcp-server`) currently exposes **33 tools** across:
+
+- Core model lifecycle (parse, validate, network generation, simulation, parameter scans)
+- Calibration workflows (parameter fitting, PEtab import, model reduction)
+- Sensitivity and inference (Sobol analysis, identifiability, Bayesian inference, optimal experiment design)
+- Intelligence assistance (model composition, editing, diagnosis, explanation)
+- Advanced analysis and formal methods (verification, bifurcation, temporal information analysis, symbolic steady state, perturbation screening, dose-response, QSSA)
+- Applied domains (PK/PD workflows and multiscale simulation)
+
+For the authoritative tool list and schemas, see [packages/mcp-server/README.md](packages/mcp-server/README.md) and [packages/mcp-server/src/index.ts](packages/mcp-server/src/index.ts).
 
 ## Scripts
 

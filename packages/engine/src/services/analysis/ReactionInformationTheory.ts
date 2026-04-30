@@ -157,11 +157,18 @@ function discretize(
     const names = new Map<number, string>();
     for (const e of firingLog) {
         const bin = Math.min(Math.floor((e.time - tMin) / binWidth), nBins - 1);
-        if (e.reactionIndex >= 0 && e.reactionIndex < nReactions) {
-            series[e.reactionIndex][bin] = 1;
+        const reactionIndex = Number.isInteger(e.reactionIndex) ? e.reactionIndex : -1;
+        if (
+            reactionIndex >= 0 &&
+            reactionIndex < nReactions &&
+            Number.isInteger(bin) &&
+            bin >= 0 &&
+            bin < nBins
+        ) {
+            series[reactionIndex].set([1], bin);
         }
-        if (e.ruleName && !names.has(e.reactionIndex)) {
-            names.set(e.reactionIndex, e.ruleName);
+        if (e.ruleName && reactionIndex >= 0 && reactionIndex < nReactions && !names.has(reactionIndex)) {
+            names.set(reactionIndex, e.ruleName);
         }
     }
     return { series, nBins, names };

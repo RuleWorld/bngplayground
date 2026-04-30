@@ -57,10 +57,44 @@ const normalizeLegacySuffixCompartment = (s: string): string => {
     if (!s) return s;
     // Normalize legacy BNGL syntax like `B@EC()` to canonical `B()@EC`.
     // Apply globally to support multi-molecule patterns such as `A@CP().B@PM()`.
-    return s.replace(/([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g, (_m, mol, comp, args) => {
-        const inside = String(args ?? '');
-        return `${mol}(${inside})@${comp}`;
-    });
+    let out = '';
+    for (let i = 0; i < s.length;) {
+        if (!/[A-Za-z_]/.test(s[i])) {
+            out += s[i++];
+            continue;
+        }
+
+        let molEnd = i + 1;
+        while (molEnd < s.length && /[A-Za-z0-9_]/.test(s[molEnd])) molEnd++;
+        if (molEnd >= s.length || s[molEnd] !== '@') {
+            out += s.slice(i, molEnd);
+            i = molEnd;
+            continue;
+        }
+
+        const compStart = molEnd + 1;
+        let compEnd = compStart;
+        while (compEnd < s.length && /[A-Za-z0-9_]/.test(s[compEnd])) compEnd++;
+        if (compEnd >= s.length || s[compEnd] !== '(') {
+            out += s.slice(i, compEnd);
+            i = compEnd;
+            continue;
+        }
+
+        const argStart = compEnd + 1;
+        const argEnd = s.indexOf(')', argStart);
+        if (argEnd < 0) {
+            out += s.slice(i);
+            break;
+        }
+
+        const mol = s.slice(i, molEnd);
+        const comp = s.slice(compStart, compEnd);
+        const inside = s.slice(argStart, argEnd);
+        out += `${mol}(${inside})@${comp}`;
+        i = argEnd + 1;
+    }
+    return out;
 };
 
 export const getCompartment = (s: string) => {
@@ -305,13 +339,64 @@ export function countPatternMatches(speciesStr: string, patternStr: string): num
             // Fallback to lightweight string parsing.
             const normalized = normalizeLegacySuffixCompartment(speciesStr.trim());
             const body = normalized.replace(/^@[A-Za-z0-9_]+::?/, '');
-            const chunks = body.split('.').map((c) => c.trim()).filter(Boolean);
+            const speciesComp = getCompartment(speciesStr);
             let count = 0;
-            for (const chunk of chunks) {
-                const chunkComp = chunk.match(/@([A-Za-z0-9_]+)$/)?.[1] ?? getCompartment(speciesStr);
-                const noComp = chunk.replace(/@([A-Za-z0-9_]+)$/, '');
-                const nameMatch = noComp.match(/^([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(|$)/);
-                if (nameMatch && nameMatch[1] === simpleCompPattern.molecule && chunkComp === simpleCompPattern.compartment) count++;
+            let start = 0;
+            while (start < body.length) {
+                let end = body.indexOf('.', start);
+                if (end === -1) end = body.length;
+
+                let chunkStart = start;
+                while (chunkStart < end && body.charCodeAt(chunkStart) <= 32) chunkStart++;
+                let chunkEnd = end;
+                while (chunkEnd > chunkStart && body.charCodeAt(chunkEnd - 1) <= 32) chunkEnd--;
+
+                if (chunkEnd > chunkStart) {
+                    let chunkComp = speciesComp;
+                    let noCompEnd = chunkEnd;
+                    const atIndex = body.lastIndexOf('@', chunkEnd - 1);
+                    if (atIndex >= chunkStart) {
+                        // simple validation of compartment name characters [A-Za-z0-9_]
+                        let valid = true;
+                        for (let k = atIndex + 1; k < chunkEnd; k++) {
+                            const c = body.charCodeAt(k);
+                            if (!((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95)) {
+                                valid = false;
+                                break;
+                            }
+                        }
+                        if (valid && atIndex + 1 < chunkEnd) {
+                            chunkComp = body.substring(atIndex + 1, chunkEnd);
+                            noCompEnd = atIndex;
+                        }
+                    }
+
+                    if (chunkComp === simpleCompPattern.compartment) {
+                        // match molecule name: /^([A-Za-z_][A-Za-z0-9_]*)\s*(?:\(|$)/
+                        const mStart = chunkStart;
+                        let mEnd = mStart;
+                        if (mStart < noCompEnd) {
+                            const c0 = body.charCodeAt(mStart);
+                            if ((c0 >= 65 && c0 <= 90) || (c0 >= 97 && c0 <= 122) || c0 === 95) {
+                                mEnd++;
+                                while (mEnd < noCompEnd) {
+                                    const c = body.charCodeAt(mEnd);
+                                    if (!((c >= 48 && c <= 57) || (c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95)) break;
+                                    mEnd++;
+                                }
+                            }
+                        }
+                        if (mEnd > mStart) {
+                            let nextIdx = mEnd;
+                            while (nextIdx < noCompEnd && body.charCodeAt(nextIdx) <= 32) nextIdx++;
+                            if (nextIdx === noCompEnd || body.charCodeAt(nextIdx) === 40) { // '(' is 40
+                                const molName = body.substring(mStart, mEnd);
+                                if (molName === simpleCompPattern.molecule) count++;
+                            }
+                        }
+                    }
+                }
+                start = end + 1;
             }
             return count;
         }

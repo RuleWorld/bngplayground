@@ -69,6 +69,33 @@ export interface MultiscaleResult {
   };
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function isSafeObjectKey(key: string): boolean {
+  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
+}
+
+function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function setSafeNumberArrayField(target: Record<string, number[]>, key: string, value: number[]): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
 // ---------------------------------------------------------------------------
 // RK4 stepper – generic 4th-order Runge-Kutta
 // ---------------------------------------------------------------------------
@@ -211,40 +238,48 @@ export function multiscaleSimulation(
   let nextOutputTime = 0;
   const popTs: MultiscaleResult['populationTimeSeries'] = {
     time: [],
-    counts: {},
+    counts: Object.create(null) as Record<string, number[]>,
   };
   for (const ct of config.cellTypes) {
-    popTs.counts[ct.name] = [];
+    setSafeNumberArrayField(popTs.counts, ct.name, []);
   }
 
   // ---- Helper: take a snapshot ----
   function takeSnapshot(time: number) {
-    const popCounts: Record<string, number> = {};
-    const obsAccum: Record<string, Record<string, number>> = {};
-    const obsCounts: Record<string, number> = {};
+    const popCounts: Record<string, number> = Object.create(null) as Record<string, number>;
+    const obsAccum: Record<string, Record<string, number>> = Object.create(null) as Record<string, Record<string, number>>;
+    const obsCounts: Record<string, number> = Object.create(null) as Record<string, number>;
 
     for (const ct of config.cellTypes) {
-      popCounts[ct.name] = 0;
-      obsAccum[ct.name] = {};
-      obsCounts[ct.name] = 0;
+      if (!isSafeObjectKey(ct.name)) continue;
+      setSafeNumberField(popCounts, ct.name, 0);
+      Object.defineProperty(obsAccum, ct.name, {
+        value: Object.create(null) as Record<string, number>,
+        writable: true,
+        enumerable: true,
+        configurable: true,
+      });
+      setSafeNumberField(obsCounts, ct.name, 0);
     }
 
     for (const cell of cells) {
       if (cell.phase === 'dead') continue;
-      popCounts[cell.cellType] = (popCounts[cell.cellType] ?? 0) + 1;
-      obsCounts[cell.cellType] = (obsCounts[cell.cellType] ?? 0) + 1;
-      if (!obsAccum[cell.cellType]) obsAccum[cell.cellType] = {};
+      if (!isSafeObjectKey(cell.cellType)) continue;
+      setSafeNumberField(popCounts, cell.cellType, (popCounts[cell.cellType] ?? 0) + 1);
+      setSafeNumberField(obsCounts, cell.cellType, (obsCounts[cell.cellType] ?? 0) + 1);
+      if (!obsAccum[cell.cellType]) obsAccum[cell.cellType] = Object.create(null) as Record<string, number>;
       for (const [key, val] of Object.entries(cell.observables)) {
-        obsAccum[cell.cellType][key] = (obsAccum[cell.cellType][key] ?? 0) + val;
+        if (!isSafeObjectKey(key)) continue;
+        setSafeNumberField(obsAccum[cell.cellType], key, (obsAccum[cell.cellType][key] ?? 0) + val);
       }
     }
 
-    const meanObs: Record<string, Record<string, number>> = {};
+    const meanObs: Record<string, Record<string, number>> = Object.create(null) as Record<string, Record<string, number>>;
     for (const [ct, accum] of Object.entries(obsAccum)) {
-      meanObs[ct] = {};
+      meanObs[ct] = Object.create(null) as Record<string, number>;
       const n = obsCounts[ct] || 1;
       for (const [key, sum] of Object.entries(accum)) {
-        meanObs[ct][key] = sum / n;
+        setSafeNumberField(meanObs[ct], key, sum / n);
       }
     }
 
@@ -259,6 +294,7 @@ export function multiscaleSimulation(
 
     popTs.time.push(time);
     for (const ct of config.cellTypes) {
+      if (ct.name === '__proto__' || ct.name === 'constructor' || ct.name === 'prototype') continue;
       popTs.counts[ct.name].push(popCounts[ct.name] ?? 0);
     }
   }
@@ -352,11 +388,13 @@ export function multiscaleSimulation(
           break;
         }
         case 'secrete': {
-          cell.secretionRates[action.species] = action.rate;
+          setSafeNumberField(cell.secretionRates, action.species, action.rate);
           break;
         }
         case 'stop_secrete': {
-          delete cell.secretionRates[action.species];
+          if (isSafeObjectKey(action.species)) {
+            delete cell.secretionRates[action.species];
+          }
           break;
         }
         case 'change_type': {
@@ -365,7 +403,7 @@ export function multiscaleSimulation(
         }
         case 'set_parameter': {
           // Store as observable for simplicity
-          cell.observables[action.parameter] = action.value;
+          setSafeNumberField(cell.observables, action.parameter, action.value);
           break;
         }
       }
@@ -406,7 +444,7 @@ export function multiscaleSimulation(
       if (typeDef.uptake) {
         for (const u of typeDef.uptake) {
           const conc = grid.getConcentration(cell.position, u.species);
-          cell.observables[u.intracellularParameter] = conc * u.scalingFactor;
+          setSafeNumberField(cell.observables, u.intracellularParameter, conc * u.scalingFactor);
         }
       }
 
@@ -414,7 +452,7 @@ export function multiscaleSimulation(
       if (typeDef.secretion) {
         for (const s of typeDef.secretion) {
           const obsVal = cell.observables[s.intracellularObservable] ?? 0;
-          cell.secretionRates[s.species] = obsVal * s.scalingFactor;
+          setSafeNumberField(cell.secretionRates, s.species, obsVal * s.scalingFactor);
         }
       }
     }

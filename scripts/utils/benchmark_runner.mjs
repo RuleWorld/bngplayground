@@ -7,7 +7,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -78,7 +78,7 @@ function runBNG2(modelPath, modelName) {
 
   try {
     // Run BNG2.pl with timeout
-    const result = execSync(`perl "${BNG2_PATH}" "${bnglFile}"`, {
+    const result = execFileSync('perl', [BNG2_PATH, bnglFile], {
       cwd: TEST_DIR,
       timeout: 120000, // 120 second timeout
       encoding: 'utf-8',

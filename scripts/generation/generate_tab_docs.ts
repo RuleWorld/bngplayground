@@ -15,7 +15,7 @@
  *   - Subsequent runs (file exists): refresh only the auto-managed blocks.
  */
 
-import { readdirSync, readFileSync, writeFileSync, existsSync, statSync, mkdirSync } from 'node:fs';
+import { readdirSync, readFileSync, writeFileSync, existsSync, statSync, mkdirSync, renameSync } from 'node:fs';
 import { join, basename, resolve, dirname } from 'node:path';
 
 const TABS_ROOT = 'src/components/tabs';
@@ -188,6 +188,12 @@ function refreshAutoBlock(existing: string, tabs: TabEntry[]): string {
   return before + renderAutoSection(tabs) + after;
 }
 
+function writeAtomically(targetPath: string, content: string) {
+  const tempPath = `${targetPath}.tmp-${process.pid}`;
+  writeFileSync(tempPath, content, 'utf8');
+  renameSync(tempPath, targetPath);
+}
+
 // ── Main ───────────────────────────────────────────────────────────────────
 
 function main() {
@@ -200,19 +206,20 @@ function main() {
   mkdirSync(dirname(resolve(OUT_PATH)), { recursive: true });
 
   let out: string;
-  if (existsSync(OUT_PATH)) {
+  try {
     out = refreshAutoBlock(readFileSync(OUT_PATH, 'utf8'), tabs);
     console.log(`refreshed AUTO block in ${OUT_PATH} (${tabs.length} tabs)`);
-  } else {
+  } catch (error: any) {
+    if (error?.code !== 'ENOENT') throw error;
     out = renderFullSkeleton(tabs);
     console.log(`wrote ${OUT_PATH} with full skeleton (${tabs.length} tabs)`);
   }
-  writeFileSync(OUT_PATH, out);
+  writeAtomically(OUT_PATH, out);
 
   // Emit a JSON side-file for CI drift checks.
-  writeFileSync(
+  writeAtomically(
     resolve('docs/.tab-registry.json'),
-    JSON.stringify(tabs.map(({ filePath: _f, ...rest }) => rest), null, 2),
+    JSON.stringify(tabs.map(({ filePath: _f, ...rest }) => rest), null, 2) + '\n',
   );
 }
 

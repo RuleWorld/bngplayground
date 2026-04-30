@@ -5,12 +5,16 @@ import * as path from 'path';
 const WEB_OUTPUT_DIR = path.resolve('web_output');
 const REPORT_PATH = path.resolve('reports/validation_report.md.resolved');
 
-if (!fs.existsSync(REPORT_PATH)) {
-    console.error("Report not found");
-    process.exit(1);
+let content = '';
+try {
+    content = fs.readFileSync(REPORT_PATH, 'utf8');
+} catch (error: any) {
+    if (error?.code === 'ENOENT') {
+        console.error('Report not found');
+        process.exit(1);
+    }
+    throw error;
 }
-
-const content = fs.readFileSync(REPORT_PATH, 'utf8');
 const lines = content.split('\n');
 
 let missingCount = 0;
@@ -24,10 +28,17 @@ lines.forEach(line => {
                 const filename = `results_${name}.csv`;
                 const filePath = path.join(WEB_OUTPUT_DIR, filename);
 
-                if (!fs.existsSync(filePath)) {
+                try {
+                    const fd = fs.openSync(filePath, 'wx');
+                    try {
+                        fs.writeFileSync(fd, 'Time,Observable\n# SKIPPED (Failed/Crash)\n0,0');
+                    } finally {
+                        fs.closeSync(fd);
+                    }
                     console.log(`Creating missing skipped marker for: ${name}`);
-                    fs.writeFileSync(filePath, 'Time,Observable\n# SKIPPED (Failed/Crash)\n0,0');
                     missingCount++;
+                } catch (error: any) {
+                    if (error?.code !== 'EEXIST') throw error;
                 }
             }
         }

@@ -299,7 +299,10 @@ export async function diagnoseModelDeep(args: {
                 totalOrder: topTotalOrder,
             }, parameterRuleCounts);
 
-            const sensitiveParams = topFirstOrder.filter(p => Math.abs(p.value) > 0.01).map(p => p.name);
+            const sensitiveParams = topFirstOrder.reduce<string[]>((acc, p) => {
+                if (Math.abs(p.value) > 0.01) acc.push(p.name);
+                return acc;
+            }, []);
             const hasStrongSignal = topFirstOrder.length > 0 && Math.abs(topFirstOrder[0].value) > 0.1;
             const signalToNoise = hasStrongSignal ? Math.abs(topFirstOrder[0].value) / (Math.abs(topFirstOrder[0].value - (topTotalOrder[0]?.value ?? 0)) + 0.01) : 0;
             const doubledSampleCount = Math.max((args.n_samples ?? 64) * 2, (args.n_samples ?? 64) + 16);

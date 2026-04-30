@@ -22,6 +22,12 @@ interface ExpressionInputPanelProps {
   hasSpeciesData?: boolean;  // Whether species-level data is available for BNGL patterns
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+
+function isSafeObjectKey(key: string): boolean {
+  return !UNSAFE_OBJECT_KEYS.has(key);
+}
+
 /**
  * Evaluate a mathematical expression with complex entity names (including BNGL patterns)
  * Consolidated version using the central BNGLParser.
@@ -103,10 +109,12 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
     // Split input by newlines to support bulk add
     const lines = input.split('\n').filter(line => line.trim());
     const newExpressions: CustomExpression[] = [...expressions];
-    const testVars: Record<string, number> = { time: 1 };
-    observableNames.forEach((name) => { testVars[name] = 1; });
-    parameterNames.forEach((name) => { testVars[name] = 1; });
-    speciesNames.forEach((name) => { testVars[name] = 1; });
+    const testVarsMap = new Map<string, number>();
+    testVarsMap.set('time', 1);
+    observableNames.forEach((name) => { if (isSafeObjectKey(name)) testVarsMap.set(name, 1); });
+    parameterNames.forEach((name) => { if (isSafeObjectKey(name)) testVarsMap.set(name, 1); });
+    speciesNames.forEach((name) => { if (isSafeObjectKey(name)) testVarsMap.set(name, 1); });
+    const testVars = Object.fromEntries(testVarsMap.entries());
 
     let addedCount = 0;
     let lastError: string | null = null;
@@ -178,6 +186,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
       <button
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
+        aria-controls="custom-expressions-panel"
         className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
       >
         <span className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
@@ -190,7 +199,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
       </button>
 
       {isExpanded && (
-        <div className="mt-3 space-y-3 pl-4">
+        <div id="custom-expressions-panel" className="mt-3 space-y-3 pl-4">
           {/* Mode toggle */}
           <div className="flex items-center gap-2">
             <span className="text-xs text-slate-500 dark:text-slate-400">Mode:</span>

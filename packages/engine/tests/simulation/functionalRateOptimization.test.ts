@@ -161,7 +161,7 @@ describe('JIT compilation (Optimization B) matches AST-walk evaluator', () => {
     });
   }
 
-  it('falls back to AST-walk for expressions using BNG if()', () => {
+  it('compiles BNG if() via fast path and matches original evaluator', () => {
     const expr = 'if(Active_Enzyme - 10, k1, k2)';
     const fullCtx = { ...TEST_PARAMS, ...TEST_OBS, ...EXTRA_CONTEXT };
 
@@ -173,10 +173,14 @@ describe('JIT compilation (Optimization B) matches AST-walk evaluator', () => {
     );
     expect(compiled).toHaveLength(1);
 
-    // 'if' is not in JIT_ALLOWED_FUNCTIONS, so should fall back to AST
     const entry = compiled[0];
     const astResult = entry.astFn(fullCtx);
     expect(typeof astResult).toBe('number');
+
+    if (entry.jitFn) {
+      const fastResult = entry.jitFn(fullCtx);
+      expect(fastResult).toBe(astResult);
+    }
 
     // Original path should match
     const original = evalOriginal(expr, TEST_PARAMS, TEST_OBS, undefined, EXTRA_CONTEXT);
@@ -266,9 +270,8 @@ describe('isJITSafe', () => {
     expect(isJITSafe('A; B', knownVars)).toBe(false);
   });
 
-  it('rejects expressions with the if function (not in JIT allowlist)', () => {
-    // BNG 'if' is a special function not in JIT_ALLOWED_FUNCTIONS
-    expect(isJITSafe('if(A, k1, k2)', knownVars)).toBe(false);
+  it('accepts expressions with BNG if function', () => {
+    expect(isJITSafe('if(A, k1, k2)', knownVars)).toBe(true);
   });
 });
 
@@ -495,9 +498,8 @@ describe('Batch pre-compilation', () => {
     );
     expect(compiled).toHaveLength(3);
 
-    // First and third should be JIT (if JIT is working)
-    // Second should NOT be JIT (uses 'if' which is not in JIT allowlist)
-    expect(compiled[1].isJIT).toBe(false);
+    // All expressions should now have a compiled fast path (dynamic or bytecode VM).
+    expect(compiled[1].isJIT).toBe(true);
 
     // All should have astFn regardless
     for (const entry of compiled) {

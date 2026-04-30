@@ -290,7 +290,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
   if (!model) {
     return (
-      <div className="text-slate-500 dark:text-slate-400 p-4">
+      <div className="text-slate-500 dark:text-slate-300 p-4">
         Parse a model to run bifurcation analysis.
       </div>
     );
@@ -571,18 +571,18 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           </h3>
           <div className="grid grid-cols-2 gap-4">
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Type</p>
+              <p className="text-xs text-slate-500 dark:text-slate-300">Type</p>
               <p className="font-medium text-sm capitalize">
                 {selectedBifurcation.type.replace(/-/g, ' ')}
               </p>
             </div>
             <div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Parameter Value</p>
+              <p className="text-xs text-slate-500 dark:text-slate-300">Parameter Value</p>
               <p className="font-medium text-sm">{selectedBifurcation.parameterValue.toPrecision(4)}</p>
             </div>
             {selectedBifurcation.frequency && (
               <div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">Oscillation Frequency</p>
+                <p className="text-xs text-slate-500 dark:text-slate-300">Oscillation Frequency</p>
                 <p className="font-medium text-sm">{selectedBifurcation.frequency.toPrecision(4)}</p>
               </div>
             )}
@@ -605,7 +605,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
                     <span className="text-xs text-slate-600 dark:text-slate-300 truncate flex-1">
                       {rc.ruleName || rc.mechanism}
                     </span>
-                    <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
+                    <span className="text-xs font-mono text-slate-500 dark:text-slate-300">
                       {(rc.contribution * 100).toFixed(1)}%
                     </span>
                   </div>
@@ -625,7 +625,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       {/* Empty state */}
       {!continuationResult && !isRunning && (
-        <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-500 text-sm">
+        <div className="flex-1 flex items-center justify-center text-slate-400 dark:text-slate-300 text-sm">
           Select a continuation parameter and click "Run Continuation" to begin.
         </div>
       )}

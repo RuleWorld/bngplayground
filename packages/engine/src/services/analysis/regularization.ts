@@ -99,32 +99,33 @@ export function pruneModel(
 
   for (const line of lines) {
     const trimmed = line.trim();
+    const lower = trimmed.toLowerCase();
 
-    if (trimmed.match(/^begin\s+reaction\s*rules/i)) {
+    if (lower === 'begin reaction rules') {
       inRulesBlock = true;
       outputLines.push(line);
       continue;
     }
-    if (trimmed.match(/^end\s+reaction\s*rules/i)) {
+    if (lower === 'end reaction rules') {
       inRulesBlock = false;
       outputLines.push(line);
       continue;
     }
-    if (trimmed.match(/^begin\s+parameters/i)) {
+    if (lower === 'begin parameters') {
       inParametersBlock = true;
       outputLines.push(line);
       continue;
     }
-    if (trimmed.match(/^end\s+parameters/i)) {
+    if (lower === 'end parameters') {
       inParametersBlock = false;
       outputLines.push(line);
       continue;
     }
 
     if (inParametersBlock) {
-      const paramMatch = trimmed.match(/^(\w+)\s+(.+)$/);
-      if (paramMatch) {
-        const pName = paramMatch[1];
+      const firstSpace = trimmed.search(/\s/);
+      if (firstSpace > 0) {
+        const pName = trimmed.slice(0, firstSpace);
         if (prunedParamSet.has(pName)) {
           outputLines.push(`# PRUNED: ${line.trim()}`);
           continue;

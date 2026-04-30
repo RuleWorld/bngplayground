@@ -1,10 +1,5 @@
 
 import { execSync } from 'child_process';
-import fs from 'fs';
-import path from 'path';
-
-const WEB_OUTPUT_DIR = 'web_output';
-const REFERENCE_OUTPUT_DIR = 'bng_test_output';
 
 // Viable models that should be checked
 // This list should ideally be dynamic or match the one in get_viable_published_models.mjs

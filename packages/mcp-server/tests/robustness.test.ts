@@ -552,6 +552,18 @@ end reaction rules`;
     it('should not crash on empty parameters array', async () => {
       const result = await handleSobolSensitivity({ code: WORKING_MODEL, parameters: [] });
       assertStructuredResponse(result);
+      expect(result.structuredContent.error).toBeDefined();
+    });
+
+    it('should return explicit error for unknown observables', async () => {
+      const result = await handleSobolSensitivity({
+        code: MINIMAL_MODEL,
+        parameters: [{ name: 'k', min: 0.1, max: 10 }],
+        observables: ['DOES_NOT_EXIST'],
+        n_samples: 8,
+      });
+      assertStructuredResponse(result);
+      expect(result.structuredContent.error).toContain('Unknown Sobol observables');
     });
 
     it('should not crash on garbage code', async () => {

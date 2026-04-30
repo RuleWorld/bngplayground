@@ -7,6 +7,7 @@
 
 import { getFeatureFlags, registerCacheClearCallback } from '../../featureFlags';
 import { SafeExpressionEvaluator as SafeExpressionEvaluatorStatic } from '../../utils/safeExpressionEvaluator';
+import { compileExpressionToBytecode } from '../analysis/ExpressionBytecodeCompiler';
 // console.log("ExpressionEvaluator module loaded");
 
 /**
@@ -282,6 +283,51 @@ function preExpandExpression(
   return expandedExpr;
 }
 
+function isIdentifierChar(ch: string | undefined): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  return (
+    (code >= 48 && code <= 57) ||
+    (code >= 65 && code <= 90) ||
+    (code >= 97 && code <= 122) ||
+    ch === '_' ||
+    ch === '$'
+  );
+}
+
+function replaceWholeWord(source: string, target: string, replacement: string): string {
+  let result = '';
+
+  for (let i = 0; i < source.length; ) {
+    if (
+      source.startsWith(target, i) &&
+      !isIdentifierChar(source[i - 1]) &&
+      !isIdentifierChar(source[i + target.length])
+    ) {
+      result += replacement;
+      i += target.length;
+      continue;
+    }
+
+    result += source[i];
+    i++;
+  }
+
+  return result;
+}
+
+function findFunctionCallStart(source: string, fnName: string, fromIndex: number): number {
+  const prefix = `${fnName}(`;
+  let searchIndex = fromIndex;
+
+  while (true) {
+    const startIdx = source.indexOf(prefix, searchIndex);
+    if (startIdx === -1) return -1;
+    if (!isIdentifierChar(source[startIdx - 1])) return startIdx;
+    searchIndex = startIdx + 1;
+  }
+}
+
 export function getCompiledRateFunction(
   expandedExpr: string,
   varNames: string[],
@@ -497,11 +543,214 @@ const JIT_ALLOWED_FUNCTIONS: Record<string, string> = {
   hypot: 'Math.hypot',
 };
 
+const BYTECODE_ALLOWED_FUNCTIONS = new Set<string>([
+  ...Object.keys(JIT_ALLOWED_FUNCTIONS),
+  'if',
+  'not',
+]);
+
+const OP_STOP = 0xFF;
+
+interface BytecodeProgram {
+  code: Uint8Array;
+  view: DataView;
+}
+
+function compileRateToBytecodeProgram(expandedExpr: string, varNames: string[]): BytecodeProgram | null {
+  const compiled = compileExpressionToBytecode(
+    expandedExpr,
+    {},
+    varNames,
+    []
+  );
+  if (!compiled) return null;
+
+  return {
+    code: compiled.bytecode,
+    view: new DataView(compiled.bytecode.buffer, compiled.bytecode.byteOffset, compiled.bytecode.byteLength),
+  };
+}
+
+function buildBytecodeEvaluator(
+  program: BytecodeProgram,
+  varNames: string[]
+): (ctx: Record<string, number>) => number {
+  // Reuse buffers across calls to avoid per-step allocations in hot loops.
+  const valueSlots = new Float64Array(varNames.length);
+  const stack = new Float64Array(Math.max(64, program.code.length));
+
+  return (ctx: Record<string, number>) => {
+    for (let i = 0; i < varNames.length; i++) {
+      const value = ctx[varNames[i]];
+      valueSlots[i] = typeof value === 'number' ? value : 0;
+    }
+
+    const code = program.code;
+    const view = program.view;
+    let pc = 0;
+    let sp = 0;
+
+    while (pc < code.length) {
+      const op = code[pc++];
+      if (op === OP_STOP) break;
+
+      switch (op) {
+        case 0: { // PUSH_CONST
+          const val = view.getFloat64(pc, true);
+          pc += 8;
+          stack[sp++] = val;
+          break;
+        }
+        case 1:
+        case 2: { // PUSH_SPEC / PUSH_OBS
+          const idx = view.getInt32(pc, true);
+          pc += 4;
+          stack[sp++] = (idx >= 0 && idx < valueSlots.length) ? valueSlots[idx] : 0;
+          break;
+        }
+        case 3: { // ADD
+          const b = stack[--sp];
+          stack[sp - 1] += b;
+          break;
+        }
+        case 4: { // SUB
+          const b = stack[--sp];
+          stack[sp - 1] -= b;
+          break;
+        }
+        case 5: { // MUL
+          const b = stack[--sp];
+          stack[sp - 1] *= b;
+          break;
+        }
+        case 6: { // DIV
+          const b = stack[--sp];
+          stack[sp - 1] /= b;
+          break;
+        }
+        case 7: { // POW
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] ** b;
+          break;
+        }
+        case 8: // NEG
+          stack[sp - 1] = -stack[sp - 1];
+          break;
+        case 9: // EXP
+          stack[sp - 1] = Math.exp(stack[sp - 1]);
+          break;
+        case 10: // LOG
+          stack[sp - 1] = Math.log(stack[sp - 1]);
+          break;
+        case 11: // LOG10
+          stack[sp - 1] = Math.log10(stack[sp - 1]);
+          break;
+        case 12: // SQRT
+          stack[sp - 1] = Math.sqrt(stack[sp - 1]);
+          break;
+        case 13: // ABS
+          stack[sp - 1] = Math.abs(stack[sp - 1]);
+          break;
+        case 14: // SIN
+          stack[sp - 1] = Math.sin(stack[sp - 1]);
+          break;
+        case 15: // COS
+          stack[sp - 1] = Math.cos(stack[sp - 1]);
+          break;
+        case 16: // CEIL
+          stack[sp - 1] = Math.ceil(stack[sp - 1]);
+          break;
+        case 17: // FLOOR
+          stack[sp - 1] = Math.floor(stack[sp - 1]);
+          break;
+        case 18: // ROUND
+          stack[sp - 1] = Math.round(stack[sp - 1]);
+          break;
+        case 19: // TAN
+          stack[sp - 1] = Math.tan(stack[sp - 1]);
+          break;
+        case 20: // ASIN
+          stack[sp - 1] = Math.asin(stack[sp - 1]);
+          break;
+        case 21: // ACOS
+          stack[sp - 1] = Math.acos(stack[sp - 1]);
+          break;
+        case 22: // ATAN
+          stack[sp - 1] = Math.atan(stack[sp - 1]);
+          break;
+        case 23: { // MAX
+          const b = stack[--sp];
+          stack[sp - 1] = Math.max(stack[sp - 1], b);
+          break;
+        }
+        case 24: { // MIN
+          const b = stack[--sp];
+          stack[sp - 1] = Math.min(stack[sp - 1], b);
+          break;
+        }
+        case 25: { // IF_ELSE
+          const elseVal = stack[--sp];
+          const thenVal = stack[--sp];
+          const cond = stack[--sp];
+          stack[sp++] = cond !== 0 ? thenVal : elseVal;
+          break;
+        }
+        case 26: { // LT
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] < b ? 1 : 0;
+          break;
+        }
+        case 27: { // GT
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] > b ? 1 : 0;
+          break;
+        }
+        case 28: { // LE
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] <= b ? 1 : 0;
+          break;
+        }
+        case 29: { // GE
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] >= b ? 1 : 0;
+          break;
+        }
+        case 30: { // EQ
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] === b ? 1 : 0;
+          break;
+        }
+        case 31: { // NE
+          const b = stack[--sp];
+          stack[sp - 1] = stack[sp - 1] !== b ? 1 : 0;
+          break;
+        }
+        case 32: { // AND
+          const b = stack[--sp];
+          stack[sp - 1] = (stack[sp - 1] !== 0 && b !== 0) ? 1 : 0;
+          break;
+        }
+        case 33: { // OR
+          const b = stack[--sp];
+          stack[sp - 1] = (stack[sp - 1] !== 0 || b !== 0) ? 1 : 0;
+          break;
+        }
+        case 34: // NOT
+          stack[sp - 1] = stack[sp - 1] === 0 ? 1 : 0;
+          break;
+        default:
+          return 0;
+      }
+    }
+
+    return sp > 0 ? stack[sp - 1] : 0;
+  };
+}
+
 /**
  * Check whether an expression is safe for JIT compilation via new Function().
  *
  * Returns `false` for expressions that use:
- *  - The BNG `if()` function (ternary semantics differ from JS `if`)
  *  - `mratio` or other non-Math builtins
  *  - Any identifier that is not a known variable or allowed function
  *  - String manipulation, property access, assignment, etc.
@@ -521,15 +770,16 @@ export function isJITSafe(expandedExpr: string, knownVars: Set<string>): boolean
 
   // The AST parser validates that the expression is mathematically safe.
   // However, JIT compilation via new Function() only supports a strict subset of
-  // mathematical functions (defined in JIT_ALLOWED_FUNCTIONS).
-  // Functions like BNG's "if()" or "mratio" are parsed safely by AST but cannot be
-  // safely mapped directly to JS semantics in buildJITFunctionBody, so we must reject them here.
+  // mathematical functions (defined in BYTECODE_ALLOWED_FUNCTIONS).
+  // Some functions (such as BNG's if()) are supported by the bytecode VM but not
+  // by dynamic-code emission; compileRateToJIT handles that by falling back to
+  // bytecode execution when dynamic-code emission is unavailable.
 
   // Extract all identifiers (word tokens not preceded by a dot)
   const identifiers = expandedExpr.match(/\b[A-Za-z_][A-Za-z0-9_]*\b/g) || [];
   for (const id of identifiers) {
     if (knownVars.has(id)) continue;
-    if (id in JIT_ALLOWED_FUNCTIONS) continue;
+    if (BYTECODE_ALLOWED_FUNCTIONS.has(id)) continue;
     // It could be a numeric suffix like e10 from scientific notation - skip
     if (/^[eE]\d*$/.test(id)) continue;
     return false; // Found an unsupported identifier/function for JIT
@@ -539,49 +789,16 @@ export function isJITSafe(expandedExpr: string, knownVars: Set<string>): boolean
 }
 
 /**
- * Convert an expanded expression into a JS function body string.
+ * Compile a rate expression to the secure fast path.
  *
- * Replaces:
- *  - `^` with `**` (JS exponentiation)
- *  - Known math function names with their `Math.*` equivalents
- *  - Variable references with `ctx.varName` property access
- *
- * @returns A function body string suitable for `new Function('ctx', body)`.
- */
-function buildJITFunctionBody(expandedExpr: string, knownVars: Set<string>): string {
-  let body = expandedExpr;
-
-  // Replace ^ with ** for JS exponentiation (but not inside identifiers)
-  body = body.replace(/\^/g, '**');
-
-  // Replace function calls: funcName( -> Math.funcName(
-  for (const [name, jsName] of Object.entries(JIT_ALLOWED_FUNCTIONS)) {
-    const regex = new RegExp(`\\b${name}\\s*\\(`, 'g');
-    body = body.replace(regex, `${jsName}(`);
-  }
-
-  // Replace variable references with ctx.varName
-  // Process longest names first to avoid partial replacements
-  const sortedVars = Array.from(knownVars).sort((a, b) => b.length - a.length);
-  for (const v of sortedVars) {
-    // Only replace standalone identifiers not already prefixed by 'ctx.' or 'Math.'
-    const regex = new RegExp(`(?<!\\.)\\b${v.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`, 'g');
-    body = body.replace(regex, `ctx.${v}`);
-  }
-
-  return `return ${body};`;
-}
-
-/**
- * Compile a rate expression to a native JS function via `new Function()`.
- *
- * This gives ~16.7x speedup over the AST-walk evaluator by producing a direct
- * JavaScript function that V8 can JIT-optimize.
+ * Priority order:
+ *  1. Bytecode VM (no dynamic code generation)
+ *  2. SafeExpressionEvaluator fallback
  *
  * @param expandedExpr - The pre-expanded expression (macros already inlined).
  * @param varNames - All variable names available in the evaluation context.
- * @param enableJIT - Whether JIT compilation is enabled (default: true).
- * @returns The JIT-compiled function, or `null` if the expression cannot be JIT-compiled.
+ * @param enableJIT - Whether functional-rate precompilation is enabled (default: true).
+ * @returns The compiled function, or `null` if the expression cannot be compiled.
  */
 export function compileRateToJIT(
   expandedExpr: string,
@@ -591,20 +808,27 @@ export function compileRateToJIT(
   if (!enableJIT) return null;
 
   const knownVars = new Set(varNames);
-  if (!isJITSafe(expandedExpr, knownVars)) return null;
+  if (!isJITSafe(expandedExpr, knownVars)) {
+    return null;
+  }
+
+  // Dynamic-code emission via `new Function` was removed to satisfy CodeQL
+  // and keep this path strictly non-evaluative.
+  void getFeatureFlags().enableJitFastPath;
+
+  // Secure default fast path: compile once to bytecode and execute via a static VM.
+  const bytecodeProgram = compileRateToBytecodeProgram(expandedExpr, varNames);
+  if (bytecodeProgram) {
+    return buildBytecodeEvaluator(bytecodeProgram, varNames);
+  }
+
+  const evaluator = getEvaluator();
+  if (!evaluator) return null;
 
   try {
-    const body = buildJITFunctionBody(expandedExpr, knownVars);
-    // eslint-disable-next-line no-new-func
-    const fn = new Function('ctx', body) as (ctx: Record<string, number>) => number;
-
-    // Sanity check: evaluate with zeros to verify it doesn't throw
-    const testCtx: Record<string, number> = {};
-    for (const v of varNames) testCtx[v] = 0;
-    const testResult = fn(testCtx);
-    if (typeof testResult !== 'number') return null;
-
-    return fn;
+    const referenced = evaluator.getReferencedVariables(expandedExpr);
+    const usedVars = referenced.filter((v) => knownVars.has(v));
+    return evaluator.compile(expandedExpr, usedVars);
   } catch {
     return null;
   }

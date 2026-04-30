@@ -7,30 +7,45 @@ export interface GdatData {
 const splitLine = (line: string): string[] => {
   if (line.includes('\t')) return line.split('\t');
   if (line.includes(',')) return line.split(',');
-  return line.trim().split(/\s+/);
+  return line.split(/\s+/);
 };
 
 export function parseGdat(gdat: string): GdatData {
-  const lines = gdat.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const lines = gdat.split(/\r?\n/);
 
-  // Look for the last line starting with #, which is usually the header in NFsim .gdat files
   let headerLineIndex = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
-    if (lines[i].startsWith('#')) {
+    let line = lines[i];
+    let start = 0;
+    while(start < line.length && line.charCodeAt(start) <= 32) start++;
+    if (start < line.length && line.charCodeAt(start) === 35) { // '#'
       headerLineIndex = i;
       break;
     }
   }
+
   let headerTokens: string[] = [];
   let dataStartIndex = 0;
+  let rawHeaderLine: string | undefined;
 
   if (headerLineIndex >= 0) {
-    const rawHeader = lines[headerLineIndex].replace(/^#\s*/, '');
+    rawHeaderLine = lines[headerLineIndex];
+    let start = 0;
+    while(start < rawHeaderLine.length && rawHeaderLine.charCodeAt(start) <= 32) start++;
+    const rawHeader = rawHeaderLine.substring(start).replace(/^#\s*/, '').trim();
     headerTokens = splitLine(rawHeader).filter(Boolean);
     dataStartIndex = headerLineIndex + 1;
   } else {
-    // Fallback: look for the first non-comment line and see if it looks like data
-    const firstDataLine = lines.find((l) => !l.startsWith('#')) || '';
+    let firstDataLine = '';
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        let start = 0;
+        while(start < line.length && line.charCodeAt(start) <= 32) start++;
+        if (start < line.length && line.charCodeAt(start) !== 35) {
+            firstDataLine = line.trim();
+            break;
+        }
+    }
     headerTokens = firstDataLine ? splitLine(firstDataLine).filter(Boolean) : [];
   }
 
@@ -42,26 +57,48 @@ export function parseGdat(gdat: string): GdatData {
 
   let headers: string[];
   if (headerIsData) {
-    // If the header tokens look like numbers, it's actually the first row of data
     headers = ['time', ...Array.from({ length: Math.max(0, headerTokens.length - 1) }, (_, i) => `O${i + 1}`)];
-    dataStartIndex = lines.findIndex((l) => !l.startsWith('#'));
+    for (let i = 0; i < lines.length; i++) {
+        let line = lines[i];
+        let start = 0;
+        while(start < line.length && line.charCodeAt(start) <= 32) start++;
+        if (start < line.length && line.charCodeAt(start) !== 35) {
+            dataStartIndex = i;
+            break;
+        }
+    }
+    rawHeaderLine = undefined;
   } else {
     headers = headerTokens.length > 0 ? headerTokens : ['time'];
   }
 
   const data: Record<string, number>[] = [];
+  const numHeaders = headers.length;
   for (let i = dataStartIndex; i < lines.length; i++) {
     const line = lines[i];
-    if (!line || line.startsWith('#')) continue;
-    const tokens = splitLine(line);
+    let start = 0;
+    while(start < line.length && line.charCodeAt(start) <= 32) start++;
+    if (start === line.length || line.charCodeAt(start) === 35) continue; // 35 is '#'
+
+    let end = line.length;
+    while(end > start && line.charCodeAt(end - 1) <= 32) end--;
+    const trimmedLine = (start === 0 && end === line.length) ? line : line.substring(start, end);
+
+    let tokens: string[];
+    if (trimmedLine.includes('\t')) tokens = trimmedLine.split('\t');
+    else if (trimmedLine.includes(',')) tokens = trimmedLine.split(',');
+    else tokens = trimmedLine.split(/\s+/);
+
     if (tokens.length === 0) continue;
+
     const row: Record<string, number> = {};
-    for (let j = 0; j < headers.length && j < tokens.length; j++) {
+    const limit = numHeaders < tokens.length ? numHeaders : tokens.length;
+    for (let j = 0; j < limit; j++) {
       const value = Number(tokens[j]);
       row[headers[j]] = Number.isFinite(value) ? value : 0;
     }
     data.push(row);
   }
 
-  return { headers, data };
+  return { headers, data, rawHeaderLine };
 }

@@ -292,7 +292,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
           className="mt-4 mb-auto flex items-center gap-3 whitespace-nowrap pointer-events-none"
           style={{ writingMode: 'vertical-rl', transform: 'rotate(180deg)' }}
         >
-          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-500">Designer</span>
+          <span className="text-[10px] font-black uppercase tracking-[0.2em] text-slate-400 dark:text-slate-300">Designer</span>
         </div>
 
         <div className="mt-auto flex flex-col items-center gap-5 pb-4">
@@ -304,6 +304,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
               }}
               className="h-11 w-11 rounded-full border border-blue-500 bg-blue-600 text-xl text-white shadow-lg transition-all hover:scale-110 active:scale-95"
               title="Sync and visualize"
+              aria-label="Sync and visualize"
             >
               <span className="pl-1">↻</span>
             </button>
@@ -320,7 +321,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
             <h2 className="text-lg font-semibold">Designer Mode</h2>
-            <p className="text-sm text-slate-500 dark:text-slate-400">
+            <p className="text-sm text-slate-500 dark:text-slate-300">
               Build models from local grammar or INDRA-backed biological statements.
             </p>
           </div>
@@ -367,7 +368,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
 
       <div className="px-4 pt-4">
         <div className="mb-3">
-          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
             Model Name
           </label>
           <input
@@ -396,7 +397,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
           <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4">
             <div className="flex min-h-0 flex-[1.35] gap-4">
               <div className="flex min-h-0 flex-1 flex-col">
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Natural Language Input</h3>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Natural Language Input</h3>
                 <textarea
                   className="flex-1 resize-none rounded-md border border-slate-200 bg-white p-4 font-mono text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-800"
                   value={displayText}
@@ -407,7 +408,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
               </div>
 
               <div className="flex w-1/4 min-h-0 flex-col">
-                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Logic Parser</h3>
+                <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Logic Parser</h3>
                 <div className="flex-1 overflow-y-auto rounded-md border border-slate-200 bg-white p-2 dark:border-slate-700 dark:bg-slate-800">
                   <div className="space-y-1">
                     {sentences.filter((sentence) => sentence.type !== 'COMMENT' && sentence.type !== 'COMPARTMENT').map((sentence) => (
@@ -436,7 +437,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
 
             <div className="mt-1 flex h-40 flex-col border-t border-slate-200 pt-3 dark:border-slate-800">
               <div className="mb-2 flex items-center justify-between">
-                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Generated BNGL Code</h3>
+                <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Generated BNGL Code</h3>
                 <span className="text-xs text-slate-400">{previewLineCount(lastGeneratedCode || null)}</span>
               </div>
               <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-slate-200 shadow-sm dark:border-slate-700">
@@ -469,7 +470,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 {activeTab === 'indra-nlp' ? (
                   <>
                     <div className="flex min-h-0 flex-col">
-                      <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Describe Biological Mechanisms</h3>
+                      <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Describe Biological Mechanisms</h3>
                       <textarea
                         className="min-h-[220px] flex-1 resize-none rounded-md border border-slate-200 bg-white p-4 font-mono text-sm outline-none focus:border-transparent focus:ring-2 focus:ring-blue-500 dark:border-slate-700 dark:bg-slate-900"
                         value={nlpInput}
@@ -482,7 +483,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                       <Button variant="primary" className="text-xs" onClick={() => void handleProcessNlp()} disabled={nlpLoading || checkingIndraAvailability || indraAvailable === false}>
                         Process with INDRA
                       </Button>
-                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                      <label className="text-xs text-slate-500 dark:text-slate-300">
                         Policy
                         <select
                           className="ml-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
@@ -497,7 +498,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                       <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => setIsIndraGuideOpen(true)}>
                         What do these mean?
                       </Button>
-                      {nlpLoading && <span className="text-xs text-slate-500 dark:text-slate-400">Processing...</span>}
+                      {nlpLoading && <span className="text-xs text-slate-500 dark:text-slate-300">Processing...</span>}
                     </div>
                     <div className="mt-3 rounded-md border border-sky-200 bg-sky-50 px-3 py-2 text-xs text-sky-800 dark:border-sky-900 dark:bg-sky-950/30 dark:text-sky-200">
                       <span className="font-semibold">Policy:</span> `one_step` is the simplest default for NLP text. Open `INDRA Guide` for assembly details and docs links.
@@ -568,7 +569,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                       <Button variant="primary" className="text-xs" onClick={() => void handleQueryDb()} disabled={dbLoading || checkingIndraAvailability || indraAvailable === false}>
                         Search INDRA DB
                       </Button>
-                      <label className="text-xs text-slate-500 dark:text-slate-400">
+                      <label className="text-xs text-slate-500 dark:text-slate-300">
                         Policy
                         <select
                           className="ml-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
@@ -583,7 +584,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                       <Button variant="subtle" className="px-3 py-1 text-xs" onClick={() => setIsIndraGuideOpen(true)}>
                         What do these mean?
                       </Button>
-                      {dbLoading && <span className="text-xs text-slate-500 dark:text-slate-400">Searching...</span>}
+                      {dbLoading && <span className="text-xs text-slate-500 dark:text-slate-300">Searching...</span>}
                     </div>
                     <div className="mt-3 rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-xs text-emerald-800 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-200">
                       <span className="font-semibold">Policy:</span> `two_step` is usually best for curated INDRA DB statements because it preserves more mechanism.
@@ -599,14 +600,14 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
 
               <div className="flex min-h-[320px] flex-col rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
                 <div className="mb-2 flex items-center justify-between">
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
                     Extracted Statements
                   </h3>
                   <span className="text-xs text-slate-400">{currentStatements.length} found</span>
                 </div>
                 <div className="min-h-0 flex-1 overflow-y-auto rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-800">
                   {currentStatements.length === 0 ? (
-                    <div className="p-4 text-sm text-slate-500 dark:text-slate-400">
+                    <div className="p-4 text-sm text-slate-500 dark:text-slate-300">
                       {checkingIndraAvailability ? 'Checking INDRA availability...' : 'Run an INDRA action to populate statements for review.'}
                     </div>
                   ) : (
@@ -623,7 +624,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                             <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100" title={statement.english}>
                               {statement.english}
                             </div>
-                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                            <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">
                               {statement.statement.type} · {statement.sourceType.toUpperCase()} · {statementBadgeText(statement)}
                             </div>
                           </div>
@@ -648,7 +649,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
             <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
               <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Generated BNGL</h3>
+                  <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Generated BNGL</h3>
                   <span className="text-xs text-slate-400">{previewLineCount(assembledBNGL)}</span>
                 </div>
                 <Button
@@ -694,7 +695,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
             <div className="flex items-start justify-between gap-4">
               <div>
                 <h3 className="text-lg font-semibold">INDRA Guide</h3>
-                <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
+                <p className="mt-1 text-sm text-slate-500 dark:text-slate-300">
                   INDRA assembles natural-language or literature-backed statements into BNGL. The assembly policy controls how detailed the generated mechanism is.
                 </p>
               </div>
@@ -710,9 +711,9 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                   rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                 >
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Docs</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Docs</div>
                   <div className="mt-1 font-semibold">INDRA REST API Docs</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">ReadTheDocs reference for the REST service.</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">ReadTheDocs reference for the REST service.</div>
                 </a>
                 <a
                   href={INDRA_API_URL}
@@ -720,9 +721,9 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                   rel="noopener noreferrer"
                   className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-3 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700"
                 >
-                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">Live API</div>
+                  <div className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Live API</div>
                   <div className="mt-1 font-semibold">api.indra.bio</div>
-                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-400">Swagger UI for the currently deployed INDRA endpoints.</div>
+                  <div className="mt-1 text-xs text-slate-500 dark:text-slate-300">Swagger UI for the currently deployed INDRA endpoints.</div>
                 </a>
               </div>
               <div>

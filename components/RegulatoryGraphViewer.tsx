@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import { escapeXml } from '@bngplayground/engine';
 import { useTheme } from '../hooks/useTheme';
 import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
@@ -196,11 +197,11 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
             width: 'label',
             height: 'label',
             padding: '8px',
-            color: '#000000',
+            color: theme === 'dark' ? '#F8FAFC' : '#111827',
             'text-valign': 'center',
             'text-halign': 'center',
             label: 'data(label)',
-            'font-size': 14, // BNG 14pt
+            'font-size': '14px', // BNG 14pt
           },
         },
         {
@@ -213,11 +214,11 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
             width: 'label',
             height: 'label',
             padding: '8px',
-            color: '#000000',
+            color: theme === 'dark' ? '#F8FAFC' : '#111827',
             'text-valign': 'center',
             'text-halign': 'center',
             label: 'data(label)',
-            'font-size': 14, // BNG 14pt
+            'font-size': '14px', // BNG 14pt
           },
         },
         {
@@ -234,16 +235,16 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
         {
           selector: 'edge[type = "reactant"]',
           style: {
-            'line-color': '#000000', // BNG yEd black
-            'target-arrow-color': '#000000',
+            'line-color': theme === 'dark' ? '#cbd5e1' : '#000000', // BNG yEd black
+            'target-arrow-color': theme === 'dark' ? '#cbd5e1' : '#000000',
             'target-arrow-shape': 'triangle', // BNG 'standard'
           },
         },
         {
           selector: 'edge[type = "product"]',
           style: {
-            'line-color': '#000000', // BNG yEd black
-            'target-arrow-color': '#000000',
+            'line-color': theme === 'dark' ? '#cbd5e1' : '#000000', // BNG yEd black
+            'target-arrow-color': theme === 'dark' ? '#cbd5e1' : '#000000',
             'target-arrow-shape': 'triangle', // BNG 'standard'
           },
         },
@@ -402,16 +403,6 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
       inhibition: { fill: '#FF9999', sourceArrow: 'none', targetArrow: 'standard' },
     };
 
-    // Helper to escape XML special characters
-    const escapeXml = (str: string): string => {
-      return str
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;')
-        .replace(/'/g, '&apos;');
-    };
-
     // Generate GraphML content (matching BioNetGen format)
     let graphml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>
 <graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:java="http://www.yworks.com/xml/yfiles-common/1.0/java" xmlns:sys="http://www.yworks.com/xml/yfiles-common/markup/primitives/2.0" xmlns:x="http://www.yworks.com/xml/yfiles-common/markup/2.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns:y="http://www.yworks.com/xml/graphml" xmlns:yed="http://www.yworks.com/xml/yed/3" xsi:schemaLocation="http://graphml.graphdrawing.org/xmlns http://www.yworks.com/xml/schema/graphml/1.1/ygraphml.xsd">
@@ -434,7 +425,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
       const type = node.data('type') || 'species';
       const style = nodeStyles[type] || nodeStyles.species;
 
-      graphml += `    <node id="${bngId}">
+      graphml += `    <node id="${escapeXml(bngId)}">
       <data key="d0">
         <y:ShapeNode>
           <y:Fill color="${style.fill}"/>
@@ -464,7 +455,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
       edgeCountMap.set(sourceId, edgeNum + 1);
       const edgeId = `${sourceId}::e${edgeNum}`;
 
-      graphml += `    <edge id="${edgeId}" source="${sourceId}" target="${targetId}">
+      graphml += `    <edge id="${escapeXml(edgeId)}" source="${escapeXml(sourceId)}" target="${escapeXml(targetId)}">
     <data key="d1">
       <y:PolyLineEdge>
         <y:LineStyle color="${style.fill}" type="line" width="1"/>

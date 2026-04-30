@@ -47,6 +47,23 @@ interface PLAReaction {
   propensity: number;
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function isSafeObjectKey(key: string): boolean {
+  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
+}
+
+function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
 /**
  * Configuration options governing the behavior of the Partitioned Leaping Algorithm (PLA).
  */
@@ -419,10 +436,18 @@ export class PLASimulator {
         const rxn = reactions[esRxnIdx];
         // Fire once
         for (let j = 0; j < rxn.reactants.length; j++) {
-          state[rxn.reactants[j]]--;
+          const reactantIndex = rxn.reactants[j];
+          if (reactantIndex < 0 || reactantIndex >= state.length) {
+            throw new Error(`[PLASimulator] Reactant index out of bounds: ${reactantIndex}`);
+          }
+          state[reactantIndex]--;
         }
         for (let j = 0; j < rxn.products.length; j++) {
-          state[rxn.products[j]]++;
+          const productIndex = rxn.products[j];
+          if (productIndex < 0 || productIndex >= state.length) {
+            throw new Error(`[PLASimulator] Product index out of bounds: ${productIndex}`);
+          }
+          state[productIndex]++;
         }
       }
     } else {
@@ -451,10 +476,18 @@ export class PLASimulator {
       if (fireES && esRxnIdx >= 0 && reactions[esRxnIdx].propensity > 0) {
         const rxn = reactions[esRxnIdx];
         for (let j = 0; j < rxn.reactants.length; j++) {
-          state[rxn.reactants[j]]--;
+          const reactantIndex = rxn.reactants[j];
+          if (reactantIndex < 0 || reactantIndex >= state.length) {
+            throw new Error(`[PLASimulator] Reactant index out of bounds: ${reactantIndex}`);
+          }
+          state[reactantIndex]--;
         }
         for (let j = 0; j < rxn.products.length; j++) {
-          state[rxn.products[j]]++;
+          const productIndex = rxn.products[j];
+          if (productIndex < 0 || productIndex >= state.length) {
+            throw new Error(`[PLASimulator] Product index out of bounds: ${productIndex}`);
+          }
+          state[productIndex]++;
         }
       }
     }
@@ -524,7 +557,25 @@ export class PLASimulator {
       
       let patterns = [obs.pattern];
       if (obs.pattern.includes(',') && !obs.pattern.includes('(')) {
-         patterns = obs.pattern.split(',').map(p => p.trim()).filter(Boolean);
+        patterns = [];
+        let inWord = false;
+        let wordStart = 0;
+        let wordEnd = 0;
+        const pLen = obs.pattern.length;
+        for (let i = 0; i < pLen; i++) {
+          const char = obs.pattern.charCodeAt(i);
+          if (char === 44) { // ','
+            if (inWord) patterns.push(obs.pattern.substring(wordStart, wordEnd + 1));
+            inWord = false;
+          } else if (char !== 32) { // ' '
+            if (!inWord) {
+              inWord = true;
+              wordStart = i;
+            }
+            wordEnd = i;
+          }
+        }
+        if (inWord) patterns.push(obs.pattern.substring(wordStart, wordEnd + 1));
       }
       
       for (let i = 0; i < numSpecies; i++) {
@@ -541,17 +592,18 @@ export class PLASimulator {
     }
 
     const evaluateObservables = (currentState: Float64Array): Record<string, number> => {
-      const row: Record<string, number> = {};
+      const row: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const obs of model.observables) {
+        if (obs.name === '__proto__' || obs.name === 'constructor' || obs.name === 'prototype') continue;
         const info = observableIndices.get(obs.name);
         if (info) {
           let sum = 0;
           for (let j = 0; j < info.indices.length; j++) {
             sum += currentState[info.indices[j]] * info.coefficients[j];
           }
-          row[obs.name] = sum;
+          setSafeNumberField(row, obs.name, sum);
         } else {
-          row[obs.name] = 0;
+          setSafeNumberField(row, obs.name, 0);
         }
       }
       return row;

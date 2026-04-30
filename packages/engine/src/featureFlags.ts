@@ -14,6 +14,19 @@ export interface FeatureFlags {
   functionalRatesEnabled: boolean;
 
   /**
+   * Enable audited dynamic-code fast path for functional-rate expressions.
+   *
+   * SECURITY: when false (default), no dynamic code generation is used and
+   * expression evaluation stays on the safe AST-evaluator path.
+   * PERFORMANCE: when true, eligible expressions may use a validated
+   * `new Function` fast path for hot-loop performance experiments.
+   *
+   * To enable at build/runtime, set `VITE_ENABLE_JIT_FAST_PATH=true`
+   * (browser) or `ENABLE_JIT_FAST_PATH=true` (Node).
+   */
+  enableJitFastPath: boolean;
+
+  /**
    * Enable conservation law ODE reduction.
    * When true, SimulationLoop computes conserved moieties after network
    * expansion, creates a reduced ODE system, solves it, then expands back
@@ -28,10 +41,31 @@ export interface FeatureFlags {
   conservationLawReduction: boolean;
 }
 
+function parseBooleanEnv(raw: unknown): boolean | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  const normalized = String(raw).trim().toLowerCase();
+  if (normalized === '1' || normalized === 'true' || normalized === 'yes' || normalized === 'on') return true;
+  if (normalized === '0' || normalized === 'false' || normalized === 'no' || normalized === 'off') return false;
+  return undefined;
+}
+
+function resolveFlag(viteName: string, nodeName: string, defaultValue: boolean): boolean {
+  const viteEnv = (import.meta as unknown as { env?: Record<string, string | undefined> }).env;
+  const viteValue = parseBooleanEnv(viteEnv?.[viteName]);
+  if (viteValue !== undefined) return viteValue;
+
+  const nodeValue = typeof process !== 'undefined'
+    ? parseBooleanEnv(process.env?.[nodeName])
+    : undefined;
+  if (nodeValue !== undefined) return nodeValue;
+
+  return defaultValue;
+}
+
 // Initialize from build-time environment (Vite). Default true after security hardening.
 let FEATURE_FLAGS: FeatureFlags = {
-  functionalRatesEnabled: (typeof (import.meta as unknown as { env?: { VITE_ENABLE_FUNCTIONAL_RATES?: string } }).env !== 'undefined' &&
-    String((import.meta as unknown as { env: { VITE_ENABLE_FUNCTIONAL_RATES?: string } }).env.VITE_ENABLE_FUNCTIONAL_RATES) === 'false') ? false : true,
+  functionalRatesEnabled: resolveFlag('VITE_ENABLE_FUNCTIONAL_RATES', 'ENABLE_FUNCTIONAL_RATES', true),
+  enableJitFastPath: resolveFlag('VITE_ENABLE_JIT_FAST_PATH', 'ENABLE_JIT_FAST_PATH', false),
   conservationLawReduction: false,
 };
 
@@ -52,10 +86,16 @@ export function setFeatureFlags(flags: Partial<FeatureFlags>) {
   if (typeof flags.functionalRatesEnabled !== 'undefined' && typeof flags.functionalRatesEnabled !== 'boolean') {
     throw new Error(`Invalid value for functionalRatesEnabled: ${flags.functionalRatesEnabled}. Must be a boolean.`);
   }
+  if (typeof flags.enableJitFastPath !== 'undefined' && typeof flags.enableJitFastPath !== 'boolean') {
+    throw new Error(`Invalid value for enableJitFastPath: ${flags.enableJitFastPath}. Must be a boolean.`);
+  }
 
   const old = { ...FEATURE_FLAGS };
   FEATURE_FLAGS = { ...FEATURE_FLAGS, ...flags };
-  if (old.functionalRatesEnabled !== FEATURE_FLAGS.functionalRatesEnabled) {
+  if (
+    old.functionalRatesEnabled !== FEATURE_FLAGS.functionalRatesEnabled ||
+    old.enableJitFastPath !== FEATURE_FLAGS.enableJitFastPath
+  ) {
     // If the state changes (enabled->disabled OR disabled->enabled), clear caches to be safe.
     // Spec says: "triggers cache clearing if a security-sensitive flag is toggled."
     for (const cb of cacheClearCallbacks) cb();

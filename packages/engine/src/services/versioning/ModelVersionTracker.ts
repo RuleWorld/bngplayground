@@ -58,31 +58,90 @@ interface ParsedSection {
     rules: Map<string, string>;
 }
 
+function stripInlineComment(line: string): string {
+    const commentIdx = line.indexOf('#');
+    return (commentIdx === -1 ? line : line.slice(0, commentIdx)).trim();
+}
+
+function collapseWhitespace(text: string): string {
+    let result = '';
+    let pendingSpace = false;
+
+    for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        const isWhitespace = ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === '\v';
+        if (isWhitespace) {
+            pendingSpace = result.length > 0;
+            continue;
+        }
+        if (pendingSpace) {
+            result += ' ';
+            pendingSpace = false;
+        }
+        result += ch;
+    }
+
+    return result;
+}
+
 function extractSection(code: string, sectionName: string): string[] {
-    // Match begin <name> ... end <name> (case-insensitive)
-    const regex = new RegExp(
-        `begin\\s+${sectionName}\\s*\\n([\\s\\S]*?)\\nend\\s+${sectionName}`,
-        'i',
-    );
-    const match = code.match(regex);
-    if (!match) return [];
-    return match[1]
-        .split('\n')
-        .map(l => l.trim())
-        .filter(l => l.length > 0 && !l.startsWith('#'));
+    const normalizedSection = collapseWhitespace(sectionName.toLowerCase());
+    const lines = code.split('\n');
+    const sectionLines: string[] = [];
+    let inSection = false;
+
+    for (const rawLine of lines) {
+        const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+        const normalizedLine = collapseWhitespace(line.toLowerCase());
+
+        if (!inSection) {
+            if (normalizedLine === `begin ${normalizedSection}`) {
+                inSection = true;
+            }
+            continue;
+        }
+
+        if (normalizedLine === `end ${normalizedSection}`) {
+            break;
+        }
+
+        const stripped = stripInlineComment(line).trim();
+        if (stripped.length > 0) {
+            sectionLines.push(stripped);
+        }
+    }
+
+    return sectionLines;
 }
 
 function normalizeWhitespace(s: string): string {
-    return s.replace(/\s+/g, ' ').trim();
+    return collapseWhitespace(s);
 }
 
 function parseParameters(lines: string[]): Map<string, string> {
     const m = new Map<string, string>();
     for (const line of lines) {
         // name value  or  name=value  or  name  value  # comment
-        const stripped = line.replace(/#.*$/, '').trim();
+        const stripped = stripInlineComment(line);
         if (!stripped) continue;
-        const parts = stripped.split(/[\s=]+/);
+        const eqIdx = stripped.indexOf('=');
+
+        if (eqIdx >= 0) {
+            const left = collapseWhitespace(stripped.slice(0, eqIdx));
+            const right = collapseWhitespace(stripped.slice(eqIdx + 1));
+            if (!left) continue;
+
+            const leftParts = left.split(' ').filter(Boolean);
+            if (leftParts.length === 0) continue;
+
+            const name = leftParts[0];
+            const leftRemainder = leftParts.slice(1).join(' ');
+            const expr = [leftRemainder, right].filter(Boolean).join(' ').trim();
+            m.set(name, expr);
+            continue;
+        }
+
+        const parts = collapseWhitespace(stripped).split(' ').filter(Boolean);
         if (parts.length >= 2) {
             m.set(parts[0], parts.slice(1).join(' '));
         } else if (parts.length === 1) {
@@ -95,12 +154,14 @@ function parseParameters(lines: string[]): Map<string, string> {
 function parseMoleculeTypes(lines: string[]): Map<string, string> {
     const m = new Map<string, string>();
     for (const line of lines) {
-        const stripped = line.replace(/#.*$/, '').trim();
+        const stripped = stripInlineComment(line);
         if (!stripped) continue;
         // Molecule type name is the part before the first '(' or the whole line
-        const nameMatch = stripped.match(/^(\S+)/);
-        if (nameMatch) {
-            m.set(nameMatch[1], normalizeWhitespace(stripped));
+        const firstTokenEnd = stripped.search(/[\s(]/);
+        if (firstTokenEnd > 0) {
+            m.set(stripped.slice(0, firstTokenEnd), normalizeWhitespace(stripped));
+        } else if (firstTokenEnd === -1) {
+            m.set(stripped, normalizeWhitespace(stripped));
         }
     }
     return m;
@@ -109,7 +170,7 @@ function parseMoleculeTypes(lines: string[]): Map<string, string> {
 function parseSpecies(lines: string[]): Map<string, string> {
     const m = new Map<string, string>();
     for (const line of lines) {
-        const stripped = line.replace(/#.*$/, '').trim();
+        const stripped = stripInlineComment(line);
         if (!stripped) continue;
         // Species lines: pattern  initial_value
         const parts = stripped.split(/\s+/);
@@ -123,7 +184,7 @@ function parseSpecies(lines: string[]): Map<string, string> {
 function parseObservables(lines: string[]): Map<string, string> {
     const m = new Map<string, string>();
     for (const line of lines) {
-        const stripped = line.replace(/#.*$/, '').trim();
+        const stripped = stripInlineComment(line);
         if (!stripped) continue;
         // Observables: Type Name Pattern
         const parts = stripped.split(/\s+/);
@@ -137,12 +198,13 @@ function parseObservables(lines: string[]): Map<string, string> {
 function parseRules(lines: string[]): Map<string, string> {
     const m = new Map<string, string>();
     for (const line of lines) {
-        const stripped = line.replace(/#.*$/, '').trim();
+        const stripped = stripInlineComment(line);
         if (!stripped) continue;
         // Use the rule name if prefixed with "name:", otherwise use normalized rule text as key
-        const namedMatch = stripped.match(/^(\w+)\s*:\s*(.*)/);
-        if (namedMatch) {
-            m.set(namedMatch[1], normalizeWhitespace(namedMatch[2]));
+        const colonIdx = stripped.indexOf(':');
+        const nameToken = colonIdx > 0 ? stripped.slice(0, colonIdx).trim() : '';
+        if (colonIdx > 0 && /^[A-Za-z0-9_]+$/.test(nameToken)) {
+            m.set(nameToken, normalizeWhitespace(stripped.slice(colonIdx + 1)));
         } else {
             // Use the rule pattern (everything before the rate) as key for stable diffing
             const normalized = normalizeWhitespace(stripped);
@@ -159,15 +221,15 @@ function parseRules(lines: string[]): Map<string, string> {
 function parseBNGL(code: string): ParsedSection {
     return {
         parameters: parseParameters(extractSection(code, 'parameters')),
-        moleculeTypes: parseMoleculeTypes(extractSection(code, 'molecule\\s*types')),
+        moleculeTypes: parseMoleculeTypes(extractSection(code, 'molecule types')),
         species: parseSpecies(
             [
                 ...extractSection(code, 'species'),
-                ...extractSection(code, 'seed\\s*species'),
+                ...extractSection(code, 'seed species'),
             ],
         ),
         observables: parseObservables(extractSection(code, 'observables')),
-        rules: parseRules(extractSection(code, 'reaction\\s*rules')),
+        rules: parseRules(extractSection(code, 'reaction rules')),
     };
 }
 
@@ -260,7 +322,15 @@ function generateId(): string {
     try {
         return crypto.randomUUID();
     } catch {
-        return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        // Secure fallback if crypto.randomUUID is somehow unavailable
+        try {
+            const arr = new Uint32Array(2);
+            crypto.getRandomValues(arr);
+            return Date.now().toString(36) + arr[0].toString(36) + arr[1].toString(36);
+        } catch {
+            // Final fallback to Math.random if crypto is completely unavailable (e.g., extremely old environments)
+            return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+        }
     }
 }
 

@@ -17,7 +17,7 @@ import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { NautyService } from '@bngplayground/engine';
 import { createSolver } from '@bngplayground/engine';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { resolveBNG2Paths } from '../bng2-paths';
 import { findRuleHubModelPath, resolveRuleHubRoot } from '../rulehubLocal';
 
@@ -224,7 +224,7 @@ function runBNG2ForTiming(modelPath: string, modelName: string, tempDir: string)
     fs.writeFileSync(tempBnglPath, bnglContent);
 
     const start = performance.now();
-    execSync(`perl BNG2.pl "${tempBnglPath}"`, {
+    execFileSync('perl', ['BNG2.pl', tempBnglPath], {
       cwd: BNG2_DIR,
       timeout: 120000,
       stdio: 'ignore'
@@ -294,6 +294,30 @@ async function runFullSimulation(modelName: string, modelPath: string, bng2Speci
   ): ((context: Record<string, number>) => number) => {
     const cached = compiledRateFunctions.get(expandedExpr);
     if (cached !== undefined) return cached;
+
+    // SECURITY: Validate expression to prevent code injection via new Function
+    // eslint-disable-next-line no-useless-escape
+    if (/[;{}=\\`$\[\]]/.test(expandedExpr)) {
+      console.warn(`[getCompiledRateFunction] Unsafe characters detected in expression: '${expandedExpr}'`);
+      const zeroFn = () => 0;
+      compiledRateFunctions.set(expandedExpr, zeroFn);
+      return zeroFn;
+    }
+
+    const identifiers = expandedExpr.match(/[a-zA-Z_][a-zA-Z0-9_]*/g) || [];
+    const safeIdentifiers = new Set([
+      'Math', 'sin', 'cos', 'tan', 'exp', 'log', 'log10', 'sqrt', 'abs', 'min', 'max', 'e', 'E', 'pi', 'PI'
+    ]);
+    const varNamesSet = new Set(varNames);
+
+    for (const id of identifiers) {
+      if (!varNamesSet.has(id) && !safeIdentifiers.has(id)) {
+        console.warn(`[getCompiledRateFunction] Unsafe or unknown identifier '${id}' detected in expression: '${expandedExpr}'`);
+        const zeroFn = () => 0;
+        compiledRateFunctions.set(expandedExpr, zeroFn);
+        return zeroFn;
+      }
+    }
 
     const sortedNames = [...varNames].sort((a, b) => b.length - a.length);
     let jsExpr = expandedExpr;

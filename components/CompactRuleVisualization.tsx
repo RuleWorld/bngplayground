@@ -8,7 +8,7 @@ const operationStyles: Record<RuleOperation['type'], string> = {
   unbind: 'bg-rose-500 text-white',
   state_change: 'bg-sky-500 text-white',
   add_molecule: 'bg-violet-500 text-white',
-  remove_molecule: 'bg-slate-50 dark:bg-slate-900/50 text-white',
+  remove_molecule: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-100',
 };
 
 const operationLabel: Record<RuleOperation['type'], string> = {
@@ -92,7 +92,7 @@ export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps
     >
       <div className="mb-3 flex items-center justify-between gap-4">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{displayName}</span>
-        <span className="text-xs font-mono text-slate-500 dark:text-slate-400">k = {rule.rate}</span>
+        <span className="text-xs font-mono text-slate-500 dark:text-slate-300">k = {rule.rate}</span>
       </div>
       {classification && (
         <div className="mb-4 rounded-md border border-slate-100 bg-slate-50 p-2 text-xs text-slate-600 dark:border-slate-700/70 dark:bg-slate-800/60 dark:text-slate-300">
@@ -103,13 +103,13 @@ export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps
         </div>
       )}
       {rule.context.length && rule.comment && (
-        <div className="mb-2 text-xs italic text-slate-500 dark:text-slate-400">{(rule as any).comment}</div>
+        <div className="mb-2 text-xs italic text-slate-500 dark:text-slate-300">{(rule as any).comment}</div>
       )}
       <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_minmax(0,1.5fr)]">
         <div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Context</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Context</div>
           {rule.context.length === 0 ? (
-            <div className="text-xs text-slate-500 dark:text-slate-400">No explicit reactant context.</div>
+            <div className="text-xs text-slate-500 dark:text-slate-300">No explicit reactant context.</div>
           ) : (
             <div className="space-y-2">
               {rule.context.map((molecule, idx) => (
@@ -133,7 +133,7 @@ export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps
           )}
         </div>
         <div>
-          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Operations</div>
+          <div className="mb-2 text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-300">Operations</div>
           {hasOperations ? (
             <div className="flex flex-wrap gap-3">
               {rule.operations.map((operation, idx) => (
@@ -147,7 +147,7 @@ export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps
               ))}
             </div>
           ) : (
-            <div className="text-xs text-slate-500 dark:text-slate-400">No net change detected.</div>
+            <div className="text-xs text-slate-500 dark:text-slate-300">No net change detected.</div>
           )}
         </div>
       </div>

@@ -1,7 +1,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { findRuleHubModelPath, resolveRuleHubRoot } from '../../tools/rulehubLocal';
 
@@ -66,13 +66,12 @@ for (const model of missingModels) {
         const workBnglPath = path.join(workDir, `${model}.bngl`);
         fs.copyFileSync(bnglPath, workBnglPath);
 
-        const cmd = `${PERL_CMD} "${BNG2_PATH}" "${workBnglPath}"`;
-        console.log(`Running: ${cmd}`);
+        console.log(`Running: ${PERL_CMD} "${BNG2_PATH}" "${workBnglPath}"`);
 
         let success = true;
         let errorOutput = '';
         try {
-            execSync(cmd, { cwd: workDir, stdio: [0, 'pipe', 'pipe'] });
+            execFileSync(PERL_CMD, [BNG2_PATH, workBnglPath], { cwd: workDir, stdio: [0, 'pipe', 'pipe'] });
         } catch (e: any) {
             console.error(`❌ BNG2 execution failed for ${model}`);
             success = false;

@@ -126,7 +126,11 @@ export async function scoreStructure(
   const k = activeRules.length;
 
   // Extract rate parameter names from rules
-  const rateNames = activeRules.map((r) => extractRateName(r.rule)).filter(Boolean) as string[];
+  const rateNames = activeRules.reduce<string[]>((acc, r) => {
+    const name = extractRateName(r.rule);
+    if (name) acc.push(name);
+    return acc;
+  }, []);
 
   // Build bounds for the rate parameters
   const bounds: Record<string, [number, number]> = {};

@@ -132,12 +132,39 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // sorted state order to avoid double-counting.
       // Fallback (no molecule-type info or expansion failed): strip %n to ~? wildcard.
 
+      function findNamedBlock(source: string, beginName: string, endName: string): {
+        openStart: number;
+        openEnd: number;
+        bodyStart: number;
+        bodyEnd: number;
+        closeStart: number;
+        closeEnd: number;
+      } | null {
+        const lower = source.toLowerCase();
+        const beginToken = `begin ${beginName}`;
+        const endToken = `end ${endName}`;
+        const openStart = lower.indexOf(beginToken);
+        if (openStart < 0) return null;
+
+        const openLineEnd = source.indexOf('\n', openStart);
+        const openEnd = openLineEnd >= 0 ? openLineEnd : source.length;
+        const bodyStart = openEnd < source.length ? openEnd + 1 : openEnd;
+        const closeStart = lower.indexOf(endToken, bodyStart);
+        if (closeStart < 0) return null;
+
+        let closeEnd = source.indexOf('\n', closeStart);
+        if (closeEnd < 0) closeEnd = source.length;
+
+        const bodyEnd = closeStart;
+        return { openStart, openEnd, bodyStart, bodyEnd, closeStart, closeEnd };
+      }
+
       // ── helper: extract molecule-type component states ──────────────────────
       function extractMolCompStates(src: string): Map<string, Map<string, string[]>> {
         const result = new Map<string, Map<string, string[]>>();
-        const block = src.match(/begin\s+molecule\s+types\s*[\r\n]+([\s\S]*?)end\s+molecule\s+types/i);
+        const block = findNamedBlock(src, 'molecule types', 'molecule types');
         if (!block) return result;
-        for (const line of block[1].split(/\r?\n/)) {
+        for (const line of src.slice(block.bodyStart, block.bodyEnd).split(/\r?\n/)) {
           const t = line.trim();
           if (!t || t.startsWith('#')) continue;
           const mm = t.match(/^([A-Za-z_][A-Za-z0-9_]*)\(([^)]*)\)/);
@@ -263,10 +290,11 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
 
       // ── apply expansion to reaction rules block ────────────────────────────
       const molCompStates = extractMolCompStates(next);
-      const rulesBlockRe =
-        /(begin\s+reaction\s+rules\s*[\r\n]+)([\s\S]*?)([\r\n]+end\s+reaction\s+rules)/i;
       if (/%[A-Za-z0-9_]+/.test(next) && molCompStates.size > 0) {
-        const expandedSrc = next.replace(rulesBlockRe, (_full, open, body, close) => {
+        const ruleBlock = findNamedBlock(next, 'reaction rules', 'reaction rules');
+        let expandedSrc = next;
+        if (ruleBlock) {
+          const body = next.slice(ruleBlock.bodyStart, ruleBlock.bodyEnd);
           const lines = body.split(/\r?\n/);
           const outLines: string[] = [];
           for (const line of lines) {
@@ -279,11 +307,11 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
             if (expanded) {
               outLines.push(...expanded);
             } else {
-              outLines.push(line); // fallback: keep original
+              outLines.push(line);
             }
           }
-          return open + outLines.join('\n') + close;
-        });
+          expandedSrc = `${next.slice(0, ruleBlock.bodyStart)}${outLines.join('\n')}${next.slice(ruleBlock.bodyEnd)}`;
+        }
         if (expandedSrc !== next) {
           warnings.push('Expanded state-inheritance "%" labels into concrete rules (BNG2 style).');
           next = expandedSrc;
@@ -311,7 +339,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         let prev = i - 1;
         while (prev >= 0 && foldedLines[prev].trim() === '') prev--;
         if (prev >= 0 && !/^\s*#/.test(foldedLines[prev])) {
-          foldedLines[prev] = `${foldedLines[prev].replace(/\s+$/,'')} ${line.trim()}`;
+          foldedLines[prev] = `${foldedLines[prev].trimEnd()} ${line.trim()}`;
           foldedLines[i] = '';
           foldedStandaloneModifierLines = true;
         }

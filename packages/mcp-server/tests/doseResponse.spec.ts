@@ -90,4 +90,23 @@ describe('dose_response handler', () => {
             expect(responses[i]).toBeGreaterThanOrEqual(responses[i - 1] - 0.1);
         }
     }, 30000);
+
+      it('supports simulate method and returns non-empty curves', async () => {
+        const result = await handleDoseResponse({
+          code: SATURATION_MODEL,
+          input_parameter: 'L_total',
+          input_min: 0.1,
+          input_max: 1000,
+          observables: ['Bound'],
+          method: 'simulate',
+          n_points: 12,
+          t_end: 100,
+          log_scale: true,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.methodUsed).toBe('simulate');
+        expect(body.curves[0].doses.length).toBeGreaterThan(0);
+        expect(body.curves[0].responses.length).toBe(body.curves[0].doses.length);
+      }, 30000);
 });

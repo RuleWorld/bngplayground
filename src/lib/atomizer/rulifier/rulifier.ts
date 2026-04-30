@@ -6,7 +6,6 @@
  */
 
 import { Species, Molecule, Component, Rule, Action } from '../core/structures';
-import { Counter, DefaultDict, deepCopy } from '../utils/helpers';
 
 // =============================================================================
 // Types

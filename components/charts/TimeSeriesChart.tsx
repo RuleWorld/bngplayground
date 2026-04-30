@@ -66,7 +66,7 @@ function buildEquidistantTicks(min: number, max: number, count = 6): number[] {
  * Standard TimeSeriesChart for BioNetGen simulation results.
  * Abstracted for UI consistency across the app.
  */
-export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
+export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
   data,
   series,
   visibleSeries,
@@ -175,14 +175,21 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       const hi = Math.max(xAxisDomain[0], xAxisDomain[1]);
 
       if (xAxisScale === 'log') {
-        const positiveRaw = data
-          .map((point) => Number(point?.[xAxisKey]))
-          .filter((value) => Number.isFinite(value) && value > 0);
+        let fallbackMin = Infinity;
+        let fallbackMax = -Infinity;
+        let hasData = false;
 
-        if (positiveRaw.length === 0) return undefined;
+        for (let i = 0; i < data.length; i++) {
+          const val = Number(data[i]?.[xAxisKey]);
+          if (Number.isFinite(val) && val > 0) {
+            hasData = true;
+            if (val < fallbackMin) fallbackMin = val;
+            if (val > fallbackMax) fallbackMax = val;
+          }
+        }
 
-        const fallbackMin = Math.min(...positiveRaw);
-        const fallbackMax = Math.max(...positiveRaw);
+        if (!hasData) return undefined;
+
         const minRaw = lo > 0 ? lo : fallbackMin;
         const maxRaw = hi > 0 ? hi : fallbackMax;
         const domainMin = Math.log10(Math.min(minRaw, maxRaw));
@@ -193,11 +200,21 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       return [lo, hi];
     }
 
-    const values = plotData
-      .map((point) => Number(point?.[displayXKey]))
-      .filter((value) => Number.isFinite(value));
-    if (values.length === 0) return undefined;
-    return [Math.min(...values), Math.max(...values)];
+    let valMin = Infinity;
+    let valMax = -Infinity;
+    let hasValidValues = false;
+
+    for (let i = 0; i < plotData.length; i++) {
+      const val = Number(plotData[i]?.[displayXKey]);
+      if (Number.isFinite(val)) {
+        hasValidValues = true;
+        if (val < valMin) valMin = val;
+        if (val > valMax) valMax = val;
+      }
+    }
+
+    if (!hasValidValues) return undefined;
+    return [valMin, valMax];
   }, [currentDomain, xAxisDomain, xAxisScale, data, xAxisKey, plotData, displayXKey]);
 
   const xTicks = useMemo(() => {
@@ -333,13 +350,13 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mr-2">Scale</span>
           <button
             onClick={() => { setXAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
-            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             X: {xAxisScale.toUpperCase()}
           </button>
           <button
             onClick={() => { setYAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
-            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}
+            className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             Y: {yAxisScale.toUpperCase()}
           </button>
@@ -349,7 +366,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
           {zoomHistory.length > 0 && (
             <button
               onClick={() => setZoomHistory([])}
-              className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 underline underline-offset-2"
+              className="ml-2 px-2 py-0.5 text-[10px] font-semibold rounded bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 underline underline-offset-2"
             >
               Reset View
             </button>
@@ -358,15 +375,15 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = ({
       )}
     </div>
   );
-};
+});
 
-const CustomTooltip = ({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: any) => {
+const CustomTooltip = React.memo(({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: any) => {
   if (active && payload && payload.length) {
     const displayLabel = xAxisScale === 'log' ? Math.pow(10, Number(label)) : Number(label);
     
     return (
       <div className="bg-white/95 dark:bg-slate-900/95 p-3 border border-slate-200 dark:border-slate-800 rounded-lg shadow-xl backdrop-blur-sm min-w-[160px]">
-        <div className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
+        <div className="text-[10px] font-bold text-slate-400 dark:text-slate-300 uppercase tracking-wider mb-2 border-b border-slate-100 dark:border-slate-800 pb-1">
           {xAxisLabel}: {formatValue(displayLabel)}
         </div>
         <div className="space-y-1.5">
@@ -389,4 +406,4 @@ const CustomTooltip = ({ active, payload, label, xAxisLabel, xAxisScale, yAxisSc
     );
   }
   return null;
-};
+});

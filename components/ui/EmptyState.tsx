@@ -22,7 +22,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
     return (
         <div className={`flex flex-col items-center justify-center p-8 text-center h-full min-h-[300px] ${className}`}>
             {icon && (
-                <div className="mb-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 dark:text-slate-500">
+                <div className="mb-4 p-4 bg-slate-100 dark:bg-slate-800 rounded-full text-slate-400 dark:text-slate-300">
                     {React.cloneElement(icon as React.ReactElement<{ className?: string }>, { className: "w-8 h-8" })}
                 </div>
             )}
@@ -31,7 +31,7 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
                 {title}
             </h3>
 
-            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-sm mb-6 leading-relaxed">
+            <p className="text-sm text-slate-500 dark:text-slate-300 max-w-sm mb-6 leading-relaxed">
                 {description}
             </p>
 

@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { Atomizer } from '../../src/lib/atomizer/index.ts';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { listRuleHubExampleModelFiles } from '../../tools/rulehubLocal';
@@ -51,15 +51,14 @@ function ensureDirs() {
 
 // Helper to run BNG2.pl
 function runBNG2(args: string[]) {
-    const cmd = `perl "${normalizePath(BNG2_PATH)}" ${args.map(arg => {
-        // If an argument is a path that's already quoted, normalize the path inside the quotes
+    const normalizedArgs = args.map(arg => {
         if (arg.startsWith('"') && arg.endsWith('"')) {
-            return `"${normalizePath(arg.slice(1, -1))}"`;
+            return normalizePath(arg.slice(1, -1));
         }
         return arg;
-    }).join(' ')}`;
+    });
     try {
-        execSync(cmd, { stdio: 'pipe' });
+        execFileSync('perl', [normalizePath(BNG2_PATH), ...normalizedArgs], { stdio: 'pipe' });
     } catch (e: any) {
         throw new Error(`BNG2 Failure: ${e.stderr?.toString() || e.message}`);
     }

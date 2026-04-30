@@ -11,6 +11,7 @@ describe('Diagnostic: Feature Flags and Rate Evaluation', () => {
   it('should have functionalRatesEnabled true by default', () => {
     const flags = getFeatureFlags();
     expect(flags.functionalRatesEnabled).toBe(true);
+    expect(flags.enableJitFastPath).toBe(false);
   });
 
   it('should evaluate simple parameter ka=0.01', () => {

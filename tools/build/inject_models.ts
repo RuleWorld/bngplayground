@@ -32,7 +32,11 @@ function main() {
 
     const modelObjects = validModels.map(filepath => {
         const name = path.basename(filepath, '.bngl');
-        const code = fs.readFileSync(filepath, 'utf-8').replace(/`/g, '\\`').replace(/\$\{/g, '\\${');
+        const code = fs
+            .readFileSync(filepath, 'utf-8')
+            .replace(/\\/g, '\\\\')
+            .replace(/`/g, '\\`')
+            .replace(/\$\{/g, '\\${');
         return { name, code };
     });
 

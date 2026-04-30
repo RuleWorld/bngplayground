@@ -28,15 +28,9 @@ import {
   similarity,
   longestCommonSubstring,
   Counter,
-  DefaultDict,
-  deepCopy,
   standardizeName,
   logger,
-  pmemoize,
-  CycleError,
-  BindingException,
 } from '../utils/helpers';
-import { getAnnotationsByQualifier, extractUniProtIds } from '../parser/sbmlParser';
 
 const DEP_CYCLE_LOG_LIMIT = Number(
   (typeof process !== 'undefined' && process.env?.ATOMIZER_DEP_CYCLE_LOG_LIMIT) || '20'

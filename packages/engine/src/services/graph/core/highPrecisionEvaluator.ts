@@ -386,7 +386,7 @@ export function evaluateExpressionHighPrecision(
     return result.toNumber();
 
   } catch (e) {
-    console.error(`[evaluateExpressionHighPrecision] Failed to evaluate: "${expr}"`, e);
+    console.error('[evaluateExpressionHighPrecision] Failed to evaluate expression:', expr, e);
     // Log stack trace
     if (e instanceof Error) console.error(e.stack);
     return NaN;

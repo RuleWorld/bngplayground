@@ -5,21 +5,11 @@
  */
 
 import fs from 'fs';
-import path from 'path';
 
 const compareFile = 'compare_results_fixed.txt';
 const content = fs.readFileSync(compareFile, 'utf-8');
 
-// Parse failure information
-interface FailureInfo {
-  model: string;
-  category: string;
-  maxRelError: number;
-  worstAt: string;
-  samples: Array<{ time: string; col: string; relError: number }>;
-}
-
-const failures: FailureInfo[] = [];
+const failures = [];
 
 // Extract failure blocks
 const failurePattern = /FAIL (\w+.*?)\s*\(ref=(.*?)\):([\s\S]*?)(?=FAIL|\n\s{0,2}[A-Z]|$)/g;
@@ -35,7 +25,7 @@ while ((match = failurePattern.exec(content)) !== null) {
   const maxRelError = relErrorMatch ? parseFloat(relErrorMatch[1]) : 0;
 
   // Extract sample errors
-  const samples: Array<{ time: string; col: string; relError: number }> = [];
+  const samples = [];
   const samplePattern = /t=([\d.eE+-]+):\s*(\w+)\s+web=.*?\((\d+\.?\d*)%\)/g;
   let sampleMatch;
   while ((sampleMatch = samplePattern.exec(details)) !== null) {
@@ -63,18 +53,19 @@ while ((match = failurePattern.exec(content)) !== null) {
     category = 'sbml';
   }
 
+  const worstAtMatch = details.match(/Worst at t=([\d.eE+-]+), col=(\w+)/);
+
   failures.push({
     model,
     category,
     maxRelError,
-    worstAt: details.match(/Worst at t=([\d.eE+-]+), col=(\w+)/) ? 
-      details.match(/Worst at t=([\d.eE+-]+), col=(\w+)/)![1] : 'unknown',
+    worstAt: worstAtMatch ? worstAtMatch[1] : 'unknown',
     samples
   });
 }
 
 // Group by category
-const byCategory: Record<string, FailureInfo[]> = {};
+const byCategory = {};
 for (const failure of failures) {
   if (!byCategory[failure.category]) {
     byCategory[failure.category] = [];

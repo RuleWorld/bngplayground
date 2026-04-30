@@ -1,7 +1,7 @@
 
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { spawnSync } from 'child_process';
 import os from 'os';
 
 function resolveRuleHubRoot(projectRoot: string): string | null {
@@ -136,7 +136,14 @@ function optimizeModel(modelName: string) {
         console.log(`[Optimize] Generating output for ${modelName}...`);
         try {
             // Run generation for this specific model
-            execSync(`npm run generate:web-output -- --models ${modelName.replace('.bngl', '')}`, { stdio: 'ignore' });
+            const modelId = modelName.replace('.bngl', '');
+            const run = spawnSync('npm', ['run', 'generate:web-output', '--', '--models', modelId], {
+                stdio: 'ignore',
+                shell: false,
+            });
+            if (run.status !== 0) {
+                throw new Error(`generate:web-output failed with status ${run.status ?? 'unknown'}`);
+            }
             csvPath = getCsvPath(modelName);
         } catch (e) {
             console.error(`[Optimize] Failed to generate output for ${modelName}`);
@@ -227,7 +234,13 @@ function main() {
             const chunk = missingModels.slice(i, i + chunkSize);
             console.log(`[Optimize] Processing batch ${i / chunkSize + 1}...`);
             try {
-                execSync(`npm run generate:web-output -- --models "${chunk.join(' ')}"`, { stdio: 'inherit' });
+                const batchRun = spawnSync('npm', ['run', 'generate:web-output', '--', '--models', chunk.join(' ')], {
+                    stdio: 'inherit',
+                    shell: false,
+                });
+                if (batchRun.status !== 0) {
+                    throw new Error(`batch generate:web-output failed with status ${batchRun.status ?? 'unknown'}`);
+                }
             } catch (e) {
                 console.error(`[Optimize] Batch generation failed for chunk starting with ${chunk[0]}`);
             }

@@ -460,7 +460,7 @@ export class NetworkExporter {
 
       try {
         const patternGraph = BNGLParser.parseSpeciesGraph(innerPatternStr, true);
-        // Fix: BNG2 uses EXACT bond-count matching at every specified component
+        // Note: BNG2 uses EXACT bond-count matching at every specified component
         // site for ALL observable types (Molecules and Species alike).  When a
         // pattern says "Cyclin(b!1)" (one bond at b), species where Cyclin.b
         // carries an additional bond (e.g. "Cyclin(b!1!2)") are NOT counted.

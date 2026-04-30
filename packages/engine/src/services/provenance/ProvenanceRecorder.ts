@@ -251,9 +251,23 @@ export class ProvenanceRecorder {
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
+let fallbackUuidCounter = 0;
+
 function generateUuid(): string {
-  // RFC4122 v4 — not crypto-grade, fine for identifiers.
-  const rnd = (): number => Math.floor(Math.random() * 0x10000);
-  const h = (n: number, len: number): string => n.toString(16).padStart(len, '0');
-  return `${h(rnd(), 4)}${h(rnd(), 4)}-${h(rnd(), 4)}-${h((rnd() & 0x0fff) | 0x4000, 4)}-${h((rnd() & 0x3fff) | 0x8000, 4)}-${h(rnd(), 4)}${h(rnd(), 4)}${h(rnd(), 4)}`;
+  if (typeof globalThis.crypto?.randomUUID === 'function') {
+    return globalThis.crypto.randomUUID();
+  }
+
+  if (typeof globalThis.crypto?.getRandomValues === 'function') {
+    const bytes = new Uint8Array(16);
+    globalThis.crypto.getRandomValues(bytes);
+    bytes[6] = (bytes[6] & 0x0f) | 0x40;
+    bytes[8] = (bytes[8] & 0x3f) | 0x80;
+    const hex = Array.from(bytes, (b) => b.toString(16).padStart(2, '0')).join('');
+    return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+  }
+
+  // Last-resort fallback for non-crypto runtimes.
+  fallbackUuidCounter += 1;
+  return `fallback-${Date.now().toString(16)}-${fallbackUuidCounter.toString(16)}`;
 }

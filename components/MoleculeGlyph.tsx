@@ -35,7 +35,7 @@ export const MoleculeGlyph: React.FC<MoleculeGlyphProps> = ({ molecule, showBond
       <div className="flex w-44 flex-wrap items-center justify-center gap-1 rounded-b-md border p-2 bg-white dark:bg-slate-900 dark:bg-slate-800">
         {molecule.components.map((component, idx) => (
           <div key={`${component.name}-${idx}`} className="flex flex-col items-center">
-            <div className={`rounded-md border px-2 py-1 text-xs ${component.role === 'context' ? 'bg-slate-100 text-slate-500 dark:text-slate-400 dark:bg-slate-800/60 dark:text-slate-400' : 'bg-white dark:bg-slate-900 dark:bg-slate-800'}`}>
+            <div className={`rounded-md border px-2 py-1 text-xs ${component.role === 'context' ? 'bg-slate-100 text-slate-500 dark:text-slate-300 dark:bg-slate-800/60 dark:text-slate-300' : 'bg-white dark:bg-slate-900 dark:bg-slate-800'}`}>
               <span className="font-semibold">{component.name}</span>
               {component.state && <span className="ml-1 text-slate-600 dark:text-slate-300">~{component.state}</span>}
               {showBondLabels && component.bondLabel && (

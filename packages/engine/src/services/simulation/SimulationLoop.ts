@@ -50,6 +50,72 @@ interface ConcreteObservable {
   volumes?: Float64Array | number[];
 }
 
+const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+function isSafeObjectKey(key: string): boolean {
+  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
+}
+
+function setSafeNumericField(target: Record<string, number>, key: string, value: number): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
+  if (!isSafeObjectKey(key)) return;
+  Object.defineProperty(target, key, {
+    value,
+    writable: true,
+    enumerable: true,
+    configurable: true,
+  });
+}
+
+function extractIfConditions(expression: string): string[] {
+  const conditions: string[] = [];
+  let idx = 0;
+
+  while (idx < expression.length) {
+    const ifIndex = expression.indexOf('if(', idx);
+    if (ifIndex < 0) break;
+
+    const condStart = ifIndex + 3;
+    let depth = 1;
+    let cursor = condStart;
+    let commaAtDepthOne = -1;
+
+    while (cursor < expression.length && depth > 0) {
+      const ch = expression[cursor];
+      if (ch === '(') {
+        depth += 1;
+      } else if (ch === ')') {
+        depth -= 1;
+      } else if (ch === ',' && depth === 1) {
+        commaAtDepthOne = cursor;
+        break;
+      }
+      cursor += 1;
+    }
+
+    if (commaAtDepthOne > condStart) {
+      const cond = expression.slice(condStart, commaAtDepthOne).trim();
+      if (cond.length > 0 && !conditions.includes(cond)) {
+        conditions.push(cond);
+      }
+    }
+
+    idx = ifIndex + 3;
+  }
+
+  return conditions;
+}
+
 /**
  * Resolves the sequence of simulation phases to execute based on the model and options.
  *
@@ -520,7 +586,6 @@ export async function simulate(
     speciesVolumes[idx] = vol;
   });
 
-  // PARITY FIX: Pre-calculate reacting volumes for each reaction.
   // BioNetGen scales ODE rates by an anchor compartment volume. For mixed-dimension
   // reactants (e.g. 3D + 2D), anchoring to the lower-dimensional compartment yields
   // closer parity with cBNGL transport/binding models.
@@ -719,20 +784,33 @@ export async function simulate(
       }
     }
 
-    const dataBySuffix: Record<string, Record<string, number>[]> = {};
-    const speciesDataBySuffix: Record<string, Record<string, number>[]> = {};
+    const dataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
+    const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const includeSpeciesData = options.includeSpeciesData ?? true;
 
+    const normalizeSuffixKey = (suffix?: unknown): string => {
+      const raw = typeof suffix === 'string' ? suffix : (suffix == null ? '' : String(suffix));
+      const candidate = raw.trim();
+      if (!candidate || !isSafeObjectKey(candidate)) return '__default__';
+      return candidate;
+    };
+
     const getSuffixDataArray = (suffix?: string) => {
-      const key = suffix ?? '__default__';
-      if (!dataBySuffix[key]) dataBySuffix[key] = [];
-      return dataBySuffix[key];
+      const key = normalizeSuffixKey(suffix);
+      if (!dataBySuffix[key]) setSafeArrayField(dataBySuffix, key, []);
+      if (!dataBySuffix[key]) {
+        setSafeArrayField(dataBySuffix, '__default__', []);
+      }
+      return dataBySuffix[key] || dataBySuffix.__default__;
     };
 
     const getSuffixSpeciesDataArray = (suffix?: string) => {
-      const key = suffix ?? '__default__';
-      if (!speciesDataBySuffix[key]) speciesDataBySuffix[key] = [];
-      return speciesDataBySuffix[key];
+      const key = normalizeSuffixKey(suffix);
+      if (!speciesDataBySuffix[key]) setSafeArrayField(speciesDataBySuffix, key, []);
+      if (!speciesDataBySuffix[key]) {
+        setSafeArrayField(speciesDataBySuffix, '__default__', []);
+      }
+      return speciesDataBySuffix[key] || speciesDataBySuffix.__default__;
     };
 
     const appendDataRow = (suffix: string | undefined, row: Record<string, number>) => {
@@ -749,9 +827,10 @@ export async function simulate(
 
     const observableNames = concreteObservables.map((obs) => obs.name);
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
-    const observableValuesRecord = Object.fromEntries(
-      observableNames.map((name) => [name, 0])
-    ) as Record<string, number>;
+    const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
+    for (const name of observableNames) {
+      setSafeNumericField(observableValuesRecord, name, 0);
+    }
 
     // --- Observable evaluation strategy selection ---
     // For large models (100+ observables), use CSR sparse evaluation to avoid
@@ -834,20 +913,28 @@ export async function simulate(
     const evaluateObservablesFast = (currentState: Float64Array) => {
       const buffer = evaluateObservablesIntoBuffer(currentState);
       for (let i = 0; i < observableNames.length; i++) {
-        observableValuesRecord[observableNames[i]] = buffer[i];
+        const name = observableNames[i];
+        if (name !== '__proto__' && name !== 'constructor' && name !== 'prototype') {
+          setSafeNumericField(observableValuesRecord, name, buffer[i]);
+        }
       }
       return observableValuesRecord;
     };
 
     const evaluateFunctionsForOutput = (currentState: Float64Array, observableValues: Record<string, number>) => {
-      if (!shouldPrintFunctions) return {} as Record<string, number>;
-      const results: Record<string, number> = {};
+      if (!shouldPrintFunctions) return Object.create(null) as Record<string, number>;
+      const results: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const f of model.functions || []) {
         if (f.args && f.args.length > 0) continue;
+        if (f.name === '__proto__' || f.name === 'constructor' || f.name === 'prototype') continue;
         try {
-          results[f.name] = evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions);
+          setSafeNumericField(
+            results,
+            f.name,
+            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions)
+          );
         } catch {
-          results[f.name] = 0;
+          setSafeNumericField(results, f.name, 0);
         }
       }
       return results;
@@ -917,6 +1004,9 @@ export async function simulate(
       for (const change of parameterChanges) {
 
         if (change.afterPhaseIndex === targetPhaseIdx - 1) {
+          if (!isSafeObjectKey(change.parameter)) {
+            continue;
+          }
           const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
           let newVal: number;
           if (typeof change.value === 'number') newVal = change.value;
@@ -929,7 +1019,7 @@ export async function simulate(
           }
           if (model.parameters && model.parameters[change.parameter] !== newVal) {
 
-            model.parameters[change.parameter] = newVal;
+            setSafeNumericField(model.parameters as Record<string, number>, change.parameter, newVal);
 
             // PARITY FIX: If a parameter is explicitly set, we should stop re-evaluating it 
             // from its original expression (if it had one). 
@@ -954,12 +1044,15 @@ export async function simulate(
           let anyChanged = false;
           for (const name in model.paramExpressions) {
             if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
+                if (!isSafeObjectKey(name)) {
+                  continue;
+                }
               const expr = model.paramExpressions[name];
               try {
                 const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
                 if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
 
-                  model.parameters[name] = val;
+                  setSafeNumericField(model.parameters as Record<string, number>, name, val);
                   anyChanged = true;
                 }
               } catch (e: any) {
@@ -1174,7 +1267,6 @@ export async function simulate(
           if (change.afterPhaseIndex !== phaseIdx - 1) continue;
           const mode = change.mode ?? 'set';
 
-          // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
           if (mode === 'save') {
             const label = change.label ?? DEFAULT_CONC_LABEL;
             concentrationCache.set(label, new Float64Array(state));
@@ -1244,7 +1336,7 @@ export async function simulate(
           const obsValues = evaluateObservablesFast(state);
           appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
           const speciesPoint0: Record<string, number> = { time: outT0 };
-          for (let i = 0; i < numSpecies; i++) speciesPoint0[speciesHeaders[i]] = state[i];
+          for (let i = 0; i < numSpecies; i++) setSafeNumericField(speciesPoint0, speciesHeaders[i], state[i]);
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
         }
         let totalEvents = 0;
@@ -1402,8 +1494,12 @@ export async function simulate(
               const newProp = calcPropensity(depRxn);
               if (Math.abs(newProp - oldProp) > 1e-18) {
                 const flux = newProp - oldProp;
-                influenceMatrix[reactionIndex * numReactions + depRxn] += flux;
-                windowInfluenceMatrix[reactionIndex * numReactions + depRxn] += flux;
+                const influenceOffset = reactionIndex * numReactions + depRxn;
+                if (influenceOffset < 0 || influenceOffset >= influenceMatrix.length || influenceOffset >= windowInfluenceMatrix.length) {
+                  throw new Error(`[SimulationLoop] Influence index out of bounds: ${influenceOffset}`);
+                }
+                influenceMatrix[influenceOffset] += flux;
+                windowInfluenceMatrix[influenceOffset] += flux;
               }
             }
           }
@@ -1448,7 +1544,7 @@ export async function simulate(
               if (outT >= nextTOut || totalEvents >= maxEvents) {
                 appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
                 const sp: Record<string, number> = { time: outT };
-                for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
+                for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
                 if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
               }
@@ -1473,7 +1569,7 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(state);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
             const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = state[k];
+            for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
             if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
             nextOutIdx++;
@@ -1540,8 +1636,8 @@ export async function simulate(
         if (s.name.includes('s~P') && s.name.includes('loc~nuc')) pstatIndices.push(idx);
       });
       if (pstatIndices.length > 0) {
-        const prodRates: Record<string, number> = {};
-        for (const idx of pstatIndices) prodRates[model.species[idx].name] = 0;
+        const prodRates: Record<string, number> = Object.create(null) as Record<string, number>;
+        for (const idx of pstatIndices) setSafeNumericField(prodRates, model.species[idx].name, 0);
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           let rate = rxn.rateConstant;
@@ -1561,7 +1657,12 @@ export async function simulate(
             for (let j = 0; j < rxn.products.length; j++) {
               const prodIdx = rxn.products[j];
               if (pstatIndices.includes(prodIdx)) {
-                prodRates[model.species[prodIdx].name] += velocity * (rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1);
+                const prodName = model.species[prodIdx].name;
+                setSafeNumericField(
+                  prodRates,
+                  prodName,
+                  (prodRates[prodName] ?? 0) + velocity * (rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1)
+                );
               }
             }
           }
@@ -1716,18 +1817,26 @@ export async function simulate(
         // creating { ...context, ...rxnContext } per reaction.
         // Eliminates ~5M object allocations per simulation.
         // ---------------------------------------------------------------
-        const rateContext: Record<string, number> = {};
+        const rateContext: Record<string, number> = Object.create(null) as Record<string, number>;
         // Initialize with parameters
         for (let i = 0; i < parameterNames.length; i++) {
-          rateContext[parameterNames[i]] = model.parameters[parameterNames[i]];
+          const parameterName = parameterNames[i];
+          if (parameterName === '__proto__' || parameterName === 'constructor' || parameterName === 'prototype') continue;
+          setSafeNumericField(rateContext, parameterName, model.parameters[parameterName]);
         }
         // Initialize observable slots
         for (let i = 0; i < observableNames.length; i++) {
-          rateContext[observableNames[i]] = 0;
+          const observableName = observableNames[i];
+          if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
+            setSafeNumericField(rateContext, observableName, 0);
+          }
         }
         // Initialize species name slots
         for (let k = 0; k < model.species.length; k++) {
-          rateContext[model.species[k].name] = 0;
+          const speciesName = model.species[k].name;
+          if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
+            setSafeNumericField(rateContext, speciesName, 0);
+          }
         }
         // Initialize ridxN slots
         for (let j = 0; j < maxReactants; j++) {
@@ -1740,13 +1849,21 @@ export async function simulate(
           // Update observable values in the mutable context (in-place)
           const obsValues = evaluateObservablesFast(yIn);
           for (let i = 0; i < observableNames.length; i++) {
-            rateContext[observableNames[i]] = obsValues[observableNames[i]];
+            const observableName = observableNames[i];
+            if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
+              setSafeNumericField(rateContext, observableName, obsValues[observableName]);
+            }
           }
           // Update species values in the mutable context (in-place)
           for (let k = 0; k < model.species.length; k++) {
-            rateContext[model.species[k].name] = odeUsesAmountState
-              ? yIn[k]
-              : (yIn[k] * speciesVolumes[k]);
+            const speciesName = model.species[k].name;
+            if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
+              setSafeNumericField(
+                rateContext,
+                speciesName,
+                odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k])
+              );
+            }
           }
 
           for (let i = 0; i < concreteReactions.length; i++) {
@@ -2115,15 +2232,6 @@ export async function simulate(
     const allMassAction = functionalRateCount === 0;
 
     // Stiffness Analysis
-    let maxRate = -Infinity;
-    let minRate = Infinity;
-    for (const rxn of concreteReactions) {
-      if (rxn.rateConstant > 0) {
-        maxRate = Math.max(maxRate, rxn.rateConstant);
-        minRate = Math.min(minRate, rxn.rateConstant);
-      }
-    }
-    // const rateRatio = minRate > 0 ? maxRate / minRate : 1;
     const methodRates = concreteReactions.map(r => r.rateConstant);
     const stiffnessProfile = analyzeModelStiffness(methodRates, {
       hasFunctionalRates: functionalRateCount > 0,
@@ -2269,11 +2377,10 @@ export async function simulate(
       const rootExprs: string[] = [];
       if (model.functions) {
         for (const func of model.functions) {
-          const matches = func.expression.matchAll(/if\s*\(([^,]+),/gi);
-          for (const match of matches) {
-            const cond = match[1].trim();
-            if (!rootExprs.includes(cond)) rootExprs.push(cond);
-          }
+            const extracted = extractIfConditions(func.expression);
+            for (const cond of extracted) {
+              if (!rootExprs.includes(cond)) rootExprs.push(cond);
+            }
         }
       }
 
@@ -2298,7 +2405,6 @@ export async function simulate(
     let jacobianRowMajor: ((y: Float64Array, J: Float64Array) => void) | undefined;
 
     if (allMassAction) {
-      // Precompute, JIT logic
       const reactantCountMaps: Map<number, number>[] = concreteReactions.map(rxn => {
         const counts = new Map<number, number>();
         for (let j = 0; j < rxn.reactants.length; j++) {
@@ -2308,117 +2414,119 @@ export async function simulate(
         return counts;
       });
 
-      const buildJITJacobian = (columnMajor: boolean): ((y: Float64Array, J: Float64Array) => void) => {
-        const lines: string[] = [];
-        lines.push('J.fill(0);');
-        lines.push('var v, dv;');
+      const buildSafeJacobian = (columnMajor: boolean): ((y: Float64Array, J: Float64Array) => void) => {
+        const reactionBase = new Float64Array(concreteReactions.length);
+        const reactionAnchorVolume = new Float64Array(concreteReactions.length);
+        const reactionReactantScale: Float64Array[] = new Array(concreteReactions.length);
+        const reactionUniqueSpecies: Int32Array[] = new Array(concreteReactions.length);
+        const reactionUniqueOrders: Int32Array[] = new Array(concreteReactions.length);
 
         for (let r = 0; r < concreteReactions.length; r++) {
           const rxn = concreteReactions[r];
-          // 🔒 SECURITY FIX: Strictly sanitize all variables interpolated into the JIT string.
-          // This prevents code injection if any model properties were manipulated to contain
-          // arbitrary strings. Number() ensures only numerical representations are concatenated,
-          // totally neutralizing string-based payloads while keeping the fast JIT logic intact.
-          const k = Number(rxn.rateConstant) || 0;
-          const reactants = rxn.reactants;
-          const reactantCounts = reactantCountMaps[r];
           const volR = Number(reactionReactingVolumes[r]) || 1.0;
           const propensity = Number(rxn.propensityFactor ?? 1);
           const degeneracy = Number(rxn.degeneracy ?? 1);
+          const rateConstant = Number(rxn.rateConstant) || 0;
+          const base = rateConstant * propensity * degeneracy * volR;
 
-          // Velocity base: k * volR * propensity * degeneracy
-          const base = k * propensity * degeneracy * volR;
-          if (!Number.isFinite(base)) continue;
+          reactionBase[r] = Number.isFinite(base) ? base : 0;
+          reactionAnchorVolume[r] = volR;
 
-          for (const [speciesKRaw, orderKRaw] of reactantCounts) {
-            const speciesK = Number(speciesKRaw);
-            const orderK = Number(orderKRaw);
+          const scales = new Float64Array(rxn.reactants.length);
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            const ridx = rxn.reactants[j];
+            scales[j] = (Number(solverVolumes[ridx]) || 1.0) / volR;
+          }
+          reactionReactantScale[r] = scales;
 
-            // dv = d(ReactionVelocity) / d(y[speciesK])
-            // ReactionVelocity = base * Product_i( y[i] * Vol_i / volR )
-            // d(Velocity) / d(y[speciesK]) = base * orderK * (y[speciesK]^(orderK-1)) * (Vol_speciesK / volR)^orderK * Product_j!=K(...)
+          const uniqueSpecies = new Int32Array(reactantCountMaps[r].size);
+          const uniqueOrders = new Int32Array(reactantCountMaps[r].size);
+          let u = 0;
+          for (const [speciesIdx, order] of reactantCountMaps[r]) {
+            uniqueSpecies[u] = speciesIdx;
+            uniqueOrders[u] = order;
+            u++;
+          }
+          reactionUniqueSpecies[r] = uniqueSpecies;
+          reactionUniqueOrders[r] = uniqueOrders;
+        }
 
-            let velocityTerm = `${base}`;
-            for (let rj = 0; rj < reactants.length; rj++) {
-              const ridx = Number(reactants[rj]);
-              const scale = Number(solverVolumes[ridx]) / volR;
-              if (Number.isFinite(ridx) && Number.isFinite(scale)) {
-                velocityTerm += ` * (y[${ridx}] * ${scale})`;
-              }
+        return (y: Float64Array, J: Float64Array) => {
+          J.fill(0);
+
+          for (let r = 0; r < concreteReactions.length; r++) {
+            const rxn = concreteReactions[r];
+            const reactants = rxn.reactants;
+            const reactantScale = reactionReactantScale[r];
+
+            let velocityTerm = reactionBase[r];
+            if (!Number.isFinite(velocityTerm) || velocityTerm === 0) continue;
+
+            for (let j = 0; j < reactants.length; j++) {
+              velocityTerm *= y[reactants[j]] * reactantScale[j];
             }
 
-            // Differentiate via power rule: d(y^n)/dy = n * (y^n)/y
-            const scaleK = Number(solverVolumes[speciesK]) / volR;
-            if (!Number.isFinite(scaleK)) continue;
+            const uniqueSpecies = reactionUniqueSpecies[r];
+            const uniqueOrders = reactionUniqueOrders[r];
+            const volR = reactionAnchorVolume[r];
 
-            lines.push(`dv = y[${speciesK}] > 1e-100 ? ${orderK} * (${velocityTerm}) / y[${speciesK}] * ${scaleK} : 0.0;`);
+            for (let u = 0; u < uniqueSpecies.length; u++) {
+              const speciesK = uniqueSpecies[u];
+              const orderK = uniqueOrders[u];
+              const scaleK = (Number(solverVolumes[speciesK]) || 1.0) / volR;
+              if (!Number.isFinite(scaleK)) continue;
 
-            // Special case for order 1 to avoid /y[speciesK] when y is 0
-            if (orderK === 1) {
-              let partialProduct = `${base} * ${scaleK}`;
-              for (let rj = 0; rj < reactants.length; rj++) {
-                if (reactants[rj] !== speciesK) {
-                  const ridx = Number(reactants[rj]);
-                  const scale = Number(solverVolumes[ridx]) / volR;
-                  if (Number.isFinite(ridx) && Number.isFinite(scale)) {
-                    partialProduct += ` * (y[${ridx}] * ${scale})`;
+              let dv = 0.0;
+              const yk = y[speciesK];
+              if (yk > 1e-100) {
+                dv = orderK * velocityTerm / yk * scaleK;
+              } else if (orderK === 1) {
+                let partialProduct = reactionBase[r] * scaleK;
+                for (let j = 0; j < reactants.length; j++) {
+                  const ridx = reactants[j];
+                  if (ridx !== speciesK) {
+                    partialProduct *= y[ridx] * reactantScale[j];
                   }
                 }
+                dv = partialProduct;
               }
-              lines.push(`if (y[${speciesK}] <= 1e-100) dv = ${partialProduct};`);
-            }
 
-            if (columnMajor) {
-              // Reactants
-              for (let rj = 0; rj < reactants.length; rj++) {
-                const sIdx = Number(reactants[rj]);
-                if (Number.isFinite(sIdx) && !model.species[sIdx]?.isConstant) {
-                  const sv = Number(solverVolumes[sIdx]) || 1.0;
-                  lines.push(`J[${sIdx + speciesK * numSpecies}] -= dv / ${sv};`);
+              if (!Number.isFinite(dv) || dv === 0) continue;
+
+              for (let j = 0; j < reactants.length; j++) {
+                const sIdx = reactants[j];
+                if (model.species[sIdx]?.isConstant) continue;
+                const sv = Number(solverVolumes[sIdx]) || 1.0;
+                if (columnMajor) {
+                  J[sIdx + speciesK * numSpecies] -= dv / sv;
+                } else {
+                  J[sIdx * numSpecies + speciesK] -= dv / sv;
                 }
               }
-              // Products
+
               for (let pj = 0; pj < rxn.products.length; pj++) {
                 const pIdx = Number(rxn.products[pj]);
-                if (Number.isFinite(pIdx) && !model.species[pIdx]?.isConstant) {
-                  const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
-                  const sv = Number(solverVolumes[pIdx]) || 1.0;
-                  if (Number.isFinite(stoich)) {
-                    lines.push(`J[${pIdx + speciesK * numSpecies}] += (dv * ${stoich}) / ${sv};`);
-                  }
-                }
-              }
-            } else {
-              // Row Major
-              for (let rj = 0; rj < reactants.length; rj++) {
-                const sIdx = Number(reactants[rj]);
-                if (Number.isFinite(sIdx) && !model.species[sIdx]?.isConstant) {
-                  const sv = Number(solverVolumes[sIdx]) || 1.0;
-                  lines.push(`J[${sIdx * numSpecies + speciesK}] -= dv / ${sv};`);
-                }
-              }
-              for (let pj = 0; pj < rxn.products.length; pj++) {
-                const pIdx = Number(rxn.products[pj]);
-                if (Number.isFinite(pIdx) && !model.species[pIdx]?.isConstant) {
-                  const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
-                  const sv = Number(solverVolumes[pIdx]) || 1.0;
-                  if (Number.isFinite(stoich)) {
-                    lines.push(`J[${pIdx * numSpecies + speciesK}] += (dv * ${stoich}) / ${sv};`);
-                  }
+                if (!Number.isFinite(pIdx) || model.species[pIdx]?.isConstant) continue;
+                const stoich = Number(rxn.productStoichiometries ? rxn.productStoichiometries[pj] : 1);
+                if (!Number.isFinite(stoich)) continue;
+                const sv = Number(solverVolumes[pIdx]) || 1.0;
+                if (columnMajor) {
+                  J[pIdx + speciesK * numSpecies] += (dv * stoich) / sv;
+                } else {
+                  J[pIdx * numSpecies + speciesK] += (dv * stoich) / sv;
                 }
               }
             }
           }
-        }
-        return new Function('y', 'J', lines.join('\n')) as (y: Float64Array, J: Float64Array) => void;
+        };
       };
 
       if (concreteReactions.length < 2000) {
         try {
-          jacobianColMajor = buildJITJacobian(true);
-          jacobianRowMajor = buildJITJacobian(false);
-        } catch (e) {
-          // ignore
+          jacobianColMajor = buildSafeJacobian(true);
+          jacobianRowMajor = buildSafeJacobian(false);
+        } catch {
+          // Keep fallback solver behavior when Jacobian setup fails.
         }
       }
     }
@@ -2557,7 +2665,7 @@ export async function simulate(
             const wgpuSuffix = phases[0]?.suffix;
             appendDataRow(wgpuSuffix, { time, ...obsValues });
             const sp: Record<string, number> = { time };
-            for (let j = 0; j < numSpecies; j++) sp[speciesHeaders[j]] = conc[j];
+            for (let j = 0; j < numSpecies; j++) setSafeNumericField(sp, speciesHeaders[j], conc[j]);
             appendSpeciesSnapshot(wgpuSuffix, sp);
           }
           const defaultWgpuSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
@@ -2651,7 +2759,6 @@ export async function simulate(
         if (change.afterPhaseIndex !== phaseIdx - 1) continue;
         const mode = change.mode ?? 'set';
 
-        // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
         if (mode === 'save') {
           const label = change.label ?? DEFAULT_CONC_LABEL;
           concentrationCache.set(label, new Float64Array(y));
@@ -2780,8 +2887,11 @@ export async function simulate(
           // Add NFsim results to output data
           if (recordThisPhase) {
             for (const row of nfsimResults.data) {
-              const adjustedRow: Record<string, number> = {};
+              const adjustedRow: Record<string, number> = Object.create(null) as Record<string, number>;
               for (const [key, value] of Object.entries(row)) {
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
+                  continue;
+                }
                 if (key === 'time') {
                   adjustedRow[key] = phaseStart + value;
                 } else {
@@ -2899,7 +3009,7 @@ export async function simulate(
         const obsValues = evaluateObservablesFast(y);
         appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
         const s0: Record<string, number> = { time: outT0 };
-        for (let i = 0; i < numSpecies; i++) s0[speciesHeaders[i]] = stateValueToSpeciesOutput(y[i], i);
+        for (let i = 0; i < numSpecies; i++) setSafeNumericField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
         appendSpeciesSnapshot(phase.suffix, s0);
       }
 
@@ -2916,7 +3026,8 @@ export async function simulate(
           phaseDerivatives(solverState, denseF0);
         }
 
-        for (let i = 1; i <= phase_n_steps && !shouldStop; i++) {
+        for (let i = 1; i <= phase_n_steps; i++) {
+          if (shouldStop) break;
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
 
@@ -2970,7 +3081,7 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(y);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
             const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) sp[speciesHeaders[k]] = stateValueToSpeciesOutput(y[k], k);
+            for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
             appendSpeciesSnapshot(phase.suffix, sp);
 
             if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
@@ -3085,7 +3196,7 @@ export async function simulate(
         if (lastRecordedT !== finalT) {
           // Record final species state for multi-phase propagation
           const spFinal: Record<string, number> = { time: finalT };
-          for (let k = 0; k < numSpecies; k++) spFinal[speciesHeaders[k]] = stateValueToSpeciesOutput(y[k], k);
+          for (let k = 0; k < numSpecies; k++) setSafeNumericField(spFinal, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
           appendSpeciesSnapshot(phase.suffix, spFinal);
         }
       }

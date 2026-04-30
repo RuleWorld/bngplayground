@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
+import { escapeXml } from '@bngplayground/engine';
 import type { ContactMap } from '../types/visualization';
 import type { RuleOverlay } from '../services/visualization/ruleOverlay';
 import { applyCytoscapeRuleOverlay, ruleOverlayStyles } from '../services/visualization/applyCytoscapeRuleOverlay';
@@ -163,7 +164,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
       style: {
         'text-halign': 'center',
         'text-valign': 'center',
-        'font-size': 14,
+        'font-size': '14px',
         'text-wrap': 'none',
         'text-max-width': '10000px',
         color: textColor,
@@ -225,7 +226,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
         'border-color': '#6366f1',
         'border-width': 2,
         'border-style': 'dashed',
-        'font-size': 16,
+        'font-size': '16px',
         'font-weight': 700,
         padding: '20px',
       },
@@ -276,7 +277,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
         width: 'label',
         height: 'label',
         'min-width': 20,
-        'min-height': 20,
+            color: textColor,
         shape: 'ellipse',
         'z-index': 25,
         'z-index-compare': 'manual',
@@ -642,7 +643,6 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       children.forEach((childId, idx) => assignIds(childId, bngId, idx));
     };
     cy.nodes().filter(n => !n.data('parent')).forEach(node => assignIds(node.id(), null, rootIndex++));
-    const escapeXml = (str: string): string => str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
     let graphml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:y="http://www.yworks.com/xml/graphml" xmlns:yed="http://www.yworks.com/xml/yed/3">\n<key id="d0" for="node" yfiles.type="nodegraphics"/>\n<key id="d1" for="edge" yfiles.type="edgegraphics"/>\n  <graph edgedefault="directed" id="G">\n`;
     const nodeColors: any = { molecule: '#D2D2D2', component: '#FFFFFF', state: '#FFCC00', compartment: '#EEF2FF' };
     const generateNodeXML = (nodeId: string, indent: string = '    '): string => {
@@ -652,21 +652,22 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       const color = nodeColors[type] || '#CCCCCC';
       const hasChildren = childrenMap.has(nodeId);
       const bngId = nodeIdMap.get(nodeId) || nodeId;
+      const escapedId = escapeXml(bngId);
       const isBold = type === 'molecule' || hasChildren;
       if (hasChildren) {
-        let xml = `${indent}<node id="${bngId}" yfiles.foldertype="group">\n${indent}  <data key="d0">\n${indent}    <y:ProxyAutoBoundsNode>\n${indent}      <y:Realizers active="0">\n${indent}        <y:GroupNode>\n${indent}          <y:Fill color="${color}"/>\n${indent}          <y:BorderStyle color="#000000" type="" width="1"/>\n${indent}          <y:Shape type="roundrectangle"/>\n${indent}          <y:NodeLabel alignment="t" autoSizePolicy="content" fontFamily="Dialog" fontSize="14" fontStyle="${isBold ? 'bold' : ''}" hasBackgroundColor="false" hasLineColor="false" textColor="#000000" visible="true">${escapeXml(label)}</y:NodeLabel>\n${indent}        </y:GroupNode>\n${indent}      </y:Realizers>\n${indent}    </y:ProxyAutoBoundsNode>\n${indent}  </data>\n${indent}  <graph id="${bngId}:" edgedefault="directed">\n`;
+        let xml = `${indent}<node id="${escapedId}" yfiles.foldertype="group">\n${indent}  <data key="d0">\n${indent}    <y:ProxyAutoBoundsNode>\n${indent}      <y:Realizers active="0">\n${indent}        <y:GroupNode>\n${indent}          <y:Fill color="${color}"/>\n${indent}          <y:BorderStyle color="#000000" type="" width="1"/>\n${indent}          <y:Shape type="roundrectangle"/>\n${indent}          <y:NodeLabel alignment="t" autoSizePolicy="content" fontFamily="Dialog" fontSize="14" fontStyle="${isBold ? 'bold' : ''}" hasBackgroundColor="false" hasLineColor="false" textColor="#000000" visible="true">${escapeXml(label)}</y:NodeLabel>\n${indent}        </y:GroupNode>\n${indent}      </y:Realizers>\n${indent}    </y:ProxyAutoBoundsNode>\n${indent}  </data>\n${indent}  <graph id="${escapeXml(`${bngId}:`)}" edgedefault="directed">\n`;
         for (const childId of childrenMap.get(nodeId)!) { xml += generateNodeXML(childId, indent + '    '); }
         xml += `${indent}  </graph>\n${indent}</node>\n`;
         return xml;
       } else {
-        return `${indent}<node id="${bngId}">\n${indent}  <data key="d0">\n${indent}    <y:ShapeNode>\n${indent}      <y:Fill color="${color}"/>\n${indent}      <y:BorderStyle color="#000000" type="" width="1"/>\n${indent}      <y:Shape type="roundrectangle"/>\n${indent}      <y:NodeLabel alignment="c" autoSizePolicy="content" fontFamily="Dialog" fontSize="14" fontStyle="" hasBackgroundColor="false" hasLineColor="false" textColor="#000000" visible="true">${escapeXml(label)}</y:NodeLabel>\n${indent}    </y:ShapeNode>\n${indent}  </data>\n${indent}</node>\n`;
+        return `${indent}<node id="${escapedId}">\n${indent}  <data key="d0">\n${indent}    <y:ShapeNode>\n${indent}      <y:Fill color="${color}"/>\n${indent}      <y:BorderStyle color="#000000" type="" width="1"/>\n${indent}      <y:Shape type="roundrectangle"/>\n${indent}      <y:NodeLabel alignment="c" autoSizePolicy="content" fontFamily="Dialog" fontSize="14" fontStyle="" hasBackgroundColor="false" hasLineColor="false" textColor="#000000" visible="true">${escapeXml(label)}</y:NodeLabel>\n${indent}    </y:ShapeNode>\n${indent}  </data>\n${indent}</node>\n`;
       }
     };
     cy.nodes().filter(n => !n.data('parent')).forEach(node => { graphml += generateNodeXML(node.id()); });
     cy.edges().forEach((edge) => {
       const sourceId = nodeIdMap.get(edge.source().id());
       const targetId = nodeIdMap.get(edge.target().id());
-      if (sourceId && targetId) graphml += `    <edge source="${sourceId}" target="${targetId}">\n      <data key="d1">\n        <y:PolyLineEdge>\n          <y:LineStyle color="#000000" type="line" width="1.0"/>\n          <y:Arrows source="none" target="none"/>\n        </y:PolyLineEdge>\n      </data>\n    </edge>\n`;
+      if (sourceId && targetId) graphml += `    <edge source="${escapeXml(sourceId)}" target="${escapeXml(targetId)}">\n      <data key="d1">\n        <y:PolyLineEdge>\n          <y:LineStyle color="#000000" type="line" width="1.0"/>\n          <y:Arrows source="none" target="none"/>\n        </y:PolyLineEdge>\n      </data>\n    </edge>\n`;
     });
     graphml += `  </graph>\n</graphml>`;
     const blob = new Blob([graphml], { type: 'application/xml;charset=utf-8' });

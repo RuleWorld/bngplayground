@@ -170,14 +170,11 @@ export function compileToByteCode(
                     // Try to evaluate expression
                     const rxnStr = rxn.rateConstant.toString();
                     assertSafeRateExpression(rxnStr, paramKeys);
-                    const translated = ExpressionTranslator.translate(rxnStr);
-                    // Avoid collisions with the time variable parameter by using a unique placeholder
-                    const translatedSafe = translated.replace(/\bt\b/g, '__t__');
-                    // Simple evaluation for parameters
+                    const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
                     try {
-                        const evaluator = new Function('params', `const {${paramKeys.join(',')}} = params; return ${translatedSafe};`);
+                        const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
                         k = evaluator(parameters || {});
-                        if (isNaN(k) || !isFinite(k)) return null;
+                        if (Number.isNaN(k) || !Number.isFinite(k)) return null;
                     } catch {
                         return null; // Contains y[i] or other non-constant terms
                     }

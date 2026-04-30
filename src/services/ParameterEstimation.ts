@@ -244,6 +244,7 @@ export class VariationalParameterEstimator {
 
     for (let iter = 0; iter < nIterations; iter++) {
       let bestParamsIter: number[] | null = null;
+      let bestLogParamsIter: number[] | null = null;
       let bestObjectiveIter = Number.POSITIVE_INFINITY;
 
       for (let k = 0; k < candidatesPerIter; k++) {
@@ -259,6 +260,7 @@ export class VariationalParameterEstimator {
         if (obj < bestObjectiveIter) {
           bestObjectiveIter = obj;
           bestParamsIter = candidateParams;
+          bestLogParamsIter = candidateLogParams;
         }
 
         if (obj < minObjective) {
@@ -271,11 +273,11 @@ export class VariationalParameterEstimator {
       const elboValue = -bestObjectiveIter;
       elboHistory.push(elboValue);
 
-      if (bestParamsIter) {
+      if (bestParamsIter && bestLogParamsIter) {
         // Optimize loop: avoid .map() allocations and remove redundant Math.max
         // bestParamsIter values are generated via Math.exp(), so they are strictly positive
         for (let i = 0; i < mu.length; i++) {
-          mu[i] = (1 - step) * mu[i] + step * Math.log(bestParamsIter[i]);
+          mu[i] = (1 - step) * mu[i] + step * bestLogParamsIter[i];
           // Anneal uncertainty slowly to encourage convergence
           logSigma[i] = clamp(logSigma[i] - 0.002, logSigmaMin, logSigmaMax);
         }

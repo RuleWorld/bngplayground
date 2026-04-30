@@ -57,5 +57,8 @@ for (const model of models) {
 console.log('| Model | Category | Error Snippet | CSV? | GDAT? |');
 console.log('|---|---|---|---|---|');
 analysis.forEach(a => {
-    console.log(`| ${a.model} | ${a.category} | ${a.error.replace(/\|/g, '\\|')} | ${a.csvExists ? '✅' : '❌'} | ${a.gdatExists ? '✅' : '❌'} |`);
+    const escapedError = a.error
+        .replace(/\\/g, '\\\\')
+        .replace(/\|/g, '\\|');
+    console.log(`| ${a.model} | ${a.category} | ${escapedError} | ${a.csvExists ? '✅' : '❌'} | ${a.gdatExists ? '✅' : '❌'} |`);
 });

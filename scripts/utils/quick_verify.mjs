@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { fileURLToPath } from 'url';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -48,8 +48,8 @@ function verifyModel(filePath) {
   content = content.replace(/^\s*simulate_.*$/gm, '# simulate removed');
   fs.writeFileSync(tempPath, content);
   
-  try {
-    execSync(`perl "${BNG_PATH}" "${tempPath}"`, { 
+    try {
+      execFileSync('perl', [BNG_PATH, tempPath], { 
       cwd: TEMP_DIR, 
       stdio: 'ignore',
       timeout: 60000

@@ -183,11 +183,9 @@ export async function trainHybridModel(
             // forward-sensitivity * residual-error coefficient and accumulate
             // `coeff * output`. Summed over obs, the resulting scalar's
             // gradient wrt θ IS dL/dθ (the Jacobian-vector product we need).
-            for (const [obsName, errList] of Object.entries(losses)) {
-              // Match errList[i] to timepoint — we stored them in
-              // the order experimental observations were visited, which may
-              // not align with ti. Re-derive by looking up the experimental
-              // observation at this simulation time.
+            for (const obsName of Object.keys(losses)) {
+              // Re-derive matching experimental observation at this simulation
+              // time instead of assuming a shared index order.
               const tSim = simResult.time[ti];
               const matchingObs = config.experimentalData.find(
                 (p) => p.time === tSim && p.observables[obsName] !== undefined,

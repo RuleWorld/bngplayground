@@ -10,10 +10,10 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     
     const variantClasses = {
       primary: 'bg-primary text-white hover:bg-primary-600 focus-visible:ring-primary-500',
-      secondary: 'bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600 focus-visible:ring-slate-400 dark:focus-visible:ring-slate-500',
-      ghost: 'hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:ring-slate-400 dark:focus-visible:ring-slate-500 text-slate-800 dark:text-slate-200',
+      secondary: 'bg-slate-200 text-slate-900 hover:bg-slate-300 dark:bg-slate-700 dark:text-slate-50 dark:hover:bg-slate-600 focus-visible:ring-slate-400 dark:focus-visible:ring-slate-500',
+      ghost: 'hover:bg-slate-100 dark:hover:bg-slate-700 focus-visible:ring-slate-400 dark:focus-visible:ring-slate-500 text-slate-800 dark:text-slate-100',
       danger: 'bg-red-600 text-white hover:bg-red-700 focus-visible:ring-red-500',
-      subtle: 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-200 dark:hover:bg-slate-600'
+      subtle: 'bg-slate-100 text-slate-700 hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-100 dark:hover:bg-slate-600'
     };
 
     const combinedClasses = `${baseClasses} ${variantClasses[variant]} ${className}`;

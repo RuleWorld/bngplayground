@@ -147,6 +147,12 @@ function cleanupGeneratedFiles(modelDir, modelName) {
     }
 }
 
+function writeJsonAtomic(filePath, value) {
+    const tempPath = `${filePath}.tmp-${process.pid}`;
+    fs.writeFileSync(tempPath, JSON.stringify(value, null, 2), 'utf-8');
+    fs.renameSync(tempPath, filePath);
+}
+
 async function validateModel(modelPath) {
     const modelName = path.basename(modelPath, '.bngl');
     const modelDir = path.dirname(modelPath);
@@ -272,15 +278,15 @@ async function main() {
 
     // Load previous report if available
     let previousResults = {};
-    if (fs.existsSync(REPORT_FILE)) {
-        try {
-            const raw = fs.readFileSync(REPORT_FILE, 'utf-8');
-            const parsed = JSON.parse(raw);
-            parsed.forEach(r => {
-                previousResults[r.model] = r;
-            });
-            console.log(`Loaded ${parsed.length} entries from previous report.`);
-        } catch (e) {
+    try {
+        const raw = fs.readFileSync(REPORT_FILE, 'utf-8');
+        const parsed = JSON.parse(raw);
+        parsed.forEach(r => {
+            previousResults[r.model] = r;
+        });
+        console.log(`Loaded ${parsed.length} entries from previous report.`);
+    } catch (e) {
+        if (e?.code !== 'ENOENT') {
             console.warn('Could not read/parse previous report, starting fresh.');
         }
     }
@@ -336,7 +342,7 @@ async function main() {
     }
 
     // Write detailed report
-    fs.writeFileSync(REPORT_FILE, JSON.stringify(results, null, 2), 'utf-8');
+    writeJsonAtomic(REPORT_FILE, results);
     console.log(`Detailed report written to: ${REPORT_FILE}`);
 
     const successRate = ((passed.length + fixed.length) / results.length * 100).toFixed(1);

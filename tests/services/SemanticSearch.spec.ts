@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cosineSimilarity, semanticSearch, isSemanticSearchReady, resetSemanticSearchState } from '../../services/semanticSearch';
+import { cosineSimilarity, semanticSearch, isSemanticSearchReady, resetSemanticSearchState, _internalState } from '../../services/semanticSearch';
 
 // Mock fetching the index
 const mockIndex = {
@@ -41,6 +41,11 @@ beforeEach(() => {
 // Also mock the Node import path (used when `window` is undefined in tests)
 vi.mock('@xenova/transformers', () => ({
     pipeline: (...args: any[]) => mockPipeline(...args)
+}));
+
+export const mockLoadTransformersPipeline = vi.fn();
+vi.mock('@/src/utils/transformersLoader', () => ({
+    loadTransformersPipeline: () => mockLoadTransformersPipeline()
 }));
 
 describe('Semantic Search Service', () => {
@@ -85,6 +90,8 @@ describe('Semantic Search Service', () => {
         let fetchSpy: any;
 
         beforeEach(() => {
+            mockLoadTransformersPipeline.mockResolvedValue((...args: any[]) => mockPipeline(...args));
+
             // Setup default successful fetch for search tests
             fetchSpy = vi.spyOn(global, 'fetch');
             fetchSpy.mockResolvedValue({
@@ -133,6 +140,17 @@ describe('Semantic Search Service', () => {
 
             await expect(semanticSearch('test')).rejects.toThrow('Failed to load embeddings index: 404');
         });
+
+        it('should handle embedding model load failure by throwing and setting loadError', async () => {
+            // Override the default mock to throw an error
+            mockLoadTransformersPipeline.mockRejectedValue(new Error('Failed to load transformers'));
+
+            await expect(semanticSearch('test')).rejects.toThrow('Failed to load transformers');
+
+            // If the search failed, subsequent attempts to load embedder should immediately throw the cached loadError
+            // Calling it again without waiting for fetch will trigger the cached error branch
+            await expect(semanticSearch('test')).rejects.toThrow('Failed to load transformers');
+        });
     });
 
     describe('isSemanticSearchReady', () => {
@@ -151,6 +169,41 @@ describe('Semantic Search Service', () => {
 
             const ready = await isSemanticSearchReady();
             expect(ready).toBe(false);
+        });
+
+        it('should return false if index fetch is not ok', async () => {
+            vi.spyOn(global, 'fetch').mockResolvedValue({
+                ok: false,
+                status: 404
+            } as Response);
+
+            const ready = await isSemanticSearchReady();
+            expect(ready).toBe(false);
+        });
+    });
+
+    describe('resetSemanticSearchState', () => {
+        it('should reset all internal state variables to defaults', () => {
+            // Set internal state to dummy values
+            _internalState.embedder = { dummy: true };
+            _internalState.embeddingsIndex = { dummy: true } as any;
+            _internalState.isLoading = true;
+            _internalState.loadError = new Error('Test error');
+
+            // Verify they were set
+            expect(_internalState.embedder).not.toBeNull();
+            expect(_internalState.embeddingsIndex).not.toBeNull();
+            expect(_internalState.isLoading).toBe(true);
+            expect(_internalState.loadError).not.toBeNull();
+
+            // Call reset
+            resetSemanticSearchState();
+
+            // Verify they were reset
+            expect(_internalState.embedder).toBeNull();
+            expect(_internalState.embeddingsIndex).toBeNull();
+            expect(_internalState.isLoading).toBe(false);
+            expect(_internalState.loadError).toBeNull();
         });
     });
 });

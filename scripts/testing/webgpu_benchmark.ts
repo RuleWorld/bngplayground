@@ -280,7 +280,7 @@ function csvEscape(s: string): string {
 
 function toLatex(rows: BenchmarkRow[], verdict: { supported: boolean; adapter?: string }): string {
   const adapterNote = verdict.supported
-    ? `WebGPU adapter: ${(verdict.adapter ?? 'default').replace(/_/g, '\\_')}.`
+    ? `WebGPU adapter: ${escapeTex(verdict.adapter ?? 'default')}.`
     : 'WebGPU was unavailable in this run.';
 
   // Aggregate: group by model, display one row per (model × nTraj).
@@ -318,12 +318,28 @@ ${body}
 }
 
 function escapeTex(s: string): string {
-  return s
-    .replace(/\\/g, '\\textbackslash{}')
-    .replace(/&/g, '\\&')
-    .replace(/%/g, '\\%')
-    .replace(/_/g, '\\_')
-    .replace(/#/g, '\\#');
+  return s.replace(/[\\&%_#$^~]/g, (ch) => {
+    switch (ch) {
+      case '\\':
+        return '\\textbackslash{}';
+      case '&':
+        return '\\&';
+      case '%':
+        return '\\%';
+      case '_':
+        return '\\_';
+      case '#':
+        return '\\#';
+      case '$':
+        return '\\$';
+      case '^':
+        return '\\^{}';
+      case '~':
+        return '\\~{}';
+      default:
+        return ch;
+    }
+  });
 }
 
 function median(xs: number[]): number {

@@ -104,7 +104,7 @@ export const InlineLegend: React.FC<{
                 boxShadow: entry.inactive ? 'none' : `0 0 0 1px ${entry.color}44`,
               }}
             />
-            <span className={`text-[11px] font-medium transition-colors ${entry.inactive ? 'text-slate-400 dark:text-slate-600' : 'text-slate-700 dark:text-slate-300'}`}>
+            <span className={`text-[11px] font-medium transition-colors ${entry.inactive ? 'text-slate-400 dark:text-slate-400' : 'text-slate-700 dark:text-slate-200'}`}>
               {entry.value}
             </span>
           </button>

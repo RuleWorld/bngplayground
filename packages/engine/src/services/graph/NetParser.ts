@@ -17,6 +17,24 @@ export interface NetFileParseResult {
 }
 
 /**
+ * Optimized helper to parse comma-separated strings
+ * avoids allocations of split().map().filter()
+ */
+function parseCommaSeparated(str: string, filterEmpty: boolean = true): string[] {
+  const result: string[] = [];
+  let start = 0;
+  let end = 0;
+  while ((end = str.indexOf(',', start)) !== -1) {
+    const part = str.substring(start, end).trim();
+    if (part || !filterEmpty) result.push(part);
+    start = end + 1;
+  }
+  const lastPart = str.substring(start).trim();
+  if (lastPart || !filterEmpty) result.push(lastPart);
+  return result;
+}
+
+/**
  * Parse a BioNetGen .net file into a BNGLModel
  * @param content The full text content of the .net file
  * @returns Parse result with model and any errors/warnings
@@ -159,14 +177,22 @@ function parseSpeciesLine(line: string, model: BNGLModel, lineNum: number): void
   // The pattern may contain spaces, so we can't just split on whitespace
   // Typical format: "1 A(b!1).B(a!1) 100"
 
-  const match = line.match(/^(\d+)\s+(.+?)\s+([\d.eE+-]+)$/);
-  if (!match) {
+  const trimmed = line.trim();
+  const firstSpace = trimmed.search(/\s/);
+  if (firstSpace <= 0) {
+    throw new Error(`Invalid species format (expected: index pattern concentration)`);
+  }
+  const indexToken = trimmed.slice(0, firstSpace).trim();
+  const rest = trimmed.slice(firstSpace).trim();
+  const lastSpace = rest.lastIndexOf(' ');
+  if (lastSpace <= 0) {
     throw new Error(`Invalid species format (expected: index pattern concentration)`);
   }
 
-  const index = parseInt(match[1]);
-  const pattern = match[2].trim();
-  const concentration = parseFloat(match[3]);
+  const pattern = rest.slice(0, lastSpace).trim();
+  const concentrationToken = rest.slice(lastSpace + 1).trim();
+  const index = parseInt(indexToken, 10);
+  const concentration = parseFloat(concentrationToken);
 
   if (isNaN(index) || isNaN(concentration)) {
     throw new Error(`Invalid species: index or concentration not a number`);
@@ -202,8 +228,8 @@ function parseReactionLine(line: string, model: BNGLModel, lineNum: number): voi
     );
   }
 
-  const reactants = parts[1].split(',').map(s => s.trim()).filter(s => s);
-  const products = parts[2].split(',').map(s => s.trim()).filter(s => s);
+  const reactants = parseCommaSeparated(parts[1]);
+  const products = parseCommaSeparated(parts[2]);
   const rateExpr = parts[3];
   const label = parts.length > 4 ? parts.slice(4).join(' ').trim() : undefined;
 
@@ -262,26 +288,39 @@ function parseObservableLine(line: string, model: BNGLModel, lineNum: number): v
  */
 function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): void {
   // Format: index name(args) = expression
-  const match = line.match(/^(\d+)\s+(\w+)\s*\(([^)]*)\)\s*=\s*(.+)$/);
-  if (!match) {
+  const trimmed = line.trim();
+  const firstSpace = trimmed.search(/\s/);
+  if (firstSpace <= 0) {
     throw new Error(
       `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
       `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
 
-  const index = parseInt(match[1]);
-  const name = match[2];
-  const argsStr = match[3].trim();
-  const expression = match[4].trim();
-
-  if (isNaN(index)) {
+  const indexToken = trimmed.slice(0, firstSpace).trim();
+  const rhs = trimmed.slice(firstSpace).trim();
+  const openParen = rhs.indexOf('(');
+  const closeParen = rhs.indexOf(')', openParen + 1);
+  const eqIdx = rhs.indexOf('=', closeParen + 1);
+  if (openParen <= 0 || closeParen <= openParen || eqIdx <= closeParen) {
     throw new Error(
-      `Invalid function in .net file at line ${lineNum}: the function index "${match[1]}" is not a valid number.`
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
 
-  const args = argsStr ? argsStr.split(',').map(a => a.trim()) : [];
+  const index = parseInt(indexToken, 10);
+  const name = rhs.slice(0, openParen).trim();
+  const argsStr = rhs.slice(openParen + 1, closeParen).trim();
+  const expression = rhs.slice(eqIdx + 1).trim();
+
+  if (isNaN(index)) {
+    throw new Error(
+      `Invalid function in .net file at line ${lineNum}: the function index "${indexToken}" is not a valid number.`
+    );
+  }
+
+  const args = argsStr ? parseCommaSeparated(argsStr, false) : [];
 
   model.functions!.push({
     name,

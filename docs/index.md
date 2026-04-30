@@ -49,6 +49,7 @@ BioNetGen Playground allows you to edit BNGL models, parse them, generate reacti
 
 /docs/architecture
 /docs/building-wasm
+/docs/mcp-server
 /docs/contributing
 ```
 

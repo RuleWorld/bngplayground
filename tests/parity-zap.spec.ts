@@ -3,7 +3,7 @@ import { describe, it, expect } from 'vitest';
 import { BNGXMLWriter } from '@bngplayground/engine';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import * as fs from 'fs';
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { hasNFsim, resolveBNG2Paths } from '../tools/bng2-paths';
 import { findRuleHubModelPath } from './helpers/rulehub';
 
@@ -29,8 +29,7 @@ describe.skipIf(!hasNFsim())('Model_ZAP Parity', () => {
         try {
             // Use -o to specify output file
             const gdatPath = 'Model_ZAP_nf.gdat';
-            const cmd = `"${nfsimPath}" -xml ${xmlPath} -sim 241 -oSteps 10 -o ${gdatPath}`;
-            execSync(cmd, { encoding: 'utf-8', stdio: 'inherit' });
+            execFileSync(nfsimPath, ['-xml', xmlPath, '-sim', '241', '-oSteps', '10', '-o', gdatPath], { encoding: 'utf-8', stdio: 'inherit' });
             
             if (fs.existsSync(gdatPath)) {
                 const gdat = fs.readFileSync(gdatPath, 'utf-8');

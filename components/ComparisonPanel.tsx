@@ -242,13 +242,13 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
         What-If Comparison
       </h3>
 
-      <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
+      <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
         Compare simulation results with modified parameter values.
       </p>
 
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
             Parameter to modify
           </label>
           <select
@@ -266,7 +266,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
         </div>
 
         <div className="w-32">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
             Multiply by
           </label>
           <select
@@ -301,7 +301,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
       )}
 
       {!baseResults && (
-        <div className="p-4 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded text-center text-slate-500 dark:text-slate-400">
+        <div className="p-4 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded text-center text-slate-500 dark:text-slate-300">
           Run a simulation first to enable comparison.
         </div>
       )}
@@ -311,11 +311,11 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
           <div className="flex items-center gap-4 mb-4 text-xs">
             <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
               <span className="w-6 h-0.5 bg-slate-400"></span>
-              <span className="text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Base Model</span>
+              <span className="text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">Base Model</span>
             </span>
             <span className="flex items-center gap-1.5 px-2 py-1 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 rounded border border-slate-100 dark:border-slate-700">
               <span className="w-6 h-0.5 bg-slate-400 border-dashed" style={{ borderBottom: '2px dashed' }}></span>
-              <span className="text-slate-600 dark:text-slate-400 font-medium whitespace-nowrap">Modified ({comparisonFactor}×)</span>
+              <span className="text-slate-600 dark:text-slate-300 font-medium whitespace-nowrap">Modified ({comparisonFactor}×)</span>
             </span>
           </div>
 

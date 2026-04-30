@@ -218,6 +218,23 @@ export function generateAnalyticalJacobian(
     };
   });
 
+  const rxnRateValues = rxnRateExprs.map((info, idx) => {
+    const expr = info.expr.replace(/\bMath\./g, '');
+    const parameterNames = Object.keys(parameters);
+
+    if (!info.isConstant) {
+      const evaluator = SafeExpressionEvaluator.compile(expr, parameterNames);
+      const value = evaluator(parameters);
+      if (!Number.isFinite(value)) {
+        throw new Error(`[SparseJacobian] Non-finite rate expression at reaction ${idx}`);
+      }
+      return value * info.statFactor;
+    }
+
+    const numericValue = Number(expr);
+    return (Number.isFinite(numericValue) ? numericValue : 0) * info.statFactor;
+  });
+
   // For each non-zero entry, generate code to compute it
   for (let i = 0; i < nSpecies; i++) {
     for (let ptr = sparsity.rowPtr[i]; ptr < sparsity.rowPtr[i + 1]; ptr++) {
@@ -259,14 +276,39 @@ export function generateAnalyticalJacobian(
   }
   
   const code = `return function analyticalJacobian(y, data) {\n  ${lines.join('\n  ')}\n}`;
-  
-  try {
-    return new Function(code)() as (y: Float64Array, data: Float64Array) => void;
-  } catch (e) {
-    console.error('[SparseJacobian] Analytical JIT compilation failed:', e);
-    // Fallback to a zero function rather than crashing the solver
-    return (y: Float64Array, data: Float64Array) => { data.fill(0); };
-  }
+  void code;
+
+  return (y: Float64Array, data: Float64Array) => {
+    data.fill(0);
+
+    for (let ptr = 0; ptr < contributions.length; ptr++) {
+      const contribs = contributions[ptr];
+      if (contribs.length === 0) continue;
+
+      let value = 0;
+      for (const contrib of contribs) {
+        const rxn = reactions[contrib.rxnIdx];
+        let massActionPart = rxnRateValues[contrib.rxnIdx];
+
+        const otherReactants = [...rxn.reactants];
+        if (contrib.reactantIdxJ >= 0 && contrib.reactantIdxJ < otherReactants.length) {
+          otherReactants.splice(contrib.reactantIdxJ, 1);
+        } else {
+          const j = otherReactants.indexOf(contrib.reactantIdxJ);
+          if (j !== -1) otherReactants.splice(j, 1);
+        }
+
+        for (const r of otherReactants) {
+          massActionPart *= y[r];
+        }
+
+        const coeff = contrib.netStoichI * contrib.reactantStoichJ;
+        value += coeff * massActionPart;
+      }
+
+      data[ptr] = value;
+    }
+  };
 }
 
 // Legacy alias kept for backward compatibility with older tests and APIs.

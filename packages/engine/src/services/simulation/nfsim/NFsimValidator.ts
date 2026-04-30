@@ -96,7 +96,7 @@ export class NFsimValidator {
         } catch (e) {
           // If parser fails, it might be a complex unsupported expression, but for safety we don't block UNLESS we are sure.
           // However, a parse error on a rate usually means it's invalid anyway.
-          console.warn(`[NFsimValidator] Failed to parse rate expression "${rate}":`, e);
+          console.warn('[NFsimValidator] Failed to parse rate expression:', rate, e);
         }
       }
     }
