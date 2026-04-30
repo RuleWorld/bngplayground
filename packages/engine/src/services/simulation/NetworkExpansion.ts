@@ -732,13 +732,10 @@ export async function generateExpandedNetwork(
             if (lastAtIdx !== -1) {
                 m = m.substring(0, lastAtIdx);
             }
-
-            // split('(')[0]
             const parenIdx = m.indexOf('(');
             if (parenIdx !== -1) {
                 m = m.substring(0, parenIdx);
             }
-
             mols.push(m);
         }
         for (let i = 0; i < mols.length; i++) {
