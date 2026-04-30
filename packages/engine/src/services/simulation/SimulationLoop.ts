@@ -1268,7 +1268,6 @@ export async function simulate(
           if (change.afterPhaseIndex !== phaseIdx - 1) continue;
           const mode = change.mode ?? 'set';
 
-          // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
           if (mode === 'save') {
             const label = change.label ?? DEFAULT_CONC_LABEL;
             concentrationCache.set(label, new Float64Array(state));
@@ -2761,7 +2760,6 @@ export async function simulate(
         if (change.afterPhaseIndex !== phaseIdx - 1) continue;
         const mode = change.mode ?? 'set';
 
-        // PARITY FIX: Handle saveConcentrations / resetConcentrations (BNG2 Cache semantics)
         if (mode === 'save') {
           const label = change.label ?? DEFAULT_CONC_LABEL;
           concentrationCache.set(label, new Float64Array(y));
