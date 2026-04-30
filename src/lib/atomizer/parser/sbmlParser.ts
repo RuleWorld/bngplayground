@@ -497,25 +497,28 @@ export class SBML2JSON {
       const leftFormula = libsbml.formulaToString(math.getLeftChild());
       const rightFormula = libsbml.formulaToString(math.getRightChild());
 
-      if (remainderPatterns.includes(leftFormula)) {
-        const idx = remainderPatterns.indexOf(leftFormula);
-        remainderPatterns.splice(idx, 1);
+      // ⚡ Bolt: Replaced double traversal (includes + indexOf) with single indexOf call
+      const leftIdx = remainderPatterns.indexOf(leftFormula);
+      if (leftIdx !== -1) {
+        remainderPatterns.splice(leftIdx, 1);
         math = math.getRightChild();
-      } else if (remainderPatterns.includes(rightFormula)) {
-        const idx = remainderPatterns.indexOf(rightFormula);
-        remainderPatterns.splice(idx, 1);
-        math = math.getLeftChild();
       } else {
-        if (math.getLeftChild()?.getCharacter() === '*') {
-          math.replaceChild(0, this.getPrunnedTree(math.getLeftChild(), remainderPatterns));
+        const rightIdx = remainderPatterns.indexOf(rightFormula);
+        if (rightIdx !== -1) {
+          remainderPatterns.splice(rightIdx, 1);
+          math = math.getLeftChild();
+        } else {
+          if (math.getLeftChild()?.getCharacter() === '*') {
+            math.replaceChild(0, this.getPrunnedTree(math.getLeftChild(), remainderPatterns));
+          }
+          if (math.getRightChild()?.getCharacter() === '*') {
+            math.replaceChild(
+              math.getNumChildren() - 1,
+              this.getPrunnedTree(math.getRightChild(), remainderPatterns)
+            );
+          }
+          break;
         }
-        if (math.getRightChild()?.getCharacter() === '*') {
-          math.replaceChild(
-            math.getNumChildren() - 1,
-            this.getPrunnedTree(math.getRightChild(), remainderPatterns)
-          );
-        }
-        break;
       }
     }
 

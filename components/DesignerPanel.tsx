@@ -304,6 +304,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
               }}
               className="h-11 w-11 rounded-full border border-blue-500 bg-blue-600 text-xl text-white shadow-lg transition-all hover:scale-110 active:scale-95"
               title="Sync and visualize"
+              aria-label="Sync and visualize"
             >
               <span className="pl-1">↻</span>
             </button>

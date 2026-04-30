@@ -118,6 +118,77 @@ class PRNG {
   }
 }
 
+// --- Helpers --------------------------------------------------------------
+
+function initializePopulation(
+  NP: number,
+  n: number,
+  x0: number[],
+  lb: number[],
+  ub: number[],
+  rng: PRNG,
+): number[][] {
+  const pop: number[][] = new Array(NP);
+
+  // First member = initial guess (clamped to bounds)
+  pop[0] = x0.map((v, i) => Math.max(lb[i], Math.min(ub[i], v)));
+
+  // Rest = random in [lb, ub]
+  for (let i = 1; i < NP; i++) {
+    pop[i] = new Array(n);
+    for (let j = 0; j < n; j++) {
+      pop[i][j] = lb[j] + rng.random() * (ub[j] - lb[j]);
+    }
+  }
+
+  return pop;
+}
+
+function createTrialVector(
+  pop: number[][],
+  i: number,
+  rng: PRNG,
+  n: number,
+  NP: number,
+  CR: number,
+  F: number,
+  lb: number[],
+  ub: number[]
+): number[] {
+  // Pick 3 distinct indices != i
+  let a: number;
+  let b: number;
+  let c: number;
+  do {
+    a = rng.randInt(NP);
+  } while (a === i);
+  do {
+    b = rng.randInt(NP);
+  } while (b === i || b === a);
+  do {
+    c = rng.randInt(NP);
+  } while (c === i || c === a || c === b);
+
+  // Mutation: v = pop[a] + F * (pop[b] - pop[c])
+  // Binomial crossover: trial[j] = v[j] if rand < CR or j == jrand
+  const jrand = rng.randInt(n);
+  const trial = new Array<number>(n);
+  for (let j = 0; j < n; j++) {
+    if (rng.random() < CR || j === jrand) {
+      let v = pop[a][j] + F * (pop[b][j] - pop[c][j]);
+      // Bounce-back reflection into bounds
+      if (v < lb[j]) v = lb[j] + rng.random() * (pop[i][j] - lb[j]);
+      if (v > ub[j]) v = ub[j] - rng.random() * (ub[j] - pop[i][j]);
+      // Final clamp (safety)
+      trial[j] = Math.max(lb[j], Math.min(ub[j], v));
+    } else {
+      trial[j] = pop[i][j];
+    }
+  }
+
+  return trial;
+}
+
 // --- Core algorithm ----------------------------------------------------------
 
 /**
@@ -149,19 +220,8 @@ export async function differentialEvolution(
 
   // --- Initialize population ------------------------------------------------
 
-  const pop: number[][] = new Array(NP);
+  const pop = initializePopulation(NP, n, x0, lb, ub, rng);
   const fitness = new Float64Array(NP);
-
-  // First member = initial guess (clamped to bounds)
-  pop[0] = x0.map((v, i) => Math.max(lb[i], Math.min(ub[i], v)));
-
-  // Rest = random in [lb, ub]
-  for (let i = 1; i < NP; i++) {
-    pop[i] = new Array(n);
-    for (let j = 0; j < n; j++) {
-      pop[i][j] = lb[j] + rng.random() * (ub[j] - lb[j]);
-    }
-  }
 
   // Evaluate initial population (parallel batches)
   let nEval = 0;
@@ -184,37 +244,7 @@ export async function differentialEvolution(
     // Build trial vectors for the entire population
     const trials: number[][] = new Array(NP);
     for (let i = 0; i < NP; i++) {
-      // Pick 3 distinct indices != i
-      let a: number;
-      let b: number;
-      let c: number;
-      do {
-        a = rng.randInt(NP);
-      } while (a === i);
-      do {
-        b = rng.randInt(NP);
-      } while (b === i || b === a);
-      do {
-        c = rng.randInt(NP);
-      } while (c === i || c === a || c === b);
-
-      // Mutation: v = pop[a] + F * (pop[b] - pop[c])
-      // Binomial crossover: trial[j] = v[j] if rand < CR or j == jrand
-      const jrand = rng.randInt(n);
-      const trial = new Array<number>(n);
-      for (let j = 0; j < n; j++) {
-        if (rng.random() < CR || j === jrand) {
-          let v = pop[a][j] + F * (pop[b][j] - pop[c][j]);
-          // Bounce-back reflection into bounds
-          if (v < lb[j]) v = lb[j] + rng.random() * (pop[i][j] - lb[j]);
-          if (v > ub[j]) v = ub[j] - rng.random() * (ub[j] - pop[i][j]);
-          // Final clamp (safety)
-          trial[j] = Math.max(lb[j], Math.min(ub[j], v));
-        } else {
-          trial[j] = pop[i][j];
-        }
-      }
-      trials[i] = trial;
+      trials[i] = createTrialVector(pop, i, rng, n, NP, CR, F, lb, ub);
     }
 
     // Evaluate all trials (parallel batches)
@@ -272,7 +302,7 @@ export async function differentialEvolution(
     stopReason: 'maxeval',
   };
 
-  // --- Helpers --------------------------------------------------------------
+  // --- Helpers scoped within differentialEvolution ----------------------------
 
   async function evaluateBatch(
     vectors: number[][],
