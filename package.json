@@ -7,9 +7,11 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
-    "build": "tsx tools/build/generateEmbeddings.mjs && vite build",
+    "dev": "npm run sync-gallery && vite",
+    "build": "npm run sync-gallery && tsx tools/build/generateEmbeddings.mjs && vite build",
     "build:quick": "vite build",
+    "sync-gallery": "tsx scripts/sync-gallery.ts",
+    "sync-gallery:local": "tsx scripts/sync-gallery.ts --local ../RuleHub",
     "export:rulehub": "tsx tools/migration/export-to-rulehub.ts",
     "build:verify": "node scripts/build/check_dist.js",
     "build:full": "npm run build && npm run build:verify",
