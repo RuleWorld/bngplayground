@@ -130,8 +130,9 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
   onSelectRuleRef.current = onSelectRule;
   onSelectAtomRef.current = onSelectAtom;
 
+  const isDark = document.documentElement.classList.contains('dark');
+
   const getThemeColors = () => {
-    const isDark = document.documentElement.classList.contains('dark');
     return {
       edgeColor: isDark ? '#94a3b8' : '#000000',
       textColor: isDark ? '#ffffff' : '#000000',
@@ -198,8 +199,8 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
             height: 35,
             padding: '4px',
             label: 'data(label)',
-            'background-color': '#CC99FF',
-            'border-color': '#999999',
+            'background-color': isDark ? '#581c87' : '#CC99FF',
+            'border-color': isDark ? '#64748b' : '#999999',
             'border-width': 1,
           },
         },
@@ -211,8 +212,8 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
             height: 30,
             padding: '4px',
             label: 'data(label)',
-            'background-color': '#FFE9C7',
-            'border-color': '#999999',
+            'background-color': isDark ? '#78350f' : '#FFE9C7',
+            'border-color': isDark ? '#64748b' : '#999999',
             'border-width': 1,
           },
         },
@@ -238,15 +239,15 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
         {
           selector: 'node.highlighted',
           style: {
-            'border-color': '#000000',
+            'border-color': isDark ? '#cbd5e1' : '#000000',
             'border-width': 3,
           },
         },
         {
           selector: 'edge.highlighted',
           style: {
-            'line-color': '#000000',
-            'target-arrow-color': '#000000',
+            'line-color': isDark ? '#cbd5e1' : '#000000',
+            'target-arrow-color': isDark ? '#cbd5e1' : '#000000',
             'width': 2,
           },
         },
@@ -401,14 +402,14 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">
         <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase">Legend</h4>
         <div className="flex items-center gap-4 text-xs flex-wrap">
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-3 rounded-full bg-[#CC99FF] border border-[#999999]" />
-            <span className="text-slate-700 dark:text-slate-300">Rule</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <div className="w-4 h-3 rounded bg-[#FFE9C7] border border-[#999999]" />
-            <span className="text-slate-700 dark:text-slate-300">AtomicPattern</span>
-          </div>
+           <div className="flex items-center gap-2">
+             <div className="w-4 h-3 rounded-full bg-[#CC99FF] dark:bg-[#581c87] border border-[#999999] dark:border-slate-400" />
+             <span className="text-slate-700 dark:text-slate-300">Rule</span>
+           </div>
+           <div className="flex items-center gap-2">
+             <div className="w-4 h-3 rounded bg-[#FFE9C7] dark:bg-[#78350f] border border-[#999999] dark:border-slate-400" />
+             <span className="text-slate-700 dark:text-slate-300">AtomicPattern</span>
+           </div>
           <div className="flex items-center gap-2">
             <span className="px-1 rounded" style={{ background: colors.edgeColor, color: '#fff' }}>→</span>
             <span className="text-slate-700 dark:text-slate-300">Interaction</span>

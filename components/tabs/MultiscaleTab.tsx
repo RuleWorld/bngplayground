@@ -4,6 +4,7 @@ import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { useTheme } from '../../hooks/useTheme';
 import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LABEL_STYLE, CHART_TOOLTIP_CURSOR, CHART_LINE_WIDTH, CHART_MARGIN } from '../../src/utils/chartStyle';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
@@ -56,6 +57,9 @@ const EXAMPLE_DEFINITION = `{
 }`;
 
 export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
+  const [theme] = useTheme();
+  const isDark = theme === 'dark';
+
   const [definition, setDefinition] = useState(EXAMPLE_DEFINITION);
   const [isRunning, setIsRunning] = useState(false);
   const [snapshots, setSnapshots] = useState<SnapshotUI[]>([]);
@@ -168,7 +172,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
     ctx.clearRect(0, 0, w, h);
 
     // Background
-    ctx.fillStyle = '#1e293b';
+    ctx.fillStyle = isDark ? '#1e293b' : '#ffffff';
     ctx.fillRect(0, 0, w, h);
 
     // Get domain bounds from cell positions
@@ -207,7 +211,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
     }
 
     // Time label
-    ctx.fillStyle = '#e2e8f0';
+    ctx.fillStyle = isDark ? '#e2e8f0' : '#1e293b';
     ctx.font = '12px Arial';
     ctx.fillText(`t = ${snapshot.time.toFixed(1)}`, 8, 18);
     ctx.fillText(`${snapshot.cells.filter(c => c.phase !== 'dead').length} cells`, 8, 34);

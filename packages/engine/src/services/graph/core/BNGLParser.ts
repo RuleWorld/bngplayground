@@ -65,12 +65,13 @@ export class BNGLParser {
 
     for (const molStr of moleculeStrings) {
       const molecule = this.parseMolecule(molStr.trim());
-      // Handle molecule-level compartment suffix if not already handled globally
-      if (!globalCompartment) {
-        const molMatch = molStr.trim().match(/^(.+)@([A-Za-z0-9_]+)$/);
-        if (molMatch) {
-          molecule.compartment = molMatch[2];
-        }
+      // Always check for suffix compartment first (e.g., TLR3()@Cyt)
+      const molMatch = molStr.trim().match(/^(.+?)@([A-Za-z0-9_]+)$/);
+      if (molMatch) {
+        molecule.compartment = molMatch[2];
+      } else if (globalCompartment) {
+        // Only use global compartment prefix as fallback (e.g., @Cyt:TLR3())
+        molecule.compartment = globalCompartment;
       }
       graph.molecules.push(molecule);
     }

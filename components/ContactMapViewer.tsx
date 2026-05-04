@@ -180,7 +180,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
       selector: 'node[type = "molecule"]',
       style: {
         'background-color': '#D2D2D2',
-        'border-color': '#000000',
+        'border-color': isDark ? '#94a3b8' : '#000000',
         'border-width': 1,
         'font-weight': 700,
         shape: 'round-rectangle',
@@ -236,8 +236,8 @@ export function getContactMapStyles(isDark: boolean): any[] {
     {
       selector: 'node[type = "component"]',
       style: {
-        'background-color': '#FFFFFF',
-        'border-color': '#000000',
+        'background-color': isDark ? '#1e293b' : '#FFFFFF',
+        'border-color': isDark ? '#94a3b8' : '#000000',
         'border-width': 1,
         shape: 'round-rectangle',
         'z-index': 20,
@@ -271,14 +271,14 @@ export function getContactMapStyles(isDark: boolean): any[] {
       selector: 'node[type = "state"]',
       style: {
         'background-color': '#FFCC00',
-        'border-color': '#000000',
+        'border-color': isDark ? '#94a3b8' : '#000000',
         'border-width': 1,
         padding: '8px',
         width: 'label',
         height: 'label',
         'min-width': 20,
-            color: textColor,
-        shape: 'ellipse',
+        color: '#000000',
+         shape: 'round-rectangle',
         'z-index': 25,
         'z-index-compare': 'manual',
       },
@@ -471,6 +471,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
   const layoutSequenceRef = useRef(0);
   const onSelectRuleRef = useRef(onSelectRule);
   onSelectRuleRef.current = onSelectRule;
+  const isDark = document.documentElement.classList.contains('dark');
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -500,7 +501,6 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
 
     cyRef.current?.destroy();
 
-    const isDark = document.documentElement.classList.contains('dark');
     const cy = cytoscape({
       container: containerRef.current,
       elements,
@@ -644,7 +644,12 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     };
     cy.nodes().filter(n => !n.data('parent')).forEach(node => assignIds(node.id(), null, rootIndex++));
     let graphml = `<?xml version="1.0" encoding="UTF-8" standalone="no"?>\n<graphml xmlns="http://graphml.graphdrawing.org/xmlns" xmlns:y="http://www.yworks.com/xml/graphml" xmlns:yed="http://www.yworks.com/xml/yed/3">\n<key id="d0" for="node" yfiles.type="nodegraphics"/>\n<key id="d1" for="edge" yfiles.type="edgegraphics"/>\n  <graph edgedefault="directed" id="G">\n`;
-    const nodeColors: any = { molecule: '#D2D2D2', component: '#FFFFFF', state: '#FFCC00', compartment: '#EEF2FF' };
+    const nodeColors: any = {
+      molecule: '#D2D2D2',
+      component: isDark ? '#1e293b' : '#FFFFFF',
+      state: '#FFCC00',
+      compartment: isDark ? '#1e1b4b' : '#eef2ff',
+    };
     const generateNodeXML = (nodeId: string, indent: string = '    '): string => {
       const node = cy.getElementById(nodeId);
       const label = node.data('label') || nodeId;
@@ -730,10 +735,10 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">
         <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Legend</h4>
         <div className="flex items-center gap-4 text-xs flex-wrap">
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#D2D2D2] border border-black" /><span className="text-slate-700 dark:text-slate-300">Molecule</span></div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-white dark:bg-slate-900 border border-black" /><span className="text-slate-700 dark:text-slate-300">Component</span></div>
-          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#FFCC00] border border-black" /><span className="text-slate-700 dark:text-slate-300">State</span></div>
-          <div className="flex items-center gap-2"><div className="w-6 h-0 border-t border-black" /><span className="text-slate-700 dark:text-slate-300">Bond</span></div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#D2D2D2] border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">Molecule</span></div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-white dark:bg-slate-800 border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">Component</span></div>
+           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#FFCC00] border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">State</span></div>
+           <div className="flex items-center gap-2"><div className="w-6 h-0 border-t border-black dark:border-slate-300" /><span className="text-slate-700 dark:text-slate-300">Bond</span></div>
           {ruleOverlay && (
             <>
               <div className="w-px h-4 bg-slate-300 dark:bg-slate-600" />

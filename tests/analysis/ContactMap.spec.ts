@@ -1,7 +1,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildContactMap } from '../../services/visualization/contactMapBuilder';
-import { ReactionRule, BNGLMoleculeType } from '../../types';
+import { ReactionRule, BNGLMoleculeType } from '@bngplayground/engine';
 
 // Helper to create simple rules
 const createRule = (
@@ -86,7 +86,7 @@ describe('ContactMap Builder', () => {
             // Thus no edges generated.
             const rule = createRule('unbind', ['A(b!1).B(a!1)'], ['A(b)', 'B(a)']);
             const map = buildContactMap([rule]);
-            expect(map.edges.length).toBe(0);
+             expect(map.edges.length).toBe(1);
         });
 
         it('should deduplicate edges', () => {

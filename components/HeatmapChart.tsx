@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useTheme } from '../hooks/useTheme';
 
 interface HeatmapDatum {
   x: number;
@@ -25,6 +26,8 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
   height = 360,
   cellSize,
 }) => {
+  const [theme] = useTheme();
+  const isDark = theme === 'dark';
   if (!data || data.length === 0) {
     return <div className="text-sm text-slate-500 dark:text-slate-400">No data to render</div>;
   }
@@ -205,7 +208,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
                   width={cell}
                   height={cell}
                   fill={colorFor(d.value)}
-                  stroke="#eee"
+                  stroke={isDark ? '#334155' : '#eee'}
                   onMouseMove={(e) => setHoverTooltip(d, e.clientX, e.clientY)}
                   onClick={(e) => {
                     e.stopPropagation();

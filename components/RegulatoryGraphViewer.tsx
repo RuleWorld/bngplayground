@@ -190,7 +190,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
         {
           selector: 'node[type = "species"]',
           style: {
-            'background-color': '#FFE9C7', // BNG yEd AtomicPattern
+             'background-color': theme === 'dark' ? '#78350f' : '#FFE9C7', // BNG yEd AtomicPattern
             'border-color': '#999999',
             'border-width': 1,
             shape: 'round-rectangle', // BNG roundrectangle
@@ -207,7 +207,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
         {
           selector: 'node[type = "rule"]',
           style: {
-            'background-color': '#CC99FF', // BNG yEd Rule color
+             'background-color': theme === 'dark' ? '#581c87' : '#CC99FF', // BNG yEd Rule color
             'border-color': '#999999',
             'border-width': 1,
             shape: 'ellipse', // BNG uses ellipse for rules
@@ -261,14 +261,14 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
           selector: 'edge[?reversible][type = "reactant"]',
           style: {
             'source-arrow-shape': 'triangle',
-            'source-arrow-color': '#000000',
+            'source-arrow-color': theme === 'dark' ? '#cbd5e1' : '#000000',
           },
         },
         {
           selector: 'edge[?reversible][type = "product"]',
           style: {
             'source-arrow-shape': 'triangle',
-            'source-arrow-color': '#000000',
+            'source-arrow-color': theme === 'dark' ? '#cbd5e1' : '#000000',
           },
         },
         {
@@ -389,18 +389,18 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
     const cy = cyRef.current;
     if (!cy) return;
 
-    // BioNetGen yED colors and styles for regulatory graphs
+    // BioNetGen yED colors and styles for regulatory graphs (theme-aware)
     const nodeStyles: Record<string, { fill: string; shape: string; fontStyle: string }> = {
-      species: { fill: '#FFE9C7', shape: 'roundrectangle', fontStyle: 'plain' },
-      rule: { fill: '#CC99FF', shape: 'ellipse', fontStyle: 'plain' },
+      species: { fill: theme === 'dark' ? '#78350f' : '#FFE9C7', shape: 'roundrectangle', fontStyle: 'plain' },
+      rule: { fill: theme === 'dark' ? '#581c87' : '#CC99FF', shape: 'ellipse', fontStyle: 'plain' },
     };
 
     const edgeStyles: Record<string, { fill: string; sourceArrow: string; targetArrow: string }> = {
-      reactant: { fill: '#000000', sourceArrow: 'none', targetArrow: 'standard' },
-      product: { fill: '#000000', sourceArrow: 'none', targetArrow: 'standard' },
-      catalyst: { fill: '#AAAAAA', sourceArrow: 'none', targetArrow: 'standard' }, // Context edge
-      activation: { fill: '#66FF66', sourceArrow: 'none', targetArrow: 'standard' },
-      inhibition: { fill: '#FF9999', sourceArrow: 'none', targetArrow: 'standard' },
+      reactant: { fill: theme === 'dark' ? '#cbd5e1' : '#000000', sourceArrow: 'none', targetArrow: 'standard' },
+      product: { fill: theme === 'dark' ? '#cbd5e1' : '#000000', sourceArrow: 'none', targetArrow: 'standard' },
+      catalyst: { fill: theme === 'dark' ? '#94a3b8' : '#AAAAAA', sourceArrow: 'none', targetArrow: 'standard' },
+      activation: { fill: theme === 'dark' ? '#16a34a' : '#66FF66', sourceArrow: 'none', targetArrow: 'standard' },
+      inhibition: { fill: theme === 'dark' ? '#dc2626' : '#FF9999', sourceArrow: 'none', targetArrow: 'standard' },
     };
 
     // Generate GraphML content (matching BioNetGen format)

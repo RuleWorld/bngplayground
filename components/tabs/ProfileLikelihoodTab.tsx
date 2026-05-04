@@ -5,6 +5,7 @@ import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { EmptyState } from '../ui/EmptyState';
 import { StatusMessage } from '../ui/StatusMessage';
+import { useTheme } from '../../hooks/useTheme';
 import { profileLikelihood, ProfileLikelihoodResult } from '@bngplayground/engine';
 import { bnglService } from '../../services/bnglService';
 import { parseExperimentalData, ExperimentalDataPoint } from '../../src/services/data/experimentalData';
@@ -35,6 +36,8 @@ const DEFAULT_DATA = `# time, A, B
 50, 8, 92`;
 
 export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ model }) => {
+  const [theme] = useTheme();
+  const isDark = theme === 'dark';
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<ProfileLikelihoodResult | null>(null);
@@ -434,7 +437,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                   <div className="h-[clamp(200px,26vh,280px)] w-full mt-1 bg-white dark:bg-slate-900 rounded-lg p-2 border border-slate-200 dark:border-slate-700">
                     <ResponsiveContainer width="100%" height="100%">
                       <LineChart data={chartData} margin={{ top: 20, right: 30, left: 10, bottom: 20 }}>
-                        <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" vertical={false} />
+                         <CartesianGrid strokeDasharray="3 3" stroke={isDark ? '#334155' : '#e2e8f0'} vertical={false} />
                         <XAxis 
                           dataKey="val" 
                           type="number" 
@@ -450,11 +453,11 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                           tickFormatter={(v) => formatValue(v)}
                           label={{ value: 'Loss (SSR)', angle: -90, position: 'insideLeft', fontSize: 10, fill: '#94a3b8', fontWeight: 'bold' }}
                         />
-                        <Tooltip 
-                          contentStyle={{ backgroundColor: '#ffffff', border: '1px solid #e2e8f0', borderRadius: '8px', color: '#334155', fontSize: '11px' }}
-                          labelFormatter={(label) => `value: ${formatValue(typeof label === 'number' ? label : Number(label ?? 0))}`}
-                          formatter={(v) => [formatValue(typeof v === 'number' ? v : Number(v ?? 0)), 'SSR']}
-                        />
+                         <Tooltip 
+                           contentStyle={{ backgroundColor: isDark ? '#1e293b' : '#ffffff', border: `1px solid ${isDark ? '#475569' : '#e2e8f0'}`, borderRadius: '8px', color: isDark ? '#e2e8f0' : '#334155', fontSize: '11px' }}
+                           labelFormatter={(label) => `value: ${formatValue(typeof label === 'number' ? label : Number(label ?? 0))}`}
+                           formatter={(v) => [formatValue(typeof v === 'number' ? v : Number(v ?? 0)), 'SSR']}
+                         />
                         <ReferenceLine y={results.threshold} stroke="#f43f5e" strokeDasharray="6 4" strokeWidth={2} label={{ value: 'χ² Threshold', position: 'right', fill: '#f43f5e', fontSize: 10, fontWeight: 'black' }} />
                         
                         {profile.ci && (

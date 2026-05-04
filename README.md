@@ -18,10 +18,18 @@
 - **Multi-Compartment Support (cBNGL)**: Full support for compartmentalized models with molecule transport
 - **Visual Designer**: Construct models using a structured visual interface
 - **What-If Comparison Mode**: Run baseline vs modified-parameter simulations and compare trajectories in real-time
-- **Enhanced Example Gallery**: 250+ verified models (fetched from RuleHub) with semantic-search powered by TensorFlow.js
+- **Enhanced Example Gallery**: 337 categorized models with semantic search across 690 RuleHub models (powered by TensorFlow.js)
 - Interactive charts (series toggle / isolate, zoom, export)
 - **Analysis Modules**: Parameter scan, dose-response, perturbation screen, linear noise approximation, first passage time, NFsim post-processing, identifiability (FIM), steady state, parameter estimation, flux analysis, verification
 - **Bayesian Inference**: ABC-SMC parameter estimation with posterior predictive simulation and credible bands
+- **Provenance Recording**: PROV-O JSON-LD export, RO-Crate packaging for reproducible workflows
+- **Hybrid UDE / Neural Rate Residuals**: Universal differential equation support with neural network rate functions
+- **URL State Sharing**: Compressed model sharing via pako-compressed URLs
+- **GPU-Accelerated Solvers**: WebGPU ODE + SSA with CPU fallback for high-performance simulation
+- **Neural ODE Surrogates**: TF.js-powered neural ODE approximations for fast inference
+- **Publication Figure Pipeline**: Export figures with PLOS/Nature/Cell presets at 300 DPI
+- **CVODES Forward Sensitivity Analysis**: Compute parameter sensitivities alongside ODE solutions
+- **Dynamic Contact Map**: Interactive overlays with rule highlighting and animated simulations
 - **MCP Server**: 33 tool endpoints for programmatic model analysis (parse, simulate, calibration, sensitivity, inference, verification, and multiscale workflows)
 
 ## Quick Start
@@ -118,7 +126,6 @@ We maintain high fidelity with canonical BioNetGen (`BNG2.pl`) and provide high-
 - **Network-Free**: Native **NFsim** support for simulating models that are too large for network expansion.
 - **Multi-Compartment**: Full support for **cBNGL** (Compartmental BioNetGen) across both ODE and stochastic solvers.
 - **Hybrid Simulation**: PSA (Partitioned Stochastic Algorithm) adaptively partitions species between ODE and SSA based on copy number.
-- **Validated**: 165 models verified against BNG2.pl/run_network at R² = 1.0000000000 across 912 observables (see `artifacts/paper/`).
 
 Search capabilities include:
 
@@ -273,6 +280,15 @@ bionetgen-web-simulator/
 - **Semantic Search**: Client-side vector embeddings via TensorFlow.js for natural-language model discovery.
 - **Parallel Trajectories**: Core Comparison Engine for real-time "What-If" parameter perturbation analysis.
 
-## License
+## Architecture
+
+BNG Playground uses a monorepo architecture with clear separation of concerns:
+
+- **Engine** (`packages/engine`): Pure TypeScript, zero browser dependencies. Contains all core algorithms (parsing, simulation, analysis).
+- **MCP Server** (`packages/mcp-server`): 33 tool endpoints for programmatic access.
+- **App Root**: React UI with 27 analysis tabs, Web Worker orchestration, and WASM module loading.
+- **7 WASM Modules**: CVODE (SUNDIALS), NFsim, Nauty, and 4 additional solver modules for native-speed computation.
+
+## License:
 
 MIT
