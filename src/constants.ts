@@ -44,6 +44,7 @@ export {
 // Re-export under old names for backward compatibility
 export { BNG2_COMPATIBLE as BNG2_COMPATIBLE_MODELS } from './generated/gallery-data';
 export { NFSIM_COMPATIBLE as NFSIM_MODELS } from './generated/gallery-data';
+export { EXCLUDED as BNG2_EXCLUDED_MODELS } from './generated/gallery-data';
 
 // Type re-export
 export type { ModelCategory } from './generated/gallery-data';
