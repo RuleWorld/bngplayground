@@ -28,6 +28,8 @@ export default defineConfig({
       'tests/playwright/**/*.{test,spec}.ts',
       'tests/playwright/**/*.{test,spec}.tsx',
       'tests/*playwright*.spec.ts',
+      'tests/a11y/**/*.{test,spec}.ts',
+      'tests/a11y/**/*.{test,spec}.tsx',
       'tests/validate_biomodels_list.spec.ts',
       'tests/wasm-direct-test.spec.ts',
       // Mirror the default CI gate exclusions for unstable suites under refactor.
