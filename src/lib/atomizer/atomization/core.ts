@@ -404,10 +404,19 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
+  // Pre-compute common species if both reactants and products exist
+  const commonSpecies: string[] = [];
+  if (numReactants > 0 && numProducts > 0) {
+    for (const r of reactantIds) {
+      if (productIds.indexOf(r) !== -1) {
+        commonSpecies.push(r);
+      }
+    }
+  }
+
   // Catalysis (Sat/MM/Hill): A + B -> B where A catalyzes B production/consumption
   // Pattern: A + B -> B with Sat(k, K) rate law (B is unchanged catalyst/substrate)
   if (numReactants === 2 && numProducts === 1) {
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1 && hasSatRateLaw(reaction)) {
       const catalyst = commonSpecies[0];
       const substrate = reactantIds.find(r => r !== catalyst)!;
@@ -444,14 +453,14 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
   // Catalysis / Synthesis: E -> E + P (enzyme catalyzes its own production)
   // Pattern: 1 reactant, 2+ products where reactant is also a product
   if (numReactants === 1 && numProducts >= 2) {
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1) {
+      const commonId = commonSpecies[0];
       return {
         type: 'synthesis',
         reactants: [],
-        products: productIds.filter(p => !commonSpecies.includes(p)),
-        modifiers: [commonSpecies[0], ...modifierIds],
-        catalyst: commonSpecies[0],
+        products: productIds.filter(p => p !== commonId),
+        modifiers: [commonId, ...modifierIds],
+        catalyst: commonId,
       };
     }
   }
@@ -489,28 +498,28 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
   // Catalysis: A + E → A' + E (enzyme unchanged)
   if (numReactants === 2 && numProducts === 2) {
     // Check if one species is unchanged (catalyst)
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1) {
+      const commonId = commonSpecies[0];
       return {
         type: 'catalysis',
-        reactants: reactantIds.filter(r => !commonSpecies.includes(r)),
-        products: productIds.filter(p => !commonSpecies.includes(p)),
+        reactants: reactantIds.filter(r => r !== commonId),
+        products: productIds.filter(p => p !== commonId),
         modifiers: modifierIds,
-        catalyst: commonSpecies[0],
+        catalyst: commonId,
       };
     }
   }
 
   // Catalysis / Synthesis: E -> E + P
   if (numReactants === 1 && numProducts === 2) {
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1) {
+      const commonId = commonSpecies[0];
       return {
         type: 'synthesis',
         reactants: [],
-        products: productIds.filter(p => !commonSpecies.includes(p)),
+        products: productIds.filter(p => p !== commonId),
         modifiers: modifierIds,
-        catalyst: commonSpecies[0],
+        catalyst: commonId,
       };
     }
   }
