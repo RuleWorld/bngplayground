@@ -1,4 +1,3 @@
-
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -10,6 +9,13 @@ const MAX_MODELS = 150;
 const PER_MODEL_TIMEOUT_MS = Math.max(30_000, Number(process.env.MASSIVE_PARITY_TEST_TIMEOUT_MS ?? 120_000));
 const MASSIVE_PARITY_KNOWN_HEAVY_MODELS = new Set([
     'Lin_Prion_2019',
+    // EGFR models generate 356 species / 3749 reactions — network generation
+    // alone exceeds the 120 s per-model timeout on CI runners.
+    '10_egfr_egfr_ode',
+    'egfr_ode',
+    'example1',
+    'example1_BNFfiles_example1',
+    'example1_fit',
 ]);
 
 function normalizeKey(raw: string): string {

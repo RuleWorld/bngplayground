@@ -364,6 +364,20 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         return;
       }
 
+      // Scan expression for __FREE identifiers used inside compound expressions
+      // (e.g., "koff__FREE*T", "kp_Syk__FREE*T/(NA*Vcyt)").
+      // Register any missing __FREE params with default 0 so the expression
+      // evaluator can resolve them. Actual values come from setParameter actions
+      // at runtime (PyBNF / BNG2 fitting convention).
+      const freeParamRegex = /\b([A-Za-z_][A-Za-z0-9_]*__FREE)\b/g;
+      let freeMatch: RegExpExecArray | null;
+      while ((freeMatch = freeParamRegex.exec(value)) !== null) {
+        const freeParam = freeMatch[1];
+        if (!(freeParam in this.parameters) && !this.paramExpressions[freeParam]) {
+          this.parameters[freeParam] = 0;
+        }
+      }
+
       // Store raw expression for resolution
       this.paramExpressions[name] = value;
       // Initialize with 0
