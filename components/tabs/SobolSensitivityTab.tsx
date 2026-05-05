@@ -18,7 +18,8 @@ import {
   Legend,
   ResponsiveContainer,
   Cell,
-  ErrorBar
+  ErrorBar,
+  ReferenceLine
 } from 'recharts';
 
 interface SobolSensitivityTabProps {
@@ -116,12 +117,15 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
     const res = results[0]; // Currently only analyzing one observable
     return res.firstOrder.map((s1, i) => {
       const st = res.totalOrder[i];
+      // Recharts ErrorBar expects [low_offset, high_offset]
+      // where low_offset is subtracted from value and high_offset is added.
+      // Since our engine returns [abs_lower, abs_upper], we convert here.
       return {
         name: s1.name,
         S1: s1.value,
-        S1_CI: [s1.ci[0], s1.ci[1]],
+        S1_CI: [Math.max(0, s1.value - s1.ci[0]), Math.max(0, s1.ci[1] - s1.value)],
         ST: st.value,
-        ST_CI: [st.ci[0], st.ci[1]]
+        ST_CI: [Math.max(0, st.value - st.ci[0]), Math.max(0, st.ci[1] - st.value)]
       };
     });
   }, [results]);
@@ -303,8 +307,9 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
 
               <div className="h-[450px] w-full bg-slate-50 dark:bg-slate-900/50/50 dark:bg-slate-900/30 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barGap={0}>
+                   <BarChart data={chartData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }} barGap={0}>
                     <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#E2E8F0" />
+                    <ReferenceLine y={0} stroke="#94a3b8" strokeWidth={1} />
                     <XAxis 
                       dataKey="name" 
                       angle={-45} 
