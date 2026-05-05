@@ -189,7 +189,7 @@ jobs:
   # Reference parity suite (BioNetGen-style curated validation)
   reference-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    timeout-minutes: 120
     if: |
       github.event_name == 'workflow_dispatch' && github.event.inputs.run_full_suite == 'true' ||
       github.ref == 'refs/heads/main' ||

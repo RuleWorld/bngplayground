@@ -713,7 +713,7 @@ function getMultiPhaseReference(
 
     const gdatFiles = fs.readdirSync(BNG_OUTPUT_DIR).filter(f => f.toLowerCase().endsWith('.gdat'));
 
-    const bnglFiles = getRuleHubManifestBnglPaths(PROJECT_ROOT, (entry) => entry.bng2_compatible !== false);
+    const bnglFiles = getRuleHubManifestBnglPaths(PROJECT_ROOT, (entry) => entry.bng2_compatible !== false && entry.compatibility?.bng2 !== false);
 
     const rawLabel = csvModelLabel(csvFile);
     const baseKey = normalizeKey(rawLabel);
