@@ -6,7 +6,12 @@ import { BNGXMLWriter } from '@bngplayground/engine';
 import { collectBnglFiles, resolveRuleHubRoot } from './helpers/rulehub';
 
 const NFSIM_MODELS_DIR = resolve(process.cwd(), 'src', 'wasm', 'nfsim', 'nfsim-src');
-const RULEHUB_RUNTIME_MODELS_DIR = join(resolveRuleHubRoot(process.cwd()), 'Contributed', 'BNGPlayground_PublicRuntime');
+const RULEHUB_ROOT = resolveRuleHubRoot(process.cwd());
+// New RuleHub layout: Tutorials/, Examples/, Published/ (no more Contributed/BNGPlayground_PublicRuntime)
+const RULEHUB_MODEL_DIRS = [
+    join(RULEHUB_ROOT, 'Tutorials'),
+    join(RULEHUB_ROOT, 'Examples'),
+];
 
 // Recursively find all .bngl files in a directory
 function findBnglFiles(dir: string): string[] {
@@ -43,7 +48,9 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
 
     try {
         nfsimModels = findBnglFiles(NFSIM_MODELS_DIR);
-        publicModels = collectBnglFiles(RULEHUB_RUNTIME_MODELS_DIR);
+        for (const dir of RULEHUB_MODEL_DIRS) {
+            publicModels.push(...collectBnglFiles(dir));
+        }
     } catch (err) {
         console.warn('Could not scan model directories:', err);
     }
@@ -54,7 +61,7 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
     it(`finds BNGL models (found ${modelCount} models)`, () => {
         expect(modelCount).toBeGreaterThan(0);
         console.log(`Found ${nfsimModels.length} models in NFsim source`);
-        console.log(`Found ${publicModels.length} models in RuleHub runtime examples`);
+        console.log(`Found ${publicModels.length} models in RuleHub (Tutorials + Examples)`);
     });
 
     it('parses all models without crashing the parser', () => {
