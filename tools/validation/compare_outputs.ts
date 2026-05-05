@@ -119,6 +119,43 @@ const EXPECTED_MISMATCHES: Record<string, string> = {
   ecocoevolutionhostparasite: 'Chaotic divergence between CVODE implementations',
   mtmusicsequencer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
   spfouriersynthesizer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
+  // bifurcate action not supported — web runs ODE, BNG2 runs bifurcation scan
+  toggle: 'bifurcate action not supported',
+  lismanbifurcate: 'bifurcate action not supported',
+  // __FREE (PyBNF fitting) models: free parameters have no setParameter action in the
+  // base BNGL file — values remain at 0, producing wrong dynamics. The fitted variants
+  // (e.g., model_tofit_gen157ind72.bngl) have values baked in but aren't what the gallery loads.
+  '06degranulationmodeltofit': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp15': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp2120': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp2240': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp230': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp25': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp260': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp3120': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp3240': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp330': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp35': '__FREE params not set (PyBNF fitting model)',
+  '06degranulationmodeltofitp360': '__FREE params not set (PyBNF fitting model)',
+  egfregfr: '__FREE params not set (PyBNF fitting model)',
+  '15igf1rigf1rfitallincubate': '__FREE params not set (PyBNF fitting model)',
+  '19rafconstraintrafi': '__FREE params not set (PyBNF fitting model)',
+  '20rafconstraint4rafi': '__FREE params not set (PyBNF fitting model)',
+  '31elephantelephant': '__FREE params not set (PyBNF fitting model)',
+  rafi: '__FREE params not set (PyBNF fitting model)',
+  rafiground: '__FREE params not set (PyBNF fitting model)',
+  parabolagroundpar: '__FREE params not set (PyBNF fitting model)',
+  parabolapar: '__FREE params not set (PyBNF fitting model)',
+  polynomialgroundmut: '__FREE params not set (PyBNF fitting model)',
+  polynomialgroundwt: '__FREE params not set (PyBNF fitting model)',
+  '07eggegg': '__FREE params not set (PyBNF fitting model)',
+  mitra201902egfrbnf1inputfilesegfr: '__FREE params not set or stack overflow on large model',
+  // parameter_scan action not fully supported — web runs single ODE, BNG2 runs scan
+  abcscan: 'parameter_scan action not supported',
+  babscan: 'parameter_scan action not supported',
+  fceriji: 'parameter_scan action not supported',
+  // Method mismatch: BNG2 uses SSA, web uses ODE
+  circadianoscillator: 'Method mismatch: web=ODE, BNG2=SSA',
 };
 
 // Allow steady-state models to have different row counts if values match in overlap
@@ -141,7 +178,8 @@ const CSV_MODEL_ALIASES: Record<string, string> = {
   pybngdegranulationmodel: 'degranulation_model',
   pybngegfrode: 'egfr_ode',
   cheemalavagu2024: 'Cheemalavagu_JAK_STAT',
-  // Multi-phase models: Map to specific phase
+  // Web batch runner appends _ode/_ssa to filenames; these don't match BNG2 basenames
+  simpleode: 'simple',
   // Multi-phase models: Explicit mapping if needed, else automatic
   // hat2016 removed here to let auto-detection handle multi-phase if possible,
   // or explicitly mapped below if needed.

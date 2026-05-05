@@ -74,7 +74,7 @@ function extractDeterministicModelList() {
   }
   const manifest = JSON.parse(fs.readFileSync(ruleHubManifestPath, 'utf8'));
   const models = (Array.isArray(manifest) ? manifest : manifest.models)
-    .filter((entry) => entry?.bng2_compatible)
+    .filter((entry) => entry?.bng2_compatible || entry?.compatibility?.bng2)
     .map((entry) => entry.id)
     .filter(Boolean);
   return [...new Set(models)].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));

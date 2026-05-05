@@ -7,6 +7,7 @@ export interface RuleHubManifestEntry {
   file?: string;
   collectionId?: string;
   bng2_compatible?: boolean;
+  compatibility?: { bng2?: boolean; nfsim?: boolean; excluded?: boolean; methods?: string[] };
   origin?: string;
   category?: string;
   visible?: boolean;

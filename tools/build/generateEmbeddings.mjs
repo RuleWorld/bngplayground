@@ -209,7 +209,7 @@ async function scanModels() {
   const manifestBase = DEFAULT_RULEHUB_MANIFEST_URL.replace(/\/manifest\.json(?:[?#].*)?$/i, '');
 
   for (const entry of manifest) {
-    if (!entry?.bng2_compatible || !entry?.path) {
+    if (!(entry?.bng2_compatible || entry?.compatibility?.bng2) || !entry?.path) {
       continue;
     }
 

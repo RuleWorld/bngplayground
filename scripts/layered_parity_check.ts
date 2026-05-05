@@ -1,4 +1,3 @@
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync, execSync } from 'child_process';
@@ -226,9 +225,9 @@ const BNG_CDAT_DIR = BNG_REFERENCE_ROOT;
 const BNG_GDAT_DIR = BNG_REFERENCE_ROOT;
 const PARITY_ARTIFACTS_DIR = path.join(PROJECT_ROOT, 'artifacts', 'parity_artifacts');
 
-let ruleHubManifestCache: Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> | null = null;
+let ruleHubManifestCache: Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean; compatibility?: { bng2?: boolean } }> | null = null;
 
-function loadRuleHubManifest(): Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> {
+function loadRuleHubManifest(): Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean; compatibility?: { bng2?: boolean } }> {
   if (ruleHubManifestCache) return ruleHubManifestCache;
   if (!RULEHUB_MANIFEST_PATH || !fs.existsSync(RULEHUB_MANIFEST_PATH)) return [];
   const payload = JSON.parse(fs.readFileSync(RULEHUB_MANIFEST_PATH, 'utf8'));
@@ -1667,7 +1666,7 @@ function discoverAllModelsFromConstants(): string[] {
   }
   const deduped = dedupeModels(
     loadRuleHubManifest()
-      .filter((entry) => entry.bng2_compatible)
+      .filter((entry) => entry.bng2_compatible || entry.compatibility?.bng2)
       .map((entry) => entry.id)
       .filter((entry): entry is string => Boolean(entry))
   );
