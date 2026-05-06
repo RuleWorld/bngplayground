@@ -319,11 +319,11 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             markers={editorMarkers}
             selection={selection}
             lastResized={lastResized}
-            onRun={() => {
+            onRun={async () => {
               // Ctrl+Enter: parse first, then simulate with model-default options
-              onParse();
-              if (model) {
-                const opts = getSimulationOptionsFromParsedModel(model, 'default');
+              const parsedModel = await onParse();
+              if (parsedModel) {
+                const opts = getSimulationOptionsFromParsedModel(parsedModel, 'default');
                 onSimulate(opts);
               }
             }}

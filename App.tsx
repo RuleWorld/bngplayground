@@ -789,13 +789,9 @@ function App() {
             ...lintDiagnosticsToMarkers(code, lintResult.diagnostics),
           ]);
 
-          // Run simulation with sensible defaults
-          const simResults = await bnglService.simulate(parsedModel, {
-            method: 'ode',
-            t_end: 100,
-            n_steps: 100,
-            solver: 'auto'
-          }, { description: 'Auto-simulation on first visit' });
+          // Run simulation with model-derived options or sensible defaults
+          const opts = getSimulationOptionsFromParsedModel(parsedModel, 'default');
+          const simResults = await bnglService.simulate(parsedModel, opts, { description: 'Auto-simulation on first visit' });
 
           setResults(simResults);
           setStatus({
@@ -1114,12 +1110,12 @@ function App() {
                       onModelNameChange={handleDesignerModelNameChange}
                       onCodeChange={handleEditorCodeChange}
                       onParse={handleParse}
-                      onSimulate={(modelOverride) => handleSimulate({
-                        method: 'ode',
-                        t_end: 100,
-                        n_steps: 100,
-                        solver: 'auto'
-                      }, modelOverride)}
+                      onSimulate={(modelOverride) => {
+                        const opts = modelOverride 
+                          ? getSimulationOptionsFromParsedModel(modelOverride, 'default')
+                          : { method: 'ode', t_end: 100, n_steps: 100, solver: 'auto' } as SimulationOptions;
+                        handleSimulate(opts, modelOverride);
+                      }}
                     />
                   </ErrorBoundary>
                 )}

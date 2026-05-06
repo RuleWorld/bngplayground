@@ -74,19 +74,23 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   const [rtol, setRtol] = useState('');
   const [includeInfluence, setIncludeInfluence] = useState(true);
 
-  const initialDefaults = resolveSimulationControlDefaults(model, method);
+  // Sync state with model/method changes (derived state pattern)
+  const [prevModel, setPrevModel] = useState(model);
+  const [prevMethod, setPrevMethod] = useState(method);
 
+  const initialDefaults = resolveSimulationControlDefaults(model, method);
   const [tEnd, setTEnd] = useState(initialDefaults.tEnd);
   const [tStart, setTStart] = useState(initialDefaults.tStart);
   const [nSteps, setNSteps] = useState(initialDefaults.nSteps);
 
-  // Update defaults when model or method changes
-  useEffect(() => {
+  if (model !== prevModel || method !== prevMethod) {
     const nextDefaults = resolveSimulationControlDefaults(model, method);
     setTEnd(nextDefaults.tEnd);
     setTStart(nextDefaults.tStart);
     setNSteps(nextDefaults.nSteps);
-  }, [model, method]);
+    setPrevModel(model);
+    setPrevMethod(method);
+  }
 
   // SSA-specific parameters
   const [ssaSeed, setSsaSeed] = useState('');
