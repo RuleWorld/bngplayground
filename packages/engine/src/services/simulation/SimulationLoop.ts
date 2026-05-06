@@ -333,7 +333,75 @@ export async function simulate(
 
   const hasMultiPhase = phases.length > 1;
   const concentrationChanges = model.concentrationChanges || [];
-  const parameterChanges = model.parameterChanges || [];
+  let parameterChanges = model.parameterChanges || [];
+
+  // Apply parameter changes scheduled before phase 0 so initial expressions use updated values.
+  if (parameterChanges.length > 0) {
+    const prePhaseChanges = parameterChanges.filter((change) => change.afterPhaseIndex < 0);
+    if (prePhaseChanges.length > 0) {
+      const functionMap = new Map(
+        (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
+      );
+      const paramMap = new Map(Object.entries(model.parameters || {}));
+      let parametersUpdated = false;
+
+      for (const change of prePhaseChanges) {
+        const mode = change.mode ?? 'set';
+        if (mode !== 'set') continue;
+        if (!isSafeObjectKey(change.parameter)) continue;
+
+        let newVal: number;
+        if (typeof change.value === 'number') {
+          newVal = change.value;
+        } else {
+          const raw = String(change.value).trim();
+          const parsed = Number(raw);
+          if (Number.isFinite(parsed)) {
+            newVal = parsed;
+          } else {
+            try {
+              newVal = BNGLParser.evaluateExpression(raw, paramMap, undefined, functionMap);
+            } catch {
+              newVal = parseFloat(raw) || 0;
+            }
+          }
+        }
+
+        if (model.parameters && model.parameters[change.parameter] !== newVal) {
+          setSafeNumericField(model.parameters as Record<string, number>, change.parameter, newVal);
+          paramMap.set(change.parameter, newVal);
+          if (model.paramExpressions) {
+            delete model.paramExpressions[change.parameter];
+          }
+          parametersUpdated = true;
+        }
+      }
+
+      if (parametersUpdated && model.paramExpressions) {
+        for (let pass = 0; pass < 10; pass++) {
+          let anyChanged = false;
+          for (const name in model.paramExpressions) {
+            if (!Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) continue;
+            if (!isSafeObjectKey(name)) continue;
+            const expr = model.paramExpressions[name];
+            try {
+              const val = BNGLParser.evaluateExpression(expr, paramMap, undefined, functionMap);
+              if (Number.isFinite(val) && Math.abs(val - (model.parameters[name] || 0)) > 1e-12) {
+                setSafeNumericField(model.parameters as Record<string, number>, name, val);
+                paramMap.set(name, val);
+                anyChanged = true;
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+          if (!anyChanged) break;
+        }
+      }
+
+      parameterChanges = parameterChanges.filter((change) => change.afterPhaseIndex >= 0);
+    }
+  }
   // BNG2 semantics: phases with suffix write to separate files, while unsuffixed
   // phases write to the default model.gdat. For parity, default CSV output should
   // start from the first unsuffixed phase when one exists.
@@ -668,6 +736,23 @@ export async function simulate(
     (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
   );
   const resolveInitialAmount = (species: BNGLModel['species'][number]): number => {
+    const expression = typeof (species as any).initialExpression === 'string'
+      ? (species as any).initialExpression.trim()
+      : '';
+    if (expression) {
+      try {
+        const evaluated = BNGLParser.evaluateExpression(
+          expression,
+          initialEvalParamMap,
+          new Set(),
+          initialEvalFunctionMap
+        );
+        if (Number.isFinite(evaluated)) return evaluated;
+      } catch {
+        // Fall through to raw initial values
+      }
+    }
+
     const rawConcentration = (species as any).initialConcentration;
     if (typeof rawConcentration === 'number' && Number.isFinite(rawConcentration)) {
       return rawConcentration;
@@ -686,21 +771,7 @@ export async function simulate(
       if (Number.isFinite(parsedAmount)) return parsedAmount;
     }
 
-    const expression = typeof (species as any).initialExpression === 'string'
-      ? (species as any).initialExpression.trim()
-      : '';
-    if (!expression) return 0;
-    try {
-      const evaluated = BNGLParser.evaluateExpression(
-        expression,
-        initialEvalParamMap,
-        new Set(),
-        initialEvalFunctionMap
-      );
-      return Number.isFinite(evaluated) ? evaluated : 0;
-    } catch {
-      return 0;
-    }
+    return 0;
   };
 
   const isOde = !allSsa && !allPla && !allPsa && options.method !== 'ssa' && options.method !== 'pla' && options.method !== 'psa';
