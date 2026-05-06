@@ -74,7 +74,7 @@ interface EditorPanelProps {
   onCodeChange: (code: string) => void;
   onLoadCode?: (code: string) => void;
   editorResetKey?: number;
-  onParse: (codeOverride?: string) => void | Promise<unknown>;
+  onParse: (codeOverride?: string) => Promise<BNGLModel | null>;
   onSimulate: (options: SimulationOptions) => void;
   isSimulating: boolean;
   modelExists: boolean;
