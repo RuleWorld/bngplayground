@@ -20,7 +20,9 @@ export const generateNetworkArgsSchema = z.object({
 }).strict();
 
 export const simulateArgsSchema = z.object({
-    code: z.string(),
+    code: z.string().optional(),
+    file: z.string().optional()
+        .describe('Path to local BNGL file. If provided, overrides code.'),
     output_mode: z.enum(simulateOutputModes).optional()
         .describe('Response payload mode. Use "observables_only" for LLM clients unless expanded network data is required.'),
     method: z.enum(simulationMethods).optional(),
@@ -41,7 +43,9 @@ export const simulateArgsSchema = z.object({
         .describe('Record reaction firing events during SSA (enables reaction_information_flow downstream). Only meaningful when method="ssa".'),
     max_firing_events: positiveInt.optional()
         .describe('Cap on the SSA firing log size (default 100000)'),
-}).strict();
+}).strict().refine((value) => value.code !== undefined || value.file !== undefined, {
+    message: 'Provide code or file.',
+});
 
 export const parameterScanArgsSchema = z.object({
     code: z.string(),

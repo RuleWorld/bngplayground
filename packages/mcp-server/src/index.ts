@@ -125,9 +125,13 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
         inputSchema: {
           type: 'object',
           properties: {
+            file: {
+              type: 'string',
+              description: 'Path to local BNGL file. If provided, overrides code.',
+            },
             code: {
               type: 'string',
-              description: 'BNGL code to simulate',
+              description: 'BNGL code to simulate (ignored when file is provided)',
             },
             output_mode: {
               type: 'string',
@@ -193,7 +197,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
               description: 'Max aggregate size',
             },
           },
-          required: ['code'],
+          anyOf: [
+            { required: ['code'] },
+            { required: ['file'] },
+          ],
         },
       },
       {

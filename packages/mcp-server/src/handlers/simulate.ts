@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { NetworkGenerationLimitError, simulate, loadEvaluator, type SimulationResults } from '@bngplayground/engine';
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { simulateArgsSchema } from '../schemas/index.js';
@@ -25,7 +26,10 @@ function toObservablesOnlyPayload(results: SimulationResults): Omit<SimulationRe
 export async function handleSimulate(args: ToolArgs): Promise<ToolResult<any>> {
     const parsedArgs = parseArgs('simulate', simulateArgsSchema, args);
     try {
-        const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
+        const code = parsedArgs.file !== undefined
+            ? readFileSync(parsedArgs.file, 'utf-8')
+            : (parsedArgs.code ?? '');
+        const model = applyNetworkOptions(parseModelOrThrow(code), parsedArgs);
         const expandedModel = await expandModel(model);
         const simulationOptions = buildSimulationOptions(parsedArgs);
         const outputMode = parsedArgs.output_mode ?? 'full';
