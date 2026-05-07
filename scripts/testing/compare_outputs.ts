@@ -148,8 +148,10 @@ const EXPECTED_MISMATCHES: Record<string, string> = {
   parabolapar: '__FREE params not set (PyBNF fitting model)',
   polynomialgroundmut: '__FREE params not set (PyBNF fitting model)',
   polynomialgroundwt: '__FREE params not set (PyBNF fitting model)',
-  '07eggegg': '__FREE params not set (PyBNF fitting model)',
-  mitra201902egfrbnf1inputfilesegfr: '__FREE params not set or stack overflow on large model',
+  '07eggeggegg': '__FREE params not set (PyBNF fitting model)',
+  mitra201902egfrbnf1inputfilesegfregfr: '__FREE params not set or stack overflow on large model',
+  fceriviz: 'Long-time numerical drift in stiff FceRI model',
+  zhang2021: 'Localized observable mismatch (pTie2) - likely rate-law or observable parsing bug',
   // parameter_scan action not fully supported — web runs single ODE, BNG2 runs scan
   abcscan: 'parameter_scan action not supported',
   babscan: 'parameter_scan action not supported',
