@@ -341,7 +341,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             <Button onClick={() => setIsGalleryOpen(true)} className="h-9 px-3">Models</Button>
             
             <Dropdown align="left" trigger={
-              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2">
+              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" title="Load model" aria-label="Load model">
                 <UploadIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Load</span>
               </Button>
