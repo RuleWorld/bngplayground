@@ -893,8 +893,19 @@ export async function simulate(
     const observableNames = concreteObservables.map((obs) => obs.name);
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
     const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
-    for (const name of observableNames) {
-      setSafeNumericField(observableValuesRecord, name, 0);
+
+    // ⚡ Bolt Optimization: Pre-filter safe observable names once during setup.
+    // This avoids repeatedly checking isSafeObjectKey for every observable in the hot loop.
+    const safeObservableNames: string[] = [];
+    const safeObservableIndices: number[] = [];
+    for (let i = 0; i < observableNames.length; i++) {
+      const name = observableNames[i];
+      if (isSafeObjectKey(name)) {
+        safeObservableNames.push(name);
+        safeObservableIndices.push(i);
+        // Initialize the object with 0
+        observableValuesRecord[name] = 0;
+      }
     }
 
     // --- Observable evaluation strategy selection ---
@@ -977,11 +988,10 @@ export async function simulate(
 
     const evaluateObservablesFast = (currentState: Float64Array) => {
       const buffer = evaluateObservablesIntoBuffer(currentState);
-      for (let i = 0; i < observableNames.length; i++) {
-        const name = observableNames[i];
-        if (name !== '__proto__' && name !== 'constructor' && name !== 'prototype') {
-          setSafeNumericField(observableValuesRecord, name, buffer[i]);
-        }
+      // ⚡ Bolt Optimization: Use pre-filtered safe observable names to directly assign values,
+      // avoiding repeated regex validation via setSafeNumericField in the hot loop.
+      for (let i = 0; i < safeObservableNames.length; i++) {
+        observableValuesRecord[safeObservableNames[i]] = buffer[safeObservableIndices[i]];
       }
       return observableValuesRecord;
     };
