@@ -427,7 +427,7 @@ export class BNGLParser {
     const states = stateParts.slice(1);
     const component = new Component(name, states);
     if (states.length > 0) component.state = states[0];
-    // FIX: Handle '?' or '*' as "any state" wildcard in BNGL
+    // NOTE: Handle '?' or '*' as "any state" wildcard in BNGL
     if (component.state === '*' || component.state === '?') {
       component.state = '?';
     }
