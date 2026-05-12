@@ -349,23 +349,40 @@ function generalizeSpecies(patterns: Species[]): Species {
   
   const basePattern = patterns[0].copy();
   
-  // For each component, check if states differ
-  for (const mol of basePattern.molecules) {
-    for (const comp of mol.components) {
-      const states = new Set<string>();
-      
-      for (const pattern of patterns) {
-        const matchingMol = pattern.molecules.find(m => m.name === mol.name);
-        if (matchingMol) {
-          const matchingComp = matchingMol.components.find(c => c.name === comp.name);
-          if (matchingComp && matchingComp.activeState) {
-            states.add(matchingComp.activeState);
-          }
-        }
+  // Precompute states for fast lookup: Map<molName, Map<compName, Set<activeState>>>
+  const statesMap = new Map<string, Map<string, Set<string>>>();
+
+  for (const pattern of patterns) {
+    for (const m of pattern.molecules) {
+      let molMap = statesMap.get(m.name);
+      if (!molMap) {
+        molMap = new Map<string, Set<string>>();
+        statesMap.set(m.name, molMap);
       }
       
+      for (const c of m.components) {
+        if (c.activeState) {
+          let compStates = molMap.get(c.name);
+          if (!compStates) {
+            compStates = new Set<string>();
+            molMap.set(c.name, compStates);
+          }
+          compStates.add(c.activeState);
+        }
+      }
+    }
+  }
+
+  // For each component, check if states differ across the patterns
+  for (const mol of basePattern.molecules) {
+    const molMap = statesMap.get(mol.name);
+    if (!molMap) continue;
+
+    for (const comp of mol.components) {
+      const compStates = molMap.get(comp.name);
+      
       // If multiple states, generalize by removing the state constraint
-      if (states.size > 1) {
+      if (compStates && compStates.size > 1) {
         comp.activeState = '';
       }
     }
