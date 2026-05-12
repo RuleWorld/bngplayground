@@ -1,3 +1,4 @@
+import { secureRandom } from "../../src/utils/secureRandom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Scatter } from 'recharts';
 import { BNGLModel } from '../../types';
@@ -293,7 +294,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
           const rowVals = [row.time.toFixed(4)];
           for (const name of obsNames) {
             const exact = row[name] ?? 0;
-            const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+            const noisy = exact * (1 + (secureRandom() - 0.5) * 0.05);
             rowVals.push(noisy.toFixed(4));
           }
           csv += rowVals.join(', ') + '\n';
@@ -312,7 +313,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         const row = res.data[idx];
         for (const name of obsNames) {
           const exact = row[name] ?? 0;
-          const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+          const noisy = exact * (1 + (secureRandom() - 0.5) * 0.05);
           measRows.push(`${name}\tdefault\t${row.time.toFixed(4)}\t${noisy.toFixed(6)}`);
         }
       }

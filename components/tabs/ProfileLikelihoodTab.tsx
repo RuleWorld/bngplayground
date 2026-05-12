@@ -1,3 +1,4 @@
+import { secureRandom } from "../../src/utils/secureRandom";
 import React, { useState, useMemo } from 'react';
 import { BNGLModel } from '../../types';
 import { Card } from '../ui/Card';
@@ -306,7 +307,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                         for (const name of obsNames) {
                            const exact = row[name] ?? 0;
                            // +/- 2.5% random noise
-                           const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+                           const noisy = exact * (1 + (secureRandom() - 0.5) * 0.05);
                            rowVals.push(noisy.toFixed(4));
                         }
                         csv += rowVals.join(', ') + '\n';
