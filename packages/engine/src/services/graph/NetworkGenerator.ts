@@ -3431,7 +3431,7 @@ export class NetworkGenerator {
       }
     }
 
-    // FIX: Pre-calculate component state changes for MoveConnected rules
+    // NOTE: Pre-calculate component state changes for MoveConnected rules
     // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
     const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
     if ((rule as any).isMoveConnected) {
