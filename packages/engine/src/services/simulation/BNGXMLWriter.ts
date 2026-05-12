@@ -646,7 +646,7 @@ export class BNGXMLWriter {
 
     const moleculesXml = graph.molecules
       .map((mol, molIdx) => {
-        // Fix: populate moleculeIdMap BEFORE component loop
+        // NOTE: populate moleculeIdMap BEFORE component loop
         const moleculeId = `${prefix}_M${molIdx + 1}`;
         moleculeIdMap.set(molIdx, moleculeId);
 
