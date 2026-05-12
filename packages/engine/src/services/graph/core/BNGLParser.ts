@@ -444,7 +444,7 @@ export class BNGLParser {
         // BioNetGen semantic: "." explicitly means UNBOUND
         component.wildcard = '-';
       } else {
-        // FIX: Allow '0' as a valid bond label (common in BNG2)
+        // NOTE: Allow '0' as a valid bond label (common in BNG2)
         const bond = parseInt(bondPart);
         if (!isNaN(bond) && bond >= 0) {
           component.edges.set(bond, -1);
