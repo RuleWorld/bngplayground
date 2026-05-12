@@ -3,6 +3,7 @@
  * Usage: npx tsx scripts/gen_single_csv.ts <bngl_path> <output_csv_path>
  */
 import * as fs from 'fs';
+import * as path from 'path';
 import { parseBNGLWithANTLR } from '../packages/engine/src/parser/BNGLParserWrapper';
 import { generateExpandedNetwork } from '../packages/engine/src/services/simulation/NetworkExpansion';
 import { simulate } from '../packages/engine/src/services/simulation/SimulationLoop';
@@ -10,6 +11,13 @@ import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/util
 
 const [bnglPath, outPath] = process.argv.slice(2);
 if (!bnglPath || !outPath) { console.error('Usage: gen_single_csv.ts <bngl> <out.csv>'); process.exit(1); }
+
+const resolvedOutPath = path.resolve(process.cwd(), outPath);
+const cwdWithSep = process.cwd().endsWith(path.sep) ? process.cwd() : process.cwd() + path.sep;
+if (!resolvedOutPath.startsWith(cwdWithSep)) {
+  console.error('Error: output path must be within the current working directory');
+  process.exit(1);
+}
 
 async function main() {
   const code = fs.readFileSync(bnglPath, 'utf8');
@@ -24,7 +32,7 @@ async function main() {
     process.exit(1);
   }
   const rows = result.data.map((row: any) => [String(row.time ?? 0), ...obs.map((h: string) => String(row[h] ?? 0))].join(','));
-  fs.writeFileSync(outPath, ['time,' + obs.join(','), ...rows].join('\n') + '\n');
+  fs.writeFileSync(resolvedOutPath, ['time,' + obs.join(','), ...rows].join('\n') + '\n');
   console.log('OK: ' + obs.length + ' obs, ' + result.data.length + ' rows');
 }
 
