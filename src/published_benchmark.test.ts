@@ -386,7 +386,7 @@ describe.skipIf(!hasBNG2)('Full Published Models Benchmark', () => {
 
             });
 
-            // FIX: Respect parsed network options (especially maxStoich)
+            // NOTE: Respect parsed network options (especially maxStoich)
             let maxStoich: number | Map<string, number> = 500;
             if (parsedModel.networkOptions?.maxStoich) {
                 if (typeof parsedModel.networkOptions.maxStoich === 'object') {
