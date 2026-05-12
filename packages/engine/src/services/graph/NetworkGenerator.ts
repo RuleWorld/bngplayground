@@ -3256,7 +3256,7 @@ export class NetworkGenerator {
     const productGraphs: SpeciesGraph[] = [];
     const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules surviving in products
     const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
-    const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // FIX: Track where survivors ended up
+    const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // NOTE: Track where survivors ended up
 
     // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
     const matchedReactantKeys = new Set<string>();
@@ -3416,7 +3416,7 @@ export class NetworkGenerator {
           productGraphs.push(subgraph);
           const graphIdx = productGraphs.length - 1;
 
-          // FIX: Track survivor locations
+          // NOTE: Track survivor locations
           for (let i = 0; i < subgraph.molecules.length; i++) {
             const mol = subgraph.molecules[i];
             if (mol._sourceKey) {
@@ -3439,7 +3439,7 @@ export class NetworkGenerator {
         const rg = reactantGraphs[ri];
 
         // Map of survivors in THIS reactant graph
-        // FIX: Track survivor locations
+        // NOTE: Track survivor locations
         for (const [mIdx, loc] of survivorLocations[ri].entries()) {
           const oldMol = rg.molecules[mIdx];
           const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
