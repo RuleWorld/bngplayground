@@ -3643,7 +3643,7 @@ export class NetworkGenerator {
             const oldMol = rg.molecules[oldIdx];
             const newMol = this.cloneMoleculeStructure(oldMol);
 
-            // FIX: Apply MoveConnected deltas to bystanders
+            // NOTE: Apply MoveConnected deltas to bystanders
             if ((rule as any).isMoveConnected && anchors.size > 0) {
               // Use the first available anchor to determine the delta
               const anchorKey = anchors.keys().next().value;
