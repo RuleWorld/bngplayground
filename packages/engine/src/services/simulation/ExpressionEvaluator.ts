@@ -200,6 +200,28 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
       }
 
       for (const modulePath of candidateModulePaths) {
+        // Validate the path against expected safe absolute/relative paths to prevent traversal.
+        // We only allow exactly the hardcoded relative path, or absolute paths derived directly from it.
+        let isSafePath = false;
+        if (modulePath === '../../utils/safeExpressionEvaluator') {
+          isSafePath = true;
+        } else if (typeof modulePath === 'string') {
+          // Ensure that if it's an absolute path, it strictly ends with the expected module name
+          // and does not contain unexpected directory traversals beyond the resolved path.
+          const normalizedPath = modulePath.replace(/\\/g, '/');
+          if (
+            normalizedPath.endsWith('/utils/safeExpressionEvaluator') ||
+            normalizedPath.endsWith('/utils/safeExpressionEvaluator.js') ||
+            normalizedPath.endsWith('/utils/safeExpressionEvaluator.ts')
+          ) {
+            isSafePath = true;
+          }
+        }
+
+        if (!isSafePath) {
+          continue;
+        }
+
         try {
           const mod = (globalThis as any).require(modulePath);
           const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;
