@@ -970,7 +970,7 @@ export function lintBNGL(model: BNGLModel, options: LinterOptions = {}, sourceCo
 
 const LINE_SPLIT_REGEX = /\r?\n/;
 
-function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic, fallback: number): number {
+function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic, fallback: number, cache: Map<string, number>): number {
   const candidates = new Set<string>();
   if (diagnostic.location?.name) {
     candidates.add(diagnostic.location.name.trim());
@@ -981,7 +981,11 @@ function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic,
 
   for (const candidate of candidates) {
     if (!candidate) continue;
-    const idx = lines.findIndex((line) => line.includes(candidate));
+    let idx = cache.get(candidate);
+    if (idx === undefined) {
+      idx = lines.findIndex((line) => line.includes(candidate));
+      cache.set(candidate, idx);
+    }
     if (idx !== -1) {
       return idx;
     }
@@ -994,8 +998,10 @@ export function lintDiagnosticsToMarkers(code: string, diagnostics: LintDiagnost
   const lines = code.length ? code.split(LINE_SPLIT_REGEX) : [''];
   const fallbackLine = Math.max(0, lines.findIndex((line) => line.trim().length > 0));
 
+  const candidateCache = new Map<string, number>();
+
   return diagnostics.map((diag) => {
-    const lineIndex = findLineIndexForDiagnostic(lines, diag, fallbackLine);
+    const lineIndex = findLineIndexForDiagnostic(lines, diag, fallbackLine, candidateCache);
     const lineText = lines[lineIndex] ?? '';
     return {
       severity: diag.severity,
