@@ -3184,7 +3184,7 @@ export class NetworkGenerator {
       storedRate,
       rule.name,
       {
-        degeneracy: 1, // Fix: Multiplicity is already in storedRate. ODE loop applies degeneracy again, so set to 1.
+        degeneracy: 1, // NOTE: Multiplicity is already in storedRate. ODE loop applies degeneracy again, so set to 1.
         propensityFactor: storedPropensityFactor,
         statFactor: storedExprScaleFactor,
         rateExpression: finalRateExpr,
