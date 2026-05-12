@@ -61,7 +61,7 @@ describe('Diagnostic Benchmark: Kozer_2014', () => {
 
         // We'll subclass/mock to peek inside if needed, or just run it
         // Limiting max species to reasonable number for profile
-        // FIX: Respect parsed network options (especially maxStoich)
+        // NOTE: Respect parsed network options (especially maxStoich)
         // Convert maxStoich Record to Map if present
         let maxStoich: number | Map<string, number> = 500; // default
         if (parsedModel.networkOptions?.maxStoich) {
