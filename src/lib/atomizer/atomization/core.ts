@@ -945,17 +945,23 @@ export function buildSpeciesCompositionTable(
     }
   }
 
+  // Pre-compute a mapping for fast lookups
+  const nameToId = new Map<string, string>();
+  for (const id of speciesIds) {
+    const sp = model.species.get(id);
+    if (sp?.name && !nameToId.has(sp.name)) {
+      nameToId.set(sp.name, id);
+    }
+    if (!nameToId.has(id)) {
+      nameToId.set(id, id);
+    }
+  }
+
   // Add naming-based dependencies
   for (const [_modification, pairs] of namingAnalysis.pairClassification) {
     for (const [baseName, derivedName] of pairs) {
-      const derivedId = speciesIds.find(id => {
-        const sp = model.species.get(id);
-        return sp?.name === derivedName || id === derivedName;
-      });
-      const baseId = speciesIds.find(id => {
-        const sp = model.species.get(id);
-        return sp?.name === baseName || id === baseName;
-      });
+      const derivedId = nameToId.get(derivedName);
+      const baseId = nameToId.get(baseName);
 
       if (derivedId && baseId && derivedId !== baseId) {
         if (!sct.dependencies.has(derivedId)) {
