@@ -3132,7 +3132,7 @@ export class NetworkGenerator {
     // (e.g. A+A→B state-change, logistic carrying-capacity terms like R+R→R),
     // BNG2 writes the full rate constant k in the NET (no 0.5 prefix).
     // The web was incorrectly writing 0.5*k because multiplicity = 1/2 was baked into storedRate.
-    // Fix: split the ruleSymmetryFactor (1/2) into a separate propensityFactor field so that:
+    // NOTE: split the ruleSymmetryFactor (1/2) into a separate propensityFactor field so that:
     //   - NET file writes the full k (matches BNG2 convention for non-bond rules)
     //   - ODE/SSA simulation kernels apply propensityFactor implicitly (already do this)
     //
