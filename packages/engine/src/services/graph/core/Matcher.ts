@@ -691,7 +691,7 @@ class VF2State {
     const patternMol = this.pattern.molecules[pMol];
     const targetMol = this.target.molecules[tMol];
 
-    // FIX: Support '*' molecule name wildcard
+    // NOTE: Support '*' molecule name wildcard
     if (patternMol.name !== '*' && patternMol.name !== targetMol.name) {
       return false;
     }
