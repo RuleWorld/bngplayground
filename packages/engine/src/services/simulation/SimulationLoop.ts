@@ -1993,7 +1993,7 @@ export async function simulate(
               rate = rxn.rateConstant;
             }
 
-            // FIX: 'rate' is already the rate constant (for mass action) or the evaluated rate.
+            // NOTE: 'rate' is already the rate constant (for mass action) or the evaluated rate.
             // Do NOT multiply by rxn.rateConstant again.
             // Scale velocity to "Amount" units for mass conservation across compartments
             // Rate in nM/s * Vol_Reacting = Amount_Rate in counts/s or moles/s
