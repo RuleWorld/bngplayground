@@ -62,3 +62,45 @@ describe('Model Loader Error Paths', () => {
     await expect(modelLoader.getManifest()).rejects.toThrow(/Invalid model manifest payload/);
   });
 });
+
+describe('getManifestDebugInfo', () => {
+  let modelLoader: typeof import('../../services/modelLoader');
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.unstubAllGlobals();
+    modelLoader = await import('../../services/modelLoader');
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
+  it('should initially return null for resolved, and list candidates', () => {
+    const debugInfo = modelLoader.getManifestDebugInfo();
+    expect(debugInfo.resolved).toBeNull();
+    expect(debugInfo.candidates).toBeInstanceOf(Array);
+    expect(debugInfo.candidates.length).toBeGreaterThan(0);
+  });
+
+  it('should return the resolved URL after successful manifest load', async () => {
+    const validManifest = { models: [], totalModels: 0, generated: '2023-01-01' };
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => validManifest
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    // Initial check
+    let debugInfo = modelLoader.getManifestDebugInfo();
+    expect(debugInfo.resolved).toBeNull();
+
+    await modelLoader.getManifest();
+
+    // After load
+    debugInfo = modelLoader.getManifestDebugInfo();
+    expect(debugInfo.resolved).not.toBeNull();
+    expect(typeof debugInfo.resolved).toBe('string');
+    expect(debugInfo.candidates).toContain(debugInfo.resolved);
+  });
+});
