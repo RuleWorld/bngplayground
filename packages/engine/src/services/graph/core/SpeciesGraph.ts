@@ -31,7 +31,7 @@ export class SpeciesGraph {
     const compB = this.molecules[mol2].components[comp2];
 
     // Find next available bond label if not specified
-    // FIX: Check if bondLabel is defined (including 0)
+    // NOTE: Check if bondLabel is defined (including 0)
     const label = (bondLabel !== undefined) ? bondLabel : this.getNextBondLabel();
 
     // Update adjacency map (both directions) - supports multi-site bonding
