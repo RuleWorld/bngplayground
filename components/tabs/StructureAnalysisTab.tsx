@@ -7,7 +7,7 @@ interface StructureAnalysisTabProps {
   results: SimulationResults | null;
 }
 
-// FIX: Moved from bnglService.ts to resolve an import error.
+// NOTE: Moved from bnglService.ts to resolve an import error.
 /**
  * Calculates structural properties of the BNGL model's reaction network.
  * @param model The BNGLModel to analyze.
