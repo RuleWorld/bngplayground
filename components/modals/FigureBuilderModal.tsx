@@ -195,6 +195,8 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
                             onClick={() => movePanel(id, 'up')}
                             disabled={idx === 0}
                             className="text-xs px-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"
+                            aria-label="Move panel left"
+                            title="Move panel left"
                           >
                             ←
                           </button>
@@ -202,12 +204,16 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
                             onClick={() => movePanel(id, 'down')}
                             disabled={idx === selectedPanels.length - 1}
                             className="text-xs px-1 text-slate-400 hover:text-slate-600 disabled:opacity-30"
+                            aria-label="Move panel right"
+                            title="Move panel right"
                           >
                             →
                           </button>
                           <button
                             onClick={() => togglePanel(id)}
                             className="text-xs px-1 text-red-400 hover:text-red-600"
+                            aria-label="Remove panel"
+                            title="Remove panel"
                           >
                             ×
                           </button>
@@ -269,6 +275,8 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
                   }`}
+                  aria-label={`${l} layout`}
+                  title={`${l.charAt(0).toUpperCase() + l.slice(1)} layout`}
                 >
                   {l === 'horizontal' ? '→' : l === 'vertical' ? '↓' : '⊞'}
                 </button>

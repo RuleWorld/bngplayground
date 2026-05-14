@@ -33,7 +33,7 @@ describe('Model Loader Error Paths', () => {
 
     const manifestPromise = modelLoader.getManifest();
     await expect(manifestPromise).rejects.toThrow(/Manifest fetch failed for all candidates/);
-    await expect(manifestPromise).rejects.toThrow(/404/);
+    await expect(manifestPromise).rejects.toThrow(/Network failure/);
   });
 
   it('should succeed if the first candidate fails but the second succeeds', async () => {
