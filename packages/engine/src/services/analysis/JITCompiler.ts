@@ -945,7 +945,7 @@ export class JITCompiler {
             reactantOffsets[nReactions] = currentReactantOffset;
 
             // Stoichiometry matrix conversion (CSC-like)
-            const speciesRxnEntries: Array<{ rxnIdx: number; stoich: number }>[] = Array.from({ length: nSpecies }, () => []);
+            const speciesRxnEntries: Array<Map<number, number>> = Array.from({ length: nSpecies }, () => new Map<number, number>());
             for (let r = 0; r < nReactions; r++) {
                 const rxn = reactions[r];
                 // Reactants
@@ -953,11 +953,11 @@ export class JITCompiler {
                     const s = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, r, 'reactant', j);
                     if (isConstant(s)) continue;
                     const st = rxn.reactantStoich[j];
-                    const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
-                    if (existing) {
-                        existing.stoich -= st;
+                    const existing = speciesRxnEntries[s].get(r);
+                    if (existing !== undefined) {
+                        speciesRxnEntries[s].set(r, existing - st);
                     } else {
-                        speciesRxnEntries[s].push({ rxnIdx: r, stoich: -st });
+                        speciesRxnEntries[s].set(r, -st);
                     }
                 }
                 // Products
@@ -965,11 +965,11 @@ export class JITCompiler {
                     const s = this.normalizeSpeciesIndex(rxn.productIndices[j], nSpecies, r, 'product', j);
                     if (isConstant(s)) continue;
                     const st = rxn.productStoich[j];
-                    const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
-                    if (existing) {
-                        existing.stoich += st;
+                    const existing = speciesRxnEntries[s].get(r);
+                    if (existing !== undefined) {
+                        speciesRxnEntries[s].set(r, existing + st);
                     } else {
-                        speciesRxnEntries[s].push({ rxnIdx: r, stoich: st });
+                        speciesRxnEntries[s].set(r, st);
                     }
                 }
             }
@@ -981,7 +981,7 @@ export class JITCompiler {
                     throw new Error(`[JITCompiler] speciesOffsets index out of range: ${s}`);
                 }
                 speciesOffsets[s] = totalStoichEntries;
-                totalStoichEntries += speciesRxnEntries[s].length;
+                totalStoichEntries += speciesRxnEntries[s].size;
             }
             if (nSpecies < 0 || nSpecies >= speciesOffsets.length) {
                 throw new Error(`[JITCompiler] speciesOffsets terminal index out of range: ${nSpecies}`);
@@ -993,12 +993,12 @@ export class JITCompiler {
 
             let currentStoichOffset = 0;
             for (let s = 0; s < nSpecies; s++) {
-                for (const entry of speciesRxnEntries[s]) {
+                for (const [rxnIdx, stoich] of speciesRxnEntries[s].entries()) {
                     if (currentStoichOffset < 0 || currentStoichOffset >= speciesRxnIdx.length || currentStoichOffset >= speciesStoich.length) {
                         throw new Error(`[JITCompiler] stoichiometry entry index out of range: ${currentStoichOffset}`);
                     }
-                    speciesRxnIdx[currentStoichOffset] = entry.rxnIdx;
-                    speciesStoich[currentStoichOffset] = entry.stoich;
+                    speciesRxnIdx[currentStoichOffset] = rxnIdx;
+                    speciesStoich[currentStoichOffset] = stoich;
                     currentStoichOffset++;
                 }
             }
@@ -1009,16 +1009,14 @@ export class JITCompiler {
             const jacRows = Array.from({ length: nSpecies }, () => new Map<number, { rxnIdx: number; coeff: number }[]>());
 
             // Map: reaction index -> species affected (non-zero net stoichiometry)
-            const rxnToAffectedSpecies: number[][] = reactions.map((_, r) => {
-                const affected: number[] = [];
-                for (let s = 0; s < nSpecies; s++) {
-                    const entries = speciesRxnEntries[s];
-                    if (!entries) continue;
-                    const entry = entries.find(e => e.rxnIdx === r);
-                    if (entry && entry.stoich !== 0) affected.push(s);
+            const rxnToAffectedSpecies: Array<{species: number, stoich: number}[]> = Array.from({ length: nReactions }, () => []);
+            for (let s = 0; s < nSpecies; s++) {
+                for (const [rxnIdx, stoich] of speciesRxnEntries[s].entries()) {
+                    if (stoich !== 0) {
+                        rxnToAffectedSpecies[rxnIdx].push({ species: s, stoich });
+                    }
                 }
-                return affected;
-            });
+            }
 
             for (let r = 0; r < nReactions; r++) {
                 const rxn = reactions[r];
@@ -1028,12 +1026,13 @@ export class JITCompiler {
                     const j = this.normalizeSpeciesIndex(rxn.reactantIndices[i_r], nSpecies, r, 'reactant', i_r); // Species the rate depends on
                     const reactantStoichJ = rxn.reactantStoich[i_r];
 
-                    for (const s of affectedSpecies) {
+                    for (const affected of affectedSpecies) {
+                        const s = affected.species;
                         if (!jacRows[s].has(j)) {
                             jacRows[s].set(j, []);
                         }
                         // We store the contribution from reaction r to J[s][j]
-                        const netStoichI = speciesRxnEntries[s].find(e => e.rxnIdx === r)!.stoich;
+                        const netStoichI = affected.stoich;
                         jacRows[s].get(j)!.push({ rxnIdx: r, coeff: netStoichI * reactantStoichJ });
                     }
                 }
