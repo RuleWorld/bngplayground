@@ -1,4 +1,5 @@
 import { readFileSync } from 'node:fs';
+import { resolve, sep } from 'node:path';
 import { NetworkGenerationLimitError, simulate, loadEvaluator, type SimulationResults } from '@bngplayground/engine';
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { simulateArgsSchema } from '../schemas/index.js';
@@ -26,9 +27,21 @@ function toObservablesOnlyPayload(results: SimulationResults): Omit<SimulationRe
 export async function handleSimulate(args: ToolArgs): Promise<ToolResult<any>> {
     const parsedArgs = parseArgs('simulate', simulateArgsSchema, args);
     try {
-        const code = parsedArgs.file !== undefined
-            ? readFileSync(parsedArgs.file, 'utf-8')
-            : (parsedArgs.code ?? '');
+        let code = '';
+        if (parsedArgs.file !== undefined) {
+            const baseDir = process.cwd();
+            const resolvedPath = resolve(baseDir, parsedArgs.file);
+            const safeBase = baseDir.endsWith(sep) ? baseDir : baseDir + sep;
+
+            // SECURITY: Validate boundaries to prevent path traversal
+            if (!resolvedPath.startsWith(safeBase) && resolvedPath !== baseDir) {
+                throw new Error(`Access denied: Invalid file path`);
+            }
+            code = readFileSync(resolvedPath, 'utf-8');
+        } else {
+            code = parsedArgs.code ?? '';
+        }
+
         const model = applyNetworkOptions(parseModelOrThrow(code), parsedArgs);
         const expandedModel = await expandModel(model);
         const simulationOptions = buildSimulationOptions(parsedArgs);
