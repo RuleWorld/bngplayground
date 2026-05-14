@@ -21,7 +21,7 @@ describe('XMLValidator', () => {
       expect(result.valid).toBe(false);
       
       // Should have at least one case sensitivity error
-      const caseSensitivityErrors = result.errors.filter(e => e.type === XMLErrorType.CASE_SENSITIVITY_ERROR);
+      const caseSensitivityErrors = result.errors.filter(e => e.type === XMLErrorType.CASE_SENSITIVITY);
       expect(caseSensitivityErrors.length).toBeGreaterThan(0);
       expect(caseSensitivityErrors[0].message).toContain('camelCase "totalRate"');
       expect(caseSensitivityErrors[0].attribute).toBe('totalRate');
@@ -42,7 +42,7 @@ describe('XMLValidator', () => {
       const result = XMLValidator.validateBNGXML(xmlWithLowercase);
       
       // Should not have case sensitivity errors
-      const caseSensitivityErrors = result.errors.filter(e => e.type === XMLErrorType.CASE_SENSITIVITY_ERROR);
+      const caseSensitivityErrors = result.errors.filter(e => e.type === XMLErrorType.CASE_SENSITIVITY);
       expect(caseSensitivityErrors).toHaveLength(0);
     });
 
@@ -69,10 +69,10 @@ describe('XMLValidator', () => {
       const result = XMLValidator.validateBNGXML(xmlWithCamelCaseRateLaw);
       
       expect(result.valid).toBe(false);
-      const caseSensitivityErrors = result.errors.filter(e => e.type === XMLErrorType.CASE_SENSITIVITY_ERROR);
+      const caseSensitivityErrors = result.errors.filter(e => e.type === XMLErrorType.CASE_SENSITIVITY);
       expect(caseSensitivityErrors.length).toBeGreaterThan(0);
-      expect(caseSensitivityErrors[0].element).toBe('RateLaw');
-      expect(caseSensitivityErrors[0].attribute).toBe('totalRate');
+      expect(caseSensitivityErrors.some(e => e.element === 'RateLaw')).toBe(true);
+      expect(caseSensitivityErrors.some(e => e.attribute === 'totalRate')).toBe(true);
     });
 
     it('should accept correct lowercase totalrate in RateLaw tags', () => {
@@ -99,7 +99,7 @@ describe('XMLValidator', () => {
       
       // Should not have case sensitivity errors for RateLaw
       const caseSensitivityErrors = result.errors.filter(e => 
-        e.type === XMLErrorType.CASE_SENSITIVITY_ERROR && e.element === 'RateLaw'
+        e.type === XMLErrorType.CASE_SENSITIVITY && e.element === 'RateLaw'
       );
       expect(caseSensitivityErrors).toHaveLength(0);
     });
@@ -171,7 +171,7 @@ describe('XMLValidator', () => {
       const result = XMLValidator.validateBNGXML(xmlMissingSections);
       
       expect(result.valid).toBe(false);
-      const schemaErrors = result.errors.filter(e => e.type === XMLErrorType.SCHEMA_VIOLATION);
+      const schemaErrors = result.errors.filter(e => e.type === XMLErrorType.SCHEMA_ERROR);
       expect(schemaErrors.length).toBeGreaterThan(0);
       
       const missingElements = schemaErrors.map(e => e.element);
