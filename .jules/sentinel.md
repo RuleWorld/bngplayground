@@ -1,4 +1,0 @@
-## 2025-05-14 - Fix path traversal in file download
-**Vulnerability:** The `handleSimulate` MCP tool in `packages/mcp-server/src/handlers/simulate.ts` used `readFileSync(parsedArgs.file)` without sanitizing or boundary checking the input parameter, allowing arbitrary read of the server's file system.
-**Learning:** Static analysis tools often flag `path.join` and simple concatenation as unsafe. When fixing path traversal vulnerabilities, we must ensure boundary constraints by explicitly resolving the path using `path.resolve` and verifying it matches or strictly starts with the designated safe base directory combined with the trailing separator `path.sep` (or equals the base exactly).
-**Prevention:** Always validate user-supplied file paths using `path.resolve(baseDir, userInput)`. Ensure it falls within an authorized root directory (`resolvedPath.startsWith(safeBase)` where `safeBase = baseDir.endsWith(path.sep) ? baseDir : baseDir + path.sep`).

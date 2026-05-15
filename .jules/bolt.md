@@ -1,3 +1,0 @@
-## 2024-05-14 - Replace O(N) array search with O(log N) binary search in parameter fitting loop
-**Learning:** Found an $O(N)$ linear `.find()` scan paired with an unnecessary $O(N)$ `.map()` allocation inside the hottest execution path of `packages/engine/src/services/analysis/paramFitter.ts` during ODE parameter optimization (`objective` function).
-**Action:** Replaced the array map and `findIndex` lookup with a zero-allocation, $O(\log N)$ binary search logic natively baked into `interpolateRow`, significantly reducing GC pressure and execution latency for massive time-series interpolation sweeps.
