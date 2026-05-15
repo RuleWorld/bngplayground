@@ -127,7 +127,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
   const totalPoints = sharedObs.length * timePoints.length;
   const sseHistory: number[] = [];
-  let nEval = 0;
+
 
   const useLog: boolean[] = paramBounds.map(b => b.min > 0);
   const encode = (p: number[]): number[] =>
@@ -198,7 +198,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
         sse += regResult.penalty;
       }
 
-      nEval++;
+
       return isFinite(sse) ? sse : 1e12;
     } catch {
       return 1e12;
@@ -556,17 +556,41 @@ function interpolateRow(
   t: number
 ): Record<string, number> | null {
   if (!rows.length) return null;
-  const times = rows.map(r => r.time as number);
-  const idx = times.findIndex(rt => rt >= t);
+  let low = 0;
+  let high = rows.length - 1;
+  let exactMatch = -1;
+
+  while (low <= high) {
+    const mid = (low + high) >> 1;
+    const midTime = rows[mid].time as number;
+    if (Math.abs(midTime - t) < 1e-12) {
+      exactMatch = mid;
+      break;
+    }
+    if (midTime < t) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  if (exactMatch !== -1) return rows[exactMatch];
+
+  const idx = low;
   if (idx <= 0) return rows[0];
   if (idx >= rows.length) return rows[rows.length - 1];
-  const t0 = times[idx - 1], t1 = times[idx];
+
+  const r0 = rows[idx - 1];
+  const r1 = rows[idx];
+  const t0 = r0.time as number;
+  const t1 = r1.time as number;
   const alpha = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
   const result: Record<string, number> = { time: t } as any;
-  for (const key of Object.keys(rows[idx])) {
+
+  for (const key of Object.keys(r1)) {
     if (key === 'time') continue;
-    const v0 = rows[idx - 1][key] as number;
-    const v1 = rows[idx][key] as number;
+    const v0 = r0[key] as number;
+    const v1 = r1[key] as number;
     result[key] = v0 + alpha * (v1 - v0);
   }
   return result;
