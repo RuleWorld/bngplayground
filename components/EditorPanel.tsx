@@ -363,12 +363,12 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               <DropdownItem onClick={() => onExportNET?.()} disabled={!modelExists}>Export NET</DropdownItem>
             </Dropdown>
 
-            <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3">
+            <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3" title="Format BNGL code" aria-label="Format BNGL code">
               <span className="hidden md:inline">Format</span>
               <span className="md:hidden">✨</span>
             </Button>
 
-            <Button onClick={() => onParse()} variant="secondary" className="h-9 px-4 font-bold">Parse</Button>
+            <Button onClick={() => onParse()} variant="secondary" className="h-9 px-4 font-bold" title="Parse BNGL code" aria-label="Parse BNGL code">Parse</Button>
 
             <input
               type="file"
