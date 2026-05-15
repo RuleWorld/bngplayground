@@ -217,28 +217,31 @@ export function interpolateAtTime(
 ): number {
   if (data.length === 0) return 0;
 
-  // Exact match first
-  const exact = data.find((r) => Math.abs(r.time - targetTime) < 1e-12);
-  if (exact) return exact[observable] ?? 0;
+  let low = 0;
+  let high = data.length - 1;
 
-  // Find bracket
-  let lo = 0;
-  let hi = data.length - 1;
-  if (targetTime <= data[0].time) return data[0][observable] ?? 0;
-  if (targetTime >= data[hi].time) return data[hi][observable] ?? 0;
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i].time >= targetTime) {
-      lo = i - 1;
-      hi = i;
-      break;
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const midTime = data[mid].time;
+    if (Math.abs(midTime - targetTime) < 1e-12) {
+      return data[mid][observable] ?? 0;
+    }
+    if (midTime < targetTime) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
     }
   }
 
-  const t0 = data[lo].time;
-  const t1 = data[hi].time;
+  if (low <= 0) return data[0][observable] ?? 0;
+  if (low >= data.length) return data[data.length - 1][observable] ?? 0;
+
+  const r0 = data[low - 1];
+  const r1 = data[low];
+  const t0 = r0.time;
+  const t1 = r1.time;
   const alpha = t1 > t0 ? (targetTime - t0) / (t1 - t0) : 0;
-  const v0 = data[lo][observable] ?? 0;
-  const v1 = data[hi][observable] ?? 0;
+  const v0 = r0[observable] ?? 0;
+  const v1 = r1[observable] ?? 0;
   return v0 + alpha * (v1 - v0);
 }

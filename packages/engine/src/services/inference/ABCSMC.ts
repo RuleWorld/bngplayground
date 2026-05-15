@@ -109,13 +109,54 @@ function computeDistance(
   metric: 'sse' | 'rmse' | 'weighted_sse' | 'chi_squared',
   errors?: Record<string, number>,
 ): number {
+  if (simData.length === 0) return Infinity;
+
   let sum = 0;
   let count = 0;
 
-  for (const dp of expData) {
+  // Pre-calculate time brackets for simulation data
+  const timeBrackets = expData.map((dp) => {
+    const targetTime = dp.time;
+    let low = 0;
+    let high = simData.length - 1;
+
+    // Check bounds
+    if (targetTime <= simData[0].time) return { lo: 0, hi: 0, alpha: 0 };
+    if (targetTime >= simData[high].time) return { lo: high, hi: high, alpha: 0 };
+
+    // Binary search for bracket
+    while (low <= high) {
+      const mid = (low + high) >>> 1;
+      const midTime = simData[mid].time;
+      if (Math.abs(midTime - targetTime) < 1e-12) {
+        return { lo: mid, hi: mid, alpha: 0 };
+      }
+      if (midTime < targetTime) {
+        low = mid + 1;
+      } else {
+        high = mid - 1;
+      }
+    }
+    const idx0 = low - 1;
+    const idx1 = low;
+    const t0 = simData[idx0].time;
+    const t1 = simData[idx1].time;
+    const alpha = (targetTime - t0) / (t1 - t0);
+    return { lo: idx0, hi: idx1, alpha };
+  });
+
+  for (let i = 0; i < expData.length; i++) {
+    const dp = expData[i];
+    const bracket = timeBrackets[i];
+    const r0 = simData[bracket.lo];
+    const r1 = simData[bracket.hi];
+
     for (const obs of observables) {
       if (dp.values[obs] === undefined) continue;
-      const simVal = interpolateAtTime(simData, dp.time, obs);
+
+      const v0 = r0[obs] ?? 0;
+      const v1 = r1[obs] ?? 0;
+      const simVal = v0 + bracket.alpha * (v1 - v0);
       const expVal = dp.values[obs];
       const diff = simVal - expVal;
 

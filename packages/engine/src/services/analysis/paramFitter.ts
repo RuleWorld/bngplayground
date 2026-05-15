@@ -157,32 +157,64 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
       let sse = 0;
       const dataRows = simResult.data;
+      
+      // Pre-calculate interpolation brackets for all time points once
+      const timeBrackets = timePoints.map(t => {
+        let low = 0;
+        let high = dataRows.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >>> 1;
+          const midTime = dataRows[mid].time;
+          if (Math.abs(midTime - t) < 1e-12) return { exact: true, idx: mid };
+          if (midTime < t) low = mid + 1;
+          else high = mid - 1;
+        }
+        if (low <= 0) return { exact: true, idx: 0 };
+        if (low >= dataRows.length) return { exact: true, idx: dataRows.length - 1 };
+        
+        const t0 = dataRows[low - 1].time;
+        const t1 = dataRows[low].time;
+        return {
+          exact: false,
+          low: low - 1,
+          high: low,
+          alpha: t1 > t0 ? (t - t0) / (t1 - t0) : 0
+        };
+      });
+
       for (const obs of sharedObs) {
-        const simVals = timePoints.map(t => {
-          const row =
-            dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-            interpolateRow(dataRows, t);
-          return row?.[obs] ?? 0;
-        });
         const obsData = observed[obs];
-        for (let i = 0; i < simVals.length; i++) {
-          const diff = simVals[i] - obsData[i];
+        for (let i = 0; i < timePoints.length; i++) {
+          const b = timeBrackets[i];
+          let simVal: number;
+          if (b.exact) {
+            simVal = dataRows[b.idx][obs] ?? 0;
+          } else {
+            const v0 = dataRows[b.low][obs] ?? 0;
+            const v1 = dataRows[b.high][obs] ?? 0;
+            simVal = v0 + b.alpha * (v1 - v0);
+          }
+          const diff = simVal - obsData[i];
           sse += diff * diff;
         }
       }
 
       if (constraints.length > 0) {
         const obsMap = new Map<string, number[]>();
-        for (const obs of model.observables.map(o => o.name)) {
-          obsMap.set(
-            obs,
-            timePoints.map(t => {
-              const row =
-                dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-                interpolateRow(dataRows, t);
-              return row?.[obs] ?? 0;
-            })
-          );
+        const allModelObs = model.observables.map(o => o.name);
+        for (const obs of allModelObs) {
+          const vals = new Array(timePoints.length);
+          for (let i = 0; i < timePoints.length; i++) {
+            const b = timeBrackets[i];
+            if (b.exact) {
+              vals[i] = dataRows[b.idx][obs] ?? 0;
+            } else {
+              const v0 = dataRows[b.low][obs] ?? 0;
+              const v1 = dataRows[b.high][obs] ?? 0;
+              vals[i] = v0 + b.alpha * (v1 - v0);
+            }
+          }
+          obsMap.set(obs, vals);
         }
         const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
         sse += bpslWeight * bpslResult.totalPenalty;
@@ -549,49 +581,4 @@ async function finiteDiffCI(
       return { lower, upper };
     }
   });
-}
-
-function interpolateRow(
-  rows: Array<Record<string, number>>,
-  t: number
-): Record<string, number> | null {
-  if (!rows.length) return null;
-  let low = 0;
-  let high = rows.length - 1;
-  let exactMatch = -1;
-
-  while (low <= high) {
-    const mid = (low + high) >> 1;
-    const midTime = rows[mid].time as number;
-    if (Math.abs(midTime - t) < 1e-12) {
-      exactMatch = mid;
-      break;
-    }
-    if (midTime < t) {
-      low = mid + 1;
-    } else {
-      high = mid - 1;
-    }
-  }
-
-  if (exactMatch !== -1) return rows[exactMatch];
-
-  const idx = low;
-  if (idx <= 0) return rows[0];
-  if (idx >= rows.length) return rows[rows.length - 1];
-
-  const r0 = rows[idx - 1];
-  const r1 = rows[idx];
-  const t0 = r0.time as number;
-  const t1 = r1.time as number;
-  const alpha = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
-  const result: Record<string, number> = { time: t } as any;
-
-  for (const key of Object.keys(r1)) {
-    if (key === 'time') continue;
-    const v0 = r0[key] as number;
-    const v1 = r1[key] as number;
-    result[key] = v0 + alpha * (v1 - v0);
-  }
-  return result;
 }

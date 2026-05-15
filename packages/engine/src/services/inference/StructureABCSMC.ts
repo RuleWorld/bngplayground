@@ -188,19 +188,30 @@ export async function structureSearch(
     simData: Record<string, number>[],
     headers: string[],
   ): number {
+    if (simData.length === 0) return Infinity;
+    
+    // Find time field name
+    const timeField = ['time', 'Time', 't'].find(f => simData[0][f] !== undefined) ?? 'time';
+
     let sse = 0;
     for (const dp of experimentalData) {
-      // Find closest time point in simulation
-      let bestIdx = 0;
-      let bestDt = Infinity;
-      for (let i = 0; i < simData.length; i++) {
-        const t = simData[i]['time'] ?? simData[i]['Time'] ?? simData[i]['t'] ?? 0;
-        const dt = Math.abs(t - dp.time);
-        if (dt < bestDt) {
-          bestDt = dt;
-          bestIdx = i;
+      // Binary search for closest time point
+      let low = 0;
+      let high = simData.length - 1;
+      
+      while (high - low > 1) {
+        const mid = (low + high) >>> 1;
+        if ((simData[mid][timeField] ?? 0) < dp.time) {
+          low = mid;
+        } else {
+          high = mid;
         }
       }
+
+      const t0 = simData[low][timeField] ?? 0;
+      const t1 = simData[high][timeField] ?? 0;
+      const bestIdx = Math.abs(t0 - dp.time) < Math.abs(t1 - dp.time) ? low : high;
+
       const simVal = simData[bestIdx]?.[dp.observable] ?? 0;
       const err = dp.error ?? 1;
       sse += ((simVal - dp.value) / err) ** 2;
