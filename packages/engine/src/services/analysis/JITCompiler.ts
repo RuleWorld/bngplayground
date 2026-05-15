@@ -161,6 +161,7 @@ export interface JITCompileDebugContext {
 export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private observableCache: Map<string, JITCompiledObservableFunction> = new Map();
+    private bytecodeCache: Map<string, NetworkByteCode> = new Map();
     private maxCacheSize: number = 50;
 
     private hashString(value: string): string {
@@ -198,6 +199,50 @@ export class JITCompiler {
                 reaction.productStoich.join(','),
                 String(reaction.rateConstant),
                 String(reaction.scalingVolume ?? 1),
+                reaction.totalRate ? '1' : '0'
+            ].join('|'));
+        }
+        return this.hashString(parts.join(';'));
+    }
+
+    private getBytecodeSignature(
+        reactions: Array<{
+            reactantIndices: Array<number | string>;
+            reactantStoich: number[];
+            productIndices: Array<number | string>;
+            productStoich: number[];
+            rateConstant: number | string;
+            scalingVolume?: number;
+            statisticalFactor?: number;
+            totalRate?: boolean;
+        }>,
+        nSpecies: number,
+        constantSpeciesMask?: boolean[],
+        observables?: Array<{
+            name: string;
+            indices: Int32Array | number[];
+            coefficients: Float64Array | number[];
+        }>
+    ): string {
+        const parts = [`n=${nSpecies}`];
+        if (constantSpeciesMask && constantSpeciesMask.length > 0) {
+            parts.push(`c=${constantSpeciesMask.map((value) => (value ? '1' : '0')).join('')}`);
+        }
+        if (observables) {
+            for (const o of observables) {
+                parts.push(`o=${o.name}|${o.indices.join(',')}|${o.coefficients.join(',')}`);
+            }
+        }
+        for (const reaction of reactions) {
+            const rateSig = typeof reaction.rateConstant === 'string' ? reaction.rateConstant : 'num';
+            parts.push([
+                reaction.reactantIndices.join(','),
+                reaction.reactantStoich.join(','),
+                reaction.productIndices.join(','),
+                reaction.productStoich.join(','),
+                rateSig,
+                String(reaction.scalingVolume ?? 1),
+                String(reaction.statisticalFactor ?? 1),
                 reaction.totalRate ? '1' : '0'
             ].join('|'));
         }
@@ -857,6 +902,46 @@ export class JITCompiler {
                 );
             }
 
+            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables);
+            const cached = this.bytecodeCache.get(signature);
+
+            if (cached) {
+                // Re-evaluate rate constants only
+                const rateConstants = new Float64Array(cached.nReactions);
+                for (let i = 0; i < cached.nReactions; i++) {
+                    const rxn = reactions[i];
+                    let hasExpressionBytecode = typeof rxn.rateConstant === 'string' && cached.exprBytecodeOffsets[i + 1] > cached.exprBytecodeOffsets[i];
+                    let k: number;
+                    if (typeof rxn.rateConstant === 'number') {
+                        k = rxn.rateConstant;
+                    } else {
+                        if (hasExpressionBytecode) {
+                            k = 0;
+                        } else {
+                            const rxnStr = rxn.rateConstant.toString();
+                            this.assertSafeRateExpression(rxnStr, paramKeys);
+                            const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
+                            try {
+                                const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
+                                k = evaluator(safeParameters);
+                                if (Number.isNaN(k) || !Number.isFinite(k)) return null;
+                            } catch {
+                                return null;
+                            }
+                        }
+                    }
+                    if (rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                        k *= rxn.statisticalFactor;
+                    }
+                    rateConstants[i] = k;
+                }
+
+                return {
+                    ...cached,
+                    rateConstants
+                };
+            }
+
             const nReactions = reactions.length;
             const rateConstants = new Float64Array(nReactions);
             const nReactantsPerRxn = new Int32Array(nReactions);
@@ -1099,8 +1184,7 @@ export class JITCompiler {
                 currentByteOffset += chunk.length;
             }
 
-
-            return {
+            const newByteCode: NetworkByteCode = {
                 nReactions,
                 nSpecies,
                 rateConstants,
@@ -1126,6 +1210,17 @@ export class JITCompiler {
                 exprBytecode,
                 exprConstants: new Float64Array(0),
                 requiresParameterRebuild
+            };
+
+            if (this.bytecodeCache.size >= this.maxCacheSize) {
+                const firstKey = this.bytecodeCache.keys().next().value;
+                if (firstKey !== undefined) this.bytecodeCache.delete(firstKey);
+            }
+            this.bytecodeCache.set(signature, newByteCode);
+
+            return {
+                ...newByteCode,
+                rateConstants: new Float64Array(rateConstants)
             };
         } catch (error) {
             console.error('[JITCompiler] Failed to compile bytecode:', error);

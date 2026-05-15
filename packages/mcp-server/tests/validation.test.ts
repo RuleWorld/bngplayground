@@ -399,6 +399,11 @@ end model
 `;
             const result = await handleDiagnoseModel({
                 code: bnglWithDeadRule,
+                t_end: 1,
+                n_steps: 2,
+                n_samples: 2,
+                n_bootstrap: 2,
+                max_parameters: 1,
             });
 
             expect(result.structuredContent.unreachableAnalysis).toBeDefined();
@@ -432,6 +437,11 @@ end model
 `;
             const result = await handleDiagnoseModel({
                 code: goodModel,
+                t_end: 1,
+                n_steps: 2,
+                n_samples: 2,
+                n_bootstrap: 2,
+                max_parameters: 1,
             });
 
             expect(result.structuredContent.unreachableAnalysis).toBeDefined();
