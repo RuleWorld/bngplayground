@@ -165,17 +165,18 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
         while (low <= high) {
           const mid = (low + high) >>> 1;
           const midTime = dataRows[mid].time;
-          if (Math.abs(midTime - t) < 1e-12) return { exact: true, idx: mid };
+          if (Math.abs(midTime - t) < 1e-12) return { exact: true, idx: mid, low: 0, high: 0, alpha: 0 };
           if (midTime < t) low = mid + 1;
           else high = mid - 1;
         }
-        if (low <= 0) return { exact: true, idx: 0 };
-        if (low >= dataRows.length) return { exact: true, idx: dataRows.length - 1 };
+        if (low <= 0) return { exact: true, idx: 0, low: 0, high: 0, alpha: 0 };
+        if (low >= dataRows.length) return { exact: true, idx: dataRows.length - 1, low: 0, high: 0, alpha: 0 };
         
         const t0 = dataRows[low - 1].time;
         const t1 = dataRows[low].time;
         return {
           exact: false,
+          idx: 0,
           low: low - 1,
           high: low,
           alpha: t1 > t0 ? (t - t0) / (t1 - t0) : 0
@@ -581,4 +582,46 @@ async function finiteDiffCI(
       return { lower, upper };
     }
   });
+}
+
+function interpolateRow(
+  rows: Array<Record<string, number>>,
+  t: number
+): Record<string, number> | null {
+  if (!rows.length) return null;
+  let low = 0;
+  let high = rows.length - 1;
+
+  // Check bounds
+  if (t <= rows[0].time) return rows[0];
+  if (t >= rows[high].time) return rows[high];
+
+  // Binary search for bracket
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const midTime = rows[mid].time;
+    if (Math.abs(midTime - t) < 1e-12) {
+      return rows[mid];
+    }
+    if (midTime < t) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const r0 = rows[low - 1];
+  const r1 = rows[low];
+  const t0 = r0.time;
+  const t1 = r1.time;
+  const alpha = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
+  
+  const result: Record<string, number> = { time: t };
+  for (const key in r1) {
+    if (key === 'time') continue;
+    const v0 = r0[key] ?? 0;
+    const v1 = r1[key] ?? 0;
+    result[key] = v0 + alpha * (v1 - v0);
+  }
+  return result;
 }
