@@ -310,13 +310,11 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
             let sse = 0;
             const dataRows = simResult.data;
+            const interpRows = timePoints.map(t =>
+              dataRows.find(r => Math.abs(r.time - t) < 1e-12) ?? interpolateRow(dataRows, t));
+
             for (const obs of sharedObs) {
-              const simVals = timePoints.map(t => {
-                const row =
-                  dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-                  interpolateRow(dataRows, t);
-                return row?.[obs] ?? 0;
-              });
+              const simVals = interpRows.map(row => row?.[obs] ?? 0);
               const obsData = observed[obs];
               for (let i = 0; i < simVals.length; i++) {
                 const diff = simVals[i] - obsData[i];
@@ -329,12 +327,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
               for (const obs of model.observables.map(o => o.name)) {
                 obsMap.set(
                   obs,
-                  timePoints.map(t => {
-                    const row =
-                      dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-                      interpolateRow(dataRows, t);
-                    return row?.[obs] ?? 0;
-                  })
+                  interpRows.map(row => row?.[obs] ?? 0)
                 );
               }
               const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
@@ -424,15 +417,12 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
       ...simOptions,
     });
 
+    const finalInterpRows = timePoints.map(t =>
+      finalSim.data.find(r => Math.abs(r.time - t) < 1e-12) ?? interpolateRow(finalSim.data, t));
+
     for (const obs of sharedObs) {
       bestPredictions.set(obs,
-        timePoints.map(t => {
-          const dataRows = finalSim.data;
-          const row =
-            dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-            interpolateRow(dataRows, t);
-          return row?.[obs] ?? 0;
-        })
+        finalInterpRows.map(row => row?.[obs] ?? 0)
       );
     }
 
@@ -451,12 +441,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
       for (const obs of model.observables.map(o => o.name)) {
         obsMap.set(
           obs,
-          timePoints.map(t => {
-            const row =
-              finalSim.data.find(r => Math.abs(r.time - t) < 1e-12) ??
-              interpolateRow(finalSim.data, t);
-            return row?.[obs] ?? 0;
-          })
+          finalInterpRows.map(row => row?.[obs] ?? 0)
         );
       }
       bpslResults = evaluateBPSL(constraints, timePoints, obsMap);
