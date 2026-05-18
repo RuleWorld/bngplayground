@@ -575,12 +575,11 @@ export class SpeciesGraph {
    */
   clone(): SpeciesGraph {
     const sg = new SpeciesGraph(this.molecules.map(m => m.clone()));
-    // NOTE: Deep clone adjacency Map values (arrays) to prevent mutation
-    const clonedAdjacency = new Map<string, string[]>();
+    // BUG FIX: Deep clone adjacency Map values (arrays) to prevent mutation
+    sg.adjacency = new Map();
     for (const [key, partners] of this.adjacency.entries()) {
-      clonedAdjacency.set(key, [...partners]);
+      sg.adjacency.set(key, [...partners]);
     }
-    sg.adjacency = clonedAdjacency;
     sg.compartment = this.compartment;
     if (this.adjacencyBitset) {
       sg.adjacencyBitset = this.adjacencyBitset.slice();
