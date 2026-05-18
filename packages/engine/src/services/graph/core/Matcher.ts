@@ -619,15 +619,15 @@ class VF2State {
       return pairs;
     }
 
-    // KEY FIX: When the next pattern node is NOT in the pattern frontier (i.e., it's from
+    // NOTE: When the next pattern node is NOT in the pattern frontier (i.e., it's from
     // a disconnected component in the pattern), we must consider ALL uncovered target nodes,
     // not just the target frontier. This is essential for patterns like "A.B" where A and B
     // are not directly bonded but must be in the same species/complex.
     // 
     // BNG semantics: "A.B" means A and B are in the same complex, but they don't need to
     // be directly bonded. They could be connected through intermediate molecules.
-    const nextPatternNodeInFrontier = patternFrontier.has(nextPatternIdx);
-    const targetCandidates = (targetFrontier.size > 0 && nextPatternNodeInFrontier)
+    const isNextPatternNodeInFrontier = patternFrontier.has(nextPatternIdx);
+    const targetCandidates = (targetFrontier.size > 0 && isNextPatternNodeInFrontier)
       ? targetFrontier
       : this.getUncoveredTargetNodes();
 
