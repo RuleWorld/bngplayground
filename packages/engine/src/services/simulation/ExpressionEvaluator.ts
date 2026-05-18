@@ -206,15 +206,29 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
         if (modulePath === '../../utils/safeExpressionEvaluator') {
           isSafePath = true;
         } else if (typeof modulePath === 'string') {
-          // Ensure that if it's an absolute path, it strictly ends with the expected module name
-          // and does not contain unexpected directory traversals beyond the resolved path.
           const normalizedPath = modulePath.replace(/\\/g, '/');
-          if (
-            normalizedPath.endsWith('/utils/safeExpressionEvaluator') ||
-            normalizedPath.endsWith('/utils/safeExpressionEvaluator.js') ||
-            normalizedPath.endsWith('/utils/safeExpressionEvaluator.ts')
-          ) {
-            isSafePath = true;
+          let resolvedBase: string | null = null;
+
+          try {
+            const pathInfo = (globalThis as any).require('url');
+            if (pathInfo && typeof pathInfo.fileURLToPath === 'function') {
+              resolvedBase = pathInfo.fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url)).replace(/\\/g, '/');
+            }
+          } catch {
+             // Fallback
+          }
+
+          if (resolvedBase && (normalizedPath === resolvedBase || normalizedPath === `${resolvedBase}.js` || normalizedPath === `${resolvedBase}.ts`)) {
+             isSafePath = true;
+          } else if (!resolvedBase) {
+             // If we can't reliably resolve the base (e.g. in some browser-like test envs),
+             // fall back to a strictly validated suffix check but ensure it doesn't contain traversal attempts.
+             if (!normalizedPath.includes('..') &&
+                 (normalizedPath.endsWith('/utils/safeExpressionEvaluator') ||
+                  normalizedPath.endsWith('/utils/safeExpressionEvaluator.js') ||
+                  normalizedPath.endsWith('/utils/safeExpressionEvaluator.ts'))) {
+                 isSafePath = true;
+             }
           }
         }
 
