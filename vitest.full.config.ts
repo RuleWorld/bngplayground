@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
+    globalTeardown: './tests/global-teardown.ts',
     include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
     exclude: [
       '**/node_modules/**',
