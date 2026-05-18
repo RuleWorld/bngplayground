@@ -251,11 +251,11 @@ function evaluateNode(node: JsepNode, context: Record<string, number>, stepRef: 
       return typeof node.value === 'number' ? node.value : NaN;
 
     case 'Identifier':
-      if (node.name && node.name in ALLOWED_CONSTS) {
-        return ALLOWED_CONSTS[node.name];
-      }
       if (node.name && node.name in context) {
         return context[node.name];
+      }
+      if (node.name && node.name in ALLOWED_CONSTS) {
+        return ALLOWED_CONSTS[node.name];
       }
       throw new Error(`Unknown variable: ${node.name}`);
 

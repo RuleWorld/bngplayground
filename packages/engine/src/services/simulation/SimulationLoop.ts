@@ -1938,6 +1938,13 @@ export async function simulate(
         return (yIn: Float64Array, dydt: Float64Array) => {
           dydt.fill(0);
 
+          // Refresh parameters (may change between phases via setParameter)
+          for (let i = 0; i < parameterNames.length; i++) {
+            const pn = parameterNames[i];
+            if (pn === '__proto__' || pn === 'constructor' || pn === 'prototype') continue;
+            setSafeNumericField(rateContext, pn, model.parameters[pn]);
+          }
+
           // Update observable values in the mutable context (in-place)
           const obsValues = evaluateObservablesFast(yIn);
           for (let i = 0; i < observableNames.length; i++) {
