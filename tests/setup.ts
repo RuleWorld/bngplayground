@@ -7,6 +7,10 @@ import { isAbsolute, relative } from 'node:path';
 expect.extend(matchers as any);
 
 const TRACE_SHARD = process.env.VITEST_TRACE_SHARD === '1';
+const WATCHDOG_TIMEOUT_MS = 120_000; // 2 minutes of silence triggers watchdog
+
+let lastActivity = Date.now();
+let watchdogTimer: NodeJS.Timeout | undefined;
 
 function getTraceState() {
   const state = (expect as any).getState?.() ?? {};
@@ -33,11 +37,32 @@ function formatTraceLabel() {
   };
 }
 
+function resetWatchdog() {
+  lastActivity = Date.now();
+}
+
+function startWatchdog() {
+  if (!TRACE_SHARD) return;
+
+  const checkActivity = () => {
+    const elapsed = Date.now() - lastActivity;
+    if (elapsed > WATCHDOG_TIMEOUT_MS) {
+      const { file, test } = formatTraceLabel();
+      console.error(`[Watchdog] HANG DETECTED: No test activity for ${Math.floor(elapsed / 1000)}s`);
+      console.error(`[Watchdog] Last known location: ${file} :: ${test}`);
+      console.error(`[Watchdog] This usually indicates a hanging import or test setup`);
+      // Don't exit - let the CI timeout handle it, but at least we have diagnostics
+    }
+  };
+
+  watchdogTimer = setInterval(checkActivity, 30_000); // Check every 30 seconds
+}
+
 if (TRACE_SHARD) {
-  const { file } = formatTraceLabel();
-  console.info(`[ShardTrace] FILE START ${file}`);
+  startWatchdog();
 
   beforeEach(() => {
+    resetWatchdog();
     const { label } = formatTraceLabel();
     console.info(`[ShardTrace] START ${label}`);
   });
@@ -47,11 +72,16 @@ if (TRACE_SHARD) {
     console.info(`[ShardTrace] END ${label} (cleanup start)`);
     cleanup();
     console.info(`[ShardTrace] END ${label} (cleanup done)`);
+    resetWatchdog();
   });
 
   afterAll(() => {
     const { file } = formatTraceLabel();
     console.info(`[ShardTrace] FILE END ${file}`);
+    resetWatchdog();
+    if (watchdogTimer) {
+      clearInterval(watchdogTimer);
+    }
   });
 } else {
   // Runs a cleanup after each test case (e.g. clearing jsdom)
