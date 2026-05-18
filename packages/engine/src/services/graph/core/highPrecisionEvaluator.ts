@@ -177,7 +177,11 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       const txt = ctx.literal()!.text;
       if (txt === 'PI') return Decimal.acos(-1);
       if (txt === 'EULERIAN') return new Decimal(1).exp();
-      return new Decimal(txt);
+      // The ANTLR FLOAT rule "DIGIT+ '.' ~[a-zA-Z_]" consumes the lookahead non-alpha char
+      // into the token text (e.g. "1./" → token is "1./"). Strip the sentinel char and
+      // normalize to a valid Decimal string (e.g. "1./" → "1.0", "1. " → "1.0").
+      const normalized = txt.replace(/^(-?\d+)\.([^0-9eEdDfFgG]).*$/, (_m, p1) => p1 + '.0');
+      return new Decimal(normalized);
     }
     if (ctx.observable_ref()) {
       // observables are treated as 1.0 (or looked up if passed as params) during rate eval
@@ -351,7 +355,8 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
 export function evaluateExpressionHighPrecision(
   expr: string,
   parameters: Map<string, number> | Record<string, number> | Map<string, Decimal>,
-  functions?: Map<string, { args: string[], expr: string }>
+  functions?: Map<string, { args: string[], expr: string }>,
+  silent: boolean = false
 ): number {
   try {
     // Prepare parameters
@@ -366,15 +371,17 @@ export function evaluateExpressionHighPrecision(
       }
     }
 
-    // Parse
-    const chars = CharStreams.fromString(expr);
-    const lexer = new BNGLexer(chars);
-    // Remove default error listeners to avoid console noise on expected errors?
-    // lexer.removeErrorListeners();
+    const inputStream = CharStreams.fromString(expr);
+    const lexer = new BNGLexer(inputStream);
+    
+    // Disable default error listeners to avoid console flooding during batch parsing
+    lexer.removeErrorListeners();
 
-    const tokens = new CommonTokenStream(lexer);
-    const parser = new BNGParser(tokens);
-    // parser.removeErrorListeners();
+    const tokenStream = new CommonTokenStream(lexer);
+    const parser = new BNGParser(tokenStream);
+    
+    // Disable default error listeners for parser as well
+    parser.removeErrorListeners();
 
     const tree = parser.expression();
 
@@ -386,9 +393,9 @@ export function evaluateExpressionHighPrecision(
     return result.toNumber();
 
   } catch (e) {
-    console.error('[evaluateExpressionHighPrecision] Failed to evaluate expression:', expr, e);
-    // Log stack trace
-    if (e instanceof Error) console.error(e.stack);
+    if (!silent) {
+      console.error('[evaluateExpressionHighPrecision] Failed to evaluate expression:', expr, e instanceof Error ? e.message : e);
+    }
     return NaN;
   }
 }
@@ -435,6 +442,8 @@ export function evaluateAllParametersHighPrecision(
   let changed = true;
   let iterations = 0;
   const maxIterations = 500;
+  // Track expressions that will never resolve (e.g. function bodies with formal params like a, b, z).
+  const permanentlyFailed = new Set<string>();
 
   while (changed && iterations < maxIterations) {
     changed = false;
@@ -442,15 +451,18 @@ export function evaluateAllParametersHighPrecision(
 
     for (const [name, expr] of expressions) {
       if (resolved.has(name)) continue;
+      if (permanentlyFailed.has(name)) continue;
 
       try {
-        const value = evaluateExpressionHighPrecision(expr, resolved);
+        const value = evaluateExpressionHighPrecision(expr, resolved, undefined, true);
         if (!isNaN(value)) {
           resolved.set(name, value);
           changed = true;
         }
-      } catch {
-        // continue
+      } catch (err) {
+        // A thrown error (not a NaN return) means the expression is permanently broken —
+        // e.g. a function body referencing formal parameters not in the global param map.
+        permanentlyFailed.add(name);
       }
     }
   }

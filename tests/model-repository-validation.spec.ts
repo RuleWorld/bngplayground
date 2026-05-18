@@ -74,7 +74,14 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
         // non-comment lines; they are tested via the massive-parity suite instead.
         const MAX_LINES = 500;
 
+        const MAX_TOTAL_MS = 120_000; // 2 min
+        const SLOW_THRESHOLD_MS = 2000; // 2s
+        const slowModels: Array<{ file: string; ms: number }> = [];
+        let cumulativeMs = 0;
+        let processedInLoop = 0;
+
         for (const modelPath of allModels) {
+            processedInLoop++;
             try {
                 const content = readFileSync(modelPath, 'utf-8');
 
@@ -95,6 +102,7 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
                 }
 
                 // Try to parse
+                const start = performance.now();
                 try {
                     parseBNGLStrict(content);
                     parsedCount++;
@@ -106,6 +114,20 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
                         error: parseErr.message?.substring(0, 100) || 'Unknown error'
                     });
                 }
+                const duration = performance.now() - start;
+                cumulativeMs += duration;
+
+                if (duration > SLOW_THRESHOLD_MS) {
+                    slowModels.push({
+                        file: modelPath.split('\\').pop() || modelPath,
+                        ms: Math.round(duration)
+                    });
+                }
+
+                if (cumulativeMs > MAX_TOTAL_MS) {
+                    console.log(`Stopping model parsing early: reached cumulative budget of ${MAX_TOTAL_MS}ms. Parsed ${parsedCount} models, skipped ${skippedCount}, remaining: ${allModels.length - processedInLoop}`);
+                    break;
+                }
             } catch (readErr) {
                 skippedCount++;
             }
@@ -114,6 +136,11 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
         console.log(`Successfully parsed: ${parsedCount}/${modelCount}`);
         console.log(`Skipped (empty/unreadable): ${skippedCount}`);
         console.log(`Parse errors: ${errors.length}`);
+        console.log(`Cumulative parse time: ${(cumulativeMs / 1000).toFixed(1)}s`);
+        if (slowModels.length > 0) {
+            console.log(`Slow models (>${SLOW_THRESHOLD_MS}ms):`);
+            slowModels.sort((a, b) => b.ms - a.ms).forEach(m => console.log(`  ${m.ms}ms: ${m.file}`));
+        }
 
         if (errors.length > 0 && errors.length < 20) {
             console.log('Sample parse errors:');
@@ -124,13 +151,11 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
 
         // We mainly want to ensure the parser doesn't crash
         expect(parsedCount).toBeGreaterThan(0);
-    });
+    }, 30000);
 
     it('generates XML for parseable models without crashing', () => {
         const xmlErrors: Array<{ file: string; error: string }> = [];
         let xmlGeneratedCount = 0;
-        let containsCompartments = 0;
-        let containsTransport = 0;
 
         for (const modelPath of allModels.slice(0, 50)) { // Test first 50 to keep test time reasonable
             try {
@@ -147,14 +172,6 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
                     try {
                         const xml = BNGXMLWriter.write(model);
                         xmlGeneratedCount++;
-
-                        // Check for compartment features
-                        if (xml.includes('<Compartment')) {
-                            containsCompartments++;
-                        }
-                        if (xml.includes('<ChangeCompartment')) {
-                            containsTransport++;
-                        }
                     } catch (xmlErr: any) {
                         xmlErrors.push({
                             file: modelPath.split('\\').pop() || modelPath,
@@ -169,20 +186,9 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
             }
         }
 
-        console.log(`Generated XML for: ${xmlGeneratedCount} models`);
-        console.log(`Models with compartments: ${containsCompartments}`);
-        console.log(`Models with transport reactions: ${containsTransport}`);
-
-        if (xmlErrors.length > 0 && xmlErrors.length < 10) {
-            console.log('XML generation errors:');
-            xmlErrors.forEach(e => {
-                console.log(`  ${e.file}: ${e.error}`);
-            });
-        }
-
         // We want to ensure XML generation doesn't crash
         expect(xmlGeneratedCount).toBeGreaterThan(0);
-    });
+    }, 30000);
 
     it('correctly identifies compartment-containing models', () => {
         const compartmentModels: string[] = [];

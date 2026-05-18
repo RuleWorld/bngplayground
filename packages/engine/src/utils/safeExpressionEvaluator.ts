@@ -341,7 +341,7 @@ function getVariables(node: JsepNode): string[] {
     if (!n) return;
     // Skip validation here - already done at top level
     if (n.type === 'Identifier') {
-      if (n.name && !(n.name in ALLOWED_CONSTS)) {
+      if (n.name) {
         vars.add(n.name);
       }
     } else if (n.type === 'BinaryExpression' || n.type === 'LogicalExpression') {
@@ -392,7 +392,7 @@ export function compile(
   // Validate AST structure and extract variables simultaneously
   const vars = getVariables(ast);
   const allowed = new Set<string>(paramNames);
-  const unknown = vars.filter(v => !allowed.has(v));
+  const unknown = vars.filter(v => !allowed.has(v) && !(v in ALLOWED_CONSTS));
   if (unknown.length > 0) {
     throw new Error(`Expression references unknown variables: ${unknown.join(', ')}`);
   }
@@ -422,7 +422,7 @@ export function evaluateConstant(expr: string, fallbackNaN: boolean = false, sil
       throw new Error(`Expression nesting too deep (>${MAX_PAREN_DEPTH}).`);
     }
     const ast = jsep(expr) as unknown as JsepNode;
-    const vars = getVariables(ast);
+    const vars = getVariables(ast).filter(v => !(v in ALLOWED_CONSTS));
     if (vars.length > 0) {
       throw new Error(`Constant expression contains variables: ${vars.join(', ')}`);
     }
@@ -445,7 +445,7 @@ export function isSafe(expr: string, paramNames: string[] = []): boolean {
     const ast = jsep(expr) as unknown as JsepNode;
     const vars = getVariables(ast);
     const allowed = new Set<string>(paramNames);
-    return vars.every(v => allowed.has(v));
+    return vars.every(v => allowed.has(v) || v in ALLOWED_CONSTS);
   } catch {
     return false;
   }

@@ -758,7 +758,7 @@ export class BNGLParser {
           }
         }
 
-        const result = evaluateExpressionHighPrecision(expr, evalParams, functions);
+        const result = evaluateExpressionHighPrecision(expr, evalParams, functions, true);
         if (!isNaN(result)) {
           return result;
         }
@@ -828,7 +828,7 @@ export class BNGLParser {
             evalParams.set(obs, 1.0);
           }
         }
-        return evaluateExpressionHighPrecision(expr, evalParams, functions);
+        return evaluateExpressionHighPrecision(expr, evalParams, functions, true);
       }
 
       // Use SafeExpressionEvaluator for safe evaluation instead of new Function

@@ -120,8 +120,10 @@ const EXPECTED_MISMATCHES: Record<string, string> = {
   mtmusicsequencer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
   spfouriersynthesizer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
   // bifurcate action not supported — web runs ODE, BNG2 runs bifurcation scan
-  toggle: 'bifurcate action not supported',
-  lismanbifurcate: 'bifurcate action not supported',
+  abcscan: 'scan/bifurcate action not supported',
+  babscan: 'scan/bifurcate action not supported',
+  lismanbifurcate: 'scan/bifurcate action not supported',
+  toggle: 'scan/bifurcate action not supported',
   // __FREE (PyBNF fitting) models: free parameters have no setParameter action in the
   // base BNGL file — values remain at 0, producing wrong dynamics. The fitted variants
   // (e.g., model_tofit_gen157ind72.bngl) have values baked in but aren't what the gallery loads.
@@ -144,17 +146,12 @@ const EXPECTED_MISMATCHES: Record<string, string> = {
   '31elephantelephant': '__FREE params not set (PyBNF fitting model)',
   rafi: '__FREE params not set (PyBNF fitting model)',
   rafiground: '__FREE params not set (PyBNF fitting model)',
-  parabolagroundpar: '__FREE params not set (PyBNF fitting model)',
   parabolapar: '__FREE params not set (PyBNF fitting model)',
-  polynomialgroundmut: '__FREE params not set (PyBNF fitting model)',
-  polynomialgroundwt: '__FREE params not set (PyBNF fitting model)',
   '07eggeggegg': '__FREE params not set (PyBNF fitting model)',
   mitra201902egfrbnf1inputfilesegfregfr: '__FREE params not set or stack overflow on large model',
   fceriviz: 'Long-time numerical drift in stiff FceRI model',
   zhang2021: 'Localized observable mismatch (pTie2) - likely rate-law or observable parsing bug',
   // parameter_scan action not fully supported — web runs single ODE, BNG2 runs scan
-  abcscan: 'parameter_scan action not supported',
-  babscan: 'parameter_scan action not supported',
   fceriji: 'parameter_scan action not supported',
   // Method mismatch: BNG2 uses SSA, web uses ODE
   circadianoscillator: 'Method mismatch: web=ODE, BNG2=SSA',
