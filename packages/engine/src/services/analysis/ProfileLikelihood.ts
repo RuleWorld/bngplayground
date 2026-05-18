@@ -55,10 +55,65 @@ function computeSSR(
   observables: string[],
 ): number {
   let ssr = 0;
+
   for (const dp of expData) {
+    const targetTime = dp.time;
+
+    // Determine the interpolation bounds outside the inner obs loop using binary search (O(log N))
+    let exactRow: Record<string, number> | null = null;
+    let lowerRow: Record<string, number> | null = null;
+    let upperRow: Record<string, number> | null = null;
+    let alpha = 0;
+
+    if (simData.length > 0) {
+      if (targetTime <= simData[0].time) {
+        exactRow = simData[0];
+      } else if (targetTime >= simData[simData.length - 1].time) {
+        exactRow = simData[simData.length - 1];
+      } else {
+        let left = 0;
+        let right = simData.length - 1;
+        let found = false;
+
+        while (left <= right) {
+          const mid = Math.floor((left + right) / 2);
+          const midTime = simData[mid].time;
+          if (Math.abs(midTime - targetTime) < 1e-12) {
+            exactRow = simData[mid];
+            found = true;
+            break;
+          }
+          if (midTime < targetTime) {
+            left = mid + 1;
+          } else {
+            right = mid - 1;
+          }
+        }
+
+        if (!found) {
+          // right is the largest index with time < targetTime
+          // left is the smallest index with time > targetTime
+          lowerRow = simData[right];
+          upperRow = simData[left];
+          const t0 = lowerRow.time;
+          const t1 = upperRow.time;
+          alpha = t1 > t0 ? (targetTime - t0) / (t1 - t0) : 0;
+        }
+      }
+    }
+
     for (const obs of observables) {
       if (dp.values[obs] === undefined) continue;
-      const simVal = interpolateValue(simData, dp.time, obs);
+
+      let simVal = 0;
+      if (exactRow) {
+        simVal = exactRow[obs] ?? 0;
+      } else if (lowerRow && upperRow) {
+        const v0 = lowerRow[obs] ?? 0;
+        const v1 = upperRow[obs] ?? 0;
+        simVal = v0 + alpha * (v1 - v0);
+      }
+
       const diff = simVal - dp.values[obs];
       const error = dp.errors?.[obs];
       if (error !== undefined && error > 0) {
@@ -69,31 +124,6 @@ function computeSSR(
     }
   }
   return ssr;
-}
-
-function interpolateValue(
-  data: Array<Record<string, number>>,
-  targetTime: number,
-  obs: string,
-): number {
-  if (data.length === 0) return 0;
-  const exact = data.find((r) => Math.abs(r.time - targetTime) < 1e-12);
-  if (exact) return exact[obs] ?? 0;
-
-  if (targetTime <= data[0].time) return data[0][obs] ?? 0;
-  if (targetTime >= data[data.length - 1].time) return data[data.length - 1][obs] ?? 0;
-
-  for (let i = 1; i < data.length; i++) {
-    if (data[i].time >= targetTime) {
-      const t0 = data[i - 1].time;
-      const t1 = data[i].time;
-      const alpha = t1 > t0 ? (targetTime - t0) / (t1 - t0) : 0;
-      const v0 = data[i - 1][obs] ?? 0;
-      const v1 = data[i][obs] ?? 0;
-      return v0 + alpha * (v1 - v0);
-    }
-  }
-  return data[data.length - 1][obs] ?? 0;
 }
 
 // ── Main API ─────────────────────────────────────────────────────────
