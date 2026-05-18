@@ -80,8 +80,11 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
         let cumulativeMs = 0;
         let processedInLoop = 0;
 
+        console.log(`[ModelRepoValidation] Parse pass starting for ${allModels.length} models`);
+
         for (const modelPath of allModels) {
             processedInLoop++;
+            console.log(`[ModelRepoValidation] Parse ${processedInLoop}/${allModels.length}: ${modelPath.split('\\').pop() || modelPath}`);
             try {
                 const content = readFileSync(modelPath, 'utf-8');
 
@@ -157,7 +160,10 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
         const xmlErrors: Array<{ file: string; error: string }> = [];
         let xmlGeneratedCount = 0;
 
-        for (const modelPath of allModels.slice(0, 50)) { // Test first 50 to keep test time reasonable
+        console.log(`[ModelRepoValidation] XML pass starting for ${Math.min(allModels.length, 50)} models`);
+
+        for (const [index, modelPath] of allModels.slice(0, 50).entries()) { // Test first 50 to keep test time reasonable
+            console.log(`[ModelRepoValidation] XML ${index + 1}/${Math.min(allModels.length, 50)}: ${modelPath.split('\\').pop() || modelPath}`);
             try {
                 const content = readFileSync(modelPath, 'utf-8');
                 const nonCommentLines = content.split('\n').filter(l => {
