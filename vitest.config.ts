@@ -92,7 +92,7 @@ export default defineConfig({
        'tests/parity-zap.spec.ts',
 
        'tests/services/NetworkExpansion.spec.ts',
-      'tests/VerifyJITPhase.spec.ts',
+//      'tests/VerifyJITPhase.spec.ts',
       'tests/diagnostics/stat3_simulation.spec.ts',
       'tests/graph/Canonicalization.spec.ts',
       'tests/services/ComponentCompletion.spec.ts',

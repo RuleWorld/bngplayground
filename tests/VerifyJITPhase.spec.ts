@@ -1,8 +1,8 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { simulate } from '@bngplayground/engine';
-import { jitCompiler } from '../../src/services/JITCompiler';
-import { BNGLModel } from '../../types';
+import { jitCompiler } from '../packages/engine/src/services/analysis/JITCompiler';
+import { BNGLModel } from '../types';
 
 // Mock ODESolver
 const mockSolve = vi.fn();
@@ -65,7 +65,7 @@ describe('JIT Compiler Cache Verification', () => {
             reactions: [
                 {
                     reactants: ['A'], products: ['B'],
-                    rate: 'k_rate', rateConstant: 1.0,
+                    rateConstant: 1.0,
                     isFunctionalRate: false
                 } as any
             ],

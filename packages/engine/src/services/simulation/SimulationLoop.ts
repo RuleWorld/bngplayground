@@ -488,7 +488,7 @@ export async function simulate(
       products: new Int32Array(productIndices),
       rateConstant: rate,
       rateExpression: isFunctionalRate ? rateExpr : null,
-      rate: String(rateExpr),
+      rate: rateExpr !== undefined && rateExpr !== null ? String(rateExpr) : '',
       isFunctionalRate,
       propensityFactor: r.propensityFactor ?? 1,
       productStoichiometries: r.productStoichiometries,
@@ -1071,6 +1071,8 @@ export async function simulate(
     let compiledMassActionJit: JITCompiledFunction | undefined;
     let activeNativeByteCode: NetworkByteCode | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
+    let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
+    let persistedSolverKey = '';
 
 
     const applyParameterUpdates = (targetPhaseIdx: number): boolean => {
@@ -1146,7 +1148,7 @@ export async function simulate(
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           // Only re-evaluate if it's a mass-action rate (static string) that might be a parameter
-          if (!rxn.isFunctionalRate && rxn.rate && typeof rxn.rate === 'string') {
+          if (!rxn.isFunctionalRate && rxn.rate && typeof rxn.rate === 'string' && rxn.rate !== 'undefined') {
             try {
               const oldK = rxn.rateConstant;
               const newK = evaluateFunctionalRate(rxn.rate as string, context, {}, model.functions);
@@ -1161,6 +1163,17 @@ export async function simulate(
         }
         clearAllEvaluatorCaches();
         rebuildNativeByteCode?.();
+        refreshRateContextParameters?.();
+
+        // Destroy persisted solver on parameter updates to force recreation with new rates/bytecode
+        if (persistedSolver) {
+          try {
+            persistedSolver.destroy?.();
+          } catch (e) {
+            /* ignore */
+          }
+          persistedSolver = undefined;
+        }
       }
 
 
@@ -1696,6 +1709,7 @@ export async function simulate(
     }
 
     let derivatives: (y: Float64Array, dydt: Float64Array) => void;
+    let refreshRateContextParameters: (() => void) | undefined = undefined;
 
 
 
@@ -1893,12 +1907,15 @@ export async function simulate(
         // Eliminates ~5M object allocations per simulation.
         // ---------------------------------------------------------------
         const rateContext: Record<string, number> = Object.create(null) as Record<string, number>;
+        refreshRateContextParameters = () => {
+          for (let i = 0; i < parameterNames.length; i++) {
+            const parameterName = parameterNames[i];
+            if (parameterName === '__proto__' || parameterName === 'constructor' || parameterName === 'prototype') continue;
+            setSafeNumericField(rateContext, parameterName, model.parameters[parameterName]);
+          }
+        };
         // Initialize with parameters
-        for (let i = 0; i < parameterNames.length; i++) {
-          const parameterName = parameterNames[i];
-          if (parameterName === '__proto__' || parameterName === 'constructor' || parameterName === 'prototype') continue;
-          setSafeNumericField(rateContext, parameterName, model.parameters[parameterName]);
-        }
+        refreshRateContextParameters();
         // Initialize observable slots
         for (let i = 0; i < observableNames.length; i++) {
           const observableName = observableNames[i];
@@ -2805,11 +2822,10 @@ export async function simulate(
     // phases with continue=>1. We replicate this by NOT destroying the solver at phase end
     // when the next phase also uses continue=>1 with the same solver configuration.
     // The CVODESolver.ensureInitialized() reuse path triggers when t0 === currentT.
-    let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
-    let persistedSolverKey = '';
+    persistedSolver = undefined;
+    persistedSolverKey = '';
 
-    // Clear JIT cache at the start of simulation to ensure no stale state from previous runs
-    jitCompiler.clearCache();
+    // Do not clear the JIT cache here so that structural compiled functions can be reused across simulations
 
     for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
       const phase = phases[phaseIdx];
