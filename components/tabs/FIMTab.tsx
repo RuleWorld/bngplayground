@@ -595,6 +595,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             </h3>
             <button
               onClick={downloadVIF}
+              aria-label="Export Variance Inflation Factors to CSV"
               className="text-sm text-teal-600 hover:text-teal-700 underline"
             >
               Export CSV ↓
@@ -867,6 +868,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             <h3 className="text-lg font-semibold">Low-sensitivity parameter combinations</h3>
             <button
               onClick={exportNullSpace}
+              aria-label="Export Low-sensitivity parameter combinations to CSV"
               className="text-sm text-teal-600 hover:text-teal-700 underline"
             >
               Export CSV ↓
@@ -982,6 +984,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             </h3>
             <button
               onClick={downloadCorrelations}
+              aria-label="Export Top correlated parameter pairs to CSV"
               className="text-sm text-teal-600 hover:text-teal-700 underline"
             >
               Export CSV ↓
@@ -1075,6 +1078,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                     e.stopPropagation();
                     downloadFIMMatrix();
                   }}
+                  aria-label="Export Fisher Information Matrix to CSV"
                   className="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline"
                 >
                   Export CSV ↓
@@ -1143,6 +1147,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                     e.stopPropagation();
                     downloadCorrelations();
                   }}
+                  aria-label="Export Parameter correlations to CSV"
                   className="text-sm text-teal-600 hover:text-teal-700 dark:text-teal-400 dark:hover:text-teal-300 underline"
                 >
                   Export CSV ↓
@@ -1267,6 +1272,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {/* Scroll to Top Button */}
       <button
         onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+        aria-label="Scroll to top"
         className="fixed bottom-6 right-6 bg-teal-600 hover:bg-teal-700 text-white p-3 rounded-full shadow-lg transition-all duration-200 z-10"
         title="Scroll to top"
       >

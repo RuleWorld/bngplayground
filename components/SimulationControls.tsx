@@ -245,6 +245,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         <button
           onClick={() => setShowOptions(!showOptions)}
           title="Configure simulation options"
+          aria-label="Configure simulation options"
           aria-expanded={showOptions}
           aria-haspopup="dialog"
           aria-controls="simulation-options-popover"

@@ -199,7 +199,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           <div className="relative flex items-center">
             <Dropdown
               trigger={
-                <button className={`flex items-center gap-1 py-2 px-3 border-b-2 font-medium text-sm transition-colors ${isAnalysisTab || activeTab === 10
+                <button aria-label="Analysis options" className={`flex items-center gap-1 py-2 px-3 border-b-2 font-medium text-sm transition-colors ${isAnalysisTab || activeTab === 10
                   ? 'border-teal-600 text-teal-600 dark:text-teal-400 dark:border-teal-400'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:border-slate-600'
                   }`}>

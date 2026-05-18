@@ -24,6 +24,7 @@ export const HelpSection: React.FC<HelpSectionProps> = ({
     <div className={`mb-4 shrink-0 overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-900/10 transition-all ${className}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={`Toggle help section: ${title}`}
         aria-expanded={isOpen}
         aria-controls={contentId}
         className="flex w-full items-center justify-between px-4 py-2 text-left hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors"
