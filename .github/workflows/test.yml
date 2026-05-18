@@ -162,9 +162,18 @@ jobs:
       - name: Run full test suite (sharded)
         run: |
           if [ "${{ matrix.shard }}" = "3" ]; then
-            VITEST_TRACE_SHARD=1 npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
+            timeout 40m bash -c 'VITEST_TRACE_SHARD=1 npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3 || exit $?' || EXIT_CODE=$?
           else
-            npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
+            timeout 40m npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3 || EXIT_CODE=$?
+          fi
+
+          # If timeout command exits with 124, it means the command timed out
+          if [ "${EXIT_CODE:-0}" = "124" ]; then
+            echo "::error::Test suite timed out after 40 minutes"
+            echo "This usually indicates a hanging test or cleanup issue"
+            exit 124
+          elif [ "${EXIT_CODE:-0}" != "0" ]; then
+            exit $EXIT_CODE
           fi
         env:
           NODE_ENV: test

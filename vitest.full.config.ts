@@ -9,6 +9,7 @@ export default defineConfig({
     },
   },
   test: {
+    globalSetup: ['./tests/global-setup.ts'],
     include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
     exclude: [
       '**/node_modules/**',
