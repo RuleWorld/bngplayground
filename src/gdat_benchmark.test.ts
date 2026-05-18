@@ -345,9 +345,19 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
   // symmetric embeddings (e.g., swapping identical molecules in a dimer).
   // GraphMatcher.findAllMaps returns all embeddings; we dedupe maps by their
   // target-image signature while preserving distinct component assignments.
+  const matchCache1 = new Map<string, number>();
   const countObservableMatches = (patternGraph: ReturnType<typeof BNGLParser.parseSpeciesGraph>, speciesGraph: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
+    const pStr = GraphCanonicalizer.canonicalize(patternGraph);
+    const sStr = GraphCanonicalizer.canonicalize(speciesGraph);
+    const key = `${pStr}||${sStr}`;
+    const cached = matchCache1.get(key);
+    if (cached !== undefined) return cached;
+
     const rawMaps = GraphMatcher.findAllMaps(patternGraph, speciesGraph);
-    if (rawMaps.length === 0) return 0;
+    if (rawMaps.length === 0) {
+      matchCache1.set(key, 0);
+      return 0;
+    }
 
     const autoFactor = GraphMatcher.getPatternAutomorphismFactor(patternGraph);
     
@@ -358,7 +368,9 @@ export async function _simulateModel(inputModel: BNGLModel, options: { t_end: nu
       total += countEmbeddingDegeneracy(patternGraph, speciesGraph, m);
     }
     
-    return total / autoFactor;
+    const result = total / autoFactor;
+    matchCache1.set(key, result);
+    return result;
   };
 
   const concreteObservables = expandedModel.observables.map(obs => {
@@ -1116,9 +1128,19 @@ describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG
       // symmetric embeddings (e.g., swapping identical molecules in a dimer).
       // GraphMatcher.findAllMaps returns all embeddings; we dedupe maps by their
       // target-image signature while preserving distinct component assignments.
+      const matchCache2 = new Map<string, number>();
       const countObservableMatches = (patternGraph: ReturnType<typeof BNGLParser.parseSpeciesGraph>, speciesGraph: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
+        const pStr = GraphCanonicalizer.canonicalize(patternGraph);
+        const sStr = GraphCanonicalizer.canonicalize(speciesGraph);
+        const key = `${pStr}||${sStr}`;
+        const cached = matchCache2.get(key);
+        if (cached !== undefined) return cached;
+
         const rawMaps = GraphMatcher.findAllMaps(patternGraph, speciesGraph);
-        if (rawMaps.length <= 1) return rawMaps.length;
+        if (rawMaps.length <= 1) {
+          matchCache2.set(key, rawMaps.length);
+          return rawMaps.length;
+        }
 
         const unique = new Set<string>();
         for (const m of rawMaps) {
@@ -1144,7 +1166,9 @@ describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG
           unique.add(`${molPairs.join('|')}//${compPairs.join('|')}`);
         }
 
-        return unique.size;
+        const result = unique.size;
+        matchCache2.set(key, result);
+        return result;
       };
 
       const debugModel = process.env.GDAT_DEBUG_MODEL;
