@@ -160,7 +160,12 @@ jobs:
         run: npm install --legacy-peer-deps
       
       - name: Run full test suite (sharded)
-        run: npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
+        run: |
+          if [ "${{ matrix.shard }}" = "3" ]; then
+            VITEST_TRACE_SHARD=1 npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
+          else
+            npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
+          fi
         env:
           NODE_ENV: test
           RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
