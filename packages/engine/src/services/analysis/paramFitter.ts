@@ -310,8 +310,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
             let sse = 0;
             const dataRows = simResult.data;
-            const interpRows = timePoints.map(t =>
-              dataRows.find(r => Math.abs(r.time - t) < 1e-12) ?? interpolateRow(dataRows, t));
+            const interpRows = timePoints.map(t => interpolateRow(dataRows, t));
 
             for (const obs of sharedObs) {
               const simVals = interpRows.map(row => row?.[obs] ?? 0);
@@ -417,8 +416,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
       ...simOptions,
     });
 
-    const finalInterpRows = timePoints.map(t =>
-      finalSim.data.find(r => Math.abs(r.time - t) < 1e-12) ?? interpolateRow(finalSim.data, t));
+    const finalInterpRows = timePoints.map(t => interpolateRow(finalSim.data, t));
 
     for (const obs of sharedObs) {
       bestPredictions.set(obs,
