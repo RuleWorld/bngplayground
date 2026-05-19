@@ -55,7 +55,8 @@ function startWatchdog() {
     }
   };
 
-  watchdogTimer = setInterval(checkActivity, 30_000); // Check every 30 seconds
+  watchdogTimer = setInterval(checkActivity, 30_000);
+  watchdogTimer.unref(); // Don't let the watchdog prevent process exit
 }
 
 if (TRACE_SHARD) {

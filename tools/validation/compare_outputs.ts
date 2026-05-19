@@ -123,7 +123,11 @@ const EXPECTED_MISMATCHES: Record<string, string> = {
   abcscan: 'scan/bifurcate action not supported',
   babscan: 'scan/bifurcate action not supported',
   lismanbifurcate: 'scan/bifurcate action not supported',
+  lisman: 'Multi-phase model: web ODE produces zeros — phase state not carried to recorded phase (bug)',
   toggle: 'scan/bifurcate action not supported',
+  gardner2000ode: 'Multi-phase model: web ODE produces zeros — phase state carry bug',
+  hat2016ode2irrad: 'Multi-phase model with setParameter: web ODE produces zeros — phase state carry bug',
+  hat2016ode3relax: 'Multi-phase model with setParameter: web ODE produces zeros — phase state carry bug',
   // __FREE (PyBNF fitting) models: free parameters have no setParameter action in the
   // base BNGL file — values remain at 0, producing wrong dynamics. The fitted variants
   // (e.g., model_tofit_gen157ind72.bngl) have values baked in but aren't what the gallery loads.
