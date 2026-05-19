@@ -1234,7 +1234,12 @@ export class JITCompiler {
     clearCache(): void {
         this.cache.clear();
         this.observableCache.clear();
+        this.bytecodeCache.clear();
         console.log('[JITCompiler] Cache cleared');
+    }
+
+    clearBytecodeCache(): void {
+        this.bytecodeCache.clear();
     }
 
     /**

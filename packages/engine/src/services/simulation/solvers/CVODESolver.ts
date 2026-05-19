@@ -499,6 +499,7 @@ export class CVODESolver {
     new Uint8Array(m.HEAPF64.buffer, exprBytecodePtr, bc.exprBytecode.length).set(bc.exprBytecode);
     m.HEAPF64.set(bc.exprConstants, exprConstantsPtr >> 3);
 
+
     const handle = loadNetwork(
       bc.nReactions, bc.nSpecies,
       rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr,

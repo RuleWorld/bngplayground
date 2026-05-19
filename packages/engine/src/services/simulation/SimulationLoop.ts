@@ -2647,6 +2647,8 @@ export async function simulate(
     rebuildNativeByteCode = () => {
       activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
+      // Clear JIT bytecode cache so expression bytecodes are recompiled with new parameter values
+      jitCompiler.clearBytecodeCache();
 
       const canUseNativeBytecode =
         enableNativeBytecode &&
@@ -3283,6 +3285,12 @@ export async function simulate(
       }
       // t is now absolute (phaseStart + elapsed), so modelTime = t directly.
       modelTime = t;
+
+      // Synchronize state with y for multi-phase propagation.
+      // During ODE integration, y is the primary state vector that gets updated.
+      // The state array must be kept in sync so any downstream operations (parameter
+      // changes, concentration changes, next phase initialization) see the evolved values.
+      state.set(y);
 
       // Always output final species state for multi-phase propagation support
       // This ensures batchRunner can capture the equilibrated state even when recordThisPhase=false
