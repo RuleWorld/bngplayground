@@ -37,7 +37,7 @@ import { SolverOptions, SolverResult, hasInvalidValues } from '../../../utils/so
 import { ExpressionTranslator } from '../../graph/core/ExpressionTranslator';
 import type { NetworkByteCode } from '../../analysis/JITCompiler';
 import type { Rxn } from '../../graph/core/Rxn';
-import { setCVodeSensModule } from '../../analysis/DifferentiableSolver';
+import { resetCVodeSensModule, setCVodeSensModule } from '../../analysis/DifferentiableSolver';
 
 type DerivativeFunction = (y: Float64Array, dydt: Float64Array) => void;
 
@@ -236,6 +236,24 @@ export class CVODESolver {
   /** Wire up the CVODE loader (call from app init before any simulation). */
   static setCVodeFactory(factory: () => Promise<unknown>): void {
     CVODESolver.cvodeModuleFactory = factory;
+  }
+
+  /** Clear cached CVODE runtime state so test workers can exit cleanly. */
+  static async resetRuntimeState(): Promise<void> {
+    if (!CVODESolver.module && !CVODESolver.initPromise) {
+      return;
+    }
+
+    CVODESolver.module = null;
+    CVODESolver.initPromise = null;
+    resetCVodeSensModule();
+
+    try {
+      const { destroyCachedCVodeLoader } = await import('../cvode_node.ts');
+      destroyCachedCVodeLoader();
+    } catch {
+      // Ignore teardown cleanup failures.
+    }
   }
 
   constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false, jacobian?: JacobianFunction, useAdams: boolean = false) {

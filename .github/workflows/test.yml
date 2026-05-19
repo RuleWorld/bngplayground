@@ -174,11 +174,11 @@ jobs:
             2>&1 | tee /tmp/vitest-output.log &
           VITEST_PID=$!
 
-          # Wait up to 35 minutes for vitest to exit on its own
+          # Wait up to 10 minutes for vitest to exit on its own
           SECONDS=0
           while kill -0 $VITEST_PID 2>/dev/null; do
             sleep 5
-            if [ $SECONDS -ge 2100 ]; then
+            if [ $SECONDS -ge 600 ]; then
               echo "::warning::Vitest process hung after ${SECONDS}s — killing"
               kill -9 $VITEST_PID 2>/dev/null || true
               wait $VITEST_PID 2>/dev/null || true

@@ -102,4 +102,8 @@ export const createCVodeModule: CvodeLoader = async (moduleArg?: unknown) => {
   return await cachedLoader(config);
 };
 
+export function destroyCachedCVodeLoader(): void {
+  cachedLoader = null;
+}
+
 export default createCVodeModule;
