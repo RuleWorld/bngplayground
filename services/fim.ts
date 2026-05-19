@@ -702,7 +702,7 @@ export async function computeFIM(
         // Best-effort release of the cached model in the worker to avoid leaks.
         await bnglService.releaseModel(modelId);
       } catch (err) {
-        console.warn('Failed to release FIM cached model:', err);
+        console.error('Failed to release model after FIM analysis:', err);
       }
     }
   }

@@ -1319,20 +1319,21 @@ export async function simulate(
 
         let a = rate * rxn.propensityFactor;
 
-        // PARITY FIX: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
+        // PARITY NOTE: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
         // to convert to propensity in reciprocal molecule-counts.
         // n=0: a = k*V
         // n=1: a = k*N
         // n=2: a = k*N1*N2/V
         // n=3: a = k*N1*N2*N3/V^2
+        const volume = reactionReactingVolumes[rxnIdx];
         if (n === 0) {
-          a *= reactionReactingVolumes[rxnIdx];
+          a *= volume;
         } else if (n === 2) {
-          a /= reactionReactingVolumes[rxnIdx];
+          a /= volume;
         } else if (n === 3) {
-          a /= (reactionReactingVolumes[rxnIdx] * reactionReactingVolumes[rxnIdx]);
+          a /= (volume * volume);
         } else if (n > 3) {
-          a /= Math.pow(reactionReactingVolumes[rxnIdx], n - 1);
+          a /= Math.pow(volume, n - 1);
         }
 
         for (let j = 0; j < rxn.reactants.length; j++) {
@@ -1469,15 +1470,16 @@ export async function simulate(
 
             let a = rate * rxn.propensityFactor;
 
-            // PARITY FIX: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
+            // PARITY NOTE: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
+            const volume = reactionReactingVolumes[i];
             if (n === 0) {
-              a *= reactionReactingVolumes[i]; // Zero-order: k * V
+              a *= volume; // Zero-order: k * V
             } else if (n === 2) {
-              a /= reactionReactingVolumes[i]; // Bimolecular: k * N1 * N2 / V
+              a /= volume; // Bimolecular: k * N1 * N2 / V
             } else if (n === 3) {
-              a /= (reactionReactingVolumes[i] * reactionReactingVolumes[i]); // Ternary: k * N1 * N2 * N3 / V^2
+              a /= (volume * volume); // Ternary: k * N1 * N2 * N3 / V^2
             } else if (n > 3) {
-              a /= Math.pow(reactionReactingVolumes[i], n - 1);
+              a /= Math.pow(volume, n - 1);
             }
 
             const reactants = rxn.reactants;

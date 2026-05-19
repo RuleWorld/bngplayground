@@ -1057,8 +1057,11 @@ export class NetworkGenerator {
 
     const totalTime = ((Date.now() - this.startTime) / 1000).toFixed(2);
 
-    // MEDIUM BUG FIX: Warn when maxIterations limit was reached
-    if (iteration >= this.options.maxIterations && queue.length > 0) {
+    const isIterationLimitReached = iteration >= this.options.maxIterations;
+    const hasRemainingQueue = queue.length > 0;
+
+    // NOTE: Warn when maxIterations limit was reached
+    if (isIterationLimitReached && hasRemainingQueue) {
       console.warn(`[NetworkGenerator] WARNING: maxIterations limit (${this.options.maxIterations}) reached with ${queue.length} species still in queue. Network may be incomplete.`);
     }
 

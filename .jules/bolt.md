@@ -1,0 +1,3 @@
+## 2026-05-19 - Binary Search in paramFitter
+**Learning:** When evaluating objective functions or fitting parameters over simulation datasets, avoid redundant O(N) array searches inside nested loops like `dataRows.find(r => Math.abs(r.time - t) < 1e-12)`. Instead, use binary search or existing helpers like `interpolateRow(dataRows, t)` which already implement binary search internally and properly handle missing keys to avoid NaN regressions. This reduces time complexity from O(T x M x N) to O(T x log N).
+**Action:** Use existing binary search helpers ahead of loops instead of linear finds, and preserve fallback `?? 0` logic during interpolation.
