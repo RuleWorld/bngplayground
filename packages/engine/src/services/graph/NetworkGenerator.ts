@@ -5119,12 +5119,12 @@ export class NetworkGenerator {
         let preserveOptionalWildcardBond = false;
         const isBound = (idx: number) => productGraph.adjacency.has(`${productMolIdx}.${idx}`);
 
-        // CRITICAL FIX: First try to use componentMap for exact component identification
         const prMapping = productToReactantPattern.get(pMolIdx);
         if (prMapping) {
-          const match = matches[prMapping.reactantIdx];
+          const mappedReactantIdx = prMapping.reactantIdx;
+          const match = matches[mappedReactantIdx];
           const reactantPatternsArr = reactantPatterns instanceof Array ? reactantPatterns : [reactantPatterns]; // Safety check
-          const reactantPatternMol = reactantPatternsArr[prMapping.reactantIdx].molecules[prMapping.reactantPatternMolIdx];
+          const reactantPatternMol = reactantPatternsArr[mappedReactantIdx].molecules[prMapping.reactantPatternMolIdx];
 
           if (!pComp.wildcard && pComp.edges.size === 0) {
             let seen = 0;
@@ -5149,7 +5149,9 @@ export class NetworkGenerator {
 
             // Look up exact target component via componentMap
             const compKey = `${prMapping.reactantPatternMolIdx}.${rpCompIdx}`;
-            const targetKey = match.componentMap.get(compKey);
+            // NOTE: First try to use componentMap for exact component identification
+            const exactComponentMapTarget = match.componentMap.get(compKey);
+            const targetKey = exactComponentMapTarget;
 
             if (!targetKey) continue;
             const idx = Number(targetKey.split('.')[1]);
