@@ -5191,18 +5191,20 @@ export class NetworkGenerator {
               }
             } else {
               // No wildcard, no bond in product pattern.
-              // CRITICAL FIX: If the REACTANT pattern had a !? wildcard on this component,
+              // NOTE: If the REACTANT pattern had a !? wildcard on this component,
               // the bond state should be PRESERVED (allow either bound or unbound).
               // This is essential for transport rules like:
               //   @PM:R(tf~pY!?) -> @EM:R(tf~pY)
               // where the tf component may be bound to TF or P in CP.
               // Only enforce "explicitly unbound" if reactant pattern also expected unbound.
               const reactantExplicitlyUnbound = reactantPatternComp.wildcard === '-';
+              const reactantHadOptionalWildcard = reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard;
+
               if (reactantExplicitlyUnbound) {
                 // Reactant pattern explicitly expected unbound, product should be unbound
                 if (bound) continue;
                 markExplicitUnbound = true;
-              } else if (reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard) {
+              } else if (reactantHadOptionalWildcard) {
                 // BNG2 semantics: EXPLICITLY written !? in reactant means the bond ALWAYS
                 // carries through to the product — the rule does not modify the bond on this
                 // component regardless of how the product pattern writes it.
