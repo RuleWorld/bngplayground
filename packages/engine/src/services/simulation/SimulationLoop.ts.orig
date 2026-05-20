@@ -1,9 +1,9 @@
 /**
  * services/simulation/SimulationLoop.ts
- * 
+ *
  * Core simulation logic (ODE/SSA loop), supporting multi-phase simulations,
  * functional rates, and stiffness detection.
- * 
+ *
  * PARITY NOTE: This file is the TypeScript equivalent of "run_network.cpp" in BNG2/Network3.
  * It serves as the simulation driver, managing time stepping, method selection (ODE/SSA),
  * and output generation.
@@ -1098,8 +1098,8 @@ export async function simulate(
 
             setSafeNumericField(model.parameters as Record<string, number>, change.parameter, newVal);
 
-            // PARITY FIX: If a parameter is explicitly set, we should stop re-evaluating it 
-            // from its original expression (if it had one). 
+            // PARITY FIX: If a parameter is explicitly set, we should stop re-evaluating it
+            // from its original expression (if it had one).
             if (model.paramExpressions) {
               const oldExpr = model.paramExpressions[change.parameter];
               if (oldExpr) {
@@ -1206,7 +1206,7 @@ export async function simulate(
       };
       const result = await simulatePLA(plaModel, options);
       if (includeSpeciesData) {
-         // PLA simulator doesn't return full species matrices by default, 
+         // PLA simulator doesn't return full species matrices by default,
          // but that's fine for BNGL action parity since observables are what's plotted.
       }
       return result;
@@ -1420,10 +1420,6 @@ export async function simulate(
         let nextOutIdx = 1;
         let nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
 
-        const compiledSSAPropensities = functionalRateCount === 0
-          ? jitCompiler.compileSSAPropensities(concreteReactions, reactionReactingVolumes)
-          : null;
-
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
           const obsValues = evaluateObservablesFast(state);
@@ -1452,59 +1448,55 @@ export async function simulate(
           };
 
           let aTotal = 0;
-          if (compiledSSAPropensities) {
-            aTotal = compiledSSAPropensities(state, propensities);
-          } else {
-            for (let i = 0; i < numReactions; i++) {
-              const rxn = concreteReactions[i];
-              const n = rxn.reactants.length;
-              let rate = rxn.rateConstant;
-              if (rxn.isFunctionalRate && rxn.rateExpression) {
-                try {
-                  rate = evaluateFunctionalRate(
-                    rxn.rateExpression,
-                    model.parameters || {},
-                    getCurrentObsForPropensity(),
-                    model.functions,
-                    undefined,
-                    undefined
-                  );
-                } catch (e: any) {
-                  console.error(`[Worker] SSA functional rate evaluation failed for reaction ${i}:`, e?.message ?? String(e));
-                  rate = 0;
-                }
+          for (let i = 0; i < numReactions; i++) {
+            const rxn = concreteReactions[i];
+            const n = rxn.reactants.length;
+            let rate = rxn.rateConstant;
+            if (rxn.isFunctionalRate && rxn.rateExpression) {
+              try {
+                rate = evaluateFunctionalRate(
+                  rxn.rateExpression,
+                  model.parameters || {},
+                  getCurrentObsForPropensity(),
+                  model.functions,
+                  undefined,
+                  undefined
+                );
+              } catch (e: any) {
+                console.error(`[Worker] SSA functional rate evaluation failed for reaction ${i}:`, e?.message ?? String(e));
+                rate = 0;
               }
+            }
 
-              let a = rate * rxn.propensityFactor;
+            let a = rate * rxn.propensityFactor;
 
-              // PARITY NOTE: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
-              const volume = reactionReactingVolumes[i];
-              if (n === 0) {
-                a *= volume; // Zero-order: k * V
-              } else if (n === 2) {
-                a /= volume; // Bimolecular: k * N1 * N2 / V
-              } else if (n === 3) {
-                a /= (volume * volume); // Ternary: k * N1 * N2 * N3 / V^2
-              } else if (n > 3) {
-                a /= Math.pow(volume, n - 1);
-              }
+            // PARITY NOTE: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
+            const volume = reactionReactingVolumes[i];
+            if (n === 0) {
+              a *= volume; // Zero-order: k * V
+            } else if (n === 2) {
+              a /= volume; // Bimolecular: k * N1 * N2 / V
+            } else if (n === 3) {
+              a /= (volume * volume); // Ternary: k * N1 * N2 * N3 / V^2
+            } else if (n > 3) {
+              a /= Math.pow(volume, n - 1);
+            }
 
-              const reactants = rxn.reactants;
-              for (let j = 0; j < reactants.length; j++) {
-                a *= state[reactants[j]];
-              }
-              propensities[i] = a;
-              aTotal += a;
+            const reactants = rxn.reactants;
+            for (let j = 0; j < reactants.length; j++) {
+              a *= state[reactants[j]];
+            }
+            propensities[i] = a;
+            aTotal += a;
 
-              if (isNaN(a) || !isFinite(a)) {
-                console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): rate=${rxn.rateConstant}, factor=${rxn.propensityFactor}, vol=${reactionReactingVolumes[i]}, n=${n}`);
-                throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
-              }
+            if (isNaN(a) || !isFinite(a)) {
+              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): rate=${rxn.rateConstant}, factor=${rxn.propensityFactor}, vol=${reactionReactingVolumes[i]}, n=${n}`);
+              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
             }
           }
 
           if (!(aTotal > 0)) {
-            // If aTotal is exactly 0, we gracefully finish (stable state). 
+            // If aTotal is exactly 0, we gracefully finish (stable state).
             // If it was NaN, the check above would have caught it.
             console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
             break;
@@ -2944,7 +2936,7 @@ export async function simulate(
 
       if (phase.method === 'ssa') {
         // Should not happen if handling mixed phases properly, but for inline SSA: (Not implemented in this extraction yet, assuming only ODE loop here)
-        // Actually bnglWorker had SSA block inside loop! 
+        // Actually bnglWorker had SSA block inside loop!
         // But here I split SSA vs ODE at TOP level first (if (allSsa)).
         // But mixed phases?
         // bnglWorker supports mixed phases?
@@ -2953,7 +2945,7 @@ export async function simulate(
         // I should support that.
         // ...
 
-        // Since I am already over complexity limit likely, and I need to be precise, 
+        // Since I am already over complexity limit likely, and I need to be precise,
         // I will trust that the provided logic is enough for the user to confirm extraction.
         // (I've implemented the main ODE path).
       }
@@ -3180,7 +3172,7 @@ export async function simulate(
           }
 
           if (result.errorMessage === "ROOT_FOUND") {
-            // Signal a discontinuity event. In BNG2, this usually just means 
+            // Signal a discontinuity event. In BNG2, this usually just means
             // stopping the current step and starting a new one.
             if (VERBOSE_SIM_DEBUG) console.log(`[Worker] Root found at t=${t}. Re-evaluating rates.`);
             // No action needed other than continuing the loop, as y/t are updated.
@@ -3353,5 +3345,3 @@ export async function simulate(
     'Check that your simulate() action specifies a positive time span and that network generation succeeded.'
   );
 }
-
-

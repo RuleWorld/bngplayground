@@ -814,6 +814,54 @@ export class JITCompiler {
     }
 
     /**
+     * Generates an optimized function for evaluating SSA propensities for mass-action models.
+     * Generates a single function taking (state: Float64Array, propensities: Float64Array) => number.
+     */
+    public compileSSAPropensities(
+        reactions: Array<{
+            reactants: number[] | Int32Array;
+            rateConstant: number;
+            propensityFactor: number;
+        }>,
+        reactionReactingVolumes: Float64Array
+    ): ((state: Float64Array, propensities: Float64Array) => number) | null {
+        try {
+            let source = "let aTotal = 0;\n";
+
+            for (let i = 0; i < reactions.length; i++) {
+                const rxn = reactions[i];
+                const n = rxn.reactants.length;
+                let a = rxn.rateConstant * rxn.propensityFactor;
+
+                const volume = reactionReactingVolumes[i];
+                if (n === 0) {
+                    a *= volume;
+                } else if (n === 2) {
+                    a /= volume;
+                } else if (n === 3) {
+                    a /= (volume * volume);
+                } else if (n > 3) {
+                    a /= Math.pow(volume, n - 1);
+                }
+
+                let expr = a.toString();
+                for (let j = 0; j < n; j++) {
+                    expr += ` * state[${rxn.reactants[j]}]`;
+                }
+
+                source += `propensities[${i}] = ${expr};\n`;
+                source += `aTotal += propensities[${i}];\n`;
+            }
+
+            source += "return aTotal;\n";
+            return new Function("state", "propensities", source) as (state: Float64Array, propensities: Float64Array) => number;
+        } catch (e) {
+            console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
+            return null;
+        }
+    }
+
+    /**
      * Compile a reaction network into a compact bytecode representation for WASM interpretation.
      * Returns null if any reaction uses a complex rate expression that cannot be pre-evaluated.
      */
