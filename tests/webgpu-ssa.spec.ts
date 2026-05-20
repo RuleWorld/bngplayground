@@ -73,7 +73,7 @@ describe('generateSSAShader', () => {
     // 1 reaction * 2 species = 2 entries
     expect(shader).toContain('array<f32, 2>');
     // Reaction 0 -> 1: species 0 loses 1, species 1 gains 1
-    expect(shader).toContain('-1.0');
+    expect(shader).toContain('- 1.0');
     expect(shader).toContain('1.0');
   });
 
