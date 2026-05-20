@@ -893,6 +893,7 @@ export async function simulate(
     const observableNames = concreteObservables.map((obs) => obs.name);
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
     const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
+    const outputTemplate: Record<string, number> = Object.create(null) as Record<string, number>;
 
     // ⚡ Bolt Optimization: Pre-filter safe observable names once during setup.
     // This avoids repeatedly checking isSafeObjectKey for every observable in the hot loop.
@@ -1013,6 +1014,23 @@ export async function simulate(
         }
       }
       return results;
+    };
+
+    const pushDataRow = (suffix: string | undefined, outT: number, currentState: Float64Array) => {
+      const buffer = evaluateObservablesIntoBuffer(currentState);
+      outputTemplate.time = outT;
+      for (let i = 0; i < safeObservableNames.length; i++) {
+        outputTemplate[safeObservableNames[i]] = buffer[safeObservableIndices[i]];
+      }
+      if (shouldPrintFunctions) {
+        const funcResults = evaluateFunctionsForOutput(currentState, outputTemplate);
+        for (const key in funcResults) {
+          if (Object.prototype.hasOwnProperty.call(funcResults, key)) {
+            outputTemplate[key] = funcResults[key];
+          }
+        }
+      }
+      appendDataRow(suffix, { ...outputTemplate });
     };
 
     const buildMassActionJitReactions = () => concreteReactions.map((rxn, rxnIndex) => {
@@ -1422,8 +1440,7 @@ export async function simulate(
 
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
-          const obsValues = evaluateObservablesFast(state);
-          appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+          pushDataRow(phase.suffix, outT0, state as any as Float64Array);
           const speciesPoint0: Record<string, number> = { time: outT0 };
           for (let i = 0; i < numSpecies; i++) setSafeNumericField(speciesPoint0, speciesHeaders[i], state[i]);
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
@@ -1438,7 +1455,7 @@ export async function simulate(
             console.warn(`[Worker] SSA Terminating early (maxEvents=${maxEvents} reached) at t=${(globalTime + t).toFixed(3)}. Population count may be exploding.`);
             break;
           }
-          callbacks.checkCancelled();
+          if (totalEvents % 1000 === 0) callbacks.checkCancelled();
           let currentObsForPropensity: Record<string, number> | null = null;
           const getCurrentObsForPropensity = (): Record<string, number> => {
             if (!currentObsForPropensity) {
@@ -1613,10 +1630,10 @@ export async function simulate(
             if (recordThisPhase) {
               const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
               // PARITY FIX: Use 'state' (the SSA state vector), not 'y' (which is undefined here).
-              const obsValues = evaluateObservablesFast(state);
               // Debug: log early outputs (capture t<=0.6 to inspect early dynamics)
               try {
                 if (outT <= 0.6) {
+                  const obsValues = evaluateObservablesFast(state);
                   if (VERBOSE_SIM_DEBUG) {
                     if (obsValues['Total_pSTAT3'] === undefined) console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3 is MISSING from obsValues, keys:', Object.keys(obsValues));
                     else console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
@@ -1632,7 +1649,7 @@ export async function simulate(
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
               if (outT >= nextTOut || totalEvents >= maxEvents) {
-                appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+                pushDataRow(phase.suffix, outT, state as any as Float64Array);
                 const sp: Record<string, number> = { time: outT };
                 for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
@@ -1656,8 +1673,7 @@ export async function simulate(
         if (recordThisPhase) {
           while (nextOutIdx <= phaseNSteps) {
             const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
-            const obsValues = evaluateObservablesFast(state);
-            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+            pushDataRow(phase.suffix, outT, state as any as Float64Array);
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
