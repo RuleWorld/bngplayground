@@ -58,6 +58,12 @@ export interface LNATimeResult {
   speciesNames: string[];
 }
 
+
+interface PrecomputedPropensity {
+  rateConstant: number;
+  reactants: { idx: number; count: number }[];
+}
+
 // ── Helper: build stoichiometry matrix (n x m) ────────────────────
 
 function buildStoichiometryMatrix(
@@ -85,39 +91,51 @@ function buildStoichiometryMatrix(
   return S;
 }
 
-// ── Helper: propensity vector a(y) ────────────────────────────────
+// ── Helper: propensity vector precomputation ──────────────────────
 
-function computePropensities(
-  y: Float64Array | number[],
+function precomputePropensities(
   reactions: BNGLReaction[],
   species: BNGLSpecies[],
-): number[] {
+): PrecomputedPropensity[] {
   const speciesIndex = new Map<string, number>();
   for (let i = 0; i < species.length; i++) speciesIndex.set(species[i].name, i);
 
-  const m = reactions.length;
-  const a = new Array<number>(m);
-
-  for (let r = 0; r < m; r++) {
-    const rxn = reactions[r];
-    let prop = rxn.rateConstant;
-
-    // Count reactant multiplicities
+  return reactions.map((rxn) => {
     const reactantCounts = new Map<string, number>();
     for (const name of rxn.reactants) {
       reactantCounts.set(name, (reactantCounts.get(name) ?? 0) + 1);
     }
 
+    const reactants: { idx: number; count: number }[] = [];
     reactantCounts.forEach((count, name) => {
       const idx = speciesIndex.get(name);
       if (idx !== undefined) {
-        const conc = typeof y[idx] === 'number' ? y[idx] : 0;
-        prop *= Math.pow(Math.max(conc, 0), count);
+        reactants.push({ idx, count });
       }
     });
-    a[r] = prop;
+
+    return {
+      rateConstant: rxn.rateConstant,
+      reactants,
+    };
+  });
+}
+
+function evaluatePropensities(
+  y: Float64Array | number[],
+  precomputed: PrecomputedPropensity[],
+  out: number[] | Float64Array,
+): void {
+  for (let r = 0; r < precomputed.length; r++) {
+    const propDef = precomputed[r];
+    let prop = propDef.rateConstant;
+    for (let i = 0; i < propDef.reactants.length; i++) {
+      const { idx, count } = propDef.reactants[i];
+      const conc = y[idx] ?? 0;
+      prop *= Math.pow(Math.max(conc, 0), count);
+    }
+    out[r] = prop;
   }
-  return a;
 }
 
 // ── Helper: build RHS from stoichiometry and propensities ─────────
@@ -129,9 +147,11 @@ function buildRhsFn(
 ): (y: Float64Array, dydt: Float64Array) => void {
   const n = species.length;
   const m = reactions.length;
+  const precomputed = precomputePropensities(reactions, species);
+  const a = new Float64Array(m);
 
   return (y: Float64Array, dydt: Float64Array): void => {
-    const a = computePropensities(y, reactions, species);
+    evaluatePropensities(y, precomputed, a);
     for (let i = 0; i < n; i++) {
       let sum = 0;
       for (let r = 0; r < m; r++) {
@@ -178,7 +198,7 @@ function numericalJacobian(
 
 function buildDiffusionMatrix(
   S: number[][],
-  a: number[],
+  a: number[] | Float64Array,
   n: number,
   m: number,
 ): number[][] {
@@ -341,7 +361,9 @@ export function computeLNASteadyState(config: LNAConfig): LNASteadyStateResult {
   const xStar = ss.y;
 
   // Propensity at steady state
-  const aStar = computePropensities(xStar, reactions, species);
+  const precomputed = precomputePropensities(reactions, species);
+  const aStar = new Float64Array(m);
+  evaluatePropensities(xStar, precomputed, aStar);
 
   // Jacobian at steady state (numerical)
   const A = numericalJacobian(rhsFn, xStar, n);
@@ -397,6 +419,9 @@ export function computeLNATimeCourse(config: LNAConfig): LNATimeResult {
 
   const dt = t_end / n_steps;
 
+  const precomputed = precomputePropensities(reactions, species);
+  const aCurr = new Float64Array(m);
+
   // Augmented state: [y_1,...,y_n, C_11, C_12,...,C_1n, C_21,...,C_nn]
   // Total dimension: n + n*n
   const augDim = n + n * n;
@@ -428,7 +453,7 @@ export function computeLNATimeCourse(config: LNAConfig): LNATimeResult {
 
     // Extract C (n x n, row-major starting at index n)
     // Compute A(t) and D(t) at current y
-    const aCurr = computePropensities(y, reactions, species);
+    evaluatePropensities(y, precomputed, aCurr);
     const A = numericalJacobian(rhsFn, y, n);
     const D = buildDiffusionMatrix(S, aCurr, n, m);
 

@@ -1,3 +1,6 @@
 ## 2026-05-19 - Binary Search in paramFitter
 **Learning:** When evaluating objective functions or fitting parameters over simulation datasets, avoid redundant O(N) array searches inside nested loops like `dataRows.find(r => Math.abs(r.time - t) < 1e-12)`. Instead, use binary search or existing helpers like `interpolateRow(dataRows, t)` which already implement binary search internally and properly handle missing keys to avoid NaN regressions. This reduces time complexity from O(T x M x N) to O(T x log N).
 **Action:** Use existing binary search helpers ahead of loops instead of linear finds, and preserve fallback `?? 0` logic during interpolation.
+## 2026-05-19 - Precomputing Map Lookups in Hot ODE Loops
+**Learning:** In heavily invoked ODE evaluation functions like those in `LinearNoiseApproximation.ts`, recreating `Map` objects or repeatedly calling `Map.get()` to resolve indices for reactants introduces significant garbage collection overhead and slows down the solver (e.g., inside RK4 integration steps).
+**Action:** Precompute static lookups (like species indices and counts for reactions) outside the ODE loop into a flat array structure, and use a pre-allocated `Float64Array` for storing temporary results (like propensities) to avoid unnecessary allocations during each timestep evaluation.
