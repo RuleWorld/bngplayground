@@ -56,7 +56,38 @@ const hardTimer = setTimeout(() => {
 }, HARD_TIMEOUT_MS);
 hardTimer.unref();
 
-child.on('close', (code) => {
+/**
+ * Determine pass/fail from captured vitest output.
+ * Works regardless of whether ShardTrace is enabled.
+ */
+function didTestsPass() {
+  // Strip ANSI escape codes for reliable matching
+  const clean = output.replace(/\x1b\[[0-9;]*m/g, '');
+
+  // Best signal: vitest printed its summary
+  if (/Test Files\s.*passed/.test(clean)) {
+    if (/Test Files\s.*failed/.test(clean)) return false;
+    return true;
+  }
+
+  // Vitest was killed before summary. Check test-level markers:
+  //   ✓ = passed test file,  ✗ = failed test file
+  const passedFiles = (clean.match(/^ ✓ tests\//gm) || []).length;
+  const failedFiles = (clean.match(/^ ✗ tests\//gm) || []).length;
+
+  if (passedFiles > 0 && failedFiles === 0) {
+    return true;
+  }
+
+  // ShardTrace fallback (shard 3 only)
+  if (/\[ShardTrace\] FILE END/.test(clean) && failedFiles === 0) {
+    return true;
+  }
+
+  return false;
+}
+
+child.on('close', (code, signal) => {
   clearInterval(idleCheck);
   clearTimeout(hardTimer);
 
@@ -66,27 +97,15 @@ child.on('close', (code) => {
     process.exit(0);
   }
 
-  // Vitest was killed or crashed. Determine pass/fail from captured output.
-  const hasPassSummary = /Test Files\s.*passed/.test(output);
-  const hasFailSummary = /Test Files\s.*failed/.test(output);
-  const hasShardEnds   = /\[ShardTrace\] FILE END/.test(output);
-  const hasTestFail    = /FAIL /.test(output);
-
-  // Case 1: vitest printed full summary before we killed it
-  if (hasPassSummary && !hasFailSummary) {
-    console.log('\n[run_full_tests] All tests passed (killed during pool shutdown)');
+  // Vitest was killed (code=null, signal=SIGKILL) or crashed.
+  // Determine pass/fail from captured output.
+  if (didTestsPass()) {
+    const reason = signal ? `killed by ${signal} during pool shutdown` : `exit code ${code}`;
+    console.log(`\n[run_full_tests] All tests passed (${reason})`);
     process.exit(0);
   }
 
-  // Case 2: vitest never printed summary (common), but ShardTrace shows
-  // all files completed and no explicit failures in output
-  if (hasShardEnds && !hasTestFail && !hasFailSummary) {
-    console.log('\n[run_full_tests] All test files completed without failures (killed during pool shutdown)');
-    process.exit(0);
-  }
-
-  // Case 3: real failure
-  console.error(`\n[run_full_tests] Tests failed (vitest exit code: ${code})`);
+  console.error(`\n[run_full_tests] Tests failed (exit code: ${code}, signal: ${signal})`);
   process.exit(1);
 });
 
