@@ -1233,6 +1233,28 @@ export async function simulate(
           speciesDependents.get(speciesIdx)!.push(i);
         }
       }
+      // Precompute rxnUpdateRxn for SSA incremental propensity updates
+      // This is a reaction dependency graph: for each reaction, which other reactions are affected?
+      const rxnUpdateRxn: Int32Array[] = new Array(numReactions);
+      for (let r = 0; r < numReactions; r++) {
+        const rxn = concreteReactions[r];
+        const deps = new Set<number>();
+        for (const idx of rxn.reactants) {
+          const dependentRxns = speciesDependents.get(idx);
+          if (dependentRxns) {
+            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          }
+        }
+        for (const idx of rxn.products) {
+          const dependentRxns = speciesDependents.get(idx);
+          if (dependentRxns) {
+            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          }
+        }
+        rxnUpdateRxn[r] = new Int32Array(Array.from(deps));
+      }
+
+
 
       // Global influence tracking
       const includeInfluence = options.includeInfluence === true;
@@ -1433,66 +1455,46 @@ export async function simulate(
         let hasPushedFinalResult = false;
         const maxEvents = options.maxEvents ?? 100_000_000;
 
+
+        let aTotal = 0;
+        let recalculatePropensitiesCount = 0;
+
+        const computeAllPropensities = () => {
+          aTotal = 0;
+          for (let i = 0; i < numReactions; i++) {
+            const a = calcPropensity(i);
+            propensities[i] = a;
+            aTotal += a;
+
+            if (isNaN(a) || !isFinite(a)) {
+              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): n=${concreteReactions[i].reactants.length}`);
+              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
+            }
+          }
+        };
+
+        computeAllPropensities();
+
         while (t < phaseTEnd) {
           if (totalEvents >= maxEvents) {
             console.warn(`[Worker] SSA Terminating early (maxEvents=${maxEvents} reached) at t=${(globalTime + t).toFixed(3)}. Population count may be exploding.`);
             break;
           }
           callbacks.checkCancelled();
-          let currentObsForPropensity: Record<string, number> | null = null;
-          const getCurrentObsForPropensity = (): Record<string, number> => {
+          // let currentObsForPropensity: Record<string, number> | null = null;
+          /* const getCurrentObsForPropensity = (): Record<string, number> => {
             if (!currentObsForPropensity) {
               currentObsForPropensity = evaluateObservablesFast(state);
             }
             return currentObsForPropensity;
-          };
+          }; */
 
-          let aTotal = 0;
-          for (let i = 0; i < numReactions; i++) {
-            const rxn = concreteReactions[i];
-            const n = rxn.reactants.length;
-            let rate = rxn.rateConstant;
-            if (rxn.isFunctionalRate && rxn.rateExpression) {
-              try {
-                rate = evaluateFunctionalRate(
-                  rxn.rateExpression,
-                  model.parameters || {},
-                  getCurrentObsForPropensity(),
-                  model.functions,
-                  undefined,
-                  undefined
-                );
-              } catch (e: any) {
-                console.error(`[Worker] SSA functional rate evaluation failed for reaction ${i}:`, e?.message ?? String(e));
-                rate = 0;
-              }
-            }
-
-            let a = rate * rxn.propensityFactor;
-
-            // PARITY NOTE: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
-            const volume = reactionReactingVolumes[i];
-            if (n === 0) {
-              a *= volume; // Zero-order: k * V
-            } else if (n === 2) {
-              a /= volume; // Bimolecular: k * N1 * N2 / V
-            } else if (n === 3) {
-              a /= (volume * volume); // Ternary: k * N1 * N2 * N3 / V^2
-            } else if (n > 3) {
-              a /= Math.pow(volume, n - 1);
-            }
-
-            const reactants = rxn.reactants;
-            for (let j = 0; j < reactants.length; j++) {
-              a *= state[reactants[j]];
-            }
-            propensities[i] = a;
-            aTotal += a;
-
-            if (isNaN(a) || !isFinite(a)) {
-              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): rate=${rxn.rateConstant}, factor=${rxn.propensityFactor}, vol=${reactionReactingVolumes[i]}, n=${n}`);
-              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
-            }
+          if (recalculatePropensitiesCount++ >= 100) {
+            computeAllPropensities();
+            recalculatePropensitiesCount = 0;
+          }
+          if (aTotal < 0) {
+            computeAllPropensities(); // floating point correction
           }
 
           if (!(aTotal > 0)) {
@@ -1575,6 +1577,15 @@ export async function simulate(
           // Apply state changes
           for (let j = 0; j < firedRxn.reactants.length; j++) state[firedRxn.reactants[j]]--;
           for (let j = 0; j < firedRxn.products.length; j++) state[firedRxn.products[j]]++;
+
+          // Incremental propensity update
+          const deps = rxnUpdateRxn[reactionIndex];
+          for (let d = 0; d < deps.length; d++) {
+            const jrxn = deps[d];
+            const aNew = calcPropensity(jrxn);
+            aTotal += aNew - propensities[jrxn];
+            propensities[jrxn] = aNew;
+          }
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
           if (includeInfluence && influenceMatrix && windowInfluenceMatrix && affectedReactionIndices && oldPropensityValues) {
