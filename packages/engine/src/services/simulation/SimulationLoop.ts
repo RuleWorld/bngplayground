@@ -1254,6 +1254,7 @@ export async function simulate(
       const propensities = new Float64Array(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
+      const propOrder = new Int32Array(numReactions);
 
       // Reaction firing log for information-theoretic analysis
       const shouldRecordFirings = !!(options as any).recordFirings;
@@ -1346,6 +1347,10 @@ export async function simulate(
       for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
         const phase = phases[phaseIdx];
         const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
+
+        for (let j = 0; j < numReactions; j++) {
+          propOrder[j] = j;
+        }
 
         const shouldEmitPhaseStart = recordThisPhase && (phaseIdx === recordFromPhaseIdx || !(phase.continue ?? false));
 
@@ -1514,13 +1519,22 @@ export async function simulate(
           let reactionIndex = 0;
           // Direct method: select reaction where cumulative sum exceeds r2
           // Use < instead of <= to avoid bias toward last reaction when r2 ≈ aTotal
-          for (let i = 0; i < propensities.length; i++) {
-            sumA += propensities[i];
-            if (r2 < sumA || i === propensities.length - 1) {
-              reactionIndex = i;
+          let selectedRxn = propOrder[0];
+          for (let j = 0; j < numReactions; j++) {
+            const rj = propOrder[j];
+            sumA += propensities[rj];
+            if (r2 < sumA) {
+              selectedRxn = rj;
               break;
             }
+            if (j > 0 && propensities[rj] > propensities[propOrder[j - 1]]) {
+              const tmp = propOrder[j];
+              propOrder[j] = propOrder[j - 1];
+              propOrder[j - 1] = tmp;
+            }
+            selectedRxn = rj;
           }
+          reactionIndex = selectedRxn;
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;

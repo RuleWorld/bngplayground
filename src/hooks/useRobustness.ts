@@ -50,7 +50,7 @@ export function useRobustness() {
             const sumSqs: Record<string, number[]> = {};
             const mins: Record<string, number[]> = {};
             const maxs: Record<string, number[]> = {};
-            let processHeaders: string[] = [];
+            const processHeaders: string[] = [];
 
             // Loop
             const { iterations, variationPercent } = robustnessOptions;
