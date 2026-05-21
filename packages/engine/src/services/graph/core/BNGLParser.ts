@@ -501,8 +501,8 @@ export class BNGLParser {
           depth--;
           current += char;
         } else if (depth === 0 && char === '+') {
-          // PROPOSED FIX: Check if preceded by '!'. If so, it's a wildcard '!+', not a separator.
-          const prev = i > 0 ? segment[i - 1] : '';
+          // Check if preceded by '!'. If so, it's a wildcard '!+', not a separator.
+          const prev = current.trimEnd().endsWith('!') ? '!' : '';
           if (prev === '!') {
             current += char;
           } else {

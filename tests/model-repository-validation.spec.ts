@@ -44,7 +44,7 @@ function findBnglFiles(dir: string): string[] {
 
 describe('Multi-Compartment Support - Model Repository Validation', () => {
     let nfsimModels: string[] = [];
-    let publicModels: string[] = [];
+    const publicModels: string[] = [];
 
     try {
         nfsimModels = findBnglFiles(NFSIM_MODELS_DIR);

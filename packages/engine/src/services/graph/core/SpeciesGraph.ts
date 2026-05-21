@@ -57,14 +57,6 @@ export class SpeciesGraph {
     }
 
     // Update Component.edges for VF2 matching
-    // FIX: Remove any existing "unresolved" edges that might have been set by parser
-    if (compA.edges.has(label) && compA.edges.get(label) === -1) {
-      compA.edges.delete(label);
-    }
-    if (compB.edges.has(label) && compB.edges.get(label) === -1) {
-      compB.edges.delete(label);
-    }
-
     compA.edges.set(label, comp2);
     compB.edges.set(label, comp1);
 

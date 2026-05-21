@@ -118,7 +118,7 @@ export function continuation(
   if (onProgress) onProgress(startPoint, 0);
 
   // Previous tangent for predictor
-  let prevTangentY = new Float64Array(nSpecies);
+  const prevTangentY = new Float64Array(nSpecies);
   let prevTangentP = 1.0;
 
   // Compute initial tangent: solve J * dy/dp = -df/dp
@@ -141,7 +141,7 @@ export function continuation(
     // ── Predictor ──
     const yPred = new Float64Array(nSpecies);
     for (let i = 0; i < nSpecies; i++) yPred[i] = y[i] + ds * prevTangentY[i];
-    let pPred = p + ds * prevTangentP;
+    const pPred = p + ds * prevTangentP;
 
     // ── Corrector (Newton on augmented system) ──
     const yCor = new Float64Array(yPred);

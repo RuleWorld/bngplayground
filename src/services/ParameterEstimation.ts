@@ -247,14 +247,20 @@ export class VariationalParameterEstimator {
       let bestLogParamsIter: number[] | null = null;
       let bestObjectiveIter = Number.POSITIVE_INFINITY;
 
+      const epsBatch = tf.tidy(() => tf.randomNormal([candidatesPerIter, this.nParams]).arraySync() as number[][]);
+
       for (let k = 0; k < candidatesPerIter; k++) {
-        const eps = tf.randomNormal([this.nParams]).arraySync() as number[];
-        const candidateLogParams = mu.map((m, i) => {
+        const eps = epsBatch[k];
+        const candidateLogParams = new Array<number>(this.nParams);
+        const candidateParams = new Array<number>(this.nParams);
+
+        for (let i = 0; i < this.nParams; i++) {
           const sigmaLog = Math.exp(clamp(logSigma[i], logSigmaMin, logSigmaMax));
-          const raw = m + sigmaLog * eps[i];
-          return clamp(raw, this.logMinBounds[i], this.logMaxBounds[i]);
-        });
-        const candidateParams = candidateLogParams.map((x) => Math.exp(x));
+          const raw = mu[i] + sigmaLog * eps[i];
+          const clamped = clamp(raw, this.logMinBounds[i], this.logMaxBounds[i]);
+          candidateLogParams[i] = clamped;
+          candidateParams[i] = Math.exp(clamped);
+        }
 
         const obj = await this.computeObjective(candidateParams);
         if (obj < bestObjectiveIter) {
@@ -282,8 +288,10 @@ export class VariationalParameterEstimator {
           logSigma[i] = clamp(logSigma[i] - 0.002, logSigmaMin, logSigmaMax);
         }
 
-        this.mu.assign(tf.tensor1d(mu));
-        this.logSigma.assign(tf.tensor1d(logSigma));
+        tf.tidy(() => {
+          this.mu.assign(tf.tensor1d(mu));
+          this.logSigma.assign(tf.tensor1d(logSigma));
+        });
       }
 
       if (verbose && iter % 50 === 0) {
@@ -301,7 +309,7 @@ export class VariationalParameterEstimator {
 
     // Extract posterior parameters
     const posteriorMu = this.mu.arraySync() as number[];
-    const posteriorSigma = tf.exp(this.logSigma).arraySync() as number[];
+    const posteriorSigma = tf.tidy(() => tf.exp(this.logSigma).arraySync() as number[]);
 
     const meanOriginal = posteriorMu.map((muVal, i) => {
       const s = posteriorSigma[i];
@@ -363,9 +371,21 @@ export class VariationalParameterEstimator {
   }
 
   private computeStd(values: number[]): number {
-    const mean = values.reduce((a, b) => a + b, 0) / values.length;
-    const variance = values.reduce((a, b) => a + (b - mean) ** 2, 0) / values.length;
-    return Math.sqrt(variance);
+    if (values.length === 0) return 0;
+
+    let mean = 0;
+    let m2 = 0;
+    let count = 0;
+
+    for (const value of values) {
+      count++;
+      const delta = value - mean;
+      mean += delta / count;
+      const delta2 = value - mean;
+      m2 += delta * delta2;
+    }
+
+    return Math.sqrt(m2 / count);
   }
 
   /**
