@@ -19,17 +19,6 @@ interface MoleculeInfo {
  * cyrb53 hash function (better collision resistance and mixing than FNV-1a)
  * Returns a 53-bit unsigned integer.
  */
-function simpleHash(str: string, seed = 0): number {
-  let h1 = 0xdeadbeef ^ seed, h2 = 0x41c6ce57 ^ seed;
-  for (let i = 0, ch; i < str.length; i++) {
-    ch = str.charCodeAt(i);
-    h1 = Math.imul(h1 ^ ch, 2654435761);
-    h2 = Math.imul(h2 ^ ch, 1597334677);
-  }
-  h1 = Math.imul(h1 ^ (h1 >>> 16), 2246822507) ^ Math.imul(h2 ^ (h2 >>> 13), 3266489909);
-  h2 = Math.imul(h2 ^ (h2 >>> 16), 2246822507) ^ Math.imul(h1 ^ (h1 >>> 13), 3266489909);
-  return 4294967296 * (2097151 & h2) + (h1 >>> 0);
-}
 
 /**
  * BioNetGen: SpeciesGraph::findAutomorphisms() + canonical()
@@ -845,15 +834,14 @@ export class GraphCanonicalizer {
     });
 
     // 2. Iterative refinement: update color classes based on neighbor colors
-    // Use hash-based colors to avoid exponential string growth
-
     for (let iter = 0; iter < graph.molecules.length; iter++) {
       const prevColors = moleculeInfos.map(m => m.colorClass);
-      let changed = false;
+
+      const newSigs = new Array<string>(graph.molecules.length);
 
       for (let molIdx = 0; molIdx < graph.molecules.length; molIdx++) {
         const mol = graph.molecules[molIdx];
-        const neighborColors: number[] = [];
+        const neighborColors: string[] = [];
 
         // Collect colors of all neighbors (molecules connected via bonds)
         for (let compIdx = 0; compIdx < mol.components.length; compIdx++) {
@@ -867,21 +855,29 @@ export class GraphCanonicalizer {
               const pMol = graph.molecules[pMolIdx];
               if (pMol) {
                 // Include component info and partner's color
-                const edgeHash = simpleHash(
-                  `${mol.components[compIdx].name}->${pMol.components[pCompIdx]?.name}:${prevColors[pMolIdx]}`
-                );
-                neighborColors.push(edgeHash);
+                const edgeSig = `${mol.components[compIdx].name}->${pMol.components[pCompIdx]?.name}:${prevColors[pMolIdx]}`;
+                neighborColors.push(edgeSig);
               }
             }
           }
         }
 
-        // Sort and combine neighbor colors for a deterministic hash
-        neighborColors.sort((a, b) => a - b);
-        const combinedHash = simpleHash(prevColors[molIdx] + ':' + neighborColors.join(','));
+        // Sort and combine neighbor colors for a deterministic signature
+        neighborColors.sort();
+        const combinedSig = prevColors[molIdx] + ':' + neighborColors.join(',');
+        newSigs[molIdx] = combinedSig;
+      }
 
-        if (combinedHash !== moleculeInfos[molIdx].colorClass) {
-          moleculeInfos[molIdx].colorClass = combinedHash;
+      // Assign ranks based on sorted unique signatures
+      const uniqueIterSigs = Array.from(new Set(newSigs)).sort();
+      const iterSigToRank = new Map<string, number>();
+      uniqueIterSigs.forEach((sig, idx) => iterSigToRank.set(sig, idx));
+
+      let changed = false;
+      for (let molIdx = 0; molIdx < graph.molecules.length; molIdx++) {
+        const newRank = iterSigToRank.get(newSigs[molIdx])!;
+        if (newRank !== moleculeInfos[molIdx].colorClass) {
+          moleculeInfos[molIdx].colorClass = newRank;
           changed = true;
         }
       }
