@@ -159,6 +159,7 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
       
+      # Replace the "Run full test suite (sharded)" step in .github/workflows/test.yml
       - name: Run full test suite (sharded)
         run: |
           TRACE_ENV=""
@@ -166,44 +167,15 @@ jobs:
             TRACE_ENV="VITEST_TRACE_SHARD=1"
           fi
 
-          # Run Vitest through a small wrapper that computes pass/fail from the
-          # API result and forces process exit after teardown.
+          # Wrapper spawns vitest, detects idle hang (WASM fork pool issue),
+          # kills it, checks output for pass/fail, and exits.
           env $TRACE_ENV node scripts/run_full_tests.mjs \
-            --reporter=default --reporter=hanging-process \
+            --reporter=default \
             --shard=${{ matrix.shard }}/3 \
-            --config vitest.full.config.ts \
-            > >(tee /tmp/vitest-output.log) 2>&1 &
-          VITEST_PID=$!
-
-          # Wait up to 10 minutes for the wrapper process to exit on its own
-          SECONDS=0
-          while kill -0 $VITEST_PID 2>/dev/null; do
-            sleep 5
-            if [ $SECONDS -ge 600 ]; then
-              echo "::warning::Vitest process hung after ${SECONDS}s — killing"
-              kill -9 $VITEST_PID 2>/dev/null || true
-              wait $VITEST_PID 2>/dev/null || true
-              break
-            fi
-          done
-          set +e
-          wait $VITEST_PID 2>/dev/null
-          EXIT_CODE=$?
-          set -e
-
-          if [ $EXIT_CODE -eq 0 ]; then
-            echo "All tests passed"
-            exit 0
-          fi
-
-          echo "::error::Tests failed — check output above"
-          exit 1
+            --config vitest.full.config.ts
         env:
           NODE_ENV: test
           RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
-          BNG2_PATH: ${{ env.BNG2_PATH }}
-          BNGPATH: ${{ env.BNGPATH }}
-          NFSIM_PATH: ${{ env.NFSIM_PATH }}
       
       - name: Upload coverage (if generated)
         if: always()
