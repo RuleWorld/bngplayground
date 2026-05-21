@@ -1057,8 +1057,11 @@ export class NetworkGenerator {
 
     const totalTime = ((Date.now() - this.startTime) / 1000).toFixed(2);
 
-    // MEDIUM BUG FIX: Warn when maxIterations limit was reached
-    if (iteration >= this.options.maxIterations && queue.length > 0) {
+    const isIterationLimitReached = iteration >= this.options.maxIterations;
+    const hasRemainingQueue = queue.length > 0;
+
+    // NOTE: Warn when maxIterations limit was reached
+    if (isIterationLimitReached && hasRemainingQueue) {
       console.warn(`[NetworkGenerator] WARNING: maxIterations limit (${this.options.maxIterations}) reached with ${queue.length} species still in queue. Network may be incomplete.`);
     }
 
@@ -5118,12 +5121,12 @@ export class NetworkGenerator {
         let preserveOptionalWildcardBond = false;
         const isBound = (idx: number) => productGraph.adjacency.has(`${productMolIdx}.${idx}`);
 
-        // CRITICAL FIX: First try to use componentMap for exact component identification
         const prMapping = productToReactantPattern.get(pMolIdx);
         if (prMapping) {
-          const match = matches[prMapping.reactantIdx];
+          const mappedReactantIdx = prMapping.reactantIdx;
+          const match = matches[mappedReactantIdx];
           const reactantPatternsArr = reactantPatterns instanceof Array ? reactantPatterns : [reactantPatterns]; // Safety check
-          const reactantPatternMol = reactantPatternsArr[prMapping.reactantIdx].molecules[prMapping.reactantPatternMolIdx];
+          const reactantPatternMol = reactantPatternsArr[mappedReactantIdx].molecules[prMapping.reactantPatternMolIdx];
 
           if (!pComp.wildcard && pComp.edges.size === 0) {
             let seen = 0;
@@ -5148,7 +5151,9 @@ export class NetworkGenerator {
 
             // Look up exact target component via componentMap
             const compKey = `${prMapping.reactantPatternMolIdx}.${rpCompIdx}`;
-            const targetKey = match.componentMap.get(compKey);
+            // NOTE: First try to use componentMap for exact component identification
+            const exactComponentMapTarget = match.componentMap.get(compKey);
+            const targetKey = exactComponentMapTarget;
 
             if (!targetKey) continue;
             const idx = Number(targetKey.split('.')[1]);
@@ -5188,18 +5193,20 @@ export class NetworkGenerator {
               }
             } else {
               // No wildcard, no bond in product pattern.
-              // CRITICAL FIX: If the REACTANT pattern had a !? wildcard on this component,
+              // NOTE: If the REACTANT pattern had a !? wildcard on this component,
               // the bond state should be PRESERVED (allow either bound or unbound).
               // This is essential for transport rules like:
               //   @PM:R(tf~pY!?) -> @EM:R(tf~pY)
               // where the tf component may be bound to TF or P in CP.
               // Only enforce "explicitly unbound" if reactant pattern also expected unbound.
               const reactantExplicitlyUnbound = reactantPatternComp.wildcard === '-';
+              const reactantHadOptionalWildcard = reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard;
+
               if (reactantExplicitlyUnbound) {
                 // Reactant pattern explicitly expected unbound, product should be unbound
                 if (bound) continue;
                 markExplicitUnbound = true;
-              } else if (reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard) {
+              } else if (reactantHadOptionalWildcard) {
                 // BNG2 semantics: EXPLICITLY written !? in reactant means the bond ALWAYS
                 // carries through to the product — the rule does not modify the bond on this
                 // component regardless of how the product pattern writes it.

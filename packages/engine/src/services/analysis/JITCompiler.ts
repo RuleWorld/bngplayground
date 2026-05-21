@@ -910,7 +910,7 @@ export class JITCompiler {
                 const rateConstants = new Float64Array(cached.nReactions);
                 for (let i = 0; i < cached.nReactions; i++) {
                     const rxn = reactions[i];
-                    let hasExpressionBytecode = typeof rxn.rateConstant === 'string' && cached.exprBytecodeOffsets[i + 1] > cached.exprBytecodeOffsets[i];
+                    const hasExpressionBytecode = typeof rxn.rateConstant === 'string' && cached.exprBytecodeOffsets[i + 1] > cached.exprBytecodeOffsets[i];
                     let k: number;
                     if (typeof rxn.rateConstant === 'number') {
                         k = rxn.rateConstant;
@@ -1234,7 +1234,12 @@ export class JITCompiler {
     clearCache(): void {
         this.cache.clear();
         this.observableCache.clear();
+        this.bytecodeCache.clear();
         console.log('[JITCompiler] Cache cleared');
+    }
+
+    clearBytecodeCache(): void {
+        this.bytecodeCache.clear();
     }
 
     /**

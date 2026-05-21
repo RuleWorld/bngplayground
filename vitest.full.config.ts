@@ -9,7 +9,7 @@ export default defineConfig({
     },
   },
   test: {
-    globalSetup: './tests/global-teardown.ts',
+    globalSetup: ['./tests/global-setup.ts'],
     include: ['tests/**/*.spec.ts', 'tests/**/*.spec.tsx'],
     exclude: [
       '**/node_modules/**',
@@ -55,6 +55,7 @@ export default defineConfig({
     ],
     testTimeout: 300_000,
     hookTimeout: 60_000,
+    teardownTimeout: 10_000,
     pool: 'forks',
     sequence: {
       concurrent: false,

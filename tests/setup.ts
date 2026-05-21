@@ -2,6 +2,7 @@ import { expect, afterAll, afterEach, beforeEach } from 'vitest';
 import { cleanup } from '@testing-library/react';
 import * as matchers from '@testing-library/jest-dom/matchers';
 import { isAbsolute, relative } from 'node:path';
+import { CVODESolver } from '@bngplayground/engine/services/simulation/solvers/CVODESolver';
 
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers as any);
@@ -55,7 +56,8 @@ function startWatchdog() {
     }
   };
 
-  watchdogTimer = setInterval(checkActivity, 30_000); // Check every 30 seconds
+  watchdogTimer = setInterval(checkActivity, 30_000);
+  watchdogTimer.unref(); // Don't let the watchdog prevent process exit
 }
 
 if (TRACE_SHARD) {
@@ -75,17 +77,22 @@ if (TRACE_SHARD) {
     resetWatchdog();
   });
 
-  afterAll(() => {
+  afterAll(async () => {
     const { file } = formatTraceLabel();
     console.info(`[ShardTrace] FILE END ${file}`);
     resetWatchdog();
     if (watchdogTimer) {
       clearInterval(watchdogTimer);
     }
+    await CVODESolver.resetRuntimeState();
   });
 } else {
   // Runs a cleanup after each test case (e.g. clearing jsdom)
   afterEach(() => {
     cleanup();
+  });
+
+  afterAll(async () => {
+    await CVODESolver.resetRuntimeState();
   });
 }

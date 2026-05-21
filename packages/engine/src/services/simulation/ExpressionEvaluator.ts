@@ -192,9 +192,16 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
       const candidateModulePaths = ['../../utils/safeExpressionEvaluator'];
       try {
         // Prefer absolute file path candidates in Node ESM/CJS interop contexts.
-        const { fileURLToPath } = (globalThis as any).require('url');
-        const resolvedNoExt = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url));
-        candidateModulePaths.unshift(resolvedNoExt, `${resolvedNoExt}.js`, `${resolvedNoExt}.ts`);
+        let fileURLToPath;
+        try {
+            fileURLToPath = (globalThis as any).require('url')?.fileURLToPath;
+        } catch {
+            fileURLToPath = null;
+        }
+        if (typeof fileURLToPath === 'function') {
+           const resolvedNoExt = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url));
+           candidateModulePaths.unshift(resolvedNoExt, `${resolvedNoExt}.js`, `${resolvedNoExt}.ts`);
+        }
       } catch {
         // Ignore and fall back to relative path only.
       }
@@ -210,9 +217,14 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
           let resolvedBase: string | null = null;
 
           try {
-            const pathInfo = (globalThis as any).require('url');
-            if (pathInfo && typeof pathInfo.fileURLToPath === 'function') {
-              resolvedBase = pathInfo.fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url)).replace(/\\/g, '/');
+            let fileURLToPath;
+            try {
+               fileURLToPath = (globalThis as any).require('url')?.fileURLToPath;
+            } catch {
+               fileURLToPath = null;
+            }
+            if (typeof fileURLToPath === 'function') {
+              resolvedBase = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url)).replace(/\\/g, '/');
             }
           } catch {
              // Fallback
@@ -221,12 +233,13 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
           if (resolvedBase && (normalizedPath === resolvedBase || normalizedPath === `${resolvedBase}.js` || normalizedPath === `${resolvedBase}.ts`)) {
              isSafePath = true;
           } else if (!resolvedBase) {
-             // If we can't reliably resolve the base (e.g. in some browser-like test envs),
-             // fall back to a strictly validated suffix check but ensure it doesn't contain traversal attempts.
-             if (!normalizedPath.includes('..') &&
-                 (normalizedPath.endsWith('/utils/safeExpressionEvaluator') ||
-                  normalizedPath.endsWith('/utils/safeExpressionEvaluator.js') ||
-                  normalizedPath.endsWith('/utils/safeExpressionEvaluator.ts'))) {
+             // Strict exact string match validation to prevent path traversal with malicious prefixes
+             if (normalizedPath === '../../utils/safeExpressionEvaluator' ||
+                 normalizedPath === '../../utils/safeExpressionEvaluator.js' ||
+                 normalizedPath === '../../utils/safeExpressionEvaluator.ts' ||
+                 normalizedPath === './utils/safeExpressionEvaluator' ||
+                 normalizedPath === './utils/safeExpressionEvaluator.js' ||
+                 normalizedPath === './utils/safeExpressionEvaluator.ts') {
                  isSafePath = true;
              }
           }

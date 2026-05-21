@@ -587,7 +587,7 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
       const products = rawProducts.length === 1 && rawProducts[0] === '0' ? [] : rawProducts;
 
       // Tokenize rate chunk respecting parentheses to handle function calls like exclude_reactants(2,R)
-      // FIX: Split by comma only to preserve math expressions like "2.0 * 602.0"
+      // NOTE: Split by comma only to preserve math expressions like "2.0 * 602.0"
       // Also handle whitespace-separated keywords (exclude_reactants, include_reactants, DeleteMolecules)
       const tokenizeRateChunk = (chunk: string) => {
         const tokens: string[] = [];
@@ -602,11 +602,13 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
           if (ch === '(') depth++;
           else if (ch === ')') depth--;
 
+          const isAtTopLevel = depth === 0;
+
           // Only split on comma at top level
-          if (ch === ',' && depth === 0) {
+          if (ch === ',' && isAtTopLevel) {
             if (current.trim()) tokens.push(current.trim());
             current = '';
-          } else if (/\s/.test(ch) && depth === 0) {
+          } else if (/\s/.test(ch) && isAtTopLevel) {
             // At top level whitespace, check if next non-whitespace starts a keyword
             let j = i + 1;
             while (j < chunk.length && /\s/.test(chunk[j])) j++;
