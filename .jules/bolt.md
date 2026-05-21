@@ -1,3 +1,5 @@
-## 2026-05-19 - Binary Search in paramFitter
-**Learning:** When evaluating objective functions or fitting parameters over simulation datasets, avoid redundant O(N) array searches inside nested loops like `dataRows.find(r => Math.abs(r.time - t) < 1e-12)`. Instead, use binary search or existing helpers like `interpolateRow(dataRows, t)` which already implement binary search internally and properly handle missing keys to avoid NaN regressions. This reduces time complexity from O(T x M x N) to O(T x log N).
-**Action:** Use existing binary search helpers ahead of loops instead of linear finds, and preserve fallback `?? 0` logic during interpolation.
+## YYYY-MM-DD - O(N) Array Looks in Hot SSA Loop
+**What:** Replaced an `indexOf` call on an array mapping safe observable names back to their index in the `SimulationLoop.ts` `getCurrentObsForPropensity` loop.
+**Why:** Calling an O(N) array method like `indexOf` inside the highly-frequent SSA inner loop introduces significant overhead, causing execution to be potentially slower than the original non-lazy logic for models with large amounts of observables.
+**Impact:** Eliminates a performance bottleneck ensuring the newly implemented lazy-evaluation flag provides tangible speedups in the SSA step simulation pipeline.
+**Measurement:** Replaced O(N) array search inside a loop evaluated hundreds-of-thousands of times with O(1) direct-array lookup.

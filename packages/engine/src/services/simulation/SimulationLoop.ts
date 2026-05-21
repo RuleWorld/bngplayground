@@ -1301,6 +1301,26 @@ export async function simulate(
       const maxFiringEvents = (options as any).maxFiringEvents ?? 100000;
       const firingLog: Array<{ time: number; reactionIndex: number; ruleName?: string; propensity: number }> = [];
 
+      // === LAZY OBSERVABLE EVALUATION SETUP ===
+      const numObservables = concreteObservables.length;
+      const observableIndexToSafeName: string[] = new Array(numObservables);
+      for (let i = 0; i < safeObservableIndices.length; i++) {
+        observableIndexToSafeName[safeObservableIndices[i]] = safeObservableNames[i];
+      }
+      const observableDependsOnSpecies: number[][] = Array.from({ length: numSpecies }, () => []);
+      for (let i = 0; i < numObservables; i++) {
+        const obs = concreteObservables[i];
+        for (let j = 0; j < obs.indices.length; j++) {
+          const spIdx = obs.indices[j];
+          if (!observableDependsOnSpecies[spIdx].includes(i)) {
+            observableDependsOnSpecies[spIdx].push(i);
+          }
+        }
+      }
+      const dirtyObservables = new Uint8Array(numObservables);
+      dirtyObservables.fill(1); // Initially all dirty
+      const ssaObservableValues = Object.create(null) as Record<string, number>;
+
       // Extract meaningful reaction names from ruleName or reactants/products
       const ruleNames = concreteReactions.map((rxn, i) => {
         if (rxn.ruleName) return rxn.ruleName;
@@ -1506,7 +1526,22 @@ export async function simulate(
           // let currentObsForPropensity: Record<string, number> | null = null;
           /* const getCurrentObsForPropensity = (): Record<string, number> => {
             if (!currentObsForPropensity) {
-              currentObsForPropensity = evaluateObservablesFast(state);
+              for (let i = 0; i < numObservables; i++) {
+                if (dirtyObservables[i]) {
+                  const obs = concreteObservables[i];
+                  let sum = 0;
+                  for (let j = 0; j < obs.indices.length; j++) {
+                    // SSA works directly with state counts, so we do not scale by volume here
+                    sum += state[obs.indices[j]] * obs.coefficients[j];
+                  }
+                  const name = observableIndexToSafeName[i];
+                  if (name !== undefined) {
+                    ssaObservableValues[name] = sum;
+                  }
+                  dirtyObservables[i] = 0;
+                }
+              }
+              currentObsForPropensity = ssaObservableValues;
             }
             return currentObsForPropensity;
           }; */
@@ -1606,8 +1641,18 @@ export async function simulate(
           }
 
           // Apply state changes
-          for (let j = 0; j < firedRxn.reactants.length; j++) state[firedRxn.reactants[j]]--;
-          for (let j = 0; j < firedRxn.products.length; j++) state[firedRxn.products[j]]++;
+          for (let j = 0; j < firedRxn.reactants.length; j++) {
+            const spIdx = firedRxn.reactants[j];
+            state[spIdx]--;
+            const deps = observableDependsOnSpecies[spIdx];
+            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
+          }
+          for (let j = 0; j < firedRxn.products.length; j++) {
+            const spIdx = firedRxn.products[j];
+            state[spIdx]++;
+            const deps = observableDependsOnSpecies[spIdx];
+            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
+          }
 
           // Incremental propensity update
           const deps = rxnUpdateRxn[reactionIndex];
