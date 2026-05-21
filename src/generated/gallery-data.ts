@@ -1,6 +1,6 @@
 // AUTO-GENERATED — DO NOT EDIT
 // Source: RuleHub manifest-slim.json + gallery.json
-// Generated: 2026-05-19T13:41:43.000Z
+// Generated: 2026-05-21T11:55:42.586Z
 
 import type { Example } from '@bngplayground/engine';
 
