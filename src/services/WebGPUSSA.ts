@@ -84,6 +84,41 @@ function buildStoichiometryData(reactions: SSAReaction[], nSpecies: number): str
 }
 
 /**
+ * Build a WGSL switch statement that applies only the non-zero stoichiometry
+ * entries for the selected reaction. Avoids the generic O(N_SPECIES) loop
+ * in the shader for sparse networks.
+ */
+function buildSparseApplyFunction(reactions: SSAReaction[], nSpecies: number): string {
+  const lines: string[] = [];
+  lines.push('  switch (selected_rxn) {');
+
+  for (let r = 0; r < reactions.length; r++) {
+    // Compute net change per species for this reaction
+    const changes = new Map<number, number>();
+    for (const sp of reactions[r].reactants) {
+      changes.set(sp, (changes.get(sp) || 0) - 1);
+    }
+    for (const sp of reactions[r].products) {
+      changes.set(sp, (changes.get(sp) || 0) + 1);
+    }
+
+    lines.push(`    case ${r}u: {`);
+    for (const [sp, delta] of changes) {
+      if (delta !== 0) {
+        const sign = delta > 0 ? '+' : '-';
+        const abs = Math.abs(delta);
+        lines.push(`      state[${sp}u] = state[${sp}u] ${sign} ${abs.toFixed(1)};`);
+      }
+    }
+    lines.push('    }');
+  }
+
+  lines.push('    default: {}');
+  lines.push('  }');
+  return lines.join('\n');
+}
+
+/**
  * Build the propensity computation body as WGSL code.
  *
  * For each reaction j the propensity is:
@@ -143,7 +178,7 @@ export function generateSSAShader(
 ): string {
   const nReactions = reactions.length;
 
-  const stoichData = buildStoichiometryData(reactions, nSpecies);
+  const sparseApplyFn = buildSparseApplyFunction(reactions, nSpecies);
   const propensityFn = buildPropensityFunction(reactions, nSpecies);
 
   let shader = SSA_SHADER_TEMPLATE;
@@ -151,8 +186,8 @@ export function generateSSAShader(
   shader = shader.replace(/\{\{N_REACTIONS\}\}/g, String(nReactions));
   shader = shader.replace(/\{\{N_OUTPUT_POINTS\}\}/g, String(nOutputPoints));
   shader = shader.replace(/\{\{MAX_STEPS\}\}/g, String(maxSteps));
-  shader = shader.replace(/\{\{STOICHIOMETRY_DATA\}\}/g, stoichData);
   shader = shader.replace(/\{\{PROPENSITY_FUNCTION\}\}/g, propensityFn);
+  shader = shader.replace(/\{\{SPARSE_APPLY_STOICHIOMETRY\}\}/g, sparseApplyFn);
   shader = shader.replace(/\{\{RAW_N_SPECIES\}\}/g, String(nSpecies));
   shader = shader.replace(/\{\{RAW_N_REACTIONS\}\}/g, String(nReactions));
 
@@ -402,184 +437,386 @@ export function runCPUSSAEnsemble(config: GPUSSAConfig): GPUSSAResult {
     timePoints[i] = (tEnd * (i + 1)) / nOutputPoints;
   }
 
-  // Pre-compute stoichiometry net change: stoich[rxn][species]
-  const stoich: number[][] = [];
-  for (let r = 0; r < nReactions; r++) {
-    const row = new Array<number>(nSpecies).fill(0);
-    for (const sp of reactions[r].reactants) row[sp] -= 1;
-    for (const sp of reactions[r].products) row[sp] += 1;
-    stoich.push(row);
-  }
+  // ===========================================================================
+  // REACTION PRE-CLASSIFICATION
+  // ===========================================================================
+  // Classify each reaction by its kinetic order so the propensity inner loop
+  // can use a branchless fast path per category instead of a generic loop.
+  //
+  //   Order 0 (source/constitutive):  a = k
+  //   Order 1 (unimolecular):         a = k * X[s0]
+  //   Order 2 (bimolecular):          a = k * X[s0] * X[s1]
+  //   Order 2 (homodimer):            a = k_eff * X[s0] * (X[s0] - 1)
+  //   Order 3+ (general):             a = k_eff * falling_factorial(...)
+  //
+  // This mirrors BioNetGen's compiled rate evaluation but goes further by
+  // eliminating the inner multiplicity loop for the common cases.
+  // ===========================================================================
 
-  // Pre-compute reactant multiplicity per reaction
-  // Stored as arrays of [speciesIndex, multiplicity] for faster iteration during propensity calculation
-  const reactantMultPairs: Array<Array<[number, number]>> = reactions.map((rxn) => {
+  const RXN_ORDER_0 = 0;
+  const RXN_ORDER_1 = 1;
+  const RXN_BIMOLECULAR = 2;
+  const RXN_HOMODIMER = 3;
+  const RXN_GENERAL = 4;
+
+  // Per-reaction compiled info, packed into flat typed arrays for cache locality.
+  const rxnOrder = new Int32Array(nReactions);       // which fast-path
+  const rxnKeff = new Float64Array(nReactions);      // effective rate constant (factorial baked in)
+  const rxnSp0 = new Int32Array(nReactions);         // first reactant species index
+  const rxnSp1 = new Int32Array(nReactions);         // second reactant species index (bimolecular only)
+
+  // General-order reactions need the full multiplicity list — stored flat.
+  // genReactantData: [sp0, count0, sp1, count1, ...] per reaction
+  // genReactantOffsets[r] = start index, genReactantLengths[r] = number of pairs
+  const genReactantDataBuild: number[] = [];
+  const genReactantOffsets = new Int32Array(nReactions);
+  const genReactantLengths = new Int32Array(nReactions);
+
+  // Also build the reactant multiplicity map per reaction (needed for dependency graph)
+  const reactantSpeciesPerRxn: Array<Int32Array> = [];
+
+  for (let r = 0; r < nReactions; r++) {
+    const rxn = reactions[r];
+
+    // Build multiplicity map
     const m = new Map<number, number>();
     for (const sp of rxn.reactants) {
       m.set(sp, (m.get(sp) || 0) + 1);
     }
-    return Array.from(m.entries());
-  });
+    const pairs = Array.from(m.entries()); // [[speciesIdx, count], ...]
+    reactantSpeciesPerRxn.push(Int32Array.from(pairs.map(p => p[0])));
 
-  // Output array: nTrajectories * nOutputPoints * nSpecies
-  const output = new Float32Array(nTrajectories * nOutputPoints * nSpecies);
-  const totalReactionsArr = new Uint32Array(nTrajectories);
-
-  // -----------------------------------------------------------------------
-  // Simple seedable PRNG (xoshiro128** in JS)
-  // -----------------------------------------------------------------------
-  const prng = initializePRNGState(nTrajectories, seed);
-
-  function xoshiro128ss(tid: number): number {
-    const b = tid * 4;
-    let s0 = prng[b];
-    let s1 = prng[b + 1];
-    let s2 = prng[b + 2];
-    let s3 = prng[b + 3];
-
-    const result = Math.imul(((s1 * 5) >>> 0) << 7 | ((s1 * 5) >>> 0) >>> 25, 9) >>> 0;
-    const t = s1 << 9;
-
-    s2 ^= s0;
-    s3 ^= s1;
-    s1 ^= s2;
-    s0 ^= s3;
-    s2 ^= t;
-    s3 = (s3 << 11 | s3 >>> 21) >>> 0;
-
-    prng[b] = s0 >>> 0;
-    prng[b + 1] = s1 >>> 0;
-    prng[b + 2] = s2 >>> 0;
-    prng[b + 3] = s3 >>> 0;
-
-    return result;
-  }
-
-  function randUniform(tid: number): number {
-    const bits = xoshiro128ss(tid);
-    // Match GPU shader: (bits >> 9) + 1) / 0x800001 → maps to (0, 1], avoids log(0)
-    return ((bits >>> 9) + 1) / 0x800001;
-  }
-
-  // -----------------------------------------------------------------------
-  // Propensity computation
-  // -----------------------------------------------------------------------
-  function computePropensity(rxnIdx: number, state: Float64Array): number {
-    const rxn = reactions[rxnIdx];
-    const mults = reactantMultPairs[rxnIdx];
-    let a = rxn.rateConstant;
-
-    for (let i = 0; i < mults.length; i++) {
-      const pair = mults[i];
-      const sp = pair[0];
-      const count = pair[1];
-      const x = state[sp];
-      if (count === 1) {
-        a *= x;
-      } else if (count === 2) {
-        a *= x * (x - 1) / 2;
-      } else {
-        // General falling factorial / count!
+    // Bake factorial into rate constant
+    let k = rxn.rateConstant;
+    for (const [, count] of pairs) {
+      if (count >= 2) {
         let factorial = 1;
-        for (let m = 1; m <= count; m++) factorial *= m;
-        let ff = 1;
-        for (let m = 0; m < count; m++) ff *= (x - m);
-        a *= ff / factorial;
+        for (let f = 2; f <= count; f++) factorial *= f;
+        k /= factorial;
       }
     }
+    rxnKeff[r] = k;
 
-    return Math.max(a, 0);
+    // Classify
+    if (pairs.length === 0) {
+      // 0th order: a = k (source reaction, no reactants)
+      rxnOrder[r] = RXN_ORDER_0;
+      rxnSp0[r] = 0;
+      rxnSp1[r] = 0;
+    } else if (pairs.length === 1 && pairs[0][1] === 1) {
+      // 1st order: a = k * X[s]
+      rxnOrder[r] = RXN_ORDER_1;
+      rxnSp0[r] = pairs[0][0];
+      rxnSp1[r] = 0;
+    } else if (pairs.length === 2 && pairs[0][1] === 1 && pairs[1][1] === 1) {
+      // Bimolecular: a = k * X[s0] * X[s1]
+      rxnOrder[r] = RXN_BIMOLECULAR;
+      rxnSp0[r] = pairs[0][0];
+      rxnSp1[r] = pairs[1][0];
+    } else if (pairs.length === 1 && pairs[0][1] === 2) {
+      // Homodimer: a = k_eff * X[s] * (X[s] - 1)  (k_eff already has /2)
+      rxnOrder[r] = RXN_HOMODIMER;
+      rxnSp0[r] = pairs[0][0];
+      rxnSp1[r] = 0;
+    } else {
+      // General: store full multiplicity list
+      rxnOrder[r] = RXN_GENERAL;
+      rxnSp0[r] = 0;
+      rxnSp1[r] = 0;
+      genReactantOffsets[r] = genReactantDataBuild.length;
+      genReactantLengths[r] = pairs.length;
+      for (const [sp, count] of pairs) {
+        genReactantDataBuild.push(sp, count);
+      }
+    }
   }
 
-  // -----------------------------------------------------------------------
-  // Run trajectories
-  // -----------------------------------------------------------------------
-  for (let traj = 0; traj < nTrajectories; traj++) {
-    // Copy initial state
-    const state = new Float64Array(nSpecies);
-    for (let i = 0; i < nSpecies; i++) {
-      state[i] = config.initialState[i];
+  const genReactantData = Int32Array.from(genReactantDataBuild);
+
+  // ===========================================================================
+  // FLAT SPARSE STOICHIOMETRY
+  // ===========================================================================
+  // Instead of Array<Array<[number, number]>>, pack into two flat typed arrays
+  // with an offset table. Eliminates JS object/tuple overhead in the hot loop.
+  //
+  // stoichSpecies[stoichOffsets[r] .. stoichOffsets[r]+stoichLengths[r]]
+  //   = species indices with non-zero net change
+  // stoichDeltas[same range] = corresponding net change values
+  // ===========================================================================
+
+  const stoichSpeciesBuild: number[] = [];
+  const stoichDeltasBuild: number[] = [];
+  const stoichOffsets = new Int32Array(nReactions);
+  const stoichLengths = new Int32Array(nReactions);
+
+  for (let r = 0; r < nReactions; r++) {
+    const changes = new Map<number, number>();
+    for (const sp of reactions[r].reactants) changes.set(sp, (changes.get(sp) || 0) - 1);
+    for (const sp of reactions[r].products) changes.set(sp, (changes.get(sp) || 0) + 1);
+
+    stoichOffsets[r] = stoichSpeciesBuild.length;
+    let len = 0;
+    for (const [sp, delta] of changes) {
+      if (delta !== 0) {
+        stoichSpeciesBuild.push(sp);
+        stoichDeltasBuild.push(delta);
+        len++;
+      }
     }
+    stoichLengths[r] = len;
+  }
+
+  const stoichSpecies = Int32Array.from(stoichSpeciesBuild);
+  const stoichDeltas = Float64Array.from(stoichDeltasBuild);
+
+  // ===========================================================================
+  // REACTION DEPENDENCY GRAPH (flat packed)
+  // ===========================================================================
+  // Port of BioNetGen create_update_lists(), stored as flat Int32Array + offsets.
+  // ===========================================================================
+
+  const speciesAsReactant: Array<Set<number>> = [];
+  for (let s = 0; s < nSpecies; s++) speciesAsReactant.push(new Set());
+  for (let r = 0; r < nReactions; r++) {
+    const spArr = reactantSpeciesPerRxn[r];
+    for (let i = 0; i < spArr.length; i++) speciesAsReactant[spArr[i]].add(r);
+  }
+
+  const depListBuild: number[] = [];
+  const depOffsets = new Int32Array(nReactions);
+  const depLengths = new Int32Array(nReactions);
+
+  for (let r = 0; r < nReactions; r++) {
+    const deps = new Set<number>();
+    const off = stoichOffsets[r];
+    const len = stoichLengths[r];
+    for (let i = 0; i < len; i++) {
+      const sp = stoichSpecies[off + i];
+      for (const depRxn of speciesAsReactant[sp]) deps.add(depRxn);
+    }
+    depOffsets[r] = depListBuild.length;
+    depLengths[r] = deps.size;
+    for (const d of deps) depListBuild.push(d);
+  }
+
+  const depList = Int32Array.from(depListBuild);
+
+  // ===========================================================================
+  // ALLOCATE REUSABLE BUFFERS
+  // ===========================================================================
+
+  const output = new Float32Array(nTrajectories * nOutputPoints * nSpecies);
+  const totalReactionsArr = new Uint32Array(nTrajectories);
+  const propensities = new Float64Array(nReactions);
+  // Sorted propensity search order (à la BioNetGen GSP.prop).
+  // High-propensity reactions bubble toward the front over time.
+  const propOrder = new Int32Array(nReactions);
+
+  // Scratch buffer for recording state to Float32 output
+  const stateF32 = new Float32Array(nSpecies);
+
+  // ===========================================================================
+  // PRNG STATE — initialized once, used per-trajectory
+  // ===========================================================================
+
+  const prng = initializePRNGState(nTrajectories, seed);
+
+  // ===========================================================================
+  // PROPENSITY: ORDER-SPECIALIZED FAST PATHS
+  // ===========================================================================
+
+  function computePropensity(r: number, state: Float64Array): number {
+    switch (rxnOrder[r]) {
+      case RXN_ORDER_0:
+        return rxnKeff[r];
+      case RXN_ORDER_1: {
+        const a = rxnKeff[r] * state[rxnSp0[r]];
+        return a > 0 ? a : 0;
+      }
+      case RXN_BIMOLECULAR: {
+        const a = rxnKeff[r] * state[rxnSp0[r]] * state[rxnSp1[r]];
+        return a > 0 ? a : 0;
+      }
+      case RXN_HOMODIMER: {
+        const x = state[rxnSp0[r]];
+        const a = rxnKeff[r] * x * (x - 1);
+        return a > 0 ? a : 0;
+      }
+      default: {
+        // General: falling factorial with arbitrary multiplicity
+        let a = rxnKeff[r];
+        const off = genReactantOffsets[r];
+        const len = genReactantLengths[r];
+        for (let i = 0; i < len; i++) {
+          const sp = genReactantData[off + i * 2];
+          const count = genReactantData[off + i * 2 + 1];
+          const x = state[sp];
+          for (let m = 0; m < count; m++) a *= (x - m);
+        }
+        return a > 0 ? a : 0;
+      }
+    }
+  }
+
+  // Interval for periodic full a0 recalculation to correct floating-point drift.
+  // Matches BioNetGen's rxn_rate_update_interval concept.
+  const FULL_RECALC_INTERVAL = 100;
+
+  // ===========================================================================
+  // INLINE HELPER: copy state to Float32 output at a given output slot
+  // ===========================================================================
+
+  function recordState(state: Float64Array, base: number): void {
+    // Narrowing f64 → f32 via the scratch buffer and set() is faster than a
+    // per-element write to the output Float32Array for nSpecies > ~8.
+    for (let s = 0; s < nSpecies; s++) stateF32[s] = state[s];
+    output.set(stateF32, base);
+  }
+
+  // ===========================================================================
+  // TRAJECTORY LOOP
+  // ===========================================================================
+
+  for (let traj = 0; traj < nTrajectories; traj++) {
+    // ----- state init -----
+    const state = new Float64Array(config.initialState);
 
     let t = 0;
     let outputIdx = 0;
     let reactionCount = 0;
     const trajBase = traj * nOutputPoints * nSpecies;
 
-    // Record state at any output times <= 0
+    // ----- PRNG: copy to locals for this trajectory (avoid array indexing) -----
+    const pb = traj * 4;
+    let ps0 = prng[pb];
+    let ps1 = prng[pb + 1];
+    let ps2 = prng[pb + 2];
+    let ps3 = prng[pb + 3];
+
+    // Inline xoshiro128** → uniform (0,1]
+    // Doing this inline avoids function-call overhead in the hot loop.
+    function nextRand(): number {
+      const result = Math.imul(((ps1 * 5) >>> 0) << 7 | ((ps1 * 5) >>> 0) >>> 25, 9) >>> 0;
+      const tt = ps1 << 9;
+      ps2 ^= ps0; ps3 ^= ps1; ps1 ^= ps2; ps0 ^= ps3;
+      ps2 ^= tt;
+      ps3 = (ps3 << 11 | ps3 >>> 21) >>> 0;
+      ps0 >>>= 0; ps1 >>>= 0; ps2 >>>= 0; ps3 >>>= 0;
+      return ((result >>> 9) + 1) / 0x800001;
+    }
+
+    // ----- initial output recording -----
     while (outputIdx < nOutputPoints && timePoints[outputIdx] <= t) {
-      for (let s = 0; s < nSpecies; s++) {
-        output[trajBase + outputIdx * nSpecies + s] = state[s];
-      }
+      recordState(state, trajBase + outputIdx * nSpecies);
       outputIdx++;
     }
 
+    // ----- initial propensity computation -----
+    let a0 = 0;
+    for (let j = 0; j < nReactions; j++) {
+      propensities[j] = computePropensity(j, state);
+      a0 += propensities[j];
+      propOrder[j] = j; // reset sort order per trajectory
+    }
+
+    // ----- main SSA loop -----
     for (let step = 0; step < maxSteps; step++) {
       if (t >= tEnd || outputIdx >= nOutputPoints) break;
-
-      // Compute propensities
-      let a0 = 0;
-      const propensities = new Float64Array(nReactions);
-      for (let j = 0; j < nReactions; j++) {
-        propensities[j] = computePropensity(j, state);
-        a0 += propensities[j];
-      }
 
       // Absorbed state
       if (a0 <= 0) {
         for (let oi = outputIdx; oi < nOutputPoints; oi++) {
-          for (let s = 0; s < nSpecies; s++) {
-            output[trajBase + oi * nSpecies + s] = state[s];
-          }
+          recordState(state, trajBase + oi * nSpecies);
         }
         outputIdx = nOutputPoints;
         break;
       }
 
       // Exponential wait time
-      const u1 = randUniform(traj);
-      const tau = -Math.log(u1) / a0;
+      const tau = -Math.log(nextRand()) / a0;
       const tNext = t + tau;
 
       // Record at output times between t and tNext
       while (outputIdx < nOutputPoints && timePoints[outputIdx] <= tNext) {
-        for (let s = 0; s < nSpecies; s++) {
-          output[trajBase + outputIdx * nSpecies + s] = state[s];
-        }
+        recordState(state, trajBase + outputIdx * nSpecies);
         outputIdx++;
       }
 
-      // Select reaction
-      const r = randUniform(traj) * a0;
+      // -------------------------------------------------------------------
+      // Select reaction: sorted linear search (à la BioNetGen select_next_rxn)
+      //
+      // The propOrder array is a permutation of [0..nReactions).  During the
+      // linear scan, if we discover a neighbouring pair where the later
+      // reaction has higher propensity, we swap them.  Over time this moves
+      // frequently-firing reactions toward the front, reducing average scan
+      // length from O(nReactions/2) toward O(1) for skewed distributions.
+      // -------------------------------------------------------------------
+      const target = nextRand() * a0;
       let cumsum = 0;
-      let selectedRxn = 0;
+      let selectedRxn = propOrder[0]; // fallback
       for (let j = 0; j < nReactions; j++) {
-        cumsum += propensities[j];
-        if (cumsum > r) {
-          selectedRxn = j;
+        const rj = propOrder[j];
+        cumsum += propensities[rj];
+        if (cumsum > target) {
+          selectedRxn = rj;
           break;
         }
-        selectedRxn = j;
+        // Adaptive bubble: swap with predecessor if out of order
+        if (j > 0 && propensities[rj] > propensities[propOrder[j - 1]]) {
+          const tmp = propOrder[j];
+          propOrder[j] = propOrder[j - 1];
+          propOrder[j - 1] = tmp;
+        }
+        selectedRxn = rj;
       }
 
-      // Apply stoichiometry
-      const delta = stoich[selectedRxn];
-      for (let s = 0; s < nSpecies; s++) {
-        state[s] += delta[s];
+      // -------------------------------------------------------------------
+      // Apply sparse stoichiometry — only touch affected species
+      // -------------------------------------------------------------------
+      const sOff = stoichOffsets[selectedRxn];
+      const sLen = stoichLengths[selectedRxn];
+      for (let i = 0; i < sLen; i++) {
+        state[stoichSpecies[sOff + i]] += stoichDeltas[sOff + i];
       }
 
       t = tNext;
       reactionCount++;
+
+      // -------------------------------------------------------------------
+      // Incremental propensity update via dependency graph
+      // -------------------------------------------------------------------
+      const dOff = depOffsets[selectedRxn];
+      const dLen = depLengths[selectedRxn];
+      for (let d = 0; d < dLen; d++) {
+        const jrxn = depList[dOff + d];
+        const aNew = computePropensity(jrxn, state);
+        a0 += aNew - propensities[jrxn];
+        propensities[jrxn] = aNew;
+      }
+
+      // -------------------------------------------------------------------
+      // Periodic full a0 recalculation to correct floating-point drift
+      // (matches BioNetGen rxn_rate_update_interval)
+      // -------------------------------------------------------------------
+      if (a0 < 0 || reactionCount % FULL_RECALC_INTERVAL === 0) {
+        a0 = 0;
+        for (let j = 0; j < nReactions; j++) a0 += propensities[j];
+      }
     }
 
     // Fill remaining output points
     for (let oi = outputIdx; oi < nOutputPoints; oi++) {
-      for (let s = 0; s < nSpecies; s++) {
-        output[trajBase + oi * nSpecies + s] = state[s];
-      }
+      recordState(state, trajBase + oi * nSpecies);
     }
 
     totalReactionsArr[traj] = reactionCount;
+
+    // Write PRNG state back (not strictly needed since trajectories are
+    // independent, but preserves reproducibility if we ever interleave)
+    prng[pb] = ps0;
+    prng[pb + 1] = ps1;
+    prng[pb + 2] = ps2;
+    prng[pb + 3] = ps3;
   }
 
   // -----------------------------------------------------------------------

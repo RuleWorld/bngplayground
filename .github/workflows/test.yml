@@ -159,28 +159,23 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
       
+      # Replace the "Run full test suite (sharded)" step in .github/workflows/test.yml
       - name: Run full test suite (sharded)
         run: |
+          TRACE_ENV=""
           if [ "${{ matrix.shard }}" = "3" ]; then
-            timeout 40m bash -c 'VITEST_TRACE_SHARD=1 npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3 || exit $?' || EXIT_CODE=$?
-          else
-            timeout 40m npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3 || EXIT_CODE=$?
+            TRACE_ENV="VITEST_TRACE_SHARD=1"
           fi
 
-          # If timeout command exits with 124, it means the command timed out
-          if [ "${EXIT_CODE:-0}" = "124" ]; then
-            echo "::error::Test suite timed out after 40 minutes"
-            echo "This usually indicates a hanging test or cleanup issue"
-            exit 124
-          elif [ "${EXIT_CODE:-0}" != "0" ]; then
-            exit $EXIT_CODE
-          fi
+          # Wrapper spawns vitest, detects idle hang (WASM fork pool issue),
+          # kills it, checks output for pass/fail, and exits.
+          env $TRACE_ENV node scripts/run_full_tests.mjs \
+            --reporter=default \
+            --shard=${{ matrix.shard }}/3 \
+            --config vitest.full.config.ts
         env:
           NODE_ENV: test
           RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
-          BNG2_PATH: ${{ env.BNG2_PATH }}
-          BNGPATH: ${{ env.BNGPATH }}
-          NFSIM_PATH: ${{ env.NFSIM_PATH }}
       
       - name: Upload coverage (if generated)
         if: always()
