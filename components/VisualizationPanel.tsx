@@ -250,9 +250,10 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {/* Network View Toggle - only visible on Network tab */}
         {activeTab === 1 && (
-          <div className="flex bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-0.5 ml-auto my-1 max-w-full min-w-0 overflow-x-auto whitespace-nowrap">
+          <div role="group" aria-label="Network View Mode" className="flex bg-white dark:bg-slate-800 rounded-md border border-slate-200 dark:border-slate-700 p-0.5 ml-auto my-1 max-w-full min-w-0 overflow-x-auto whitespace-nowrap">
             <button
               onClick={() => setNetworkViewMode('regulatory')}
+              aria-pressed={networkViewMode === 'regulatory'}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'regulatory'
                   ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -262,6 +263,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             </button>
             <button
               onClick={() => setNetworkViewMode('contact')}
+              aria-pressed={networkViewMode === 'contact'}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'contact'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -272,6 +274,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
             <button
               onClick={() => setNetworkViewMode('rules')}
+              aria-pressed={networkViewMode === 'rules'}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'rules'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -282,6 +285,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
             <button
               onClick={() => setNetworkViewMode('influence')}
+              aria-pressed={networkViewMode === 'influence'}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'influence'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -291,6 +295,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             </button>
             <button
               onClick={() => setNetworkViewMode('analysis')}
+              aria-pressed={networkViewMode === 'analysis'}
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'analysis'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'

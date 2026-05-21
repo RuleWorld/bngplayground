@@ -901,6 +901,7 @@ export async function simulate(
     const observableNames = concreteObservables.map((obs) => obs.name);
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
     const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
+    const outputTemplate: Record<string, number> = Object.create(null) as Record<string, number>;
 
     // ⚡ Bolt Optimization: Pre-filter safe observable names once during setup.
     // This avoids repeatedly checking isSafeObjectKey for every observable in the hot loop.
@@ -1021,6 +1022,23 @@ export async function simulate(
         }
       }
       return results;
+    };
+
+    const pushDataRow = (suffix: string | undefined, outT: number, currentState: Float64Array) => {
+      const buffer = evaluateObservablesIntoBuffer(currentState);
+      outputTemplate.time = outT;
+      for (let i = 0; i < safeObservableNames.length; i++) {
+        outputTemplate[safeObservableNames[i]] = buffer[safeObservableIndices[i]];
+      }
+      if (shouldPrintFunctions) {
+        const funcResults = evaluateFunctionsForOutput(currentState, outputTemplate);
+        for (const key in funcResults) {
+          if (Object.prototype.hasOwnProperty.call(funcResults, key)) {
+            outputTemplate[key] = funcResults[key];
+          }
+        }
+      }
+      appendDataRow(suffix, { ...outputTemplate });
     };
 
     const buildMassActionJitReactions = () => concreteReactions.map((rxn, rxnIndex) => {
@@ -1241,6 +1259,28 @@ export async function simulate(
           speciesDependents.get(speciesIdx)!.push(i);
         }
       }
+      // Precompute rxnUpdateRxn for SSA incremental propensity updates
+      // This is a reaction dependency graph: for each reaction, which other reactions are affected?
+      const rxnUpdateRxn: Int32Array[] = new Array(numReactions);
+      for (let r = 0; r < numReactions; r++) {
+        const rxn = concreteReactions[r];
+        const deps = new Set<number>();
+        for (const idx of rxn.reactants) {
+          const dependentRxns = speciesDependents.get(idx);
+          if (dependentRxns) {
+            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          }
+        }
+        for (const idx of rxn.products) {
+          const dependentRxns = speciesDependents.get(idx);
+          if (dependentRxns) {
+            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          }
+        }
+        rxnUpdateRxn[r] = new Int32Array(Array.from(deps));
+      }
+
+
 
       // Global influence tracking
       const includeInfluence = options.includeInfluence === true;
@@ -1262,11 +1302,32 @@ export async function simulate(
       const propensities = new Float64Array(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
+      const propOrder = new Int32Array(numReactions);
 
       // Reaction firing log for information-theoretic analysis
       const shouldRecordFirings = !!(options as any).recordFirings;
       const maxFiringEvents = (options as any).maxFiringEvents ?? 100000;
       const firingLog: Array<{ time: number; reactionIndex: number; ruleName?: string; propensity: number }> = [];
+
+      // === LAZY OBSERVABLE EVALUATION SETUP ===
+      const numObservables = concreteObservables.length;
+      const observableIndexToSafeName: string[] = new Array(numObservables);
+      for (let i = 0; i < safeObservableIndices.length; i++) {
+        observableIndexToSafeName[safeObservableIndices[i]] = safeObservableNames[i];
+      }
+      const observableDependsOnSpecies: number[][] = Array.from({ length: numSpecies }, () => []);
+      for (let i = 0; i < numObservables; i++) {
+        const obs = concreteObservables[i];
+        for (let j = 0; j < obs.indices.length; j++) {
+          const spIdx = obs.indices[j];
+          if (!observableDependsOnSpecies[spIdx].includes(i)) {
+            observableDependsOnSpecies[spIdx].push(i);
+          }
+        }
+      }
+      const dirtyObservables = new Uint8Array(numObservables);
+      dirtyObservables.fill(1); // Initially all dirty
+      const ssaObservableValues = Object.create(null) as Record<string, number>;
 
       // Extract meaningful reaction names from ruleName or reactants/products
       const ruleNames = concreteReactions.map((rxn, i) => {
@@ -1327,20 +1388,21 @@ export async function simulate(
 
         let a = rate * rxn.propensityFactor;
 
-        // PARITY FIX: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
+        // PARITY NOTE: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
         // to convert to propensity in reciprocal molecule-counts.
         // n=0: a = k*V
         // n=1: a = k*N
         // n=2: a = k*N1*N2/V
         // n=3: a = k*N1*N2*N3/V^2
+        const volume = reactionReactingVolumes[rxnIdx];
         if (n === 0) {
-          a *= reactionReactingVolumes[rxnIdx];
+          a *= volume;
         } else if (n === 2) {
-          a /= reactionReactingVolumes[rxnIdx];
+          a /= volume;
         } else if (n === 3) {
-          a /= (reactionReactingVolumes[rxnIdx] * reactionReactingVolumes[rxnIdx]);
+          a /= (volume * volume);
         } else if (n > 3) {
-          a /= Math.pow(reactionReactingVolumes[rxnIdx], n - 1);
+          a /= Math.pow(volume, n - 1);
         }
 
         for (let j = 0; j < rxn.reactants.length; j++) {
@@ -1353,6 +1415,10 @@ export async function simulate(
       for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
         const phase = phases[phaseIdx];
         const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
+
+        for (let j = 0; j < numReactions; j++) {
+          propOrder[j] = j;
+        }
 
         const shouldEmitPhaseStart = recordThisPhase && (phaseIdx === recordFromPhaseIdx || !(phase.continue ?? false));
 
@@ -1432,8 +1498,7 @@ export async function simulate(
 
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
-          const obsValues = evaluateObservablesFast(state);
-          appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+          pushDataRow(phase.suffix, outT0, state as any as Float64Array);
           const speciesPoint0: Record<string, number> = { time: outT0 };
           for (let i = 0; i < numSpecies; i++) setSafeNumericField(speciesPoint0, speciesHeaders[i], state[i]);
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
@@ -1443,65 +1508,61 @@ export async function simulate(
         let hasPushedFinalResult = false;
         const maxEvents = options.maxEvents ?? 100_000_000;
 
+
+        let aTotal = 0;
+        let recalculatePropensitiesCount = 0;
+
+        const computeAllPropensities = () => {
+          aTotal = 0;
+          for (let i = 0; i < numReactions; i++) {
+            const a = calcPropensity(i);
+            propensities[i] = a;
+            aTotal += a;
+
+            if (isNaN(a) || !isFinite(a)) {
+              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): n=${concreteReactions[i].reactants.length}`);
+              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
+            }
+          }
+        };
+
+        computeAllPropensities();
+
         while (t < phaseTEnd) {
           if (totalEvents >= maxEvents) {
             console.warn(`[Worker] SSA Terminating early (maxEvents=${maxEvents} reached) at t=${(globalTime + t).toFixed(3)}. Population count may be exploding.`);
             break;
           }
           callbacks.checkCancelled();
-          let currentObsForPropensity: Record<string, number> | null = null;
-          const getCurrentObsForPropensity = (): Record<string, number> => {
+          // let currentObsForPropensity: Record<string, number> | null = null;
+          /* const getCurrentObsForPropensity = (): Record<string, number> => {
             if (!currentObsForPropensity) {
-              currentObsForPropensity = evaluateObservablesFast(state);
+              for (let i = 0; i < numObservables; i++) {
+                if (dirtyObservables[i]) {
+                  const obs = concreteObservables[i];
+                  let sum = 0;
+                  for (let j = 0; j < obs.indices.length; j++) {
+                    // SSA works directly with state counts, so we do not scale by volume here
+                    sum += state[obs.indices[j]] * obs.coefficients[j];
+                  }
+                  const name = observableIndexToSafeName[i];
+                  if (name !== undefined) {
+                    ssaObservableValues[name] = sum;
+                  }
+                  dirtyObservables[i] = 0;
+                }
+              }
+              currentObsForPropensity = ssaObservableValues;
             }
             return currentObsForPropensity;
-          };
+          }; */
 
-          let aTotal = 0;
-          for (let i = 0; i < numReactions; i++) {
-            const rxn = concreteReactions[i];
-            const n = rxn.reactants.length;
-            let rate = rxn.rateConstant;
-            if (rxn.isFunctionalRate && rxn.rateExpression) {
-              try {
-                rate = evaluateFunctionalRate(
-                  rxn.rateExpression,
-                  model.parameters || {},
-                  getCurrentObsForPropensity(),
-                  model.functions,
-                  undefined,
-                  undefined
-                );
-              } catch (e: any) {
-                console.error(`[Worker] SSA functional rate evaluation failed for reaction ${i}:`, e?.message ?? String(e));
-                rate = 0;
-              }
-            }
-
-            let a = rate * rxn.propensityFactor;
-
-            // PARITY FIX: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
-            if (n === 0) {
-              a *= reactionReactingVolumes[i]; // Zero-order: k * V
-            } else if (n === 2) {
-              a /= reactionReactingVolumes[i]; // Bimolecular: k * N1 * N2 / V
-            } else if (n === 3) {
-              a /= (reactionReactingVolumes[i] * reactionReactingVolumes[i]); // Ternary: k * N1 * N2 * N3 / V^2
-            } else if (n > 3) {
-              a /= Math.pow(reactionReactingVolumes[i], n - 1);
-            }
-
-            const reactants = rxn.reactants;
-            for (let j = 0; j < reactants.length; j++) {
-              a *= state[reactants[j]];
-            }
-            propensities[i] = a;
-            aTotal += a;
-
-            if (isNaN(a) || !isFinite(a)) {
-              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): rate=${rxn.rateConstant}, factor=${rxn.propensityFactor}, vol=${reactionReactingVolumes[i]}, n=${n}`);
-              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
-            }
+          if (recalculatePropensitiesCount++ >= 100) {
+            computeAllPropensities();
+            recalculatePropensitiesCount = 0;
+          }
+          if (aTotal < 0) {
+            computeAllPropensities(); // floating point correction
           }
 
           if (!(aTotal > 0)) {
@@ -1523,13 +1584,22 @@ export async function simulate(
           let reactionIndex = 0;
           // Direct method: select reaction where cumulative sum exceeds r2
           // Use < instead of <= to avoid bias toward last reaction when r2 ≈ aTotal
-          for (let i = 0; i < propensities.length; i++) {
-            sumA += propensities[i];
-            if (r2 < sumA || i === propensities.length - 1) {
-              reactionIndex = i;
+          let selectedRxn = propOrder[0];
+          for (let j = 0; j < numReactions; j++) {
+            const rj = propOrder[j];
+            sumA += propensities[rj];
+            if (r2 < sumA) {
+              selectedRxn = rj;
               break;
             }
+            if (j > 0 && propensities[rj] > propensities[propOrder[j - 1]]) {
+              const tmp = propOrder[j];
+              propOrder[j] = propOrder[j - 1];
+              propOrder[j - 1] = tmp;
+            }
+            selectedRxn = rj;
           }
+          reactionIndex = selectedRxn;
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
@@ -1582,8 +1652,27 @@ export async function simulate(
           }
 
           // Apply state changes
-          for (let j = 0; j < firedRxn.reactants.length; j++) state[firedRxn.reactants[j]]--;
-          for (let j = 0; j < firedRxn.products.length; j++) state[firedRxn.products[j]]++;
+          for (let j = 0; j < firedRxn.reactants.length; j++) {
+            const spIdx = firedRxn.reactants[j];
+            state[spIdx]--;
+            const deps = observableDependsOnSpecies[spIdx];
+            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
+          }
+          for (let j = 0; j < firedRxn.products.length; j++) {
+            const spIdx = firedRxn.products[j];
+            state[spIdx]++;
+            const deps = observableDependsOnSpecies[spIdx];
+            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
+          }
+
+          // Incremental propensity update
+          const deps = rxnUpdateRxn[reactionIndex];
+          for (let d = 0; d < deps.length; d++) {
+            const jrxn = deps[d];
+            const aNew = calcPropensity(jrxn);
+            aTotal += aNew - propensities[jrxn];
+            propensities[jrxn] = aNew;
+          }
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
           if (includeInfluence && influenceMatrix && windowInfluenceMatrix && affectedReactionIndices && oldPropensityValues) {
@@ -1622,10 +1711,10 @@ export async function simulate(
             if (recordThisPhase) {
               const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
               // PARITY FIX: Use 'state' (the SSA state vector), not 'y' (which is undefined here).
-              const obsValues = evaluateObservablesFast(state);
               // Debug: log early outputs (capture t<=0.6 to inspect early dynamics)
               try {
                 if (outT <= 0.6) {
+                  const obsValues = evaluateObservablesFast(state);
                   if (VERBOSE_SIM_DEBUG) {
                     if (obsValues['Total_pSTAT3'] === undefined) console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3 is MISSING from obsValues, keys:', Object.keys(obsValues));
                     else console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
@@ -1641,7 +1730,7 @@ export async function simulate(
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
               if (outT >= nextTOut || totalEvents >= maxEvents) {
-                appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+                pushDataRow(phase.suffix, outT, state as any as Float64Array);
                 const sp: Record<string, number> = { time: outT };
                 for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
@@ -1665,8 +1754,7 @@ export async function simulate(
         if (recordThisPhase) {
           while (nextOutIdx <= phaseNSteps) {
             const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
-            const obsValues = evaluateObservablesFast(state);
-            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
+            pushDataRow(phase.suffix, outT, state as any as Float64Array);
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
@@ -2658,6 +2746,8 @@ export async function simulate(
     rebuildNativeByteCode = () => {
       activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
+      // Clear JIT bytecode cache so expression bytecodes are recompiled with new parameter values
+      jitCompiler.clearBytecodeCache();
 
       const canUseNativeBytecode =
         enableNativeBytecode &&
@@ -3296,6 +3386,12 @@ export async function simulate(
       }
       // t is now absolute (phaseStart + elapsed), so modelTime = t directly.
       modelTime = t;
+
+      // Synchronize state with y for multi-phase propagation.
+      // During ODE integration, y is the primary state vector that gets updated.
+      // The state array must be kept in sync so any downstream operations (parameter
+      // changes, concentration changes, next phase initialization) see the evolved values.
+      state.set(y);
 
       // Always output final species state for multi-phase propagation support
       // This ensures batchRunner can capture the equilibrated state even when recordThisPhase=false
