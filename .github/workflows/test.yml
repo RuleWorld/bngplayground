@@ -159,19 +159,23 @@ jobs:
       - name: Install dependencies
         run: npm install --legacy-peer-deps
       
+      # Replace the "Run full test suite (sharded)" step in .github/workflows/test.yml
       - name: Run full test suite (sharded)
         run: |
+          TRACE_ENV=""
           if [ "${{ matrix.shard }}" = "3" ]; then
-            VITEST_TRACE_SHARD=1 npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
-          else
-            npx vitest run --config vitest.full.config.ts --shard=${{ matrix.shard }}/3
+            TRACE_ENV="VITEST_TRACE_SHARD=1"
           fi
+
+          # Wrapper spawns vitest, detects idle hang (WASM fork pool issue),
+          # kills it, checks output for pass/fail, and exits.
+          env $TRACE_ENV node scripts/run_full_tests.mjs \
+            --reporter=default \
+            --shard=${{ matrix.shard }}/3 \
+            --config vitest.full.config.ts
         env:
           NODE_ENV: test
           RULEHUB_ROOT: ${{ github.workspace }}/RuleHub
-          BNG2_PATH: ${{ env.BNG2_PATH }}
-          BNGPATH: ${{ env.BNGPATH }}
-          NFSIM_PATH: ${{ env.NFSIM_PATH }}
       
       - name: Upload coverage (if generated)
         if: always()

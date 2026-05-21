@@ -167,6 +167,20 @@ describe('WebGPU ODE Solver', () => {
       expect(rk4Shader).toContain('k4');
       expect(rk4Shader).toContain('dt / 6.0');
     });
+
+    it('should generate intermediate state shader', () => {
+      const gpuReactions: GPUReaction[] = [];
+      const solver = new WebGPUODESolver(2, gpuReactions, []);
+
+      const solverAny = solver as any;
+      const intermediateShader = solverAny.generateIntermediateStateShader();
+
+      expect(intermediateShader).toContain('@compute');
+      expect(intermediateShader).toContain('intermediate_state');
+      expect(intermediateShader).toContain('temp');
+      expect(intermediateShader).toContain('scale');
+      expect(intermediateShader).toContain('u32(params.n_species)');
+    });
   });
 
   describe('Fallback Behavior', () => {

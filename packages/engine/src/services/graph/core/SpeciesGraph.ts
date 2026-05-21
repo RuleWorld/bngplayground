@@ -57,14 +57,6 @@ export class SpeciesGraph {
     }
 
     // Update Component.edges for VF2 matching
-    // FIX: Remove any existing "unresolved" edges that might have been set by parser
-    if (compA.edges.has(label) && compA.edges.get(label) === -1) {
-      compA.edges.delete(label);
-    }
-    if (compB.edges.has(label) && compB.edges.get(label) === -1) {
-      compB.edges.delete(label);
-    }
-
     compA.edges.set(label, comp2);
     compB.edges.set(label, comp1);
 
@@ -575,11 +567,12 @@ export class SpeciesGraph {
    */
   clone(): SpeciesGraph {
     const sg = new SpeciesGraph(this.molecules.map(m => m.clone()));
-    // BUG FIX: Deep clone adjacency Map values (arrays) to prevent mutation
-    sg.adjacency = new Map();
+    // NOTE: Deep clone adjacency Map values (arrays) to prevent mutation
+    const clonedAdjacency = new Map<string, string[]>();
     for (const [key, partners] of this.adjacency.entries()) {
-      sg.adjacency.set(key, [...partners]);
+      clonedAdjacency.set(key, [...partners]);
     }
+    sg.adjacency = clonedAdjacency;
     sg.compartment = this.compartment;
     if (this.adjacencyBitset) {
       sg.adjacencyBitset = this.adjacencyBitset.slice();

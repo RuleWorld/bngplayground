@@ -19,7 +19,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
   onResults,
   onSearchStart,
   onSearchEnd,
-  placeholder = 'Search models (e.g., "calcium signaling" or "MAPK cascade")...',
+  placeholder = "Describe a model (e.g. 'MAPK cascade with scaffold')...",
 }) => {
   const [query, setQuery] = useState('');
   const [isSearching, setIsSearching] = useState(false);
