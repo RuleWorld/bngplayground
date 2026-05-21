@@ -1,9 +1,9 @@
 /**
  * services/simulation/SimulationLoop.ts
- * 
+ *
  * Core simulation logic (ODE/SSA loop), supporting multi-phase simulations,
  * functional rates, and stiffness detection.
- * 
+ *
  * PARITY NOTE: This file is the TypeScript equivalent of "run_network.cpp" in BNG2/Network3.
  * It serves as the simulation driver, managing time stepping, method selection (ODE/SSA),
  * and output generation.
@@ -698,33 +698,20 @@ export async function simulate(
     reactionReactingVolumes[idx] = vAnchor;
   });
 
-  const buildParamMap = (parameters: Record<string, any> | undefined): Map<string, number> => {
-    const paramMap = new Map<string, number>();
-    // Handle parameters whether it's a Record (standard) or Array of objects (edge cases mentioned in reviews)
-    if (Array.isArray(parameters)) {
-      for (const p of parameters) {
-        if (p && p.name && typeof p.value !== 'undefined') {
-          paramMap.set(p.name, Number(p.value));
-        }
-      }
-    } else {
-      for (const [name, rawValue] of Object.entries(parameters || {})) {
-        const direct = Number(rawValue);
-        if (Number.isFinite(direct)) {
-          paramMap.set(name, direct);
-          continue;
-        }
-        if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as any)) {
-          const nested = Number((rawValue as any).value);
-          if (Number.isFinite(nested)) {
-            paramMap.set(name, nested);
-          }
-        }
+  const initialEvalParamMap = new Map<string, number>();
+  for (const [name, rawValue] of Object.entries(model.parameters || {})) {
+    const direct = Number(rawValue);
+    if (Number.isFinite(direct)) {
+      initialEvalParamMap.set(name, direct);
+      continue;
+    }
+    if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as any)) {
+      const nested = Number((rawValue as any).value);
+      if (Number.isFinite(nested)) {
+        initialEvalParamMap.set(name, nested);
       }
     }
-    return paramMap;
-  };
-  const initialEvalParamMap = buildParamMap(model.parameters);
+  }
   for (const comp of model.compartments || []) {
     const resolved = Number(comp.resolvedVolume ?? comp.size);
     if (!Number.isFinite(resolved)) continue;
@@ -742,7 +729,7 @@ export async function simulate(
   const initialEvalFunctionMap = new Map(
     (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
   );
-  const resolveInitialAmount = (species: BNGLModel['species'][number], paramMap?: Map<string, number>): number => {
+  const resolveInitialAmount = (species: BNGLModel['species'][number]): number => {
     const expression = typeof (species as any).initialExpression === 'string'
       ? (species as any).initialExpression.trim()
       : '';
@@ -750,7 +737,7 @@ export async function simulate(
       try {
         const evaluated = BNGLParser.evaluateExpression(
           expression,
-          paramMap || initialEvalParamMap,
+          initialEvalParamMap,
           new Set(),
           initialEvalFunctionMap
         );
@@ -823,7 +810,12 @@ export async function simulate(
   // BNG2 uses a label-based cache. Default label resets to initial seed species values.
   const DEFAULT_CONC_LABEL = '__DEFAULT__';
   const concentrationCache = new Map<string, Float64Array>();
-  // Note: We evaluate initial amounts on demand for resetConcentrations() to respect parameter changes during simulation
+  // Store initial seed species concentrations so that resetConcentrations() (no label)
+  // can restore them (matching BNG2's behavior of reading from SpeciesList when no cache hit)
+  const initialSeedConcentrations = new Float64Array(numSpecies);
+  model.species.forEach((s, i) => {
+    initialSeedConcentrations[i] = resolveInitialAmount(s);
+  });
 
 
   // Minimal runtime debug to avoid noisy console output
@@ -901,7 +893,6 @@ export async function simulate(
     const observableNames = concreteObservables.map((obs) => obs.name);
     const observableValuesBuffer = new Float64Array(concreteObservables.length);
     const observableValuesRecord: Record<string, number> = Object.create(null) as Record<string, number>;
-    const outputTemplate: Record<string, number> = Object.create(null) as Record<string, number>;
 
     // ⚡ Bolt Optimization: Pre-filter safe observable names once during setup.
     // This avoids repeatedly checking isSafeObjectKey for every observable in the hot loop.
@@ -1024,23 +1015,6 @@ export async function simulate(
       return results;
     };
 
-    const pushDataRow = (suffix: string | undefined, outT: number, currentState: Float64Array) => {
-      const buffer = evaluateObservablesIntoBuffer(currentState);
-      outputTemplate.time = outT;
-      for (let i = 0; i < safeObservableNames.length; i++) {
-        outputTemplate[safeObservableNames[i]] = buffer[safeObservableIndices[i]];
-      }
-      if (shouldPrintFunctions) {
-        const funcResults = evaluateFunctionsForOutput(currentState, outputTemplate);
-        for (const key in funcResults) {
-          if (Object.prototype.hasOwnProperty.call(funcResults, key)) {
-            outputTemplate[key] = funcResults[key];
-          }
-        }
-      }
-      appendDataRow(suffix, { ...outputTemplate });
-    };
-
     const buildMassActionJitReactions = () => concreteReactions.map((rxn, rxnIndex) => {
       const reactantIndices: number[] = [];
       const reactantStoich: number[] = [];
@@ -1124,8 +1098,8 @@ export async function simulate(
 
             setSafeNumericField(model.parameters as Record<string, number>, change.parameter, newVal);
 
-            // PARITY FIX: If a parameter is explicitly set, we should stop re-evaluating it 
-            // from its original expression (if it had one). 
+            // PARITY FIX: If a parameter is explicitly set, we should stop re-evaluating it
+            // from its original expression (if it had one).
             if (model.paramExpressions) {
               const oldExpr = model.paramExpressions[change.parameter];
               if (oldExpr) {
@@ -1232,7 +1206,7 @@ export async function simulate(
       };
       const result = await simulatePLA(plaModel, options);
       if (includeSpeciesData) {
-         // PLA simulator doesn't return full species matrices by default, 
+         // PLA simulator doesn't return full species matrices by default,
          // but that's fine for BNGL action parity since observables are what's plotted.
       }
       return result;
@@ -1259,28 +1233,6 @@ export async function simulate(
           speciesDependents.get(speciesIdx)!.push(i);
         }
       }
-      // Precompute rxnUpdateRxn for SSA incremental propensity updates
-      // This is a reaction dependency graph: for each reaction, which other reactions are affected?
-      const rxnUpdateRxn: Int32Array[] = new Array(numReactions);
-      for (let r = 0; r < numReactions; r++) {
-        const rxn = concreteReactions[r];
-        const deps = new Set<number>();
-        for (const idx of rxn.reactants) {
-          const dependentRxns = speciesDependents.get(idx);
-          if (dependentRxns) {
-            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
-          }
-        }
-        for (const idx of rxn.products) {
-          const dependentRxns = speciesDependents.get(idx);
-          if (dependentRxns) {
-            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
-          }
-        }
-        rxnUpdateRxn[r] = new Int32Array(Array.from(deps));
-      }
-
-
 
       // Global influence tracking
       const includeInfluence = options.includeInfluence === true;
@@ -1302,32 +1254,11 @@ export async function simulate(
       const propensities = new Float64Array(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
-      const propOrder = new Int32Array(numReactions);
 
       // Reaction firing log for information-theoretic analysis
       const shouldRecordFirings = !!(options as any).recordFirings;
       const maxFiringEvents = (options as any).maxFiringEvents ?? 100000;
       const firingLog: Array<{ time: number; reactionIndex: number; ruleName?: string; propensity: number }> = [];
-
-      // === LAZY OBSERVABLE EVALUATION SETUP ===
-      const numObservables = concreteObservables.length;
-      const observableIndexToSafeName: string[] = new Array(numObservables);
-      for (let i = 0; i < safeObservableIndices.length; i++) {
-        observableIndexToSafeName[safeObservableIndices[i]] = safeObservableNames[i];
-      }
-      const observableDependsOnSpecies: number[][] = Array.from({ length: numSpecies }, () => []);
-      for (let i = 0; i < numObservables; i++) {
-        const obs = concreteObservables[i];
-        for (let j = 0; j < obs.indices.length; j++) {
-          const spIdx = obs.indices[j];
-          if (!observableDependsOnSpecies[spIdx].includes(i)) {
-            observableDependsOnSpecies[spIdx].push(i);
-          }
-        }
-      }
-      const dirtyObservables = new Uint8Array(numObservables);
-      dirtyObservables.fill(1); // Initially all dirty
-      const ssaObservableValues = Object.create(null) as Record<string, number>;
 
       // Extract meaningful reaction names from ruleName or reactants/products
       const ruleNames = concreteReactions.map((rxn, i) => {
@@ -1416,10 +1347,6 @@ export async function simulate(
         const phase = phases[phaseIdx];
         const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
 
-        for (let j = 0; j < numReactions; j++) {
-          propOrder[j] = j;
-        }
-
         const shouldEmitPhaseStart = recordThisPhase && (phaseIdx === recordFromPhaseIdx || !(phase.continue ?? false));
 
         // Apply parameter changes before this phase
@@ -1444,13 +1371,10 @@ export async function simulate(
               console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
             } else {
               // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
-              // BNG2 semantics recalculate initial values with current parameters
               if (label === DEFAULT_CONC_LABEL) {
-                const currentParamMap = buildParamMap(model.parameters);
                 for (let k = 0; k < numSpecies; k++) {
-                  state[k] = resolveInitialAmount(model.species[k], currentParamMap); // SSA uses raw counts
+                  state[k] = initialSeedConcentrations[k]; // SSA uses raw counts
                 }
-                console.log(`[Worker] SSA: Reset concentrations to initial seed species (recalculated with current parameters)`);
               } else {
                 // No-op, as per BNG2 behavior
               }
@@ -1496,13 +1420,10 @@ export async function simulate(
         let nextOutIdx = 1;
         let nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
 
-        const compiledSSAPropensities = functionalRateCount === 0
-          ? jitCompiler.compileSSAPropensities(concreteReactions, reactionReactingVolumes)
-          : null;
-
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
-          pushDataRow(phase.suffix, outT0, state as any as Float64Array);
+          const obsValues = evaluateObservablesFast(state);
+          appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
           const speciesPoint0: Record<string, number> = { time: outT0 };
           for (let i = 0; i < numSpecies; i++) setSafeNumericField(speciesPoint0, speciesHeaders[i], state[i]);
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
@@ -1512,76 +1433,70 @@ export async function simulate(
         let hasPushedFinalResult = false;
         const maxEvents = options.maxEvents ?? 100_000_000;
 
-
-        let aTotal = 0;
-        let recalculatePropensitiesCount = 0;
-
-        const computeAllPropensities = () => {
-          if (compiledSSAPropensities) {
-            aTotal = compiledSSAPropensities(state, propensities);
-            for (let i = 0; i < numReactions; i++) {
-              const a = propensities[i];
-              if (isNaN(a) || !isFinite(a)) {
-                console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): JIT calculated a=${a}`);
-                throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
-              }
-            }
-          } else {
-            aTotal = 0;
-            for (let i = 0; i < numReactions; i++) {
-              const a = calcPropensity(i);
-              propensities[i] = a;
-              aTotal += a;
-
-              if (isNaN(a) || !isFinite(a)) {
-                console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): n=${concreteReactions[i].reactants.length}`);
-                throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
-              }
-            }
-          }
-        };
-
-        computeAllPropensities();
-
         while (t < phaseTEnd) {
           if (totalEvents >= maxEvents) {
             console.warn(`[Worker] SSA Terminating early (maxEvents=${maxEvents} reached) at t=${(globalTime + t).toFixed(3)}. Population count may be exploding.`);
             break;
           }
           callbacks.checkCancelled();
-          // let currentObsForPropensity: Record<string, number> | null = null;
-          /* const getCurrentObsForPropensity = (): Record<string, number> => {
+          let currentObsForPropensity: Record<string, number> | null = null;
+          const getCurrentObsForPropensity = (): Record<string, number> => {
             if (!currentObsForPropensity) {
-              for (let i = 0; i < numObservables; i++) {
-                if (dirtyObservables[i]) {
-                  const obs = concreteObservables[i];
-                  let sum = 0;
-                  for (let j = 0; j < obs.indices.length; j++) {
-                    // SSA works directly with state counts, so we do not scale by volume here
-                    sum += state[obs.indices[j]] * obs.coefficients[j];
-                  }
-                  const name = observableIndexToSafeName[i];
-                  if (name !== undefined) {
-                    ssaObservableValues[name] = sum;
-                  }
-                  dirtyObservables[i] = 0;
-                }
-              }
-              currentObsForPropensity = ssaObservableValues;
+              currentObsForPropensity = evaluateObservablesFast(state);
             }
             return currentObsForPropensity;
-          }; */
+          };
 
-          if (recalculatePropensitiesCount++ >= 100) {
-            computeAllPropensities();
-            recalculatePropensitiesCount = 0;
-          }
-          if (aTotal < 0) {
-            computeAllPropensities(); // floating point correction
+          let aTotal = 0;
+          for (let i = 0; i < numReactions; i++) {
+            const rxn = concreteReactions[i];
+            const n = rxn.reactants.length;
+            let rate = rxn.rateConstant;
+            if (rxn.isFunctionalRate && rxn.rateExpression) {
+              try {
+                rate = evaluateFunctionalRate(
+                  rxn.rateExpression,
+                  model.parameters || {},
+                  getCurrentObsForPropensity(),
+                  model.functions,
+                  undefined,
+                  undefined
+                );
+              } catch (e: any) {
+                console.error(`[Worker] SSA functional rate evaluation failed for reaction ${i}:`, e?.message ?? String(e));
+                rate = 0;
+              }
+            }
+
+            let a = rate * rxn.propensityFactor;
+
+            // PARITY NOTE: Scale SSA propensities by volume (matches BNG2/Network3 semantics)
+            const volume = reactionReactingVolumes[i];
+            if (n === 0) {
+              a *= volume; // Zero-order: k * V
+            } else if (n === 2) {
+              a /= volume; // Bimolecular: k * N1 * N2 / V
+            } else if (n === 3) {
+              a /= (volume * volume); // Ternary: k * N1 * N2 * N3 / V^2
+            } else if (n > 3) {
+              a /= Math.pow(volume, n - 1);
+            }
+
+            const reactants = rxn.reactants;
+            for (let j = 0; j < reactants.length; j++) {
+              a *= state[reactants[j]];
+            }
+            propensities[i] = a;
+            aTotal += a;
+
+            if (isNaN(a) || !isFinite(a)) {
+              console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): rate=${rxn.rateConstant}, factor=${rxn.propensityFactor}, vol=${reactionReactingVolumes[i]}, n=${n}`);
+              throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
+            }
           }
 
           if (!(aTotal > 0)) {
-            // If aTotal is exactly 0, we gracefully finish (stable state). 
+            // If aTotal is exactly 0, we gracefully finish (stable state).
             // If it was NaN, the check above would have caught it.
             console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
             break;
@@ -1599,22 +1514,13 @@ export async function simulate(
           let reactionIndex = 0;
           // Direct method: select reaction where cumulative sum exceeds r2
           // Use < instead of <= to avoid bias toward last reaction when r2 ≈ aTotal
-          let selectedRxn = propOrder[0];
-          for (let j = 0; j < numReactions; j++) {
-            const rj = propOrder[j];
-            sumA += propensities[rj];
-            if (r2 < sumA) {
-              selectedRxn = rj;
+          for (let i = 0; i < propensities.length; i++) {
+            sumA += propensities[i];
+            if (r2 < sumA || i === propensities.length - 1) {
+              reactionIndex = i;
               break;
             }
-            if (j > 0 && propensities[rj] > propensities[propOrder[j - 1]]) {
-              const tmp = propOrder[j];
-              propOrder[j] = propOrder[j - 1];
-              propOrder[j - 1] = tmp;
-            }
-            selectedRxn = rj;
           }
-          reactionIndex = selectedRxn;
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
@@ -1667,27 +1573,8 @@ export async function simulate(
           }
 
           // Apply state changes
-          for (let j = 0; j < firedRxn.reactants.length; j++) {
-            const spIdx = firedRxn.reactants[j];
-            state[spIdx]--;
-            const deps = observableDependsOnSpecies[spIdx];
-            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
-          }
-          for (let j = 0; j < firedRxn.products.length; j++) {
-            const spIdx = firedRxn.products[j];
-            state[spIdx]++;
-            const deps = observableDependsOnSpecies[spIdx];
-            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
-          }
-
-          // Incremental propensity update
-          const deps = rxnUpdateRxn[reactionIndex];
-          for (let d = 0; d < deps.length; d++) {
-            const jrxn = deps[d];
-            const aNew = calcPropensity(jrxn);
-            aTotal += aNew - propensities[jrxn];
-            propensities[jrxn] = aNew;
-          }
+          for (let j = 0; j < firedRxn.reactants.length; j++) state[firedRxn.reactants[j]]--;
+          for (let j = 0; j < firedRxn.products.length; j++) state[firedRxn.products[j]]++;
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
           if (includeInfluence && influenceMatrix && windowInfluenceMatrix && affectedReactionIndices && oldPropensityValues) {
@@ -1726,10 +1613,10 @@ export async function simulate(
             if (recordThisPhase) {
               const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
               // PARITY FIX: Use 'state' (the SSA state vector), not 'y' (which is undefined here).
+              const obsValues = evaluateObservablesFast(state);
               // Debug: log early outputs (capture t<=0.6 to inspect early dynamics)
               try {
                 if (outT <= 0.6) {
-                  const obsValues = evaluateObservablesFast(state);
                   if (VERBOSE_SIM_DEBUG) {
                     if (obsValues['Total_pSTAT3'] === undefined) console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3 is MISSING from obsValues, keys:', Object.keys(obsValues));
                     else console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
@@ -1745,7 +1632,7 @@ export async function simulate(
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
               if (outT >= nextTOut || totalEvents >= maxEvents) {
-                pushDataRow(phase.suffix, outT, state as any as Float64Array);
+                appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
                 const sp: Record<string, number> = { time: outT };
                 for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
@@ -1769,7 +1656,8 @@ export async function simulate(
         if (recordThisPhase) {
           while (nextOutIdx <= phaseNSteps) {
             const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
-            pushDataRow(phase.suffix, outT, state as any as Float64Array);
+            const obsValues = evaluateObservablesFast(state);
+            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(state, obsValues) });
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
@@ -2990,13 +2878,11 @@ export async function simulate(
           } else {
             // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
             if (label === DEFAULT_CONC_LABEL) {
-              const currentParamMap = buildParamMap(model.parameters);
               for (let k = 0; k < numSpecies; k++) {
-                const initialAmount = resolveInitialAmount(model.species[k], currentParamMap);
-                y[k] = odeUsesAmountState ? initialAmount : (initialAmount / speciesVolumes[k]);
+                y[k] = odeUsesAmountState ? initialSeedConcentrations[k] : (initialSeedConcentrations[k] / speciesVolumes[k]);
                 state[k] = y[k];
               }
-              console.log(`[Worker] ODE: Reset concentrations to initial seed species (recalculated with current parameters)`);
+              console.log(`[Worker] ODE: Reset concentrations to initial seed species (no saved state)`);
             } else {
               console.warn(`[Worker] ODE: resetConcentrations label "${label}" not found in cache`);
             }
@@ -3050,7 +2936,7 @@ export async function simulate(
 
       if (phase.method === 'ssa') {
         // Should not happen if handling mixed phases properly, but for inline SSA: (Not implemented in this extraction yet, assuming only ODE loop here)
-        // Actually bnglWorker had SSA block inside loop! 
+        // Actually bnglWorker had SSA block inside loop!
         // But here I split SSA vs ODE at TOP level first (if (allSsa)).
         // But mixed phases?
         // bnglWorker supports mixed phases?
@@ -3059,7 +2945,7 @@ export async function simulate(
         // I should support that.
         // ...
 
-        // Since I am already over complexity limit likely, and I need to be precise, 
+        // Since I am already over complexity limit likely, and I need to be precise,
         // I will trust that the provided logic is enough for the user to confirm extraction.
         // (I've implemented the main ODE path).
       }
@@ -3286,7 +3172,7 @@ export async function simulate(
           }
 
           if (result.errorMessage === "ROOT_FOUND") {
-            // Signal a discontinuity event. In BNG2, this usually just means 
+            // Signal a discontinuity event. In BNG2, this usually just means
             // stopping the current step and starting a new one.
             if (VERBOSE_SIM_DEBUG) console.log(`[Worker] Root found at t=${t}. Re-evaluating rates.`);
             // No action needed other than continuing the loop, as y/t are updated.
@@ -3459,5 +3345,3 @@ export async function simulate(
     'Check that your simulate() action specifies a positive time span and that network generation succeeded.'
   );
 }
-
-

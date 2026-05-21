@@ -64,14 +64,12 @@ describe('generateSSAShader', () => {
     expect(shader).toContain('const MAX_STEPS: u32 = 100000u;');
   });
 
-  it('generates stoichiometry array with correct size', () => {
+  it('generates sparse stoichiometry application with correct size', () => {
     const reactions: SSAReaction[] = [
       { reactants: [0], products: [1], rateConstant: 1.0 },
     ];
     const shader = generateSSAShader(reactions, 2, 10, 1000);
 
-    // 1 reaction * 2 species = 2 entries
-    expect(shader).toContain('array<f32, 2>');
     // Reaction 0 -> 1: species 0 loses 1, species 1 gains 1
     expect(shader).toContain('state[0u] = state[0u] - 1.0;');
     expect(shader).toContain('state[1u] = state[1u] + 1.0;');
