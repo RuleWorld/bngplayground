@@ -83,7 +83,7 @@ export async function lbfgsOptimize(config: GradientOptimizerConfig): Promise<Op
   const n = config.initialParams.length;
 
   let x = projectOnBounds(new Float64Array(config.initialParams), bounds);
-  let evalResult = await objectiveFn(x);
+  const evalResult = await objectiveFn(x);
   let f = evalResult.value;
   let g = new Float64Array(evalResult.gradient);
 
@@ -350,7 +350,7 @@ export async function trustRegionOptimize(config: GradientOptimizerConfig): Prom
   const n = config.initialParams.length;
 
   let x = projectOnBounds(new Float64Array(config.initialParams), bounds);
-  let evalResult = await objectiveFn(x);
+  const evalResult = await objectiveFn(x);
   let f = evalResult.value;
   let g = new Float64Array(evalResult.gradient);
 

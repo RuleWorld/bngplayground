@@ -15,7 +15,7 @@ export function parseGdat(gdat: string): GdatData {
 
   let headerLineIndex = -1;
   for (let i = lines.length - 1; i >= 0; i--) {
-    let line = lines[i];
+    const line = lines[i];
     let start = 0;
     while(start < line.length && line.charCodeAt(start) <= 32) start++;
     if (start < line.length && line.charCodeAt(start) === 35) { // '#'
@@ -38,7 +38,7 @@ export function parseGdat(gdat: string): GdatData {
   } else {
     let firstDataLine = '';
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+        const line = lines[i];
         let start = 0;
         while(start < line.length && line.charCodeAt(start) <= 32) start++;
         if (start < line.length && line.charCodeAt(start) !== 35) {
@@ -59,7 +59,7 @@ export function parseGdat(gdat: string): GdatData {
   if (headerIsData) {
     headers = ['time', ...Array.from({ length: Math.max(0, headerTokens.length - 1) }, (_, i) => `O${i + 1}`)];
     for (let i = 0; i < lines.length; i++) {
-        let line = lines[i];
+        const line = lines[i];
         let start = 0;
         while(start < line.length && line.charCodeAt(start) <= 32) start++;
         if (start < line.length && line.charCodeAt(start) !== 35) {

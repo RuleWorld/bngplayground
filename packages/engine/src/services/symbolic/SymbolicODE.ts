@@ -341,7 +341,7 @@ export function solveSymbolicSteadyState(
   }
 
   // Substitute dependent variables in the RHS of independent equations
-  let reducedRHS: SymExpr[] = independentIndices.map(i => {
+  const reducedRHS: SymExpr[] = independentIndices.map(i => {
     let expr = rhs[i];
     for (const [varName, subst] of substitutions) {
       expr = substitute(expr, varName, subst);
@@ -407,7 +407,7 @@ function _solveLinearSteadyState(
   for (const eq of equations) {
     const row: SymExpr[] = [];
     // Collect coefficients of each variable
-    let remainder = eq;
+    const remainder = eq;
     for (const v of vars) {
       const coll = collectTerms(remainder, v);
       row.push(coll.degree >= 1 ? coll.coefficients[1] : symConst(0));
