@@ -1,7 +1,7 @@
 /**
  * Global teardown for Vitest - ensures clean exit after all tests complete
  */
-export async function teardown() {
+export default async function globalTeardown() {
   console.log('[GlobalTeardown] All tests completed, forcing cleanup...');
 
   // Give a brief moment for async cleanup
