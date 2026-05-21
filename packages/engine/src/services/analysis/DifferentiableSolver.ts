@@ -84,6 +84,11 @@ export function setCVodeSensModule(mod: unknown): void {
   }
 }
 
+/** Clear the cached CVODES module reference. */
+export function resetCVodeSensModule(): void {
+  cvodesModule = null;
+}
+
 /** Check if CVODES WASM sensitivity is available. */
 function getCvodesModule(): CVodeSensModule | null {
   if (cvodesModule) return cvodesModule;
