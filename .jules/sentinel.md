@@ -1,4 +1,0 @@
-## 2026-05-19 - Fix Path Traversal in ExpressionEvaluator
-**Vulnerability:** Weak path traversal vulnerability using `.includes('..')` and `.endsWith()` to validate `modulePath` for dynamic `require()`.
-**Learning:** When refactoring unsafe dynamic imports or 'require' calls (like `globalThis.require('url')`), do not blindly delete fallback branches designed for environments where the module cannot be resolved (e.g., browser-like test envs). Instead, wrap the `require` call in a `try...catch` block with optional chaining (e.g., `require('url')?.fileURLToPath`) to handle missing dependencies gracefully while preserving the existing fallback path validation logic.
-**Prevention:** Always use strict exact string matching (`===`) for fallback validations or strictly resolved absolute paths securely using Node's `fileURLToPath(new URL(..., import.meta.url))` instead of loose suffix/prefix checks.
