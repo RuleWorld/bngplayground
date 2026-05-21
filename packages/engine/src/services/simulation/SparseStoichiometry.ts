@@ -134,7 +134,9 @@ export function buildCSRStoichiometry(
   }
   rowPtr.set([pos], numSpecies);
 
-  return { rowPtr, colIdx, values, nnz, numSpecies, numReactions };
+  const matrix = { rowPtr, colIdx, values, nnz, numSpecies, numReactions };
+  validateCSR(matrix, numReactions);
+  return matrix;
 }
 
 /**
@@ -158,13 +160,17 @@ export function sparseCSRDgemv(
     const start = rowPtr[i];
     const end = rowPtr[i + 1];
     for (let p = start; p < end; p++) {
-      const col = colIdx[p];
-      if (col < 0 || col >= reactionVelocities.length) {
-        throw new Error(`[SparseStoichiometry] Invalid reaction velocity index: ${col}`);
-      }
-      sum += values[p] * reactionVelocities[col];
+      sum += values[p] * reactionVelocities[colIdx[p]];
     }
     dydt[i] += sum;
+  }
+}
+
+export function validateCSR(S: CSRStoichiometryMatrix, numReactionVelocities: number): void {
+  for (let p = 0; p < S.nnz; p++) {
+    if (S.colIdx[p] < 0 || S.colIdx[p] >= numReactionVelocities) {
+      throw new Error(`[SparseStoichiometry] Invalid column index ${S.colIdx[p]} at position ${p}`);
+    }
   }
 }
 

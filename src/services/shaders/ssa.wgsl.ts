@@ -6,8 +6,8 @@
  *   {{N_REACTIONS}}        - number of reactions
  *   {{N_OUTPUT_POINTS}}    - number of output time points
  *   {{MAX_STEPS}}          - maximum SSA steps per trajectory
- *   {{STOICHIOMETRY_DATA}} - constant array of net stoichiometry changes
  *   {{PROPENSITY_FUNCTION}} - inline propensity computation for each reaction
+ *   {{SPARSE_APPLY_STOICHIOMETRY}} - per-reaction switch for sparse state updates
  */
 
 export const SSA_SHADER_TEMPLATE = /* wgsl */ `
@@ -19,10 +19,6 @@ const N_SPECIES: u32 = {{N_SPECIES}}u;
 const N_REACTIONS: u32 = {{N_REACTIONS}}u;
 const N_OUTPUT_POINTS: u32 = {{N_OUTPUT_POINTS}}u;
 const MAX_STEPS: u32 = {{MAX_STEPS}}u;
-
-// Stoichiometry matrix: net change per species per reaction
-// Laid out as stoich[reaction * N_SPECIES + species]
-{{STOICHIOMETRY_DATA}}
 
 // -----------------------------------------------------------------------------
 // Bindings
@@ -43,50 +39,49 @@ struct Params {
 @group(0) @binding(5) var<storage, read_write> total_reactions: array<u32>;
 
 // -----------------------------------------------------------------------------
-// xoshiro128** PRNG
+// xoshiro128** PRNG — operates on private (register) state
+//
+// The PRNG state is loaded from storage once at kernel start and written back
+// once at kernel end.  This eliminates 8 storage reads + 4 storage writes per
+// random number that the previous version incurred via prng_state[].
 // -----------------------------------------------------------------------------
+
+var<private> ps0: u32;
+var<private> ps1: u32;
+var<private> ps2: u32;
+var<private> ps3: u32;
 
 fn rotl(x: u32, k: u32) -> u32 {
   return (x << k) | (x >> (32u - k));
 }
 
-fn xoshiro128ss(tid: u32) -> u32 {
-  let base = tid * 4u;
-  let s0 = prng_state[base + 0u];
-  let s1 = prng_state[base + 1u];
-  let s2 = prng_state[base + 2u];
-  let s3 = prng_state[base + 3u];
+fn xoshiro128ss() -> u32 {
+  let result = rotl(ps1 * 5u, 7u) * 9u;
+  let t = ps1 << 9u;
 
-  let result = rotl(s1 * 5u, 7u) * 9u;
-
-  let t = s1 << 9u;
-
-  var ns2 = s2 ^ s0;
-  var ns3 = s3 ^ s1;
-  let ns1 = s1 ^ ns2;
-  let ns0 = s0 ^ ns3;
+  var ns2 = ps2 ^ ps0;
+  var ns3 = ps3 ^ ps1;
+  let ns1 = ps1 ^ ns2;
+  let ns0 = ps0 ^ ns3;
 
   ns2 = ns2 ^ t;
   ns3 = rotl(ns3, 11u);
 
-  prng_state[base + 0u] = ns0;
-  prng_state[base + 1u] = ns1;
-  prng_state[base + 2u] = ns2;
-  prng_state[base + 3u] = ns3;
+  ps0 = ns0;
+  ps1 = ns1;
+  ps2 = ns2;
+  ps3 = ns3;
 
   return result;
 }
 
-// Generate a uniform random f32 in (0, 1)
-fn rand_uniform(tid: u32) -> f32 {
-  let bits = xoshiro128ss(tid);
-  // Use upper 23 bits for mantissa, ensure > 0
+fn rand_uniform() -> f32 {
+  let bits = xoshiro128ss();
   return f32((bits >> 9u) + 1u) / f32(0x800001u);
 }
 
-// Generate an exponential random variate with rate lambda
-fn rand_exponential(tid: u32, lambda: f32) -> f32 {
-  let u = rand_uniform(tid);
+fn rand_exponential(lambda: f32) -> f32 {
+  let u = rand_uniform();
   return -log(u) / lambda;
 }
 
@@ -108,6 +103,13 @@ fn ssa_main(@builtin(global_invocation_id) global_id: vec3u) {
   if (tid >= params.n_trajectories) {
     return;
   }
+
+  // Load PRNG state from storage into private registers (once)
+  let prng_base = tid * 4u;
+  ps0 = prng_state[prng_base + 0u];
+  ps1 = prng_state[prng_base + 1u];
+  ps2 = prng_state[prng_base + 2u];
+  ps3 = prng_state[prng_base + 3u];
 
   // Initialize state from initial conditions
   var state: array<f32, {{RAW_N_SPECIES}}>;
@@ -161,7 +163,7 @@ fn ssa_main(@builtin(global_invocation_id) global_id: vec3u) {
     }
 
     // Generate wait time (exponential with rate a0)
-    let tau = rand_exponential(tid, a0);
+    let tau = rand_exponential(a0);
     let t_next = t + tau;
 
     // Record output at any scheduled time points between t and t_next
@@ -169,7 +171,6 @@ fn ssa_main(@builtin(global_invocation_id) global_id: vec3u) {
       if (output_times[oi] > t_next) {
         break;
       }
-      // Record current state (before this reaction fires)
       for (var s = 0u; s < N_SPECIES; s = s + 1u) {
         output[traj_output_base + oi * N_SPECIES + s] = state[s];
       }
@@ -177,7 +178,7 @@ fn ssa_main(@builtin(global_invocation_id) global_id: vec3u) {
     }
 
     // Select reaction: find j such that sum(a_0..a_j) > r * a0
-    let r = rand_uniform(tid) * a0;
+    let r = rand_uniform() * a0;
     var cumsum: f32 = 0.0;
     var selected_rxn: u32 = 0u;
     for (var j = 0u; j < N_REACTIONS; j = j + 1u) {
@@ -189,10 +190,8 @@ fn ssa_main(@builtin(global_invocation_id) global_id: vec3u) {
       selected_rxn = j;
     }
 
-    // Apply stoichiometry update
-    for (var s = 0u; s < N_SPECIES; s = s + 1u) {
-      state[s] = state[s] + stoichiometry[selected_rxn * N_SPECIES + s];
-    }
+    // Apply stoichiometry update (sparse — only non-zero entries)
+{{SPARSE_APPLY_STOICHIOMETRY}}
 
     t = t_next;
     reaction_count = reaction_count + 1u;
@@ -205,7 +204,13 @@ fn ssa_main(@builtin(global_invocation_id) global_id: vec3u) {
     }
   }
 
-  // Store total reaction count for this trajectory
+  // Store total reaction count
   total_reactions[tid] = reaction_count;
+
+  // Write PRNG state back to storage (once)
+  prng_state[prng_base + 0u] = ps0;
+  prng_state[prng_base + 1u] = ps1;
+  prng_state[prng_base + 2u] = ps2;
+  prng_state[prng_base + 3u] = ps3;
 }
 `;
