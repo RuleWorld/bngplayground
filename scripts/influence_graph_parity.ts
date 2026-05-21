@@ -12,8 +12,10 @@
  * Usage: npx ts-node scripts/influence_graph_parity.ts <bngl-file>
  */
 
-import { computeInfluenceGraph } from '../services/visualization/computeInfluence';
-import { BNGLModel } from '../types';
+import { computeInfluenceGraph } from '../services/visualization/computeInfluence.ts';
+import { buildRuleOverlays } from '../services/visualization/buildRuleOverlays.ts';
+import { parseBNGL } from '../services/parseBNGL.ts';
+import { BNGLModel } from '../types.ts';
 import * as fs from 'fs';
 import * as path from 'path';
 
@@ -40,20 +42,22 @@ const compareInfluenceGraphs = async (bnglFilePath: string) => {
     // Read BNGL file
     const bnglContent = fs.readFileSync(bnglFilePath, 'utf-8');
 
-    // TODO: Parse BNGL to BNGLModel
-    // This requires the BNGL parser which is typically run in browser/worker
-    // For now, we'll assume the model is available via some parsing logic
     console.log(`Parsing ${bnglFilePath}...`);
+    const parsedModel: BNGLModel = parseBNGL(bnglContent);
 
-    // Placeholder: In reality, you'd need to:
-    // 1. Parse BNGL using the engine's parser
-    // 2. Get the BNGLModel object
-    // For now, skip actual parsing
+    console.log('Building rule overlays...');
+    const overlays = buildRuleOverlays(parsedModel.reactionRules, parsedModel.moleculeTypes);
 
-    results.differences.push('Full implementation pending BNGL parser integration');
+    console.log('Computing influence graph...');
+    const influenceGraph = computeInfluenceGraph(overlays, parsedModel.reactionRules);
+
+    results.playgroundNodes = influenceGraph.nodes.length;
+    results.playgroundEdges = influenceGraph.edges.length;
 
     // Output playground's influence graph structure
     console.log('\n=== Playground Influence Graph Structure ===');
+    console.log(`Nodes: ${results.playgroundNodes}`);
+    console.log(`Edges: ${results.playgroundEdges}`);
     console.log('Note: Full comparison requires BNG2 GML output');
     console.log('Run BNG2: visualize({type=>"regulatory"}) to get GML output');
 

@@ -78,7 +78,27 @@ export class ODESolverAdapter {
     
     const data = simulationResult.data;
     const simTime = data ? data.map((row: any) => row.time) : [];
-    const timeIndices = timePoints.map(t => this.findClosestTimeIndex(simTime, t));
+
+    const timeIndices: number[] = new Array(timePoints.length);
+    let simIdx = 0;
+    const simLen = simTime.length;
+    if (simLen > 0) {
+      for (let i = 0; i < timePoints.length; i++) {
+        const t = timePoints[i];
+        while (simIdx < simLen - 1) {
+          const currentDiff = Math.abs(simTime[simIdx] - t);
+          const nextDiff = Math.abs(simTime[simIdx + 1] - t);
+          if (nextDiff <= currentDiff) {
+            simIdx++;
+          } else {
+            break;
+          }
+        }
+        timeIndices[i] = simIdx;
+      }
+    } else {
+      timeIndices.fill(0);
+    }
 
     for (const obsName of observableNames) {
       const obsData = this.extractObservable(
@@ -128,12 +148,31 @@ export class ODESolverAdapter {
       return timePoints.map(() => 0);
     }
 
+    let simIdx = 0;
     const simTime = !timeIndices ? data.map((row: any) => row.time) : [];
+    const simLen = simTime.length;
 
     for (let i = 0; i < timePoints.length; i++) {
-      const t = timePoints[i];
-      // Find closest time point in simulation result
-      const idx = timeIndices ? timeIndices[i] : this.findClosestTimeIndex(simTime, t);
+      let idx;
+      if (timeIndices) {
+        idx = timeIndices[i];
+      } else {
+        const t = timePoints[i];
+        if (simLen > 0) {
+          while (simIdx < simLen - 1) {
+            const currentDiff = Math.abs(simTime[simIdx] - t);
+            const nextDiff = Math.abs(simTime[simIdx + 1] - t);
+            if (nextDiff <= currentDiff) {
+              simIdx++;
+            } else {
+              break;
+            }
+          }
+          idx = simIdx;
+        } else {
+          idx = 0;
+        }
+      }
 
       // Extract observable value at that time
       const value = data[idx]?.[observableName] ?? 0;
