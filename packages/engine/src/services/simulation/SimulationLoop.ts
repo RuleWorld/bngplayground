@@ -698,20 +698,33 @@ export async function simulate(
     reactionReactingVolumes[idx] = vAnchor;
   });
 
-  const initialEvalParamMap = new Map<string, number>();
-  for (const [name, rawValue] of Object.entries(model.parameters || {})) {
-    const direct = Number(rawValue);
-    if (Number.isFinite(direct)) {
-      initialEvalParamMap.set(name, direct);
-      continue;
-    }
-    if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as any)) {
-      const nested = Number((rawValue as any).value);
-      if (Number.isFinite(nested)) {
-        initialEvalParamMap.set(name, nested);
+  const buildParamMap = (parameters: Record<string, any> | undefined): Map<string, number> => {
+    const paramMap = new Map<string, number>();
+    // Handle parameters whether it's a Record (standard) or Array of objects (edge cases mentioned in reviews)
+    if (Array.isArray(parameters)) {
+      for (const p of parameters) {
+        if (p && p.name && typeof p.value !== 'undefined') {
+          paramMap.set(p.name, Number(p.value));
+        }
+      }
+    } else {
+      for (const [name, rawValue] of Object.entries(parameters || {})) {
+        const direct = Number(rawValue);
+        if (Number.isFinite(direct)) {
+          paramMap.set(name, direct);
+          continue;
+        }
+        if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as any)) {
+          const nested = Number((rawValue as any).value);
+          if (Number.isFinite(nested)) {
+            paramMap.set(name, nested);
+          }
+        }
       }
     }
-  }
+    return paramMap;
+  };
+  const initialEvalParamMap = buildParamMap(model.parameters);
   for (const comp of model.compartments || []) {
     const resolved = Number(comp.resolvedVolume ?? comp.size);
     if (!Number.isFinite(resolved)) continue;
@@ -729,7 +742,7 @@ export async function simulate(
   const initialEvalFunctionMap = new Map(
     (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
   );
-  const resolveInitialAmount = (species: BNGLModel['species'][number]): number => {
+  const resolveInitialAmount = (species: BNGLModel['species'][number], paramMap?: Map<string, number>): number => {
     const expression = typeof (species as any).initialExpression === 'string'
       ? (species as any).initialExpression.trim()
       : '';
@@ -737,7 +750,7 @@ export async function simulate(
       try {
         const evaluated = BNGLParser.evaluateExpression(
           expression,
-          initialEvalParamMap,
+          paramMap || initialEvalParamMap,
           new Set(),
           initialEvalFunctionMap
         );
@@ -810,12 +823,7 @@ export async function simulate(
   // BNG2 uses a label-based cache. Default label resets to initial seed species values.
   const DEFAULT_CONC_LABEL = '__DEFAULT__';
   const concentrationCache = new Map<string, Float64Array>();
-  // Store initial seed species concentrations so that resetConcentrations() (no label)
-  // can restore them (matching BNG2's behavior of reading from SpeciesList when no cache hit)
-  const initialSeedConcentrations = new Float64Array(numSpecies);
-  model.species.forEach((s, i) => {
-    initialSeedConcentrations[i] = resolveInitialAmount(s);
-  });
+  // Note: We evaluate initial amounts on demand for resetConcentrations() to respect parameter changes during simulation
 
 
   // Minimal runtime debug to avoid noisy console output
@@ -1436,10 +1444,13 @@ export async function simulate(
               console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
             } else {
               // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
+              // BNG2 semantics recalculate initial values with current parameters
               if (label === DEFAULT_CONC_LABEL) {
+                const currentParamMap = buildParamMap(model.parameters);
                 for (let k = 0; k < numSpecies; k++) {
-                  state[k] = initialSeedConcentrations[k]; // SSA uses raw counts
+                  state[k] = resolveInitialAmount(model.species[k], currentParamMap); // SSA uses raw counts
                 }
+                console.log(`[Worker] SSA: Reset concentrations to initial seed species (recalculated with current parameters)`);
               } else {
                 // No-op, as per BNG2 behavior
               }
@@ -2964,11 +2975,13 @@ export async function simulate(
           } else {
             // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
             if (label === DEFAULT_CONC_LABEL) {
+              const currentParamMap = buildParamMap(model.parameters);
               for (let k = 0; k < numSpecies; k++) {
-                y[k] = odeUsesAmountState ? initialSeedConcentrations[k] : (initialSeedConcentrations[k] / speciesVolumes[k]);
+                const initialAmount = resolveInitialAmount(model.species[k], currentParamMap);
+                y[k] = odeUsesAmountState ? initialAmount : (initialAmount / speciesVolumes[k]);
                 state[k] = y[k];
               }
-              console.log(`[Worker] ODE: Reset concentrations to initial seed species (no saved state)`);
+              console.log(`[Worker] ODE: Reset concentrations to initial seed species (recalculated with current parameters)`);
             } else {
               console.warn(`[Worker] ODE: resetConcentrations label "${label}" not found in cache`);
             }
