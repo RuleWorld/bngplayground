@@ -66,6 +66,7 @@ export const Tab: React.FC<TabProps> = ({ children, isActive, onClick, dataTabIn
   const inactiveClasses = 'border-transparent text-slate-500 hover:text-slate-700 hover:border-stone-300 dark:text-slate-300 dark:hover:text-slate-100 dark:hover:border-slate-500';
   return (
     <button
+      id={`tab-${dataTabIndex}`}
       type="button"
       role="tab"
       aria-selected={isActive}

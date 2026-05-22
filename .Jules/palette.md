@@ -1,0 +1,3 @@
+## 2024-03-24 - Semantic Tabs Make Screen Readers Happy
+**Learning:** In custom component architectures, standard visual metaphors (like navbars indicating tabs) aren't communicated to assistive tech. Adding standard `role="tablist"` to the container and `role="tab"` with `aria-selected` tracking active state is critical for keyboard navigation/screen readers to understand UI structure.
+**Action:** When building tab-like navigational switches, always ensure `role="tablist"` is applied to the wrapper container and `role="tab"`/`aria-selected={isActive}` are dynamically toggled on the child elements.
