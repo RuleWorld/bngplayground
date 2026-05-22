@@ -136,8 +136,6 @@ describe('igraphNetworkAnalysis', () => {
       // A and B appear together in pattern, so there's an edge between them (0-1)
       expect(payload.edges).toEqual([{ from: 0, to: 1 }]);
     });
-<<<<<<< Updated upstream
-=======
 
     it('should build a molecular graph linking molecule types found in the same pattern', () => {
       const model = createMockModel({
@@ -249,7 +247,6 @@ describe('igraphNetworkAnalysis', () => {
         ])
       );
     });
->>>>>>> Stashed changes
   });
 
   describe('buildRegulatoryGraph', () => {
@@ -261,11 +258,8 @@ describe('igraphNetworkAnalysis', () => {
         ],
         reactionRules: [
           {
-<<<<<<< Updated upstream
             // Kinase is on LHS only (well, usually it's both sides for catalyst, but for testing)
             // Let's make an explicit rule: Kinase() -> Substrate()
-=======
->>>>>>> Stashed changes
             reactants: ['Kinase()'],
             products: ['Substrate()'],
             rate: 'k',
