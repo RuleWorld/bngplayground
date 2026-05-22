@@ -57,6 +57,8 @@ const TabButton: React.FC<{
   children: React.ReactNode;
 }> = ({ active, onClick, children }) => (
   <button
+    role="tab"
+    aria-selected={active}
     onClick={onClick}
     className={`whitespace-nowrap py-2 px-3 border-b-2 font-medium text-sm transition-colors ${active
       ? 'border-teal-600 text-teal-600 dark:text-teal-400 dark:border-teal-400'
@@ -185,7 +187,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     <div className="flex h-full min-h-0 flex-col gap-0 border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
       {/* Header / Tabs */}
       <div className="flex items-center justify-between px-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 shrink-0 rounded-t-lg">
-        <nav className="flex space-x-1" aria-label="Tabs">
+        <nav className="flex space-x-1" aria-label="Tabs" role="tablist">
           <TabButton active={activeTab === 0} onClick={() => setActiveTab(0)}>
             📈 Time Courses
           </TabButton>
