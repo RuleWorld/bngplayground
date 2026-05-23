@@ -391,6 +391,7 @@ export class NetworkGenerator {
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
+  private compartmentMap: Map<string, CompartmentInfo> = new Map();
   // NEW: map Canonical Name -> Initial Concentration (from seed parameter evaluation)
   private seedConcentrationMap?: Map<string, number>;
 
@@ -419,6 +420,7 @@ export class NetworkGenerator {
     if (this.options.compartments) {
       for (const c of this.options.compartments) {
         this.compartmentVolumes.set(c.name, c.size);
+        this.compartmentMap.set(c.name, c);
       }
     }
     if (this.options.energyPatterns) {
@@ -519,7 +521,7 @@ export class NetworkGenerator {
       let minDim = 99;
 
       for (const cName of molCompartments) {
-        const comp = this.options.compartments.find(c => c.name === cName);
+        const comp = this.compartmentMap.get(cName);
         const dim = comp ? comp.dimension : 3;
         if (dim < minDim) {
           minDim = dim;
@@ -538,7 +540,7 @@ export class NetworkGenerator {
   private getSpeciesVolume(s: Species | SpeciesGraph): number {
     const cName = this.getSpeciesCompartment(s);
     if (!cName || !this.options.compartments) return 1;
-    const comp = this.options.compartments.find(c => c.name === cName);
+    const comp = this.compartmentMap.get(cName);
     return (comp && comp.size > 0) ? comp.size : 1;
   }
 
@@ -563,7 +565,7 @@ export class NetworkGenerator {
       for (const species of candidates) {
         const compName = this.getSpeciesCompartment(species);
         if (!compName) continue;
-        const comp = compartments.find(c => c.name === compName);
+        const comp = this.compartmentMap.get(compName);
         if (!comp) continue;
         const size = comp.size > 0 ? comp.size : 1;
         if (comp.dimension === 2) surfaceVolumes.push(size);
@@ -582,7 +584,7 @@ export class NetworkGenerator {
     const dimOf = (s: Species): number => {
       const compName = this.getSpeciesCompartment(s);
       if (!compName) return 3;
-      const comp = compartments.find(c => c.name === compName);
+      const comp = this.compartmentMap.get(compName);
       return comp?.dimension ?? 3;
     };
 
@@ -612,8 +614,8 @@ export class NetworkGenerator {
 
     if (!this.options.compartments) return true;
 
-    const c1 = this.options.compartments.find(c => c.name === comp1Name);
-    const c2 = this.options.compartments.find(c => c.name === comp2Name);
+    const c1 = this.compartmentMap.get(comp1Name);
+    const c2 = this.compartmentMap.get(comp2Name);
 
     if (!c1 || !c2) return true;
 
@@ -744,8 +746,8 @@ export class NetworkGenerator {
     // No compartments defined in model - allow
     if (!this.options.compartments || this.options.compartments.length === 0) return true;
 
-    const comp1 = this.options.compartments.find(c => c.name === comp1Name);
-    const comp2 = this.options.compartments.find(c => c.name === comp2Name);
+    const comp1 = this.compartmentMap.get(comp1Name);
+    const comp2 = this.compartmentMap.get(comp2Name);
 
     // If compartments not found, allow (backward compatibility)
     if (!comp1 || !comp2) return true;
@@ -774,8 +776,8 @@ export class NetworkGenerator {
     // If either has no compartment, allow (sloppy mode)
     if (!comp1Name || !comp2Name) return true;
 
-    const comp1 = this.options.compartments.find(c => c.name === comp1Name);
-    const comp2 = this.options.compartments.find(c => c.name === comp2Name);
+    const comp1 = this.compartmentMap.get(comp1Name);
+    const comp2 = this.compartmentMap.get(comp2Name);
 
     // If compartments not found in definitions, allow
     if (!comp1 || !comp2) return true;
@@ -3953,7 +3955,7 @@ export class NetworkGenerator {
         const comp = rg.compartment || (rg.molecules.length > 0 ? rg.molecules[0].compartment : undefined);
         if (comp) {
           // Get compartment dimension if available
-          const compInfo = this.options.compartments?.find(c => c.name === comp);
+          const compInfo = this.compartmentMap.get(comp);
           const dim = compInfo ? compInfo.dimension : 3; // Default to 3D if unknown
 
           if (shouldLogNetworkGenerator) {
