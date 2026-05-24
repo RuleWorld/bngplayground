@@ -15,6 +15,7 @@ import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
+import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
 
 const OP_STOP = 0xFF;
@@ -825,6 +826,10 @@ export class JITCompiler {
         }>,
         reactionReactingVolumes: Float64Array
     ): ((state: Float64Array, propensities: Float64Array) => number) | null {
+        if (!getFeatureFlags().enableJitFastPath) {
+            return null;
+        }
+
         try {
             let source = "let aTotal = 0;\n";
 
