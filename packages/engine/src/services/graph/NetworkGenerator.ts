@@ -827,11 +827,14 @@ export class NetworkGenerator {
     const reactionKeys = new Set<string>();  // Fast duplicate detection for reactions
     const reactionIndexByKey = new Map<string, number>();
     const queue: SpeciesGraph[] = [];
-    const processedPairs = new Set<string>();  // Track processed (species, rule) pairs
-    const ruleProcessedSpecies = new Map<number, Set<string>>(); // Track species processed per rule (by rule index) to prevent runaway generation
+    const reactiveRules = rules.filter(r => r.reactants.length > 0);
+    const synthesisRules = rules.filter(r => r.reactants.length === 0);
 
-    // Initialize rule processed sets using rule index as key
-    for (let i = 0; i < rules.length; i++) {
+    const processedPairs = new Set<string>();  // Track processed (species, rule) pairs
+    const ruleProcessedSpecies = new Map<number, Set<string>>(); // Track species processed per rule (by reactive rule index) to prevent runaway generation
+
+    // Initialize rule processed sets using reactive rule index as key
+    for (let i = 0; i < reactiveRules.length; i++) {
       ruleProcessedSpecies.set(i, new Set<string>());
     }
 
@@ -842,48 +845,41 @@ export class NetworkGenerator {
 
     // Handle synthesis rules (0 -> X) - add products directly
     // These are zero-order reactions that produce species regardless of existing species
-    for (const rule of rules) {
-      if (rule.reactants.length === 0 && rule.products.length > 0) {
-        debugNetworkLog(`[NetworkGenerator] Processing synthesis rule: ${rule.name}`);
+    for (const rule of synthesisRules) {
+      debugNetworkLog(`[NetworkGenerator] Processing synthesis rule: ${rule.name}`);
 
-        // Add each product species if not already present
-        for (const productGraph of rule.products) {
-          this.addOrGetSpecies(productGraph, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+      // Add each product species and retrieve its index directly
+      const productIndices = rule.products.map(productGraph => {
+        const sp = this.addOrGetSpecies(productGraph, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+        return sp.index;
+      });
+
+      const productSpeciesList = productIndices.map(idx => speciesList[idx]);
+      const { scalingVolume } = this.getVolumeScalingInfo([], productSpeciesList);
+
+      const rxn = new Rxn([], productIndices, rule.rateConstant, rule.name, {
+        statFactor: 1,
+        rateExpression: rule.rateExpression,
+        scalingVolume
+      });
+
+      const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
+      const existingIdx = reactionIndexByKey.get(rxnKey);
+      if (existingIdx === undefined) {
+        reactionKeys.add(rxnKey);
+        reactionIndexByKey.set(rxnKey, reactionsList.length);
+        reactionsList.push(rxn);
+      } else {
+        reactionsList[existingIdx].rate += rxn.rate;
+        if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
+          reactionsList[existingIdx].rateExpression = mergeRateExpressions(
+            reactionsList[existingIdx].rateExpression,
+            rxn.rateExpression
+          );
         }
-
-        // Create the synthesis reaction (no reactants -> products)
-        const productIndices = rule.products.map(pg => {
-          const canonical = profiledCanonicalize(pg);
-          return speciesMap.get(canonical)!.index;
-        });
-
-        const productSpeciesList = productIndices.map(idx => speciesList[idx]);
-        const { scalingVolume } = this.getVolumeScalingInfo([], productSpeciesList);
-
-        const rxn = new Rxn([], productIndices, rule.rateConstant, rule.name, {
-          statFactor: 1,
-          rateExpression: rule.rateExpression,
-          scalingVolume
-        });
-
-        const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
-        const existingIdx = reactionIndexByKey.get(rxnKey);
-        if (existingIdx === undefined) {
-          reactionKeys.add(rxnKey);
-          reactionIndexByKey.set(rxnKey, reactionsList.length);
-          reactionsList.push(rxn);
-        } else {
-          reactionsList[existingIdx].rate += rxn.rate;
-          if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
-            reactionsList[existingIdx].rateExpression = mergeRateExpressions(
-              reactionsList[existingIdx].rateExpression,
-              rxn.rateExpression
-            );
-          }
-        }
-
-        debugNetworkLog(`[NetworkGenerator] Added synthesis reaction: 0 -> [${productIndices.join(', ')}]`);
       }
+
+      debugNetworkLog(`[NetworkGenerator] Added synthesis reaction: 0 -> [${productIndices.join(', ')}]`);
     }
 
     let iteration = 0;
@@ -932,9 +928,9 @@ export class NetworkGenerator {
             );
           }
 
-          // Apply each rule to current species
-          for (let ruleIdx = 0; ruleIdx < rules.length; ruleIdx++) {
-            const rule = rules[ruleIdx];
+          // Apply each reactive rule to current species
+          for (let ruleIdx = 0; ruleIdx < reactiveRules.length; ruleIdx++) {
+            const rule = reactiveRules[ruleIdx];
             if (signal?.aborted) {
               throw new DOMException('Network generation cancelled', 'AbortError');
             }
@@ -967,12 +963,7 @@ export class NetworkGenerator {
             if (ruleProcessed.has(currentCanonical)) continue;
             ruleProcessed.add(currentCanonical);
 
-            if (rule.reactants.length === 0) {
-              // Synthesis rule (0 -> X): Skip in network generation loop
-              // Synthesis rules are zero-order and don't depend on existing species
-              // They are handled separately by adding products directly
-              continue;
-            } else if (rule.reactants.length === 1) {
+            if (rule.reactants.length === 1) {
               // Unimolecular rule
               if (shouldLogNetworkGenerator) {
                 debugNetworkLog(
@@ -2372,6 +2363,10 @@ export class NetworkGenerator {
         for (const candidateIdx of candidates) {
           // BNG2 Rule: For N-ary, partners can be ANY species in the network so far.
           const candidateSpecies = allSpecies[candidateIdx];
+          // O(1) early structural pruning before calling any matches/isomorphisms
+          if (!GraphMatcher.canPossiblyMatch(nextPattern, candidateSpecies.graph)) {
+            continue;
+          }
           let allCandMaps: MatchMap[];
           if (rule.isMatchOnce || isCarryThroughPattern) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
@@ -3087,12 +3082,7 @@ export class NetworkGenerator {
     // This corrects for overcounting when the pattern is symmetric (see auto_activation_loop).
     let patternAutomorphismFactor = 1;
     for (const pattern of patterns) {
-      try {
-        const autos = GraphMatcher.findAllMaps(pattern, pattern);
-        patternAutomorphismFactor *= (autos.length || 1);
-      } catch (err) {
-        console.warn('[NetworkGenerator] Failed to compute automorphisms for pattern:', pattern.toString(), err);
-      }
+      patternAutomorphismFactor *= GraphMatcher.getMoleculeAutomorphismFactor(pattern);
     }
 
     // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
@@ -5637,18 +5627,20 @@ export class NetworkGenerator {
     signal?: AbortSignal
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
+
+    // 1. Try finding an isomorphic species first using the fingerprint index to avoid canonicalization
+    const isomorphic = this.findIsomorphicSpecies(graph, speciesByFingerprint);
+    if (isomorphic) {
+      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
+      return isomorphic;
+    }
+
+    // 2. Not isomorphic to any known species; canonicalize it now
     const canonical = profiledCanonicalize(graph);
 
     if (speciesMap.has(canonical)) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
       return speciesMap.get(canonical)!;
-    }
-
-    const isomorphic = this.findIsomorphicSpecies(graph, speciesByFingerprint);
-    if (isomorphic) {
-      speciesMap.set(canonical, isomorphic);
-      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      return isomorphic;
     }
 
     if (speciesList.length >= this.options.maxSpecies) {

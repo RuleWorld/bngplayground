@@ -12,6 +12,7 @@ export class SpeciesGraph {
   private _canonicalString?: string;  // Cached canonical form
   private _componentOffsets?: number[];
   private _componentCount?: number;
+  private _fingerprint?: Map<string, number>;
 
   constructor(molecules: Molecule[] = []) {
     this.molecules = molecules;
@@ -19,6 +20,28 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
+  }
+
+  get fingerprint(): Map<string, number> {
+    if (this._fingerprint !== undefined) return this._fingerprint;
+    const fp = new Map<string, number>();
+    for (let i = 0; i < this.molecules.length; i++) {
+      const mol = this.molecules[i];
+      fp.set(`M:${mol.name}`, (fp.get(`M:${mol.name}`) ?? 0) + 1);
+      for (const comp of mol.components) {
+        if (comp.state && comp.state !== '?') {
+          const stateKey = `S:${mol.name}:${comp.name}:${comp.state}`;
+          fp.set(stateKey, (fp.get(stateKey) ?? 0) + 1);
+        }
+        if (comp.edges.size > 0) {
+          const bondKey = `B:${mol.name}:${comp.name}`;
+          fp.set(bondKey, (fp.get(bondKey) ?? 0) + 1);
+        }
+      }
+    }
+    this._fingerprint = fp;
+    return this._fingerprint;
   }
 
   /**
@@ -66,6 +89,7 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
   }
 
   /**
@@ -175,6 +199,7 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
   }
 
   /**
@@ -243,6 +268,7 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
 
     return offset;
   }
