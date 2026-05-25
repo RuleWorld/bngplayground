@@ -325,6 +325,12 @@ export class GraphMatcher {
     const patternFp = pattern.fingerprint;
     const targetFp = target.fingerprint;
     for (const [key, patCount] of patternFp.entries()) {
+      // Wildcard molecules use literal "*" in the fingerprint, but that is only a
+      // placeholder for "any molecule name". Skip those entries so the VF2 matcher
+      // can evaluate the real structural constraints.
+      if (key.startsWith('M:*') || key.startsWith('S:*:') || key.startsWith('B:*:')) {
+        continue;
+      }
       const tarCount = targetFp.get(key) ?? 0;
       if (tarCount < patCount) {
         return false;
