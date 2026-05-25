@@ -1,0 +1,3 @@
+## 2025-02-12 - Replacing O(N) array finds in SpatialSimulation hot loop
+**Learning:** Found an O(N) `array.find()` search inside `reflectBoundary()` in `SpatialSimulation.ts`, which is called for *every* molecule during the spatial simulation's inner diffusion loop. This caused a heavy performance bottleneck as the simulation scaled.
+**Action:** Replaced `.find()` with an O(1) `geometryMap` initialized on startup. Always look for `.find()` or `.indexOf()` on arrays within repeatedly called hot loops (e.g., inside per-molecule or per-step iterations) and replace them with pre-allocated Maps or Array lookups.
