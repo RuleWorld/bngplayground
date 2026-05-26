@@ -10,10 +10,12 @@ import { spawn } from 'node:child_process';
 import { resolve } from 'node:path';
 
 const args = process.argv.slice(2);
+const executable = resolve('node_modules', '.bin', 'vitest' + (process.platform === 'win32' ? '.cmd' : ''));
+const spawnExecutable = process.platform === 'win32' ? `"${executable}"` : executable;
 const child = spawn(
-  resolve('node_modules', '.bin', 'vitest'),
+  spawnExecutable,
   ['run', ...args],
-  { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env } }
+  { stdio: ['ignore', 'pipe', 'pipe'], env: { ...process.env }, shell: process.platform === 'win32' }
 );
 
 let output = '';
@@ -72,8 +74,8 @@ function didTestsPass() {
 
   // Vitest was killed before summary. Check test-level markers:
   //   ✓ = passed test file,  ✗ = failed test file
-  const passedFiles = (clean.match(/^ ✓ tests\//gm) || []).length;
-  const failedFiles = (clean.match(/^ ✗ tests\//gm) || []).length;
+  const passedFiles = (clean.match(/^ ✓ (?:packages\/[A-Za-z0-9_.-]+\/)?(?:tests|src)\//gm) || []).length;
+  const failedFiles = (clean.match(/^ ✗ (?:packages\/[A-Za-z0-9_.-]+\/)?(?:tests|src)\//gm) || []).length;
 
   if (passedFiles > 0 && failedFiles === 0) {
     return true;

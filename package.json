@@ -17,7 +17,7 @@
     "build:full": "npm run build && npm run build:verify",
     "preview": "vite preview",
     "test": "vitest --run --config vitest.config.ts",
-    "test:fast": "vitest --run --config vitest.config.ts",
+    "test:fast": "node scripts/run_full_tests.mjs --config vitest.config.ts",
     "test:watch": "vitest",
     "test:full": "vitest --run --config vitest.full.config.ts",
     "test:reference": "tsx tools/validation/compare_outputs.ts",
