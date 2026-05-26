@@ -541,9 +541,6 @@ export class GraphCanonicalizer {
     // BNG2 convention: use double-colon prefix if all molecules are in the same compartment
     // defined at the graph level.
     const finalResult = graph.compartment ? `@${graph.compartment}::${canonicalMolecules}` : canonicalMolecules;
-    // if (graph.molecules.length === 1 && graph.molecules[0].name === 'CCND') {
-    //   console.error(`[Canonical] CCND comp='${graph.compartment}' => '${finalResult}'`);
-    // }
     graph.cachedCanonical = finalResult;
     return finalResult;
   }
