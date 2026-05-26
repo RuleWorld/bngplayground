@@ -168,13 +168,15 @@ function numericalJacobian(
   rhsFn: (y: Float64Array, dydt: Float64Array) => void,
   y: Float64Array,
   n: number,
-): number[][] {
+  J: number[][],
+  fp: Float64Array,
+  fm: Float64Array,
+  yp: Float64Array,
+  ym: Float64Array
+): void {
   const eps = 1e-8;
-  const fp = new Float64Array(n);
-  const fm = new Float64Array(n);
-  const yp = new Float64Array(y);
-  const ym = new Float64Array(y);
-  const J: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  yp.set(y);
+  ym.set(y);
 
   for (let j = 0; j < n; j++) {
     const h = Math.max(eps, Math.abs(y[j]) * eps);
@@ -191,7 +193,6 @@ function numericalJacobian(
     yp[j] = y[j];
     ym[j] = y[j];
   }
-  return J;
 }
 
 // ── Helper: diffusion matrix D = S * diag(a) * S^T ───────────────
@@ -201,8 +202,8 @@ function buildDiffusionMatrix(
   a: number[] | Float64Array,
   n: number,
   m: number,
-): number[][] {
-  const D: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  D: number[][]
+): void {
 
   for (let i = 0; i < n; i++) {
     for (let j = 0; j < n; j++) {
@@ -213,7 +214,6 @@ function buildDiffusionMatrix(
       D[i][j] = sum;
     }
   }
-  return D;
 }
 
 // ── Helper: solve Lyapunov  A*C + C*A^T + D = 0  ─────────────────
@@ -366,10 +366,16 @@ export function computeLNASteadyState(config: LNAConfig): LNASteadyStateResult {
   evaluatePropensities(xStar, precomputed, aStar);
 
   // Jacobian at steady state (numerical)
-  const A = numericalJacobian(rhsFn, xStar, n);
+  const A: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  const fp = new Float64Array(n);
+  const fm = new Float64Array(n);
+  const yp = new Float64Array(n);
+  const ym = new Float64Array(n);
+  numericalJacobian(rhsFn, xStar, n, A, fp, fm, yp, ym);
 
   // Diffusion matrix D = S * diag(a*) * S^T
-  const D = buildDiffusionMatrix(S, aStar, n, m);
+  const D: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  buildDiffusionMatrix(S, aStar, n, m, D);
 
   // Solve Lyapunov equation A*C + C*A^T + D = 0
   const C = solveLyapunov(A, D, n);
@@ -421,6 +427,13 @@ export function computeLNATimeCourse(config: LNAConfig): LNATimeResult {
 
   const precomputed = precomputePropensities(reactions, species);
   const aCurr = new Float64Array(m);
+  const A_tmp: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  const D_tmp: number[][] = Array.from({ length: n }, () => new Array(n).fill(0));
+  const fp_tmp = new Float64Array(n);
+  const fm_tmp = new Float64Array(n);
+  const yp_tmp = new Float64Array(n);
+  const ym_tmp = new Float64Array(n);
+  const dydt_tmp = new Float64Array(n);
 
   // Augmented state: [y_1,...,y_n, C_11, C_12,...,C_1n, C_21,...,C_nn]
   // Total dimension: n + n*n
@@ -445,17 +458,18 @@ export function computeLNATimeCourse(config: LNAConfig): LNATimeResult {
   function augmentedRHS(s: Float64Array, dsdt: Float64Array): void {
     // Extract y
     const y = s.subarray(0, n);
-    const dydt = new Float64Array(n);
-    rhsFn(y, dydt);
+    rhsFn(y, dydt_tmp);
 
     // Copy dy/dt
-    for (let i = 0; i < n; i++) dsdt[i] = dydt[i];
+    for (let i = 0; i < n; i++) dsdt[i] = dydt_tmp[i];
 
     // Extract C (n x n, row-major starting at index n)
     // Compute A(t) and D(t) at current y
     evaluatePropensities(y, precomputed, aCurr);
-    const A = numericalJacobian(rhsFn, y, n);
-    const D = buildDiffusionMatrix(S, aCurr, n, m);
+    numericalJacobian(rhsFn, y, n, A_tmp, fp_tmp, fm_tmp, yp_tmp, ym_tmp);
+    buildDiffusionMatrix(S, aCurr, n, m, D_tmp);
+    const A = A_tmp;
+    const D = D_tmp;
 
     // dC/dt = A*C + C*A^T + D
     for (let i = 0; i < n; i++) {
