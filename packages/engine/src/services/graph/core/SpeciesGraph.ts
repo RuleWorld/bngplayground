@@ -12,6 +12,7 @@ export class SpeciesGraph {
   private _canonicalString?: string;  // Cached canonical form
   private _componentOffsets?: number[];
   private _componentCount?: number;
+  private _fingerprint?: Map<string, number>;
 
   constructor(molecules: Molecule[] = []) {
     this.molecules = molecules;
@@ -19,6 +20,28 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
+  }
+
+  get fingerprint(): Map<string, number> {
+    if (this._fingerprint !== undefined) return this._fingerprint;
+    const fp = new Map<string, number>();
+    for (let i = 0; i < this.molecules.length; i++) {
+      const mol = this.molecules[i];
+      fp.set(`M:${mol.name}`, (fp.get(`M:${mol.name}`) ?? 0) + 1);
+      for (const comp of mol.components) {
+        if (comp.state && comp.state !== '?') {
+          const stateKey = `S:${mol.name}:${comp.name}:${comp.state}`;
+          fp.set(stateKey, (fp.get(stateKey) ?? 0) + 1);
+        }
+        if (comp.edges.size > 0) {
+          const bondKey = `B:${mol.name}:${comp.name}`;
+          fp.set(bondKey, (fp.get(bondKey) ?? 0) + 1);
+        }
+      }
+    }
+    this._fingerprint = fp;
+    return this._fingerprint;
   }
 
   /**
@@ -31,7 +54,7 @@ export class SpeciesGraph {
     const compB = this.molecules[mol2].components[comp2];
 
     // Find next available bond label if not specified
-    // FIX: Check if bondLabel is defined (including 0)
+    // NOTE: Check if bondLabel is defined (including 0)
     const label = (bondLabel !== undefined) ? bondLabel : this.getNextBondLabel();
 
     // Update adjacency map (both directions) - supports multi-site bonding
@@ -57,14 +80,6 @@ export class SpeciesGraph {
     }
 
     // Update Component.edges for VF2 matching
-    // FIX: Remove any existing "unresolved" edges that might have been set by parser
-    if (compA.edges.has(label) && compA.edges.get(label) === -1) {
-      compA.edges.delete(label);
-    }
-    if (compB.edges.has(label) && compB.edges.get(label) === -1) {
-      compB.edges.delete(label);
-    }
-
     compA.edges.set(label, comp2);
     compB.edges.set(label, comp1);
 
@@ -74,6 +89,7 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
   }
 
   /**
@@ -183,6 +199,7 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
   }
 
   /**
@@ -251,6 +268,7 @@ export class SpeciesGraph {
     this.adjacencyBitset = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
+    this._fingerprint = undefined;
 
     return offset;
   }
@@ -575,11 +593,12 @@ export class SpeciesGraph {
    */
   clone(): SpeciesGraph {
     const sg = new SpeciesGraph(this.molecules.map(m => m.clone()));
-    // BUG FIX: Deep clone adjacency Map values (arrays) to prevent mutation
-    sg.adjacency = new Map();
+    // NOTE: Deep clone adjacency Map values (arrays) to prevent mutation
+    const clonedAdjacency = new Map<string, string[]>();
     for (const [key, partners] of this.adjacency.entries()) {
-      sg.adjacency.set(key, [...partners]);
+      clonedAdjacency.set(key, [...partners]);
     }
+    sg.adjacency = clonedAdjacency;
     sg.compartment = this.compartment;
     if (this.adjacencyBitset) {
       sg.adjacencyBitset = this.adjacencyBitset.slice();

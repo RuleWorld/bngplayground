@@ -30,7 +30,7 @@ async function main() {
 
   const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
   const ids = (Array.isArray(manifest) ? manifest : manifest.models)
-    .filter((entry) => entry?.bng2_compatible)
+    .filter((entry) => entry?.bng2_compatible || entry?.compatibility?.bng2)
     .map((entry) => entry.id)
     .filter(Boolean);
   console.log(`Verifying ${ids.length} models (Parsing ONLY)...`);

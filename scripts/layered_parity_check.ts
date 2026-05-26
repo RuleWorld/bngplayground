@@ -1,4 +1,3 @@
-
 import * as fs from 'fs';
 import * as path from 'path';
 import { execFileSync, execSync } from 'child_process';
@@ -9,6 +8,15 @@ import { getSimulationOptionsFromParsedModel } from '../packages/engine/src/util
 import { simulate } from '@bngplayground/engine';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical.ts';
+
+function securePathJoin(baseDir: string, ...paths: string[]): string {
+  const resolvedBase = path.resolve(baseDir);
+  const resolvedPath = path.resolve(baseDir, ...paths);
+  if (!resolvedPath.startsWith(resolvedBase + path.sep) && resolvedPath !== resolvedBase) {
+    throw new Error(`Path traversal attempt detected: ${resolvedPath}`);
+  }
+  return resolvedPath;
+}
 
 interface ParsedParameter {
   index: number;
@@ -226,9 +234,9 @@ const BNG_CDAT_DIR = BNG_REFERENCE_ROOT;
 const BNG_GDAT_DIR = BNG_REFERENCE_ROOT;
 const PARITY_ARTIFACTS_DIR = path.join(PROJECT_ROOT, 'artifacts', 'parity_artifacts');
 
-let ruleHubManifestCache: Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> | null = null;
+let ruleHubManifestCache: Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean; compatibility?: { bng2?: boolean } }> | null = null;
 
-function loadRuleHubManifest(): Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean }> {
+function loadRuleHubManifest(): Array<{ id?: string; file?: string; path?: string; bng2_compatible?: boolean; compatibility?: { bng2?: boolean } }> {
   if (ruleHubManifestCache) return ruleHubManifestCache;
   if (!RULEHUB_MANIFEST_PATH || !fs.existsSync(RULEHUB_MANIFEST_PATH)) return [];
   const payload = JSON.parse(fs.readFileSync(RULEHUB_MANIFEST_PATH, 'utf8'));
@@ -1113,13 +1121,13 @@ function toSafeModelStem(modelName: string): string {
 
 function stageModelArtifacts(modelName: string, files: ModelFiles): ModelFiles {
   const staged: ModelFiles = { ...files };
-  const modelDir = path.join(PARITY_ARTIFACTS_DIR, toSafeModelStem(modelName));
+  const modelDir = securePathJoin(PARITY_ARTIFACTS_DIR, toSafeModelStem(modelName));
   fs.mkdirSync(modelDir, { recursive: true });
 
   const copyIfExists = (src: string | null, destBaseName: string): string | null => {
     if (!src || !fs.existsSync(src)) return null;
     const ext = path.extname(src) || '';
-    const dest = path.join(modelDir, `${destBaseName}${ext}`);
+    const dest = securePathJoin(modelDir, `${destBaseName}${ext}`);
     if (path.resolve(src) !== path.resolve(dest)) {
       fs.copyFileSync(src, dest);
     }
@@ -1206,7 +1214,7 @@ async function ensureGeneratedArtifacts(modelName: string, files: ModelFiles, op
   const safeModelName = modelName.replace(/[^a-zA-Z0-9]/g, '_');
 
   if (needNet) {
-    const netPath = path.join(WEB_OUTPUT_DIR, `${safeModelName}.net`);
+    const netPath = securePathJoin(WEB_OUTPUT_DIR, `${safeModelName}.net`);
     log(`    [Artifacts] Exporting network for ${modelName} to ${netPath}...`);
     try {
       log(`    Executing: npx -y tsx scripts/export_net.ts "${files.bnglPath}" "${netPath}"`);
@@ -1279,8 +1287,8 @@ async function ensureGeneratedArtifacts(modelName: string, files: ModelFiles, op
       });
 
       const lines = [`# time ${headers.join(' ')}`, ...rows];
-      const cdatPath = path.join(WEB_OUTPUT_DIR, `${safeModelName}.cdat`);
-      const gdatPath = path.join(WEB_OUTPUT_DIR, `results_${safeModelName}.csv`);
+      const cdatPath = securePathJoin(WEB_OUTPUT_DIR, `${safeModelName}.cdat`);
+      const gdatPath = securePathJoin(WEB_OUTPUT_DIR, `results_${safeModelName}.csv`);
       fs.mkdirSync(path.dirname(cdatPath), { recursive: true });
       fs.writeFileSync(cdatPath, lines.join('\n') + '\n', 'utf8');
       files.webCdat = cdatPath;
@@ -1667,7 +1675,7 @@ function discoverAllModelsFromConstants(): string[] {
   }
   const deduped = dedupeModels(
     loadRuleHubManifest()
-      .filter((entry) => entry.bng2_compatible)
+      .filter((entry) => entry.bng2_compatible || entry.compatibility?.bng2)
       .map((entry) => entry.id)
       .filter((entry): entry is string => Boolean(entry))
   );

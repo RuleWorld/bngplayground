@@ -680,7 +680,7 @@ describe('Atomizer+Simulation parity (numeric comparison) — RuleHub examples',
         const parsed = JSON.parse(content);
         // Handle nested result from previous bug: find the deepest 'perModel'
         let current = parsed;
-        while (current && current.perModel) {
+        while (current && current.perModel && !current.perModel.history) {
           current = current.perModel;
         }
         perModelStore = current || {};

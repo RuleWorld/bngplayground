@@ -254,14 +254,16 @@ export function generateAnalyticalJacobian(
         if (info.statFactor !== 1) massActionPart = `(${massActionPart} * ${info.statFactor})`;
         
         // Multiply by other reactants (excluding one instance of y_j)
-        const otherReactants = [...rxn.reactants];
-        const jIdx = otherReactants.indexOf(j);
-        if (jIdx !== -1) {
-          otherReactants.splice(jIdx, 1);
-        }
-        
-        for (const r of otherReactants) {
-          massActionPart += ` * y[${r}]`;
+        // ⚡ Bolt Performance Optimization:
+        // Avoid array allocation and splice during string building.
+        const rxnReactants = rxn.reactants;
+        let jIdxToSkip = rxnReactants.indexOf(j);
+        for (let idx = 0; idx < rxnReactants.length; idx++) {
+          if (idx === jIdxToSkip) {
+            jIdxToSkip = -1; // skip only one instance
+            continue;
+          }
+          massActionPart += ` * y[${rxnReactants[idx]}]`;
         }
         
         // Coeff is netStoichI * reactantStoichJ
@@ -290,16 +292,23 @@ export function generateAnalyticalJacobian(
         const rxn = reactions[contrib.rxnIdx];
         let massActionPart = rxnRateValues[contrib.rxnIdx];
 
-        const otherReactants = [...rxn.reactants];
-        if (contrib.reactantIdxJ >= 0 && contrib.reactantIdxJ < otherReactants.length) {
-          otherReactants.splice(contrib.reactantIdxJ, 1);
+        // ⚡ Bolt Performance Optimization:
+        // Avoid array allocation ([...rxn.reactants]) and .splice() inside this hot loop.
+        // Instead, find the index to skip and iterate the original array directly.
+        const rxnReactants = rxn.reactants;
+        let skipIndex = -1;
+        if (contrib.reactantIdxJ >= 0 && contrib.reactantIdxJ < rxnReactants.length) {
+          skipIndex = contrib.reactantIdxJ;
         } else {
-          const j = otherReactants.indexOf(contrib.reactantIdxJ);
-          if (j !== -1) otherReactants.splice(j, 1);
+          skipIndex = rxnReactants.indexOf(contrib.reactantIdxJ);
         }
 
-        for (const r of otherReactants) {
-          massActionPart *= y[r];
+        for (let idx = 0; idx < rxnReactants.length; idx++) {
+          if (idx === skipIndex) {
+            skipIndex = -1; // Only skip one instance in case of duplicates
+            continue;
+          }
+          massActionPart *= y[rxnReactants[idx]];
         }
 
         const coeff = contrib.netStoichI * contrib.reactantStoichJ;

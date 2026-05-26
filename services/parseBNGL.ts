@@ -606,7 +606,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
       const products = rawProducts.length === 1 && rawProducts[0] === '0' ? [] : rawProducts;
 
       // Tokenize rate chunk respecting parentheses to handle function calls like exclude_reactants(2,R)
-      // FIX: Split by comma only to preserve math expressions like "2.0 * 602.0"
+      // NOTE: Split by comma only to preserve math expressions like "2.0 * 602.0"
       // Also handle whitespace-separated keywords (exclude_reactants, include_reactants, DeleteMolecules)
       const tokenizeRateChunk = (chunk: string) => {
         const tokens: string[] = [];

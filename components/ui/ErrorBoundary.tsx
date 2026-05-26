@@ -39,19 +39,19 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       }
       if (fallback) return fallback;
 
-      // Default fallback
-      return (
-        <div className="flex flex-col items-center justify-center p-8 text-center text-gray-400 gap-3">
-          <p className="text-sm font-medium">Something went wrong in this panel.</p>
-          <p className="text-xs text-gray-500">{this.state.error.message}</p>
-          <button
-            onClick={this.reset}
-            className="mt-2 px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
-          >
-            Try again
-          </button>
-        </div>
-      );
+       // Default fallback
+       return (
+         <div role="alert" aria-live="assertive" className="flex flex-col items-center justify-center p-8 text-center text-gray-400 gap-3">
+           <p className="text-sm font-medium">Something went wrong in this panel.</p>
+           <p className="text-xs text-gray-500">{this.state.error.message}</p>
+           <button
+             onClick={this.reset}
+             className="mt-2 px-3 py-1.5 text-xs rounded bg-gray-700 hover:bg-gray-600 text-gray-200 transition-colors"
+           >
+             Try again
+           </button>
+         </div>
+       );
     }
     return this.props.children;
   }

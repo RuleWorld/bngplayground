@@ -244,11 +244,25 @@ export function tsAnalyseGraph(payload: NetworkAnalysisPayload): IgraphAnalysisR
   // ---- Community detection (label propagation) -----------------------------
   const labels = Array.from({ length: n }, (_, i) => i);
   const LP_ITER = 20;
+
+  if (typeof crypto === 'undefined' || typeof crypto.getRandomValues !== 'function') {
+    throw new Error("Secure random number generation (crypto.getRandomValues) is not available.");
+  }
+
+  const MAX_RANDOM_CHUNK = 16384; // 65536 bytes / 4 bytes per Uint32
+  const randomPool = new Uint32Array(n);
+
   for (let iter = 0; iter < LP_ITER; iter++) {
-    // Random order (Fisher-Yates)
+    // Random order (Fisher-Yates) using cryptographically secure randomness
     const order = Array.from({ length: n }, (_, i) => i);
+
+    // Fill the random pool in chunks to avoid Exceeding maximum buffer size (65536 bytes)
+    for (let offset = 0; offset < n; offset += MAX_RANDOM_CHUNK) {
+      crypto.getRandomValues(randomPool.subarray(offset, offset + MAX_RANDOM_CHUNK));
+    }
+
     for (let i = n - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
+      const j = Math.floor((randomPool[i] / 4294967296.0) * (i + 1));
       [order[i], order[j]] = [order[j], order[i]];
     }
     let changed = false;

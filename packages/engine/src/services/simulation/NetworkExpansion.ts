@@ -274,7 +274,7 @@ export async function generateExpandedNetwork(
         const localFnDetected = detectLocalFn(r.rate);
 
         // Check if the rate depends on observables, functions, or changing parameters (Time dependent).
-        // FIX: Do NOT mark as functional if only dependent on changing parameters.
+        // NOTE: Do NOT mark as functional if only dependent on changing parameters.
         // Local function calls are also excluded here since they are handled separately.
         const isForwardFunctional = !localFnDetected && (hasMacro ||
             isFunctionalRateExpr(expandedRate, observableNames, functionNames, new Set()));

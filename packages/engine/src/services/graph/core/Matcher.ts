@@ -53,27 +53,20 @@ const shouldLogGraphMatcher = typeof process !== 'undefined' && process.env?.DEB
 const MAX_VF2_ITERATIONS = 100000;
 const MAX_COMPONENT_ITERATIONS = 10000;
 
-// Cache for strict rule-matching results (allowExtraTargetBonds=false).
-// Note: Cache is cleared at the start of each network generation run.
-const matchCache = new Map<string, MatchMap[]>();
-const MAX_CACHE_SIZE = 2000;
+// WeakMaps for nested caching: Pattern -> Target -> MatchMap[]
+// To support both strict and relaxed matching, as well as symmetry-breaking,
+// we use four separate WeakMaps. This completely avoids string construction,
+// hashing, and the need for LRU eviction.
+let matchCacheStrictNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
+let matchCacheStrictSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
+let matchCacheRelaxedNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
+let matchCacheRelaxedSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
 
-// Separate cache for relaxed observable matching (allowExtraTargetBonds=true)
-// so relaxed lookups do not evict strict rule-matching cache entries.
-const relaxedMatchCache = new Map<string, MatchMap[]>();
-const MAX_RELAXED_CACHE_SIZE = 1000;
-
-/**
- * Add entry to matchCache with LRU eviction when size exceeds limit
- */
-function addToCache(cache: Map<string, MatchMap[]>, maxSize: number, key: string, value: MatchMap[]): void {
-  cache.set(key, value);
-  if (cache.size > maxSize) {
-    // Remove oldest entry (Map maintains insertion order, so the first key is the oldest)
-    const oldestKey = cache.keys().next().value;
-    if (oldestKey !== undefined) {
-      cache.delete(oldestKey);
-    }
+function getSelectedCache(allowExtra: boolean, sb: boolean) {
+  if (allowExtra) {
+    return sb ? matchCacheRelaxedSB : matchCacheRelaxedNoSB;
+  } else {
+    return sb ? matchCacheStrictSB : matchCacheStrictNoSB;
   }
 }
 
@@ -81,8 +74,10 @@ function addToCache(cache: Map<string, MatchMap[]>, maxSize: number, key: string
  * Clear the match cache. Call this at the start of network generation.
  */
 export function clearMatchCache() {
-  matchCache.clear();
-  relaxedMatchCache.clear();
+  matchCacheStrictNoSB = new WeakMap();
+  matchCacheStrictSB = new WeakMap();
+  matchCacheRelaxedNoSB = new WeakMap();
+  matchCacheRelaxedSB = new WeakMap();
 }
 
 /**
@@ -272,19 +267,18 @@ export class GraphMatcher {
       return [];
     }
 
-    // Check cache - use toString() as key since graphs are immutable during generation
-    // Note: caching is only valid within a single network generation run
-    const symmetryKey = options.symmetryBreaking ? '1' : '0';
-    const cacheKey = `${pattern.toString()}|${target.toString()}|${symmetryKey}`;
-    const useRelaxedCache = options.allowExtraTargetBonds ?? false;
-    const selectedCache = useRelaxedCache ? relaxedMatchCache : matchCache;
-    const cached = selectedCache.get(cacheKey);
-    if (cached !== undefined) {
-      // Return a shallow copy to prevent mutations
-      return cached.map(m => ({
-        moleculeMap: new Map(m.moleculeMap),
-        componentMap: new Map(m.componentMap)
-      }));
+    // Check cache using nested WeakMaps - completely avoids string serialization and O(N) hashing
+    const selectedCache = getSelectedCache(options.allowExtraTargetBonds ?? false, options.symmetryBreaking ?? false);
+    const targetMap = selectedCache.get(pattern);
+    if (targetMap !== undefined) {
+      const cached = targetMap.get(target);
+      if (cached !== undefined) {
+        // Return a shallow copy to prevent mutations
+        return cached.map(m => ({
+          moleculeMap: new Map(m.moleculeMap),
+          componentMap: new Map(m.componentMap)
+        }));
+      }
     }
 
     const matches: MatchMap[] = [];
@@ -306,12 +300,13 @@ export class GraphMatcher {
       console.log(`[GM_DEBUG] EGFR Match count for ${pattern.toString()} in ${target.toString()}: ${matches.length} (sb=${options.symmetryBreaking})`);
     }
 
-    // Cache result with LRU eviction
-    if (useRelaxedCache) {
-      addToCache(relaxedMatchCache, MAX_RELAXED_CACHE_SIZE, cacheKey, matches);
-    } else {
-      addToCache(matchCache, MAX_CACHE_SIZE, cacheKey, matches);
+    // Cache result with nested WeakMaps
+    let tMap = selectedCache.get(pattern);
+    if (tMap === undefined) {
+      tMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+      selectedCache.set(pattern, tMap);
     }
+    tMap.set(target, matches);
 
     if (shouldLogGraphMatcher) {
       // console.log(
@@ -322,22 +317,84 @@ export class GraphMatcher {
   }
 
   /**
-   * Fast O(n) pre-filter: check if target has at least as many molecules of each type as pattern
+   * Fast O(n) pre-filter: check if target has at least as many molecules of each type as pattern,
+   * along with fast topological checks (bond count, max degree, and bound components) to prune rejections in O(1) time.
    */
-  private static canPossiblyMatch(pattern: SpeciesGraph, target: SpeciesGraph): boolean {
-    // Build molecule type count for pattern
+  public static canPossiblyMatch(pattern: SpeciesGraph, target: SpeciesGraph): boolean {
+    // 0. Fingerprint check
+    const patternFp = pattern.fingerprint;
+    const targetFp = target.fingerprint;
+    for (const [key, patCount] of patternFp.entries()) {
+      // Wildcard molecules use literal "*" in the fingerprint, but that is only a
+      // placeholder for "any molecule name". Skip those entries so the VF2 matcher
+      // can evaluate the real structural constraints.
+      if (key.startsWith('M:*') || key.startsWith('S:*:') || key.startsWith('B:*:')) {
+        continue;
+      }
+      const tarCount = targetFp.get(key) ?? 0;
+      if (tarCount < patCount) {
+        return false;
+      }
+    }
+
+    // 1. Build molecule type count for pattern
     const patternCounts = new Map<string, number>();
-    for (const mol of pattern.molecules) {
+    let patternBonds = 0;
+    let patternBoundComps = 0;
+    let maxPatternDegree = 0;
+
+    for (let idx = 0; idx < pattern.molecules.length; idx++) {
+      const mol = pattern.molecules[idx];
       patternCounts.set(mol.name, (patternCounts.get(mol.name) || 0) + 1);
-    }
+      
+      const deg = getNeighborMolecules(pattern, idx).length;
+      if (deg > maxPatternDegree) maxPatternDegree = deg;
 
-    // Build molecule type count for target
+      for (const comp of mol.components) {
+        const edgeSize = comp.edges.size;
+        patternBonds += edgeSize;
+        if (edgeSize > 0 || comp.wildcard === '+') {
+          patternBoundComps++;
+        }
+      }
+    }
+    patternBonds = Math.floor(patternBonds / 2);
+
+    // 2. Build molecule type count and topological features for target
     const targetCounts = new Map<string, number>();
-    for (const mol of target.molecules) {
+    let targetBonds = 0;
+    let targetBoundComps = 0;
+    let maxTargetDegree = 0;
+
+    for (let idx = 0; idx < target.molecules.length; idx++) {
+      const mol = target.molecules[idx];
       targetCounts.set(mol.name, (targetCounts.get(mol.name) || 0) + 1);
+      
+      const deg = getNeighborMolecules(target, idx).length;
+      if (deg > maxTargetDegree) maxTargetDegree = deg;
+
+      for (const comp of mol.components) {
+        const edgeSize = comp.edges.size;
+        targetBonds += edgeSize;
+        if (edgeSize > 0) {
+          targetBoundComps++;
+        }
+      }
+    }
+    targetBonds = Math.floor(targetBonds / 2);
+
+    // 3. Topological rejections
+    if (targetBonds < patternBonds) {
+      return false;
+    }
+    if (targetBoundComps < patternBoundComps) {
+      return false;
+    }
+    if (maxTargetDegree < maxPatternDegree) {
+      return false;
     }
 
-    // Check that target has enough of each type
+    // 4. Name-based molecule count checks
     const targetTotal = target.molecules.length;
     const patternTotal = pattern.molecules.length;
 
@@ -450,6 +507,28 @@ export class GraphMatcher {
     }
 
     return null;
+  }
+
+  private static moleculeAutomorphismCache = new WeakMap<SpeciesGraph, number>();
+
+  /**
+   * Calculate and cache the molecule-level self-automorphisms of a pattern.
+   * Completely avoids redundant graph matching runs for static reactant patterns.
+   */
+  static getMoleculeAutomorphismFactor(pattern: SpeciesGraph): number {
+    const cached = this.moleculeAutomorphismCache.get(pattern);
+    if (cached !== undefined) return cached;
+
+    try {
+      if (pattern.molecules.length === 0) return 1;
+      const autos = this.findAllMaps(pattern, pattern);
+      const factor = autos.length || 1;
+      this.moleculeAutomorphismCache.set(pattern, factor);
+      return factor;
+    } catch (err) {
+      console.warn(`[GraphMatcher] Failed to compute molecule automorphisms for pattern`, err);
+      return 1;
+    }
   }
 
   /**
@@ -619,15 +698,15 @@ class VF2State {
       return pairs;
     }
 
-    // KEY FIX: When the next pattern node is NOT in the pattern frontier (i.e., it's from
+    // NOTE: When the next pattern node is NOT in the pattern frontier (i.e., it's from
     // a disconnected component in the pattern), we must consider ALL uncovered target nodes,
     // not just the target frontier. This is essential for patterns like "A.B" where A and B
     // are not directly bonded but must be in the same species/complex.
     // 
     // BNG semantics: "A.B" means A and B are in the same complex, but they don't need to
     // be directly bonded. They could be connected through intermediate molecules.
-    const nextPatternNodeInFrontier = patternFrontier.has(nextPatternIdx);
-    const targetCandidates = (targetFrontier.size > 0 && nextPatternNodeInFrontier)
+    const isNextPatternNodeInFrontier = patternFrontier.has(nextPatternIdx);
+    const targetCandidates = (targetFrontier.size > 0 && isNextPatternNodeInFrontier)
       ? targetFrontier
       : this.getUncoveredTargetNodes();
 
@@ -691,7 +770,7 @@ class VF2State {
     const patternMol = this.pattern.molecules[pMol];
     const targetMol = this.target.molecules[tMol];
 
-    // FIX: Support '*' molecule name wildcard
+    // NOTE: Support '*' molecule name wildcard
     if (patternMol.name !== '*' && patternMol.name !== targetMol.name) {
       return false;
     }
@@ -1506,12 +1585,14 @@ class VF2State {
         }
       } else if (this.corePattern.has(partnerMolIdx)) {
         // The bond partner's molecule is already matched in corePattern.
-        // CRITICAL FIX: Instead of requiring the frozen componentMatches to satisfy the bond,
+        // NOTE: Instead of requiring the frozen componentMatches to satisfy the bond,
         // we check if SOME component of the target partner molecule could satisfy this bond.
         // This is essential for finding multiple symmetric embeddings (e.g., BAB).
         const targetPartnerMolIdx = this.corePattern.get(partnerMolIdx)!;
 
-        if (!this.hasCompatibleBondedPartnerComponent(tMolIdx, tCompIdx, partnerMolIdx, partnerCompIdx, targetPartnerMolIdx)) {
+        const hasCompatiblePartner = this.hasCompatibleBondedPartnerComponent(tMolIdx, tCompIdx, partnerMolIdx, partnerCompIdx, targetPartnerMolIdx);
+
+        if (!hasCompatiblePartner) {
           return false;
         }
       } else {
@@ -1553,8 +1634,7 @@ class VF2State {
    * where the bonds are dangling (partner not present).
    */
   private targetHasBond(tMolIdx: number, tCompIdx: number): boolean {
-    const key = this.getAdjacencyKey(tMolIdx, tCompIdx);
-    const hasAdj = this.target.adjacency.has(key);
+    const hasAdj = this.target.componentHasAnyBond(tMolIdx, tCompIdx);
 
     // Check resolved bonds in adjacency map
     if (hasAdj) {
@@ -1581,11 +1661,7 @@ class VF2State {
     tMolIdxB: number,
     tCompIdxB: number
   ): boolean {
-    const keyA = this.getAdjacencyKey(tMolIdxA, tCompIdxA);
-    const keyB = this.getAdjacencyKey(tMolIdxB, tCompIdxB);
-    const partnersA = this.target.adjacency.get(keyA);
-    // Support multi-site bonding: check if keyB is in partners array
-    return partnersA !== undefined && partnersA.includes(keyB);
+    return this.target.hasBondFast(tMolIdxA, tCompIdxA, tMolIdxB, tCompIdxB);
   }
 
   private hasCompatibleBondedPartnerComponent(

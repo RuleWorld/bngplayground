@@ -67,7 +67,7 @@ export const RuleFlowViewer: React.FC<RuleFlowViewerProps> = ({ graph, selectedR
             height: 46,
             // avoid mapping to data(color) here — use a presence selector below
             'border-width': 1,
-            'border-color': '#0f172a',
+            'border-color': theme === 'dark' ? '#94a3b8' : '#0f172a',
           },
         },
           {
@@ -87,7 +87,7 @@ export const RuleFlowViewer: React.FC<RuleFlowViewerProps> = ({ graph, selectedR
         },
         {
           selector: 'node[type = "synthesis"]',
-          style: { 'background-color': '#76B7B2', color: '#0f172a' },
+          style: { 'background-color': '#76B7B2', color: theme === 'dark' ? '#f8fafc' : '#0f172a' },
         },
         {
           selector: 'node[type = "degradation"]',
@@ -103,7 +103,7 @@ export const RuleFlowViewer: React.FC<RuleFlowViewerProps> = ({ graph, selectedR
             'curve-style': 'bezier',
             'font-size': '9px',
             // label mapping is done only for edges that actually have a label
-            'text-background-color': '#f8fafc',
+            'text-background-color': theme === 'dark' ? '#1e293b' : '#f8fafc',
             'text-background-opacity': 0.8,
             'text-background-padding': '2px',
           },

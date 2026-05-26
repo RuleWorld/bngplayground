@@ -116,8 +116,8 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
 
   return (
     <>
-      <div className="inline-block" ref={triggerRef}>
-        {React.isValidElement<{ onClick?: React.MouseEventHandler, 'aria-expanded'?: boolean, 'aria-haspopup'?: string }>(trigger)
+       <div className="inline-block" ref={triggerRef}>
+        {React.isValidElement<{ onClick?: React.MouseEventHandler, 'aria-expanded'?: boolean, 'aria-haspopup'?: string, tabIndex?: number }>(trigger)
           ? React.cloneElement(trigger, {
               onClick: (e: React.MouseEvent) => {
                 setIsOpen((prev) => !prev);
@@ -128,8 +128,9 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
               },
               'aria-expanded': isOpen,
               'aria-haspopup': 'menu',
+              tabIndex: 0,
             })
-          : <span onClick={() => setIsOpen((prev) => !prev)}>{trigger}</span>}
+          : <span onClick={() => setIsOpen((prev) => !prev)} tabIndex={0}>{trigger}</span>}
       </div>
       {isOpen && ReactDOM.createPortal(
         <div

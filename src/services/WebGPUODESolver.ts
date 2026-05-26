@@ -85,11 +85,16 @@ export class WebGPUODESolver {
 
   // GPU resources
   private rhsPipeline: GPUComputePipeline | null = null;
+  private intermediatePipeline: GPUComputePipeline | null = null;
   private rk4Pipeline: GPUComputePipeline | null = null;
   private concentrationBuffer: GPUBuffer | null = null;
   private derivativesBuffer: GPUBuffer | null = null;
   private rateConstantsBuffer: GPUBuffer | null = null;
   private paramsBuffer: GPUBuffer | null = null;
+  private rhsBindGroups: GPUBindGroup[] = [];
+  private intermediateParamsBuffers: GPUBuffer[] = [];
+  private intermediateBindGroups: GPUBindGroup[] = [];
+  private rk4BindGroup: GPUBindGroup | null = null;
   private kBuffers: GPUBuffer[] = []; // k1, k2, k3, k4 for RK4
   private tempBuffer: GPUBuffer | null = null;
 
@@ -142,6 +147,15 @@ export class WebGPUODESolver {
         return false;
       }
 
+      // Generate and compile intermediate-state shader
+      const intermediateShaderCode = this.generateIntermediateStateShader();
+      this.intermediatePipeline = createComputePipeline(device, intermediateShaderCode, 'intermediate_state');
+
+      if (!this.intermediatePipeline) {
+        console.error('[WebGPUODESolver] Intermediate-state pipeline creation returned null');
+        return false;
+      }
+
       // Generate and compile RK4 shader
       const rk4ShaderCode = this.generateRK4Shader();
       console.log('[WebGPUODESolver] RK4 shader code length:', rk4ShaderCode.length, 'chars');
@@ -154,6 +168,7 @@ export class WebGPUODESolver {
 
       // Create GPU buffers
       this.createBuffers(device);
+  this.createBindGroups(device);
 
       this.isCompiled = true;
       console.info('[WebGPUODESolver] Compiled successfully for', this.nSpecies, 'species,', this.nReactions, 'reactions');
@@ -231,8 +246,8 @@ export class WebGPUODESolver {
 struct SimParams {
   dt: f32,
   t: f32,
-  n_species: u32,
-  n_reactions: u32,
+  n_species: f32,
+  n_reactions: f32,
 }
 
 @group(0) @binding(0) var<storage, read> concentrations: array<f32>;
@@ -243,7 +258,7 @@ struct SimParams {
 @compute @workgroup_size(64)
 fn compute_rhs(@builtin(global_invocation_id) global_id: vec3u) {
   let species_idx = global_id.x;
-  if (species_idx >= params.n_species) {
+  if (species_idx >= u32(params.n_species)) {
     return;
   }
 
@@ -269,8 +284,8 @@ ${speciesCode}
 struct SimParams {
   dt: f32,
   t: f32,
-  n_species: u32,
-  n_reactions: u32,
+  n_species: f32,
+  n_reactions: f32,
 }
 
 @group(0) @binding(0) var<storage, read_write> concentrations: array<f32>;
@@ -283,7 +298,7 @@ struct SimParams {
 @compute @workgroup_size(64)
 fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
   let i = global_id.x;
-  if (i >= params.n_species) {
+  if (i >= u32(params.n_species)) {
     return;
   }
 
@@ -298,10 +313,44 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
   }
 
   /**
+   * Generate WGSL shader for RK4 intermediate-state computation.
+   */
+  private generateIntermediateStateShader(): string {
+    return `
+// WebGPU RK4 Intermediate-State Shader
+
+struct IntermediateParams {
+  scale: f32,
+  n_species: f32,
+  _pad0: f32,
+  _pad1: f32,
+}
+
+@group(0) @binding(0) var<storage, read> y: array<f32>;
+@group(0) @binding(1) var<storage, read> k: array<f32>;
+@group(0) @binding(2) var<storage, read_write> temp: array<f32>;
+@group(0) @binding(3) var<uniform> params: IntermediateParams;
+
+@compute @workgroup_size(64)
+fn intermediate_state(@builtin(global_invocation_id) global_id: vec3u) {
+  let i = global_id.x;
+  if (i >= u32(params.n_species)) {
+    return;
+  }
+
+  temp[i] = max(y[i] + params.scale * k[i], 0.0);
+}
+`;
+  }
+
+  /**
    * Create GPU buffers for simulation
    */
   private createBuffers(device: GPUDevice): void {
     const bufferSize = this.nSpecies * 4; // Float32 = 4 bytes
+
+    this.kBuffers = [];
+    this.intermediateParamsBuffers = [];
 
     // Main concentration buffer (read/write)
     this.concentrationBuffer = createStorageBuffer(device, bufferSize);
@@ -321,11 +370,57 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
       this.kBuffers.push(createStorageBuffer(device, bufferSize));
     }
 
+    // Separate step-parameter buffers let each intermediate dispatch see a stable scale.
+    for (let i = 0; i < 3; i++) {
+      this.intermediateParamsBuffers.push(createUniformBuffer(device, 16));
+    }
+
     // Temporary buffer for intermediate states
     this.tempBuffer = createStorageBuffer(device, bufferSize);
 
     // Uniform buffer for simulation parameters
     this.paramsBuffer = createUniformBuffer(device, 16); // 4 floats
+  }
+
+  /**
+   * Pre-create bind groups for the fixed RK4 dispatch pattern.
+   */
+  private createBindGroups(device: GPUDevice): void {
+    if (!this.rhsPipeline || !this.intermediatePipeline || !this.rk4Pipeline) {
+      throw new Error('Pipelines must be compiled before creating bind groups');
+    }
+
+    this.rhsBindGroups = this.kBuffers.map((kBuffer) => device.createBindGroup({
+      layout: this.rhsPipeline!.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.concentrationBuffer! } },
+        { binding: 1, resource: { buffer: this.rateConstantsBuffer! } },
+        { binding: 2, resource: { buffer: kBuffer } },
+        { binding: 3, resource: { buffer: this.paramsBuffer! } }
+      ]
+    }));
+
+    this.intermediateBindGroups = [0, 1, 2].map((stage) => device.createBindGroup({
+      layout: this.intermediatePipeline!.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.concentrationBuffer! } },
+        { binding: 1, resource: { buffer: this.kBuffers[stage] } },
+        { binding: 2, resource: { buffer: this.tempBuffer! } },
+        { binding: 3, resource: { buffer: this.intermediateParamsBuffers[stage] } }
+      ]
+    }));
+
+    this.rk4BindGroup = device.createBindGroup({
+      layout: this.rk4Pipeline.getBindGroupLayout(0),
+      entries: [
+        { binding: 0, resource: { buffer: this.concentrationBuffer! } },
+        { binding: 1, resource: { buffer: this.kBuffers[0] } },
+        { binding: 2, resource: { buffer: this.kBuffers[1] } },
+        { binding: 3, resource: { buffer: this.kBuffers[2] } },
+        { binding: 4, resource: { buffer: this.kBuffers[3] } },
+        { binding: 5, resource: { buffer: this.paramsBuffer! } }
+      ]
+    });
   }
 
   /**
@@ -403,13 +498,13 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
       }
 
       // Take RK4 step
-      await this.rk4Step(device, t, dt);
+      this.rk4Step(device, t, dt);
 
       t += dt;
       steps++;
 
-      // Yield to event loop occasionally + progress logging (every 10 steps for debugging)
-      if (steps % 10 === 0) {
+      // Yield to the browser occasionally without stalling every few steps.
+      if (steps % 100 === 0) {
         console.log(`[WebGPU] Progress: step ${steps}, t=${t.toFixed(4)}/${tEnd}, dt=${dt.toExponential(2)}, output ${outputIdx}/${outputTimes.length}`);
         await new Promise(resolve => setTimeout(resolve, 0));
       }
@@ -462,115 +557,69 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
   /**
    * Perform one RK4 step
    */
-  private async rk4Step(device: GPUDevice, t: number, dt: number): Promise<void> {
+  private rk4Step(device: GPUDevice, t: number, dt: number): void {
     const workgroups = Math.ceil(this.nSpecies / 64);
 
     // Update params
     const params = new Float32Array([dt, t, this.nSpecies, this.nReactions]);
     device.queue.writeBuffer(this.paramsBuffer!, 0, params);
 
+    const halfStepParams = new Float32Array([dt / 2, this.nSpecies, 0, 0]);
+    const fullStepParams = new Float32Array([dt, this.nSpecies, 0, 0]);
+    device.queue.writeBuffer(this.intermediateParamsBuffers[0], 0, halfStepParams);
+    device.queue.writeBuffer(this.intermediateParamsBuffers[1], 0, halfStepParams);
+    device.queue.writeBuffer(this.intermediateParamsBuffers[2], 0, fullStepParams);
+
+    const commandEncoder = device.createCommandEncoder();
+    const passEncoder = commandEncoder.beginComputePass();
+
     // k1 = f(t, y)
-    await this.computeRHS(device, this.concentrationBuffer!, this.kBuffers[0], workgroups);
+    this.computeRHS(passEncoder, 0, workgroups);
 
     // k2 = f(t + dt/2, y + dt/2 * k1)
-    await this.computeIntermediateState(device, this.concentrationBuffer!, this.kBuffers[0], dt / 2);
-    await this.computeRHS(device, this.tempBuffer!, this.kBuffers[1], workgroups);
+    this.computeIntermediateState(passEncoder, 0, workgroups);
+    this.computeRHS(passEncoder, 1, workgroups);
 
     // k3 = f(t + dt/2, y + dt/2 * k2)
-    await this.computeIntermediateState(device, this.concentrationBuffer!, this.kBuffers[1], dt / 2);
-    await this.computeRHS(device, this.tempBuffer!, this.kBuffers[2], workgroups);
+    this.computeIntermediateState(passEncoder, 1, workgroups);
+    this.computeRHS(passEncoder, 2, workgroups);
 
     // k4 = f(t + dt, y + dt * k3)
-    await this.computeIntermediateState(device, this.concentrationBuffer!, this.kBuffers[2], dt);
-    await this.computeRHS(device, this.tempBuffer!, this.kBuffers[3], workgroups);
+    this.computeIntermediateState(passEncoder, 2, workgroups);
+    this.computeRHS(passEncoder, 3, workgroups);
 
     // Final RK4 update
-    await this.applyRK4Update(device, workgroups);
+    this.applyRK4Update(passEncoder, workgroups);
+
+    passEncoder.end();
+    device.queue.submit([commandEncoder.finish()]);
   }
 
   /**
    * Compute RHS (derivatives) for current state
    */
-  private async computeRHS(
-    device: GPUDevice,
-    concBuffer: GPUBuffer,
-    derivBuffer: GPUBuffer,
-    workgroups: number
-  ): Promise<void> {
-    const bindGroup = device.createBindGroup({
-      layout: this.rhsPipeline!.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: concBuffer } },
-        { binding: 1, resource: { buffer: this.rateConstantsBuffer! } },
-        { binding: 2, resource: { buffer: derivBuffer } },
-        { binding: 3, resource: { buffer: this.paramsBuffer! } }
-      ]
-    });
-
-    const commandEncoder = device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
+  private computeRHS(passEncoder: GPUComputePassEncoder, stageIndex: number, workgroups: number): void {
     passEncoder.setPipeline(this.rhsPipeline!);
-    passEncoder.setBindGroup(0, bindGroup);
+    passEncoder.setBindGroup(0, this.rhsBindGroups[stageIndex]);
     passEncoder.dispatchWorkgroups(workgroups);
-    passEncoder.end();
-    device.queue.submit([commandEncoder.finish()]);
   }
 
   /**
    * Compute intermediate state: y_temp = y + h * k
    */
-  private async computeIntermediateState(
-    device: GPUDevice,
-    yBuffer: GPUBuffer,
-    kBuffer: GPUBuffer,
-    h: number
-  ): Promise<void> {
-    // For simplicity, do this on CPU (small overhead for state updates)
-    // A production version would use another compute shader
-    const readBufY = createReadBuffer(device, this.nSpecies * 4);
-    const readBufK = createReadBuffer(device, this.nSpecies * 4);
-
-    const commandEncoder = device.createCommandEncoder();
-    commandEncoder.copyBufferToBuffer(yBuffer, 0, readBufY, 0, this.nSpecies * 4);
-    commandEncoder.copyBufferToBuffer(kBuffer, 0, readBufK, 0, this.nSpecies * 4);
-    device.queue.submit([commandEncoder.finish()]);
-
-    const y = await readBuffer(readBufY);
-    const k = await readBuffer(readBufK);
-    readBufY.destroy();
-    readBufK.destroy();
-
-    const yTemp = new Float32Array(this.nSpecies);
-    for (let i = 0; i < this.nSpecies; i++) {
-      yTemp[i] = Math.max(0, y[i] + h * k[i]);
-    }
-
-    device.queue.writeBuffer(this.tempBuffer!, 0, yTemp);
+  private computeIntermediateState(passEncoder: GPUComputePassEncoder, stageIndex: number, workgroups: number): void {
+    passEncoder.setPipeline(this.intermediatePipeline!);
+    passEncoder.setBindGroup(0, this.intermediateBindGroups[stageIndex]);
+    passEncoder.dispatchWorkgroups(workgroups);
   }
 
   /**
    * Apply final RK4 update
    */
-  private async applyRK4Update(device: GPUDevice, workgroups: number): Promise<void> {
-    const bindGroup = device.createBindGroup({
-      layout: this.rk4Pipeline!.getBindGroupLayout(0),
-      entries: [
-        { binding: 0, resource: { buffer: this.concentrationBuffer! } },
-        { binding: 1, resource: { buffer: this.kBuffers[0] } },
-        { binding: 2, resource: { buffer: this.kBuffers[1] } },
-        { binding: 3, resource: { buffer: this.kBuffers[2] } },
-        { binding: 4, resource: { buffer: this.kBuffers[3] } },
-        { binding: 5, resource: { buffer: this.paramsBuffer! } }
-      ]
-    });
-
-    const commandEncoder = device.createCommandEncoder();
-    const passEncoder = commandEncoder.beginComputePass();
+  private applyRK4Update(passEncoder: GPUComputePassEncoder, workgroups: number): void {
     passEncoder.setPipeline(this.rk4Pipeline!);
-    passEncoder.setBindGroup(0, bindGroup);
+    passEncoder.setBindGroup(0, this.rk4BindGroup!);
     passEncoder.dispatchWorkgroups(workgroups);
-    passEncoder.end();
-    device.queue.submit([commandEncoder.finish()]);
   }
 
   /**
@@ -605,14 +654,29 @@ fn rk4_step(@builtin(global_invocation_id) global_id: vec3u) {
    */
   dispose(): void {
     this.concentrationBuffer?.destroy();
+    this.concentrationBuffer = null;
     this.derivativesBuffer?.destroy();
+    this.derivativesBuffer = null;
     this.rateConstantsBuffer?.destroy();
+    this.rateConstantsBuffer = null;
     this.paramsBuffer?.destroy();
+    this.paramsBuffer = null;
+    for (const buf of this.intermediateParamsBuffers) {
+      buf.destroy();
+    }
+    this.intermediateParamsBuffers = [];
     this.tempBuffer?.destroy();
+    this.tempBuffer = null;
     for (const buf of this.kBuffers) {
       buf.destroy();
     }
     this.kBuffers = [];
+    this.rhsBindGroups = [];
+    this.intermediateBindGroups = [];
+    this.rk4BindGroup = null;
+    this.intermediatePipeline = null;
+    this.rhsPipeline = null;
+    this.rk4Pipeline = null;
     this.ctx?.dispose();
     this.ctx = null;
     this.isCompiled = false;

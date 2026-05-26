@@ -74,7 +74,7 @@ interface EditorPanelProps {
   onCodeChange: (code: string) => void;
   onLoadCode?: (code: string) => void;
   editorResetKey?: number;
-  onParse: (codeOverride?: string) => void | Promise<unknown>;
+  onParse: (codeOverride?: string) => Promise<BNGLModel | null>;
   onSimulate: (options: SimulationOptions) => void;
   isSimulating: boolean;
   modelExists: boolean;
@@ -319,11 +319,11 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             markers={editorMarkers}
             selection={selection}
             lastResized={lastResized}
-            onRun={() => {
+            onRun={async () => {
               // Ctrl+Enter: parse first, then simulate with model-default options
-              onParse();
-              if (model) {
-                const opts = getSimulationOptionsFromParsedModel(model, 'default');
+              const parsedModel = await onParse();
+              if (parsedModel) {
+                const opts = getSimulationOptionsFromParsedModel(parsedModel, 'default');
                 onSimulate(opts);
               }
             }}
@@ -341,7 +341,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             <Button onClick={() => setIsGalleryOpen(true)} className="h-9 px-3">Models</Button>
             
             <Dropdown align="left" trigger={
-              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2">
+              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" title="Load model" aria-label="Load model">
                 <UploadIcon className="w-4 h-4" />
                 <span className="hidden sm:inline">Load</span>
               </Button>
@@ -363,12 +363,12 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               <DropdownItem onClick={() => onExportNET?.()} disabled={!modelExists}>Export NET</DropdownItem>
             </Dropdown>
 
-            <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3">
+            <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3" title="Format BNGL code" aria-label="Format BNGL code">
               <span className="hidden md:inline">Format</span>
               <span className="md:hidden">✨</span>
             </Button>
 
-            <Button onClick={() => onParse()} variant="secondary" className="h-9 px-4 font-bold">Parse</Button>
+            <Button onClick={() => onParse()} variant="secondary" className="h-9 px-4 font-bold" title="Parse BNGL code" aria-label="Parse BNGL code">Parse</Button>
 
             <input
               type="file"
@@ -394,6 +394,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         <div className="border border-slate-200 dark:border-slate-700 rounded-md bg-slate-50 dark:bg-slate-800/50 overflow-hidden">
           <button
             onClick={() => setIsParamsOpen(!isParamsOpen)}
+            aria-label="Toggle parameter sliders"
             aria-expanded={isParamsOpen}
             aria-controls="parameter-sliders-panel"
             className="flex w-full items-center justify-between px-3 py-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-700/50 transition-colors"

@@ -212,6 +212,11 @@ export class BNGXMLWriter {
           if (refsObservable) {
             observableDependentRates.add(pId);
           }
+          const expandedRateValue = expandUserDefinedFunctions(rateValue, model.functions || []);
+          const expandedTokens = expandedRateValue.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+          if (expandedTokens.some(t => obsNames.has(t))) {
+            observableDependentRates.add(pId);
+          }
           synthesizedParameters.push({ id: pId, expression: rateValue });
         }
       });
@@ -646,7 +651,7 @@ export class BNGXMLWriter {
 
     const moleculesXml = graph.molecules
       .map((mol, molIdx) => {
-        // Fix: populate moleculeIdMap BEFORE component loop
+        // NOTE: populate moleculeIdMap BEFORE component loop
         const moleculeId = `${prefix}_M${molIdx + 1}`;
         moleculeIdMap.set(molIdx, moleculeId);
 

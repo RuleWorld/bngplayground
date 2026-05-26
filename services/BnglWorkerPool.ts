@@ -37,8 +37,7 @@ export const generateSecureMessageId = (): number => {
     if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
         return crypto.getRandomValues(new Uint32Array(1))[0];
     }
-    // Fallback for environments lacking crypto support
-    return Math.floor(Math.random() * Number.MAX_SAFE_INTEGER);
+    throw new Error('Secure random generation is not supported in this environment (crypto.getRandomValues is missing).');
 };
 
 export const createSharedEnsembleResults = (

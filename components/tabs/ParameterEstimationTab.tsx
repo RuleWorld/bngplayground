@@ -1,3 +1,4 @@
+import { secureRandom } from "../../src/utils/secureRandom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Scatter } from 'recharts';
 import { BNGLModel } from '../../types';
@@ -9,6 +10,7 @@ import { DataTable } from '../ui/DataTable';
 import { EmptyState } from '../ui/EmptyState';
 import { StatusMessage } from '../ui/StatusMessage';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { useTheme } from '../../hooks/useTheme';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 import { parseExperimentalData, ExperimentalDataPoint } from '../../src/services/data/experimentalData';
 import { fitParameters, FitAlgorithm } from '../../services/optimization/paramFitter';
@@ -66,6 +68,9 @@ const DEFAULT_TEST_DATA = `# Paste experimental data here (CSV format)
 time`;
 
 export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ model }) => {
+  const [theme] = useTheme();
+  const isDark = theme === 'dark';
+
   // Parameter selection
   const [selectedParams, setSelectedParams] = useState<string[]>([]);
   const [priors, setPriors] = useState<ParameterPrior[]>([]);
@@ -289,7 +294,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
           const rowVals = [row.time.toFixed(4)];
           for (const name of obsNames) {
             const exact = row[name] ?? 0;
-            const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+            const noisy = exact * (1 + (secureRandom() - 0.5) * 0.05);
             rowVals.push(noisy.toFixed(4));
           }
           csv += rowVals.join(', ') + '\n';
@@ -308,7 +313,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         const row = res.data[idx];
         for (const name of obsNames) {
           const exact = row[name] ?? 0;
-          const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+          const noisy = exact * (1 + (secureRandom() - 0.5) * 0.05);
           measRows.push(`${name}\tdefault\t${row.time.toFixed(4)}\t${noisy.toFixed(6)}`);
         }
       }
@@ -1019,25 +1024,26 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                       label={{ value: 'Parameter Value (log scale)', position: 'bottom', offset: 15, fontSize: 11, fontWeight: 'bold' }}
                     />
                     <YAxis dataKey="name" type="category" width={100} tick={{ fontSize: 10, fontWeight: 'bold' }} />
-                    <Tooltip 
-                      formatter={(v: any, name?: string | number) => {
-                        // Filter out 'name' keys and other internal Recharts properties that might leak into tooltip
-                        if (name === 'name' || name === 'Parameter' || name === 'range') return [];
-                        
-                        if (Array.isArray(v)) {
-                          return [`${formatValue(v[0])} - ${formatValue(v[1])}`, '95% CI'];
-                        }
-                        return [formatValue(v), String(name)];
-                      }}
-                      contentStyle={{ 
-                        backgroundColor: 'rgba(255, 255, 255, 0.95)', 
-                        borderRadius: '8px', 
-                        border: 'none', 
-                        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
-                        fontSize: '12px',
-                        padding: '10px'
-                      }}
-                    />
+                     <Tooltip
+                       formatter={(v: any, name?: string | number) => {
+                         // Filter out 'name' keys and other internal Recharts properties that might leak into tooltip
+                         if (name === 'name' || name === 'Parameter' || name === 'range') return [];
+
+                         if (Array.isArray(v)) {
+                           return [`${formatValue(v[0])} - ${formatValue(v[1])}`, '95% CI'];
+                         }
+                         return [formatValue(v), String(name)];
+                       }}
+                       contentStyle={{
+                         backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255, 255, 255, 0.95)',
+                         borderRadius: '8px',
+                         border: isDark ? '1px solid #475569' : 'none',
+                         boxShadow: '0 4px 12px rgba(0, 0, 0, 0.1)',
+                         fontSize: '12px',
+                         padding: '10px',
+                         color: isDark ? '#e2e8f0' : '#334155',
+                       }}
+                     />
                     {/* Legend matches the components below */}
                     <Legend verticalAlign="top" height={36} />
                     
@@ -1158,11 +1164,11 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                           return mantissa >= 1.05 ? `${mantissa.toFixed(1)}e${exp}` : `1e${exp}`;
                         }}
                       />
-                      <Tooltip
-                        labelFormatter={(label) => `Iteration: ${label}`}
-                        formatter={(v: any) => [formatValue(Math.pow(10, Number(v))), 'SSE']}
-                        contentStyle={{ backgroundColor: 'rgba(255,255,255,0.95)', borderRadius: '8px', border: 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '11px' }}
-                      />
+                       <Tooltip
+                         labelFormatter={(label) => `Iteration: ${label}`}
+                         formatter={(v: any) => [formatValue(Math.pow(10, Number(v))), 'SSE']}
+                         contentStyle={{ backgroundColor: isDark ? 'rgba(30, 41, 59, 0.95)' : 'rgba(255,255,255,0.95)', borderRadius: '8px', border: isDark ? '1px solid #475569' : 'none', boxShadow: '0 4px 12px rgba(0,0,0,0.1)', fontSize: '11px', color: isDark ? '#e2e8f0' : '#334155' }}
+                       />
                       <Line
                         type="monotone"
                         dataKey="logElbo"

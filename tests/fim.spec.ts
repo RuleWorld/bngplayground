@@ -133,5 +133,44 @@ describe('FIM identifiability', () => {
     expect(exported.format).toBe('FIM-v1');
     expect(exported.eigenvalues).toHaveLength(3);
   });
+
+  it('handles error during model release gracefully', async () => {
+    const model: BNGLModel = {
+      parameters: { a: 1, b: 2 },
+      moleculeTypes: [],
+      species: [],
+      observables: [],
+      reactions: [],
+      reactionRules: [],
+    } as any;
+    (globalThis as any).TEST_MODEL = model;
+
+    // Spy on console.error
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+    // Import bnglService to mock its method for this test
+    const { bnglService } = await import('../services/bnglService');
+    const originalReleaseModel = bnglService.releaseModel;
+
+    // Make it throw an error
+    bnglService.releaseModel = vi.fn().mockRejectedValue(new Error('Test release error'));
+
+    try {
+      const result = await fimModule.computeFIM(model, ['a', 'b'], { method: 'ode', t_end: 10, n_steps: 10 }, undefined, undefined, true, true, true);
+
+      // Ensure the result is still returned successfully despite the release error
+      expect(result).toBeDefined();
+      expect(result.eigenvalues).toBeDefined();
+
+      // Ensure the error was logged
+      expect(errorSpy).toHaveBeenCalledWith('Failed to release model after FIM analysis:', expect.any(Error));
+      const errorArg = errorSpy.mock.calls.find(call => call[0] === 'Failed to release model after FIM analysis:')?.[1] as Error;
+      expect(errorArg.message).toBe('Test release error');
+    } finally {
+      // Restore
+      bnglService.releaseModel = originalReleaseModel;
+      errorSpy.mockRestore();
+    }
+  });
 });
 

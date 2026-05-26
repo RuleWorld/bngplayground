@@ -15,6 +15,7 @@ import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
+import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
 
 const OP_STOP = 0xFF;
@@ -161,6 +162,7 @@ export interface JITCompileDebugContext {
 export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private observableCache: Map<string, JITCompiledObservableFunction> = new Map();
+    private bytecodeCache: Map<string, NetworkByteCode> = new Map();
     private maxCacheSize: number = 50;
 
     private hashString(value: string): string {
@@ -198,6 +200,50 @@ export class JITCompiler {
                 reaction.productStoich.join(','),
                 String(reaction.rateConstant),
                 String(reaction.scalingVolume ?? 1),
+                reaction.totalRate ? '1' : '0'
+            ].join('|'));
+        }
+        return this.hashString(parts.join(';'));
+    }
+
+    private getBytecodeSignature(
+        reactions: Array<{
+            reactantIndices: Array<number | string>;
+            reactantStoich: number[];
+            productIndices: Array<number | string>;
+            productStoich: number[];
+            rateConstant: number | string;
+            scalingVolume?: number;
+            statisticalFactor?: number;
+            totalRate?: boolean;
+        }>,
+        nSpecies: number,
+        constantSpeciesMask?: boolean[],
+        observables?: Array<{
+            name: string;
+            indices: Int32Array | number[];
+            coefficients: Float64Array | number[];
+        }>
+    ): string {
+        const parts = [`n=${nSpecies}`];
+        if (constantSpeciesMask && constantSpeciesMask.length > 0) {
+            parts.push(`c=${constantSpeciesMask.map((value) => (value ? '1' : '0')).join('')}`);
+        }
+        if (observables) {
+            for (const o of observables) {
+                parts.push(`o=${o.name}|${o.indices.join(',')}|${o.coefficients.join(',')}`);
+            }
+        }
+        for (const reaction of reactions) {
+            const rateSig = typeof reaction.rateConstant === 'string' ? reaction.rateConstant : 'num';
+            parts.push([
+                reaction.reactantIndices.join(','),
+                reaction.reactantStoich.join(','),
+                reaction.productIndices.join(','),
+                reaction.productStoich.join(','),
+                rateSig,
+                String(reaction.scalingVolume ?? 1),
+                String(reaction.statisticalFactor ?? 1),
                 reaction.totalRate ? '1' : '0'
             ].join('|'));
         }
@@ -769,6 +815,58 @@ export class JITCompiler {
     }
 
     /**
+     * Generates an optimized function for evaluating SSA propensities for mass-action models.
+     * Generates a single function taking (state: Float64Array, propensities: Float64Array) => number.
+     */
+    public compileSSAPropensities(
+        reactions: Array<{
+            reactants: number[] | Int32Array;
+            rateConstant: number;
+            propensityFactor: number;
+        }>,
+        reactionReactingVolumes: Float64Array
+    ): ((state: Float64Array, propensities: Float64Array) => number) | null {
+        if (!getFeatureFlags().enableJitFastPath) {
+            return null;
+        }
+
+        try {
+            let source = "let aTotal = 0;\n";
+
+            for (let i = 0; i < reactions.length; i++) {
+                const rxn = reactions[i];
+                const n = rxn.reactants.length;
+                let a = rxn.rateConstant * rxn.propensityFactor;
+
+                const volume = reactionReactingVolumes[i];
+                if (n === 0) {
+                    a *= volume;
+                } else if (n === 2) {
+                    a /= volume;
+                } else if (n === 3) {
+                    a /= (volume * volume);
+                } else if (n > 3) {
+                    a /= Math.pow(volume, n - 1);
+                }
+
+                let expr = a.toString();
+                for (let j = 0; j < n; j++) {
+                    expr += ` * state[${rxn.reactants[j]}]`;
+                }
+
+                source += `propensities[${i}] = ${expr};\n`;
+                source += `aTotal += propensities[${i}];\n`;
+            }
+
+            source += "return aTotal;\n";
+            return new Function("state", "propensities", source) as (state: Float64Array, propensities: Float64Array) => number;
+        } catch (e) {
+            console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
+            return null;
+        }
+    }
+
+    /**
      * Compile a reaction network into a compact bytecode representation for WASM interpretation.
      * Returns null if any reaction uses a complex rate expression that cannot be pre-evaluated.
      */
@@ -855,6 +953,46 @@ export class JITCompiler {
                 console.warn(
                     `[JITCompiler] Ignoring ${allParamKeys.length - paramKeys.length} invalid parameter key(s) during bytecode compilation`
                 );
+            }
+
+            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables);
+            const cached = this.bytecodeCache.get(signature);
+
+            if (cached) {
+                // Re-evaluate rate constants only
+                const rateConstants = new Float64Array(cached.nReactions);
+                for (let i = 0; i < cached.nReactions; i++) {
+                    const rxn = reactions[i];
+                    const hasExpressionBytecode = typeof rxn.rateConstant === 'string' && cached.exprBytecodeOffsets[i + 1] > cached.exprBytecodeOffsets[i];
+                    let k: number;
+                    if (typeof rxn.rateConstant === 'number') {
+                        k = rxn.rateConstant;
+                    } else {
+                        if (hasExpressionBytecode) {
+                            k = 0;
+                        } else {
+                            const rxnStr = rxn.rateConstant.toString();
+                            this.assertSafeRateExpression(rxnStr, paramKeys);
+                            const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
+                            try {
+                                const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
+                                k = evaluator(safeParameters);
+                                if (Number.isNaN(k) || !Number.isFinite(k)) return null;
+                            } catch {
+                                return null;
+                            }
+                        }
+                    }
+                    if (rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                        k *= rxn.statisticalFactor;
+                    }
+                    rateConstants[i] = k;
+                }
+
+                return {
+                    ...cached,
+                    rateConstants
+                };
             }
 
             const nReactions = reactions.length;
@@ -945,7 +1083,7 @@ export class JITCompiler {
             reactantOffsets[nReactions] = currentReactantOffset;
 
             // Stoichiometry matrix conversion (CSC-like)
-            const speciesRxnEntries: Array<{ rxnIdx: number; stoich: number }>[] = Array.from({ length: nSpecies }, () => []);
+            const speciesRxnEntries: Array<Map<number, number>> = Array.from({ length: nSpecies }, () => new Map<number, number>());
             for (let r = 0; r < nReactions; r++) {
                 const rxn = reactions[r];
                 // Reactants
@@ -953,11 +1091,11 @@ export class JITCompiler {
                     const s = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, r, 'reactant', j);
                     if (isConstant(s)) continue;
                     const st = rxn.reactantStoich[j];
-                    const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
-                    if (existing) {
-                        existing.stoich -= st;
+                    const existing = speciesRxnEntries[s].get(r);
+                    if (existing !== undefined) {
+                        speciesRxnEntries[s].set(r, existing - st);
                     } else {
-                        speciesRxnEntries[s].push({ rxnIdx: r, stoich: -st });
+                        speciesRxnEntries[s].set(r, -st);
                     }
                 }
                 // Products
@@ -965,11 +1103,11 @@ export class JITCompiler {
                     const s = this.normalizeSpeciesIndex(rxn.productIndices[j], nSpecies, r, 'product', j);
                     if (isConstant(s)) continue;
                     const st = rxn.productStoich[j];
-                    const existing = speciesRxnEntries[s].find(e => e.rxnIdx === r);
-                    if (existing) {
-                        existing.stoich += st;
+                    const existing = speciesRxnEntries[s].get(r);
+                    if (existing !== undefined) {
+                        speciesRxnEntries[s].set(r, existing + st);
                     } else {
-                        speciesRxnEntries[s].push({ rxnIdx: r, stoich: st });
+                        speciesRxnEntries[s].set(r, st);
                     }
                 }
             }
@@ -981,7 +1119,7 @@ export class JITCompiler {
                     throw new Error(`[JITCompiler] speciesOffsets index out of range: ${s}`);
                 }
                 speciesOffsets[s] = totalStoichEntries;
-                totalStoichEntries += speciesRxnEntries[s].length;
+                totalStoichEntries += speciesRxnEntries[s].size;
             }
             if (nSpecies < 0 || nSpecies >= speciesOffsets.length) {
                 throw new Error(`[JITCompiler] speciesOffsets terminal index out of range: ${nSpecies}`);
@@ -993,12 +1131,12 @@ export class JITCompiler {
 
             let currentStoichOffset = 0;
             for (let s = 0; s < nSpecies; s++) {
-                for (const entry of speciesRxnEntries[s]) {
+                for (const [rxnIdx, stoich] of speciesRxnEntries[s].entries()) {
                     if (currentStoichOffset < 0 || currentStoichOffset >= speciesRxnIdx.length || currentStoichOffset >= speciesStoich.length) {
                         throw new Error(`[JITCompiler] stoichiometry entry index out of range: ${currentStoichOffset}`);
                     }
-                    speciesRxnIdx[currentStoichOffset] = entry.rxnIdx;
-                    speciesStoich[currentStoichOffset] = entry.stoich;
+                    speciesRxnIdx[currentStoichOffset] = rxnIdx;
+                    speciesStoich[currentStoichOffset] = stoich;
                     currentStoichOffset++;
                 }
             }
@@ -1009,16 +1147,14 @@ export class JITCompiler {
             const jacRows = Array.from({ length: nSpecies }, () => new Map<number, { rxnIdx: number; coeff: number }[]>());
 
             // Map: reaction index -> species affected (non-zero net stoichiometry)
-            const rxnToAffectedSpecies: number[][] = reactions.map((_, r) => {
-                const affected: number[] = [];
-                for (let s = 0; s < nSpecies; s++) {
-                    const entries = speciesRxnEntries[s];
-                    if (!entries) continue;
-                    const entry = entries.find(e => e.rxnIdx === r);
-                    if (entry && entry.stoich !== 0) affected.push(s);
+            const rxnToAffectedSpecies: Array<{species: number, stoich: number}[]> = Array.from({ length: nReactions }, () => []);
+            for (let s = 0; s < nSpecies; s++) {
+                for (const [rxnIdx, stoich] of speciesRxnEntries[s].entries()) {
+                    if (stoich !== 0) {
+                        rxnToAffectedSpecies[rxnIdx].push({ species: s, stoich });
+                    }
                 }
-                return affected;
-            });
+            }
 
             for (let r = 0; r < nReactions; r++) {
                 const rxn = reactions[r];
@@ -1028,12 +1164,13 @@ export class JITCompiler {
                     const j = this.normalizeSpeciesIndex(rxn.reactantIndices[i_r], nSpecies, r, 'reactant', i_r); // Species the rate depends on
                     const reactantStoichJ = rxn.reactantStoich[i_r];
 
-                    for (const s of affectedSpecies) {
+                    for (const affected of affectedSpecies) {
+                        const s = affected.species;
                         if (!jacRows[s].has(j)) {
                             jacRows[s].set(j, []);
                         }
                         // We store the contribution from reaction r to J[s][j]
-                        const netStoichI = speciesRxnEntries[s].find(e => e.rxnIdx === r)!.stoich;
+                        const netStoichI = affected.stoich;
                         jacRows[s].get(j)!.push({ rxnIdx: r, coeff: netStoichI * reactantStoichJ });
                     }
                 }
@@ -1100,8 +1237,7 @@ export class JITCompiler {
                 currentByteOffset += chunk.length;
             }
 
-
-            return {
+            const newByteCode: NetworkByteCode = {
                 nReactions,
                 nSpecies,
                 rateConstants,
@@ -1128,6 +1264,17 @@ export class JITCompiler {
                 exprConstants: new Float64Array(0),
                 requiresParameterRebuild
             };
+
+            if (this.bytecodeCache.size >= this.maxCacheSize) {
+                const firstKey = this.bytecodeCache.keys().next().value;
+                if (firstKey !== undefined) this.bytecodeCache.delete(firstKey);
+            }
+            this.bytecodeCache.set(signature, newByteCode);
+
+            return {
+                ...newByteCode,
+                rateConstants: new Float64Array(rateConstants)
+            };
         } catch (error) {
             console.error('[JITCompiler] Failed to compile bytecode:', error);
             return null;
@@ -1140,7 +1287,12 @@ export class JITCompiler {
     clearCache(): void {
         this.cache.clear();
         this.observableCache.clear();
+        this.bytecodeCache.clear();
         console.log('[JITCompiler] Cache cleared');
+    }
+
+    clearBytecodeCache(): void {
+        this.bytecodeCache.clear();
     }
 
     /**

@@ -33,7 +33,8 @@ interface ModelEntry {
   name: string;
   path: string;
   category: string;
-  bng2_compatible: boolean;
+  bng2_compatible?: boolean;
+  compatibility?: { bng2?: boolean; nfsim?: boolean; excluded?: boolean; methods?: string[] };
   origin: string;
   tags: string[];
 }
@@ -48,7 +49,7 @@ function loadManifest(): ModelEntry[] {
 function getPublishedModels(manifest: ModelEntry[]): ModelEntry[] {
   return manifest.filter(m =>
     m.origin === 'published' &&
-    m.bng2_compatible === true
+    (m.bng2_compatible === true || m.compatibility?.bng2 === true)
   );
 }
 

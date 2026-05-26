@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useId } from 'react';
 import { InfoIcon } from './icons/InfoIcon';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 
@@ -18,11 +18,15 @@ export const HelpSection: React.FC<HelpSectionProps> = ({
   className = "",
 }) => {
   const [isOpen, setIsOpen] = useState(false);
+  const contentId = useId();
 
   return (
     <div className={`mb-4 shrink-0 overflow-hidden rounded-lg border border-blue-100 bg-blue-50/50 dark:border-blue-900/30 dark:bg-blue-900/10 transition-all ${className}`}>
       <button
         onClick={() => setIsOpen(!isOpen)}
+        aria-label={`Toggle help section: ${title}`}
+        aria-expanded={isOpen}
+        aria-controls={contentId}
         className="flex w-full items-center justify-between px-4 py-2 text-left hover:bg-blue-100/50 dark:hover:bg-blue-900/20 transition-colors"
       >
         <div className="flex items-center gap-2">
@@ -37,7 +41,7 @@ export const HelpSection: React.FC<HelpSectionProps> = ({
       </button>
       
       {isOpen && (
-        <div className="px-4 pb-4 pt-1 space-y-3">
+        <div id={contentId} className="px-4 pb-4 pt-1 space-y-3">
           <p className="text-sm text-blue-800 dark:text-blue-200 leading-relaxed">
             {description}
           </p>

@@ -27,9 +27,18 @@ const loaderPath = resolve(root, 'services', 'cvode_loader.js');
 
 let cachedLoader: CvodeLoader | null = null;
 
+const ALLOWED_MODULES = new Set(['path', 'fs', 'crypto', 'url']);
+
+function safeRequire(id: string) {
+  if (ALLOWED_MODULES.has(id)) {
+    return require(id);
+  }
+  throw new Error(`[Security] Unauthorized require attempt for module: ${id}`);
+}
+
 function installNodePolyfills() {
   const g = globalThis as unknown as Record<string, unknown>;
-  if (!g.require) g.require = require;
+  if (!g.require) g.require = safeRequire;
   if (!g.__filename) g.__filename = __filename;
   if (!g.__dirname) g.__dirname = __dirname;
 }
@@ -48,7 +57,7 @@ export const createCVodeModule: CvodeLoader = async (moduleArg?: unknown) => {
     const context = vm.createContext({
       module: moduleObj,
       exports: exportsObj,
-      require,
+      require: safeRequire,
       __filename: loaderPath,
       __dirname: dirname(loaderPath),
       process,
@@ -92,5 +101,9 @@ export const createCVodeModule: CvodeLoader = async (moduleArg?: unknown) => {
 
   return await cachedLoader(config);
 };
+
+export function destroyCachedCVodeLoader(): void {
+  cachedLoader = null;
+}
 
 export default createCVodeModule;

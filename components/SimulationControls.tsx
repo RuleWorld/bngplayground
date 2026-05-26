@@ -74,19 +74,23 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   const [rtol, setRtol] = useState('');
   const [includeInfluence, setIncludeInfluence] = useState(true);
 
-  const initialDefaults = resolveSimulationControlDefaults(model, method);
+  // Sync state with model/method changes (derived state pattern)
+  const [prevModel, setPrevModel] = useState(model);
+  const [prevMethod, setPrevMethod] = useState(method);
 
+  const initialDefaults = resolveSimulationControlDefaults(model, method);
   const [tEnd, setTEnd] = useState(initialDefaults.tEnd);
   const [tStart, setTStart] = useState(initialDefaults.tStart);
   const [nSteps, setNSteps] = useState(initialDefaults.nSteps);
 
-  // Update defaults when model or method changes
-  useEffect(() => {
+  if (model !== prevModel || method !== prevMethod) {
     const nextDefaults = resolveSimulationControlDefaults(model, method);
     setTEnd(nextDefaults.tEnd);
     setTStart(nextDefaults.tStart);
     setNSteps(nextDefaults.nSteps);
-  }, [model, method]);
+    setPrevModel(model);
+    setPrevMethod(method);
+  }
 
   // SSA-specific parameters
   const [ssaSeed, setSsaSeed] = useState('');
@@ -241,6 +245,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         <button
           onClick={() => setShowOptions(!showOptions)}
           title="Configure simulation options"
+          aria-label="Configure simulation options"
           aria-expanded={showOptions}
           aria-haspopup="dialog"
           aria-controls="simulation-options-popover"
@@ -275,14 +280,15 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 
             {/* Method selection */}
             <div className="mb-4">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
+              <label id="simulation-method-label" className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
                 Simulation Method
               </label>
-              <div className="grid grid-cols-6 gap-1 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-900/50 p-1 rounded-md">
+              <div role="group" aria-labelledby="simulation-method-label" className="grid grid-cols-6 gap-1 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-900/50 p-1 rounded-md">
                 {['default', 'ode', 'ssa', 'pla', 'psa', 'nf'].map(m => (
                   <button
                     key={m}
                     onClick={() => setMethod(m as any)}
+                    aria-pressed={method === m}
                     className={`px-1 py-1.5 text-xs font-medium rounded transition-all text-center ${method === m
                       ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 text-teal-700 dark:text-teal-400 shadow-sm'
                       : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'

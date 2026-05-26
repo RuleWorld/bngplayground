@@ -404,10 +404,19 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
+  // Pre-compute common species if both reactants and products exist
+  const commonSpecies: string[] = [];
+  if (numReactants > 0 && numProducts > 0) {
+    for (const r of reactantIds) {
+      if (productIds.indexOf(r) !== -1) {
+        commonSpecies.push(r);
+      }
+    }
+  }
+
   // Catalysis (Sat/MM/Hill): A + B -> B where A catalyzes B production/consumption
   // Pattern: A + B -> B with Sat(k, K) rate law (B is unchanged catalyst/substrate)
   if (numReactants === 2 && numProducts === 1) {
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1 && hasSatRateLaw(reaction)) {
       const catalyst = commonSpecies[0];
       const substrate = reactantIds.find(r => r !== catalyst)!;
@@ -444,14 +453,14 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
   // Catalysis / Synthesis: E -> E + P (enzyme catalyzes its own production)
   // Pattern: 1 reactant, 2+ products where reactant is also a product
   if (numReactants === 1 && numProducts >= 2) {
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1) {
+      const commonId = commonSpecies[0];
       return {
         type: 'synthesis',
         reactants: [],
-        products: productIds.filter(p => !commonSpecies.includes(p)),
-        modifiers: [commonSpecies[0], ...modifierIds],
-        catalyst: commonSpecies[0],
+        products: productIds.filter(p => p !== commonId),
+        modifiers: [commonId, ...modifierIds],
+        catalyst: commonId,
       };
     }
   }
@@ -489,28 +498,28 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
   // Catalysis: A + E → A' + E (enzyme unchanged)
   if (numReactants === 2 && numProducts === 2) {
     // Check if one species is unchanged (catalyst)
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1) {
+      const commonId = commonSpecies[0];
       return {
         type: 'catalysis',
-        reactants: reactantIds.filter(r => !commonSpecies.includes(r)),
-        products: productIds.filter(p => !commonSpecies.includes(p)),
+        reactants: reactantIds.filter(r => r !== commonId),
+        products: productIds.filter(p => p !== commonId),
         modifiers: modifierIds,
-        catalyst: commonSpecies[0],
+        catalyst: commonId,
       };
     }
   }
 
   // Catalysis / Synthesis: E -> E + P
   if (numReactants === 1 && numProducts === 2) {
-    const commonSpecies = reactantIds.filter(r => productIds.includes(r));
     if (commonSpecies.length === 1) {
+      const commonId = commonSpecies[0];
       return {
         type: 'synthesis',
         reactants: [],
-        products: productIds.filter(p => !commonSpecies.includes(p)),
+        products: productIds.filter(p => p !== commonId),
         modifiers: modifierIds,
-        catalyst: commonSpecies[0],
+        catalyst: commonId,
       };
     }
   }
@@ -936,17 +945,23 @@ export function buildSpeciesCompositionTable(
     }
   }
 
+  // Pre-compute a mapping for fast lookups
+  const nameToId = new Map<string, string>();
+  for (const id of speciesIds) {
+    const sp = model.species.get(id);
+    if (sp?.name && !nameToId.has(sp.name)) {
+      nameToId.set(sp.name, id);
+    }
+    if (!nameToId.has(id)) {
+      nameToId.set(id, id);
+    }
+  }
+
   // Add naming-based dependencies
   for (const [_modification, pairs] of namingAnalysis.pairClassification) {
     for (const [baseName, derivedName] of pairs) {
-      const derivedId = speciesIds.find(id => {
-        const sp = model.species.get(id);
-        return sp?.name === derivedName || id === derivedName;
-      });
-      const baseId = speciesIds.find(id => {
-        const sp = model.species.get(id);
-        return sp?.name === baseName || id === baseName;
-      });
+      const derivedId = nameToId.get(derivedName);
+      const baseId = nameToId.get(baseName);
 
       if (derivedId && baseId && derivedId !== baseId) {
         if (!sct.dependencies.has(derivedId)) {
@@ -1085,21 +1100,33 @@ export function buildSpeciesCompositionTable(
  */
 export function reconcileSCT(sct: SpeciesCompositionTable, moleculeTypes: Molecule[]): void {
   const typeMap = new Map<string, Molecule>();
+  const typeCountsMap = new Map<string, Counter<string>>();
+  const typeTemplateMap = new Map<string, Map<string, Component>>();
+
   for (const type of moleculeTypes) {
     typeMap.set(type.name, type);
+    typeCountsMap.set(type.name, new Counter<string>(type.components.map((c: Component) => c.name)));
+    const templateMap = new Map<string, Component>();
+    for (const c of type.components) {
+      if (!templateMap.has(c.name)) {
+        templateMap.set(c.name, c);
+      }
+    }
+    typeTemplateMap.set(type.name, templateMap);
   }
 
   for (const entry of sct.entries.values()) {
     for (const mol of entry.structure.molecules) {
       const type = typeMap.get(mol.name);
       if (type) {
-        const typeCounts = new Counter<string>(type.components.map((c: Component) => c.name));
+        const typeCounts = typeCountsMap.get(type.name)!;
+        const templateMap = typeTemplateMap.get(type.name)!;
         const molCounts = new Counter<string>(mol.components.map((c: Component) => c.name));
 
         for (const [name, count] of typeCounts.entries()) {
           const diff = count - (molCounts.get(name) || 0);
           if (diff > 0) {
-            const template = type.components.find((c: Component) => c.name === name)!;
+            const template = templateMap.get(name)!;
             for (let i = 0; i < diff; i++) {
               const newComp = template.copy();
               newComp.bonds = [];

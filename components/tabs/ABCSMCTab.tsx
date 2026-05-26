@@ -1,3 +1,4 @@
+import { secureRandom } from "../../src/utils/secureRandom";
 import React, { useMemo, useState } from 'react';
 import { bnglService } from '../../services/bnglService';
 import { ABCSMCProgress, abcSMC } from '@bngplayground/engine';
@@ -362,7 +363,7 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                          for (const name of obsNames) {
                             const exact = row[name] ?? 0;
                             // +/- 2.5% random noise
-                            const noisy = exact * (1 + (Math.random() - 0.5) * 0.05);
+                            const noisy = exact * (1 + (secureRandom() - 0.5) * 0.05);
                             rowVals.push(noisy.toFixed(4));
                          }
                          csv += rowVals.join(', ') + '\n';

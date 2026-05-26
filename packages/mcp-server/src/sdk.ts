@@ -4,7 +4,18 @@
 
 type Constructor<T = unknown> = new (...args: any[]) => T;
 
-const dynamicImport = new Function('specifier', 'return import(specifier)') as (specifier: string) => Promise<any>;
+const dynamicImport = (specifier: string): Promise<any> => {
+  switch (specifier) {
+    case '@modelcontextprotocol/sdk/server/index.js':
+      return import('@modelcontextprotocol/sdk/server/index.js');
+    case '@modelcontextprotocol/sdk/server/stdio.js':
+      return import('@modelcontextprotocol/sdk/server/stdio.js');
+    case '@modelcontextprotocol/sdk/types.js':
+      return import('@modelcontextprotocol/sdk/types.js');
+    default:
+      throw new Error(`Unauthorized import specifier: ${specifier}`);
+  }
+};
 
 let RealServer: Constructor | undefined;
 let RealStdioServerTransport: Constructor | undefined;

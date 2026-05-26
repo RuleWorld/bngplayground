@@ -335,10 +335,24 @@ export class Molecule {
    * Extend this molecule with components from another molecule
    */
   extend(molecule: Molecule): void {
+    const useMap = this.components.length + molecule.components.length >= 10;
+    const componentMap = useMap ? new Map<string, Component>() : null;
+
+    if (componentMap) {
+      for (const comp of this.components) {
+        componentMap.set(comp.name, comp);
+      }
+    }
+
     for (const element of molecule.components) {
-      const existing = this.components.find(x => x.name === element.name);
+      const existing = componentMap
+        ? componentMap.get(element.name)
+        : this.components.find(x => x.name === element.name);
+
       if (!existing) {
-        this.components.push(deepCopy(element));
+        const copied = deepCopy(element);
+        this.components.push(copied);
+        if (componentMap) componentMap.set(copied.name, copied);
       } else {
         for (const bond of element.bonds) {
           existing.addBond(bond);
@@ -354,9 +368,24 @@ export class Molecule {
    * Update this molecule with components from another
    */
   update(molecule: Molecule): void {
+    const useSet = this.components.length + molecule.components.length >= 10;
+    const componentNames = useSet ? new Set<string>() : null;
+
+    if (componentNames) {
+      for (const comp of this.components) {
+        componentNames.add(comp.name);
+      }
+    }
+
     for (const comp of molecule.components) {
-      if (!this.components.some(x => x.name === comp.name)) {
-        this.components.push(deepCopy(comp));
+      const exists = componentNames
+        ? componentNames.has(comp.name)
+        : this.components.some(x => x.name === comp.name);
+
+      if (!exists) {
+        const copied = deepCopy(comp);
+        this.components.push(copied);
+        if (componentNames) componentNames.add(copied.name);
       }
     }
   }

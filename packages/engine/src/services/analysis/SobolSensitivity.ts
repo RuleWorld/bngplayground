@@ -184,6 +184,7 @@ function bootstrapSobolCI(
         sum += diff * diff;
       }
       value = 1 - sum / (2 * N * totalVariance);
+      value = Math.max(0, Math.min(1, value));
     } else {
       let sum = 0;
       for (const idx of idxs) {
@@ -191,6 +192,7 @@ function bootstrapSobolCI(
         sum += diff * diff;
       }
       value = sum / (2 * N * totalVariance);
+      value = Math.max(0, Math.min(1, value));
     }
     estimates.push(value);
   }
@@ -340,7 +342,7 @@ export async function sobolSensitivity(config: SobolAnalysisConfig): Promise<Sob
         const diff = fABk[i] - fB[i];
         sumFirst += diff * diff;
       }
-      const Si = 1 - sumFirst / (2 * N * totalVariance);
+      const Si = Math.max(0, Math.min(1, 1 - sumFirst / (2 * N * totalVariance)));
 
       // Jansen total-order: ST_i = (1/(2N)) * Σ(f(A) - f(AB^i))² / V(Y)
       let sumTotal = 0;
@@ -348,7 +350,7 @@ export async function sobolSensitivity(config: SobolAnalysisConfig): Promise<Sob
         const diff = fA[i] - fABk[i];
         sumTotal += diff * diff;
       }
-      const STi = sumTotal / (2 * N * totalVariance);
+      const STi = Math.max(0, Math.min(1, sumTotal / (2 * N * totalVariance)));
 
       // Bootstrap CIs
       const ciFirst = bootstrapSobolCI(fA, fB, fABk, totalVariance, 'first', nBootstrap, alpha, rng);

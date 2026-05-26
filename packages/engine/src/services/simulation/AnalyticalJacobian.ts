@@ -282,6 +282,21 @@ export function buildJacobianFunction(
         // This isolates the functional-rate contribution and avoids double-counting.
 
         const hInv = 1.0 / h;
+
+        // ⚡ Bolt Performance Optimization:
+        // Pre-calculate mass-action contributions for this j over all species i.
+        // This reduces time complexity from O(N^2 * R) to O(N * R + N) inside this hot loop.
+        const massActionContribs = new Float64Array(N);
+        for (const rxn of massActionRxns) {
+          const sj = rxn.reactantStoich.get(j);
+          if (!sj) continue;
+          const deriv = massActionDerivative(rxn, j, y);
+          if (deriv === 0) continue;
+          for (const [i, S_ir] of rxn.netStoich) {
+            massActionContribs[i] += S_ir * deriv;
+          }
+        }
+
         for (let i = 0; i < N; i++) {
           // Only add FD contribution for rows affected by functional reactions.
           // We identify these as species with nonzero net stoichiometry in any
@@ -291,14 +306,7 @@ export function buildJacobianFunction(
           const fdEntry = (fdDydt1[i] - fdDydt0[i]) * hInv;
           // The mass-action contribution to this column entry was already added.
           // We need to compute what mass-action alone would give for this (i,j):
-          let massActionContrib = 0;
-          for (const rxn of massActionRxns) {
-            const sj = rxn.reactantStoich.get(j);
-            if (!sj) continue;
-            const S_ir = rxn.netStoich.get(i);
-            if (!S_ir) continue;
-            massActionContrib += S_ir * massActionDerivative(rxn, j, y);
-          }
+          const massActionContrib = massActionContribs[i];
           // The functional-rate contribution is the difference
           const funcContrib = fdEntry - massActionContrib;
           if (funcContrib !== 0) {

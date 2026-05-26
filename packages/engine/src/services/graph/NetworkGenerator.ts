@@ -391,6 +391,7 @@ export class NetworkGenerator {
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
+  private compartmentMap: Map<string, CompartmentInfo> = new Map();
   // NEW: map Canonical Name -> Initial Concentration (from seed parameter evaluation)
   private seedConcentrationMap?: Map<string, number>;
 
@@ -419,6 +420,7 @@ export class NetworkGenerator {
     if (this.options.compartments) {
       for (const c of this.options.compartments) {
         this.compartmentVolumes.set(c.name, c.size);
+        this.compartmentMap.set(c.name, c);
       }
     }
     if (this.options.energyPatterns) {
@@ -519,7 +521,7 @@ export class NetworkGenerator {
       let minDim = 99;
 
       for (const cName of molCompartments) {
-        const comp = this.options.compartments.find(c => c.name === cName);
+        const comp = this.compartmentMap.get(cName);
         const dim = comp ? comp.dimension : 3;
         if (dim < minDim) {
           minDim = dim;
@@ -538,7 +540,7 @@ export class NetworkGenerator {
   private getSpeciesVolume(s: Species | SpeciesGraph): number {
     const cName = this.getSpeciesCompartment(s);
     if (!cName || !this.options.compartments) return 1;
-    const comp = this.options.compartments.find(c => c.name === cName);
+    const comp = this.compartmentMap.get(cName);
     return (comp && comp.size > 0) ? comp.size : 1;
   }
 
@@ -563,7 +565,7 @@ export class NetworkGenerator {
       for (const species of candidates) {
         const compName = this.getSpeciesCompartment(species);
         if (!compName) continue;
-        const comp = compartments.find(c => c.name === compName);
+        const comp = this.compartmentMap.get(compName);
         if (!comp) continue;
         const size = comp.size > 0 ? comp.size : 1;
         if (comp.dimension === 2) surfaceVolumes.push(size);
@@ -582,7 +584,7 @@ export class NetworkGenerator {
     const dimOf = (s: Species): number => {
       const compName = this.getSpeciesCompartment(s);
       if (!compName) return 3;
-      const comp = compartments.find(c => c.name === compName);
+      const comp = this.compartmentMap.get(compName);
       return comp?.dimension ?? 3;
     };
 
@@ -612,8 +614,8 @@ export class NetworkGenerator {
 
     if (!this.options.compartments) return true;
 
-    const c1 = this.options.compartments.find(c => c.name === comp1Name);
-    const c2 = this.options.compartments.find(c => c.name === comp2Name);
+    const c1 = this.compartmentMap.get(comp1Name);
+    const c2 = this.compartmentMap.get(comp2Name);
 
     if (!c1 || !c2) return true;
 
@@ -744,8 +746,8 @@ export class NetworkGenerator {
     // No compartments defined in model - allow
     if (!this.options.compartments || this.options.compartments.length === 0) return true;
 
-    const comp1 = this.options.compartments.find(c => c.name === comp1Name);
-    const comp2 = this.options.compartments.find(c => c.name === comp2Name);
+    const comp1 = this.compartmentMap.get(comp1Name);
+    const comp2 = this.compartmentMap.get(comp2Name);
 
     // If compartments not found, allow (backward compatibility)
     if (!comp1 || !comp2) return true;
@@ -774,8 +776,8 @@ export class NetworkGenerator {
     // If either has no compartment, allow (sloppy mode)
     if (!comp1Name || !comp2Name) return true;
 
-    const comp1 = this.options.compartments.find(c => c.name === comp1Name);
-    const comp2 = this.options.compartments.find(c => c.name === comp2Name);
+    const comp1 = this.compartmentMap.get(comp1Name);
+    const comp2 = this.compartmentMap.get(comp2Name);
 
     // If compartments not found in definitions, allow
     if (!comp1 || !comp2) return true;
@@ -825,11 +827,14 @@ export class NetworkGenerator {
     const reactionKeys = new Set<string>();  // Fast duplicate detection for reactions
     const reactionIndexByKey = new Map<string, number>();
     const queue: SpeciesGraph[] = [];
-    const processedPairs = new Set<string>();  // Track processed (species, rule) pairs
-    const ruleProcessedSpecies = new Map<number, Set<string>>(); // Track species processed per rule (by rule index) to prevent runaway generation
+    const reactiveRules = rules.filter(r => r.reactants.length > 0);
+    const synthesisRules = rules.filter(r => r.reactants.length === 0);
 
-    // Initialize rule processed sets using rule index as key
-    for (let i = 0; i < rules.length; i++) {
+    const processedPairs = new Set<string>();  // Track processed (species, rule) pairs
+    const ruleProcessedSpecies = new Map<number, Set<string>>(); // Track species processed per rule (by reactive rule index) to prevent runaway generation
+
+    // Initialize rule processed sets using reactive rule index as key
+    for (let i = 0; i < reactiveRules.length; i++) {
       ruleProcessedSpecies.set(i, new Set<string>());
     }
 
@@ -840,48 +845,41 @@ export class NetworkGenerator {
 
     // Handle synthesis rules (0 -> X) - add products directly
     // These are zero-order reactions that produce species regardless of existing species
-    for (const rule of rules) {
-      if (rule.reactants.length === 0 && rule.products.length > 0) {
-        debugNetworkLog(`[NetworkGenerator] Processing synthesis rule: ${rule.name}`);
+    for (const rule of synthesisRules) {
+      debugNetworkLog(`[NetworkGenerator] Processing synthesis rule: ${rule.name}`);
 
-        // Add each product species if not already present
-        for (const productGraph of rule.products) {
-          this.addOrGetSpecies(productGraph, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+      // Add each product species and retrieve its index directly
+      const productIndices = rule.products.map(productGraph => {
+        const sp = this.addOrGetSpecies(productGraph, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+        return sp.index;
+      });
+
+      const productSpeciesList = productIndices.map(idx => speciesList[idx]);
+      const { scalingVolume } = this.getVolumeScalingInfo([], productSpeciesList);
+
+      const rxn = new Rxn([], productIndices, rule.rateConstant, rule.name, {
+        statFactor: 1,
+        rateExpression: rule.rateExpression,
+        scalingVolume
+      });
+
+      const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
+      const existingIdx = reactionIndexByKey.get(rxnKey);
+      if (existingIdx === undefined) {
+        reactionKeys.add(rxnKey);
+        reactionIndexByKey.set(rxnKey, reactionsList.length);
+        reactionsList.push(rxn);
+      } else {
+        reactionsList[existingIdx].rate += rxn.rate;
+        if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
+          reactionsList[existingIdx].rateExpression = mergeRateExpressions(
+            reactionsList[existingIdx].rateExpression,
+            rxn.rateExpression
+          );
         }
-
-        // Create the synthesis reaction (no reactants -> products)
-        const productIndices = rule.products.map(pg => {
-          const canonical = profiledCanonicalize(pg);
-          return speciesMap.get(canonical)!.index;
-        });
-
-        const productSpeciesList = productIndices.map(idx => speciesList[idx]);
-        const { scalingVolume } = this.getVolumeScalingInfo([], productSpeciesList);
-
-        const rxn = new Rxn([], productIndices, rule.rateConstant, rule.name, {
-          statFactor: 1,
-          rateExpression: rule.rateExpression,
-          scalingVolume
-        });
-
-        const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
-        const existingIdx = reactionIndexByKey.get(rxnKey);
-        if (existingIdx === undefined) {
-          reactionKeys.add(rxnKey);
-          reactionIndexByKey.set(rxnKey, reactionsList.length);
-          reactionsList.push(rxn);
-        } else {
-          reactionsList[existingIdx].rate += rxn.rate;
-          if (shouldMergeExpressionMultiplicity(reactionsList[existingIdx], rxn)) {
-            reactionsList[existingIdx].rateExpression = mergeRateExpressions(
-              reactionsList[existingIdx].rateExpression,
-              rxn.rateExpression
-            );
-          }
-        }
-
-        debugNetworkLog(`[NetworkGenerator] Added synthesis reaction: 0 -> [${productIndices.join(', ')}]`);
       }
+
+      debugNetworkLog(`[NetworkGenerator] Added synthesis reaction: 0 -> [${productIndices.join(', ')}]`);
     }
 
     let iteration = 0;
@@ -930,9 +928,9 @@ export class NetworkGenerator {
             );
           }
 
-          // Apply each rule to current species
-          for (let ruleIdx = 0; ruleIdx < rules.length; ruleIdx++) {
-            const rule = rules[ruleIdx];
+          // Apply each reactive rule to current species
+          for (let ruleIdx = 0; ruleIdx < reactiveRules.length; ruleIdx++) {
+            const rule = reactiveRules[ruleIdx];
             if (signal?.aborted) {
               throw new DOMException('Network generation cancelled', 'AbortError');
             }
@@ -965,12 +963,7 @@ export class NetworkGenerator {
             if (ruleProcessed.has(currentCanonical)) continue;
             ruleProcessed.add(currentCanonical);
 
-            if (rule.reactants.length === 0) {
-              // Synthesis rule (0 -> X): Skip in network generation loop
-              // Synthesis rules are zero-order and don't depend on existing species
-              // They are handled separately by adding products directly
-              continue;
-            } else if (rule.reactants.length === 1) {
+            if (rule.reactants.length === 1) {
               // Unimolecular rule
               if (shouldLogNetworkGenerator) {
                 debugNetworkLog(
@@ -1057,8 +1050,11 @@ export class NetworkGenerator {
 
     const totalTime = ((Date.now() - this.startTime) / 1000).toFixed(2);
 
-    // MEDIUM BUG FIX: Warn when maxIterations limit was reached
-    if (iteration >= this.options.maxIterations && queue.length > 0) {
+    const isIterationLimitReached = iteration >= this.options.maxIterations;
+    const hasRemainingQueue = queue.length > 0;
+
+    // NOTE: Warn when maxIterations limit was reached
+    if (isIterationLimitReached && hasRemainingQueue) {
       console.warn(`[NetworkGenerator] WARNING: maxIterations limit (${this.options.maxIterations}) reached with ${queue.length} species still in queue. Network may be incomplete.`);
     }
 
@@ -2367,6 +2363,10 @@ export class NetworkGenerator {
         for (const candidateIdx of candidates) {
           // BNG2 Rule: For N-ary, partners can be ANY species in the network so far.
           const candidateSpecies = allSpecies[candidateIdx];
+          // O(1) early structural pruning before calling any matches/isomorphisms
+          if (!GraphMatcher.canPossiblyMatch(nextPattern, candidateSpecies.graph)) {
+            continue;
+          }
           let allCandMaps: MatchMap[];
           if (rule.isMatchOnce || isCarryThroughPattern) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
@@ -3082,12 +3082,7 @@ export class NetworkGenerator {
     // This corrects for overcounting when the pattern is symmetric (see auto_activation_loop).
     let patternAutomorphismFactor = 1;
     for (const pattern of patterns) {
-      try {
-        const autos = GraphMatcher.findAllMaps(pattern, pattern);
-        patternAutomorphismFactor *= (autos.length || 1);
-      } catch (err) {
-        console.warn('[NetworkGenerator] Failed to compute automorphisms for pattern:', pattern.toString(), err);
-      }
+      patternAutomorphismFactor *= GraphMatcher.getMoleculeAutomorphismFactor(pattern);
     }
 
     // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
@@ -3132,7 +3127,7 @@ export class NetworkGenerator {
     // (e.g. A+A→B state-change, logistic carrying-capacity terms like R+R→R),
     // BNG2 writes the full rate constant k in the NET (no 0.5 prefix).
     // The web was incorrectly writing 0.5*k because multiplicity = 1/2 was baked into storedRate.
-    // Fix: split the ruleSymmetryFactor (1/2) into a separate propensityFactor field so that:
+    // NOTE: split the ruleSymmetryFactor (1/2) into a separate propensityFactor field so that:
     //   - NET file writes the full k (matches BNG2 convention for non-bond rules)
     //   - ODE/SSA simulation kernels apply propensityFactor implicitly (already do this)
     //
@@ -3184,7 +3179,7 @@ export class NetworkGenerator {
       storedRate,
       rule.name,
       {
-        degeneracy: 1, // Fix: Multiplicity is already in storedRate. ODE loop applies degeneracy again, so set to 1.
+        degeneracy: 1, // NOTE: Multiplicity is already in storedRate. ODE loop applies degeneracy again, so set to 1.
         propensityFactor: storedPropensityFactor,
         statFactor: storedExprScaleFactor,
         rateExpression: finalRateExpr,
@@ -3256,7 +3251,7 @@ export class NetworkGenerator {
     const productGraphs: SpeciesGraph[] = [];
     const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules surviving in products
     const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
-    const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // FIX: Track where survivors ended up
+    const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // NOTE: Track where survivors ended up
 
     // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
     const matchedReactantKeys = new Set<string>();
@@ -3416,7 +3411,7 @@ export class NetworkGenerator {
           productGraphs.push(subgraph);
           const graphIdx = productGraphs.length - 1;
 
-          // FIX: Track survivor locations
+          // NOTE: Track survivor locations
           for (let i = 0; i < subgraph.molecules.length; i++) {
             const mol = subgraph.molecules[i];
             if (mol._sourceKey) {
@@ -3431,7 +3426,7 @@ export class NetworkGenerator {
       }
     }
 
-    // FIX: Pre-calculate component state changes for MoveConnected rules
+    // NOTE: Pre-calculate component state changes for MoveConnected rules
     // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
     const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
     if ((rule as any).isMoveConnected) {
@@ -3439,7 +3434,7 @@ export class NetworkGenerator {
         const rg = reactantGraphs[ri];
 
         // Map of survivors in THIS reactant graph
-        // FIX: Track survivor locations
+        // NOTE: Track survivor locations
         for (const [mIdx, loc] of survivorLocations[ri].entries()) {
           const oldMol = rg.molecules[mIdx];
           const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
@@ -3643,7 +3638,7 @@ export class NetworkGenerator {
             const oldMol = rg.molecules[oldIdx];
             const newMol = this.cloneMoleculeStructure(oldMol);
 
-            // FIX: Apply MoveConnected deltas to bystanders
+            // NOTE: Apply MoveConnected deltas to bystanders
             if ((rule as any).isMoveConnected && anchors.size > 0) {
               // Use the first available anchor to determine the delta
               const anchorKey = anchors.keys().next().value;
@@ -3950,7 +3945,7 @@ export class NetworkGenerator {
         const comp = rg.compartment || (rg.molecules.length > 0 ? rg.molecules[0].compartment : undefined);
         if (comp) {
           // Get compartment dimension if available
-          const compInfo = this.options.compartments?.find(c => c.name === comp);
+          const compInfo = this.compartmentMap.get(comp);
           const dim = compInfo ? compInfo.dimension : 3; // Default to 3D if unknown
 
           if (shouldLogNetworkGenerator) {
@@ -5036,7 +5031,7 @@ export class NetworkGenerator {
     // 1. First, map wildcard components (!+) to bound product components
     // 2. Then, map unbound pattern components to unbound product components
     // 3. Finally, map new-bond pattern components to remaining unbound product components
-    // CRITICAL FIX: Build reverse lookup from product pattern molecule to reactant pattern molecule
+    // CRITICAL NOTE: Build reverse lookup from product pattern molecule to reactant pattern molecule
     // This allows us to use the matcher's componentMap for exact component identification
     const productToReactantPattern = new Map<number, {
       reactantIdx: number,
@@ -5045,8 +5040,10 @@ export class NetworkGenerator {
     for (const [pMolIdx, mapping] of productPatternToReactant.entries()) {
       const match = matches[mapping.reactantIdx];
       if (!match) continue;
+
+      const expectedTargetMolIdx = mapping.targetMolIdx;
       for (const [rpMolIdx, tMolIdx] of match.moleculeMap.entries()) {
-        if (tMolIdx === mapping.targetMolIdx) {
+        if (tMolIdx === expectedTargetMolIdx) {
           productToReactantPattern.set(pMolIdx, {
             reactantIdx: mapping.reactantIdx,
             reactantPatternMolIdx: rpMolIdx
@@ -5116,12 +5113,12 @@ export class NetworkGenerator {
         let preserveOptionalWildcardBond = false;
         const isBound = (idx: number) => productGraph.adjacency.has(`${productMolIdx}.${idx}`);
 
-        // CRITICAL FIX: First try to use componentMap for exact component identification
         const prMapping = productToReactantPattern.get(pMolIdx);
         if (prMapping) {
-          const match = matches[prMapping.reactantIdx];
+          const mappedReactantIdx = prMapping.reactantIdx;
+          const match = matches[mappedReactantIdx];
           const reactantPatternsArr = reactantPatterns instanceof Array ? reactantPatterns : [reactantPatterns]; // Safety check
-          const reactantPatternMol = reactantPatternsArr[prMapping.reactantIdx].molecules[prMapping.reactantPatternMolIdx];
+          const reactantPatternMol = reactantPatternsArr[mappedReactantIdx].molecules[prMapping.reactantPatternMolIdx];
 
           if (!pComp.wildcard && pComp.edges.size === 0) {
             let seen = 0;
@@ -5146,7 +5143,9 @@ export class NetworkGenerator {
 
             // Look up exact target component via componentMap
             const compKey = `${prMapping.reactantPatternMolIdx}.${rpCompIdx}`;
-            const targetKey = match.componentMap.get(compKey);
+            // NOTE: First try to use componentMap for exact component identification
+            const exactComponentMapTarget = match.componentMap.get(compKey);
+            const targetKey = exactComponentMapTarget;
 
             if (!targetKey) continue;
             const idx = Number(targetKey.split('.')[1]);
@@ -5186,18 +5185,20 @@ export class NetworkGenerator {
               }
             } else {
               // No wildcard, no bond in product pattern.
-              // CRITICAL FIX: If the REACTANT pattern had a !? wildcard on this component,
+              // NOTE: If the REACTANT pattern had a !? wildcard on this component,
               // the bond state should be PRESERVED (allow either bound or unbound).
               // This is essential for transport rules like:
               //   @PM:R(tf~pY!?) -> @EM:R(tf~pY)
               // where the tf component may be bound to TF or P in CP.
               // Only enforce "explicitly unbound" if reactant pattern also expected unbound.
               const reactantExplicitlyUnbound = reactantPatternComp.wildcard === '-';
+              const reactantHadOptionalWildcard = reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard;
+
               if (reactantExplicitlyUnbound) {
                 // Reactant pattern explicitly expected unbound, product should be unbound
                 if (bound) continue;
                 markExplicitUnbound = true;
-              } else if (reactantPatternComp.wildcard === '?' && !reactantPatternComp.syntheticWildcard) {
+              } else if (reactantHadOptionalWildcard) {
                 // BNG2 semantics: EXPLICITLY written !? in reactant means the bond ALWAYS
                 // carries through to the product — the rule does not modify the bond on this
                 // component regardless of how the product pattern writes it.
@@ -5626,18 +5627,20 @@ export class NetworkGenerator {
     signal?: AbortSignal
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
+
+    // 1. Try finding an isomorphic species first using the fingerprint index to avoid canonicalization
+    const isomorphic = this.findIsomorphicSpecies(graph, speciesByFingerprint);
+    if (isomorphic) {
+      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
+      return isomorphic;
+    }
+
+    // 2. Not isomorphic to any known species; canonicalize it now
     const canonical = profiledCanonicalize(graph);
 
     if (speciesMap.has(canonical)) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
       return speciesMap.get(canonical)!;
-    }
-
-    const isomorphic = this.findIsomorphicSpecies(graph, speciesByFingerprint);
-    if (isomorphic) {
-      speciesMap.set(canonical, isomorphic);
-      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      return isomorphic;
     }
 
     if (speciesList.length >= this.options.maxSpecies) {

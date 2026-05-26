@@ -192,14 +192,63 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
       const candidateModulePaths = ['../../utils/safeExpressionEvaluator'];
       try {
         // Prefer absolute file path candidates in Node ESM/CJS interop contexts.
-        const { fileURLToPath } = (globalThis as any).require('url');
-        const resolvedNoExt = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url));
-        candidateModulePaths.unshift(resolvedNoExt, `${resolvedNoExt}.js`, `${resolvedNoExt}.ts`);
+        let fileURLToPath;
+        try {
+            fileURLToPath = (globalThis as any).require('url')?.fileURLToPath;
+        } catch {
+            fileURLToPath = null;
+        }
+        if (typeof fileURLToPath === 'function') {
+           const resolvedNoExt = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url));
+           candidateModulePaths.unshift(resolvedNoExt, `${resolvedNoExt}.js`, `${resolvedNoExt}.ts`);
+        }
       } catch {
         // Ignore and fall back to relative path only.
       }
 
       for (const modulePath of candidateModulePaths) {
+        // Validate the path against expected safe absolute/relative paths to prevent traversal.
+        // We only allow exactly the hardcoded relative path, or absolute paths derived directly from it.
+        let isSafePath = false;
+        if (modulePath === '../../utils/safeExpressionEvaluator') {
+          isSafePath = true;
+        } else if (typeof modulePath === 'string') {
+          const normalizedPath = modulePath.replace(/\\/g, '/');
+          let resolvedBase: string | null = null;
+
+          try {
+            let fileURLToPath;
+            try {
+               fileURLToPath = (globalThis as any).require('url')?.fileURLToPath;
+            } catch {
+               fileURLToPath = null;
+            }
+            if (typeof fileURLToPath === 'function') {
+              resolvedBase = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url)).replace(/\\/g, '/');
+            }
+          } catch {
+             // Fallback
+          }
+
+          if (resolvedBase && (normalizedPath === resolvedBase || normalizedPath === `${resolvedBase}.js` || normalizedPath === `${resolvedBase}.ts`)) {
+             isSafePath = true;
+          } else if (!resolvedBase) {
+             // Strict exact string match validation to prevent path traversal with malicious prefixes
+             if (normalizedPath === '../../utils/safeExpressionEvaluator' ||
+                 normalizedPath === '../../utils/safeExpressionEvaluator.js' ||
+                 normalizedPath === '../../utils/safeExpressionEvaluator.ts' ||
+                 normalizedPath === './utils/safeExpressionEvaluator' ||
+                 normalizedPath === './utils/safeExpressionEvaluator.js' ||
+                 normalizedPath === './utils/safeExpressionEvaluator.ts') {
+                 isSafePath = true;
+             }
+          }
+        }
+
+        if (!isSafePath) {
+          continue;
+        }
+
         try {
           const mod = (globalThis as any).require(modulePath);
           const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;

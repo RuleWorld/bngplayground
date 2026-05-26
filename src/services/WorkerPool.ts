@@ -206,7 +206,7 @@ export class WorkerPool {
       crypto.getRandomValues(arr);
       taskId = `${Date.now().toString(36)}-${arr[0].toString(36)}${arr[1].toString(36)}`;
     } else {
-      taskId = `${Date.now().toString(36)}-${Math.random().toString(36).substring(7)}`;
+      throw new Error("Secure random generation is unavailable in this environment");
     }
 
     const task: WorkerTask<T> = { id: taskId, type, data };

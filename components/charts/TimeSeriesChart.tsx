@@ -350,12 +350,16 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
           <span className="text-[9px] font-bold text-slate-400 uppercase tracking-widest mr-2">Scale</span>
           <button
             onClick={() => { setXAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
+            aria-pressed={xAxisScale === 'log'}
+            aria-label={`Switch X-axis. Currently ${xAxisScale} scale`}
             className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             X: {xAxisScale.toUpperCase()}
           </button>
           <button
             onClick={() => { setYAxisScale(s => s === 'linear' ? 'log' : 'linear'); setZoomHistory([]); }}
+            aria-pressed={yAxisScale === 'log'}
+            aria-label={`Switch Y-axis. Currently ${yAxisScale} scale`}
             className={`px-2 py-0.5 text-[10px] font-semibold rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300'}`}
           >
             Y: {yAxisScale.toUpperCase()}

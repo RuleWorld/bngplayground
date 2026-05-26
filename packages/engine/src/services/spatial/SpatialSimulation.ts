@@ -43,6 +43,7 @@ export class SpatialSimulation {
   private stepCount = 0;
 
   private geometries: CompartmentGeometry[] = [];
+  private geometryMap: Map<number, CompartmentGeometry> = new Map();
   private moleculeTypes: Map<number, SpatialMoleculeType> = new Map();
   private speciesNames: Map<number, string> = new Map();
   private compartmentMap: Map<string, number> = new Map();
@@ -84,6 +85,11 @@ export class SpatialSimulation {
 
     if (this.config.geometry === 'auto') {
       this.geometries = autoGenerateGeometry(compartments);
+    }
+
+    this.geometryMap.clear();
+    for (const geom of this.geometries) {
+      this.geometryMap.set(geom.compartmentId, geom);
     }
 
     this.buildSpeciesIndex();
@@ -217,7 +223,7 @@ export class SpatialSimulation {
     if (!this.model) return;
 
     for (const [idx, name] of this.speciesNames) {
-      const spec = this.model.species.find(s => s.name === name);
+      const spec = this.model.species[idx];
       if (!spec) continue;
       const amount = Math.round(spec.initialConcentration);
       if (amount <= 0) continue;
@@ -228,7 +234,7 @@ export class SpatialSimulation {
         compartmentId = this.compartmentMap.get(match[1]) ?? 0;
       }
 
-      const geom = this.geometries.find(g => g.compartmentId === compartmentId) ?? this.geometries[0];
+      const geom = this.geometryMap.get(compartmentId) ?? this.geometries[0];
 
       for (let j = 0; j < amount; j++) {
         const pos = this.randomPositionInGeometry(geom);
@@ -315,9 +321,7 @@ export class SpatialSimulation {
   }
 
   private reflectBoundary(mol: ActiveMolecule): void {
-    const geom = this.geometries.find(g =>
-      g.compartmentId === mol.compartmentId || mol.compartmentId === -1
-    ) ?? this.geometries[0];
+    const geom = this.geometryMap.get(mol.compartmentId === -1 ? 0 : mol.compartmentId) ?? this.geometries[0];
     if (!geom) return;
 
     if (geom.shape === 'box' && geom.halfExtents) {

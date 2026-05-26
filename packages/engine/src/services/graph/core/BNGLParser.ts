@@ -65,12 +65,13 @@ export class BNGLParser {
 
     for (const molStr of moleculeStrings) {
       const molecule = this.parseMolecule(molStr.trim());
-      // Handle molecule-level compartment suffix if not already handled globally
-      if (!globalCompartment) {
-        const molMatch = molStr.trim().match(/^(.+)@([A-Za-z0-9_]+)$/);
-        if (molMatch) {
-          molecule.compartment = molMatch[2];
-        }
+      // Always check for suffix compartment first (e.g., TLR3()@Cyt)
+      const molMatch = molStr.trim().match(/^(.+?)@([A-Za-z0-9_]+)$/);
+      if (molMatch) {
+        molecule.compartment = molMatch[2];
+      } else if (globalCompartment) {
+        // Only use global compartment prefix as fallback (e.g., @Cyt:TLR3())
+        molecule.compartment = globalCompartment;
       }
       graph.molecules.push(molecule);
     }
@@ -306,7 +307,7 @@ export class BNGLParser {
     }
 
     // Parse name and components
-    // FIX: Molecule name must start with letter or underscore (not number or wildcard)
+    // Molecule name must start with letter or underscore (not number or wildcard)
     // Allow '*' for wildcard molecule patterns
     const parseMoleculeFields = (input: string): { name: string; componentStr: string; moleculeWildcard?: string; suffixCompartment?: string } | null => {
       const str = input.trim();
@@ -321,7 +322,8 @@ export class BNGLParser {
       if (first === '*') {
         idx = 1;
       } else {
-        if (!/[A-Za-z_]/.test(first)) return null;
+        const isValidFirstChar = /[A-Za-z_]/.test(first);
+        if (!isValidFirstChar) return null;
         idx++;
         while (idx < str.length && /[A-Za-z0-9_]/.test(str[idx])) idx++;
       }
@@ -426,7 +428,7 @@ export class BNGLParser {
     const states = stateParts.slice(1);
     const component = new Component(name, states);
     if (states.length > 0) component.state = states[0];
-    // FIX: Handle '?' or '*' as "any state" wildcard in BNGL
+    // NOTE: Handle '?' or '*' as "any state" wildcard in BNGL
     if (component.state === '*' || component.state === '?') {
       component.state = '?';
     }
@@ -443,7 +445,7 @@ export class BNGLParser {
         // BioNetGen semantic: "." explicitly means UNBOUND
         component.wildcard = '-';
       } else {
-        // FIX: Allow '0' as a valid bond label (common in BNG2)
+        // NOTE: Allow '0' as a valid bond label (common in BNG2)
         const bond = parseInt(bondPart);
         if (!isNaN(bond) && bond >= 0) {
           component.edges.set(bond, -1);
@@ -499,8 +501,8 @@ export class BNGLParser {
           depth--;
           current += char;
         } else if (depth === 0 && char === '+') {
-          // PROPOSED FIX: Check if preceded by '!'. If so, it's a wildcard '!+', not a separator.
-          const prev = i > 0 ? segment[i - 1] : '';
+          // Check if preceded by '!'. If so, it's a wildcard '!+', not a separator.
+          const prev = current.trimEnd().endsWith('!') ? '!' : '';
           if (prev === '!') {
             current += char;
           } else {
@@ -756,7 +758,7 @@ export class BNGLParser {
           }
         }
 
-        const result = evaluateExpressionHighPrecision(expr, evalParams, functions);
+        const result = evaluateExpressionHighPrecision(expr, evalParams, functions, true);
         if (!isNaN(result)) {
           return result;
         }
@@ -826,7 +828,7 @@ export class BNGLParser {
             evalParams.set(obs, 1.0);
           }
         }
-        return evaluateExpressionHighPrecision(expr, evalParams, functions);
+        return evaluateExpressionHighPrecision(expr, evalParams, functions, true);
       }
 
       // Use SafeExpressionEvaluator for safe evaluation instead of new Function

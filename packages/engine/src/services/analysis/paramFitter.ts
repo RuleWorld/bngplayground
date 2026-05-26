@@ -127,7 +127,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
   const totalPoints = sharedObs.length * timePoints.length;
   const sseHistory: number[] = [];
-  let nEval = 0;
+
 
   const useLog: boolean[] = paramBounds.map(b => b.min > 0);
   const encode = (p: number[]): number[] =>
@@ -157,32 +157,65 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
       let sse = 0;
       const dataRows = simResult.data;
+      
+      // Pre-calculate interpolation brackets for all time points once
+      const timeBrackets = timePoints.map(t => {
+        let low = 0;
+        let high = dataRows.length - 1;
+        while (low <= high) {
+          const mid = (low + high) >>> 1;
+          const midTime = dataRows[mid].time;
+          if (Math.abs(midTime - t) < 1e-12) return { exact: true, idx: mid, low: 0, high: 0, alpha: 0 };
+          if (midTime < t) low = mid + 1;
+          else high = mid - 1;
+        }
+        if (low <= 0) return { exact: true, idx: 0, low: 0, high: 0, alpha: 0 };
+        if (low >= dataRows.length) return { exact: true, idx: dataRows.length - 1, low: 0, high: 0, alpha: 0 };
+        
+        const t0 = dataRows[low - 1].time;
+        const t1 = dataRows[low].time;
+        return {
+          exact: false,
+          idx: 0,
+          low: low - 1,
+          high: low,
+          alpha: t1 > t0 ? (t - t0) / (t1 - t0) : 0
+        };
+      });
+
       for (const obs of sharedObs) {
-        const simVals = timePoints.map(t => {
-          const row =
-            dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-            interpolateRow(dataRows, t);
-          return row?.[obs] ?? 0;
-        });
         const obsData = observed[obs];
-        for (let i = 0; i < simVals.length; i++) {
-          const diff = simVals[i] - obsData[i];
+        for (let i = 0; i < timePoints.length; i++) {
+          const b = timeBrackets[i];
+          let simVal: number;
+          if (b.exact) {
+            simVal = dataRows[b.idx][obs] ?? 0;
+          } else {
+            const v0 = dataRows[b.low][obs] ?? 0;
+            const v1 = dataRows[b.high][obs] ?? 0;
+            simVal = v0 + b.alpha * (v1 - v0);
+          }
+          const diff = simVal - obsData[i];
           sse += diff * diff;
         }
       }
 
       if (constraints.length > 0) {
         const obsMap = new Map<string, number[]>();
-        for (const obs of model.observables.map(o => o.name)) {
-          obsMap.set(
-            obs,
-            timePoints.map(t => {
-              const row =
-                dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-                interpolateRow(dataRows, t);
-              return row?.[obs] ?? 0;
-            })
-          );
+        const allModelObs = model.observables.map(o => o.name);
+        for (const obs of allModelObs) {
+          const vals = new Array(timePoints.length);
+          for (let i = 0; i < timePoints.length; i++) {
+            const b = timeBrackets[i];
+            if (b.exact) {
+              vals[i] = dataRows[b.idx][obs] ?? 0;
+            } else {
+              const v0 = dataRows[b.low][obs] ?? 0;
+              const v1 = dataRows[b.high][obs] ?? 0;
+              vals[i] = v0 + b.alpha * (v1 - v0);
+            }
+          }
+          obsMap.set(obs, vals);
         }
         const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
         sse += bpslWeight * bpslResult.totalPenalty;
@@ -198,7 +231,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
         sse += regResult.penalty;
       }
 
-      nEval++;
+
       return isFinite(sse) ? sse : 1e12;
     } catch {
       return 1e12;
@@ -277,13 +310,10 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
             let sse = 0;
             const dataRows = simResult.data;
+            const interpRows = timePoints.map(t => interpolateRow(dataRows, t));
+
             for (const obs of sharedObs) {
-              const simVals = timePoints.map(t => {
-                const row =
-                  dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-                  interpolateRow(dataRows, t);
-                return row?.[obs] ?? 0;
-              });
+              const simVals = interpRows.map(row => row?.[obs] ?? 0);
               const obsData = observed[obs];
               for (let i = 0; i < simVals.length; i++) {
                 const diff = simVals[i] - obsData[i];
@@ -296,12 +326,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
               for (const obs of model.observables.map(o => o.name)) {
                 obsMap.set(
                   obs,
-                  timePoints.map(t => {
-                    const row =
-                      dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-                      interpolateRow(dataRows, t);
-                    return row?.[obs] ?? 0;
-                  })
+                  interpRows.map(row => row?.[obs] ?? 0)
                 );
               }
               const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
@@ -391,15 +416,11 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
       ...simOptions,
     });
 
+    const finalInterpRows = timePoints.map(t => interpolateRow(finalSim.data, t));
+
     for (const obs of sharedObs) {
       bestPredictions.set(obs,
-        timePoints.map(t => {
-          const dataRows = finalSim.data;
-          const row =
-            dataRows.find(r => Math.abs(r.time - t) < 1e-12) ??
-            interpolateRow(dataRows, t);
-          return row?.[obs] ?? 0;
-        })
+        finalInterpRows.map(row => row?.[obs] ?? 0)
       );
     }
 
@@ -418,12 +439,7 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
       for (const obs of model.observables.map(o => o.name)) {
         obsMap.set(
           obs,
-          timePoints.map(t => {
-            const row =
-              finalSim.data.find(r => Math.abs(r.time - t) < 1e-12) ??
-              interpolateRow(finalSim.data, t);
-            return row?.[obs] ?? 0;
-          })
+          finalInterpRows.map(row => row?.[obs] ?? 0)
         );
       }
       bpslResults = evaluateBPSL(constraints, timePoints, obsMap);
@@ -556,17 +572,38 @@ function interpolateRow(
   t: number
 ): Record<string, number> | null {
   if (!rows.length) return null;
-  const times = rows.map(r => r.time as number);
-  const idx = times.findIndex(rt => rt >= t);
-  if (idx <= 0) return rows[0];
-  if (idx >= rows.length) return rows[rows.length - 1];
-  const t0 = times[idx - 1], t1 = times[idx];
+  let low = 0;
+  let high = rows.length - 1;
+
+  // Check bounds
+  if (t <= rows[0].time) return rows[0];
+  if (t >= rows[high].time) return rows[high];
+
+  // Binary search for bracket
+  while (low <= high) {
+    const mid = (low + high) >>> 1;
+    const midTime = rows[mid].time;
+    if (Math.abs(midTime - t) < 1e-12) {
+      return rows[mid];
+    }
+    if (midTime < t) {
+      low = mid + 1;
+    } else {
+      high = mid - 1;
+    }
+  }
+
+  const r0 = rows[low - 1];
+  const r1 = rows[low];
+  const t0 = r0.time;
+  const t1 = r1.time;
   const alpha = t1 > t0 ? (t - t0) / (t1 - t0) : 0;
-  const result: Record<string, number> = { time: t } as any;
-  for (const key of Object.keys(rows[idx])) {
+  
+  const result: Record<string, number> = { time: t };
+  for (const key in r1) {
     if (key === 'time') continue;
-    const v0 = rows[idx - 1][key] as number;
-    const v1 = rows[idx][key] as number;
+    const v0 = r0[key] ?? 0;
+    const v1 = r1[key] ?? 0;
     result[key] = v0 + alpha * (v1 - v0);
   }
   return result;

@@ -63,8 +63,8 @@ function findBnglFiles(): Map<string, string> {
 
 // Use the manifest to find ALL bng2_compatible models, not just those in the parity report
 const MANIFEST = path.resolve('artifacts/rulehub-export/manifest.json');
-const manifest: Array<{ id: string; path: string; bng2_compatible: boolean }> = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
-const bng2Models = manifest.filter(m => m.bng2_compatible && !m.path?.includes(EXCLUDED_MODEL_PATH_SUBSTRING));
+const manifest: Array<{ id: string; path: string; bng2_compatible?: boolean; compatibility?: { bng2?: boolean } }> = JSON.parse(fs.readFileSync(MANIFEST, 'utf8'));
+const bng2Models = manifest.filter(m => (m.bng2_compatible || m.compatibility?.bng2) && !m.path?.includes(EXCLUDED_MODEL_PATH_SUBSTRING));
 
 const existingGdat = new Set(
   fs.readdirSync(GDAT_DIR).filter(f => f.endsWith('.gdat')).map(f => normalizeKey(f.replace('.gdat', '')))

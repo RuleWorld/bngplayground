@@ -854,6 +854,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             <span className="text-xs text-slate-500 dark:text-slate-300 mr-1">Scale:</span>
             <button
               onClick={handleXScaleChange}
+              aria-pressed={xAxisScale === 'log'}
               className={`px-2 py-1 text-xs font-medium rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               title="Toggle X-axis scale (resets zoom)"
             >
@@ -861,6 +862,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             </button>
             <button
               onClick={handleYScaleChange}
+              aria-pressed={yAxisScale === 'log'}
               className={`px-2 py-1 text-xs font-medium rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               title="Toggle Y-axis scale (resets zoom)"
             >
@@ -882,7 +884,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
           <Dropdown
             direction="up"
             trigger={
-              <button className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md shadow-sm text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-colors">
+              <button aria-label="Export options" className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md shadow-sm text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-colors">
                 <span>📥 Export</span>
                 <ChevronDownIcon className="w-3 h-3 text-slate-400" />
               </button>

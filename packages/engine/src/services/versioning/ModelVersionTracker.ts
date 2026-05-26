@@ -328,8 +328,8 @@ function generateId(): string {
             crypto.getRandomValues(arr);
             return Date.now().toString(36) + arr[0].toString(36) + arr[1].toString(36);
         } catch {
-            // Final fallback to Math.random if crypto is completely unavailable (e.g., extremely old environments)
-            return Date.now().toString(36) + Math.random().toString(36).slice(2, 10);
+            // Fail securely if crypto is completely unavailable
+            throw new Error("Secure random generation is unavailable in this environment");
         }
     }
 }
