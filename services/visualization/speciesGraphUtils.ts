@@ -90,8 +90,7 @@ export const buildVisualizationMolecule = (
       visualComponent.bondRequirement = null;
     }
 
-    const bonds = Array.from(component.edges.entries());
-    if (bonds.length > 0) {
+    if (component.edges.size > 0) {
       const partnerKeys = graph.adjacency.get(`${molIdx}.${compIdx}`);
       if (partnerKeys && partnerKeys.length > 0) {
         const partnerKey = partnerKeys[0]; // Use first partner for visualization
@@ -101,8 +100,19 @@ export const buildVisualizationMolecule = (
         const partnerMolecule = graph.molecules[partnerMolIdx];
         const partnerComponent = partnerMolecule?.components[partnerCompIdx];
         if (partnerMolecule && partnerComponent) {
-          const match = bonds.find(([, targetCompIdx]) => targetCompIdx === partnerCompIdx);
-          const bondLabel = match ? match[0] : bonds[0]?.[0];
+          let bondLabel: number | undefined;
+
+          for (const [key, val] of component.edges.entries()) {
+            if (val === partnerCompIdx) {
+              bondLabel = key;
+              break;
+            }
+          }
+
+          if (bondLabel === undefined) {
+            bondLabel = component.edges.keys().next().value;
+          }
+
           if (bondLabel !== undefined) {
             visualComponent.bondLabel = `!${bondLabel}`;
             visualComponent.bondPartner = `${partnerMolecule.name}:${partnerComponent.name}`;
