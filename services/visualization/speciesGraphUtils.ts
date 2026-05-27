@@ -311,17 +311,30 @@ export const detectStateChanges = (
   });
 
   // Match molecules by name and position
-  const usedProductIdx = new Set<number>();
+  // Group product molecules by name for O(1) lookups
+  const productMoleculesByName = new Map<string, number[]>();
+  productMolecules.forEach((prodMol, idx) => {
+    let list = productMoleculesByName.get(prodMol.name);
+    if (!list) {
+      list = [];
+      productMoleculesByName.set(prodMol.name, list);
+    }
+    list.push(idx);
+  });
+
+  // Track how many of each molecule name we've used
+  const productMoleculesUsedCount = new Map<string, number>();
 
   reactantMolecules.forEach((reactantMol) => {
     // Find matching product molecule by name (first unused one)
-    const productIdx = productMolecules.findIndex((prodMol, idx) => {
-      return !usedProductIdx.has(idx) && prodMol.name === reactantMol.name;
-    });
+    const availableProducts = productMoleculesByName.get(reactantMol.name);
+    const usedCount = productMoleculesUsedCount.get(reactantMol.name) ?? 0;
 
-    if (productIdx === -1) return; // Molecule was deleted
+    if (!availableProducts || usedCount >= availableProducts.length) return; // Molecule was deleted
 
-    usedProductIdx.add(productIdx);
+    const productIdx = availableProducts[usedCount];
+    productMoleculesUsedCount.set(reactantMol.name, usedCount + 1);
+
     const productMol = productMolecules[productIdx];
 
     // Compare components between matched molecules
