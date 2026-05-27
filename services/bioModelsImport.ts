@@ -89,16 +89,6 @@ const isLikelySbml = (text: string): boolean => {
 
 const isLikelyHtml = (text: string): boolean => HTML_TAG_RE.test(stripBom(text).slice(0, 4096));
 
-const debugEnabled =
-  typeof process !== 'undefined' &&
-  !!process.env &&
-  process.env.BIOMODELS_IMPORT_DEBUG === '1';
-
-const debugLog = (...args: unknown[]): void => {
-  if (!debugEnabled) return;
-  console.log('[bioModelsImport]', ...args);
-};
-
 const withTimeout = async <T>(
   promise: Promise<T>,
   ms: number,
@@ -279,14 +269,6 @@ const fetchAttempt = async (
     /\.omex\b|\.zip\b/.test(contentDisposition) ||
     /\.omex(?:$|[?#])|\.zip(?:$|[?#])/.test(lowerResolvedUrl);
 
-  debugLog(
-    `fetched ${normalizedId}`,
-    `status=${response.status}`,
-    `url=${resolvedUrl}`,
-    `content-type=${contentType || 'n/a'}`,
-    `archiveHint=${archiveHint}`
-  );
-
   if (!archiveHint) {
     const text = await withTimeout(
       response.text(),
@@ -294,10 +276,8 @@ const fetchAttempt = async (
       `BioModels response body read (text) ${normalizedId}`,
       () => controller?.abort()
     );
-    debugLog('text read ok', `chars=${text.length}`);
 
     if (isLikelySbml(text)) {
-      debugLog('payload identified as SBML text');
       return {
         normalizedId,
         sbmlText: text,
@@ -336,10 +316,8 @@ const fetchAttempt = async (
     }
   );
   const bytes = new Uint8Array(raw);
-  debugLog('arrayBuffer read ok', `bytes=${bytes.byteLength}`);
 
   if (looksLikeZip(bytes)) {
-    debugLog('payload looks like ZIP/OMEX');
     const { sbmlText, sourceEntry } = await extractSbmlFromOmex(bytes);
     return {
       normalizedId,
@@ -351,7 +329,6 @@ const fetchAttempt = async (
 
   const text = new TextDecoder('utf-8').decode(bytes);
   if (isLikelySbml(text)) {
-    debugLog('payload identified as SBML text');
     return {
       normalizedId,
       sbmlText: text,
