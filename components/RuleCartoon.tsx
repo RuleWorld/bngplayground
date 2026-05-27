@@ -93,13 +93,26 @@ const annotateRule = (rule: VisualizationRule): AnnotatedVisualization => {
       const annotatedProduct = productComplex[productMatchIdx];
       const productComponentUsage = new Set<number>();
 
+      const candidateMap = new Map<string, number[]>();
+      annotatedProduct.components.forEach((candidate, idx) => {
+        if (!candidateMap.has(candidate.name)) {
+          candidateMap.set(candidate.name, []);
+        }
+        candidateMap.get(candidate.name)!.push(idx);
+      });
+
       annotatedReactant.components = annotatedReactant.components.map((component) => {
-        const candidateIdx = annotatedProduct.components.findIndex((candidate, idx) => {
-          if (productComponentUsage.has(idx)) {
-            return false;
+        const indices = candidateMap.get(component.name);
+        let candidateIdx = -1;
+
+        if (indices) {
+          for (const idx of indices) {
+            if (!productComponentUsage.has(idx)) {
+              candidateIdx = idx;
+              break;
+            }
           }
-          return candidate.name === component.name;
-        });
+        }
 
         if (candidateIdx === -1) {
           return { ...component, role: 'transformed' };
