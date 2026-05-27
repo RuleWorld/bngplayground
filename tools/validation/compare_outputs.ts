@@ -169,10 +169,6 @@ const CSV_MODEL_ALIASES: Record<string, string> = {
   jaruszewicz2023: 'Jaruszewicz-Blonska_2023',
   // Tutorials that have different ref file names
   babtutorial: 'bab',
-  // Fix wrong fuzzy matches (keys normalized: lowercase, no special chars)
-  caspaseactivationloop: 'caspase-activation-loop',
-  fgfsignalingpathway: 'fgf-signaling-pathway',
-  baruafceri2012: 'BaruaFceRI_2012',
   mallela2022alabama: 'Alabama',
   pybngdegranulationmodel: 'degranulation_model',
   pybngegfrode: 'egfr_ode',
@@ -673,6 +669,12 @@ function getMultiPhaseReference(
 
   function findBestBnglForCsv(csvFile: string, bnglFilePaths: string[]): string | null {
     const raw = csvModelLabel(csvFile);
+    const rawBase = raw.toLowerCase();
+
+    // First, try exact unnormalized match (ignoring case)
+    const exactRaw = bnglFilePaths.find((fp) => path.basename(fp).replace(/\.bngl$/i, '').toLowerCase() === rawBase);
+    if (exactRaw) return exactRaw;
+
     const tokens = raw.toLowerCase().split(/[^a-z0-9]+/).filter(Boolean);
     const modelKey = normalizeKey(raw);
 
