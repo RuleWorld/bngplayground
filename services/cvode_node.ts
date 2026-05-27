@@ -50,20 +50,15 @@ try {
 
 // Re-export the CVODE module creation function
 export default async function createCVodeModule(config = {}): Promise<any> {
-  console.log('[cvode_node] Starting createCVodeModule...');
   try {
-    console.log('[cvode_node] Polyfilling require...');
     const require = createRequire(import.meta.url);
     if (!(globalThis as any).require) {
       (globalThis as any).require = require;
     }
 
-    console.log('[cvode_node] Dynamically importing cvode_loader.js...');
     const mod = await import('./cvode_loader.js');
-    console.log('[cvode_node] Import success. Type of default:', typeof mod.default);
 
     const createCVodeModuleBase = mod.default;
-    console.log('[cvode_node] Calling createCVodeModuleBase...');
     return await createCVodeModuleBase({
       ...moduleConfig,
       ...config,
