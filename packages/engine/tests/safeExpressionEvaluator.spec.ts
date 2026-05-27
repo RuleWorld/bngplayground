@@ -13,6 +13,13 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     expect(value).toBeLessThan(4.45);
   });
 
+  it('handles invalid expressions with fallbackNaN flag', () => {
+    // With fallbackNaN=true, an invalid expression returns NaN
+    expect(Number.isNaN(evaluateConstant('invalid_expression', true, true))).toBe(true);
+    // With fallbackNaN=false (default), it returns 0
+    expect(evaluateConstant('invalid_expression', false, true)).toBe(0);
+  });
+
   it('compiles with param allowlist and evaluates', () => {
     const fn = compile('k1 * x / (km + x)', ['k1', 'x', 'km']);
     const out = fn({ k1: 0.5, x: 10, km: 5 });
