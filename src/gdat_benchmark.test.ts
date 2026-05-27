@@ -112,6 +112,15 @@ function createExpressionEvaluator(
     if (cached) return cached;
 
     const js = normalizeToJS(expr);
+
+    // SECURITY: Validate expression to prevent code injection via new Function
+    // eslint-disable-next-line no-useless-escape
+    if (/[;{}=\\`$\[\]]/.test(js)) {
+      console.warn(`[compileExpression] Unsafe characters detected in expression: '${js}'`);
+      const zeroFn = () => 0;
+      compiledExprCache.set(expr, zeroFn);
+      return zeroFn;
+    }
      
     const fn = new Function('params', 'obs', 'fn', `"use strict"; return (${js});`) as any;
     const wrapped = (paramsObj: Record<string, number>, obsObj: Record<string, number>, fnObj: any) => {
@@ -132,6 +141,15 @@ function createExpressionEvaluator(
       if (cached) return cached(...args);
 
       const jsBody = normalizeToJS(def.expression);
+
+      // SECURITY: Validate expression to prevent code injection via new Function
+      // eslint-disable-next-line no-useless-escape
+      if (/[;{}=\\`$\[\]]/.test(jsBody)) {
+        console.warn(`[compileExpression] Unsafe characters detected in function body: '${jsBody}'`);
+        const zeroFn = () => 0;
+        compiledFnCache.set(name, zeroFn);
+        return zeroFn();
+      }
        
       const compiled = new Function(
         'params',
