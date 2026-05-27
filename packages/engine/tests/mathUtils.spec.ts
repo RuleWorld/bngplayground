@@ -172,4 +172,22 @@ describe('invertSymmetricMatrix', () => {
     const A = [[1, 1], [1, 1]];
     expect(invertSymmetricMatrix(A)).toBeNull();
   });
+
+  it('inverts a 1x1 matrix', () => {
+    const A = [[4]];
+    const inv = invertSymmetricMatrix(A);
+    expect(inv).not.toBeNull();
+    expect(inv![0][0]).toBeCloseTo(0.25, 6);
+  });
+
+  it('handles an empty matrix', () => {
+    const A: number[][] = [];
+    const inv = invertSymmetricMatrix(A);
+    expect(inv).toEqual([]);
+  });
+
+  it('returns null for non-positive definite matrix', () => {
+    const A = [[-4, 2], [2, 3]];
+    expect(invertSymmetricMatrix(A)).toBeNull();
+  });
 });
