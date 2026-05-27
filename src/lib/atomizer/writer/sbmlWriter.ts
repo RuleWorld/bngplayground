@@ -1628,17 +1628,17 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
         productCounts.set(prodName, (productCounts.get(prodName) || 0) + 1);
       }
 
-      const catalysts = new Set<string>();
+
       let substrateName: string | null = null;
-      for (const [name, count] of reactantCounts) {
-        if (productCounts.get(name) === count) {
-          catalysts.add(name);
-        } else if (substrateName === null) {
+      for (let j = 0; j < r.reactants.length; j++) {
+        const name = r.reactants[j];
+        if (productCounts.get(name) !== reactantCounts.get(name)) {
           substrateName = name;
+          break;
         }
       }
+      if (!substrateName) {
 
-      if (substrateName === null) {
         substrateName = r.reactants[0] || null;
       }
       const substrateId = substrateName ? (speciesIdByName.get(substrateName) || null) : null;
