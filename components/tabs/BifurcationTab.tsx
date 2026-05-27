@@ -214,7 +214,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           maxSteps,
         });
 
-        const speciesIdx = expandedModel.species.findIndex((s: any) => s.name === (selectedSpecies1 || expandedModel.species[0]?.name));
+        const speciesIdx = speciesIndexMap.get(selectedSpecies1 || expandedModel.species[0]?.name) ?? -1;
         mockResult.points = result.path.map((p: any) => ({
           parameterValue: p.parameterValue,
           steadyState: p.y[speciesIdx >= 0 ? speciesIdx : 0],
@@ -232,8 +232,8 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       // Compute nullclines if two species are selected
       if (selectedSpecies1 && selectedSpecies2 && engine.computeNullclines) {
-        const idx1 = expandedModel.species.findIndex((s: any) => s.name === selectedSpecies1);
-        const idx2 = expandedModel.species.findIndex((s: any) => s.name === selectedSpecies2);
+        const idx1 = speciesIndexMap.get(selectedSpecies1) ?? -1;
+        const idx2 = speciesIndexMap.get(selectedSpecies2) ?? -1;
 
         if (idx1 >= 0 && idx2 >= 0) {
           const fixed = new Float64Array(nSpecies);
