@@ -3106,11 +3106,6 @@ export class NetworkGenerator {
       finalRateExpr = finalRateExpr.trim();
     }
 
-    // Always log for this model during investigation
-    // if (rule.name.includes("_R")) {
-    //   console.log(`[DEBUG_RULES] Rule: ${rule.name}, rate: ${effectiveRate}, auto: ${patternAutomorphismFactor}, sym: ${ruleSymmetryFactor}`);
-    // }
-
     // BIO-NETGEN PARITY: Symmetry Factor Correction
     // For reactions with identical reactants (e.g., A + A -> B), BNG2 divides the rate by N!
     // where N is the multiplicity of the identical reactant.
