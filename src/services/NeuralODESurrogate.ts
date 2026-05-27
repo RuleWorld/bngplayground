@@ -2,6 +2,7 @@
 // Phase 2: Neural ODE surrogate models for fast parameter sweeps
 
 import * as tf from '@tensorflow/tfjs';
+import { SecureStorage } from '../utils/SecureStorage';
 // Note: BNGLModel type is in root types.ts - using 'any' for flexibility
 
 // Backend initialization state
@@ -589,7 +590,7 @@ export class NeuralODESurrogate {
       isNormalized: this.isNormalized
     };
     
-    localStorage.setItem(`${name}_metadata`, JSON.stringify(metadata));
+    await SecureStorage.setItem(`${name}_metadata`, JSON.stringify(metadata));
   }
   
   /**
@@ -599,7 +600,7 @@ export class NeuralODESurrogate {
     this.model = await tf.loadLayersModel(`localstorage://${name}`) as tf.Sequential;
     
     // Load normalization parameters
-    const metadataStr = localStorage.getItem(`${name}_metadata`);
+    const metadataStr = await SecureStorage.getItem(`${name}_metadata`);
     if (metadataStr) {
       const metadata = JSON.parse(metadataStr);
       this.nParams = metadata.nParams;
