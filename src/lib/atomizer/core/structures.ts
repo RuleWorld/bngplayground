@@ -648,12 +648,23 @@ export class Species {
         const oelement = list2[i];
         const cocomponents = new Counter(oelement.components.map(x => x.name));
 
+        const refcomponents = new Counter(selement.components.map(x => x.name));
+        const existingMap = new Map();
+        for (const c of selement.components) {
+          if (!existingMap.has(c.name)) {
+            existingMap.set(c.name, c);
+          }
+        }
+
         for (const component of oelement.components) {
-          const refcomponents = new Counter(selement.components.map(x => x.name));
           if ((refcomponents.get(component.name) || 0) < (cocomponents.get(component.name) || 0)) {
             selement.components.push(component);
+            refcomponents.set(component.name, (refcomponents.get(component.name) || 0) + 1);
+            if (!existingMap.has(component.name)) {
+              existingMap.set(component.name, component);
+            }
           } else {
-            const existing = selement.components.find(x => x.name === component.name);
+            const existing = existingMap.get(component.name);
             if (existing) {
               existing.addStates(component.states, update);
             }
