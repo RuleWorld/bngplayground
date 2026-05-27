@@ -534,7 +534,7 @@ export function generateJupyterNotebookContent(
     cell_type: 'markdown',
     metadata: {},
     source: [
-      `--- \n`,
+      `---\n`,
       `**Next Steps**:\n`,
       `- Modify the BNGL string at the top to change model structure.\n`,
       `- Use \`model.rules\` and \`model.species\` to inspect or modify components programmatically.\n`,
