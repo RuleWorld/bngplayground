@@ -68,7 +68,6 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
         cancelled = false;
 
         try {
-          console.log('[spatialWorker] Starting simulation.run()');
           const result = await simulation.run((snapshot: SpatialSnapshot) => {
             if (cancelled) return;
             if (!snapshot.positions) return;
@@ -80,7 +79,6 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
           });
 
           if (!cancelled) {
-            console.log('[spatialWorker] Simulation complete, sending result');
             const response: SpatialWorkerResponse = { type: 'complete', result };
             self.postMessage(response);
           }

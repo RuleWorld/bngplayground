@@ -135,8 +135,12 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       });
       
       const expData = parseExperimentalData(dataInput);
+      const expMap = new Map();
+      for (const e of expData) {
+        expMap.set(Math.round(e.time * 100000), e);
+      }
       const combined = sim.data.map(d => {
-        const exp = expData.find(e => Math.abs(e.time - d.time) < 1e-5);
+        const exp = expMap.get(Math.round(d.time * 100000));
         const point: any = { ...d };
         if (exp) {
           Object.entries(exp.values).forEach(([k, v]) => {

@@ -41,6 +41,14 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
   const [isExporting, setIsExporting] = useState(false);
   const [totalWidth, setTotalWidth] = useState(178);
 
+  const availablePanelsMap = useMemo(() => {
+    const map = new Map<string, FigurePanelEntry>();
+    for (const panel of availablePanels) {
+      map.set(panel.id, panel);
+    }
+    return map;
+  }, [availablePanels]);
+
   const togglePanel = useCallback((panelId: string) => {
     setSelectedPanels(prev =>
       prev.includes(panelId)
@@ -68,7 +76,7 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
       const { exportFigure, downloadFigure, generateLatexSnippet } = await import('../../src/services/figure/FigureExporter');
 
       const panels = selectedPanels.map((id, idx) => {
-        const panel = availablePanels.find(p => p.id === id);
+        const panel = availablePanelsMap.get(id);
         return {
           id,
           label: `(${PANEL_LABELS[idx] || String.fromCharCode(65 + idx)})`,
@@ -107,13 +115,13 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
         figureCaption,
         `fig:${figureNumber}`,
       );
-      try { await navigator.clipboard.writeText(latex); } catch {}
+      try { await navigator.clipboard.writeText(latex); } catch (e) { /* ignore */ }
     } catch (err) {
       console.error('Export failed:', err);
     } finally {
       setIsExporting(false);
     }
-  }, [selectedPanels, availablePanels, layout, gridCols, preset, totalWidth, figureCaption, figureNumber]);
+  }, [selectedPanels, availablePanelsMap, layout, gridCols, preset, totalWidth, figureCaption, figureNumber]);
 
   // Preview layout
   const previewLayout = useMemo(() => {
@@ -180,7 +188,7 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
                 }}
               >
                 {selectedPanels.map((id, idx) => {
-                  const panel = availablePanels.find(p => p.id === id);
+                  const panel = availablePanelsMap.get(id);
                   return (
                     <div
                       key={id}

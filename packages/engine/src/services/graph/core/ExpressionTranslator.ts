@@ -48,7 +48,7 @@ export class ExpressionTranslator {
     };
 
     for (const [bnglName, jsName] of Object.entries(functionMappings)) {
-      const regex = new RegExp(`\\b${bnglName}\\s*\\(`, 'g');
+      const regex = new RegExp(`(?<!\\.)\\b${bnglName}\\s*\\(`, 'g');
       jsExpr = jsExpr.replace(regex, `${jsName}(`);
     }
 

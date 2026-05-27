@@ -1164,18 +1164,47 @@ export function getMoleculeTypes(sct: SpeciesCompositionTable): Molecule[] {
         const existingCounts = new Counter<string>(existing.components.map(c => c.name));
         const molCounts = new Counter<string>(mol.components.map((c: Component) => c.name));
 
+        // Precompute component maps to avoid O(N^2) searches inside the loop
+        const molComponentMap = new Map<string, Component>();
+        const molComponentsByName = new Map<string, Component[]>();
+        for (const c of mol.components) {
+          if (!molComponentMap.has(c.name)) {
+            molComponentMap.set(c.name, c);
+          }
+          if (!molComponentsByName.has(c.name)) {
+            molComponentsByName.set(c.name, []);
+          }
+          molComponentsByName.get(c.name)!.push(c);
+        }
+
+        const existingComponentsByName = new Map<string, Component[]>();
+        for (const c of existing.components) {
+          if (!existingComponentsByName.has(c.name)) {
+            existingComponentsByName.set(c.name, []);
+          }
+          existingComponentsByName.get(c.name)!.push(c);
+        }
+
         for (const [name, count] of molCounts.entries()) {
           const diff = count - (existingCounts.get(name) || 0);
           if (diff > 0) {
             // Add missing components
-            const template = mol.components.find((c: Component) => c.name === name)!;
+            const template = molComponentMap.get(name)!;
             for (let i = 0; i < diff; i++) {
-              existing.addComponent(template.copy());
+              const newComp = template.copy();
+              existing.addComponent(newComp);
+              // Crucial fix: add the newly added component to the map array
+              const existingArray = existingComponentsByName.get(name);
+              if (existingArray) {
+                existingArray.push(newComp);
+              } else {
+                existingComponentsByName.set(name, [newComp]);
+              }
             }
           }
           // Merge states for existing components
-          const existingComps = existing.components.filter((c: Component) => c.name === name);
-          const molComps = mol.components.filter((c: Component) => c.name === name);
+          const existingComps = existingComponentsByName.get(name) || [];
+          const molComps = molComponentsByName.get(name) || [];
           for (let i = 0; i < Math.min(existingComps.length, molComps.length); i++) {
             for (const state of molComps[i].states) {
               existingComps[i].addState(state, false);

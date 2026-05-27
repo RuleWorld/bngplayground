@@ -606,7 +606,7 @@ class Logger {
         } else if (level === 'DEBUG') {
           console.debug(prefix, fullMessage);
         } else {
-          console.log(prefix, fullMessage);
+          console.info(prefix, fullMessage);
         }
       }
     }

@@ -73,16 +73,22 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
     // We must NOT reset the initialValue if the code update matches our current local value.
 
     if (!isEditingRef.current) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setLocalParams(prev => {
+        const prevMap = new Map();
+        for (const e of prev) {
+          prevMap.set(e.name, e);
+        }
+
         // Map new parsed params to local state
         return parsedParams.map(p => {
-          const existing = prev.find(e => e.name === p.name);
+          const existing = prevMap.get(p.name);
 
           // Check if the value has changed significantly from what we have locally.
           // If it matches our local "current value", it's likely our own update echoing back.
           // In that case, we MUST preserve the initialValue and sliderValue to prevent "ratcheting".
 
-          let isDifferent = true;
+          let isDifferent;
           if (existing) {
             const diff = Math.abs(p.value - existing.value);
             // Allow for small floating point differences or precision formatting

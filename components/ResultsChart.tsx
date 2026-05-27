@@ -830,12 +830,14 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             <button
               className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'all' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
               onClick={() => setFilterMode('all')}
+              aria-pressed={filterMode === 'all'}
             >
               All
             </button>
             <button
               className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'search' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
               onClick={() => setFilterMode('search')}
+              aria-pressed={filterMode === 'search'}
             >
               Search
             </button>

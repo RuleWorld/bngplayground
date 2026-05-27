@@ -1549,28 +1549,6 @@ export async function simulate(
             break;
           }
           callbacks.checkCancelled();
-          // let currentObsForPropensity: Record<string, number> | null = null;
-          /* const getCurrentObsForPropensity = (): Record<string, number> => {
-            if (!currentObsForPropensity) {
-              for (let i = 0; i < numObservables; i++) {
-                if (dirtyObservables[i]) {
-                  const obs = concreteObservables[i];
-                  let sum = 0;
-                  for (let j = 0; j < obs.indices.length; j++) {
-                    // SSA works directly with state counts, so we do not scale by volume here
-                    sum += state[obs.indices[j]] * obs.coefficients[j];
-                  }
-                  const name = observableIndexToSafeName[i];
-                  if (name !== undefined) {
-                    ssaObservableValues[name] = sum;
-                  }
-                  dirtyObservables[i] = 0;
-                }
-              }
-              currentObsForPropensity = ssaObservableValues;
-            }
-            return currentObsForPropensity;
-          }; */
 
           if (recalculatePropensitiesCount++ >= 100) {
             computeAllPropensities();

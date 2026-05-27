@@ -335,24 +335,19 @@ export class Molecule {
    * Extend this molecule with components from another molecule
    */
   extend(molecule: Molecule): void {
-    const useMap = this.components.length + molecule.components.length >= 10;
-    const componentMap = useMap ? new Map<string, Component>() : null;
+    const componentMap = new Map<string, Component>();
 
-    if (componentMap) {
-      for (const comp of this.components) {
-        componentMap.set(comp.name, comp);
-      }
+    for (const comp of this.components) {
+      componentMap.set(comp.name, comp);
     }
 
     for (const element of molecule.components) {
-      const existing = componentMap
-        ? componentMap.get(element.name)
-        : this.components.find(x => x.name === element.name);
+      const existing = componentMap.get(element.name);
 
       if (!existing) {
         const copied = deepCopy(element);
         this.components.push(copied);
-        if (componentMap) componentMap.set(copied.name, copied);
+        componentMap.set(copied.name, copied);
       } else {
         for (const bond of element.bonds) {
           existing.addBond(bond);
@@ -368,24 +363,19 @@ export class Molecule {
    * Update this molecule with components from another
    */
   update(molecule: Molecule): void {
-    const useSet = this.components.length + molecule.components.length >= 10;
-    const componentNames = useSet ? new Set<string>() : null;
+    const componentNames = new Set<string>();
 
-    if (componentNames) {
-      for (const comp of this.components) {
-        componentNames.add(comp.name);
-      }
+    for (const comp of this.components) {
+      componentNames.add(comp.name);
     }
 
     for (const comp of molecule.components) {
-      const exists = componentNames
-        ? componentNames.has(comp.name)
-        : this.components.some(x => x.name === comp.name);
+      const exists = componentNames.has(comp.name);
 
       if (!exists) {
         const copied = deepCopy(comp);
         this.components.push(copied);
-        if (componentNames) componentNames.add(copied.name);
+        componentNames.add(copied.name);
       }
     }
   }
@@ -658,12 +648,23 @@ export class Species {
         const oelement = list2[i];
         const cocomponents = new Counter(oelement.components.map(x => x.name));
 
+        const refcomponents = new Counter(selement.components.map(x => x.name));
+        const existingMap = new Map();
+        for (const c of selement.components) {
+          if (!existingMap.has(c.name)) {
+            existingMap.set(c.name, c);
+          }
+        }
+
         for (const component of oelement.components) {
-          const refcomponents = new Counter(selement.components.map(x => x.name));
           if ((refcomponents.get(component.name) || 0) < (cocomponents.get(component.name) || 0)) {
             selement.components.push(component);
+            refcomponents.set(component.name, (refcomponents.get(component.name) || 0) + 1);
+            if (!existingMap.has(component.name)) {
+              existingMap.set(component.name, component);
+            }
           } else {
-            const existing = selement.components.find(x => x.name === component.name);
+            const existing = existingMap.get(component.name);
             if (existing) {
               existing.addStates(component.states, update);
             }

@@ -1,6 +1,6 @@
 
-import { describe, it, expect } from 'vitest';
-import { safeLog, clamp, deriveBounds, priorToLogNormal } from '../../src/services/ParameterEstimation';
+import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { safeLog, clamp, deriveBounds, priorToLogNormal, VariationalParameterEstimator, SimulationData, ParameterPrior } from '../../src/services/ParameterEstimation';
 
 describe('ParameterEstimation Math Helpers', () => {
 
@@ -88,5 +88,93 @@ describe('ParameterEstimation Math Helpers', () => {
             // Clamped to 1.0 max
             expect(res.sigmaLog).toBe(1.0);
         });
+    });
+});
+
+describe('VariationalParameterEstimator', () => {
+    let mockData: SimulationData;
+    let mockPriors: Map<string, ParameterPrior>;
+    let mockModel: any;
+
+    beforeEach(() => {
+        mockModel = {};
+        mockData = {
+            timePoints: [0, 1, 2],
+            observables: new Map([
+                ['Obs1', [1.0, 2.0, 3.0]]
+            ])
+        };
+        mockPriors = new Map([
+            ['k1', { mean: 1.0, std: 0.1, min: 0.1, max: 10.0 }],
+            ['k2', { mean: 2.0, std: 0.2 }]
+        ]);
+    });
+
+    it('should initialize correctly', () => {
+        const estimator = new VariationalParameterEstimator(mockModel, mockData, ['k1', 'k2'], mockPriors);
+        expect(estimator).toBeDefined();
+        estimator.dispose();
+    });
+
+    it('should run fit for a small number of iterations', async () => {
+        const estimator = new VariationalParameterEstimator(mockModel, mockData, ['k1', 'k2'], mockPriors);
+
+        const result = await estimator.fit({ nIterations: 2, batchSize: 2, verbose: false });
+
+        expect(result).toBeDefined();
+        expect(result.iterations).toBe(2);
+        expect(result.posteriorMean).toHaveLength(2);
+        expect(result.posteriorStd).toHaveLength(2);
+        expect(result.elbo).toHaveLength(2);
+        expect(typeof result.convergence).toBe('boolean');
+        expect(typeof result.rmse).toBe('number');
+        expect(typeof result.sse).toBe('number');
+        expect(typeof result.rSquared).toBe('number');
+        expect(result.bestPredictions).toBeInstanceOf(Map);
+
+        estimator.dispose();
+    });
+
+    it('should call onProgress during fit', async () => {
+        const estimator = new VariationalParameterEstimator(mockModel, mockData, ['k1', 'k2'], mockPriors);
+        const onProgressSpy = vi.fn();
+
+        // nIterations needs to be at least 11 so that iter=10 triggers iter % 10 === 0
+        await estimator.fit({ nIterations: 11, batchSize: 2, verbose: false, onProgress: onProgressSpy });
+
+        expect(onProgressSpy).toHaveBeenCalled();
+        expect(onProgressSpy.mock.calls[0][0]).toHaveProperty('current');
+        expect(onProgressSpy.mock.calls[0][0]).toHaveProperty('total', 11);
+        expect(onProgressSpy.mock.calls[0][0]).toHaveProperty('elbo');
+
+        estimator.dispose();
+    });
+
+    it('should sample posterior', async () => {
+        const estimator = new VariationalParameterEstimator(mockModel, mockData, ['k1', 'k2'], mockPriors);
+
+        const samples = await estimator.samplePosterior(5);
+        expect(samples).toHaveLength(5);
+        expect(samples[0]).toHaveLength(2);
+
+        estimator.dispose();
+    });
+
+    it('should dispose without throwing', () => {
+        const estimator = new VariationalParameterEstimator(mockModel, mockData, ['k1', 'k2'], mockPriors);
+        expect(() => estimator.dispose()).not.toThrow();
+    });
+
+    it('should use provided simulator callback', async () => {
+        const mockSimulator = vi.fn().mockResolvedValue(new Map([
+            ['Obs1', [1.5, 2.5, 3.5]]
+        ]));
+
+        const estimator = new VariationalParameterEstimator(mockModel, mockData, ['k1', 'k2'], mockPriors, mockSimulator);
+        await estimator.fit({ nIterations: 1, batchSize: 2, verbose: false });
+
+        expect(mockSimulator).toHaveBeenCalled();
+
+        estimator.dispose();
     });
 });

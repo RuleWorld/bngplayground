@@ -13,6 +13,13 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     expect(value).toBeLessThan(4.45);
   });
 
+  it('handles invalid expressions with fallbackNaN flag', () => {
+    // With fallbackNaN=true, an invalid expression returns NaN
+    expect(Number.isNaN(evaluateConstant('invalid_expression', true, true))).toBe(true);
+    // With fallbackNaN=false (default), it returns 0
+    expect(evaluateConstant('invalid_expression', false, true)).toBe(0);
+  });
+
   it('compiles with param allowlist and evaluates', () => {
     const fn = compile('k1 * x / (km + x)', ['k1', 'x', 'km']);
     const out = fn({ k1: 0.5, x: 10, km: 5 });
@@ -62,10 +69,57 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     expect(() => compile(deep, [])).toThrow(/nesting too deep/i);
   });
 
-  it('getReferencedVariables returns variables used', () => {
-    const vars = SafeExpressionEvaluator.getReferencedVariables('a + b * PI');
-    expect(vars.includes('a')).toBe(true);
-    expect(vars.includes('b')).toBe(true);
+  describe('getReferencedVariables', () => {
+    it('returns variables used in basic arithmetic', () => {
+      const vars = SafeExpressionEvaluator.getReferencedVariables('a + b * c');
+      expect(vars.length).toBe(3);
+      expect(vars).toContain('a');
+      expect(vars).toContain('b');
+      expect(vars).toContain('c');
+    });
+
+    it('includes constants like PI as they are parsed as Identifiers', () => {
+      const vars = SafeExpressionEvaluator.getReferencedVariables('a + b * PI');
+      expect(vars.length).toBe(3);
+      expect(vars).toContain('a');
+      expect(vars).toContain('b');
+      expect(vars).toContain('PI');
+    });
+
+    it('excludes function names in CallExpressions', () => {
+      const vars = SafeExpressionEvaluator.getReferencedVariables('sin(x) + cos(y) + FunctionProduct(k1, k2)');
+      expect(vars.length).toBe(4);
+      expect(vars).toContain('x');
+      expect(vars).toContain('y');
+      expect(vars).toContain('k1');
+      expect(vars).toContain('k2');
+      expect(vars).not.toContain('sin');
+      expect(vars).not.toContain('cos');
+      expect(vars).not.toContain('FunctionProduct');
+    });
+
+    it('extracts variables from conditional (ternary) expressions', () => {
+      const vars = SafeExpressionEvaluator.getReferencedVariables('x > 0 ? a : b');
+      expect(vars.length).toBe(3);
+      expect(vars).toContain('x');
+      expect(vars).toContain('a');
+      expect(vars).toContain('b');
+    });
+
+    it('returns a unique set of variables', () => {
+      const vars = SafeExpressionEvaluator.getReferencedVariables('a + a * a - a');
+      expect(vars.length).toBe(1);
+      expect(vars).toContain('a');
+    });
+
+    it('throws error for overly deep nesting', () => {
+      const deep = '1' + ' + ('.repeat(300) + '0' + ')'.repeat(300);
+      expect(() => SafeExpressionEvaluator.getReferencedVariables(deep)).toThrow(/too deeply nested/i);
+    });
+
+    it('throws error for invalid syntax', () => {
+      expect(() => SafeExpressionEvaluator.getReferencedVariables(')))((({{{')).toThrow();
+    });
   });
 
   it('disallows factorial operator (5!)', () => {

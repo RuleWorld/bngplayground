@@ -206,6 +206,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
             <div className="inline-flex rounded-lg border border-slate-200 dark:border-slate-700 dark:border-slate-700 text-xs">
               <button
                 onClick={() => setMode('math')}
+                aria-pressed={mode === 'math'}
                 className={`px-2.5 py-1 rounded-l-lg transition-colors ${mode === 'math'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
@@ -217,6 +218,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 onClick={() => setMode('bngl')}
                 disabled={!hasSpeciesData}
                 title={hasSpeciesData ? 'Define observable using BNGL pattern' : 'Requires species-level simulation data'}
+                aria-pressed={mode === 'bngl'}
                 className={`px-2.5 py-1 rounded-r-lg transition-colors ${mode === 'bngl'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'

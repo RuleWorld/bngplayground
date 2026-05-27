@@ -149,13 +149,23 @@ const extractAtomicPatternsBNG2 = (
   const pMols = flattenMols(productGraphs);
 
   // Match molecules by name (first available) so we can compare per-component
-  const usedP = new Set<number>();
   const rMatched = new Map<number, number>(); // rIdx → pIdx
 
+  // Precompute available product indices by name to avoid O(N^2) searches
+  const pMolsByName = new Map<string, number[]>();
+  pMols.forEach((p, i) => {
+    const arr = pMolsByName.get(p.name);
+    if (arr) {
+      arr.push(i);
+    } else {
+      pMolsByName.set(p.name, [i]);
+    }
+  });
+
   rMols.forEach((rMol, rIdx) => {
-    const pIdx = pMols.findIndex((p, i) => !usedP.has(i) && p.name === rMol.name);
-    if (pIdx >= 0) {
-      usedP.add(pIdx);
+    const arr = pMolsByName.get(rMol.name);
+    if (arr && arr.length > 0) {
+      const pIdx = arr.shift()!;
       rMatched.set(rIdx, pIdx);
     }
   });

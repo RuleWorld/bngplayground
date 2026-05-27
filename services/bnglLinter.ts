@@ -970,7 +970,7 @@ export function lintBNGL(model: BNGLModel, options: LinterOptions = {}, sourceCo
 
 const LINE_SPLIT_REGEX = /\r?\n/;
 
-function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic, fallback: number, cache: Map<string, number>): number {
+function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic, fallback: number, cache: Map<string, number>, tokenMap: Map<string, number>): number {
   const candidates = new Set<string>();
   if (diagnostic.location?.name) {
     candidates.add(diagnostic.location.name.trim());
@@ -983,7 +983,10 @@ function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic,
     if (!candidate) continue;
     let idx = cache.get(candidate);
     if (idx === undefined) {
-      idx = lines.findIndex((line) => line.includes(candidate));
+      idx = tokenMap.get(candidate);
+      if (idx === undefined || !lines[idx].includes(candidate)) {
+        idx = lines.findIndex((line) => line.includes(candidate));
+      }
       cache.set(candidate, idx);
     }
     if (idx !== -1) {
@@ -999,9 +1002,27 @@ export function lintDiagnosticsToMarkers(code: string, diagnostics: LintDiagnost
   const fallbackLine = Math.max(0, lines.findIndex((line) => line.trim().length > 0));
 
   const candidateCache = new Map<string, number>();
+  const tokenMap = new Map<string, number>();
+
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i];
+    const words = line.trim().split(/\s+/);
+    for (let j = 0; j < words.length; j++) {
+      const word = words[j];
+      if (!tokenMap.has(word)) {
+        tokenMap.set(word, i);
+      }
+      if (word.endsWith(':') && word.length > 1) {
+        const stripped = word.slice(0, -1);
+        if (!tokenMap.has(stripped)) {
+          tokenMap.set(stripped, i);
+        }
+      }
+    }
+  }
 
   return diagnostics.map((diag) => {
-    const lineIndex = findLineIndexForDiagnostic(lines, diag, fallbackLine, candidateCache);
+    const lineIndex = findLineIndexForDiagnostic(lines, diag, fallbackLine, candidateCache, tokenMap);
     const lineText = lines[lineIndex] ?? '';
     return {
       severity: diag.severity,

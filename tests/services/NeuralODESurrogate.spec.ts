@@ -127,23 +127,41 @@ describe('NeuralODESurrogate Service', () => {
             }
         });
 
-        it('should generate stratified samples', () => {
-             const ranges: [number, number][] = [[0, 10]];
+        it('should generate stratified samples for multiple parameters', () => {
+             const ranges: [number, number][] = [[0, 10], [100, 200]];
              const nSamples = 10;
              const samples = SurrogateDatasetGenerator.latinHypercubeSample(ranges, nSamples);
              
              // In LHS, if we divide range into n bins, each bin has exactly one sample.
-             // Bin width = 1.
-             // Check if we have one sample in [0,1), [1,2), etc.
-             const bins = new Array(nSamples).fill(0);
+             // For param 0: Bin width = 1. Range = [0, 10].
+             // For param 1: Bin width = 10. Range = [100, 200].
+             const binsP0 = new Array(nSamples).fill(0);
+             const binsP1 = new Array(nSamples).fill(0);
+
              for (const s of samples) {
-                 const bin = Math.floor(s[0]);
-                 if (bin >= 0 && bin < nSamples) bins[bin]++;
+                 const bin0 = Math.floor(s[0]);
+                 if (bin0 >= 0 && bin0 < nSamples) binsP0[bin0]++;
+
+                 const bin1 = Math.floor((s[1] - 100) / 10);
+                 if (bin1 >= 0 && bin1 < nSamples) binsP1[bin1]++;
              }
              
              // Note: Randomness might hit boundary exactly, but assuming uniform distribution
              // Expect all bins to be 1
-             expect(bins.every(b => b === 1)).toBe(true);
+             expect(binsP0.every(b => b === 1)).toBe(true);
+             expect(binsP1.every(b => b === 1)).toBe(true);
+        });
+
+        it('should handle zero samples correctly', () => {
+             const ranges: [number, number][] = [[0, 10]];
+             const samples = SurrogateDatasetGenerator.latinHypercubeSample(ranges, 0);
+             expect(samples).toHaveLength(0);
+        });
+
+        it('should handle empty parameter ranges correctly', () => {
+             const samples = SurrogateDatasetGenerator.latinHypercubeSample([], 10);
+             expect(samples).toHaveLength(10);
+             expect(samples[0]).toHaveLength(0);
         });
 
         it('should generate correct dataset structure', async () => {
@@ -162,6 +180,23 @@ describe('NeuralODESurrogate Service', () => {
             expect(dataset.timePoints).toEqual(timePoints);
             expect(dataset.concentrations).toHaveLength(5);
             expect(simFn).toHaveBeenCalledTimes(5);
+        });
+
+        it('should propagate errors from simulateFunction', async () => {
+            const ranges: [number, number][] = [[0, 1]];
+            const timePoints = [0, 10];
+            const expectedError = new Error('Simulation failed');
+            const simFn = vi.fn().mockRejectedValue(expectedError);
+
+            await expect(SurrogateDatasetGenerator.generateDataset(
+                ranges,
+                5,
+                timePoints,
+                simFn
+            )).rejects.toThrow('Simulation failed');
+
+            // Should stop at the first simulation error
+            expect(simFn).toHaveBeenCalledTimes(1);
         });
     });
 });

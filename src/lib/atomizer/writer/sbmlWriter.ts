@@ -1383,12 +1383,12 @@ async function ensureLibSBML() {
 
     const config: Record<string, unknown> = {
       onAbort: (reason: unknown) => {
-        console.error('[sbmlWriter] libsbml abort:', reason);
+        logger.error('SBMW000E', 'libsbml abort:', String(reason));
       },
       TOTAL_MEMORY: 128 * 1024 * 1024,
       noInitialRun: true,
-      print: (text: string) => console.log(`[sbmlWriter] ${text}`),
-      printErr: (text: string) => console.warn(`[sbmlWriter:err] ${text}`),
+      print: (text: string) => logger.debug('SBMW000I', text),
+      printErr: (text: string) => logger.warning('SBMW000W', text),
       locateFile: (file: string) => {
         if (file.endsWith('.wasm')) {
           if (typeof process !== 'undefined' && process.versions && process.versions.node) {
@@ -1628,14 +1628,19 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
         productCounts.set(prodName, (productCounts.get(prodName) || 0) + 1);
       }
 
-      const catalysts = new Set<string>();
-      for (const [name, count] of reactantCounts) {
-        if (productCounts.get(name) === count) {
-          catalysts.add(name);
+
+      let substrateName: string | null = null;
+      for (let j = 0; j < r.reactants.length; j++) {
+        const name = r.reactants[j];
+        if (productCounts.get(name) !== reactantCounts.get(name)) {
+          substrateName = name;
+          break;
         }
       }
+      if (!substrateName) {
 
-      const substrateName = r.reactants.find(name => !catalysts.has(name)) || r.reactants[0] || null;
+        substrateName = r.reactants[0] || null;
+      }
       const substrateId = substrateName ? (speciesIdByName.get(substrateName) || null) : null;
 
       // Map reactants

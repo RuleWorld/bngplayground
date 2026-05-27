@@ -150,7 +150,6 @@ export function convertBNGXmlToBNGL(xml: string): string {
             return mcomp ? `${base}@${mcomp}` : base;
           });
           patternStr = molStrs.join('.');
-          console.log(`[Parser Debug] Observable '${name}': reconstructed pattern '${patternStr}'`);
         }
         lines.push(`    ${type}    ${name}    ${patternStr}`);
       }

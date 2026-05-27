@@ -78,6 +78,7 @@ export const Header: React.FC<HeaderProps> = ({
                 <div className="flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
                   <button
                     onClick={() => onViewModeChange('code')}
+                    aria-pressed={viewMode === 'code'}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'code'
                       ? 'bg-slate-100 dark:bg-slate-800/50 text-teal-700 dark:text-teal-400'
                       : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -88,6 +89,7 @@ export const Header: React.FC<HeaderProps> = ({
                   <div className="w-px bg-slate-200 dark:bg-slate-700" />
                   <button
                     onClick={() => onViewModeChange('design')}
+                    aria-pressed={viewMode === 'design'}
                     className={`px-4 py-1.5 text-sm font-medium transition-colors ${viewMode === 'design'
                       ? 'bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-400'
                       : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'

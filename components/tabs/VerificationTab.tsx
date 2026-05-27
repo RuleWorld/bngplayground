@@ -220,10 +220,13 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                             </tr>
                         </thead>
                         <tbody>
-                            {constraints.map((constraint) => {
-                                const result = verificationResults.find(r => r.constraintId === constraint.id);
-                                return (
-                                    <tr key={constraint.id} className="border-b border-slate-200 dark:border-slate-700 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-800/50">
+                            {(() => {
+                                // Optimization: Build a lookup map to avoid O(N^2) search inside the map loop
+                                const resultsMap = new Map(verificationResults.map(r => [r.constraintId, r]));
+                                return constraints.map((constraint) => {
+                                    const result = resultsMap.get(constraint.id);
+                                    return (
+                                        <tr key={constraint.id} className="border-b border-slate-200 dark:border-slate-700 dark:border-slate-700 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-800/50">
                                         <td className="p-2">
                                             <Select
                                                 value={constraint.observable}
@@ -285,7 +288,8 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                                         </td>
                                     </tr>
                                 );
-                            })}
+                                });
+                            })()}
                         </tbody>
                     </table>
                 </div>

@@ -78,6 +78,24 @@ describe('WebGPU ODE Solver', () => {
       expect(gpuReactions).toHaveLength(0);
       expect(rateConstants).toHaveLength(0);
     });
+
+    it('should handle creation reactions (no reactants)', () => {
+      const reactions = [{ reactants: [], products: [{ index: 0, stoichiometry: 1 }], rateConstant: 0.5 }];
+      const { gpuReactions } = convertToGPUReactions(reactions);
+      expect(gpuReactions[0].reactantIndices).toEqual([]);
+      expect(gpuReactions[0].reactantStoich).toEqual([]);
+      expect(gpuReactions[0].productIndices).toEqual([0]);
+      expect(gpuReactions[0].productStoich).toEqual([1]);
+    });
+
+    it('should handle degradation reactions (no products)', () => {
+      const reactions = [{ reactants: [{ index: 0, stoichiometry: 1 }], products: [], rateConstant: 0.5 }];
+      const { gpuReactions } = convertToGPUReactions(reactions);
+      expect(gpuReactions[0].reactantIndices).toEqual([0]);
+      expect(gpuReactions[0].reactantStoich).toEqual([1]);
+      expect(gpuReactions[0].productIndices).toEqual([]);
+      expect(gpuReactions[0].productStoich).toEqual([]);
+    });
   });
 
   describe('WebGPUODESolver Constructor', () => {

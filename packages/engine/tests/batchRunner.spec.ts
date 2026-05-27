@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BNGLModel, SimulationResults } from '../src/types';
 import type { BatchReporter, BatchSimulator } from '../src/utils/batchRunner';
-import { runSingleBatchItem } from '../src/utils/batchRunner';
+import { runSingleBatchItem, normalizeFilterNames } from '../src/utils/batchRunner';
 
 function createBaseModel(): BNGLModel {
     return {
@@ -130,5 +130,26 @@ describe('batchRunner', () => {
         expect(reporter.warn).toHaveBeenCalledWith(
             '[Batch] Skipping nf-model: NFsim models are not supported by the batch runner (detected: nfsim).'
         );
+    });
+});
+
+describe('normalizeFilterNames', () => {
+    it('returns null for undefined, null, or empty array', () => {
+        expect(normalizeFilterNames(undefined)).toBeNull();
+        expect(normalizeFilterNames(null as unknown as string[])).toBeNull();
+        expect(normalizeFilterNames([])).toBeNull();
+    });
+
+    it('returns null if all names are empty or whitespace', () => {
+        expect(normalizeFilterNames(['', ' ', '   '])).toBeNull();
+        expect(normalizeFilterNames([null as unknown as string, undefined as unknown as string])).toBeNull();
+    });
+
+    it('trims and lowercases valid names', () => {
+        expect(normalizeFilterNames(['  foo  ', 'BAR', 'BaZ '])).toEqual(['foo', 'bar', 'baz']);
+    });
+
+    it('filters out empty/whitespace names and normalizes the rest', () => {
+        expect(normalizeFilterNames(['  ', 'A', '', ' b ', undefined as unknown as string, 'C'])).toEqual(['a', 'b', 'c']);
     });
 });

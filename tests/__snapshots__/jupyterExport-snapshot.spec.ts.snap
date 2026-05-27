@@ -1,0 +1,1716 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`jupyterExport snapshot > generates a complete valid notebook structure with simulation data 1`] = `
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "# BioNetGen Analysis: SnapshotModelWithData
+",
+        "This notebook is generated from the current web session. It preserves the BNGL source, adds a reproducible Python workflow, and can embed simulation output when it is available.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Install dependencies if needed
+",
+        "# !pip install pybionetgen libroadrunner numpy matplotlib pandas seaborn scipy
+",
+        "import bionetgen
+",
+        "import numpy as np
+",
+        "import pandas as pd
+",
+        "import matplotlib.pyplot as plt
+",
+        "import seaborn as sns
+",
+        "import os
+",
+        "from scipy.optimize import curve_fit, root, brute
+",
+        "from scipy.stats import sem
+
+",
+        "# Configure plot style
+",
+        "sns.set_theme(style="whitegrid", palette="muted")
+",
+        "plt.rcParams['figure.figsize'] = [10, 6]
+",
+        "plt.rcParams['font.size'] = 12",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Save current model to file
+",
+        "model_name = "SnapshotModelWithData"
+",
+        "model_file = f"{model_name}.bngl"
+",
+        "bngl_content = """begin model
+end model"""
+
+",
+        "with open(model_file, "w", encoding="utf-8") as f:
+",
+        "    f.write(bngl_content)
+
+",
+        "print(f"Model saved to {model_file}")",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 1.1 Embedded Session Results
+",
+        "The current web-session trajectory is embedded below so the exported notebook can inspect and re-plot the same data immediately.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "import json
+",
+        "session_rows = json.loads("""[
+  {
+    "time": 0,
+    "A": 1,
+    "B": 2
+  },
+  {
+    "time": 1,
+    "A": 3,
+    "B": 4
+  }
+]""")
+",
+        "session_df = pd.DataFrame(session_rows)
+",
+        "if 'time' in session_df.columns:
+",
+        "    session_df = session_df.sort_values('time').reset_index(drop=True)
+",
+        "display(session_df.head())
+",
+        "
+",
+        "plt.figure(figsize=(10, 6))
+",
+        "for column in session_df.columns:
+",
+        "    if column != 'time':
+",
+        "        plt.plot(session_df['time'], session_df[column], label=column)
+",
+        "plt.xlabel('Time')
+",
+        "plt.ylabel('Value')
+",
+        "plt.title(f'Session Results: SnapshotModelWithData')
+",
+        "plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+",
+        "plt.tight_layout()
+",
+        "plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 1. Standard Simulation with pybionetgen
+",
+        "The \`bionetgen.run()\` command executes the full BNGL script using the BNG2.pl engine. This handles network generation and simulation as defined in your script.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Run the model using pybionetgen's documented return structure
+",
+        "def to_dataframe(result_obj):
+",
+        "    if isinstance(result_obj, pd.DataFrame):
+",
+        "        return result_obj.copy()
+",
+        "    if hasattr(result_obj, 'colnames'):
+",
+        "        return pd.DataFrame({col: result_obj[col] for col in result_obj.colnames})
+",
+        "    return pd.DataFrame(result_obj)
+
+",
+        "sim_df = None
+",
+        "try:
+",
+        "    ret = bionetgen.run(model_file, out="bng_output")
+",
+        "    base_name = os.path.splitext(os.path.basename(model_file))[0]
+",
+        "    result_map = ret.results if hasattr(ret, 'results') else ret
+",
+        "    if not isinstance(result_map, dict) or len(result_map) == 0:
+",
+        "        raise RuntimeError("No simulation result map was returned by bionetgen.run")
+",
+        "    result_key = base_name if base_name in result_map else next(iter(result_map.keys()))
+",
+        "    print(f"Using result key: {result_key}")
+",
+        "    sim_df = to_dataframe(result_map[result_key])
+",
+        "except Exception as err:
+",
+        "    print(f"bionetgen.run() failed ({err})")
+",
+        "    print("Trying bngmodel + setup_simulator fallback")
+",
+        "    try:
+",
+        "        fallback_model = bionetgen.bngmodel(model_file)
+",
+        "        fallback_rr = fallback_model.setup_simulator()
+",
+        "        sim_df = to_dataframe(fallback_rr.simulate(0, 100, 101))
+",
+        "    except Exception as fallback_err:
+",
+        "        raise RuntimeError(f"Both simulation paths failed: {fallback_err}")
+
+",
+        "display(sim_df.head())
+",
+        "time_col = 'time' if 'time' in sim_df.columns else sim_df.columns[0]
+",
+        "plt.figure(figsize=(10, 6))
+",
+        "for col in sim_df.columns:
+",
+        "    if col != time_col:
+",
+        "        plt.plot(sim_df[time_col], sim_df[col], label=col)
+",
+        "plt.xlabel(time_col)
+",
+        "plt.ylabel('Value')
+",
+        "plt.title(f"Simulation: {model_name}")
+",
+        "plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+",
+        "plt.tight_layout()
+",
+        "plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 2. High-Performance ODE Simulation with libroadrunner
+",
+        "For rapid parameter sweeps or optimization, you can use the \`libroadrunner\` engine, which uses LLVM to JIT-compile your model for high-performance ODE integration.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Load the model into a pythonic bngmodel object
+",
+        "model = bionetgen.bngmodel(model_file)
+
+",
+        "# Setup the roadrunner simulator
+",
+        "# Note: This generates BNG-XML and then SBML to load into roadrunner
+",
+        "rr = None
+",
+        "try:
+",
+        "    rr = model.setup_simulator()
+",
+        "
+",
+        "    def safe_rr_simulate(start, end, points):
+",
+        "        try:
+",
+        "            return rr.simulate(float(start), float(end), int(points))
+",
+        "        except Exception as first_err:
+",
+        "            # Retry with relaxed integration settings for stiff/unstable regimes
+",
+        "            try:
+",
+        "                rr.integrator.setValue('maximum_num_steps', 200000)
+",
+        "                rr.integrator.setValue('relative_tolerance', 1e-6)
+",
+        "                rr.integrator.setValue('absolute_tolerance', 1e-10)
+",
+        "            except Exception:
+",
+        "                pass
+",
+        "            try:
+",
+        "                retry_points = max(51, int(points) // 2)
+",
+        "                return rr.simulate(float(start), float(end), retry_points)
+",
+        "            except Exception as second_err:
+",
+        "                raise RuntimeError(f'RoadRunner simulate failed: {first_err}; retry failed: {second_err}')
+",
+        "
+",
+        "    rr_data = safe_rr_simulate(0, 100, 101)
+",
+        "    rr_df = pd.DataFrame({col: rr_data[col] for col in rr_data.colnames})
+",
+        "    plt.figure(figsize=(10, 6))
+",
+        "    for col in rr_df.columns:
+",
+        "        if col != 'time':
+",
+        "            plt.plot(rr_df['time'], rr_df[col], label=col)
+",
+        "    plt.xlabel('Time')
+",
+        "    plt.ylabel('Concentration')
+",
+        "    plt.title(f'ODE Simulation: {model_name}')
+",
+        "    plt.legend()
+",
+        "    plt.grid(True, alpha=0.3)
+",
+        "    plt.show()
+",
+        "except Exception as err:
+",
+        "    print(f'RoadRunner setup unavailable: {err}')
+",
+        "    print('Advanced ODE cells below are optional and will be skipped if rr is None.')",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 2.5. Steady State Analysis
+",
+        "Find and analyze the steady-state behavior of your model.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None:
+",
+        "    print('Skipping steady-state analysis because rr is unavailable.')
+",
+        "else:
+",
+        "    rr.reset()
+",
+        "    try:
+",
+        "        steady_state = rr.steadyState()
+",
+        "        print(f"Steady state found with residual: {steady_state}")
+",
+        "        ss_values = rr.getSteadyStateValues()
+",
+        "        raw_selections = list(getattr(rr, 'steadyStateSelections', []))
+",
+        "        ss_names = []
+",
+        "        for sel in raw_selections:
+",
+        "            if hasattr(sel, 'selection'):
+",
+        "                ss_names.append(str(sel.selection))
+",
+        "            else:
+",
+        "                ss_names.append(str(sel))
+",
+        "        if len(ss_names) != len(ss_values):
+",
+        "            ss_names = [f'value_{i}' for i in range(len(ss_values))]
+",
+        "        print('Steady state values:')
+",
+        "        for name, val in zip(ss_names, ss_values):
+",
+        "            print(f"  {name}: {val}")
+",
+        "    except Exception as e:
+",
+        "        print(f"Steady-state analysis unavailable: {e}")
+",
+        "        print('This can happen for oscillatory systems or unsupported steady-state outputs.')",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 3. Model Structure Analysis
+",
+        "Explore the structure of your BioNetGen model.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Parse names directly from BNGL text to avoid API-shape assumptions
+",
+        "def parse_parameter_names(text):
+",
+        "    names = []
+",
+        "    in_section = False
+",
+        "    for raw in text.splitlines():
+",
+        "        line = raw.strip()
+",
+        "        low = line.lower()
+",
+        "        if low.startswith('begin parameters'):
+",
+        "            in_section = True
+",
+        "            continue
+",
+        "        if low.startswith('end parameters'):
+",
+        "            break
+",
+        "        if in_section and line and not line.startswith('#'):
+",
+        "            parts = line.split()
+",
+        "            if len(parts) >= 2:
+",
+        "                names.append(parts[0])
+",
+        "    return names
+
+",
+        "param_names = parse_parameter_names(bngl_content)
+",
+        "observable_names = [c for c in sim_df.columns if c != 'time'] if sim_df is not None else []
+",
+        "print('=== MODEL STRUCTURE ===')
+",
+        "print(f'Parameters parsed from BNGL: {len(param_names)}')
+",
+        "print(param_names[:10])
+",
+        "print(f'Observable/result columns: {len(observable_names)}')
+",
+        "print(observable_names[:10])
+",
+        "if rr is not None:
+",
+        "    try:
+",
+        "        print(f'RoadRunner global params: {rr.getGlobalParameterIds()}')
+",
+        "    except Exception:
+",
+        "        pass",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 4. Parameter Sensitivity Scan (1D)
+",
+        "Explore how varying a single parameter affects the final state of your observables.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None:
+",
+        "    print('Skipping parameter scan because rr is unavailable.')
+",
+        "else:
+",
+        "    if len(param_names) == 0:
+",
+        "        rr_params = list(rr.getGlobalParameterIds()) if hasattr(rr, 'getGlobalParameterIds') else []
+",
+        "        param_names = [p for p in rr_params if p.lower() not in ('time')]
+",
+        "    if len(param_names) == 0 or len(observable_names) == 0:
+",
+        "        print('Skipping scan: need at least one parameter and one observable/result column.')
+",
+        "    else:
+",
+        "        param_name = param_names[0]
+",
+        "        target_observable = observable_names[0]
+",
+        "        scan_range = np.logspace(-1, 1, 7)
+",
+        "        print(f'Scanning parameter: {param_name}')
+",
+        "        print(f'Monitoring observable: {target_observable}')
+",
+        "
+",
+        "        baseline = rr[param_name]
+",
+        "        t_end = float(sim_df[time_col].max()) if sim_df is not None and time_col in sim_df.columns else 100.0
+",
+        "        n_steps = max(51, len(sim_df)) if sim_df is not None else 101
+",
+        "        scan_results = []
+",
+        "        for scale in scan_range:
+",
+        "            rr.reset()
+",
+        "            rr[param_name] = max(1e-12, baseline * scale)
+",
+        "            try:
+",
+        "                res = safe_rr_simulate(0, t_end, n_steps)
+",
+        "                obs_data = res[target_observable] if target_observable in res.colnames else res[res.colnames[1]]
+",
+        "                scan_results.append(float(obs_data[-1]))
+",
+        "            except Exception as sim_err:
+",
+        "                print(f'Scan point failed at scale={scale:.3g}: {sim_err}')
+",
+        "                scan_results.append(np.nan)
+",
+        "
+",
+        "        plt.figure(figsize=(8, 5))
+",
+        "        plt.semilogx(scan_range, scan_results, 'o-')
+",
+        "        plt.xlabel(f'Fold-change on {param_name}')
+",
+        "        plt.ylabel(f'Final {target_observable}')
+",
+        "        plt.title(f'1D Parameter Scan: {param_name}')
+",
+        "        plt.grid(True, alpha=0.3)
+",
+        "        plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 5. Parameter Estimation (Optimization)
+",
+        "Fit your model parameters to experimental data using \`scipy.optimize\`.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None or 'param_name' not in globals() or len(observable_names) == 0:
+",
+        "    print('Skipping optimization: run the previous cells first and ensure rr is available.')
+",
+        "else:
+",
+        "    def robust_rr_simulate(start, end, points):
+",
+        "        attempts = [
+",
+        "            ('cvode', float(start), float(end), int(points)),
+",
+        "            ('cvode', float(start), float(end), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(10.0, float(end)*0.5), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(5.0, float(end)*0.25), max(31, int(points)//4)),
+",
+        "        ]
+",
+        "        last_err = None
+",
+        "        for integrator, s, e, p in attempts:
+",
+        "            try:
+",
+        "                rr.setIntegrator(integrator)
+",
+        "            except Exception:
+",
+        "                pass
+",
+        "            try:
+",
+        "                return rr.simulate(s, e, p)
+",
+        "            except Exception as err:
+",
+        "                last_err = err
+",
+        "        print(f'Optimization simulate fallback exhausted: {last_err}')
+",
+        "        return None
+",
+        "
+",
+        "    obs_to_fit = observable_names[0]
+",
+        "    t_exp = np.linspace(0, 100, 21)
+",
+        "
+",
+        "    rr.reset()
+",
+        "    truth = robust_rr_simulate(float(t_exp[0]), float(t_exp[-1]), len(t_exp))
+",
+        "    if truth is None:
+",
+        "        print('Skipping optimization: could not produce stable baseline simulation.')
+",
+        "    else:
+",
+        "        truth_vals = truth[obs_to_fit] if obs_to_fit in truth.colnames else truth[truth.colnames[1]]
+",
+        "        experimental_data = truth_vals + np.random.normal(0, 0.02, len(truth_vals))
+",
+        "        t_exp_data = np.linspace(float(t_exp[0]), float(t_exp[-1]), len(experimental_data))
+",
+        "
+",
+        "        def objective(p):
+",
+        "            rr.reset()
+",
+        "            rr[param_name] = max(1e-12, float(p[0]))
+",
+        "            sim = robust_rr_simulate(float(t_exp[0]), float(t_exp[-1]), len(t_exp))
+",
+        "            if sim is None:
+",
+        "                return 1e15
+",
+        "            sim_vals = sim[obs_to_fit] if obs_to_fit in sim.colnames else sim[sim.colnames[1]]
+",
+        "            return float(np.sum((sim_vals - experimental_data) ** 2))
+",
+        "
+",
+        "        base = float(rr[param_name])
+",
+        "        sweep = np.logspace(np.log10(max(base * 0.1, 1e-12)), np.log10(max(base * 10.0, 1e-11)), 25)
+",
+        "        losses = [objective([candidate]) for candidate in sweep]
+",
+        "        best_idx = int(np.argmin(losses))
+",
+        "        best_p = sweep[best_idx]
+",
+        "        print(f'Best {param_name} from grid search: {best_p}')
+",
+        "
+",
+        "        rr.reset()
+",
+        "        rr[param_name] = float(best_p)
+",
+        "        fitted = robust_rr_simulate(0, 100, 101)
+",
+        "        if fitted is None:
+",
+        "            print('Skipping optimization plot: best-fit simulation failed.')
+",
+        "        else:
+",
+        "            fitted_vals = fitted[obs_to_fit] if obs_to_fit in fitted.colnames else fitted[fitted.colnames[1]]
+",
+        "
+",
+        "            plt.figure(figsize=(8, 5))
+",
+        "            plt.scatter(t_exp_data, experimental_data, label='Synthetic experimental data')
+",
+        "            plt.plot(fitted['time'], fitted_vals, 'r--', label='Best-fit simulation')
+",
+        "            plt.legend()
+",
+        "            plt.title('Parameter Estimation Result')
+",
+        "            plt.xlabel('Time')
+",
+        "            plt.ylabel(obs_to_fit)
+",
+        "            plt.grid(True, alpha=0.3)
+",
+        "            plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 6. Fisher Information & Sensitivity Analysis
+",
+        "Estimate the sensitivity of model dynamic responses to parameter changes.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None or 'param_name' not in globals():
+",
+        "    print('Skipping sensitivity analysis: run previous cells first and ensure rr is available.')
+",
+        "else:
+",
+        "    def robust_rr_simulate(start, end, points):
+",
+        "        attempts = [
+",
+        "            ('cvode', float(start), float(end), int(points)),
+",
+        "            ('cvode', float(start), float(end), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(10.0, float(end)*0.5), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(5.0, float(end)*0.25), max(31, int(points)//4)),
+",
+        "        ]
+",
+        "        last_err = None
+",
+        "        for integrator, s, e, p in attempts:
+",
+        "            try:
+",
+        "                rr.setIntegrator(integrator)
+",
+        "            except Exception:
+",
+        "                pass
+",
+        "            try:
+",
+        "                return rr.simulate(s, e, p)
+",
+        "            except Exception as err:
+",
+        "                last_err = err
+",
+        "        print(f'Sensitivity simulate fallback exhausted: {last_err}')
+",
+        "        return None
+",
+        "
+",
+        "    def get_sensitivity(p_name, delta=0.01):
+",
+        "        rr.reset()
+",
+        "        base = float(rr[p_name])
+",
+        "
+",
+        "        rr[p_name] = max(1e-12, base * (1 + delta))
+",
+        "        sim_plus = robust_rr_simulate(0, 100, 101)
+",
+        "
+",
+        "        rr.reset()
+",
+        "        rr[p_name] = max(1e-12, base * (1 - delta))
+",
+        "        sim_minus = robust_rr_simulate(0, 100, 101)
+",
+        "        if sim_plus is None or sim_minus is None:
+",
+        "            return None
+",
+        "
+",
+        "        target = observable_names[0] if len(observable_names) > 0 else sim_plus.colnames[1]
+",
+        "        if target not in sim_plus.colnames:
+",
+        "            target = sim_plus.colnames[1]
+",
+        "
+",
+        "        sens = (sim_plus[target] - sim_minus[target]) / (2 * delta * max(base, 1e-12))
+",
+        "        return sim_plus['time'], sens, target
+",
+        "
+",
+        "    sensitivity_output = get_sensitivity(param_name)
+",
+        "    if sensitivity_output is None:
+",
+        "        print('Skipping sensitivity plot: simulation failed for perturbed parameter values.')
+",
+        "    else:
+",
+        "        t_vals, sens_vals, target_col = sensitivity_output
+",
+        "        plt.figure(figsize=(8, 5))
+",
+        "        plt.plot(t_vals, sens_vals)
+",
+        "        plt.ylabel(f'd[{target_col}] / d[{param_name}]')
+",
+        "        plt.xlabel('Time')
+",
+        "        plt.title('Local Sensitivity Over Time')
+",
+        "        plt.grid(True, alpha=0.3)
+",
+        "        plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "---
+",
+        "**Next Steps**:
+",
+        "- Modify the BNGL string at the top to change model structure.
+",
+        "- Use \`model.rules\` and \`model.species\` to inspect or modify components programmatically.
+",
+        "- Visit [pybionetgen.readthedocs.io](https://pybionetgen.readthedocs.io) for advanced documentation.",
+      ],
+    },
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3",
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3,
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.10.0",
+    },
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5,
+}
+`;
+
+exports[`jupyterExport snapshot > generates a complete valid notebook structure without simulation data 1`] = `
+{
+  "cells": [
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "# BioNetGen Analysis: SnapshotModel
+",
+        "This notebook is generated from the current web session. It preserves the BNGL source, adds a reproducible Python workflow, and can embed simulation output when it is available.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Install dependencies if needed
+",
+        "# !pip install pybionetgen libroadrunner numpy matplotlib pandas seaborn scipy
+",
+        "import bionetgen
+",
+        "import numpy as np
+",
+        "import pandas as pd
+",
+        "import matplotlib.pyplot as plt
+",
+        "import seaborn as sns
+",
+        "import os
+",
+        "from scipy.optimize import curve_fit, root, brute
+",
+        "from scipy.stats import sem
+
+",
+        "# Configure plot style
+",
+        "sns.set_theme(style="whitegrid", palette="muted")
+",
+        "plt.rcParams['figure.figsize'] = [10, 6]
+",
+        "plt.rcParams['font.size'] = 12",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Save current model to file
+",
+        "model_name = "SnapshotModel"
+",
+        "model_file = f"{model_name}.bngl"
+",
+        "bngl_content = """begin model
+end model"""
+
+",
+        "with open(model_file, "w", encoding="utf-8") as f:
+",
+        "    f.write(bngl_content)
+
+",
+        "print(f"Model saved to {model_file}")",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 1. Standard Simulation with pybionetgen
+",
+        "The \`bionetgen.run()\` command executes the full BNGL script using the BNG2.pl engine. This handles network generation and simulation as defined in your script.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Run the model using pybionetgen's documented return structure
+",
+        "def to_dataframe(result_obj):
+",
+        "    if isinstance(result_obj, pd.DataFrame):
+",
+        "        return result_obj.copy()
+",
+        "    if hasattr(result_obj, 'colnames'):
+",
+        "        return pd.DataFrame({col: result_obj[col] for col in result_obj.colnames})
+",
+        "    return pd.DataFrame(result_obj)
+
+",
+        "sim_df = None
+",
+        "try:
+",
+        "    ret = bionetgen.run(model_file, out="bng_output")
+",
+        "    base_name = os.path.splitext(os.path.basename(model_file))[0]
+",
+        "    result_map = ret.results if hasattr(ret, 'results') else ret
+",
+        "    if not isinstance(result_map, dict) or len(result_map) == 0:
+",
+        "        raise RuntimeError("No simulation result map was returned by bionetgen.run")
+",
+        "    result_key = base_name if base_name in result_map else next(iter(result_map.keys()))
+",
+        "    print(f"Using result key: {result_key}")
+",
+        "    sim_df = to_dataframe(result_map[result_key])
+",
+        "except Exception as err:
+",
+        "    print(f"bionetgen.run() failed ({err})")
+",
+        "    print("Trying bngmodel + setup_simulator fallback")
+",
+        "    try:
+",
+        "        fallback_model = bionetgen.bngmodel(model_file)
+",
+        "        fallback_rr = fallback_model.setup_simulator()
+",
+        "        sim_df = to_dataframe(fallback_rr.simulate(0, 100, 101))
+",
+        "    except Exception as fallback_err:
+",
+        "        raise RuntimeError(f"Both simulation paths failed: {fallback_err}")
+
+",
+        "display(sim_df.head())
+",
+        "time_col = 'time' if 'time' in sim_df.columns else sim_df.columns[0]
+",
+        "plt.figure(figsize=(10, 6))
+",
+        "for col in sim_df.columns:
+",
+        "    if col != time_col:
+",
+        "        plt.plot(sim_df[time_col], sim_df[col], label=col)
+",
+        "plt.xlabel(time_col)
+",
+        "plt.ylabel('Value')
+",
+        "plt.title(f"Simulation: {model_name}")
+",
+        "plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+",
+        "plt.tight_layout()
+",
+        "plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 2. High-Performance ODE Simulation with libroadrunner
+",
+        "For rapid parameter sweeps or optimization, you can use the \`libroadrunner\` engine, which uses LLVM to JIT-compile your model for high-performance ODE integration.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Load the model into a pythonic bngmodel object
+",
+        "model = bionetgen.bngmodel(model_file)
+
+",
+        "# Setup the roadrunner simulator
+",
+        "# Note: This generates BNG-XML and then SBML to load into roadrunner
+",
+        "rr = None
+",
+        "try:
+",
+        "    rr = model.setup_simulator()
+",
+        "
+",
+        "    def safe_rr_simulate(start, end, points):
+",
+        "        try:
+",
+        "            return rr.simulate(float(start), float(end), int(points))
+",
+        "        except Exception as first_err:
+",
+        "            # Retry with relaxed integration settings for stiff/unstable regimes
+",
+        "            try:
+",
+        "                rr.integrator.setValue('maximum_num_steps', 200000)
+",
+        "                rr.integrator.setValue('relative_tolerance', 1e-6)
+",
+        "                rr.integrator.setValue('absolute_tolerance', 1e-10)
+",
+        "            except Exception:
+",
+        "                pass
+",
+        "            try:
+",
+        "                retry_points = max(51, int(points) // 2)
+",
+        "                return rr.simulate(float(start), float(end), retry_points)
+",
+        "            except Exception as second_err:
+",
+        "                raise RuntimeError(f'RoadRunner simulate failed: {first_err}; retry failed: {second_err}')
+",
+        "
+",
+        "    rr_data = safe_rr_simulate(0, 100, 101)
+",
+        "    rr_df = pd.DataFrame({col: rr_data[col] for col in rr_data.colnames})
+",
+        "    plt.figure(figsize=(10, 6))
+",
+        "    for col in rr_df.columns:
+",
+        "        if col != 'time':
+",
+        "            plt.plot(rr_df['time'], rr_df[col], label=col)
+",
+        "    plt.xlabel('Time')
+",
+        "    plt.ylabel('Concentration')
+",
+        "    plt.title(f'ODE Simulation: {model_name}')
+",
+        "    plt.legend()
+",
+        "    plt.grid(True, alpha=0.3)
+",
+        "    plt.show()
+",
+        "except Exception as err:
+",
+        "    print(f'RoadRunner setup unavailable: {err}')
+",
+        "    print('Advanced ODE cells below are optional and will be skipped if rr is None.')",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 2.5. Steady State Analysis
+",
+        "Find and analyze the steady-state behavior of your model.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None:
+",
+        "    print('Skipping steady-state analysis because rr is unavailable.')
+",
+        "else:
+",
+        "    rr.reset()
+",
+        "    try:
+",
+        "        steady_state = rr.steadyState()
+",
+        "        print(f"Steady state found with residual: {steady_state}")
+",
+        "        ss_values = rr.getSteadyStateValues()
+",
+        "        raw_selections = list(getattr(rr, 'steadyStateSelections', []))
+",
+        "        ss_names = []
+",
+        "        for sel in raw_selections:
+",
+        "            if hasattr(sel, 'selection'):
+",
+        "                ss_names.append(str(sel.selection))
+",
+        "            else:
+",
+        "                ss_names.append(str(sel))
+",
+        "        if len(ss_names) != len(ss_values):
+",
+        "            ss_names = [f'value_{i}' for i in range(len(ss_values))]
+",
+        "        print('Steady state values:')
+",
+        "        for name, val in zip(ss_names, ss_values):
+",
+        "            print(f"  {name}: {val}")
+",
+        "    except Exception as e:
+",
+        "        print(f"Steady-state analysis unavailable: {e}")
+",
+        "        print('This can happen for oscillatory systems or unsupported steady-state outputs.')",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 3. Model Structure Analysis
+",
+        "Explore the structure of your BioNetGen model.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "# Parse names directly from BNGL text to avoid API-shape assumptions
+",
+        "def parse_parameter_names(text):
+",
+        "    names = []
+",
+        "    in_section = False
+",
+        "    for raw in text.splitlines():
+",
+        "        line = raw.strip()
+",
+        "        low = line.lower()
+",
+        "        if low.startswith('begin parameters'):
+",
+        "            in_section = True
+",
+        "            continue
+",
+        "        if low.startswith('end parameters'):
+",
+        "            break
+",
+        "        if in_section and line and not line.startswith('#'):
+",
+        "            parts = line.split()
+",
+        "            if len(parts) >= 2:
+",
+        "                names.append(parts[0])
+",
+        "    return names
+
+",
+        "param_names = parse_parameter_names(bngl_content)
+",
+        "observable_names = [c for c in sim_df.columns if c != 'time'] if sim_df is not None else []
+",
+        "print('=== MODEL STRUCTURE ===')
+",
+        "print(f'Parameters parsed from BNGL: {len(param_names)}')
+",
+        "print(param_names[:10])
+",
+        "print(f'Observable/result columns: {len(observable_names)}')
+",
+        "print(observable_names[:10])
+",
+        "if rr is not None:
+",
+        "    try:
+",
+        "        print(f'RoadRunner global params: {rr.getGlobalParameterIds()}')
+",
+        "    except Exception:
+",
+        "        pass",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 4. Parameter Sensitivity Scan (1D)
+",
+        "Explore how varying a single parameter affects the final state of your observables.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None:
+",
+        "    print('Skipping parameter scan because rr is unavailable.')
+",
+        "else:
+",
+        "    if len(param_names) == 0:
+",
+        "        rr_params = list(rr.getGlobalParameterIds()) if hasattr(rr, 'getGlobalParameterIds') else []
+",
+        "        param_names = [p for p in rr_params if p.lower() not in ('time')]
+",
+        "    if len(param_names) == 0 or len(observable_names) == 0:
+",
+        "        print('Skipping scan: need at least one parameter and one observable/result column.')
+",
+        "    else:
+",
+        "        param_name = param_names[0]
+",
+        "        target_observable = observable_names[0]
+",
+        "        scan_range = np.logspace(-1, 1, 7)
+",
+        "        print(f'Scanning parameter: {param_name}')
+",
+        "        print(f'Monitoring observable: {target_observable}')
+",
+        "
+",
+        "        baseline = rr[param_name]
+",
+        "        t_end = float(sim_df[time_col].max()) if sim_df is not None and time_col in sim_df.columns else 100.0
+",
+        "        n_steps = max(51, len(sim_df)) if sim_df is not None else 101
+",
+        "        scan_results = []
+",
+        "        for scale in scan_range:
+",
+        "            rr.reset()
+",
+        "            rr[param_name] = max(1e-12, baseline * scale)
+",
+        "            try:
+",
+        "                res = safe_rr_simulate(0, t_end, n_steps)
+",
+        "                obs_data = res[target_observable] if target_observable in res.colnames else res[res.colnames[1]]
+",
+        "                scan_results.append(float(obs_data[-1]))
+",
+        "            except Exception as sim_err:
+",
+        "                print(f'Scan point failed at scale={scale:.3g}: {sim_err}')
+",
+        "                scan_results.append(np.nan)
+",
+        "
+",
+        "        plt.figure(figsize=(8, 5))
+",
+        "        plt.semilogx(scan_range, scan_results, 'o-')
+",
+        "        plt.xlabel(f'Fold-change on {param_name}')
+",
+        "        plt.ylabel(f'Final {target_observable}')
+",
+        "        plt.title(f'1D Parameter Scan: {param_name}')
+",
+        "        plt.grid(True, alpha=0.3)
+",
+        "        plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 5. Parameter Estimation (Optimization)
+",
+        "Fit your model parameters to experimental data using \`scipy.optimize\`.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None or 'param_name' not in globals() or len(observable_names) == 0:
+",
+        "    print('Skipping optimization: run the previous cells first and ensure rr is available.')
+",
+        "else:
+",
+        "    def robust_rr_simulate(start, end, points):
+",
+        "        attempts = [
+",
+        "            ('cvode', float(start), float(end), int(points)),
+",
+        "            ('cvode', float(start), float(end), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(10.0, float(end)*0.5), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(5.0, float(end)*0.25), max(31, int(points)//4)),
+",
+        "        ]
+",
+        "        last_err = None
+",
+        "        for integrator, s, e, p in attempts:
+",
+        "            try:
+",
+        "                rr.setIntegrator(integrator)
+",
+        "            except Exception:
+",
+        "                pass
+",
+        "            try:
+",
+        "                return rr.simulate(s, e, p)
+",
+        "            except Exception as err:
+",
+        "                last_err = err
+",
+        "        print(f'Optimization simulate fallback exhausted: {last_err}')
+",
+        "        return None
+",
+        "
+",
+        "    obs_to_fit = observable_names[0]
+",
+        "    t_exp = np.linspace(0, 100, 21)
+",
+        "
+",
+        "    rr.reset()
+",
+        "    truth = robust_rr_simulate(float(t_exp[0]), float(t_exp[-1]), len(t_exp))
+",
+        "    if truth is None:
+",
+        "        print('Skipping optimization: could not produce stable baseline simulation.')
+",
+        "    else:
+",
+        "        truth_vals = truth[obs_to_fit] if obs_to_fit in truth.colnames else truth[truth.colnames[1]]
+",
+        "        experimental_data = truth_vals + np.random.normal(0, 0.02, len(truth_vals))
+",
+        "        t_exp_data = np.linspace(float(t_exp[0]), float(t_exp[-1]), len(experimental_data))
+",
+        "
+",
+        "        def objective(p):
+",
+        "            rr.reset()
+",
+        "            rr[param_name] = max(1e-12, float(p[0]))
+",
+        "            sim = robust_rr_simulate(float(t_exp[0]), float(t_exp[-1]), len(t_exp))
+",
+        "            if sim is None:
+",
+        "                return 1e15
+",
+        "            sim_vals = sim[obs_to_fit] if obs_to_fit in sim.colnames else sim[sim.colnames[1]]
+",
+        "            return float(np.sum((sim_vals - experimental_data) ** 2))
+",
+        "
+",
+        "        base = float(rr[param_name])
+",
+        "        sweep = np.logspace(np.log10(max(base * 0.1, 1e-12)), np.log10(max(base * 10.0, 1e-11)), 25)
+",
+        "        losses = [objective([candidate]) for candidate in sweep]
+",
+        "        best_idx = int(np.argmin(losses))
+",
+        "        best_p = sweep[best_idx]
+",
+        "        print(f'Best {param_name} from grid search: {best_p}')
+",
+        "
+",
+        "        rr.reset()
+",
+        "        rr[param_name] = float(best_p)
+",
+        "        fitted = robust_rr_simulate(0, 100, 101)
+",
+        "        if fitted is None:
+",
+        "            print('Skipping optimization plot: best-fit simulation failed.')
+",
+        "        else:
+",
+        "            fitted_vals = fitted[obs_to_fit] if obs_to_fit in fitted.colnames else fitted[fitted.colnames[1]]
+",
+        "
+",
+        "            plt.figure(figsize=(8, 5))
+",
+        "            plt.scatter(t_exp_data, experimental_data, label='Synthetic experimental data')
+",
+        "            plt.plot(fitted['time'], fitted_vals, 'r--', label='Best-fit simulation')
+",
+        "            plt.legend()
+",
+        "            plt.title('Parameter Estimation Result')
+",
+        "            plt.xlabel('Time')
+",
+        "            plt.ylabel(obs_to_fit)
+",
+        "            plt.grid(True, alpha=0.3)
+",
+        "            plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "## 6. Fisher Information & Sensitivity Analysis
+",
+        "Estimate the sensitivity of model dynamic responses to parameter changes.",
+      ],
+    },
+    {
+      "cell_type": "code",
+      "metadata": {
+        "language": "python",
+      },
+      "source": [
+        "if rr is None or 'param_name' not in globals():
+",
+        "    print('Skipping sensitivity analysis: run previous cells first and ensure rr is available.')
+",
+        "else:
+",
+        "    def robust_rr_simulate(start, end, points):
+",
+        "        attempts = [
+",
+        "            ('cvode', float(start), float(end), int(points)),
+",
+        "            ('cvode', float(start), float(end), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(10.0, float(end)*0.5), max(51, int(points)//2)),
+",
+        "            ('rk4', float(start), max(5.0, float(end)*0.25), max(31, int(points)//4)),
+",
+        "        ]
+",
+        "        last_err = None
+",
+        "        for integrator, s, e, p in attempts:
+",
+        "            try:
+",
+        "                rr.setIntegrator(integrator)
+",
+        "            except Exception:
+",
+        "                pass
+",
+        "            try:
+",
+        "                return rr.simulate(s, e, p)
+",
+        "            except Exception as err:
+",
+        "                last_err = err
+",
+        "        print(f'Sensitivity simulate fallback exhausted: {last_err}')
+",
+        "        return None
+",
+        "
+",
+        "    def get_sensitivity(p_name, delta=0.01):
+",
+        "        rr.reset()
+",
+        "        base = float(rr[p_name])
+",
+        "
+",
+        "        rr[p_name] = max(1e-12, base * (1 + delta))
+",
+        "        sim_plus = robust_rr_simulate(0, 100, 101)
+",
+        "
+",
+        "        rr.reset()
+",
+        "        rr[p_name] = max(1e-12, base * (1 - delta))
+",
+        "        sim_minus = robust_rr_simulate(0, 100, 101)
+",
+        "        if sim_plus is None or sim_minus is None:
+",
+        "            return None
+",
+        "
+",
+        "        target = observable_names[0] if len(observable_names) > 0 else sim_plus.colnames[1]
+",
+        "        if target not in sim_plus.colnames:
+",
+        "            target = sim_plus.colnames[1]
+",
+        "
+",
+        "        sens = (sim_plus[target] - sim_minus[target]) / (2 * delta * max(base, 1e-12))
+",
+        "        return sim_plus['time'], sens, target
+",
+        "
+",
+        "    sensitivity_output = get_sensitivity(param_name)
+",
+        "    if sensitivity_output is None:
+",
+        "        print('Skipping sensitivity plot: simulation failed for perturbed parameter values.')
+",
+        "    else:
+",
+        "        t_vals, sens_vals, target_col = sensitivity_output
+",
+        "        plt.figure(figsize=(8, 5))
+",
+        "        plt.plot(t_vals, sens_vals)
+",
+        "        plt.ylabel(f'd[{target_col}] / d[{param_name}]')
+",
+        "        plt.xlabel('Time')
+",
+        "        plt.title('Local Sensitivity Over Time')
+",
+        "        plt.grid(True, alpha=0.3)
+",
+        "        plt.show()",
+      ],
+    },
+    {
+      "cell_type": "markdown",
+      "metadata": {
+        "language": "markdown",
+      },
+      "source": [
+        "---
+",
+        "**Next Steps**:
+",
+        "- Modify the BNGL string at the top to change model structure.
+",
+        "- Use \`model.rules\` and \`model.species\` to inspect or modify components programmatically.
+",
+        "- Visit [pybionetgen.readthedocs.io](https://pybionetgen.readthedocs.io) for advanced documentation.",
+      ],
+    },
+  ],
+  "metadata": {
+    "kernelspec": {
+      "display_name": "Python 3",
+      "language": "python",
+      "name": "python3",
+    },
+    "language_info": {
+      "codemirror_mode": {
+        "name": "ipython",
+        "version": 3,
+      },
+      "file_extension": ".py",
+      "mimetype": "text/x-python",
+      "name": "python",
+      "nbconvert_exporter": "python",
+      "pygments_lexer": "ipython3",
+      "version": "3.10.0",
+    },
+  },
+  "nbformat": 4,
+  "nbformat_minor": 5,
+}
+`;
