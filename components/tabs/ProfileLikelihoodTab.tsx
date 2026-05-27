@@ -128,21 +128,19 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
   const updatePreview = async () => {
     if (!model) return;
     try {
-      const expData = parseExperimentalData(dataInput);
       const sim = await bnglService.simulate(model, {
-        t_end: Math.max(50, ...expData.map(d => d.time)),
+        t_end: Math.max(50, ...parseExperimentalData(dataInput).map(d => d.time)),
         n_steps: 50,
         method: 'ode'
       });
       
+      const expData = parseExperimentalData(dataInput);
       const expMap = new Map();
       for (const e of expData) {
-        expMap.set(Math.round(e.time * 1e5), e);
+        expMap.set(Math.round(e.time * 100000), e);
       }
-
       const combined = sim.data.map(d => {
-        const key = Math.round(d.time * 1e5);
-        const exp = expMap.get(key) || expMap.get(key - 1) || expMap.get(key + 1);
+        const exp = expMap.get(Math.round(d.time * 100000));
         const point: any = { ...d };
         if (exp) {
           Object.entries(exp.values).forEach(([k, v]) => {
