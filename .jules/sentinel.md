@@ -1,4 +1,0 @@
-## 2025-05-25 - Fix arbitrary code execution vulnerability in expression evaluator
-**Vulnerability:** The expression evaluator in `src/gdat_benchmark.test.ts` passed dynamically built JavaScript strings to `new Function` without validating for potentially malicious code injection characters (like `;`, `{`, `}`, `=`, `\`, `` ` ``, `$`, `[`, `]`).
-**Learning:** `new Function` is functionally equivalent to `eval()`. Without sanitizing or strictly validating the input string before compilation, an attacker could potentially execute arbitrary code by passing crafted rate expressions or function bodies.
-**Prevention:** Before compiling the expression string using `new Function`, validate it against a restrictive regular expression (e.g., `/[;{}=\\`$\[\]]/`) to ensure it only contains expected mathematical symbols and safe characters. Reject the compilation (or safely fallback to a dummy function) if unsafe characters are detected.
