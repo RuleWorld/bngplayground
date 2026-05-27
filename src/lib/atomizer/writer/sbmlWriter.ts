@@ -1383,12 +1383,12 @@ async function ensureLibSBML() {
 
     const config: Record<string, unknown> = {
       onAbort: (reason: unknown) => {
-        console.error('[sbmlWriter] libsbml abort:', reason);
+        logger.error('SBMW000E', 'libsbml abort:', String(reason));
       },
       TOTAL_MEMORY: 128 * 1024 * 1024,
       noInitialRun: true,
-      print: (text: string) => console.log(`[sbmlWriter] ${text}`),
-      printErr: (text: string) => console.warn(`[sbmlWriter:err] ${text}`),
+      print: (text: string) => logger.debug('SBMW000I', text),
+      printErr: (text: string) => logger.warning('SBMW000W', text),
       locateFile: (file: string) => {
         if (file.endsWith('.wasm')) {
           if (typeof process !== 'undefined' && process.versions && process.versions.node) {
