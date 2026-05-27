@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BNGLModel, SimulationResults } from '../src/types';
 import type { BatchReporter, BatchSimulator } from '../src/utils/batchRunner';
-import { runSingleBatchItem, safeModelName } from '../src/utils/batchRunner';
+import { runSingleBatchItem, normalizeFilterNames } from '../src/utils/batchRunner';
 
 function createBaseModel(): BNGLModel {
     return {
@@ -133,22 +133,23 @@ describe('batchRunner', () => {
     });
 });
 
-describe('safeModelName', () => {
-    it('returns lowercase for alphanumeric strings', () => {
-        expect(safeModelName('ModelName123')).toBe('modelname123');
+describe('normalizeFilterNames', () => {
+    it('returns null for undefined, null, or empty array', () => {
+        expect(normalizeFilterNames(undefined)).toBeNull();
+        expect(normalizeFilterNames(null as unknown as string[])).toBeNull();
+        expect(normalizeFilterNames([])).toBeNull();
     });
 
-    it('replaces special characters with underscores', () => {
-        expect(safeModelName('My-Model (test) & version 1.0!')).toBe('my_model__test____version_1_0_');
-        expect(safeModelName('hello/world\\test')).toBe('hello_world_test');
+    it('returns null if all names are empty or whitespace', () => {
+        expect(normalizeFilterNames(['', ' ', '   '])).toBeNull();
+        expect(normalizeFilterNames([null as unknown as string, undefined as unknown as string])).toBeNull();
     });
 
-    it('handles an empty string', () => {
-        expect(safeModelName('')).toBe('');
+    it('trims and lowercases valid names', () => {
+        expect(normalizeFilterNames(['  foo  ', 'BAR', 'BaZ '])).toEqual(['foo', 'bar', 'baz']);
     });
 
-    it('handles strings that are already safe', () => {
-        expect(safeModelName('safe_model_name')).toBe('safe_model_name');
-        expect(safeModelName('another_123')).toBe('another_123');
+    it('filters out empty/whitespace names and normalizes the rest', () => {
+        expect(normalizeFilterNames(['  ', 'A', '', ' b ', undefined as unknown as string, 'C'])).toEqual(['a', 'b', 'c']);
     });
 });
