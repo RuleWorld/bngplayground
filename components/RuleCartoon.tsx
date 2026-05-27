@@ -60,7 +60,7 @@ const cloneMolecule = (
   })),
 });
 
-const annotateRule = (rule: VisualizationRule): AnnotatedVisualization => {
+export const annotateRule = (rule: VisualizationRule): AnnotatedVisualization => {
   const annotatedReactants = rule.reactants.map((complex) =>
     complex.map((molecule) => cloneMolecule(molecule, 'context'))
   );
@@ -70,16 +70,20 @@ const annotateRule = (rule: VisualizationRule): AnnotatedVisualization => {
 
   annotatedReactants.forEach((complex, complexIdx) => {
     const productComplex = annotatedProducts[complexIdx] ?? [];
-    const productUsage = new Set<number>();
+    const productMoleculesByName = new Map<string, number[]>();
+    productComplex.forEach((candidate, idx) => {
+      let arr = productMoleculesByName.get(candidate.name);
+      if (!arr) {
+        arr = [];
+        productMoleculesByName.set(candidate.name, arr);
+      }
+      arr.push(idx);
+    });
 
     complex.forEach((molecule, moleculeIdx) => {
       const annotatedReactant = annotatedReactants[complexIdx][moleculeIdx];
-      const productMatchIdx = productComplex.findIndex((candidate, candidateIdx) => {
-        if (productUsage.has(candidateIdx)) {
-          return false;
-        }
-        return candidate.name === molecule.name;
-      });
+      const candidates = productMoleculesByName.get(molecule.name);
+      const productMatchIdx = candidates && candidates.length > 0 ? candidates.shift()! : -1;
 
       if (productMatchIdx === -1) {
         annotatedReactant.components = annotatedReactant.components.map((component) => ({
@@ -89,30 +93,21 @@ const annotateRule = (rule: VisualizationRule): AnnotatedVisualization => {
         return;
       }
 
-      productUsage.add(productMatchIdx);
       const annotatedProduct = productComplex[productMatchIdx];
+      const productComponentsByName = new Map<string, number[]>();
+      annotatedProduct.components.forEach((candidate, idx) => {
+        let arr = productComponentsByName.get(candidate.name);
+        if (!arr) {
+          arr = [];
+          productComponentsByName.set(candidate.name, arr);
+        }
+        arr.push(idx);
+      });
       const productComponentUsage = new Set<number>();
 
-      const candidateMap = new Map<string, number[]>();
-      annotatedProduct.components.forEach((candidate, idx) => {
-        if (!candidateMap.has(candidate.name)) {
-          candidateMap.set(candidate.name, []);
-        }
-        candidateMap.get(candidate.name)!.push(idx);
-      });
-
       annotatedReactant.components = annotatedReactant.components.map((component) => {
-        const indices = candidateMap.get(component.name);
-        let candidateIdx = -1;
-
-        if (indices) {
-          for (const idx of indices) {
-            if (!productComponentUsage.has(idx)) {
-              candidateIdx = idx;
-              break;
-            }
-          }
-        }
+        const compCandidates = productComponentsByName.get(component.name);
+        const candidateIdx = compCandidates && compCandidates.length > 0 ? compCandidates.shift()! : -1;
 
         if (candidateIdx === -1) {
           return { ...component, role: 'transformed' };
