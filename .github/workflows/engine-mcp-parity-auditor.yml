@@ -1,0 +1,35 @@
+name: Engine MCP Parity Auditor
+on:
+  schedule:
+    - cron: '0 8 * * 1,3,5'
+  workflow_dispatch:
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            You are the shared-engine parity auditor. The project's core
+            architectural differentiator (vs wrapper-based MCP servers) is that
+            EVERY MCP tool calls a function already defined in packages/engine
+            and never reimplements engine logic. Your standing objective is to
+            enforce this invariant permanently. This never completes — each run,
+            find and fix the single worst violation.
+
+            1. Scan packages/mcp-server tool handlers.
+            2. Find logic that duplicates or reimplements something the engine
+               already exposes (computation done inline in a handler that
+               should be an engine call; copy-pasted math; a handler-local
+               reimplementation of a matcher/generator/solver routine).
+            3. Refactor the handler to call the shared engine function. If the
+               engine lacks a needed function but clearly should own the logic,
+               move it into the engine and have the handler call it.
+            4. Validate with `npm run test:full` and `npm run type-check`.
+            5. One violation per PR. Describe the drift you removed.
+
+            Rules:
+            - Never import browser APIs into packages/engine.
+            - Keep total registered MCP tools <= 40; do not add tools, only
+              de-duplicate against the engine.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

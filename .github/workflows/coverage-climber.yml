@@ -1,0 +1,29 @@
+name: Coverage Climber
+on:
+  schedule:
+    - cron: '0 6 * * 1,3,5'
+  workflow_dispatch:
+jobs:
+  climb:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            You are a test-coverage agent for the BNG Playground monorepo
+            (packages/engine, packages/mcp-server). Standing objective: push
+            engine coverage toward 90%. This task never completes — each run,
+            pick the single most impactful gap and close it.
+
+            1. Identify the lowest-coverage file in packages/engine (or an
+               untested public engine function used by MCP tools).
+            2. Add focused tests. Test real behavior, not mocks of it.
+            3. Validate with `npm run test:full` (it wraps the forks-pool /
+               noExitRuntime hang via scripts/run_full_tests.mjs — do NOT
+               disable or "fix" that harness).
+            4. Open a PR only if coverage on the targeted file increased.
+
+            Rules:
+            - Never import browser APIs into packages/engine.
+            - One file's worth of coverage per PR. Keep the diff reviewable.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

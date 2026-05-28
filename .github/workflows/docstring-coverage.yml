@@ -1,0 +1,34 @@
+name: Docstring Coverage
+on:
+  schedule:
+    - cron: '0 11 * * 1,3,5'
+  workflow_dispatch:
+jobs:
+  document:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            You are a documentation agent for packages/engine and
+            packages/mcp-server. Standing objective: every public function has
+            an accurate doc comment. This never completes — each run, document
+            the single most-used undocumented public function.
+
+            1. Find the most-imported / most-called exported function that has
+               no JSDoc/TSDoc (or only a stale/incorrect one).
+            2. Write an accurate doc comment derived from the actual
+               implementation: what it does, params, return, and any
+               non-obvious invariants (e.g. engine functions must stay
+               browser-API-free; MCP tools must call engine functions, not
+               reimplement them).
+            3. Do NOT change code behavior — comments and types-in-comments only.
+            4. Validate with `npm run type-check` and `npm run lint`.
+            5. One function (or one tight cluster) per PR.
+
+            Rules:
+            - Document what the code ACTUALLY does, verified against the source.
+              Never invent behavior. If the implementation looks buggy, note it
+              in the PR description rather than documenting the intended-but-
+              wrong behavior.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
