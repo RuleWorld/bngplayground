@@ -1,0 +1,19 @@
+name: Performance Improver
+on:
+  schedule:
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+jobs:
+  optimize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            Performance agent. Hunt bottlenecks in the engine + WASM simulation path.
+            Likely targets: NetworkGenerator, Matcher, SimulationLoop, ODESolver.
+            1. Profile a representative model (20-rule/43-species range).
+            2. Implement an optimization (no public API/contract changes).
+            3. Verify via `node scripts/run_full_tests.mjs`.
+            Only open a PR on measurable gains.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

@@ -1,0 +1,22 @@
+name: CI Failure Fix
+on:
+  workflow_run:
+    workflows: ["CI Tests"]
+    types: [completed]
+  workflow_dispatch:
+jobs:
+  fix:
+    if: ${{ github.event.workflow_run.conclusion == 'failure' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            The CI run on branch ${{ github.event.workflow_run.head_branch }} failed.
+            Analyze the failure logs, find root cause, fix on that branch.
+            Note: Vitest forks pool hangs after pass when WASM sets noExitRuntime;
+            tests run via scripts/run_full_tests.mjs (child-process idle detector).
+            Don't "fix" that by disabling the harness.
+          starting_branch: ${{ github.event.workflow_run.head_branch }}
+          include_last_commit: true
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
