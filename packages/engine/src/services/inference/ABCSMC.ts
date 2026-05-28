@@ -13,7 +13,6 @@ import {
   effectiveSampleSize,
   systematicResample,
   weightedCovariance,
-  interpolateAtTime,
 } from './posteriorAnalysis';
 
 // ── Types ────────────────────────────────────────────────────────────

@@ -555,7 +555,6 @@ export class NetworkGenerator {
     if (!this.options.compartments || this.options.compartments.length === 0) {
       return { scale: 1, scalingVolume: 1 };
     }
-    const compartments = this.options.compartments;
 
     const pickAnchorVolume = (candidates: Species[]): number => {
       // Prefer 3D anchor volumes; only use 2D surface anchors when no 3D candidate exists.

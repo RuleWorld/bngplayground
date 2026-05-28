@@ -117,7 +117,9 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
 
   const outDir = resolve('src/generated');
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(resolve(outDir, 'gallery-data.ts'), output);
+  const outPath = resolve(outDir, 'gallery-data.ts');
+  const sanitized = output.replace(/\0/g, '').slice(0, 1_000_000);
+  writeFileSync(outPath, sanitized);
 
   console.log(`Generated: ${slim.length} models, ${gallery.categories.length} categories, ${Object.keys(gallery.assignments).length} assignments`);
 }

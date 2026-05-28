@@ -5,7 +5,7 @@
  * Converts flat models (explicit species) to rule-based models (patterns).
  */
 
-import { Species, Molecule, Component, Rule, Action } from '../core/structures';
+import { Species, Rule, Action } from '../core/structures';
 
 // =============================================================================
 // Types

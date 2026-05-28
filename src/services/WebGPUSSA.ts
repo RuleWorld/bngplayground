@@ -63,7 +63,7 @@ export interface GPUSSAResult {
  * Build the stoichiometry constant array (net change) as a WGSL string.
  * Layout: stoich[rxn * nSpecies + species] = net change (f32).
  */
-function buildStoichiometryData(reactions: SSAReaction[], nSpecies: number): string {
+function _buildStoichiometryData(reactions: SSAReaction[], nSpecies: number): string {
   const nReactions = reactions.length;
   const totalEntries = nReactions * nSpecies;
   const flat = new Array<number>(totalEntries).fill(0);

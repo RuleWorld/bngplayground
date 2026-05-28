@@ -17,6 +17,7 @@ const paths = resolveBNG2Paths();
 
 // Import BNG2 path defaults
 import { BNG2_PARSE_AND_ODE_VERIFIED_MODELS } from '../src/constants';
+const verifiedModels = BNG2_PARSE_AND_ODE_VERIFIED_MODELS ?? new Set<string>();
 
 const thisDir = dirname(fileURLToPath(import.meta.url));
 const projectRoot = resolve(thisDir, '..');
@@ -1809,7 +1810,7 @@ describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
 
   // Filter out models with known performance issues or those not verified for ODE parity
   const modelsToTest = testModels.filter(m => {
-    const isVerified = BNG2_PARSE_AND_ODE_VERIFIED_MODELS.has(m.model);
+    const isVerified = verifiedModels.has(m.model);
     const isExcluded = SKIP_MODELS.has(m.model);
     return isVerified && !isExcluded;
   });

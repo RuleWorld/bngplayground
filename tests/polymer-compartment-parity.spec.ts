@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { readFileSync, mkdirSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { BNGXMLWriter } from '@bngplayground/engine';
@@ -96,7 +96,7 @@ describe('Polymer Compartment Parity Tests', () => {
         console.log(`\n🔬 Running BNG2.pl simulation for ${name}.bngl...`);
         
         try {
-          const output = execFileSync('perl', [BNG2_PATH, bnglPath, '--outdir', outputDir], {
+          execFileSync('perl', [BNG2_PATH, bnglPath, '--outdir', outputDir], {
             encoding: 'utf-8',
             timeout: 50000,
             stdio: 'pipe'

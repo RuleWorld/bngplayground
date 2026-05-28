@@ -176,7 +176,7 @@ describe('Multi-Compartment Support - Model Repository Validation', () => {
 
                     // Try to generate XML
                     try {
-                        const xml = BNGXMLWriter.write(model);
+                        BNGXMLWriter.write(model);
                         xmlGeneratedCount++;
                     } catch (xmlErr: any) {
                         xmlErrors.push({

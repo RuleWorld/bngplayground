@@ -1,5 +1,3 @@
-import { Example } from '../types.ts';
-
 export { CHART_COLORS } from './utils/chartColors';
 
 // Set AB model as default

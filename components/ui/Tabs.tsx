@@ -100,7 +100,7 @@ export const TabList: React.FC<{ children: React.ReactNode }> = ({ children }) =
     if (tabs.length === 0) return;
 
     const currentIdx = tabs.findIndex(tab => tab === document.activeElement);
-    let nextIdx = currentIdx;
+    let nextIdx: number;
 
     switch (e.key) {
       case 'ArrowRight':

@@ -849,9 +849,13 @@ export class JITCompiler {
                     a /= Math.pow(volume, n - 1);
                 }
 
-                let expr = a.toString();
+                let expr = String(a);
                 for (let j = 0; j < n; j++) {
-                    expr += ` * state[${rxn.reactants[j]}]`;
+                    const idx = rxn.reactants[j];
+                    if (typeof idx !== 'number' || !Number.isFinite(idx) || idx < 0 || Math.floor(idx) !== idx) {
+                        throw new Error(`Invalid reactant index: ${idx}`);
+                    }
+                    expr += ` * state[${idx}]`;
                 }
 
                 source += `propensities[${i}] = ${expr};\n`;

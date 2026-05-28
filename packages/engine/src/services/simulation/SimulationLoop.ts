@@ -1327,7 +1327,6 @@ export async function simulate(
       }
       const dirtyObservables = new Uint8Array(numObservables);
       dirtyObservables.fill(1); // Initially all dirty
-      const ssaObservableValues = Object.create(null) as Record<string, number>;
 
       // Extract meaningful reaction names from ruleName or reactants/products
       const ruleNames = concreteReactions.map((rxn, i) => {
