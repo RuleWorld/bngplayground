@@ -756,23 +756,27 @@ export class BNGXMLWriter {
       { reactToProd: Map<number, number>; prodToReact: Map<number, number> }
     >();
 
-    const signature = (ref: MolRef) => `${ref.name}|${ref.componentNames.join(',')}`;
+    // Precompute a map of reactant indices to optimize product-to-reactant matching from O(N^2) to O(N).
+    // Uses shift() to pop indices matching the same signature.
+    const precomputedReactants = new Map<string, number[]>();
+    reactantRefs.forEach((reactRef, rIdx) => {
+      const key = reactRef.label
+        ? `lbl|${reactRef.name}|${reactRef.label}`
+        : `heur|${reactRef.name}|${reactRef.componentNames.join(',')}`;
+
+      const list = precomputedReactants.get(key);
+      if (list) list.push(rIdx);
+      else precomputedReactants.set(key, [rIdx]);
+    });
 
     productRefs.forEach((prodRef) => {
-      const matchIdx = prodRef.label
-        ? reactantRefs.findIndex((reactRef, rIdx) => {
-          if (reactantUsed.has(rIdx)) return false;
-          // When label is present, it MUST match for the molecule to be the same identity
-          return reactRef.name === prodRef.name && reactRef.label === prodRef.label;
-        })
-        : reactantRefs.findIndex((reactRef, rIdx) => {
-          if (reactantUsed.has(rIdx)) return false;
-          // Heuristic: same name and same set of components (names) usually implies same molecule
-          // across the transformation, especially in simple BioNetGen rules.
-          // Note: NFsim requires a complete mapping; if components differ, this heuristic might fail.
-          return reactRef.name === prodRef.name && reactRef.componentNames.join(',') === prodRef.componentNames.join(',');
-        });
-      if (matchIdx >= 0) {
+      const key = prodRef.label
+        ? `lbl|${prodRef.name}|${prodRef.label}`
+        : `heur|${prodRef.name}|${prodRef.componentNames.join(',')}`;
+
+      const list = precomputedReactants.get(key);
+      if (list && list.length > 0) {
+        const matchIdx = list.shift()!;
         const reactRef = reactantRefs[matchIdx];
         reactantUsed.add(matchIdx);
         productToReactant.set(`${prodRef.patternIdx}.${prodRef.molIdx}`, reactRef);
