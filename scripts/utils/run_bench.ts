@@ -46,7 +46,7 @@ async function runBenchmarks() {
 
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-    let categories: string[] = [];
+    let categories: string[];
     const models: { name: string; path: string; category: string }[] = [];
 
     try {

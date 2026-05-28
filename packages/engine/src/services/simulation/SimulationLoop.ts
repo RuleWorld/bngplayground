@@ -1508,7 +1508,6 @@ export async function simulate(
         }
         let totalEvents = 0;
         let nEventsThisPhase = 0;
-        let hasPushedFinalResult = false;
         const maxEvents = options.maxEvents ?? 100_000_000;
 
 
@@ -1721,12 +1720,11 @@ export async function simulate(
               } catch (e: unknown) {
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
-              if (outT >= nextTOut || totalEvents >= maxEvents) {
+                if (outT >= nextTOut || totalEvents >= maxEvents) {
                 pushDataRow(phase.suffix, outT, state as any as Float64Array);
                 const sp: Record<string, number> = { time: outT };
                 for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
-                if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
               }
             }
             // Always advance the output index regardless of recordThisPhase to prevent
@@ -1750,7 +1748,6 @@ export async function simulate(
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
-            if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
             nextOutIdx++;
           }
         }
@@ -3220,7 +3217,6 @@ export async function simulate(
         }
 
         for (let i = 1; i <= phase_n_steps; i++) {
-          if (shouldStop) break;
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
 

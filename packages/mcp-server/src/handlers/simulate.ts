@@ -64,7 +64,7 @@ export async function handleSimulate(args: ToolArgs): Promise<ToolResult<any>> {
         }
         return createToolResult(results);
     } catch (error: any) {
-        let stage = 'simulation';
+        let stage: string;
         if (error instanceof NetworkGenerationLimitError) {
             stage = 'network_expansion';
             return createToolResult({

@@ -1735,7 +1735,6 @@ const runTrajectoryFidelityCheck = async (args: {
         if (rerunPoints > points) {
           originalSim = rerun.originalSim;
           roundtripSim = rerun.roundtripSim;
-          points = rerunPoints;
           solverUsed = 'cvode_auto';
         }
       } catch {

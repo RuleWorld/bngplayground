@@ -375,7 +375,7 @@ function parseSimulateCallsFromBngl(bnglContent: string): SimCall[] {
     const full = (m[0] ?? '').toLowerCase();
     const params = m[1] ?? '';
 
-    let method: 'ode' | 'ssa' | 'nf' = 'ode';
+    let method: 'ode' | 'ssa' | 'nf';
     if (full.includes('simulate_nf')) method = 'nf';
     else if (full.includes('simulate_ssa')) method = 'ssa';
     else {

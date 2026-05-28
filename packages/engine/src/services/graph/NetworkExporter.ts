@@ -348,7 +348,7 @@ export class NetworkExporter {
       // would give ratio = 1 instead of the correct statFactor.
       let inferredStatFactor: number | null = null;
       if (!rateNameIsNumeric) {
-        let baseRateValue = Number.NaN;
+        let baseRateValue: number;
 
         // Primary: evaluate rateName (the canonical rate identifier assigned by the exporter)
         try {

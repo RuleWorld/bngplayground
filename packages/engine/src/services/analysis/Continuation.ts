@@ -119,7 +119,7 @@ export function continuation(
 
   // Previous tangent for predictor
   const prevTangentY = new Float64Array(nSpecies);
-  let prevTangentP = 1.0;
+  let prevTangentP: number;
 
   // Compute initial tangent: solve J * dy/dp = -df/dp
   {

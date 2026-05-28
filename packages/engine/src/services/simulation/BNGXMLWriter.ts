@@ -167,7 +167,6 @@ function expandUserDefinedFunctions(
         const callEnd = i;
         expanded = expanded.slice(0, startIdx) + `(${bodyExpanded})` + expanded.slice(callEnd);
         changed = true;
-        searchFrom = startIdx + bodyExpanded.length + 2;
         break; // restart the while loop to handle the modified string
       }
     }

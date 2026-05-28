@@ -65,13 +65,11 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
         const upTop = triggerRect.top + scrollTop - dropdownRect.height - 4;
         if (upTop >= viewportTop) {
           top = upTop;
-          effectiveDirection = 'up';
         }
       } else if (effectiveDirection === 'up' && wouldOverflowTop) {
         const downTop = triggerRect.bottom + scrollTop + 4;
         if (downTop + dropdownRect.height <= viewportBottom) {
           top = downTop;
-          effectiveDirection = 'down';
         }
       }
 
