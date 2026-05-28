@@ -12,7 +12,9 @@ export const ModelExplorerTab: React.FC<ModelExplorerTabProps> = ({ onLoadModel 
     const [iframeUrl, setIframeUrl] = useState('');
 
     useEffect(() => {
-        const base = document.baseURI || window.location.origin + '/';
+        // Enforce trailing slash on base URL to avoid relative URL resolving to the parent directory
+        const baseUrl = import.meta.env.BASE_URL || '/';
+        const base = window.location.origin + (baseUrl.endsWith('/') ? baseUrl : baseUrl + '/');
         const url = new URL('umap.html', base);
         setIframeUrl(url.toString());
     }, []);

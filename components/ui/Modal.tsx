@@ -12,6 +12,12 @@ interface ModalProps {
 export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, size = 'lg' }) => {
   const modalRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  
+  // Use a ref for the onClose callback to prevent unstable references from triggering useEffect churn
+  const onCloseRef = useRef(onClose);
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const getFocusableElements = useCallback(() => {
     if (!modalRef.current) return [];
@@ -22,6 +28,22 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
     ).filter(el => el.offsetParent !== null);
   }, []);
 
+  // Effect 1: Programmatic focus-on-mount (only runs once when modal opens)
+  useEffect(() => {
+    if (!isOpen) return;
+
+    const focusable = getFocusableElements();
+    if (focusable.length > 0) {
+      const firstInput = focusable.find(el => el.tagName === 'INPUT' || el.tagName === 'TEXTAREA');
+      if (firstInput) {
+        firstInput.focus();
+      } else {
+        focusable[0].focus();
+      }
+    }
+  }, [isOpen, getFocusableElements]);
+
+  // Effect 2: Setup event listeners for accessibility key bindings (runs once per open lifecycle)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -30,15 +52,9 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
 
     const handleEsc = (event: KeyboardEvent) => {
       if (event.key === 'Escape') {
-        onClose();
+        onCloseRef.current();
       }
     };
-
-    // Focus first focusable element in modal
-    const focusable = getFocusableElements();
-    if (focusable.length > 0) {
-      focusable[0].focus();
-    }
 
     const handleTabKey = (event: KeyboardEvent) => {
       if (event.key !== 'Tab') return;
@@ -72,7 +88,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       // Restore focus to previously focused element
       previousFocusRef.current?.focus();
     };
-  }, [isOpen, onClose, getFocusableElements]);
+  }, [isOpen, getFocusableElements]);
 
   if (!isOpen) return null;
 

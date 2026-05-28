@@ -101,7 +101,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
     <div className="relative">
       <div className="relative">
         {/* Search icon or loading spinner */}
-        <div className="absolute left-3 top-1/2 -translate-y-1/2">
+        <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none">
           {isSearching ? (
             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           ) : (
@@ -115,7 +115,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
-          className="w-full pl-10 pr-24 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary"
+          className="w-full pl-10 pr-24 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary select-text"
         />
 
         {/* Clear button when there's a query */}
@@ -133,7 +133,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
         )}
 
         {/* AI badge */}
-        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5">
+        <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1.5 pointer-events-none">
           <SparklesIcon className="w-4 h-4 text-amber-500" />
           <span className="text-xs font-medium text-amber-600 dark:text-amber-400">
             {isModelLoading ? 'Loading AI...' : 'AI Search'}
