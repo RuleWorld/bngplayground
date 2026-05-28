@@ -16,7 +16,7 @@ import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import { NetworkGenerator } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
 import { NautyService } from '@bngplayground/engine';
-import { createSolver } from '@bngplayground/engine';
+import { createSolver, SafeExpressionEvaluator } from '@bngplayground/engine';
 import { execFileSync } from 'child_process';
 import { resolveBNG2Paths } from '../bng2-paths';
 import { findRuleHubModelPath, resolveRuleHubRoot } from '../rulehubLocal';
@@ -327,7 +327,8 @@ async function runFullSimulation(modelName: string, modelPath: string, bng2Speci
     }
 
     try {
-      const fn = new Function('ctx', `return ${jsExpr};`) as (context: Record<string, number>) => number;
+      const compiled = SafeExpressionEvaluator.compile(jsExpr, Object.keys(context));
+      const fn = (ctx: Record<string, number>) => compiled(ctx);
       compiledRateFunctions.set(expandedExpr, fn);
       return fn;
     } catch (e: any) {

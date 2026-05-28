@@ -12,7 +12,7 @@ import * as path from 'path';
 // Use ANTLR parser wrapper
 import { parseBNGLWithANTLR, NetworkGenerator, BNGLParser, GraphCanonicalizer, NautyService } from '@bngplayground/engine';
 import { createSolver } from '@bngplayground/engine';
-import { findConservationLaws, createReducedSystem } from '@bngplayground/engine';
+import { findConservationLaws, createReducedSystem, SafeExpressionEvaluator } from '@bngplayground/engine';
 import type { BNGLModel, SimulationResults, SimulationPhase, ConcentrationChange } from '../types';
 
 import modelsList from './gdat_models.json';
@@ -113,18 +113,9 @@ function createExpressionEvaluator(
 
     const js = normalizeToJS(expr);
 
-    // SECURITY: Validate expression to prevent code injection via new Function
-    // eslint-disable-next-line no-useless-escape
-    if (/[;{}=\\`$\[\]]/.test(js)) {
-      console.warn(`[compileExpression] Unsafe characters detected in expression: '${js}'`);
-      const zeroFn = () => 0;
-      compiledExprCache.set(expr, zeroFn);
-      return zeroFn;
-    }
-     
-    const fn = new Function('params', 'obs', 'fn', `"use strict"; return (${js});`) as any;
+    const fn = SafeExpressionEvaluator.compile(js, ['params', 'obs', 'fn']);
     const wrapped = (paramsObj: Record<string, number>, obsObj: Record<string, number>, fnObj: any) => {
-      const out = fn(paramsObj, obsObj, fnObj);
+      const out = fn({ params: paramsObj, obs: obsObj, fn: fnObj });
       return typeof out === 'number' && Number.isFinite(out) ? out : 0;
     };
     compiledExprCache.set(expr, wrapped);
@@ -142,25 +133,14 @@ function createExpressionEvaluator(
 
       const jsBody = normalizeToJS(def.expression);
 
-      // SECURITY: Validate expression to prevent code injection via new Function
-      // eslint-disable-next-line no-useless-escape
-      if (/[;{}=\\`$\[\]]/.test(jsBody)) {
-        console.warn(`[compileExpression] Unsafe characters detected in function body: '${jsBody}'`);
-        const zeroFn = () => 0;
-        compiledFnCache.set(name, zeroFn);
-        return zeroFn();
-      }
-       
-      const compiled = new Function(
-        'params',
-        'obs',
-        'fn',
-        ...def.args,
-        `"use strict"; return (${jsBody});`
-      ) as any;
+      const compiled = SafeExpressionEvaluator.compile(jsBody, ['params', 'obs', 'fn', ...def.args]);
 
       const wrapped = (...innerArgs: number[]) => {
-        const out = compiled(params, currentObs, fnEnv, ...innerArgs);
+        const ctx: Record<string, any> = { params, obs: currentObs, fn: fnEnv };
+        def.args.forEach((arg, i) => {
+          ctx[arg] = innerArgs[i];
+        });
+        const out = compiled(ctx);
         return typeof out === 'number' && Number.isFinite(out) ? out : 0;
       };
       compiledFnCache.set(name, wrapped);

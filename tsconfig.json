@@ -16,7 +16,8 @@
       "@webgpu/types",
       "react",
       "react-dom",
-      "@testing-library/jest-dom"
+      "@testing-library/jest-dom",
+      "vite/client"
     ],
     "moduleResolution": "bundler",
     "isolatedModules": true,
