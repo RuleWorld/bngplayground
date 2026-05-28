@@ -748,6 +748,14 @@ export async function generateExpandedNetwork(
     });
 
     try {
+        // Optimization: Precompute compartment map for O(1) lookups during observable generation
+        const compMap = new Map<string, any>();
+        if (inputModel.compartments) {
+            for (const c of inputModel.compartments) {
+                compMap.set(c.name, c);
+            }
+        }
+
         (generatedModel as any).concreteObservables = inputModel.observables.map(obs => {
             const patterns = splitByTopLevelCommas(String(obs.pattern || ''));
             const coeffMap = new Map<number, number>();
@@ -847,6 +855,9 @@ export async function generateExpandedNetwork(
             const volumes: number[] = [];
 
             const sortedEntries = Array.from(coeffMap.entries()).sort((a, b) => a[0] - b[0]);
+            // Optimization: Avoid calling getCompartment per matched species if no compartments exist
+            const hasCompartments = inputModel.compartments && inputModel.compartments.length > 0;
+
             for (const [idx, count] of sortedEntries) {
                 const s = generatedSpecies[idx];
                 matchingIndices.push(idx);
@@ -855,9 +866,9 @@ export async function generateExpandedNetwork(
                 // Observables are reported in amount units (conc * vol in ODE mode),
                 // consistent with BNG2 GDAT output for both Molecules and Species types.
                 let vol = 1.0;
-                if (inputModel.compartments && inputModel.compartments.length > 0) {
+                if (hasCompartments) {
                     const specCompName = getCompartment(s.name);
-                    const comp = inputModel.compartments.find(c => c.name === specCompName);
+                    const comp = compMap.get(specCompName || '');
                     if (comp) {
                         vol = (comp as any).resolvedVolume ?? comp.size ?? 1.0;
                     }
