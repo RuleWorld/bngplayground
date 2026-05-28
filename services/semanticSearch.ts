@@ -94,7 +94,6 @@ async function getEmbeddingsIndex(): Promise<EmbeddingsIndex> {
   if (embeddingsIndex) return embeddingsIndex;
 
   // Use Vite's BASE_URL or default to root
-  // @ts-expect-error - Vite injects import.meta.env at build time
   const baseUrl = import.meta.env?.BASE_URL || '/';
   const response = await fetch(`${baseUrl}model-embeddings.json`);
   if (!response.ok) {
