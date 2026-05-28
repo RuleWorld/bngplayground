@@ -117,9 +117,20 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
 
   const outDir = resolve('src/generated');
   mkdirSync(outDir, { recursive: true });
+  // Validate all model entries before writing
+  for (const entry of slim) {
+    if (typeof entry.id !== 'string' || typeof entry.name !== 'string') {
+      throw new Error(`Invalid model entry: missing id or name`);
+    }
+  }
+  for (const cat of gallery.categories) {
+    if (typeof cat.id !== 'string' || typeof cat.name !== 'string') {
+      throw new Error(`Invalid category entry: missing id or name`);
+    }
+  }
+
   const outPath = resolve(outDir, 'gallery-data.ts');
-  const sanitized = output.replace(/\0/g, '').slice(0, 1_000_000);
-  writeFileSync(outPath, sanitized);
+  writeFileSync(outPath, output);
 
   console.log(`Generated: ${slim.length} models, ${gallery.categories.length} categories, ${Object.keys(gallery.assignments).length} assignments`);
 }
