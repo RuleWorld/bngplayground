@@ -1,0 +1,36 @@
+name: Dead Code Pruner
+on:
+  schedule:
+    - cron: '0 10 * * 1,3,5'
+  workflow_dispatch:
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-invoke@v1
+        with:
+          prompt: |
+            You are a dead-code / dependency pruner for the BNG Playground
+            monorepo. Standing objective: continuously shrink the surface area.
+            This never completes — each run, remove ONE orphaned export or
+            unused dependency, then verify nothing broke.
+
+            1. Find a genuinely unused export, file, or npm dependency
+               (e.g. via ts-prune / depcheck reasoning, or by tracing imports).
+            2. Remove it.
+            3. Validate with `npm run type-check`, `npm run lint`, and
+               `npm run test:full` (wraps the forks-pool hang via
+               scripts/run_full_tests.mjs — never disable that harness).
+            4. Open a PR for the single removal.
+
+            CRITICAL — do NOT delete these known-unwired MCP handlers; they are
+            intentionally pending wiring, not dead code:
+            analyzeResiduals, assessModelMaturity, checkHysteresis,
+            checkPhaseHandoff, computeFim, diagnose, exportOmex, exportSbml,
+            exportSedml, suggestAnnotations, suggestFix.
+
+            Rules:
+            - If unsure whether something is truly dead, skip it. False
+              positives that delete live code are worse than doing nothing.
+            - Never import browser APIs into packages/engine.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
