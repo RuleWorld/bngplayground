@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { spawnSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { parseBNGL } from '../services/parseBNGL';
-import { createSolver } from '@bngplayground/engine';
+import { createSolver, SafeExpressionEvaluator } from '@bngplayground/engine';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { NetworkGenerator, GeneratorProgress } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical';
@@ -619,8 +619,8 @@ function createRateEvaluator(
         Arrhenius: (A: number, Ea: number) => A * Math.exp(-Ea / ((context as any).R * (context as any).T || 1))
       };
 
-      const func = new Function(...Object.keys(context), `return ${evalExpr}`);
-      const result = func(...Object.values(context));
+      const func = SafeExpressionEvaluator.compile(evalExpr, Object.keys(context));
+      const result = func(context);
 
       if (typeof result !== 'number' || isNaN(result) || !isFinite(result)) {
         console.error(`  [RateEval] Error: ${evalExpr} => ${result}`);
@@ -1209,7 +1209,7 @@ async function runWebSimulator(
         } else {
           try {
             // Try to evaluate as expression
-            newConc = new Function(`return ${value}`)();
+            newConc = SafeExpressionEvaluator.evaluateConstant(value) as number;
           } catch {
             newConc = parseFloat(value) || 0;
           }
