@@ -345,7 +345,6 @@ export class CompositeAutoSolver {
 
   private currentSolver: { integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult; destroy?: () => void } | null = null;
   private currentSolverName: SolverOptions['solver'] = 'cvode';
-  private totalSteps: number = 0;
   private lastProbe: StiffnessProbe | null = null;
 
   // Factory will be injected so we can create solvers on the fly

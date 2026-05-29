@@ -45,7 +45,7 @@ const getWildcardComponentSymmetryFactor = (pattern: ReturnType<typeof BNGLParse
     return factor;
 };
 
-const getObservablePatternSymmetryFactor = (pattern: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
+const _getObservablePatternSymmetryFactor = (pattern: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
     const auto = GraphMatcher.getPatternAutomorphismFactor(pattern);
     const wildcardFactor = getWildcardComponentSymmetryFactor(pattern);
     const resolvedAuto = Number.isFinite(auto) && auto > 0 ? auto : 1;
@@ -110,7 +110,7 @@ export const getCompartment = (s: string) => {
 export const removeCompartment = (s: string) => {
     const normalized = normalizeLegacySuffixCompartment(s);
     // Support both Web-style "@cell:Species" and BNG2-style "@cell::Species"
-    return normalized.replace(/^@[A-Za-z0-9_]+::?/, '').replace(/@([A-Za-z0-9_]+)$/, (m, g) => {
+    return normalized.replace(/^@[A-Za-z0-9_]+::?/, '').replace(/@([A-Za-z0-9_]+)$/, (_m, _g) => {
         // Only remove if it's a trailing compartment suffix (not inside a bond chain)
         return '';
     });

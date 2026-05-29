@@ -200,13 +200,13 @@ function getPermutatedKeys(name: string): string[] {
  */
 export function bnglFunction(
   rule: string,
-  functionTitle: string,
+  _functionTitle: string,
   reactants: string[],
   compartments: string[] = [],
-  parameterDict: Map<string, number> = new Map(),
+  _parameterDict: Map<string, number> = new Map(),
   reactionDict: Map<string, string> = new Map(),
   assignmentRuleVariables: Set<string> = new Set(),
-  observableIds: Set<string> = new Set(),
+  _observableIds: Set<string> = new Set(),
   speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
   observableConvertedRules: Set<string> = new Set(),
   speciesWithConcFunctions: Set<string> = new Set(),
@@ -739,10 +739,10 @@ export function writeMoleculeTypes(
  */
 export function writeSeedSpecies(
   seedSpecies: SeedSpeciesEntry[],
-  compartments: Map<string, SBMLCompartment>,
+  _compartments: Map<string, SBMLCompartment>,
   sct: SpeciesCompositionTable,
   speciesToCompartment: Map<string, string>,
-  isAtomized: boolean = false,
+  _isAtomized: boolean = false,
   constantSpeciesIds: Set<string> = new Set()
 ): { section: string, patternToId: Map<string, string>, sbmlToBnglId: Map<string, string>, idToPattern: Map<string, string> } {
   const patterns = new Map<
@@ -807,9 +807,9 @@ export function writeObservables(
   sct: SpeciesCompositionTable,
   assignmentRules: Array<{ variable: string; math: string }>,
   speciesToCompartment: Map<string, string>,
-  speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
-  options: Partial<AtomizerOptions> = {},
-  patternToId: Map<string, string> = new Map(),
+  _speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
+  _options: Partial<AtomizerOptions> = {},
+  _patternToId: Map<string, string> = new Map(),
   sbmlToBnglId: Map<string, string> = new Map(),
   idToPattern: Map<string, string> = new Map()
 ): WriteObservablesResult {
@@ -1189,7 +1189,7 @@ export function writeReactionRulesFlat(
   sct: SpeciesCompositionTable,
   compartments: Map<string, SBMLCompartment>,
   parameterDict: Map<string, number | string>,
-  functionDefinitions: Map<string, SBMLFunctionDefinition>,
+  _functionDefinitions: Map<string, SBMLFunctionDefinition>,
   speciesToCompartment: Map<string, string>,
   speciesToHasOnlySubstanceUnits: Map<string, boolean>,
   options: AtomizerOptions,

@@ -1,11 +1,10 @@
-import React, { useState, useMemo, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef, useEffect } from 'react';
 import { UMAP } from 'umap-js';
 import {
     ScatterChart,
     Scatter,
     XAxis,
     YAxis,
-    ZAxis,
     Tooltip,
     ResponsiveContainer,
     CartesianGrid

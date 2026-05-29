@@ -10,7 +10,6 @@ import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LA
 import { formatValue } from '../../src/utils/formatValue';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  LineChart, Line
 } from 'recharts';
 
 interface BifurcationTabProps {
@@ -61,7 +60,7 @@ interface NullclineResultUI {
 }
 
 export const BifurcationTab: React.FC<BifurcationTabProps> = ({
-  model, results, onSimulate, onCancelSimulation, isSimulating,
+  model, results: _results, onSimulate, onCancelSimulation, isSimulating: _isSimulating,
 }) => {
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [selectedSpecies1, setSelectedSpecies1] = useState<string>('');

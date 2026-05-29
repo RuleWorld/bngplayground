@@ -14,7 +14,6 @@ import {
   type CSRMatrix,
   type ILU0Factors,
   type ILU0SymbolicCache,
-  ilu0Factorize,
   ilu0SymbolicAnalysis,
   ilu0NumericalFactorize,
   sparseSolve,
@@ -369,8 +368,6 @@ export class SparseODESolver {
       scale = safety * Math.pow(1 / errNorm, 0.5); // Order 1 method
     }
     scale = Math.max(minScale, Math.min(maxScale, scale));
-
-    const hNew = h * scale;
 
     const hNext = h * scale;
 

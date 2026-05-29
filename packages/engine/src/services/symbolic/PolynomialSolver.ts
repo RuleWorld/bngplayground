@@ -6,7 +6,6 @@
 import {
   type SymExpr,
   symConst,
-  symVar,
   symAdd,
   symMul,
   symNeg,
@@ -14,7 +13,6 @@ import {
   symPow,
   simplify,
   evaluate,
-  expand,
   collectTerms,
   substitute,
   freeVariables,

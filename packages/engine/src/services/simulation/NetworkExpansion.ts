@@ -16,7 +16,7 @@ import { Rxn } from '../graph/core/Rxn';
 import { NetworkGenerator } from '../graph/NetworkGenerator';
 import { GraphCanonicalizer } from '../graph/core/Canonical';
 import { GraphMatcher } from '../graph/core/Matcher';
-import { containsRateLawMacro, evaluateFunctionalRate, expandRateLawMacros } from './ExpressionEvaluator';
+import { containsRateLawMacro, expandRateLawMacros } from './ExpressionEvaluator';
 import { formatSpeciesList } from '../parity/ParityService';
 import { isFunctionalRateExpr, countPatternMatches, isSpeciesMatch, removeCompartment, getCompartment } from '../parity/PatternMatcher';
 

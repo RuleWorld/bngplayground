@@ -25,19 +25,6 @@ const describeAtom = (atom: Atom): string => {
   }
 };
 
-const atomExample = (atom: Atom): string => {
-  switch (atom.kind) {
-    case 'molecule':
-      return `${atom.molecule}()`;
-    case 'componentState':
-      return atom.state ? `${atom.molecule}(${atom.component}~${atom.state})` : `${atom.molecule}(${atom.component})`;
-    case 'bond':
-      return `${atom.molecule}(${atom.component}!1).Partner(site!1)`;
-    default:
-      return atom.molecule;
-  }
-};
-
 const atomQueryString = (atom: Atom): string => {
   switch (atom.kind) {
     case 'molecule':

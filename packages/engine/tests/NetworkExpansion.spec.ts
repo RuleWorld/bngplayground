@@ -36,8 +36,6 @@ vi.mock('../src/services/simulation/ExpressionEvaluator', () => ({
     containsRateLawMacro: vi.fn(() => false)
 }));
 
-import { evaluateFunctionalRate } from '../src/index';
-
 describe('NetworkExpansion Service', () => {
 
     beforeEach(() => {

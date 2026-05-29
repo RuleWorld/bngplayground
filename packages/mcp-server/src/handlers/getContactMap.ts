@@ -1,4 +1,4 @@
-import { ToolArgs, ToolResult, ContactMap } from '../types/index.js';
+import { ToolArgs, ToolResult } from '../types/index.js';
 import { getContactMapArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow, buildContactMap } from '../services/engine.js';
 import { structureError } from '../services/errors.js';

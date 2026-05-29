@@ -9,11 +9,6 @@ import type { BNGLModel } from '../../types';
 import { BNGLParser } from '../graph/core/BNGLParser';
 import { GraphCanonicalizer } from '../graph/core/Canonical';
 
-function extractSpeciesName(pattern: string): string {
-    const graph = BNGLParser.parseSpeciesGraph(pattern, false);
-    return GraphCanonicalizer.canonicalize(graph);
-}
-
 export interface QSSACandidate {
     species: string;
     fastReactions: number;

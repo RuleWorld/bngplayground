@@ -5,7 +5,7 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Cell } from 'recharts';
 import { CHART_COLORS } from '../../src/utils/chartColors';
-import { formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
+import { formatYAxisTick } from '../charts/InteractiveLegend';
 import { formatValue } from '../../src/utils/formatValue';
 import { Card } from '../ui/Card';
 
@@ -107,7 +107,7 @@ export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, 
                   formatter={(value: any) => [formatValue(value), 'Concentration']}
                 />
                 <Bar dataKey="value" name="Concentration" radius={[0, 4, 4, 0]}>
-                  {finalStateData.data.map((entry, index) => (
+                  {finalStateData.data.map((_entry, index) => (
                     <Cell key={`cell-${index}`} fill={CHART_COLORS[index % CHART_COLORS.length]} />
                   ))}
                 </Bar>

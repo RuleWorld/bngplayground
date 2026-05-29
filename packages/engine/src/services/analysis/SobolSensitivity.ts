@@ -227,7 +227,6 @@ export async function sobolSensitivity(config: SobolAnalysisConfig): Promise<Sob
     params,
     observables: requestedObs,
     N = 512,
-    allTimepoints = false,
     logScale = false,
     seed = 42,
     nBootstrap = 1000,

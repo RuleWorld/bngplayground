@@ -31,7 +31,6 @@ describe('ExpressionEvaluator Service', () => {
         it('should evaluate expression using compiled function', () => {
             const expr = '2*k1';
             const params = { k1: 5 };
-            const context = { k1: 5 };
 
             mockEvaluator.getReferencedVariables.mockReturnValue(['k1']);
             mockEvaluator.compile.mockReturnValue((ctx: any) => 2 * ctx.k1);

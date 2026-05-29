@@ -284,7 +284,7 @@ export function computeConservationConstants(
 export function reduceSystem(
   _reactions: ReactionEntry[],
   numSpecies: number,
-  initialConcentrations: number[],
+  _initialConcentrations: number[],
   moieties: ConservedMoiety[],
 ): ReducedSystemInfo {
   if (moieties.length === 0) {

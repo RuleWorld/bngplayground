@@ -60,35 +60,11 @@ export interface GPUSSAResult {
 // ---------------------------------------------------------------------------
 
 /**
- * Build the stoichiometry constant array (net change) as a WGSL string.
- * Layout: stoich[rxn * nSpecies + species] = net change (f32).
- */
-function _buildStoichiometryData(reactions: SSAReaction[], nSpecies: number): string {
-  const nReactions = reactions.length;
-  const totalEntries = nReactions * nSpecies;
-  const flat = new Array<number>(totalEntries).fill(0);
-
-  for (let r = 0; r < nReactions; r++) {
-    // Subtract for each reactant occurrence
-    for (const sp of reactions[r].reactants) {
-      flat[r * nSpecies + sp] -= 1;
-    }
-    // Add for each product occurrence
-    for (const sp of reactions[r].products) {
-      flat[r * nSpecies + sp] += 1;
-    }
-  }
-
-  const entries = flat.map((v) => `${v.toFixed(1)}`).join(', ');
-  return `const stoichiometry = array<f32, ${totalEntries}>(${entries});`;
-}
-
-/**
  * Build a WGSL switch statement that applies only the non-zero stoichiometry
  * entries for the selected reaction. Avoids the generic O(N_SPECIES) loop
  * in the shader for sparse networks.
  */
-function buildSparseApplyFunction(reactions: SSAReaction[], nSpecies: number): string {
+function buildSparseApplyFunction(reactions: SSAReaction[]): string {
   const lines: string[] = [];
   lines.push('  switch (selected_rxn) {');
 
@@ -126,7 +102,7 @@ function buildSparseApplyFunction(reactions: SSAReaction[], nSpecies: number): s
  *
  * where C(x, 1) = x and C(x, 2) = x*(x-1)/2 for homodimers.
  */
-function buildPropensityFunction(reactions: SSAReaction[], nSpecies: number): string {
+function buildPropensityFunction(reactions: SSAReaction[]): string {
   const lines: string[] = [];
 
   // Emit rate constants as local lets (passed via initial_state is wasteful,
@@ -178,8 +154,8 @@ export function generateSSAShader(
 ): string {
   const nReactions = reactions.length;
 
-  const sparseApplyFn = buildSparseApplyFunction(reactions, nSpecies);
-  const propensityFn = buildPropensityFunction(reactions, nSpecies);
+  const sparseApplyFn = buildSparseApplyFunction(reactions);
+  const propensityFn = buildPropensityFunction(reactions);
 
   let shader = SSA_SHADER_TEMPLATE;
   shader = shader.replace(/\{\{N_SPECIES\}\}/g, String(nSpecies));

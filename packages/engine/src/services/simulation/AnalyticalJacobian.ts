@@ -177,7 +177,7 @@ function massActionDerivative(
 /**
  * Compute the full mass-action rate v_r for a reaction (used for FD fallback).
  */
-function massActionRate(compiled: CompiledReaction, y: Float64Array): number {
+function _massActionRate(compiled: CompiledReaction, y: Float64Array): number {
   let rate = compiled.k;
   for (const m of compiled.reactantIndices) {
     const sm = compiled.reactantStoich.get(m)!;

@@ -1,4 +1,4 @@
-import { generateSedML, parseBNGLWithANTLR } from '@bngplayground/engine';
+import { generateSedML } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { exportSedmlArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow } from '../services/engine.js';

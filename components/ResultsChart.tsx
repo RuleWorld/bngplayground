@@ -162,9 +162,6 @@ type ZoomDomain = {
   y2: number | 'dataMax';
 }
 
-// Threshold for when to move legend below the chart
-const LEGEND_THRESHOLD = 8;
-
 const CustomLegend = (props: any) => {
   const { payload, onClick, onHighlight } = props;
 

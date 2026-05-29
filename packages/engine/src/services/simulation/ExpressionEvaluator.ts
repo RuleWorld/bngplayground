@@ -344,7 +344,7 @@ function isIdentifierChar(ch: string | undefined): boolean {
   );
 }
 
-function replaceWholeWord(source: string, target: string, replacement: string): string {
+function _replaceWholeWord(source: string, target: string, replacement: string): string {
   let result = '';
 
   for (let i = 0; i < source.length; ) {
@@ -365,7 +365,7 @@ function replaceWholeWord(source: string, target: string, replacement: string): 
   return result;
 }
 
-function findFunctionCallStart(source: string, fnName: string, fromIndex: number): number {
+function _findFunctionCallStart(source: string, fnName: string, fromIndex: number): number {
   const prefix = `${fnName}(`;
   let searchIndex = fromIndex;
 

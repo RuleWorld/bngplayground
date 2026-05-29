@@ -80,7 +80,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 
   const initialDefaults = resolveSimulationControlDefaults(model, method);
   const [tEnd, setTEnd] = useState(initialDefaults.tEnd);
-  const [tStart, setTStart] = useState(initialDefaults.tStart);
+  const [_tStart, setTStart] = useState(initialDefaults.tStart);
   const [nSteps, setNSteps] = useState(initialDefaults.nSteps);
 
   if (model !== prevModel || method !== prevMethod) {
@@ -106,7 +106,6 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
   const [utl, setUtl] = useState('');
   const [gml, setGml] = useState('');
   const [equilibrate, setEquilibrate] = useState('');
-  const [nfsimVerbose, setNfsimVerbose] = useState(false);
   const [nfsimSeed, setNfsimSeed] = useState('');
 
   const optionsRef = useRef<HTMLDivElement>(null);

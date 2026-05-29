@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { BNGLModel, SimulationOptions } from '../../types';
+import { BNGLModel } from '../../types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';

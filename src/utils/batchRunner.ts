@@ -5,9 +5,6 @@ import {
     runSingleBatchItem,
     BatchSimulator,
     BatchReporter,
-    BatchModelDef,
-    SimulationResults,
-    BNGLModel
 } from '@bngplayground/engine';
 import { downloadCsv } from './download';
 import { loadModelCode } from '../../services/modelLoader';
@@ -40,7 +37,7 @@ const appReporter: BatchReporter = {
     groupEnd: () => console.groupEnd(),
     time: (label) => console.time(label),
     timeEnd: (label) => console.timeEnd(label),
-    onExport: async (results, modelDef, model) => {
+    onExport: async (results, modelDef, _model) => {
         // Standard CSV export
         const headers = results.headers || [];
         const safeName = safeModelName(modelDef.id || modelDef.name);

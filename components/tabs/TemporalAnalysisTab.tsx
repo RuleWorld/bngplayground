@@ -7,7 +7,6 @@ import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-  Legend, Cell
 } from 'recharts';
 
 interface TemporalAnalysisTabProps {
@@ -141,21 +140,6 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
     return { reactionNames, reactionTimes };
   }, [firingLog]);
-
-  // MI heatmap data
-  const miHeatmapData = useMemo(() => {
-    if (!itResult) return null;
-    const reactions = new Set<number>();
-    itResult.mutualInformation.forEach(mi => {
-      reactions.add(mi.pair.reaction1);
-      reactions.add(mi.pair.reaction2);
-    });
-    const sortedReactions = Array.from(reactions).sort((a, b) => a - b);
-    return {
-      reactions: sortedReactions,
-      data: itResult.mutualInformation,
-    };
-  }, [itResult]);
 
   if (!model) {
     return (

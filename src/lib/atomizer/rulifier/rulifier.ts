@@ -283,7 +283,6 @@ export function collapseRedundantRules(rules: Rule[]): Rule[] {
   
   for (const [_, groupRules] of redundantGroups) {
     // Create a single rule with wildcards
-    const baseRule = groupRules[0];
     const generalizedRule = generalizeRule(groupRules);
     collapsedRules.push(generalizedRule);
     

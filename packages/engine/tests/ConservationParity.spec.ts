@@ -1,7 +1,6 @@
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { simulate } from '../src/services/simulation/SimulationLoop';
 import { setFeatureFlags } from '../src/featureFlags';
-import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 
 describe('Conservation Law Reduction Parity', () => {
     // Michaelis-Menten system: E + S <-> ES -> E + P

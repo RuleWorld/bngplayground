@@ -9,7 +9,6 @@ import {
   Tooltip as RechartsTooltip,
   Legend,
   ResponsiveContainer,
-  ReferenceArea,
 } from 'recharts';
 import { formatValue } from '../../src/utils/formatValue';
 import { InlineLegend } from './InteractiveLegend';
@@ -291,7 +290,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
               content={<CustomTooltip xAxisLabel={xAxisLabel} xAxisScale={xAxisScale} yAxisScale={yAxisScale} />}
               cursor={{ stroke: '#94a3b8', strokeWidth: 1, strokeDasharray: '5 5' }}
             />
-            {series.map((s, i) => {
+            {series.map((s) => {
               const isVisible = visibleSeries ? visibleSeries.has(s.name) : true;
               const dataKey = yAxisScale === 'log' ? `__${s.name}` : s.name;
               

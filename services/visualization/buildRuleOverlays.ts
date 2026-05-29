@@ -28,7 +28,6 @@ import type { RuleOverlay } from './ruleOverlay';
  */
 export function buildRuleOverlays(
   rules: ReactionRule[],
-  moleculeTypes: BNGLMoleculeType[] = [],
 ): RuleOverlay[] {
   return rules.map((rule, ruleIndex) =>
     buildSingleOverlay(rule, ruleIndex),

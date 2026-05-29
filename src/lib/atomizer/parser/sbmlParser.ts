@@ -305,13 +305,11 @@ export class SBML2JSON {
   private model: any;
   private unitDictionary: Map<string, Array<[number, number, number]>>;
   private moleculeData: Map<string, number[]>;
-  private speciesDictionary: Map<string, string>;
 
   constructor(model: any) {
     this.model = model;
     this.unitDictionary = new Map();
     this.moleculeData = new Map();
-    this.speciesDictionary = new Map();
     this.getUnits();
   }
 

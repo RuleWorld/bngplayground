@@ -1,4 +1,4 @@
-import { resolveAnnotations, createUniProtResolver, parseBNGLWithANTLR } from '@bngplayground/engine';
+import { resolveAnnotations, createUniProtResolver } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { suggestAnnotationsArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow } from '../services/engine.js';

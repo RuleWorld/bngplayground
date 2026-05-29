@@ -50,7 +50,7 @@ const DEFAULT_RULEHUB_CDN_MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/ruleworld/
 
 // ── Base URL detection ─────────────────────────────────────────────
 
-function getBasePath(): string {
+function _getBasePath(): string {
   try {
     // @ts-ignore — Vite injects this at build time
     const base: string = import.meta.env?.BASE_URL ?? '';

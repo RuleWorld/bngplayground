@@ -39,7 +39,6 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
   const [selectedCategory, setSelectedCategory] = useState<string>('');
   const [focusedExample, setFocusedExample] = useState<string | null>(null);
   const [semanticResults, setSemanticResults] = useState<SearchResult[] | null>(null);
-  const [isSemanticSearching, setIsSemanticSearching] = useState(false);
   const [loadingId, setLoadingId] = useState<string | null>(null);
   const [allModels, setAllModels] = useState<CatalogExample[]>([]);
   const [categories, setCategories] = useState<CatalogCategory[]>([]);

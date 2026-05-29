@@ -59,7 +59,7 @@ const findExampleById = (id?: string | null) => {
 
 function App() {
   const PANEL_MAX_HEIGHT = 'calc(100vh - 120px)';
-  const PANEL_MIN_HEIGHT = '0px';
+
   const MIN_SPLIT_POSITION = 18; // percentage
   const MAX_SPLIT_POSITION = 82; 
   const [code, setCode] = useState<string>(INITIAL_BNGL_CODE);
@@ -152,8 +152,7 @@ function App() {
 
   // Editor resizing support
   const [lastResized, setLastResized] = useState<number>(Date.now());
-  const [editorWidth, setEditorWidth] = useState(0);
-  const isCollapsed = editorWidth > 0 && editorWidth < 180;
+  const [_editorWidth, setEditorWidth] = useState(0);
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -808,11 +807,6 @@ function App() {
       return () => clearTimeout(timer);
     }
   }, [code, defaultCatalogModelId, loadedModelId]);
-
-  const handleSimulateWrapper = useCallback(async (options: SimulationOptions, modelOverride?: BNGLModel) => {
-    // This wrapper is just to maintain the same interface if needed, or I can just use handleSimulate directly.
-    return handleSimulate(options, modelOverride);
-  }, [handleSimulate]);
 
   const handleCodeChange = (newCode: string) => {
     console.log('[App] handleCodeChange called:', {

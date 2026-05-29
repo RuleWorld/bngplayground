@@ -20,7 +20,7 @@ import type { JacobianReaction } from '../../src/services/simulation/AnalyticalJ
  * Build an RHS function from reactions for finite-difference comparison.
  * This is a simple mass-action ODE RHS: dydt[i] = sum_r S[i][r] * v_r
  */
-function buildRHS(reactions: JacobianReaction[], numSpecies: number): (y: Float64Array, dydt: Float64Array) => void {
+function buildRHS(reactions: JacobianReaction[], _numSpecies: number): (y: Float64Array, dydt: Float64Array) => void {
   return (y: Float64Array, dydt: Float64Array) => {
     dydt.fill(0);
     for (const rxn of reactions) {

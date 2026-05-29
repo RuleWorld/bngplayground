@@ -33,7 +33,6 @@ export interface ContactMapSnapshot {
  */
 export function buildContactMapSnapshots(
   results: SimulationResults,
-  moleculeTypes: BNGLMoleculeType[] = [],
 ): ContactMapSnapshot[] {
   const speciesHeaders = results.speciesHeaders;
   const speciesData = results.speciesData;

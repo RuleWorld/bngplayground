@@ -33,10 +33,8 @@
  * These are fundamental numerical characteristics, not implementation bugs.
  */
 
-import { SolverOptions, SolverResult, hasInvalidValues } from '../../../utils/solverUtils';
-import { ExpressionTranslator } from '../../graph/core/ExpressionTranslator';
+import { SolverOptions, SolverResult } from '../../../utils/solverUtils';
 import type { NetworkByteCode } from '../../analysis/JITCompiler';
-import type { Rxn } from '../../graph/core/Rxn';
 import { resetCVodeSensModule, setCVodeSensModule } from '../../analysis/DifferentiableSolver';
 
 type DerivativeFunction = (y: Float64Array, dydt: Float64Array) => void;

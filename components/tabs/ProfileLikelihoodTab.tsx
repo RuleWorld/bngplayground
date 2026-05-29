@@ -1,5 +1,5 @@
 import { secureRandom } from "../../src/utils/secureRandom";
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { BNGLModel } from '../../types';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -18,11 +18,9 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   ReferenceArea,
   ReferenceLine,
-  Scatter
 } from 'recharts';
 
 interface ProfileLikelihoodTabProps {
@@ -123,7 +121,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
     }
   };
 
-  const [previewData, setPreviewData] = useState<any[] | null>(null);
+  const [_previewData, setPreviewData] = useState<any[] | null>(null);
 
   const updatePreview = async () => {
     if (!model) return;

@@ -7,7 +7,7 @@
  * Format reference: BNG2/bng2/Perl2/BNGOutput.pm::writeNetwork()
  */
 
-import type { BNGLModel, BNGLSpecies, BNGLObservable, BNGLReaction, BNGLFunction, BNGLCompartment } from '../../types';
+import type { BNGLModel } from '../../types';
 
 export interface NetFileParseResult {
   model: BNGLModel;
@@ -172,7 +172,7 @@ function parseCompartmentLine(line: string, model: BNGLModel, lineNum: number): 
  * Parse a species line: <index> <pattern> <initialConcentration>
  * Example: "1 EGFR(L,CR1,Y1068~U) 1.8e5"
  */
-function parseSpeciesLine(line: string, model: BNGLModel, lineNum: number): void {
+function parseSpeciesLine(line: string, model: BNGLModel, _lineNum: number): void {
   // Format: index pattern concentration
   // The pattern may contain spaces, so we can't just split on whitespace
   // Typical format: "1 A(b!1).B(a!1) 100"
@@ -334,7 +334,7 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
  * @param filepath Path to the .net file
  * @returns Parsed model or throws error
  */
-export async function loadNetFile(filepath: string): Promise<BNGLModel> {
+export async function loadNetFile(_filepath: string): Promise<BNGLModel> {
   // This is a placeholder - actual implementation depends on runtime environment
   // In Node.js, use fs.readFileSync; in browser, use fetch
   throw new Error(

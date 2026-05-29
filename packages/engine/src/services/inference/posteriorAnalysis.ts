@@ -84,7 +84,7 @@ export function kde(
 ): { x: number[]; density: number[] } {
   if (samples.length === 0) throw new Error('Empty samples array');
 
-  const { mean, std: stdDev } = weightedStats(samples, weights);
+  const { std: stdDev } = weightedStats(samples, weights);
   const min = Math.min(...samples);
   const max = Math.max(...samples);
 

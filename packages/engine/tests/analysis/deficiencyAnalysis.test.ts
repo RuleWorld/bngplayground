@@ -5,7 +5,6 @@ import {
     buildComplexGraph,
     computeLinkageClasses,
     computeStrongLinkageClasses,
-    isWeaklyReversible,
     computeDeficiency,
     analyzeNetwork,
 } from '../../src/services/analysis/DeficiencyAnalysis';

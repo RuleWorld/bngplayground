@@ -8,11 +8,6 @@ import type {
   VisualizationRule,
 } from '../types/visualization';
 
-interface MoleculeVisualizerProps {
-  molecule: VisualizationMolecule;
-  showBondLabels?: boolean;
-}
-
 const roleClasses: Record<'context' | 'transformed' | 'created', string> = {
   context: 'opacity-60 filter grayscale dark:opacity-60',
   transformed: 'opacity-100',

@@ -24,8 +24,6 @@
 
 import type {
   BNGLModel,
-  BNGLPopulationMap,
-  BNGLPopulationType,
   BNGLMoleculeType,
   BNGLSpecies,
   BNGLObservable,
@@ -369,10 +367,6 @@ export class HybridModelGenerator {
       const abundance = model.species
         .filter(s => s.name.includes(mt.name + '(') || s.name === mt.name)
         .reduce((sum, s) => sum + (s.initialConcentration ?? 0), 0);
-
-      const bindingSites = (mt.components ?? []).filter(
-        c => c.includes('!') || /^[a-z]/.test(c)  // heuristic: lowercase or bond-capable
-      ).length;
 
       const componentCount = (mt.components ?? []).length;
 

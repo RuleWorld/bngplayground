@@ -3,7 +3,6 @@ import cytoscape from 'cytoscape';
 import dagre from 'cytoscape-dagre';
 import fcose from 'cytoscape-fcose';
 import type { AtomRuleGraph } from '../types/visualization';
-import { colorFromName, foregroundForBackground } from '../services/visualization/colorUtils';
 import { exportArGraphToGraphML } from '../services/visualization/arGraphExporter';
 import { Button } from './ui/Button';
 import { LoadingSpinner } from './ui/LoadingSpinner';

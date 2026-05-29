@@ -42,7 +42,7 @@ describe('profileLikelihood', () => {
     ];
 
     const result = await profileLikelihood({
-      simulate: async (overrides) => ({
+      simulate: async (_overrides) => ({
         data: [
           { time: 0, Y: 0 },
           { time: 1, Y: 5 }, // Always returns constant regardless of params

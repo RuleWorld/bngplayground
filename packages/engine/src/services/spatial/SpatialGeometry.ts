@@ -52,7 +52,7 @@ export function autoGenerateGeometry(
   function placeCompartment(
     comp: ParsedCompartment,
     parentCenter: [number, number, number],
-    parentRadius: number,
+    _parentRadius: number,
     parentId: number | null
   ): void {
     const id = nextId++;

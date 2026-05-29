@@ -19,7 +19,7 @@ import { countPatternMatches, isSpeciesMatch, isFunctionalRateExpr } from '../pa
 import { clearAllEvaluatorCaches, evaluateFunctionalRate, evaluateExpressionOrParse, loadEvaluator, preCompileFunctionalRatesWithJIT, type PreCompiledRateWithJIT } from './ExpressionEvaluator';
 import { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from './cvodeStiffConfig';
 import { getFeatureFlags } from '../../featureFlags';
-import { jitCompiler, type JITCompiledFunction, type NetworkByteCode } from '../analysis/JITCompiler';
+import { jitCompiler, type JITCompiledFunction } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
@@ -1005,7 +1005,7 @@ export async function simulate(
       return observableValuesRecord;
     };
 
-    const evaluateFunctionsForOutput = (currentState: Float64Array, observableValues: Record<string, number>) => {
+    const evaluateFunctionsForOutput = (_currentState: Float64Array, observableValues: Record<string, number>) => {
       if (!shouldPrintFunctions) return Object.create(null) as Record<string, number>;
       const results: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const f of model.functions || []) {
@@ -1095,7 +1095,6 @@ export async function simulate(
     });
 
     let compiledMassActionJit: JITCompiledFunction | undefined;
-    let activeNativeByteCode: NetworkByteCode | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
     let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
     let persistedSolverKey = '';
@@ -1329,7 +1328,7 @@ export async function simulate(
       dirtyObservables.fill(1); // Initially all dirty
 
       // Extract meaningful reaction names from ruleName or reactants/products
-      const ruleNames = concreteReactions.map((rxn, i) => {
+      const ruleNames = concreteReactions.map((rxn) => {
         if (rxn.ruleName) return rxn.ruleName;
         // Fallback: construct readable name from reactants and products
         const reactantNames = Array.from(rxn.reactants).map(idx => {
@@ -2733,7 +2732,6 @@ export async function simulate(
       ((options as any)?.disableNativeBytecode === true);
     const enableNativeBytecode = !disableNativeBytecode;
     rebuildNativeByteCode = () => {
-      activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
       // Clear JIT bytecode cache so expression bytecodes are recompiled with new parameter values
       jitCompiler.clearBytecodeCache();
@@ -2801,7 +2799,6 @@ export async function simulate(
         model.functions
       );
       if (bc) {
-        activeNativeByteCode = bc;
         solverOptions.networkByteCode = bc;
       }
     };

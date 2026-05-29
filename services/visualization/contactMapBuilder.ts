@@ -99,7 +99,7 @@ export const buildContactMap = (
     reactantBonds.forEach((v, k) => allBondsInRule.set(k, v));
     productBonds.forEach((v, k) => allBondsInRule.set(k, v));
 
-    allBondsInRule.forEach((bondInfo, key) => {
+    allBondsInRule.forEach((bondInfo, _key) => {
       // Edge now connects component-level nodes (compound nodes)
       const sourceId = `${bondInfo.mol1}_${bondInfo.comp1}`;
       const targetId = `${bondInfo.mol2}_${bondInfo.comp2}`;

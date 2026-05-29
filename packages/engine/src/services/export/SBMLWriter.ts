@@ -1,6 +1,6 @@
 import type { BNGLModel } from '../../types';
 import type { ExpandedNetwork } from '../../interfaces/SimulationEngine';
-import { inferReactionSBO, inferRateLawSBO, SBO } from './SBOAnnotations';
+import { inferReactionSBO, SBO } from './SBOAnnotations';
 import { generateMIRIAMBlock, suggestMIRIAMAnnotations } from './MIRIAMAnnotation';
 import { escapeXml } from '../../utils/xmlUtils';
 

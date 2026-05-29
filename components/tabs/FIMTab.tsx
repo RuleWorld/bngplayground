@@ -19,8 +19,6 @@ import {
 import { FIMHeatmap } from '../../components/FIMHeatmap';
 import { formatValue } from '../../src/utils/formatValue';
 
-import { EmptyState } from '../ui/EmptyState';
-
 interface FIMTabProps {
   model: BNGLModel | null;
 }

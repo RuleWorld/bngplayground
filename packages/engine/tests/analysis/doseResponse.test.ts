@@ -54,13 +54,6 @@ describe('Dose-response: linear production/degradation', () => {
     { name: 'B', initialConcentration: 0 },
   ];
 
-  const reactions: BNGLReaction[] = [
-    makeReaction([], ['A'], 10),             // 0 -> A, rate = 10
-    makeReaction(['A'], [], 1),              // A -> 0, rate = 1
-    makeReaction(['A'], ['A', 'B'], 0.01),   // A -> A + B, rate = k (varied)
-    makeReaction(['B'], [], 0.1),            // B -> 0, rate = 0.1
-  ];
-
   // The parameter 'k_convert' controls the A -> B conversion rate.
   // We use the rateConstant on the reaction but also put it in model.parameters.
   // The key insight: the third reaction's rate constant is what we sweep.

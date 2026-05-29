@@ -22,7 +22,7 @@ import { countPatternMatches } from '../parity/PatternMatcher';
  */
 
 import { SeededRandom } from '../../utils/random';
-import type { BNGLReaction, SimulationOptions, SimulationResults, BNGLModel } from '../../types';
+import type { SimulationOptions, SimulationResults, BNGLModel } from '../../types';
 
 // ────────────────────────────────────────────────────────────────────
 // Reaction classification constants (matches C++ RxnClassifier)

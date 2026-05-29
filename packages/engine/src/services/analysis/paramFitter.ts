@@ -508,7 +508,7 @@ async function finiteDiffCI(
   xenc: number[],
   f0: number,
   bestParams: number[],
-  decode: (x: number[]) => number[],
+  _decode: (x: number[]) => number[],
   useLog: boolean[],
   paramBounds: ParamBounds[],
   totalPoints: number,

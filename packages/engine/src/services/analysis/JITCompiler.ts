@@ -1485,7 +1485,7 @@ export class JITCompiler {
      * Generate a source map from compiled function back to BNGL rules
      */
     generateSourceMap(
-        compiledFn: JITCompiledFunction,
+        _compiledFn: JITCompiledFunction,
         reactions: Array<{
             reactantIndices: Array<number | string>;
             productIndices: Array<number | string>;
@@ -1501,10 +1501,10 @@ export class JITCompiler {
         for (let i = 0; i < reactions.length; i++) {
             const rxn = reactions[i];
             const reactants = rxn.reactantIndices
-                .map((idx, j) => typeof idx === 'string' ? idx : speciesNames[idx] ?? `s${idx}`)
+                .map((idx) => typeof idx === 'string' ? idx : speciesNames[idx] ?? `s${idx}`)
                 .filter((_, j) => j < (rxn.reactantIndices as unknown[]).length);
             const products = rxn.productIndices
-                .map((idx, j) => typeof idx === 'string' ? idx : speciesNames[idx] ?? `s${idx}`)
+                .map((idx) => typeof idx === 'string' ? idx : speciesNames[idx] ?? `s${idx}`)
                 .filter((_, j) => j < (rxn.productIndices as unknown[]).length);
 
             entries.push({

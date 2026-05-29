@@ -1,8 +1,8 @@
 import { describe, it, expect } from 'vitest';
-import { createCell, evaluateCondition, divideCell, moveCell } from '../../src/services/multiscale/CellAgent';
+import { createCell, evaluateCondition, divideCell } from '../../src/services/multiscale/CellAgent';
 import { ExtracellularGrid } from '../../src/services/multiscale/ExtracellularGrid';
 import { parseMultiscaleModel } from '../../src/services/multiscale/MultiscaleParser';
-import type { CellTypeDefinition, CellState, CellDecisionRule } from '../../src/services/multiscale/CellAgent';
+import type { CellTypeDefinition, CellState } from '../../src/services/multiscale/CellAgent';
 
 describe('CellAgent', () => {
   const mockTypeDef: CellTypeDefinition = {

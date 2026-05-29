@@ -161,7 +161,7 @@ export function applyCytoscapeRuleOverlay(
 }
 
 function highlightCenter(
-  cy: cytoscape.Core,
+  _cy: cytoscape.Core,
   nodes: cytoscape.NodeCollection,
 ): void {
   nodes.removeClass('rule-dimmed').addClass('rule-center');
@@ -172,7 +172,7 @@ function highlightCenter(
 }
 
 function highlightContext(
-  cy: cytoscape.Core,
+  _cy: cytoscape.Core,
   nodes: cytoscape.NodeCollection,
 ): void {
   nodes

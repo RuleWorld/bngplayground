@@ -1,6 +1,6 @@
 import { secureRandom } from "../../src/utils/secureRandom";
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, ErrorBar, Scatter } from 'recharts';
+import { ComposedChart, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, Bar, Scatter } from 'recharts';
 import { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
 import { Input } from '../ui/Input';
@@ -396,7 +396,6 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         }
       }
 
-      const paramsSnapshot = effectiveParamBounds.map((p) => p.name);
       const priorMeansSnapshot = effectiveParamBounds.map((p) => p.initial);
 
       const fitResult = await fitParameters({

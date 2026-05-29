@@ -192,9 +192,7 @@ function createNameReplacer(
   return (formula: string): string => replaceNamesWithEntries(formula, entries);
 }
 
-function replaceSpeciesNames(formula: string, speciesIdByName: Map<string, string>): string {
-  return replaceNames(formula, speciesIdByName);
-}
+
 
 function expandRateMacroForSBML(rate: string, substrateId: string | null): string {
   if (!substrateId) return rate;

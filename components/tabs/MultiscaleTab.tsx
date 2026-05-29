@@ -5,7 +5,6 @@ import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
 import { useTheme } from '../../hooks/useTheme';
-import { CHART_GRID, CHART_AXIS_LINE, CHART_TICK_LINE, CHART_TICK, CHART_AXIS_LABEL_STYLE, CHART_TOOLTIP_CURSOR, CHART_LINE_WIDTH, CHART_MARGIN } from '../../src/utils/chartStyle';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
@@ -56,7 +55,7 @@ const EXAMPLE_DEFINITION = `{
   "time": { "end": 10, "dtIntra": 0.1, "dtExtra": 0.5, "dtDecision": 1.0, "outputs": 10 }
 }`;
 
-export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode }) => {
+export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCode }) => {
   const [theme] = useTheme();
   const isDark = theme === 'dark';
 

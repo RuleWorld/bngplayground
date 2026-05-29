@@ -11,15 +11,12 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
 import {
   evaluateFunctionalRate,
-  getCompiledRateFunction,
   preCompileFunctionalRates,
   preCompileFunctionalRatesWithJIT,
   compileRateToJIT,
   isJITSafe,
   expandRateLawMacros,
   clearAllEvaluatorCaches,
-  type PreCompiledRate,
-  type PreCompiledRateWithJIT,
 } from '../../src/services/simulation/ExpressionEvaluator';
 import { setFeatureFlags } from '../../src/featureFlags';
 

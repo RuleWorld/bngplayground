@@ -7,7 +7,7 @@
  * Reference: BNG2/bng2/Perl2/BNGOutput.pm::writeModel()
  */
 
-import type { BNGLModel, BNGLMoleculeType, BNGLSpecies, BNGLObservable, BNGLReaction, ReactionRule, BNGLFunction, BNGLCompartment } from '../../types';
+import type { BNGLModel } from '../../types';
 
 export interface BNGLWriterOptions {
   includeComments?: boolean;
@@ -286,8 +286,8 @@ function formatActionArgs(args: Record<string, any>): string {
  * @param options Writer options
  * @returns Promise that resolves when file is written
  */
-export async function writeBNGLFile(model: BNGLModel, filepath: string, options: BNGLWriterOptions = {}): Promise<void> {
-  const content = writeBNGL(model, options);
+export async function writeBNGLFile(model: BNGLModel, _filepath: string, options: BNGLWriterOptions = {}): Promise<void> {
+  writeBNGL(model, options);
   // This is a placeholder - actual implementation depends on runtime environment
   // In Node.js, use fs.writeFileSync; in browser, trigger download
   throw new Error(

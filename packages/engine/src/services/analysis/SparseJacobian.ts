@@ -329,7 +329,7 @@ export function generateSparseJacobianFunction(
   reactions: Rxn[],
   nSpecies: number,
   sparsity: SparseJacobianInfo,
-  contributions: ReactionContribution[][]
+  _contributions: ReactionContribution[][]
 ): (y: Float64Array, data: Float64Array) => void {
   // contributions parameter is unused; kept for compatibility
   return generateAnalyticalJacobian(reactions, nSpecies, sparsity);

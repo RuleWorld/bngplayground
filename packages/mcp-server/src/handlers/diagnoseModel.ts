@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { ToolArgs, ToolResult, MCPErrorResult } from '../types/index.js';
+import { ToolArgs, ToolResult } from '../types/index.js';
 import { diagnoseModelArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs } from '../services/engine.js';
 import { diagnoseModelDeep } from '../services/intelligence.js';
