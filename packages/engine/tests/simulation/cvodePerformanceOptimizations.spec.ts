@@ -355,7 +355,7 @@ describe('CVODE Performance Optimizations', () => {
   describe('Part 2: Zero-Copy Dense Derivative Numerical Equivalence', () => {
 
     function assertNumericalEquivalence(
-      label: string,
+      _label: string,
       system: ReturnType<typeof makeSimpleSystem>,
       odeUsesAmountState: boolean
     ) {
@@ -524,7 +524,7 @@ describe('CVODE Performance Optimizations', () => {
           products: new Int32Array([(i + 1) % smallSystemSpecies]),
         });
       }
-      const csr = buildCSRStoichiometry(reactions, smallSystemSpecies);
+      const _csr = buildCSRStoichiometry(reactions, smallSystemSpecies);
       // shouldUseSparse has its own threshold (20 species), which is different
       // from the KLU threshold (50). Both should be below 50 for this test.
       // The important thing: the KLU auto-selection in SimulationLoop.ts

@@ -53,6 +53,13 @@ async function main() {
     fetchJson<GalleryConfig>(`${RULEHUB_BASE}/gallery.json`),
   ]);
 
+  if (!Array.isArray(slim) || slim.some(e => typeof e !== 'object' || e === null)) {
+    throw new Error('Invalid manifest-slim: expected non-null object array');
+  }
+  if (typeof gallery !== 'object' || gallery === null || !Array.isArray(gallery.categories)) {
+    throw new Error('Invalid gallery: expected non-null object with categories array');
+  }
+
   console.log(`  Loaded ${slim.length} models, ${gallery.categories.length} categories`);
 
   const modelEntries = slim.map(e => 

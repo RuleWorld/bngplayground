@@ -228,7 +228,7 @@ function backtrackMatch(
   if (patIdx === patternMols.length) {
     // Verify bond consistency: for each pattern bond, the assigned species
     // molecules must also be bonded through the same component names.
-    return verifyBondConsistency(assignment, patternMols, speciesMols, patternBonds, speciesBonds);
+    return verifyBondConsistency(assignment, patternBonds, speciesBonds);
   }
 
   const patMol = patternMols[patIdx];
@@ -298,8 +298,6 @@ function moleculeMatches(pattern: ParsedMolecule, species: ParsedMolecule): bool
  */
 function verifyBondConsistency(
   assignment: Map<number, number>,
-  patternMols: ParsedMolecule[],
-  speciesMols: ParsedMolecule[],
   patternBonds: Map<string, BondPartner[]>,
   speciesBonds: Map<string, BondPartner[]>
 ): boolean {

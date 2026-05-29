@@ -174,26 +174,6 @@ function massActionDerivative(
   return result;
 }
 
-/**
- * Compute the full mass-action rate v_r for a reaction (used for FD fallback).
- */
-function _massActionRate(compiled: CompiledReaction, y: Float64Array): number {
-  let rate = compiled.k;
-  for (const m of compiled.reactantIndices) {
-    const sm = compiled.reactantStoich.get(m)!;
-    const ym = y[m];
-    if (ym === 0) return 0;
-    if (sm === 1) {
-      rate *= ym;
-    } else if (sm === 2) {
-      rate *= ym * ym;
-    } else {
-      rate *= ym ** sm;
-    }
-  }
-  return rate;
-}
-
 // ── Public API ─────────────────────────────────────────────────────────
 
 /**

@@ -357,24 +357,24 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // replacing those directive lines with comments.
       const lines = next.split(/\r\n|\n/);
       let seenBeginModel = false;
-      let insideAnyBlock = false;
+      let _insideAnyBlock = false;
       let seenAnyBlock = false;
       let rewroteTopLevelDirectives = false;
       const rewritten = lines.map(line => {
         const trimmed = line.trim();
         if (/^begin\s+model\b/i.test(trimmed)) {
           seenBeginModel = true;
-          insideAnyBlock = true;
+          _insideAnyBlock = true;
           seenAnyBlock = true;
           return line;
         }
         if (/^begin\b/i.test(trimmed)) {
-          insideAnyBlock = true;
+          _insideAnyBlock = true;
           seenAnyBlock = true;
           return line;
         }
         if (/^end\b/i.test(trimmed)) {
-          insideAnyBlock = false;
+          _insideAnyBlock = false;
           return line;
         }
 

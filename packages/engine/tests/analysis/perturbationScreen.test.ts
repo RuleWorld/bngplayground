@@ -264,7 +264,7 @@ describe('PerturbationScreen', () => {
   // ---- Test 4: Cancellation -----------------------------------------------
 
   it('should terminate early when signal is cancelled', async () => {
-    const { mockRunSimulation, getCallCount } = createMockRunSimulation();
+    const { mockRunSimulation } = createMockRunSimulation();
     const signal = { cancelled: false };
 
     // Wrap to cancel after first perturbation simulation (second call total)
@@ -515,7 +515,7 @@ end model
   it('should handle simulation failures gracefully', async () => {
     let callCount = 0;
     const failingMock = async (
-      code: string,
+      _code: string,
       t_end: number,
       n_steps: number,
     ): Promise<SimulationResults> => {

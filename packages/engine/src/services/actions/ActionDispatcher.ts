@@ -14,7 +14,6 @@
 
 import type { BNGLModel, BNGLAction } from '../../types';
 import { writeBNGL } from '../graph/BNGLWriter';
-import { NetworkExporter } from '../graph/NetworkExporter';
 import { BNGXMLWriter } from '../simulation/BNGXMLWriter';
 import { SBMLWriter } from '../export/SBMLWriter';
 import { MatlabWriter } from '../export/MatlabWriter';

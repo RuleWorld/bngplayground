@@ -190,8 +190,8 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
                 <div className="mb-4">
                   <SemanticSearchInput
                     onResults={handleSemanticResults}
-                    onSearchStart={() => setIsSemanticSearching(true)}
-                    onSearchEnd={() => setIsSemanticSearching(false)}
+                    onSearchStart={() => {}}
+                    onSearchEnd={() => {}}
                   />
                 </div>
 

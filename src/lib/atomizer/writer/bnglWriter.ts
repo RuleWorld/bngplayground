@@ -207,7 +207,7 @@ export function bnglFunction(
   reactionDict: Map<string, string> = new Map(),
   assignmentRuleVariables: Set<string> = new Set(),
   _observableIds: Set<string> = new Set(),
-  speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
+  _speciesToHasOnlySubstanceUnits: Map<string, boolean> = new Map(),
   observableConvertedRules: Set<string> = new Set(),
   speciesWithConcFunctions: Set<string> = new Set(),
   sbmlToBnglId: Map<string, string> = new Map()

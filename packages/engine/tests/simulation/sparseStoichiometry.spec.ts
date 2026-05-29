@@ -5,7 +5,6 @@ import {
   computeSparsity,
   shouldUseSparse,
   type StoichiometryReaction,
-  type CSRStoichiometryMatrix,
 } from '../../src/services/simulation/SparseStoichiometry';
 
 /**

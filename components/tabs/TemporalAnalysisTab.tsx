@@ -5,9 +5,7 @@ import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
-import {
-  ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
-} from 'recharts';
+
 
 interface TemporalAnalysisTabProps {
   model: BNGLModel | null;

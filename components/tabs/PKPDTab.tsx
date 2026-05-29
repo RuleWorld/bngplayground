@@ -65,7 +65,7 @@ const DOSING_PRESETS = [
 ];
 
 export const PKPDTab: React.FC<PKPDTabProps> = ({
-  model, results, onSimulate, onCodeChange, isSimulating: _isSimulating,
+  _model, results, onSimulate, onCodeChange, isSimulating: _isSimulating,
 }) => {
   const [modelType, setModelType] = useState<PKModelType>('one_compartment_iv');
   const [route, setRoute] = useState<RouteType>('iv_bolus');

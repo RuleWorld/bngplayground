@@ -4,7 +4,7 @@
  */
 
 import type { SimulationResults } from '../../types';
-import type { DosingRegimen } from './DosingSchedule';
+
 
 // ---------------------------------------------------------------------------
 // Types

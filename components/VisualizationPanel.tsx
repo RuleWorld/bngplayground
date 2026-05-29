@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../types';
 import { ResultsChart } from './ResultsChart';
 import { ContactMapTab } from './tabs/ContactMapTab';
@@ -178,7 +178,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   const influenceGraphData = React.useMemo(() => {
     if (!model || reactionRules.length === 0) return { nodes: [], edges: [] };
-    const overlays = buildRuleOverlays(reactionRules, model.moleculeTypes);
+    const overlays = buildRuleOverlays(reactionRules);
     return computeInfluenceGraph(overlays, reactionRules);
   }, [model]);
 

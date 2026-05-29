@@ -45,14 +45,6 @@ const getWildcardComponentSymmetryFactor = (pattern: ReturnType<typeof BNGLParse
     return factor;
 };
 
-const _getObservablePatternSymmetryFactor = (pattern: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
-    const auto = GraphMatcher.getPatternAutomorphismFactor(pattern);
-    const wildcardFactor = getWildcardComponentSymmetryFactor(pattern);
-    const resolvedAuto = Number.isFinite(auto) && auto > 0 ? auto : 1;
-    const resolvedWildcard = Number.isFinite(wildcardFactor) && wildcardFactor > 0 ? wildcardFactor : 1;
-    return Math.max(resolvedAuto, resolvedWildcard);
-};
-
 const normalizeLegacySuffixCompartment = (s: string): string => {
     if (!s) return s;
     // Normalize legacy BNGL syntax like `B@EC()` to canonical `B()@EC`.

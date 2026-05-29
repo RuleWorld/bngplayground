@@ -13,7 +13,7 @@
  *   - detectStateChanges() from speciesGraphUtils.ts
  */
 
-import type { ReactionRule, BNGLMoleculeType } from '../../types';
+import type { ReactionRule } from '../../types';
 import type { BondInfo } from './speciesGraphUtils';
 import {
   parseSpeciesGraphs,

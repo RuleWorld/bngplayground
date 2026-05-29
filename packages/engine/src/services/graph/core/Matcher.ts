@@ -1398,7 +1398,7 @@ class VF2State {
    */
 
 
-  private getComponentSignature(comp: Component): string {
+  private _getComponentSignature(comp: Component): string {
     let sig = `${comp.name}:${comp.state ?? ''}:${comp.wildcard ?? ''}`;
     if (comp.edges.size > 0) {
       // Include sorted bond labels to distinguish symmetric components with different bonds

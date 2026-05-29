@@ -537,7 +537,7 @@ export class NetworkGenerator {
   /**
    * Helper: Get the evaluated size (volume/area) of a species' compartment.
    */
-  private getSpeciesVolume(s: Species | SpeciesGraph): number {
+  private _getSpeciesVolume(s: Species | SpeciesGraph): number {
     const cName = this.getSpeciesCompartment(s);
     if (!cName || !this.options.compartments) return 1;
     const comp = this.compartmentMap.get(cName);
@@ -607,7 +607,7 @@ export class NetworkGenerator {
    * Helper: Check if two compartments are adjacent (share a boundary) or identical.
    * In BNGL, a 2D compartment is adjacent to its 3D parent and possible 3D children.
    */
-  private areAdjacent(comp1Name: string | null, comp2Name: string | null): boolean {
+  private _areAdjacent(comp1Name: string | null, comp2Name: string | null): boolean {
     if (comp1Name === comp2Name) return true;
     if (!comp1Name || !comp2Name) return true; // Default/null compartments can interact? 
 
@@ -1815,7 +1815,6 @@ export class NetworkGenerator {
           }
         }
       }
-      const hasRateExpression = !!rule.rateExpression;
       let effectiveRate = baseRateConstant * statFactor;
 
       // Arrhenius rate law calculation
@@ -2105,7 +2104,7 @@ export class NetworkGenerator {
    */
   private async applyNaryRule(
     rule: RxnRule,
-    ruleIdx: number,
+    _ruleIdx: number,
     currentSpecies: Species,
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
@@ -3030,7 +3029,7 @@ export class NetworkGenerator {
     const hasCarryThroughReactant = currentSpeciesIndices.some((reactantIdx) => productIndices.includes(reactantIdx));
 
     // 5. Volume Scaling
-    const { scalingVolume, scale } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
+    const { scalingVolume } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
 
     const hasRateExpression = !!rule.rateExpression;
     const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
@@ -3911,7 +3910,7 @@ export class NetworkGenerator {
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[],
     usedReactantPatternMols: Set<string>, // NEW: Shared tracking across product patterns
-    isMoveConnectedRule: boolean
+    _isMoveConnectedRule: boolean
   ): SpeciesGraph | null {
     if (shouldLogNetworkGenerator) {
       debugNetworkLog(`[buildProductGraph] Building from pattern ${pattern.toString()}`);
@@ -4046,7 +4045,7 @@ export class NetworkGenerator {
     const scorePatternMolMatch = (
       pMol: any,
       rpm: { reactantIdx: number; patternMolIdx: number; name: string; targetMolIdx: number; isBound: boolean },
-      pMolIsBound: boolean
+      _pMolIsBound: boolean
     ): number => {
       const rpMol = reactantPatterns[rpm.reactantIdx].molecules[rpm.patternMolIdx];
       if (!rpMol) return -Infinity;

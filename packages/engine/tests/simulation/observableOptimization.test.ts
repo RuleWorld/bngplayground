@@ -4,7 +4,6 @@ import {
   evaluateObservablesCSR,
   shouldUseCSRObservables,
   CSR_OBSERVABLE_THRESHOLD,
-  type CSRObservableMatrix,
   type ObservableDefinition,
 } from '../../src/services/simulation/CSRObservableEvaluator';
 import { JITCompiler, type JITObservableDefinition } from '../../src/services/analysis/JITCompiler';
