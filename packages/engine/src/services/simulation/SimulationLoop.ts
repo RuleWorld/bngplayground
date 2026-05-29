@@ -61,14 +61,14 @@ function setSafeNumericField(target: Record<string, number>, key: string, value:
   if (!isSafeObjectKey(key)) return;
   // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
   // Security is maintained by the isSafeObjectKey check above.
-  target[key] = value;
+  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
 }
 
 function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
   if (!isSafeObjectKey(key)) return;
   // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
   // Security is maintained by the isSafeObjectKey check above.
-  target[key] = value;
+  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
 }
 
 function extractIfConditions(expression: string): string[] {

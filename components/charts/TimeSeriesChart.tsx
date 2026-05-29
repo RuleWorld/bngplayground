@@ -7,6 +7,7 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip as RechartsTooltip,
+  ReferenceArea,
   ResponsiveContainer,
 } from 'recharts';
 import { formatValue } from '../../src/utils/formatValue';

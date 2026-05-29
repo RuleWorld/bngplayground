@@ -1803,7 +1803,7 @@ const describeFn = bngAvailable ? describe : describe.skip;
 describeFn('Web Simulator vs BNG2.pl GDAT Comparison', () => {
   const testModels = getTestModels();
 
-  if (testModels.length === 0) {
+  if (!testModels || testModels.length === 0) {
     it.skip('No test models available', () => { });
     return;
   }

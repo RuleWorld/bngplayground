@@ -2,7 +2,6 @@ import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdirSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
-import { BNGXMLWriter } from '@bngplayground/engine';
 import { resolveBNG2Paths } from '../tools/bng2-paths';
 import { findRuleHubModelPath } from './helpers/rulehub';
 

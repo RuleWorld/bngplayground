@@ -1,5 +1,3 @@
-export { CHART_COLORS } from './utils/chartColors';
-
 // Set AB model as default
 export const INITIAL_BNGL_CODE = `begin model
 begin parameters
