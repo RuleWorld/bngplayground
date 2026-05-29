@@ -5236,8 +5236,19 @@ export class NetworkGenerator {
           }
 
           if (matchingIndices.length > 0) {
-            const boundIdx = matchingIndices.find(idx => isBound(idx));
-            const unboundIdx = matchingIndices.find(idx => !isBound(idx));
+            // Bolt optimization: combine O(N) array searches into single pass
+            // Reduces overhead compared to two separate matchingIndices.find() calls
+            let boundIdx: number | undefined;
+            let unboundIdx: number | undefined;
+            for (let i = 0; i < matchingIndices.length; i++) {
+              const idx = matchingIndices[i];
+              if (boundIdx === undefined && isBound(idx)) {
+                boundIdx = idx;
+              } else if (unboundIdx === undefined && !isBound(idx)) {
+                unboundIdx = idx;
+              }
+              if (boundIdx !== undefined && unboundIdx !== undefined) break;
+            }
 
             if (pComp.wildcard === '+') {
               // !+ must map to an already-bound site

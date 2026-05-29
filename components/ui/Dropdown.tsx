@@ -49,7 +49,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
 
       // Default: appear below
       let top = triggerRect.bottom + scrollTop + 4;
-      let effectiveDirection: 'up' | 'down' = direction;
+      const effectiveDirection: 'up' | 'down' = direction;
 
       if (direction === 'up') {
         top = triggerRect.top + scrollTop - dropdownRect.height - 4;

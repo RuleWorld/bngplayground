@@ -123,7 +123,7 @@ function expandUserDefinedFunctions(
     // Match function calls: fname(arg1, arg2, ...)
     // Use a regex that handles nested parentheses via counting (simplified: one level)
     for (const [fnName, fn] of fnMap) {
-      let searchFrom = 0;
+      const searchFrom = 0;
 
       while (true) {
         const startIdx = findFunctionCallStart(expanded, fnName, searchFrom);
@@ -827,6 +827,19 @@ export class BNGXMLWriter {
     ) => {
       const reactMol = reactantPattern.graph.molecules[reactMolIdx];
       const prodMol = productPattern?.graph.molecules[productMolIdx ?? -1];
+
+      // Bolt optimization: Pre-compute map of component names to indices for O(1) lookups.
+      // Eliminates an O(N^2) inner loop .findIndex() inside the molecules iteration below.
+      let prodCompNameMap: Map<string, number> | undefined;
+      if (prodMol) {
+        prodCompNameMap = new Map();
+        for (let i = 0; i < prodMol.components.length; i++) {
+          if (!prodCompNameMap.has(prodMol.components[i].name)) {
+            prodCompNameMap.set(prodMol.components[i].name, i);
+          }
+        }
+      }
+
       reactMol?.components.forEach((comp, compIdx) => {
         const sourceId = reactantPattern.componentIdMap.get(`${reactMolIdx}.${compIdx}`);
         if (!sourceId) return;
@@ -834,7 +847,7 @@ export class BNGXMLWriter {
           const compIndexMap = moleculeComponentIndexMaps
             .get(`${reactantPatternIdx}.${reactMolIdx}`)
             ?.reactToProd;
-          const prodCompIdx = compIndexMap?.get(compIdx) ?? prodMol.components.findIndex((c) => c.name === comp.name);
+          const prodCompIdx = compIndexMap?.get(compIdx) ?? prodCompNameMap?.get(comp.name) ?? -1;
           if (prodCompIdx >= 0) {
             const targetId = productPattern?.componentIdMap.get(`${productMolIdx}.${prodCompIdx}`);
             if (targetId) {
