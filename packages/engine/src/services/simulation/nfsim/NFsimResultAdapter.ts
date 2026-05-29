@@ -4,8 +4,12 @@ import { parseGdat, type GdatData } from '../GdatParser';
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 
+function isSafeKey(key: string): boolean {
+  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
+}
+
 function toSafeKey(raw: string): string | null {
-  return SAFE_OBJECT_KEY_PATTERN.test(raw) && !UNSAFE_OBJECT_KEYS.has(raw) ? raw : null;
+  return isSafeKey(raw) ? raw : null;
 }
 
 const normalizeHeaders = (headers: string[], model: BNGLModel): string[] => {

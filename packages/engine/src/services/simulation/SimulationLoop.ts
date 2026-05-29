@@ -19,7 +19,7 @@ import { countPatternMatches, isSpeciesMatch, isFunctionalRateExpr } from '../pa
 import { clearAllEvaluatorCaches, evaluateFunctionalRate, evaluateExpressionOrParse, loadEvaluator, preCompileFunctionalRatesWithJIT, type PreCompiledRateWithJIT } from './ExpressionEvaluator';
 import { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from './cvodeStiffConfig';
 import { getFeatureFlags } from '../../featureFlags';
-import { jitCompiler, type JITCompiledFunction, type NetworkByteCode } from '../analysis/JITCompiler';
+import { jitCompiler, type JITCompiledFunction } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
@@ -61,14 +61,14 @@ function setSafeNumericField(target: Record<string, number>, key: string, value:
   if (!isSafeObjectKey(key)) return;
   // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
   // Security is maintained by the isSafeObjectKey check above.
-  target[key] = value;
+  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
 }
 
 function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
   if (!isSafeObjectKey(key)) return;
   // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
   // Security is maintained by the isSafeObjectKey check above.
-  target[key] = value;
+  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
 }
 
 function extractIfConditions(expression: string): string[] {
@@ -1005,7 +1005,7 @@ export async function simulate(
       return observableValuesRecord;
     };
 
-    const evaluateFunctionsForOutput = (currentState: Float64Array, observableValues: Record<string, number>) => {
+    const evaluateFunctionsForOutput = (_currentState: Float64Array, observableValues: Record<string, number>) => {
       if (!shouldPrintFunctions) return Object.create(null) as Record<string, number>;
       const results: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const f of model.functions || []) {
@@ -1095,7 +1095,6 @@ export async function simulate(
     });
 
     let compiledMassActionJit: JITCompiledFunction | undefined;
-    let activeNativeByteCode: NetworkByteCode | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
     let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
     let persistedSolverKey = '';
@@ -1327,10 +1326,9 @@ export async function simulate(
       }
       const dirtyObservables = new Uint8Array(numObservables);
       dirtyObservables.fill(1); // Initially all dirty
-      const ssaObservableValues = Object.create(null) as Record<string, number>;
 
       // Extract meaningful reaction names from ruleName or reactants/products
-      const ruleNames = concreteReactions.map((rxn, i) => {
+      const ruleNames = concreteReactions.map((rxn) => {
         if (rxn.ruleName) return rxn.ruleName;
         // Fallback: construct readable name from reactants and products
         const reactantNames = Array.from(rxn.reactants).map(idx => {
@@ -1509,7 +1507,6 @@ export async function simulate(
         }
         let totalEvents = 0;
         let nEventsThisPhase = 0;
-        let hasPushedFinalResult = false;
         const maxEvents = options.maxEvents ?? 100_000_000;
 
 
@@ -1722,12 +1719,11 @@ export async function simulate(
               } catch (e: unknown) {
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
-              if (outT >= nextTOut || totalEvents >= maxEvents) {
+                if (outT >= nextTOut || totalEvents >= maxEvents) {
                 pushDataRow(phase.suffix, outT, state as any as Float64Array);
                 const sp: Record<string, number> = { time: outT };
                 for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
-                if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
               }
             }
             // Always advance the output index regardless of recordThisPhase to prevent
@@ -1751,7 +1747,6 @@ export async function simulate(
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
-            if (nextOutIdx === phaseNSteps) hasPushedFinalResult = true;
             nextOutIdx++;
           }
         }
@@ -2737,7 +2732,6 @@ export async function simulate(
       ((options as any)?.disableNativeBytecode === true);
     const enableNativeBytecode = !disableNativeBytecode;
     rebuildNativeByteCode = () => {
-      activeNativeByteCode = undefined;
       delete solverOptions.networkByteCode;
       // Clear JIT bytecode cache so expression bytecodes are recompiled with new parameter values
       jitCompiler.clearBytecodeCache();
@@ -2805,7 +2799,6 @@ export async function simulate(
         model.functions
       );
       if (bc) {
-        activeNativeByteCode = bc;
         solverOptions.networkByteCode = bc;
       }
     };
@@ -3221,7 +3214,6 @@ export async function simulate(
         }
 
         for (let i = 1; i <= phase_n_steps; i++) {
-          if (shouldStop) break;
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
 

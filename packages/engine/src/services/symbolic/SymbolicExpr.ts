@@ -286,10 +286,7 @@ function replaceCoeff(e: SymExpr, newCoeff: number): SymExpr {
   return symMul(symConst(newCoeff), rest);
 }
 
-function scaleExpr(_e: SymExpr, _s: number): SymExpr {
-  // Not used anymore — replaceCoeff is preferred.
-  return _e;
-}
+
 
 function gcdNum(a: number, b: number): number {
   a = Math.round(Math.abs(a));

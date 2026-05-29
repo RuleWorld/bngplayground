@@ -1,6 +1,5 @@
 
 import fs from 'fs';
-import path from 'path';
 import { execFileSync } from 'child_process';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';

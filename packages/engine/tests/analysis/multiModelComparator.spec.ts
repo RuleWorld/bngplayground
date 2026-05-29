@@ -13,7 +13,6 @@ import type {
 import type {
   MultiModelConfig,
   SimulatorFn,
-  ModelVariant,
 } from '../../src/services/analysis/MultiModelComparator';
 
 // ---------------------------------------------------------------------------

@@ -130,7 +130,7 @@ export class PSASimulator {
 
     // HAS scaling computation (mirrors network.cpp lines 2686-2737)
     const upperBound = 2 * poplevel;
-    let tempPop = 1;
+    let tempPop: number;
     let scaling: number;
 
     if (nReactants > 0) {

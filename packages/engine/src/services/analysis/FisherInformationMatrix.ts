@@ -337,7 +337,7 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
         if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
         
         try {
-          let currentSSR = Infinity;
+          let currentSSR: number;
           if (config.approxProfileReopt && otherNames.length > 0) {
             // Re-optimize other parameters at this grid point
             const x0 = otherNames.map(name => Math.log(Math.max(parameters[name], 1e-30)));

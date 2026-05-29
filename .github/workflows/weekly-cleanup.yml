@@ -7,7 +7,7 @@ jobs:
   cleanup:
     runs-on: ubuntu-latest
     steps:
-      - uses: google-labs-code/jules-invoke@v1
+      - uses: google-labs-code/jules-action@v1.0.0
         with:
           prompt: |
             Maintenance pass on the BNG Playground TS/WASM monorepo.

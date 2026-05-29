@@ -3,7 +3,6 @@ import { useTheme } from '../hooks/useTheme';
 import { MoonIcon } from './icons/MoonIcon';
 import { SunIcon } from './icons/SunIcon';
 import { EmailIcon } from './icons/EmailIcon';
-import { Button } from './ui/Button';
 import { ShareButton } from './ShareButton';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';

@@ -10,7 +10,6 @@ import type {
   BNGLModel,
   SimulationResults,
   SimulationOptions,
-  ReactionRule,
 } from '../../types';
 
 // ---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel, buildSimulationOptions, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { simulate, loadEvaluator, computeFIM } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
 
@@ -36,7 +36,7 @@ export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResul
         }> = [];
         
         for (const obs of observables) {
-            const simResult = await simulate(0, expandedModel, {
+            await simulate(0, expandedModel, {
                 method: parsedArgs.method ?? 'ode',
                 t_end: tEnd,
                 n_steps: nSamples,

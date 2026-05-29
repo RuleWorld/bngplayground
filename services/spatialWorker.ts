@@ -7,7 +7,7 @@
  */
 
 import { SpatialSimulation } from '@bngplayground/engine';
-import type { SpatialSimulationConfig, SpatialSnapshot, SpatialSimulationResult, CompartmentGeometry } from '@bngplayground/engine';
+import type { SpatialSimulationConfig, SpatialSnapshot, SpatialSimulationResult } from '@bngplayground/engine';
 
 /** Messages from main thread → worker */
 export type SpatialWorkerRequest =

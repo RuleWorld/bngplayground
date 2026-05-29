@@ -15,7 +15,6 @@ import {
   boundedReachabilityCheck,
   checkDeadlock as boundedCheckDeadlock,
   type BoundedVerificationConfig,
-  type BoundedVerificationResult,
 } from './BoundedVerifier';
 import { BNGLParser } from '../graph/core/BNGLParser';
 import { GraphCanonicalizer } from '../graph/core/Canonical';
@@ -23,7 +22,6 @@ import { GraphMatcher } from '../graph/core/Matcher';
 import { SpeciesGraph } from '../graph/core/SpeciesGraph';
 import {
   type ContactMap,
-  type ContactEdge,
   checkAbstractReachability,
 } from './ContactMapReachability';
 

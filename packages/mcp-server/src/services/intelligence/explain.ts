@@ -1,5 +1,4 @@
 import { parseModelOrThrow } from '../../services/engine.js';
-import { formatBNGL } from '@bngplayground/engine';
 import type { ExplainSection } from './types.js';
 import { handleSimulate } from '../../handlers/simulate.js';
 
@@ -78,7 +77,7 @@ export async function explainModelNarrative(code: string, includeCrux: boolean =
 
     const moleculeList = Object.entries(moleculeRoles).map(([name, data]) => {
         const ruleList = Array.from(data.rules);
-        let role = 'generic';
+        let role: string;
         let asReactantOnly = 0, asProductOnly = 0, asCatalyst = 0, inBinding = 0;
 
         for (const rule of reactionRules) {

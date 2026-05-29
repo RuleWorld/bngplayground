@@ -19,7 +19,7 @@
  * packages/engine/src/services/graph/core/ for correctness on symmetric models.
  */
 
-import type { BNGLModel, ReactionRule, BNGLSpecies, BNGLMoleculeType } from '../../types';
+import type { BNGLModel, ReactionRule } from '../../types';
 import { BNGLParser } from '../graph/core/BNGLParser';
 import { GraphCanonicalizer } from '../graph/core/Canonical';
 import { GraphMatcher } from '../graph/core/Matcher';

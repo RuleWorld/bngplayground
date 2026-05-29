@@ -112,7 +112,6 @@ const summarizeRule = (
   const reactantGraphs = parseSpeciesGraphs(rule.reactants);
   const productGraphs = parseSpeciesGraphs(rule.products);
 
-  const color = colorFromName(displayName);
   const producedSpecies = productGraphs.map((graph) => canonicalizeSpecies(graph.toString()));
   const consumedSpecies = reactantGraphs.map((graph) => canonicalizeSpecies(graph.toString()));
 

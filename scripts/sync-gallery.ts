@@ -53,6 +53,13 @@ async function main() {
     fetchJson<GalleryConfig>(`${RULEHUB_BASE}/gallery.json`),
   ]);
 
+  if (!Array.isArray(slim) || slim.some(e => typeof e !== 'object' || e === null)) {
+    throw new Error('Invalid manifest-slim: expected non-null object array');
+  }
+  if (typeof gallery !== 'object' || gallery === null || !Array.isArray(gallery.categories)) {
+    throw new Error('Invalid gallery: expected non-null object with categories array');
+  }
+
   console.log(`  Loaded ${slim.length} models, ${gallery.categories.length} categories`);
 
   const modelEntries = slim.map(e => 
@@ -117,7 +124,20 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
 
   const outDir = resolve('src/generated');
   mkdirSync(outDir, { recursive: true });
-  writeFileSync(resolve(outDir, 'gallery-data.ts'), output);
+  // Validate all model entries before writing
+  for (const entry of slim) {
+    if (typeof entry.id !== 'string' || typeof entry.name !== 'string') {
+      throw new Error(`Invalid model entry: missing id or name`);
+    }
+  }
+  for (const cat of gallery.categories) {
+    if (typeof cat.id !== 'string' || typeof cat.name !== 'string') {
+      throw new Error(`Invalid category entry: missing id or name`);
+    }
+  }
+
+  const outPath = resolve(outDir, 'gallery-data.ts');
+  writeFileSync(outPath, output);
 
   console.log(`Generated: ${slim.length} models, ${gallery.categories.length} categories, ${Object.keys(gallery.assignments).length} assignments`);
 }

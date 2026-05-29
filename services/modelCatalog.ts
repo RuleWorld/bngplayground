@@ -40,7 +40,7 @@ function normalizeLookupValue(value: string): string {
   return value.trim().toLowerCase().replace(/\.bngl$/i, '');
 }
 
-function mapEntry(entry: ManifestEntry): CatalogExample {
+function _mapEntry(entry: ManifestEntry): CatalogExample {
   return {
     id: entry.id,
     name: entry.name,

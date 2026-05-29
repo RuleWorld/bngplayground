@@ -7,7 +7,7 @@ jobs:
   document:
     runs-on: ubuntu-latest
     steps:
-      - uses: google-labs-code/jules-invoke@v1
+      - uses: google-labs-code/jules-action@v1.0.0
         with:
           prompt: |
             You are a documentation agent for packages/engine and

@@ -4,7 +4,7 @@
  */
 
 import type { SimulationResults } from '../../types';
-import type { DosingRegimen } from './DosingSchedule';
+
 
 // ---------------------------------------------------------------------------
 // Types
@@ -336,7 +336,6 @@ export type SimulatorFunction = (
 export async function populationSimulation(
   modelCode: string,
   population: VirtualPatient[],
-  dosingRegimen: DosingRegimen,
   observableName: string,
   simulator: SimulatorFunction,
   onProgress?: (fraction: number) => void,

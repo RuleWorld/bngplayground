@@ -98,7 +98,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
       xl: 'max-w-xl',
       '2xl': 'max-w-2xl',
       '3xl': 'max-w-3xl',
-  }
+  };
 
    return (
     <div

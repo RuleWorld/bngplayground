@@ -1724,7 +1724,7 @@ const runTrajectoryFidelityCheck = async (args: {
 
     let solverUsed = solver;
     let { originalSim, roundtripSim } = await runSimulationPair(roundtripForSim, solverUsed);
-    let points = Math.min(originalSim.data?.length ?? 0, roundtripSim.data?.length ?? 0);
+    const points = Math.min(originalSim.data?.length ?? 0, roundtripSim.data?.length ?? 0);
     if (TRAJECTORY_STIFF_FALLBACK_SOLVER_ENABLED && solverUsed === 'rk4' && points <= 1) {
       try {
         const rerun = await runSimulationPair(roundtripForSim, 'cvode_auto');
@@ -1735,7 +1735,6 @@ const runTrajectoryFidelityCheck = async (args: {
         if (rerunPoints > points) {
           originalSim = rerun.originalSim;
           roundtripSim = rerun.roundtripSim;
-          points = rerunPoints;
           solverUsed = 'cvode_auto';
         }
       } catch {

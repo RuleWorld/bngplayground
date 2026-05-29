@@ -35,12 +35,12 @@ export const ContactMapTab: React.FC<ContactMapTabProps> = ({ model, results, on
     const ruleOverlays = useMemo(() => {
         const reactionRules = model?.reactionRules ?? [];
         if (!model || reactionRules.length === 0) return [];
-        return buildRuleOverlays(reactionRules, model.moleculeTypes);
+        return buildRuleOverlays(reactionRules);
     }, [model]);
 
     const snapshots = useMemo(() => {
         if (!results || !model) return [];
-        return buildContactMapSnapshots(results, model.moleculeTypes);
+        return buildContactMapSnapshots(results);
     }, [results, model]);
 
     // Track previous model/results to reset state immediately during render if they change.

@@ -11,7 +11,6 @@ import { ParameterPanel } from './ParameterPanel';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { BioModelsImportModal } from './BioModelsImportModal';
-import { HelpSection } from './HelpSection';
 
 // Minimal BNGL tidy helper (inlined to avoid module resolution issues)
 function formatBNGLMini(code: string): string {

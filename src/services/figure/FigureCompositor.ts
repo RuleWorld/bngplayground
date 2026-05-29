@@ -342,7 +342,6 @@ export function composeFigure(config: FigureConfig): string {
   } else {
     // grid
     const cols = config.gridCols ?? 2;
-    const rows = Math.ceil(n / cols);
     const availableW = totalWidthPx - (cols - 1) * gapPx;
     const cellW = availableW / cols;
 

@@ -150,37 +150,6 @@ export class CVODEAutoSolver {
 }
 
 /**
- * Sparse Implicit solver for extremely stiff systems.
- * Uses Rosenbrock23 with aggressive settings for maximum stability.
- */
-class SparseImplicitSolver {
-  private rosenbrock: Rosenbrock23Solver;
-
-  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}) {
-    const stiffOptions = {
-      ...options,
-      atol: options.atol ?? 1e-10,
-      rtol: options.rtol ?? 1e-8,
-      maxSteps: options.maxSteps ?? 2000000,
-      minStep: 1e-18,
-      maxStep: options.maxStep ?? 1.0,
-    };
-    this.rosenbrock = new Rosenbrock23Solver(n, f, stiffOptions);
-    console.log(`[SparseImplicitSolver] Created with atol=${stiffOptions.atol}, rtol=${stiffOptions.rtol}`);
-  }
-
-  integrate(
-    y0: Float64Array,
-    t0: number,
-    tEnd: number,
-    _checkCancelled?: () => void
-  ): SolverResult {
-    console.log(`[SparseImplicitSolver] Integrating from t=${t0} to t=${tEnd}`);
-    return this.rosenbrock.integrate(y0, t0, tEnd, _checkCancelled);
-  }
-}
-
-/**
  * Wrapper for the SparseODESolver to match ODESolver interface
  */
 class SparseODESolverWrapper {
@@ -278,7 +247,7 @@ export async function createSolver(
       const composite = new CompositeAutoSolver(n, f, opts as SolverOptions, compositeFactory);
       // Return an adapter that lazily initializes and delegates
       return {
-        integrate(y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void): SolverResult {
+        integrate(_y0: Float64Array, _t0: number, _tEnd: number, _checkCancelled?: () => void): SolverResult {
           // CompositeAutoSolver.integrate is async; we need a sync wrapper.
           // For the synchronous integrate interface, do the initial probe synchronously
           // by using the detector directly and picking a solver.

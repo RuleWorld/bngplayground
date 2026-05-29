@@ -10,7 +10,7 @@
  *   - speciesData: Record<string, number>[] (rows with "time" + species cols)
  */
 
-import type { SimulationResults, BNGLMoleculeType } from '../../types';
+import type { SimulationResults } from '../../types';
 import { parseSpeciesGraphs, extractBonds } from './speciesGraphUtils';
 
 /** Snapshot of contact map element annotations at a single time point */
@@ -33,7 +33,6 @@ export interface ContactMapSnapshot {
  */
 export function buildContactMapSnapshots(
   results: SimulationResults,
-  moleculeTypes: BNGLMoleculeType[] = [],
 ): ContactMapSnapshot[] {
   const speciesHeaders = results.speciesHeaders;
   const speciesData = results.speciesData;

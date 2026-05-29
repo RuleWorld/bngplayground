@@ -259,7 +259,7 @@ function collectTimepoints(data: ExperimentalObservation[]): number[] {
 }
 
 async function computeLoss(
-  residuals: Map<string, NeuralRateResidual>,
+  _residuals: Map<string, NeuralRateResidual>,
   model: HybridModel,
   data: ExperimentalObservation[],
   deps: TrainerDependencies,

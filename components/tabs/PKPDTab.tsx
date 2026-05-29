@@ -65,14 +65,14 @@ const DOSING_PRESETS = [
 ];
 
 export const PKPDTab: React.FC<PKPDTabProps> = ({
-  model, results, onSimulate, onCodeChange, isSimulating,
+  model: _model, results, onSimulate, onCodeChange, isSimulating: _isSimulating,
 }) => {
   const [modelType, setModelType] = useState<PKModelType>('one_compartment_iv');
   const [route, setRoute] = useState<RouteType>('iv_bolus');
   const [drugName, setDrugName] = useState('Drug');
   const [dose, setDose] = useState(100);
   const [dosingInterval, setDosingInterval] = useState(0);
-  const [nDoses, setNDoses] = useState(1);
+  const [_nDoses, setNDoses] = useState(1);
   const [infusionDuration, setInfusionDuration] = useState(1);
   const [dosingEvents, setDosingEvents] = useState<DosingEventUI[]>([{ time: 0, amount: 100 }]);
   const [pkMetrics, setPkMetrics] = useState<PKMetricsUI | null>(null);

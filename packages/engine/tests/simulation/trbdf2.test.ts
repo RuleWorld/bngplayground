@@ -87,7 +87,7 @@ function linearStiffRHS(y: Float64Array, dydt: Float64Array): void {
   dydt[1] = -1000 * y[1];
 }
 
-function linearStiffJacobian(y: Float64Array, J: Float64Array): void {
+function linearStiffJacobian(_y: Float64Array, J: Float64Array): void {
   J[0] = -1;    J[1] = 0;
   J[2] = 0;     J[3] = -1000;
 }

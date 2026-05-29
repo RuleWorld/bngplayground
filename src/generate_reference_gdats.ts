@@ -123,7 +123,7 @@ for (const model of targetModels) {
         const uncommentedBngl = originalBngl.split('\n').filter(line => !line.trim().startsWith('#')).join('\n');
         const hasSimulate = /simulate\s*\(/.test(uncommentedBngl);
 
-        let bnglToRun = bnglPath;
+        let bnglToRun: string;
 
         // If no simulate block, create wrapper with default ODE simulate
         if (!hasSimulate) {

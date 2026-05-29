@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../types';
 import { ResultsChart } from './ResultsChart';
 import { ContactMapTab } from './tabs/ContactMapTab';
@@ -26,7 +26,6 @@ import { JupyterExportTab } from './tabs/JupyterExportTab';
 import { NetworkAnalysisTab } from './tabs/NetworkAnalysisTab';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
-import { EmptyState } from './ui/EmptyState';
 import { HelpSection } from './HelpSection';
 import { SpatialPanel } from './SpatialPanel';
 import { ErrorBoundary } from './ui/ErrorBoundary';
@@ -179,7 +178,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
   const influenceGraphData = React.useMemo(() => {
     if (!model || reactionRules.length === 0) return { nodes: [], edges: [] };
-    const overlays = buildRuleOverlays(reactionRules, model.moleculeTypes);
+    const overlays = buildRuleOverlays(reactionRules);
     return computeInfluenceGraph(overlays, reactionRules);
   }, [model]);
 

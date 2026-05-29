@@ -190,7 +190,7 @@ describe('ConservationLaws Service', () => {
       // d(dB/dt)/dB = -k
       
       const k = 0.5;
-      const fullJacobian = (y: Float64Array, J: Float64Array) => {
+      const fullJacobian = (_y: Float64Array, J: Float64Array) => {
           J[0] = -k; J[2] = 0;
           J[1] = k;  J[3] = 0;
       }; // Column major

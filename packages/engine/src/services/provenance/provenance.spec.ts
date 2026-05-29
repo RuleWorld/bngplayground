@@ -7,7 +7,7 @@ import JSZip from 'jszip';
 import { ProvenanceRecorder } from './ProvenanceRecorder';
 import { buildROCrate } from './ROCrate';
 import { sha256Normalized, sha256OfParams } from './HashComputer';
-import type { ProvActivity, ProvEntity } from './types';
+import type { ProvActivity } from './types';
 
 const SAMPLE_BNGL = `
 begin model

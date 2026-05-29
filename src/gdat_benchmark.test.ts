@@ -1623,8 +1623,6 @@ describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG
                 continue;
               }
 
-              yReduced = yReduced0;
-              yCurrent = yCurrent0;
               throw new Error(`Solver failed at phase ${phaseIdx}, t=${tTarget}: ${result.errorMessage || 'unknown error'}`);
             }
 

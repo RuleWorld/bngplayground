@@ -7,12 +7,10 @@
  * runtime.
  */
 
-import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import type { NetworkByteCode } from './JITCompiler';
 import {
     compileExpressionToBytecode,
-    expandZeroArgFunctions,
     type JITFunctionDefinition,
 } from './ExpressionBytecodeCompiler';
 

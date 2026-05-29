@@ -1,8 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import {
-  posteriorPredictive,
-  type PosteriorPredictiveConfig,
-} from '../../src/services/inference/PosteriorPredictive';
+import { posteriorPredictive } from '../../src/services/inference/PosteriorPredictive';
 import type { ABCSMCResult } from '../../src/services/inference/ABCSMC';
 
 // ── Helpers ──────────────────────────────────────────────────────────

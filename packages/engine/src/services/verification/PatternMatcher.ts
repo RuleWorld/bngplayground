@@ -176,19 +176,18 @@ export function speciesMatchesPattern(
 ): boolean {
   // Each pattern molecule must match some species molecule.
   // We use backtracking to find a valid assignment.
-  const patternMols = pattern;
-  const speciesMols = species;
 
-  if (patternMols.length > speciesMols.length) return false;
+
+  if (pattern.length > species.length) return false;
 
   // Build bond partner map for both pattern and species
-  const patternBonds = buildBondPartnerMap(patternMols);
-  const speciesBonds = buildBondPartnerMap(speciesMols);
+  const patternBonds = buildBondPartnerMap(pattern);
+  const speciesBonds = buildBondPartnerMap(species);
 
-  const used = new Array(speciesMols.length).fill(false);
+  const used = new Array(species.length).fill(false);
 
   return backtrackMatch(
-    patternMols, speciesMols, 0, new Map(), used, patternBonds, speciesBonds
+    pattern, species, 0, new Map(), used, patternBonds, speciesBonds
   );
 }
 
@@ -229,7 +228,7 @@ function backtrackMatch(
   if (patIdx === patternMols.length) {
     // Verify bond consistency: for each pattern bond, the assigned species
     // molecules must also be bonded through the same component names.
-    return verifyBondConsistency(assignment, patternMols, speciesMols, patternBonds, speciesBonds);
+    return verifyBondConsistency(assignment, patternBonds, speciesBonds);
   }
 
   const patMol = patternMols[patIdx];
@@ -299,8 +298,6 @@ function moleculeMatches(pattern: ParsedMolecule, species: ParsedMolecule): bool
  */
 function verifyBondConsistency(
   assignment: Map<number, number>,
-  patternMols: ParsedMolecule[],
-  speciesMols: ParsedMolecule[],
   patternBonds: Map<string, BondPartner[]>,
   speciesBonds: Map<string, BondPartner[]>
 ): boolean {

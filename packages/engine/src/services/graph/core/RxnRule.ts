@@ -162,7 +162,7 @@ export class RxnRule {
           this.includeProducts.push({ productIndex: mappedIndex, pattern });
         }
       } catch (e) {
-        console.warn('Failed to parse pattern in constraint:', constraint, e);
+        console.warn('Failed to parse pattern in constraint:', String(constraint), e);
       }
     }
   }

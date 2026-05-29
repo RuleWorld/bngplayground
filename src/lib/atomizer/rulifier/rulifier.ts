@@ -5,7 +5,7 @@
  * Converts flat models (explicit species) to rule-based models (patterns).
  */
 
-import { Species, Molecule, Component, Rule, Action } from '../core/structures';
+import { Species, Rule, Action } from '../core/structures';
 
 // =============================================================================
 // Types
@@ -283,7 +283,6 @@ export function collapseRedundantRules(rules: Rule[]): Rule[] {
   
   for (const [_, groupRules] of redundantGroups) {
     // Create a single rule with wildcards
-    const baseRule = groupRules[0];
     const generalizedRule = generalizeRule(groupRules);
     collapsedRules.push(generalizedRule);
     

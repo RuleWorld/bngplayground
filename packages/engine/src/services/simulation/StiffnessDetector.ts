@@ -337,15 +337,11 @@ export interface CompositeAutoSolverOptions {
  *   4. The safe default is CVODE (assume stiff — standard for biology).
  */
 export class CompositeAutoSolver {
-  private readonly n: number;
-  private readonly f: DerivativeFunction;
-  private readonly opts: SolverOptions;
   private readonly detector: StiffnessDetector;
   private readonly reprobeInterval: number;
 
   private currentSolver: { integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult; destroy?: () => void } | null = null;
   private currentSolverName: SolverOptions['solver'] = 'cvode';
-  private totalSteps: number = 0;
   private lastProbe: StiffnessProbe | null = null;
 
   // Factory will be injected so we can create solvers on the fly
@@ -358,9 +354,6 @@ export class CompositeAutoSolver {
     solverFactory: (solver: SolverOptions['solver']) => Promise<{ integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult; destroy?: () => void }>,
     compositeOpts: CompositeAutoSolverOptions = {},
   ) {
-    this.n = n;
-    this.f = f;
-    this.opts = opts;
     this.solverFactory = solverFactory;
     this.reprobeInterval = compositeOpts.reprobeInterval ?? 25;
     this.detector = new StiffnessDetector(n, f, compositeOpts.detectorOptions);

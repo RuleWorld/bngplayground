@@ -8,13 +8,10 @@
 import {
   SBMLModel,
   SBMLSpecies,
-  AnnotationInfo,
-  BiologicalQualifier,
-  ModelQualifier,
   BIOLOGICAL_QUALIFIER_NAMES,
   MODEL_QUALIFIER_NAMES,
 } from '../config/types';
-import { logger, DefaultDict } from '../utils/helpers';
+import { DefaultDict } from '../utils/helpers';
 
 // =============================================================================
 // Annotation Types

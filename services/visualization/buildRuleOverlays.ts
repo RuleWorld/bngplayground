@@ -13,7 +13,7 @@
  *   - detectStateChanges() from speciesGraphUtils.ts
  */
 
-import type { ReactionRule, BNGLMoleculeType } from '../../types';
+import type { ReactionRule } from '../../types';
 import type { BondInfo } from './speciesGraphUtils';
 import {
   parseSpeciesGraphs,
@@ -28,7 +28,6 @@ import type { RuleOverlay } from './ruleOverlay';
  */
 export function buildRuleOverlays(
   rules: ReactionRule[],
-  moleculeTypes: BNGLMoleculeType[] = [],
 ): RuleOverlay[] {
   return rules.map((rule, ruleIndex) =>
     buildSingleOverlay(rule, ruleIndex),

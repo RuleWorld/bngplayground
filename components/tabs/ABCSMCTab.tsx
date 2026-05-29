@@ -86,7 +86,6 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
 
   const handleRun = async () => {
     if (!model || !canRun) return;
-    const simulationOptions = model.simulationOptions ?? {};
 
     setIsRunning(true);
     setError(null);

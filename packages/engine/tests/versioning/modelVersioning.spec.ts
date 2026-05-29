@@ -149,7 +149,7 @@ describe('VersionDAG', () => {
 describe('BehavioralBisection', () => {
   it('finds the version where a property changes', async () => {
     // This is a conceptual test — the actual bisection requires simulation
-    const { bisectBehavior, testProperty } = await import('../../src/services/versioning/BehavioralBisection');
+    const { testProperty } = await import('../../src/services/versioning/BehavioralBisection');
 
     // Create a 5-version history (recordVersion returns a new DAG each time)
     let dag = createVersionDAG(BASE_MODEL, 'v1');

@@ -355,22 +355,6 @@ export async function simulateModel(inputModel: BNGLModel, t_end: number, n_step
 }
 
 
-// Helper to recursively find .bngl files
-function findBnglFiles(dir: string, fileList: string[] = []): string[] {
-    if (!fs.existsSync(dir)) return fileList;
-    const files = fs.readdirSync(dir);
-    for (const file of files) {
-        const filePath = path.join(dir, file);
-        const stat = fs.statSync(filePath);
-        if (stat.isDirectory()) {
-            findBnglFiles(filePath, fileList);
-        } else if (file.endsWith('.bngl')) {
-            fileList.push(filePath);
-        }
-    }
-    return fileList;
-}
-
 async function runBenchmark() {
     // 2. Iterate and Run
     const results: any[] = [];

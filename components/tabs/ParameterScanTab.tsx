@@ -1,5 +1,4 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { CartesianGrid, ReferenceArea } from 'recharts';
 import { BNGLModel } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';

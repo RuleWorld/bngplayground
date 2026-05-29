@@ -165,7 +165,8 @@ function discretize(
             bin >= 0 &&
             bin < nBins
         ) {
-            series[reactionIndex].set([1], bin);
+            const ser = series[reactionIndex];
+            if (ser) ser.set([1], bin);
         }
         if (e.ruleName && reactionIndex >= 0 && reactionIndex < nReactions && !names.has(reactionIndex)) {
             names.set(reactionIndex, e.ruleName);

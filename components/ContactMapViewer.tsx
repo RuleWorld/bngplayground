@@ -462,7 +462,7 @@ const forcePostLayoutRedraw = (cy: cytoscape.Core) => {
   });
 };
 
-export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, selectedRuleId, onSelectRule, ruleOverlay, dynamicSnapshot }) => {
+export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, onSelectRule, ruleOverlay, dynamicSnapshot }) => {
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [layoutDone, setLayoutDone] = useState(false);
   const [activeLayout, setActiveLayout] = useState<LayoutType>('fcose');

@@ -344,39 +344,6 @@ function isIdentifierChar(ch: string | undefined): boolean {
   );
 }
 
-function replaceWholeWord(source: string, target: string, replacement: string): string {
-  let result = '';
-
-  for (let i = 0; i < source.length; ) {
-    if (
-      source.startsWith(target, i) &&
-      !isIdentifierChar(source[i - 1]) &&
-      !isIdentifierChar(source[i + target.length])
-    ) {
-      result += replacement;
-      i += target.length;
-      continue;
-    }
-
-    result += source[i];
-    i++;
-  }
-
-  return result;
-}
-
-function findFunctionCallStart(source: string, fnName: string, fromIndex: number): number {
-  const prefix = `${fnName}(`;
-  let searchIndex = fromIndex;
-
-  while (true) {
-    const startIdx = source.indexOf(prefix, searchIndex);
-    if (startIdx === -1) return -1;
-    if (!isIdentifierChar(source[startIdx - 1])) return startIdx;
-    searchIndex = startIdx + 1;
-  }
-}
-
 export function getCompiledRateFunction(
   expandedExpr: string,
   varNames: string[],

@@ -1,6 +1,6 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel, updateMassActionRates } from '../services/engine.js';
 import { simulate, loadEvaluator } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
 

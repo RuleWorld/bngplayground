@@ -375,7 +375,7 @@ function parseSimulateCallsFromBngl(bnglContent: string): SimCall[] {
     const full = (m[0] ?? '').toLowerCase();
     const params = m[1] ?? '';
 
-    let method: 'ode' | 'ssa' | 'nf' = 'ode';
+    let method: 'ode' | 'ssa' | 'nf';
     if (full.includes('simulate_nf')) method = 'nf';
     else if (full.includes('simulate_ssa')) method = 'ssa';
     else {
@@ -1252,7 +1252,6 @@ function getMultiPhaseReference(
             const timeIdx = webData.headers.findIndex(h => h.toLowerCase() === 'time');
             if (timeIdx !== -1) {
               // Create a *copy* of webData.data for this comparison to avoid modifying it for subsequent candidates
-              const originalWebData = webData.data;
               webData.data = webData.data.filter(row => row[timeIdx] <= limit + 1e-9); // 1e-9 tolerance
               console.log(`[Partial Match] Truncated ${normalizedKey} to t=${limit} (rows=${webData.data.length})`);
               // Restore webData.data after comparison if needed, or ensure compareData uses the filtered data

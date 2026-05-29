@@ -10,7 +10,7 @@ export async function handleMultiscaleSimulation(args: ToolArgs): Promise<ToolRe
     const config = engine.parseMultiscaleModel(parsedArgs.definition);
     if (parsedArgs.max_cells) config.maxCells = parsedArgs.max_cells;
 
-    const result = engine.multiscaleSimulation(config, (fraction: number) => {
+    const result = engine.multiscaleSimulation(config, (_fraction: number) => {
       // Progress tracking
     });
 

@@ -453,7 +453,7 @@ describe('Task 3: Hybrid Model Generation', () => {
       { moleculeName: 'R', treatAsPopulation: false },
     ];
 
-    const { populationRules, particleRules, hybridRules } = 
+    const { hybridRules } = 
       HybridModelGenerator.partitionRules(model, popTypes);
 
     // binding rule has both L (population) and R (particle) → hybrid

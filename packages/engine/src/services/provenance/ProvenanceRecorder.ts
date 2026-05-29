@@ -54,15 +54,10 @@ export interface ProvenanceRecorderConfig {
 export class ProvenanceRecorder {
   private nodes: ProvNode[] = [];
   private agentId: string;
-  private sessionId: string;
-  private config: ProvenanceRecorderConfig;
   private now: () => Date;
-  private completionStats: { elapsedMs: number; nSteps: number } | null = null;
 
   constructor(config: ProvenanceRecorderConfig = {}) {
-    this.config = config;
     this.now = config.now ?? (() => new Date());
-    this.sessionId = config.sessionId ?? generateUuid();
     this.agentId = config.agentId ?? `urn:bng:agent:engine:${ENGINE_VERSION}+${ENGINE_COMMIT}`;
 
     // Always emit the engine agent.
@@ -229,7 +224,6 @@ export class ProvenanceRecorder {
   }
 
   markComplete(stats: { elapsedMs: number; nSteps: number }): void {
-    this.completionStats = stats;
     const lastActivity = [...this.nodes].reverse().find((n): n is ProvActivity =>
       'prov:startedAtTime' in n && Array.isArray(n['@type']) && n['@type'].includes('bng:Simulate'),
     );

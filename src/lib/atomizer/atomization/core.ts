@@ -9,18 +9,15 @@
  * - Molecular structure inference
  */
 
-import { Species, Molecule, Component, Databases, readFromString } from '../core/structures';
+import { Species, Molecule, Component, readFromString } from '../core/structures';
 import {
   SBMLModel,
   SBMLReaction,
   SBMLSpecies,
   NamingConventions,
   DEFAULT_NAMING_CONVENTIONS,
-  ReactionDefinitions,
-  DEFAULT_REACTION_DEFINITIONS,
   SCTEntry,
   SpeciesCompositionTable,
-  BiologicalQualifier,
   SeedSpeciesEntry,
 } from '../config/types';
 import {

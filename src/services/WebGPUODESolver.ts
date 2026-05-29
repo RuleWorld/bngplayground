@@ -448,7 +448,7 @@ fn intermediate_state(@builtin(global_invocation_id) global_id: vec3u) {
     const results: Float32Array[] = [];
     const times: number[] = [];
     let t = t0;
-    const baseDt = this.options.dt;  // Save the base timestep
+    const baseDt = this.options.dt;
     let dt = baseDt;
     let steps = 0;
     let outputIdx = 0;

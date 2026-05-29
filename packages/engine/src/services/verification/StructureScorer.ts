@@ -116,7 +116,6 @@ export async function scoreStructure(
   observables: Array<{ type: string; name: string; pattern: string }>,
   experimentalData: Array<{ time: number; observable: string; value: number; error?: number }>,
   parameterBounds: Record<string, [number, number]>,
-  simulator: SimulatorFn,
   fitter: FitterFn,
 ): Promise<StructureScore> {
   // Count data points

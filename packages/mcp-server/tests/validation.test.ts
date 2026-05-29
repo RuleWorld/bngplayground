@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { handleParseBngl } from '../src/handlers/parseBngl';
 import { handleGenerateNetwork } from '../src/handlers/generateNetwork';
 import { handleSimulate } from '../src/handlers/simulate';

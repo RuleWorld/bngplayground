@@ -186,7 +186,6 @@ export async function structureSearch(
   // Helper: compute distance between simulation output and experimental data
   function computeDistance(
     simData: Record<string, number>[],
-    headers: string[],
   ): number {
     if (simData.length === 0) return Infinity;
     
@@ -242,7 +241,7 @@ export async function structureSearch(
     const code = assembleModel(activeRules, params, moleculeTypes, seedSpecies, observables);
     try {
       const result = await simulator(code, { t_end: getMaxTime(), n_steps: 50 });
-      return computeDistance(result.data, result.headers);
+      return computeDistance(result.data);
     } catch {
       return Infinity;
     }

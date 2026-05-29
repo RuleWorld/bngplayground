@@ -13,7 +13,6 @@ import {
   AtomizerResult,
   SBMLModel,
   SBMLSpecies,
-  NamingConventions,
   DEFAULT_NAMING_CONVENTIONS,
   SCTEntry,
   SeedSpeciesEntry,
