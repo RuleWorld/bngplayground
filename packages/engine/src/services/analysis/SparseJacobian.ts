@@ -142,7 +142,8 @@ export function buildJacobianContributions(
       if (ν_i === 0) continue;
       
       // For each reactant j
-      for (const j of rxn.reactants) {
+      for (let k = 0; k < rxn.reactants.length; k++) {
+        const j = rxn.reactants[k];
         const key = `${i},${j}`;
         const entryIdx = entryIndex.get(key);
         if (entryIdx !== undefined) {
@@ -151,7 +152,7 @@ export function buildJacobianContributions(
             rxnIdx,
             netStoichI: ν_i,
             reactantStoichJ: stoichJ,
-            reactantIdxJ: rxn.reactants.indexOf(j)
+            reactantIdxJ: k
           });
         }
       }
