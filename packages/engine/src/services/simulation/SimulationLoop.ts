@@ -1319,8 +1319,12 @@ export async function simulate(
         const obs = concreteObservables[i];
         for (let j = 0; j < obs.indices.length; j++) {
           const spIdx = obs.indices[j];
-          if (!observableDependsOnSpecies[spIdx].includes(i)) {
-            observableDependsOnSpecies[spIdx].push(i);
+          const arr = observableDependsOnSpecies[spIdx];
+          // Bolt optimization: since we process observables in order (0 to numObservables - 1),
+          // we only need to check the last element to avoid duplicates.
+          // This reduces O(N^2) `.includes()` lookup to O(1).
+          if (arr.length === 0 || arr[arr.length - 1] !== i) {
+            arr.push(i);
           }
         }
       }
