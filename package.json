@@ -116,7 +116,7 @@
     "esbuild": "^0.27.7",
     "flatted": "^3.4.0",
     "vite": "^8.0.8",
-    "vitest": "4.1.0",
+    "vitest": "^4.1.0",
     "protobufjs": "^7.5.5",
     "css-tree": "^3.2.1",
     "@csstools/css-syntax-patches-for-csstree": "^1.1.0",
