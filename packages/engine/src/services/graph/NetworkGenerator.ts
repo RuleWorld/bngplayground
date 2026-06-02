@@ -2813,8 +2813,14 @@ export class NetworkGenerator {
       // baseline multiplicity = totalDegeneracy / ruleSymmetryFactor).
       const embCounts: number[] = [];
       for (const [speciesIdx, _count] of speciesCountInGroup.entries()) {
-        const repPatternIdx = group.find((pIdx) => currentSpeciesIndices[pIdx] === speciesIdx)!;
-        const emb = Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx], reactantSpeciesList[repPatternIdx].graph, currentMatches[repPatternIdx]));
+        let repPatternIdx;
+        for (let i = 0; i < group.length; i++) {
+          if (currentSpeciesIndices[group[i]] === speciesIdx) {
+            repPatternIdx = group[i];
+            break;
+          }
+        }
+        const emb = Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx!], reactantSpeciesList[repPatternIdx!].graph, currentMatches[repPatternIdx!]));
         embCounts.push(emb);
       }
 
