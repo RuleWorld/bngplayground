@@ -111,18 +111,29 @@ function decodeReadable(params: URLSearchParams, warnings: string[]): Session {
 	const rawParams = params.get('params');
 	if (rawParams) {
 		const paramsObj: Record<string, number> = {};
-		for (const pair of rawParams.split(',')) {
-			const [rawKey, rawValue] = pair.split(':');
-			if (!rawKey || rawValue === undefined) {
-				warnings.push(`malformed params entry: '${pair}'`);
-				continue;
+		for (let start = 0, len = rawParams.length; start < len; ) {
+			const commaIdx = rawParams.indexOf(',', start);
+			const endIdx = commaIdx === -1 ? len : commaIdx;
+			const colonIdx = rawParams.indexOf(':', start);
+
+			if (colonIdx === -1 || colonIdx >= endIdx) {
+				warnings.push(`malformed params entry: '${rawParams.slice(start, endIdx)}'`);
+			} else {
+				const rawKey = rawParams.slice(start, colonIdx);
+				const rawValue = rawParams.slice(colonIdx + 1, endIdx);
+				if (!rawKey) {
+					warnings.push(`malformed params entry: '${rawParams.slice(start, endIdx)}'`);
+				} else {
+					const value = +rawValue;
+					if (!Number.isFinite(value)) {
+						warnings.push(`non-numeric param value for '${rawKey}': '${rawValue}'`);
+					} else {
+						const key = rawKey.indexOf('%') !== -1 ? decodeURIComponent(rawKey) : rawKey;
+						paramsObj[key] = value;
+					}
+				}
 			}
-			const value = Number(rawValue);
-			if (!Number.isFinite(value)) {
-				warnings.push(`non-numeric param value for '${rawKey}': '${rawValue}'`);
-				continue;
-			}
-			paramsObj[decodeURIComponent(rawKey)] = value;
+			start = endIdx + 1;
 		}
 		if (Object.keys(paramsObj).length > 0) session.params = paramsObj;
 	}
@@ -130,18 +141,27 @@ function decodeReadable(params: URLSearchParams, warnings: string[]): Session {
 	const rawSim = params.get('sim');
 	if (rawSim) {
 		const sim: Session['simulation'] = {};
-		for (const pair of rawSim.split(',')) {
-			const [key, value] = pair.split(':');
-			if (!key || value === undefined) continue;
-			if (key === 'method' && (value === 'ode' || value === 'ssa' || value === 'nfsim' || value === 'pla' || value === 'psa')) {
-				sim.method = value;
-			} else if (key === 'tEnd') {
-				const n = Number(value);
-				if (Number.isFinite(n)) sim.tEnd = n;
-			} else if (key === 'nSteps' || key === 'seed') {
-				const n = Number(value);
-				if (Number.isInteger(n)) sim[key] = n;
+		for (let start = 0, len = rawSim.length; start < len; ) {
+			const commaIdx = rawSim.indexOf(',', start);
+			const endIdx = commaIdx === -1 ? len : commaIdx;
+			const colonIdx = rawSim.indexOf(':', start);
+
+			if (colonIdx !== -1 && colonIdx < endIdx) {
+				const key = rawSim.slice(start, colonIdx);
+				const value = rawSim.slice(colonIdx + 1, endIdx);
+				if (key) {
+					if (key === 'method' && (value === 'ode' || value === 'ssa' || value === 'nfsim' || value === 'pla' || value === 'psa')) {
+						sim.method = value;
+					} else if (key === 'tEnd') {
+						const n = Number(value);
+						if (Number.isFinite(n)) sim.tEnd = n;
+					} else if (key === 'nSteps' || key === 'seed') {
+						const n = Number(value);
+						if (Number.isInteger(n)) sim[key] = n;
+					}
+				}
 			}
+			start = endIdx + 1;
 		}
 		if (Object.keys(sim).length > 0) session.simulation = sim;
 	}
