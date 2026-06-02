@@ -1816,6 +1816,7 @@ export async function simulate(
         if (s.name.includes('s~P') && s.name.includes('loc~nuc')) pstatIndices.push(idx);
       });
       if (pstatIndices.length > 0) {
+        const pstatIndicesSet = new Set(pstatIndices);
         const prodRates: Record<string, number> = Object.create(null) as Record<string, number>;
         for (const idx of pstatIndices) setSafeNumericField(prodRates, model.species[idx].name, 0);
         for (let i = 0; i < concreteReactions.length; i++) {
@@ -1836,7 +1837,7 @@ export async function simulate(
           if (velocity !== 0) {
             for (let j = 0; j < rxn.products.length; j++) {
               const prodIdx = rxn.products[j];
-              if (pstatIndices.includes(prodIdx)) {
+              if (pstatIndicesSet.has(prodIdx)) {
                 const prodName = model.species[prodIdx].name;
                 setSafeNumericField(
                   prodRates,
