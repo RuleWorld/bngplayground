@@ -2556,8 +2556,20 @@ export async function simulate(
       observableNamesSet.has('Tot_P') &&
       observableNamesSet.has('P_R');
     const cbnglTraceSteps = new Set([1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 470, 478, 500]);
-    const tfCpIdx = model.species.findIndex((s) => s.name === '@CP::TF(d~pY)');
-    const tfNuIdx = model.species.findIndex((s) => s.name === '@NU::TF(d~pY)');
+    let tfCpIdx = -1;
+    let tfNuIdx = -1;
+    for (let i = 0; i < model.species.length; i++) {
+      const name = model.species[i].name;
+      if (tfCpIdx === -1 && name === '@CP::TF(d~pY)') {
+        tfCpIdx = i;
+      }
+      if (tfNuIdx === -1 && name === '@NU::TF(d~pY)') {
+        tfNuIdx = i;
+      }
+      if (tfCpIdx !== -1 && tfNuIdx !== -1) {
+        break;
+      }
+    }
 
     // Root detection is currently disabled by default because global auto-detection
     // of if() conditions can introduce broad parity regressions across unrelated models.
@@ -3278,7 +3290,13 @@ export async function simulate(
               const tfCpAmt = tfCpIdx >= 0 ? (odeUsesAmountState ? y[tfCpIdx] : (y[tfCpIdx] * speciesVolumes[tfCpIdx])) : NaN;
               const tfNuAmt = tfNuIdx >= 0 ? (odeUsesAmountState ? y[tfNuIdx] : (y[tfNuIdx] * speciesVolumes[tfNuIdx])) : NaN;
               let rateTranscribeVal = Number.NaN;
-              const rateTranscribeFn = (model.functions || []).find((f) => f.name === 'rate_transcribe');
+              let rateTranscribeFn;
+              for (let i = 0; i < (model.functions || []).length; i++) {
+                if ((model.functions || [])[i].name === 'rate_transcribe') {
+                  rateTranscribeFn = (model.functions || [])[i];
+                  break;
+                }
+              }
               if (rateTranscribeFn) {
                 try {
                   rateTranscribeVal = evaluateFunctionalRate(
