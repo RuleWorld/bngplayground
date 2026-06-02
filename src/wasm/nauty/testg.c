@@ -848,6 +848,12 @@ main(int argc, char *argv[])
 	if (dofilter) countfile = stderr;
 	else          countfile = outfile;
 
+	if (dofilter && (codetype&HAS_HEADER))
+	{
+	    if (codetype&SPARSE6) writeline(outfile,SPARSE6_HEADER);
+	    else                  writeline(outfile,GRAPH6_HEADER);
+	}
+
 	if (codetype&SPARSE6) outcode = SPARSE6;
 	else                  outcode = GRAPH6;
 

@@ -195,8 +195,9 @@ describe('NeuralODESurrogate Service', () => {
                 simFn
             )).rejects.toThrow('Simulation failed');
 
-            // Should stop at the first simulation error
-            expect(simFn).toHaveBeenCalledTimes(1);
+            // With Promise.all, it initiates all simulations concurrently,
+            // so simFn will be called exactly 'nSamples' times.
+            expect(simFn).toHaveBeenCalledTimes(5);
         });
     });
 });
