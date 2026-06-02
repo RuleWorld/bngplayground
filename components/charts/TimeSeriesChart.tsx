@@ -380,7 +380,25 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
   );
 });
 
-const CustomTooltip = React.memo(({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: any) => {
+// Payload is a standard interface for Recharts Tooltip payload items
+interface TooltipPayload {
+  name: string;
+  value: string | number;
+  color: string;
+  dataKey: string;
+  payload: Record<string, unknown>;
+}
+
+interface CustomTooltipProps {
+  active?: boolean;
+  payload?: TooltipPayload[];
+  label?: string | number;
+  xAxisLabel?: string;
+  xAxisScale?: string;
+  yAxisScale?: string;
+}
+
+const CustomTooltip = React.memo(({ active, payload, label, xAxisLabel, xAxisScale, yAxisScale }: CustomTooltipProps) => {
   if (active && payload && payload.length) {
     const displayLabel = xAxisScale === 'log' ? Math.pow(10, Number(label)) : Number(label);
     
@@ -390,7 +408,7 @@ const CustomTooltip = React.memo(({ active, payload, label, xAxisLabel, xAxisSca
           {xAxisLabel}: {formatValue(displayLabel)}
         </div>
         <div className="space-y-1.5">
-          {payload.map((entry: any, index: number) => {
+          {payload.map((entry, index: number) => {
             const displayValue = yAxisScale === 'log' ? Math.pow(10, Number(entry.value)) : Number(entry.value);
             return (
               <div key={`item-${index}`} className="flex items-center justify-between gap-4 text-xs">
