@@ -970,7 +970,15 @@ export function lintBNGL(model: BNGLModel, options: LinterOptions = {}, sourceCo
 
 const LINE_SPLIT_REGEX = /\r?\n/;
 
-function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic, fallback: number, cache: Map<string, number>, tokenMap: Map<string, number>): number {
+function findLineIndexForDiagnostic(
+  diagnostic: LintDiagnostic,
+  ctx: {
+    lines: string[];
+    fallback: number;
+    cache: Map<string, number>;
+    tokenMap: Map<string, number>;
+  }
+): number {
   const candidates = new Set<string>();
   if (diagnostic.location?.name) {
     candidates.add(diagnostic.location.name.trim());
@@ -981,20 +989,20 @@ function findLineIndexForDiagnostic(lines: string[], diagnostic: LintDiagnostic,
 
   for (const candidate of candidates) {
     if (!candidate) continue;
-    let idx = cache.get(candidate);
+    let idx = ctx.cache.get(candidate);
     if (idx === undefined) {
-      idx = tokenMap.get(candidate);
-      if (idx === undefined || !lines[idx].includes(candidate)) {
-        idx = lines.findIndex((line) => line.includes(candidate));
+      idx = ctx.tokenMap.get(candidate);
+      if (idx === undefined || !ctx.lines[idx].includes(candidate)) {
+        idx = ctx.lines.findIndex((line) => line.includes(candidate));
       }
-      cache.set(candidate, idx);
+      ctx.cache.set(candidate, idx);
     }
     if (idx !== -1) {
       return idx;
     }
   }
 
-  return fallback;
+  return ctx.fallback;
 }
 
 export function lintDiagnosticsToMarkers(code: string, diagnostics: LintDiagnostic[]): EditorMarker[] {
@@ -1022,7 +1030,12 @@ export function lintDiagnosticsToMarkers(code: string, diagnostics: LintDiagnost
   }
 
   return diagnostics.map((diag) => {
-    const lineIndex = findLineIndexForDiagnostic(lines, diag, fallbackLine, candidateCache, tokenMap);
+    const lineIndex = findLineIndexForDiagnostic(diag, {
+      lines,
+      fallback: fallbackLine,
+      cache: candidateCache,
+      tokenMap,
+    });
     const lineText = lines[lineIndex] ?? '';
     return {
       severity: diag.severity,
