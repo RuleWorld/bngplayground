@@ -3278,7 +3278,16 @@ export async function simulate(
               const tfCpAmt = tfCpIdx >= 0 ? (odeUsesAmountState ? y[tfCpIdx] : (y[tfCpIdx] * speciesVolumes[tfCpIdx])) : NaN;
               const tfNuAmt = tfNuIdx >= 0 ? (odeUsesAmountState ? y[tfNuIdx] : (y[tfNuIdx] * speciesVolumes[tfNuIdx])) : NaN;
               let rateTranscribeVal = Number.NaN;
-              const rateTranscribeFn = (model.functions || []).find((f) => f.name === 'rate_transcribe');
+              // ⚡ Bolt: Replace .find with for loop in inner loop
+              let rateTranscribeFn: typeof model.functions[0] | undefined;
+              if (model.functions) {
+                for (let i = 0; i < model.functions.length; i++) {
+                  if (model.functions[i].name === 'rate_transcribe') {
+                    rateTranscribeFn = model.functions[i];
+                    break;
+                  }
+                }
+              }
               if (rateTranscribeFn) {
                 try {
                   rateTranscribeVal = evaluateFunctionalRate(

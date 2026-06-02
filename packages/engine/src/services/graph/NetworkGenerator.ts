@@ -2078,14 +2078,28 @@ export class NetworkGenerator {
               // But a synthetically-added wildcard (completeMissingComponents added it as !?__SYN__)
               // means the user DID NOT write it; treat it as absent and apply the product-implied-free
               // check, just like GPCR where l is absent from the reactant but free in the product.
-              const reactantComp = reactantMol.components.find(c => c.name === prodComp.name);
+              // ⚡ Bolt: replace array .find in inner loop
+              let reactantComp: typeof reactantMol.components[0] | undefined;
+              for (let i = 0; i < reactantMol.components.length; i++) {
+                if (reactantMol.components[i].name === prodComp.name) {
+                  reactantComp = reactantMol.components[i];
+                  break;
+                }
+              }
               if (!reactantComp?.syntheticWildcard) continue; // explicit pattern component — already constrained
               // synthetic wildcard — fall through to check target bond state
             }
 
             // Component is explicitly free in product but absent from reactant pattern.
             // BNG2 requires the target to also have it free.
-            const targetComp = targetMol.components.find(c => c.name === prodComp.name);
+            // ⚡ Bolt: replace array .find in inner loop
+            let targetComp: typeof targetMol.components[0] | undefined;
+            for (let i = 0; i < targetMol.components.length; i++) {
+              if (targetMol.components[i].name === prodComp.name) {
+                targetComp = targetMol.components[i];
+                break;
+              }
+            }
             if (!targetComp) continue; // molecule type doesn't have this component on this instance
             if (targetComp.edges.size !== 0) {
               // Target has this component bonded — reject this match.
@@ -3639,7 +3653,14 @@ export class NetworkGenerator {
                 const deltas = survivorDeltas.get(anchorKey);
                 if (deltas) {
                   for (const delta of deltas) {
-                    const compToUpdate = newMol.components.find(c => c.name === delta.comp);
+                    // ⚡ Bolt: replace array .find in inner loop
+                    let compToUpdate: typeof newMol.components[0] | undefined;
+                    for (let i = 0; i < newMol.components.length; i++) {
+                      if (newMol.components[i].name === delta.comp) {
+                        compToUpdate = newMol.components[i];
+                        break;
+                      }
+                    }
                     if (compToUpdate) {
                       // Only update if the bystander has the component and it matches the "old" state implies it's ready to move?
                       // BNG2 semantics: "Move" implies setting the new state regardless,
@@ -5377,7 +5398,14 @@ export class NetworkGenerator {
                   if (rTgtMolIdx4 === rTgtMol4) {
                     const rPatMol4 = reactantPatterns[rIdx4]?.molecules[rPatMolIdx4];
                     if (rPatMol4) {
-                      const rComp4 = rPatMol4.components.find(c => c.name === pComp.name);
+                      // ⚡ Bolt: replace array .find in inner loop
+                      let rComp4: typeof rPatMol4.components[0] | undefined;
+                      for (let i = 0; i < rPatMol4.components.length; i++) {
+                        if (rPatMol4.components[i].name === pComp.name) {
+                          rComp4 = rPatMol4.components[i];
+                          break;
+                        }
+                      }
                       if (rComp4 && rComp4.wildcard) {
                         reactantHadWildcardForComp = true;
                       }
