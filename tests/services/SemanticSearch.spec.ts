@@ -1,6 +1,6 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cosineSimilarity, semanticSearch, isSemanticSearchReady, resetSemanticSearchState, _internalState } from '../../services/semanticSearch';
+import { cosineSimilarity, semanticSearch, isSemanticSearchReady, preloadEmbeddingModel, getAllModels, resetSemanticSearchState, _internalState } from '../../services/semanticSearch';
 
 // Mock fetching the index
 const mockIndex = {
@@ -151,6 +151,92 @@ describe('Semantic Search Service', () => {
             // Calling it again without waiting for fetch will trigger the cached error branch
             await expect(semanticSearch('test')).rejects.toThrow('Failed to load transformers');
         });
+
+        it('should handle string errors during model load', async () => {
+            mockLoadTransformersPipeline.mockRejectedValue('String error');
+            await expect(semanticSearch('test')).rejects.toThrow('String error');
+        });
+
+        it('should return cached embedder if already loaded', async () => {
+            // First load
+            await semanticSearch('test');
+            // Second load should use cache
+            const results = await semanticSearch('test2');
+            expect(results).toBeDefined();
+            expect(mockLoadTransformersPipeline).toHaveBeenCalledTimes(1);
+        });
+
+        it('should wait for ongoing load and return embedder', async () => {
+            // Test the `if (isLoading)` branch with successful load
+            let resolveLoad: any;
+            mockLoadTransformersPipeline.mockReturnValue(new Promise(resolve => {
+                resolveLoad = () => resolve((...args: any[]) => mockPipeline(...args));
+            }));
+
+            // Start first search which sets isLoading = true
+            const searchPromise1 = semanticSearch('test1');
+
+            // Wait a tick to ensure isLoading is true
+            await new Promise(process.nextTick);
+
+            // Start second search which should wait
+            const searchPromise2 = semanticSearch('test2');
+
+            // Resolve the pipeline load
+            resolveLoad();
+
+            const [results1, results2] = await Promise.all([searchPromise1, searchPromise2]);
+            expect(results1).toBeDefined();
+            expect(results2).toBeDefined();
+        });
+
+        it('should wait for ongoing load and throw cached error if it failed', async () => {
+            // Test the `if (isLoading)` branch with failed load
+            let rejectLoad: any;
+            mockLoadTransformersPipeline.mockReturnValue(new Promise((_, reject) => {
+                rejectLoad = () => reject(new Error('Delayed load error'));
+            }));
+
+            // Start first search which sets isLoading = true
+            const searchPromise1 = semanticSearch('test1');
+
+            // Wait a tick to ensure isLoading is true
+            await new Promise(process.nextTick);
+
+            // Start second search which should wait
+            const searchPromise2 = semanticSearch('test2');
+
+            // Reject the pipeline load
+            rejectLoad();
+
+            await expect(searchPromise1).rejects.toThrow('Delayed load error');
+            await expect(searchPromise2).rejects.toThrow('Delayed load error');
+        });
+
+        it('should log warning if queryEmbedding length is 0', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+            mockPipeline.mockResolvedValue(async () => {
+                return {
+                    data: new Float32Array([]) // Empty array
+                };
+            });
+
+            await semanticSearch('test empty array');
+            expect(warnSpy).toHaveBeenCalledWith('[SemanticSearch][DEBUG] queryEmbedding length:', 0);
+
+            warnSpy.mockRestore();
+        });
+
+        it('should throw error if embed output is missing data', async () => {
+            mockPipeline.mockResolvedValue(async () => {
+                return {
+                    // No data property
+                };
+            });
+
+            await expect(semanticSearch('test missing data')).rejects.toThrow('Embedding pipeline returned unexpected output');
+        });
     });
 
     describe('isSemanticSearchReady', () => {
@@ -179,6 +265,82 @@ describe('Semantic Search Service', () => {
 
             const ready = await isSemanticSearchReady();
             expect(ready).toBe(false);
+        });
+    });
+
+    describe('preloadEmbeddingModel', () => {
+        it('should catch error and log warning if preloading fails', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            const testError = new Error('Preload test error');
+            mockLoadTransformersPipeline.mockRejectedValue(testError);
+
+            preloadEmbeddingModel();
+
+            // Wait a tick for the promise to reject
+            await new Promise(process.nextTick);
+
+            expect(warnSpy).toHaveBeenCalledWith('[SemanticSearch] Failed to preload model:', testError);
+            warnSpy.mockRestore();
+        });
+
+        it('should successfully preload without logging errors', async () => {
+            const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+            mockLoadTransformersPipeline.mockResolvedValue((...args: any[]) => mockPipeline(...args));
+
+            preloadEmbeddingModel();
+
+            await new Promise(process.nextTick);
+
+            expect(warnSpy).not.toHaveBeenCalled();
+            warnSpy.mockRestore();
+        });
+    });
+
+    describe('getAllModels', () => {
+        it('should return all models with score 1', async () => {
+            vi.spyOn(global, 'fetch').mockResolvedValue({
+                ok: true,
+                json: async () => mockIndex
+            } as Response);
+
+            const models = await getAllModels();
+            expect(models).toHaveLength(2);
+            expect(models[0].id).toBe('m1');
+            expect(models[0].score).toBe(1);
+            expect(models[1].id).toBe('m2');
+            expect(models[1].score).toBe(1);
+        });
+
+        it('should use import.meta.env.BASE_URL if available', async () => {
+            vi.stubEnv('BASE_URL', '/test-base/');
+
+            const fetchSpyLocal = vi.spyOn(global, 'fetch').mockResolvedValue({
+                ok: true,
+                json: async () => mockIndex
+            } as Response);
+
+            await getAllModels();
+
+            expect(fetchSpyLocal).toHaveBeenCalledWith('/test-base/model-embeddings.json');
+
+            vi.unstubAllEnvs();
+        });
+
+        it('should fallback to root if BASE_URL is empty', async () => {
+            // Unset or empty BASE_URL
+            vi.stubEnv('BASE_URL', '');
+
+            const fetchSpyLocal = vi.spyOn(global, 'fetch').mockResolvedValue({
+                ok: true,
+                json: async () => mockIndex
+            } as Response);
+
+            await getAllModels();
+
+            // Should fallback to '/'
+            expect(fetchSpyLocal).toHaveBeenCalledWith('/model-embeddings.json');
+
+            vi.unstubAllEnvs();
         });
     });
 
