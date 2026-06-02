@@ -249,6 +249,10 @@ export class VariationalParameterEstimator {
 
       const epsBatch = tf.tidy(() => tf.randomNormal([candidatesPerIter, this.nParams]).arraySync() as number[][]);
 
+      const candidateLogParamsBatch: number[][] = [];
+      const candidateParamsBatch: number[][] = [];
+
+      // Phase 1: Generate all candidates synchronously
       for (let k = 0; k < candidatesPerIter; k++) {
         const eps = epsBatch[k];
         const candidateLogParams = new Array<number>(this.nParams);
@@ -262,7 +266,20 @@ export class VariationalParameterEstimator {
           candidateParams[i] = Math.exp(clamped);
         }
 
-        const obj = await this.computeObjective(candidateParams);
+        candidateLogParamsBatch.push(candidateLogParams);
+        candidateParamsBatch.push(candidateParams);
+      }
+
+      // Phase 2: Compute objectives concurrently
+      const objectivePromises = candidateParamsBatch.map(params => this.computeObjective(params));
+      const objectives = await Promise.all(objectivePromises);
+
+      // Phase 3: Find the best candidate
+      for (let k = 0; k < candidatesPerIter; k++) {
+        const obj = objectives[k];
+        const candidateLogParams = candidateLogParamsBatch[k];
+        const candidateParams = candidateParamsBatch[k];
+
         if (obj < bestObjectiveIter) {
           bestObjectiveIter = obj;
           bestParamsIter = candidateParams;

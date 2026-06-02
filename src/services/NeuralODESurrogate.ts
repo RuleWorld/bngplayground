@@ -674,13 +674,11 @@ export class SurrogateDatasetGenerator {
     simulateFunction: (params: number[]) => Promise<number[][]>
   ): Promise<TrainingDataset> {
     const parameters = this.latinHypercubeSample(paramRanges, nSamples);
-    const concentrations: number[][][] = [];
     
-    // Run simulations for each parameter set
-    for (const params of parameters) {
-      const result = await simulateFunction(params);
-      concentrations.push(result);
-    }
+    // Run simulations for each parameter set concurrently
+    const concentrations: number[][][] = await Promise.all(
+      parameters.map(params => simulateFunction(params))
+    );
     
     return { parameters, timePoints, concentrations };
   }
