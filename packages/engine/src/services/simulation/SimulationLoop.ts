@@ -1095,7 +1095,7 @@ export async function simulate(
     let compiledMassActionJit: JITCompiledFunction | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
     let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
-    // eslint-disable-next-line prefer-const
+     
     let persistedSolverKey = '';
 
 
