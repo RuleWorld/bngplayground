@@ -818,7 +818,6 @@ export class NetworkGenerator {
     clearMatchCache();
 
     const speciesMap = new Map<string, Species>();
-  const speciesByFingerprint = new Map<string, Species[]>();
     const speciesList: Species[] = [];
     const reactionsList: Rxn[] = [];
     this.currentSpeciesList = speciesList;
@@ -839,7 +838,7 @@ export class NetworkGenerator {
 
     // Initialize with seed species
     for (const sg of seedSpecies) {
-      this.addOrGetSpecies(sg, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+      this.addOrGetSpecies(sg, speciesMap, speciesList, queue, signal);
     }
 
     // Handle synthesis rules (0 -> X) - add products directly
@@ -849,7 +848,7 @@ export class NetworkGenerator {
 
       // Add each product species and retrieve its index directly
       const productIndices = rule.products.map(productGraph => {
-        const sp = this.addOrGetSpecies(productGraph, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+        const sp = this.addOrGetSpecies(productGraph, speciesMap, speciesList, queue, signal);
         return sp.index;
       });
 
@@ -973,7 +972,6 @@ export class NetworkGenerator {
                 rule,
                 currentSpeciesObj,
                 speciesMap,
-                speciesByFingerprint,
                 speciesList,
                 queue,
                 reactionsList,
@@ -991,7 +989,6 @@ export class NetworkGenerator {
                 currentSpeciesObj,
                 speciesList, // allSpecies
                 speciesMap,
-                speciesByFingerprint,
                 speciesList,
                 queue,
                 reactionsList,
@@ -1192,7 +1189,6 @@ export class NetworkGenerator {
     rule: RxnRule,
     reactantSpecies: Species,
     speciesMap: Map<string, Species>,
-    speciesByFingerprint: Map<string, Species[]>,
     speciesList: Species[],
     queue: SpeciesGraph[],
     reactionsList: Rxn[],
@@ -1624,7 +1620,7 @@ export class NetworkGenerator {
       const productSpeciesIndices: number[] = [];
       const productSpeciesList: Species[] = [];
       for (const product of products) {
-        const productSpecies = this.addOrGetSpecies(product, speciesMap, speciesByFingerprint, speciesList, queue, signal);
+        const productSpecies = this.addOrGetSpecies(product, speciesMap, speciesList, queue, signal);
         productSpeciesList.push(productSpecies);
         productSpeciesIndices.push(productSpecies.index);
       }
@@ -2078,7 +2074,8 @@ export class NetworkGenerator {
               // But a synthetically-added wildcard (completeMissingComponents added it as !?__SYN__)
               // means the user DID NOT write it; treat it as absent and apply the product-implied-free
               // check, just like GPCR where l is absent from the reactant but free in the product.
-              let reactantComp;
+              // ⚡ Bolt: replace array .find in inner loop
+              let reactantComp: typeof reactantMol.components[0] | undefined;
               for (let i = 0; i < reactantMol.components.length; i++) {
                 if (reactantMol.components[i].name === prodComp.name) {
                   reactantComp = reactantMol.components[i];
@@ -2091,7 +2088,8 @@ export class NetworkGenerator {
 
             // Component is explicitly free in product but absent from reactant pattern.
             // BNG2 requires the target to also have it free.
-            let targetComp;
+            // ⚡ Bolt: replace array .find in inner loop
+            let targetComp: typeof targetMol.components[0] | undefined;
             for (let i = 0; i < targetMol.components.length; i++) {
               if (targetMol.components[i].name === prodComp.name) {
                 targetComp = targetMol.components[i];
@@ -2120,7 +2118,6 @@ export class NetworkGenerator {
     currentSpecies: Species,
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
-    speciesByFingerprint: Map<string, Species[]>,
     speciesList: Species[],
     queue: SpeciesGraph[],
     reactionsList: Rxn[],
@@ -2337,7 +2334,6 @@ export class NetworkGenerator {
             1,
             allSpecies,
             speciesMap,
-            speciesByFingerprint,
             speciesList,
             queue,
             reactionsList,
@@ -2433,7 +2429,6 @@ export class NetworkGenerator {
           bucket.multiplicity,
           allSpecies,
           speciesMap,
-          speciesByFingerprint,
           speciesList,
           queue,
           reactionsList,
@@ -2456,7 +2451,6 @@ export class NetworkGenerator {
     signatureMultiplicity: number,
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
-    speciesByFingerprint: Map<string, Species[]>,
     speciesList: Species[],
     queue: SpeciesGraph[],
     reactionsList: Rxn[],
@@ -3039,7 +3033,7 @@ export class NetworkGenerator {
     }
 
     // 4. Resolve Product Species
-    const productSpeciesList = products.map(p => this.addOrGetSpecies(p, speciesMap, speciesByFingerprint, speciesList, queue, signal));
+    const productSpeciesList = products.map(p => this.addOrGetSpecies(p, speciesMap, speciesList, queue, signal));
     if (!this.checkProductConstraints(rule, productSpeciesList)) {
       return;
     }
@@ -3657,7 +3651,8 @@ export class NetworkGenerator {
                 const deltas = survivorDeltas.get(anchorKey);
                 if (deltas) {
                   for (const delta of deltas) {
-                    let compToUpdate;
+                    // ⚡ Bolt: replace array .find in inner loop
+                    let compToUpdate: typeof newMol.components[0] | undefined;
                     for (let i = 0; i < newMol.components.length; i++) {
                       if (newMol.components[i].name === delta.comp) {
                         compToUpdate = newMol.components[i];
@@ -5401,7 +5396,8 @@ export class NetworkGenerator {
                   if (rTgtMolIdx4 === rTgtMol4) {
                     const rPatMol4 = reactantPatterns[rIdx4]?.molecules[rPatMolIdx4];
                     if (rPatMol4) {
-                      let rComp4;
+                      // ⚡ Bolt: replace array .find in inner loop
+                      let rComp4: typeof rPatMol4.components[0] | undefined;
                       for (let i = 0; i < rPatMol4.components.length; i++) {
                         if (rPatMol4.components[i].name === pComp.name) {
                           rComp4 = rPatMol4.components[i];
@@ -5655,21 +5651,13 @@ export class NetworkGenerator {
   private addOrGetSpecies(
     graph: SpeciesGraph,
     speciesMap: Map<string, Species>,
-    speciesByFingerprint: Map<string, Species[]>,
     speciesList: Species[],
     queue: SpeciesGraph[],
     signal?: AbortSignal
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
 
-    // 1. Try finding an isomorphic species first using the fingerprint index to avoid canonicalization
-    const isomorphic = this.findIsomorphicSpecies(graph, speciesByFingerprint);
-    if (isomorphic) {
-      if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      return isomorphic;
-    }
-
-    // 2. Not isomorphic to any known species; canonicalize it now
+    // Use pure canonicalization for deduplication (fastest O(1) string equality map)
     const canonical = profiledCanonicalize(graph);
 
     if (speciesMap.has(canonical)) {
@@ -5698,7 +5686,6 @@ export class NetworkGenerator {
     speciesMap.set(canonical, species);
     speciesList.push(species);
     this.indexSpecies(species);
-    this.indexFingerprint(species, speciesByFingerprint);
     queue.push(graph);
 
     if (signal?.aborted) {
@@ -5709,61 +5696,7 @@ export class NetworkGenerator {
     return species;
   }
 
-  private indexFingerprint(species: Species, speciesByFingerprint: Map<string, Species[]>): void {
-    const fingerprint = this.buildSpeciesFingerprint(species.graph);
-    const bucket = speciesByFingerprint.get(fingerprint);
-    if (bucket) {
-      bucket.push(species);
-      return;
-    }
-    speciesByFingerprint.set(fingerprint, [species]);
-  }
 
-  private findIsomorphicSpecies(graph: SpeciesGraph, speciesByFingerprint: Map<string, Species[]>): Species | undefined {
-    const fingerprint = this.buildSpeciesFingerprint(graph);
-    const candidates = speciesByFingerprint.get(fingerprint);
-    if (!candidates || candidates.length === 0) {
-      return undefined;
-    }
-
-    for (const candidate of candidates) {
-      const maps = profiledFindAllMaps(graph, candidate.graph, { symmetryBreaking: true });
-      if (maps.some(match => match.moleculeMap.size === graph.molecules.length)) {
-        return candidate;
-      }
-    }
-
-    return undefined;
-  }
-
-  private buildSpeciesFingerprint(graph: SpeciesGraph): string {
-    const moleculeSignatures = graph.molecules
-      .map((molecule) => {
-        const componentSignature = molecule.components
-          .map(component => `${component.name}~${component.state ?? ''}!${component.wildcard ?? ''}`)
-          .sort()
-          .join(',');
-        return `${molecule.name}@${molecule.compartment ?? ''}(${componentSignature})`;
-      })
-      .sort()
-      .join('|');
-
-    const adjacencyDegreeSignature = graph.molecules
-      .map((molecule, molIdx) => {
-        const componentDegrees = molecule.components
-          .map((_component, compIdx) => {
-            const key = `${molIdx}.${compIdx}`;
-            return graph.adjacency.get(key)?.length ?? 0;
-          })
-          .sort((a, b) => a - b)
-          .join(',');
-        return `${molecule.name}:${componentDegrees}`;
-      })
-      .sort()
-      .join('|');
-
-    return `${graph.compartment ?? ''}::${moleculeSignatures}::${adjacencyDegreeSignature}`;
-  }
 
   /**
    * Add a species' molecules to the inverted index for quick lookup when matching
