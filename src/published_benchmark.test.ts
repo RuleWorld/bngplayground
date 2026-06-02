@@ -85,9 +85,9 @@ function runNativeNFsim(modelName: string, parsedModel: ReturnType<typeof parseB
         throw new Error('NFsim completed without producing GDAT output');
     }
 
-    try { fs.rmSync(xmlPath); } catch (e) { }
-    try { fs.rmSync(gdatPath); } catch (e) { }
-    try { fs.rmSync(speciesPath); } catch (e) { }
+    try { fs.rmSync(xmlPath, { force: true }); } catch (e) { console.warn(`Failed to remove ${xmlPath}:`, e); }
+    try { fs.rmSync(gdatPath, { force: true }); } catch (e) { console.warn(`Failed to remove ${gdatPath}:`, e); }
+    try { fs.rmSync(speciesPath, { force: true }); } catch (e) { console.warn(`Failed to remove ${speciesPath}:`, e); }
 
     return elapsedMs;
 }
@@ -465,11 +465,11 @@ describe.skipIf(!hasBNG2)('Full Published Models Benchmark', () => {
                 }
 
                 // Cleanup temp file
-                try { fs.rmSync(netFile); } catch (e) { }
-                try { fs.rmSync(tempBnglPath); } catch (e) { }
-                try { fs.rmSync(path.join(tempDir, `${modelData.name}.log`)); } catch (e) { }
-                try { fs.rmSync(path.join(tempDir, `${modelData.name}.gdat`)); } catch (e) { }
-                try { fs.rmSync(path.join(tempDir, `${modelData.name}.cdat`)); } catch (e) { }
+                try { fs.rmSync(netFile, { force: true }); } catch (e) { console.warn(`Failed to remove ${netFile}:`, e); }
+                try { fs.rmSync(tempBnglPath, { force: true }); } catch (e) { console.warn(`Failed to remove ${tempBnglPath}:`, e); }
+                try { fs.rmSync(path.join(tempDir, `${modelData.name}.log`), { force: true }); } catch (e) { console.warn(`Failed to remove ${path.join(tempDir, `${modelData.name}.log`)}:`, e); }
+                try { fs.rmSync(path.join(tempDir, `${modelData.name}.gdat`), { force: true }); } catch (e) { console.warn(`Failed to remove ${path.join(tempDir, `${modelData.name}.gdat`)}:`, e); }
+                try { fs.rmSync(path.join(tempDir, `${modelData.name}.cdat`), { force: true }); } catch (e) { console.warn(`Failed to remove ${path.join(tempDir, `${modelData.name}.cdat`)}:`, e); }
 
             } catch (bngErr: any) {
                 result.bng2Error = "BNG2 Failed/Timeout";
