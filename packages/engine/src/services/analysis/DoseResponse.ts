@@ -226,7 +226,14 @@ function resolveObservable(
   species: BNGLSpecies[],
 ): ObservableMapping | null {
   // First check model observables for speciesIndices/coefficients.
-  const modelObs = model.observables.find((o) => o.name === obsName);
+  // ⚡ Bolt: Replace .find with for loop
+  let modelObs: typeof model.observables[0] | undefined;
+  for (let i = 0; i < model.observables.length; i++) {
+    if (model.observables[i].name === obsName) {
+      modelObs = model.observables[i];
+      break;
+    }
+  }
   if (modelObs) {
     const obs = modelObs as unknown as Record<string, unknown>;
     if (

@@ -148,7 +148,9 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
         return point;
       });
       setPreviewData(combined);
-    } catch (e) {}
+    } catch (e) {
+      console.error('Failed to update preview:', e);
+    }
   };
 
   React.useEffect(() => {

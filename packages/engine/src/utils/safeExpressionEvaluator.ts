@@ -363,6 +363,26 @@ function getVariables(node: JsepNode): string[] {
   return Array.from(vars);
 }
 
+/**
+ * Compiles a mathematical or logical expression into a safe executable function.
+ *
+ * Validates the expression's syntax and checks it against security constraints
+ * to prevent DoS attacks and code injection (e.g., limits parenthesis depth,
+ * validates AST structure, and blocks property/constructor access). Variables
+ * found in the expression must either be present in the `paramNames` list or
+ * exist in the predefined `ALLOWED_CONSTS` map.
+ *
+ * **Engine invariant:** To prevent code injection vulnerabilities, expressions
+ * must be evaluated through this module rather than using `new Function(...)` or `eval()`.
+ *
+ * @param expr - The mathematical or logical string expression to compile.
+ * @param paramNames - Optional list of allowed variable names that the expression may reference.
+ * @returns A callable function that takes a `context` record (mapping variable names to their values)
+ *          and returns the numerical evaluation of the expression. Returns `NaN` on evaluation errors
+ *          (such as division by zero or non-finite results).
+ * @throws {Error} If parsing fails, suspicious patterns are detected, paren depth is exceeded,
+ *                 or if the expression references variables not found in `paramNames` or `ALLOWED_CONSTS`.
+ */
 export function compile(
   expr: string,
   paramNames: string[] = []
