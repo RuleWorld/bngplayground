@@ -10,7 +10,7 @@
  * Reference: bionetgen/bng2/Network3/src/run_network.cpp
  */
 
-import { BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
+import { BNGLFunction, BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
 import type { SolverResult } from './ODESolver';
 
 import { BNGLParser } from '../graph/core/BNGLParser';
@@ -1095,7 +1095,7 @@ export async function simulate(
     let compiledMassActionJit: JITCompiledFunction | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
     let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
-    // eslint-disable-next-line prefer-const
+     
     let persistedSolverKey = '';
 
 
@@ -3291,7 +3291,7 @@ export async function simulate(
               const tfNuAmt = tfNuIdx >= 0 ? (odeUsesAmountState ? y[tfNuIdx] : (y[tfNuIdx] * speciesVolumes[tfNuIdx])) : NaN;
               let rateTranscribeVal = Number.NaN;
               // ⚡ Bolt: Replace .find with for loop in inner loop
-              let rateTranscribeFn: typeof model.functions[0] | undefined;
+              let rateTranscribeFn: BNGLFunction | undefined;
               if (model.functions) {
                 for (let i = 0; i < model.functions.length; i++) {
                   if (model.functions[i].name === 'rate_transcribe') {
