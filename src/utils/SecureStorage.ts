@@ -56,8 +56,7 @@ export class SecureStorage {
    */
   static async setItem(key: string, value: string): Promise<void> {
     if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle || typeof globalThis.indexedDB === 'undefined') {
-      // Fallback if crypto/indexedDB is not available
-      localStorage.setItem(key, btoa(value));
+      console.warn('SecureStorage: crypto or indexedDB not available. Storage operation aborted to prevent insecure fallback.');
       return;
     }
 
@@ -78,8 +77,7 @@ export class SecureStorage {
       const payload = `enc:${ivBase64}:${encryptedBase64}`;
       localStorage.setItem(key, payload);
     } catch (e) {
-      console.warn('Encryption failed, using fallback', e);
-      localStorage.setItem(key, btoa(value));
+      console.warn('SecureStorage: Encryption failed. Storage operation aborted to prevent insecure fallback.', e);
     }
   }
 
@@ -93,6 +91,7 @@ export class SecureStorage {
     }
 
     if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle || typeof globalThis.indexedDB === 'undefined') {
+      console.warn('SecureStorage: crypto or indexedDB not available. Reading fallback insecure value.');
       try {
         return atob(encryptedText);
       } catch {
@@ -129,7 +128,7 @@ export class SecureStorage {
       const dec = new TextDecoder();
       return dec.decode(decrypted);
     } catch (e) {
-      console.warn('Decryption failed, using fallback', e);
+      console.warn('SecureStorage: Decryption failed, reading fallback insecure value.', e);
       try {
           return atob(encryptedText);
       } catch {
