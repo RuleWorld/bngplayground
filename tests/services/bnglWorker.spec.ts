@@ -17,6 +17,56 @@ vi.mock('@bngplayground/engine', () => {
   };
 });
 
+describe('mergeSimulationOptionsWithModelActionDefaults', () => {
+  it('should not modify options if no model actions exist', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'ode' };
+    const model = { species: [], parameters: {}, observables: [], reactions: [], reactionRules: [] };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'ode');
+    expect(result).toEqual(options);
+  });
+
+  it('should apply defaults from simulate action if they are not set in options', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'ode' };
+    const model = {
+      species: [], parameters: {}, observables: [], reactions: [], reactionRules: [],
+      actions: [{ type: 'simulate', args: { method: 'ode', t_end: 100, n_steps: 50, seed: 123 } }]
+    };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'ode');
+    expect(result.t_end).toBe(100);
+    expect(result.n_steps).toBe(50);
+    expect(result.seed).toBe(123);
+  });
+
+  it('should not override options that are already set', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'ode', t_end: 200, n_steps: 10 };
+    const model = {
+      species: [], parameters: {}, observables: [], reactions: [], reactionRules: [],
+      actions: [{ type: 'simulate', args: { method: 'ode', t_end: 100, n_steps: 50 } }]
+    };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'ode');
+    expect(result.t_end).toBe(200);
+    expect(result.n_steps).toBe(10);
+  });
+
+  it('should use simulate_method action if available', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'nf' };
+    const model = {
+      species: [], parameters: {}, observables: [], reactions: [], reactionRules: [],
+      actions: [{ type: 'simulate_nf', args: { t_end: 50, n_steps: 25, utl: 3, gml: 100000, equilibrate: 10 } }]
+    };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'nf');
+    expect(result.t_end).toBe(50);
+    expect(result.n_steps).toBe(25);
+    expect(result.utl).toBe(3);
+    expect(result.gml).toBe(100000);
+    expect(result.equilibrate).toBe(10);
+  });
+});
+
 describe('bnglWorker logging error handling', () => {
   let mockPostMessage: any;
   let mockAddEventListener: any;
