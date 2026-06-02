@@ -90,6 +90,7 @@ main(int argc, char *argv[])
         char *arg,sw;
 	setword *gv,*gw;
 	int maxdeg,actmaxdeg,degv;
+	int loops;
 	double t;
 #if MAXN
 	graph h[MAXN*MAXM];
@@ -203,6 +204,8 @@ main(int argc, char *argv[])
 	    if ((g = readg(infile,NULL,0,&m,&n)) == NULL) break;
 	    ++nin;
 
+	    loops = loopcount(g,m,n);
+
 #if !MAXN
 	    DYNALLOC1(int,deg,deg_sz,n,"addedgeg");
 	    DYNALLOC1(boolean,okdist,okdist_sz,n+1,"addedgeg");
@@ -259,7 +262,7 @@ main(int argc, char *argv[])
 #if !MAXN
 		        DYNALLOC2(graph,h,h_sz,n,m,"addedgeg");
 #endif
-	 	        fcanonise(g,m,n,h,NULL,FALSE);  /*FIXME (loops)*/
+		        fcanonise(g,m,n,h,NULL,loops>0);
 		        gq = h;
 	            }
 	            if (outcode == SPARSE6) writes6(outfile,gq,m,n);

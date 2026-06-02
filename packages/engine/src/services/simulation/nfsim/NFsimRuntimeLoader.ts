@@ -337,22 +337,29 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
     });
   } else {
     // Strategy 2: Worker context (including module workers)
-    // Indirect eval: (0, eval)(code) evaluates in global scope, not local.
-    // The var createNFsimModule becomes a global var, and the augmented line
-    // assigns it to self for retrieval.
-    try {
-      (0, eval)(augmented);
-    } catch (evalErr) {
-      // If indirect eval fails (strict CSP), try importScripts for classic workers
-      if (typeof (globalThis as any).importScripts === 'function') {
-        const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
-        try {
-          (globalThis as any).importScripts(blobUrl);
-        } finally {
-          URL.revokeObjectURL(blobUrl);
+    if (typeof (globalThis as any).importScripts === 'function') {
+      // Classic workers
+      const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
+      try {
+        (globalThis as any).importScripts(blobUrl);
+      } finally {
+        URL.revokeObjectURL(blobUrl);
+      }
+    } else {
+      // Module workers: use Blob URL with ESM import to avoid eval
+      const esmAugmented = text + '\n;export { createNFsimModule };\nexport default createNFsimModule;\n';
+      const blobUrl = URL.createObjectURL(new Blob([esmAugmented], { type: 'application/javascript' }));
+      try {
+        const mod = await import(/* @vite-ignore */ blobUrl);
+        if (mod && mod.createNFsimModule) {
+          globalAny.createNFsimModule = mod.createNFsimModule;
+        } else if (mod && mod.default) {
+          globalAny.createNFsimModule = mod.default;
         }
-      } else {
-        throw evalErr;
+      } catch (err) {
+        throw new Error('Failed to load nfsim.js via dynamic import in module worker', { cause: err });
+      } finally {
+        URL.revokeObjectURL(blobUrl);
       }
     }
   }

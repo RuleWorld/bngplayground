@@ -17,6 +17,56 @@ vi.mock('@bngplayground/engine', () => {
   };
 });
 
+describe('mergeSimulationOptionsWithModelActionDefaults', () => {
+  it('should not modify options if no model actions exist', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'ode' };
+    const model = { species: [], parameters: {}, observables: [], reactions: [], reactionRules: [] };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'ode');
+    expect(result).toEqual(options);
+  });
+
+  it('should apply defaults from simulate action if they are not set in options', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'ode' };
+    const model = {
+      species: [], parameters: {}, observables: [], reactions: [], reactionRules: [],
+      actions: [{ type: 'simulate', args: { method: 'ode', t_end: 100, n_steps: 50, seed: 123 } }]
+    };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'ode');
+    expect(result.t_end).toBe(100);
+    expect(result.n_steps).toBe(50);
+    expect(result.seed).toBe(123);
+  });
+
+  it('should not override options that are already set', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'ode', t_end: 200, n_steps: 10 };
+    const model = {
+      species: [], parameters: {}, observables: [], reactions: [], reactionRules: [],
+      actions: [{ type: 'simulate', args: { method: 'ode', t_end: 100, n_steps: 50 } }]
+    };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'ode');
+    expect(result.t_end).toBe(200);
+    expect(result.n_steps).toBe(10);
+  });
+
+  it('should use simulate_method action if available', async () => {
+    const { mergeSimulationOptionsWithModelActionDefaults } = await import('../../services/bnglWorker');
+    const options = { method: 'nf' };
+    const model = {
+      species: [], parameters: {}, observables: [], reactions: [], reactionRules: [],
+      actions: [{ type: 'simulate_nf', args: { t_end: 50, n_steps: 25, utl: 3, gml: 100000, equilibrate: 10 } }]
+    };
+    const result = mergeSimulationOptionsWithModelActionDefaults(options, model, 'nf');
+    expect(result.t_end).toBe(50);
+    expect(result.n_steps).toBe(25);
+    expect(result.utl).toBe(3);
+    expect(result.gml).toBe(100000);
+    expect(result.equilibrate).toBe(10);
+  });
+});
+
 describe('bnglWorker logging error handling', () => {
   let mockPostMessage: any;
   let mockAddEventListener: any;
@@ -161,5 +211,171 @@ describe('bnglWorker logging error handling', () => {
     // It shouldn't post a progress message because val is NaN
     const progressCalls = mockPostMessage.mock.calls.filter((call: any) => call[0]?.type === 'progress' && call[0]?.payload?.source === 'nfsim-console');
     expect(progressCalls.length).toBe(0);
+  });
+});
+
+describe('bnglWorker - parse message', () => {
+  let mockPostMessage: any;
+  let mockAddEventListener: any;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    mockPostMessage = vi.fn();
+    mockAddEventListener = vi.fn();
+    (global as any).self = {
+      postMessage: mockPostMessage,
+      addEventListener: mockAddEventListener,
+      location: { origin: '' }
+    };
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete (global as any).self;
+  });
+
+  it('should handle parse message and succeed', async () => {
+    const engine = await import('@bngplayground/engine');
+    (engine.parseBNGLWithANTLR as any).mockReturnValue({
+      model: { some: 'model' },
+      success: true,
+      errors: []
+    });
+    (engine.requiresCompartmentResolution as any).mockReturnValue(false);
+
+    await import('../../services/bnglWorker');
+
+    const messageListener = mockAddEventListener.mock.calls.find((c: any) => c[0] === 'message')[1];
+
+    const parsePromise = messageListener({
+      origin: '',
+      data: {
+        id: 42,
+        type: 'parse',
+        payload: 'begin model\nend model'
+      }
+    });
+
+    await parsePromise;
+
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'parse_success',
+      payload: { some: 'model' },
+      id: 42
+    }));
+  });
+
+  it('should handle parse message and fail when model is not returned', async () => {
+    const engine = await import('@bngplayground/engine');
+    (engine.parseBNGLWithANTLR as any).mockReturnValue({
+      model: null,
+      success: false,
+      errors: [{ line: 1, column: 1, message: 'Syntax error' }]
+    });
+
+    await import('../../services/bnglWorker');
+
+    const messageListener = mockAddEventListener.mock.calls.find((c: any) => c[0] === 'message')[1];
+
+    const parsePromise = messageListener({
+      origin: '',
+      data: {
+        id: 42,
+        type: 'parse',
+        payload: 'invalid model'
+      }
+    });
+
+    await parsePromise;
+
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'parse_error',
+      id: 42,
+      payload: expect.objectContaining({
+        message: expect.stringContaining('BNGL parse error')
+      })
+    }));
+  });
+
+  it('should continue parsing when there are recoverable errors', async () => {
+    const engine = await import('@bngplayground/engine');
+
+    // NOTE: in bnglWorker, console.warn is intercepted to add to logBuffer and then call originalConsoleWarn
+    // However, our string checking is tricky. Let's just mock the post message, and we know if we got parse_success, we must have continued
+    (engine.parseBNGLWithANTLR as any).mockReturnValue({
+      model: { some: 'model' },
+      success: false,
+      errors: [{ line: 1, column: 1, message: 'Recoverable error' }]
+    });
+    (engine.requiresCompartmentResolution as any).mockReturnValue(false);
+
+    await import('../../services/bnglWorker');
+
+    const messageListener = mockAddEventListener.mock.calls.find((c: any) => c[0] === 'message')[1];
+
+    const parsePromise = messageListener({
+      origin: '',
+      data: {
+        id: 42,
+        type: 'parse',
+        payload: 'model with recoverable error'
+      }
+    });
+
+    await parsePromise;
+
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'parse_success',
+      payload: { some: 'model' },
+      id: 42
+    }));
+  });
+
+  it('should resolve compartments if needed', async () => {
+    const engine = await import('@bngplayground/engine');
+    (engine.parseBNGLWithANTLR as any).mockReturnValue({
+      model: { some: 'model' },
+      success: true,
+      errors: []
+    });
+    (engine.requiresCompartmentResolution as any).mockReturnValue(true);
+    (engine.resolveCompartmentVolumes as any).mockReturnValue({ some: 'resolved_model' });
+
+    await import('../../services/bnglWorker');
+
+    const messageListener = mockAddEventListener.mock.calls.find((c: any) => c[0] === 'message')[1];
+
+    const parsePromise = messageListener({
+      origin: '',
+      data: {
+        id: 42,
+        type: 'parse',
+        payload: 'model with compartments'
+      }
+    });
+
+    await parsePromise;
+
+    expect(engine.resolveCompartmentVolumes).toHaveBeenCalled();
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      type: 'parse_success',
+      payload: { some: 'resolved_model' },
+      id: 42
+    }));
+  });
+});
+
+describe('bnglWorker - getCacheSizes', () => {
+  it('should call getEvaluatorCacheSizes and return its value', async () => {
+    // The worker imports getCacheSizes as getEvaluatorCacheSizes from @bngplayground/engine
+    const engine = await import('@bngplayground/engine');
+    (engine.getCacheSizes as any).mockReturnValue({ evaluatorCache: 123 });
+
+    const worker = await import('../../services/bnglWorker');
+    const result = worker.getCacheSizes();
+
+    // We expect the original exported name to have been called
+    expect(engine.getCacheSizes).toHaveBeenCalled();
+    expect(result).toEqual({ evaluatorCache: 123 });
   });
 });

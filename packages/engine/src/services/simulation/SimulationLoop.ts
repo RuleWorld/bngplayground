@@ -132,8 +132,8 @@ export function resolveSimulationPhasesForRun(model: BNGLModel, options: Simulat
 
   const authoredPhases: SimulationPhase[] = (model.simulationPhases && model.simulationPhases.length > 0)
     ? model.simulationPhases.map((phase) => ({ ...phase }))
-    : (model as any).phases && (model as any).phases.length > 0
-      ? (model as any).phases.map((phase: SimulationPhase) => ({ ...phase }))
+    : ('phases' in model && Array.isArray((model as typeof model & { phases?: SimulationPhase[] }).phases) && (model as typeof model & { phases?: SimulationPhase[] }).phases!.length > 0)
+      ? (model as typeof model & { phases?: SimulationPhase[] }).phases!.map((phase: SimulationPhase) => ({ ...phase }))
       : [];
 
   const normalizedNSteps = normalizeNSteps(options.n_steps);
@@ -219,8 +219,8 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
  */
 async function convertReactionsToGPU(
   concreteReactions: ConcreteReaction[]
-): Promise<{ gpuReactions: any[]; rateConstants: number[] }> {
-  const gpuReactions: any[] = [];
+): Promise<{ gpuReactions: Array<{ reactantIndices: number[]; reactantStoich: number[]; productIndices: number[]; productStoich: number[]; rateConstantIndex: number; isForward: boolean }>; rateConstants: number[] }> {
+  const gpuReactions: Array<{ reactantIndices: number[]; reactantStoich: number[]; productIndices: number[]; productStoich: number[]; rateConstantIndex: number; isForward: boolean }> = [];
   const rateConstants: number[] = [];
 
   concreteReactions.forEach((rxn, idx) => {
@@ -289,7 +289,7 @@ export async function simulate(
   options: SimulationOptions,
   callbacks: {
     checkCancelled: () => void,
-    postMessage: (msg: any) => void
+    postMessage: (msg: { type: string; payload?: unknown; time?: number; state?: Float64Array; speciesCount?: number; observablesCount?: number; progress?: number; [key: string]: unknown }) => void
   }
 ): Promise<SimulationResults> {
   const formatCaughtError = (error: unknown): string => {
@@ -334,7 +334,7 @@ export async function simulate(
     const prePhaseChanges = parameterChanges.filter((change) => change.afterPhaseIndex < 0);
     if (prePhaseChanges.length > 0) {
       const functionMap = new Map(
-        (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
+        (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as { args: string[]; expr: string }])
       );
       const paramMap = new Map(Object.entries(model.parameters || {}));
       let parametersUpdated = false;
@@ -518,14 +518,14 @@ export async function simulate(
     } else {
       try {
         await loadEvaluator();
-      } catch (e: any) {
-        console.error('[Worker] Failed to load SafeExpressionEvaluator module:', e?.message ?? String(e));
+      } catch (e: unknown) {
+        console.error('[Worker] Failed to load SafeExpressionEvaluator module:', e instanceof Error ? e.message : String(e));
         throw new Error(
           'Failed to initialize the expression evaluator needed for functional rates ' +
           '(e.g., Michaelis-Menten, Hill functions). ' +
           'This may indicate the SafeExpressionEvaluator module could not be loaded in the current runtime. ' +
           'If running in a browser worker, ensure the evaluator bundle is included. ' +
-          `Original error: ${e?.message ?? String(e)}`,
+          `Original error: ${e instanceof Error ? e.message : String(e)}`,
           { cause: e }
         );
       }
@@ -535,7 +535,7 @@ export async function simulate(
   // 3. Pre-process Observables
   // Prefer concrete observables attached to the model (produced earlier by NetworkExpansion). If not present,
   // fall back to dynamic matching here (legacy behavior).
-  const concreteObservables: ConcreteObservable[] = (model as any).concreteObservables ? (model as any).concreteObservables : model.observables.map(obs => {
+  const concreteObservables: ConcreteObservable[] = ('concreteObservables' in model && Array.isArray((model as typeof model & { concreteObservables?: ConcreteObservable[] }).concreteObservables)) ? (model as typeof model & { concreteObservables?: ConcreteObservable[] }).concreteObservables! : model.observables.map(obs => {
     const splitPatternsSafe = (patternStr: string): string[] => {
       const commaChunks: string[] = [];
       let current = '';
@@ -698,7 +698,7 @@ export async function simulate(
     reactionReactingVolumes[idx] = vAnchor;
   });
 
-  const buildParamMap = (parameters: Record<string, any> | undefined): Map<string, number> => {
+  const buildParamMap = (parameters: Record<string, unknown> | undefined): Map<string, number> => {
     const paramMap = new Map<string, number>();
     // Handle parameters whether it's a Record (standard) or Array of objects (edge cases mentioned in reviews)
     if (Array.isArray(parameters)) {
@@ -714,7 +714,7 @@ export async function simulate(
           paramMap.set(name, direct);
           continue;
         }
-        if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as any)) {
+        if (rawValue && typeof rawValue === 'object' && 'value' in (rawValue as Record<string, unknown>)) {
           const nested = Number((rawValue as any).value);
           if (Number.isFinite(nested)) {
             paramMap.set(name, nested);
@@ -740,12 +740,10 @@ export async function simulate(
     initialEvalParamMap.set('Na', 1);
   }
   const initialEvalFunctionMap = new Map(
-    (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as any])
+    (model.functions || []).map((f) => [f.name, { args: f.args, expr: f.expression } as { args: string[]; expr: string }])
   );
   const resolveInitialAmount = (species: BNGLModel['species'][number], paramMap?: Map<string, number>): number => {
-    const expression = typeof (species as any).initialExpression === 'string'
-      ? (species as any).initialExpression.trim()
-      : '';
+    const expression = 'initialExpression' in species && typeof (species as unknown as Record<string, unknown>).initialExpression === 'string' ? ((species as unknown as Record<string, unknown>).initialExpression as string).trim() : '';
     if (expression) {
       try {
         const evaluated = BNGLParser.evaluateExpression(
@@ -760,20 +758,20 @@ export async function simulate(
       }
     }
 
-    const rawConcentration = (species as any).initialConcentration;
+    const rawConcentration = 'initialConcentration' in species ? (species as typeof species & { initialConcentration?: number | string }).initialConcentration : undefined;
     if (typeof rawConcentration === 'number' && Number.isFinite(rawConcentration)) {
       return rawConcentration;
     }
-    if (typeof rawConcentration === 'string' && rawConcentration.trim().length > 0) {
+    if (typeof rawConcentration === 'string' && (rawConcentration as string).trim().length > 0) {
       const parsedConcentration = Number(rawConcentration);
       if (Number.isFinite(parsedConcentration)) return parsedConcentration;
     }
 
-    const rawAmount = (species as any).initialAmount;
+    const rawAmount = 'initialAmount' in species ? (species as typeof species & { initialAmount?: number | string }).initialAmount : undefined;
     if (typeof rawAmount === 'number' && Number.isFinite(rawAmount)) {
       return rawAmount;
     }
-    if (typeof rawAmount === 'string' && rawAmount.trim().length > 0) {
+    if (typeof rawAmount === 'string' && (rawAmount as string).trim().length > 0) {
       const parsedAmount = Number(rawAmount);
       if (Number.isFinite(parsedAmount)) return parsedAmount;
     }
@@ -980,7 +978,7 @@ export async function simulate(
         for (let j = 0; j < obs.indices.length; j++) {
           const idx = obs.indices[j];
           const val = currentState[idx];
-          const obsVolumes = (obs as any).volumes;
+          const obsVolumes = 'volumes' in obs ? (obs as typeof obs & { volumes?: number[] }).volumes : undefined;
           const termVolume = Array.isArray(obsVolumes)
             ? (obsVolumes[j] ?? speciesVolumes[idx])
             : speciesVolumes[idx];
@@ -1097,6 +1095,7 @@ export async function simulate(
     let compiledMassActionJit: JITCompiledFunction | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
     let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
+    // eslint-disable-next-line prefer-const
     let persistedSolverKey = '';
 
 
@@ -1109,7 +1108,7 @@ export async function simulate(
           if (!isSafeObjectKey(change.parameter)) {
             continue;
           }
-          const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
+          const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as Float64Array);
           let newVal: number;
           if (typeof change.value === 'number') newVal = change.value;
           else {
@@ -1141,7 +1140,7 @@ export async function simulate(
       if (parametersUpdated && model.paramExpressions) {
         // ⚡ Bolt Optimization: Evaluate observables ONCE outside the loop and use for...in instead of Object.entries()
         // to avoid repeated array allocations and redundant calculations during phase updates.
-        const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as any as Float64Array);
+        const currentObsValues = isOde ? evaluateObservablesFast(y) : evaluateObservablesFast(state as Float64Array);
         for (let pass = 0; pass < 10; pass++) {
           let anyChanged = false;
           for (const name in model.paramExpressions) {
@@ -1157,7 +1156,7 @@ export async function simulate(
                   setSafeNumericField(model.parameters as Record<string, number>, name, val);
                   anyChanged = true;
                 }
-              } catch (e: any) {
+              } catch (e: unknown) {
                 /* ignore */
               }
             }
@@ -1181,7 +1180,7 @@ export async function simulate(
 
                 rxn.rateConstant = newK;
               }
-            } catch (e: any) {
+            } catch (e: unknown) {
               /* ignore */
             }
           }
@@ -1215,7 +1214,7 @@ export async function simulate(
       };
       const psaOptions = {
         ...options,
-        poplevel: (options as any).poplevel ?? phases[0]?.poplevel ?? 100,
+        poplevel: ((options as typeof options & { poplevel?: number }).poplevel) ?? phases[0]?.poplevel ?? 100,
       };
       const result = await simulatePSA(psaModel, psaOptions);
       return result;
@@ -1304,8 +1303,8 @@ export async function simulate(
       const propOrder = new Int32Array(numReactions);
 
       // Reaction firing log for information-theoretic analysis
-      const shouldRecordFirings = !!(options as any).recordFirings;
-      const maxFiringEvents = (options as any).maxFiringEvents ?? 100000;
+      const shouldRecordFirings = !!(options as typeof options & { recordFirings?: boolean }).recordFirings;
+      const maxFiringEvents = ((options as typeof options & { maxFiringEvents?: number }).maxFiringEvents) ?? 100000;
       const firingLog: Array<{ time: number; reactionIndex: number; ruleName?: string; propensity: number }> = [];
 
       // === LAZY OBSERVABLE EVALUATION SETUP ===
@@ -1382,8 +1381,8 @@ export async function simulate(
               undefined,
               undefined
             );
-          } catch (e: any) {
-            console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e?.message ?? String(e));
+          } catch (e: unknown) {
+            console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e instanceof Error ? e.message : String(e));
             rate = 0;
           }
         }
@@ -1504,7 +1503,7 @@ export async function simulate(
 
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
-          pushDataRow(phase.suffix, outT0, state as any as Float64Array);
+          pushDataRow(phase.suffix, outT0, state as Float64Array);
           const speciesPoint0: Record<string, number> = { time: outT0 };
           for (let i = 0; i < numSpecies; i++) setSafeNumericField(speciesPoint0, speciesHeaders[i], state[i]);
           appendSpeciesSnapshot(phase.suffix, speciesPoint0);
@@ -1714,7 +1713,7 @@ export async function simulate(
                     else console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
                   }
                   // Also list species with nonzero pSTAT3 concentrations
-                  const nonzeroP = [] as any[];
+                  const nonzeroP = [] as { idx?: number, p?: number, name?: string, state?: number }[];
                   for (let si = 0; si < model.species.length; si++) {
                     if (state[si] > 0 && model.species[si].name.includes('s~P')) nonzeroP.push({ name: model.species[si].name, state: state[si] });
                   }
@@ -1724,7 +1723,7 @@ export async function simulate(
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
                 if (outT >= nextTOut || totalEvents >= maxEvents) {
-                pushDataRow(phase.suffix, outT, state as any as Float64Array);
+                pushDataRow(phase.suffix, outT, state as Float64Array);
                 const sp: Record<string, number> = { time: outT };
                 for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
                 appendSpeciesSnapshot(phase.suffix, sp);
@@ -1747,7 +1746,7 @@ export async function simulate(
         if (recordThisPhase) {
           while (nextOutIdx <= phaseNSteps) {
             const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
-            pushDataRow(phase.suffix, outT, state as any as Float64Array);
+            pushDataRow(phase.suffix, outT, state as Float64Array);
             const sp: Record<string, number> = { time: outT };
             for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
             appendSpeciesSnapshot(phase.suffix, sp);
@@ -1850,7 +1849,7 @@ export async function simulate(
         if (VERBOSE_SIM_DEBUG) console.log('[Worker Debug] Initial production rates for nuc pSTAT3 species (post-vol calc):', JSON.stringify(prodRates, null, 2));
 
         // Also list reactions that produce pSTAT3 (k, expr, reactants, reactant initial values)
-        const producingReactions: any[] = [];
+        const producingReactions: { idx: number, time?: number, k?: number, rateNum?: number, expr?: string | null, reactantNames?: string[], reactantValues?: number[], multiplicative?: number, isFunctional?: boolean, velocityBase?: number, reactants?: unknown, velocity?: number }[] = [];
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           for (let j = 0; j < rxn.products.length; j++) {
@@ -1895,7 +1894,7 @@ export async function simulate(
 
         // Also probe initial velocities for phosphorylation reactions (cytosolic U -> P)
         try {
-          const phosReactions: any[] = [];
+          const phosReactions: { idx: number, time?: number, k?: number, rateNum?: number, expr?: string | null, reactantNames?: string[], reactantValues?: number[], multiplicative?: number, isFunctional?: boolean, velocityBase?: number, reactants?: unknown, velocity?: number }[] = [];
           for (let i = 0; i < concreteReactions.length; i++) {
             const rxn = concreteReactions[i];
             const reactantNames = Array.from(rxn.reactants).map(r => model.species[r].name);
@@ -1979,8 +1978,8 @@ export async function simulate(
             model.functions,
             true // enableJIT
           );
-        } catch (e: any) {
-          console.warn('[Worker] Pre-compilation of functional rates failed, falling back to per-step evaluation:', e?.message ?? String(e));
+        } catch (e: unknown) {
+          console.warn('[Worker] Pre-compilation of functional rates failed, falling back to per-step evaluation:', e instanceof Error ? e.message : String(e));
         }
 
         // Build a lookup: concreteReactions index -> compiled rate entry (or null)
@@ -2099,8 +2098,8 @@ export async function simulate(
                   console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}.`);
                   rate = 0;
                 }
-              } catch (e: any) {
-                console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed:`, e.message);
+              } catch (e: unknown) {
+                console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed:`, e instanceof Error ? e.message : String(e));
                 rate = 0;
               }
             } else {
@@ -2220,9 +2219,9 @@ export async function simulate(
         console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
 
         return (yIn: Float64Array, dydt: Float64Array) => {
-          if (!(globalThis as any)._hasLoggedDerivCall) {
+          if (!(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
             console.log('[Worker] DERIVATIVE FUNCTION CALLED (Sparse CSR Fallback)');
-            (globalThis as any)._hasLoggedDerivCall = true;
+            (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
           }
 
           // Step 1: Compute reaction velocities into pre-allocated buffer (flattened arrays)
@@ -2335,9 +2334,9 @@ export async function simulate(
       console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
 
       return (yIn: Float64Array, dydt: Float64Array) => {
-        if (!(globalThis as any)._hasLoggedDerivCall) {
+        if (!(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
           console.log('[Worker] DERIVATIVE FUNCTION CALLED (Zero-Copy Dense Fallback)');
-          (globalThis as any)._hasLoggedDerivCall = true;
+          (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
         }
 
         // Step 1: Compute reaction velocities into pre-allocated buffer
@@ -2733,7 +2732,7 @@ export async function simulate(
     const hasLocalFunctions = (model.functions || []).some((f) => Array.isArray(f.args) && f.args.length > 0);
     const disableNativeBytecode =
       ((typeof process !== 'undefined') && process?.env?.BNG_DISABLE_NATIVE_BYTECODE === '1') ||
-      ((options as any)?.disableNativeBytecode === true);
+      (((options as typeof options & { disableNativeBytecode?: boolean })?.disableNativeBytecode) === true);
     const enableNativeBytecode = !disableNativeBytecode;
     rebuildNativeByteCode = () => {
       delete solverOptions.networkByteCode;
@@ -2798,7 +2797,7 @@ export async function simulate(
         model.parameters,
         solverVolumes,
         constantSpeciesMask,
-        concreteObservables as any,
+        concreteObservables.map(o => ({ name: o.name, indices: Array.from(o.indices), coefficients: Array.from(o.coefficients) })),
         speciesHeaders,
         model.functions
       );
@@ -2886,7 +2885,7 @@ export async function simulate(
     const y = new Float64Array(state);
     const conservationLawReductionEnabled = getFeatureFlags().conservationLawReduction;
     const conservationTemplate = conservationLawReductionEnabled
-      ? findConservationLaws(concreteReactions as any, numSpecies, y, speciesHeaders)
+      ? findConservationLaws(concreteReactions.map(r => ({ reactants: Array.from(r.reactants), products: Array.from(r.products), rate: typeof r.rate === 'number' ? r.rate : 0, degeneracy: r.degeneracy, statFactor: r.statFactor })), numSpecies, y, speciesHeaders)
       : undefined;
     const getPhaseConservationAnalysis = (): typeof conservationTemplate => {
       if (!conservationTemplate) {
@@ -3175,7 +3174,7 @@ export async function simulate(
         solver = persistedSolver!;
       } else {
         // Dispose any stale persisted solver before creating a new one.
-        const staleSolver = persistedSolver as unknown as { destroy?: () => void } | undefined;
+        const staleSolver = persistedSolver as { destroy?: () => void } | undefined;
         if (staleSolver) {
           staleSolver.destroy?.();
           persistedSolver = undefined;
@@ -3348,8 +3347,8 @@ export async function simulate(
                 shouldStop = true;
                 break;
               }
-            } catch (err: any) {
-              console.warn(`[Worker] Phase ${phaseIdx + 1}: stop_if evaluation failed: ${err.message}`);
+            } catch (err: unknown) {
+              console.warn(`[Worker] Phase ${phaseIdx + 1}: stop_if evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
             }
           }
 
@@ -3378,7 +3377,7 @@ export async function simulate(
           persistedSolver = solver as typeof persistedSolver;
           persistedSolverKey = thisSolverKey;
         } else {
-          (solver as any)?.destroy?.();
+          (solver as { destroy?: () => void })?.destroy?.();
           persistedSolver = undefined;
         }
       }
@@ -3412,7 +3411,7 @@ export async function simulate(
     }
 
     // Clean up any persisted solver that was not consumed (e.g. early break due to error).
-    const leftoverSolver = persistedSolver as unknown as { destroy?: () => void } | undefined;
+    const leftoverSolver = persistedSolver as { destroy?: () => void } | undefined;
     if (leftoverSolver) {
       leftoverSolver.destroy?.();
     }
