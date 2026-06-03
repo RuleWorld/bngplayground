@@ -72,6 +72,10 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
   const attemptUri = (uri: string) => {
+    if (!uri.startsWith('vscode://') && !uri.startsWith('vscode-insiders://')) {
+      console.warn('Invalid URI scheme blocked:', uri);
+      return;
+    }
     try {
       window.location.href = uri;
     } catch (err) {
