@@ -263,9 +263,14 @@ function moleculeMatches(pattern: ParsedMolecule, species: ParsedMolecule): bool
   if (pattern.name !== species.name) return false;
 
   for (const patComp of pattern.components) {
-    const specComp = species.components.find(
-      sc => sc.name === patComp.name
-    );
+    // ⚡ Bolt: Convert array .find to single pass O(N) array search inside hot loop
+    let specComp: typeof species.components[0] | undefined;
+    for (let i = 0; i < species.components.length; i++) {
+      if (species.components[i].name === patComp.name) {
+        specComp = species.components[i];
+        break;
+      }
+    }
     if (!specComp) {
       // Component not explicitly listed in species -- treat as implicitly
       // present (BNGL semantics: unmentioned components are unchanged).

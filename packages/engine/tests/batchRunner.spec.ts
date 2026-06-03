@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import type { BNGLModel, SimulationResults } from '../src/types';
 import type { BatchReporter, BatchSimulator } from '../src/utils/batchRunner';
-import { runSingleBatchItem, normalizeFilterNames } from '../src/utils/batchRunner';
+import { runSingleBatchItem, normalizeFilterNames, safeModelName } from '../src/utils/batchRunner';
 
 function createBaseModel(): BNGLModel {
     return {
@@ -151,5 +151,34 @@ describe('normalizeFilterNames', () => {
 
     it('filters out empty/whitespace names and normalizes the rest', () => {
         expect(normalizeFilterNames(['  ', 'A', '', ' b ', undefined as unknown as string, 'C'])).toEqual(['a', 'b', 'c']);
+    });
+});
+
+describe('safeModelName', () => {
+    it('returns lowercase name when it contains only alphanumeric characters', () => {
+        expect(safeModelName('MyModel')).toBe('mymodel');
+        expect(safeModelName('MODEL123')).toBe('model123');
+    });
+
+    it('replaces spaces with underscores', () => {
+        expect(safeModelName('My Model')).toBe('my_model');
+    });
+
+    it('replaces special characters with underscores', () => {
+        expect(safeModelName('Model!@#')).toBe('model___');
+        expect(safeModelName('Model-Name')).toBe('model_name');
+    });
+
+    it('handles empty strings', () => {
+        expect(safeModelName('')).toBe('');
+    });
+
+    it('handles strings with only symbols', () => {
+        expect(safeModelName('!@#')).toBe('___');
+    });
+
+    it('replaces unicode characters', () => {
+        // '😊' consists of two surrogate characters in JS, so it results in two underscores
+        expect(safeModelName('Model😊')).toBe('model__');
     });
 });
