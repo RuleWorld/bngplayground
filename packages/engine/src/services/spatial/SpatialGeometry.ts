@@ -48,6 +48,9 @@ export function autoGenerateGeometry(
   const result: CompartmentGeometry[] = [];
   let nextId = 0;
 
+  // Keep track of visited compartments to prevent infinite loops from circular references
+  const visited = new Set<string>();
+
   // Recursive function to place compartments
   function placeCompartment(
     comp: ParsedCompartment,
@@ -55,6 +58,9 @@ export function autoGenerateGeometry(
     _parentRadius: number,
     parentId: number | null
   ): void {
+    if (visited.has(comp.name)) return;
+    visited.add(comp.name);
+
     const id = nextId++;
 
     if (comp.dimension === 3) {

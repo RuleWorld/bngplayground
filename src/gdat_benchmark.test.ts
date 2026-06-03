@@ -1146,22 +1146,40 @@ describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG
           // mappings (pattern mol->target mol and pattern comp->target comp).
           // This removes only true duplicate match enumerations while preserving
           // distinct mappings like swapping two identical molecules in a dimer.
-          const molPairs = Array.from(m.moleculeMap.entries())
-            .sort((a, b) => a[0] - b[0])
-            .map(([pMol, tMol]) => `${pMol}->${tMol}`);
 
-          const compPairs = Array.from(m.componentMap.entries())
-            .sort((a, b) => {
-              const [aMolStr, aCompStr] = a[0].split('.');
-              const [bMolStr, bCompStr] = b[0].split('.');
-              const aMol = Number(aMolStr);
-              const bMol = Number(bMolStr);
+          let maxMol = -1;
+          for (const pMol of m.moleculeMap.keys()) {
+            if (pMol > maxMol) maxMol = pMol;
+          }
+
+          let sig = '';
+          for (let pMol = 0; pMol <= maxMol; pMol++) {
+            const tMol = m.moleculeMap.get(pMol);
+            if (tMol !== undefined) {
+              sig += pMol + '>' + tMol + '|';
+            }
+          }
+
+          sig += '/';
+
+          const compKeys = Array.from(m.componentMap.keys());
+          if (compKeys.length > 0) {
+            compKeys.sort((a, b) => {
+              const dotA = a.indexOf('.');
+              const dotB = b.indexOf('.');
+              const aMol = Number(a.slice(0, dotA));
+              const bMol = Number(b.slice(0, dotB));
               if (aMol !== bMol) return aMol - bMol;
-              return Number(aCompStr) - Number(bCompStr);
-            })
-            .map(([pComp, tComp]) => `${pComp}->${tComp}`);
+              return Number(a.slice(dotA + 1)) - Number(b.slice(dotB + 1));
+            });
 
-          unique.add(`${molPairs.join('|')}//${compPairs.join('|')}`);
+            for (let i = 0; i < compKeys.length; i++) {
+              const k = compKeys[i];
+              sig += k + '>' + m.componentMap.get(k) + '|';
+            }
+          }
+
+          unique.add(sig);
         }
 
         const result = unique.size;

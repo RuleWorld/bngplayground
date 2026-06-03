@@ -228,7 +228,13 @@ export async function generateExpandedNetwork(
             obsCallRe.lastIndex = 0;
             while ((callMatch = obsCallRe.exec(fn.expression)) !== null) {
                 const obsName = callMatch[1];
-                const obs = inputModel.observables.find((o) => o.name === obsName);
+                let obs: typeof inputModel.observables[0] | undefined;
+                for (let i = 0; i < inputModel.observables.length; i++) {
+                    if (inputModel.observables[i].name === obsName) {
+                        obs = inputModel.observables[i];
+                        break;
+                    }
+                }
                 if (obs) {
                     if (!isSafeObjectKey(obsName)) {
                         continue;

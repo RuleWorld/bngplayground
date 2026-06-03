@@ -35,7 +35,7 @@ jobs:
         run: npm run type-check
 
       - name: Commit and push changes
-        uses: stefanzweifel/git-auto-commit-action@v5
+        uses: stefanzweifel/git-auto-commit-action@v7
         with:
           commit_message: "chore: auto-fix linting and formatting issues"
           branch: ${{ github.head_ref }}
