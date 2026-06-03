@@ -68,9 +68,10 @@ function buildSparseApplyFunction(reactions: SSAReaction[]): string {
   const lines: string[] = [];
   lines.push('  switch (selected_rxn) {');
 
+  const changes = new Map<number, number>();
   for (let r = 0; r < reactions.length; r++) {
     // Compute net change per species for this reaction
-    const changes = new Map<number, number>();
+    changes.clear();
     for (const sp of reactions[r].reactants) {
       changes.set(sp, (changes.get(sp) || 0) - 1);
     }
@@ -107,11 +108,12 @@ function buildPropensityFunction(reactions: SSAReaction[]): string {
 
   // Emit rate constants as local lets (passed via initial_state is wasteful,
   // but since these are baked at shader-gen time we inline them).
+  const speciesCounts = new Map<number, number>();
   for (let j = 0; j < reactions.length; j++) {
     const rxn = reactions[j];
 
     // Count multiplicity per species
-    const speciesCounts = new Map<number, number>();
+    speciesCounts.clear();
     for (const sp of rxn.reactants) {
       speciesCounts.set(sp, (speciesCounts.get(sp) || 0) + 1);
     }
@@ -450,12 +452,13 @@ export function runCPUSSAEnsemble(config: GPUSSAConfig): GPUSSAResult {
 
   // Also build the reactant multiplicity map per reaction (needed for dependency graph)
   const reactantSpeciesPerRxn: Array<Int32Array> = [];
+  const m = new Map<number, number>();
 
   for (let r = 0; r < nReactions; r++) {
     const rxn = reactions[r];
 
     // Build multiplicity map
-    const m = new Map<number, number>();
+    m.clear();
     for (const sp of rxn.reactants) {
       m.set(sp, (m.get(sp) || 0) + 1);
     }
@@ -524,9 +527,10 @@ export function runCPUSSAEnsemble(config: GPUSSAConfig): GPUSSAResult {
   const stoichDeltasBuild: number[] = [];
   const stoichOffsets = new Int32Array(nReactions);
   const stoichLengths = new Int32Array(nReactions);
+  const changes = new Map<number, number>();
 
   for (let r = 0; r < nReactions; r++) {
-    const changes = new Map<number, number>();
+    changes.clear();
     for (const sp of reactions[r].reactants) changes.set(sp, (changes.get(sp) || 0) - 1);
     for (const sp of reactions[r].products) changes.set(sp, (changes.get(sp) || 0) + 1);
 
