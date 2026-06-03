@@ -245,6 +245,11 @@ export function buildJacobianFunction(
 
       const sqrtEps = 1.4901161193847656e-8; // sqrt(machine epsilon for double)
 
+      // ⚡ Bolt Performance Optimization:
+      // Pre-allocate mass-action contributions array outside the hot loop
+      // to avoid O(N) allocation on every j iteration.
+      const massActionContribs = new Float64Array(N);
+
       for (let j = 0; j < N; j++) {
         // Perturbation size: relative to |y[j]| with absolute floor to avoid
         // catastrophic cancellation when y[j] is zero or near-zero.
@@ -266,7 +271,7 @@ export function buildJacobianFunction(
         // ⚡ Bolt Performance Optimization:
         // Pre-calculate mass-action contributions for this j over all species i.
         // This reduces time complexity from O(N^2 * R) to O(N * R + N) inside this hot loop.
-        const massActionContribs = new Float64Array(N);
+        massActionContribs.fill(0);
         for (const rxn of massActionRxns) {
           const sj = rxn.reactantStoich.get(j);
           if (!sj) continue;

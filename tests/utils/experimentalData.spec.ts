@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest';
-import { parseExperimentalCSV } from '../../src/utils/experimentalData';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { parseExperimentalCSV, readExperimentalCSVFile } from '../../src/utils/experimentalData';
 
 describe('parseExperimentalCSV', () => {
     it('throws error for less than 2 lines', () => {
@@ -72,6 +72,12 @@ describe('parseExperimentalCSV', () => {
         expect(result.datasets[0].name).toBe('A');
     });
 
+    it('getBaseColumnName returns the original name if no error suffix matches', () => {
+        const result = parseExperimentalCSV('time,A_other\n0,1\n1,2');
+        expect(result.datasets).toHaveLength(1);
+        expect(result.datasets[0].name).toBe('A_other');
+    });
+
     it('supports multiple error suffixes', () => {
         const result = parseExperimentalCSV('time,A,A_err,B,B_stdev,C,C_stderr\n0,1,0.1,2,0.2,3,0.3');
         expect(result.datasets).toHaveLength(3);
@@ -91,5 +97,84 @@ describe('parseExperimentalCSV', () => {
             { time: 1, value: 3 },
             { time: 2, value: 4 }
         ]);
+    });
+});
+
+describe('readExperimentalCSVFile', () => {
+    let originalFileReader: any;
+    let originalFile: any;
+
+    beforeEach(() => {
+        originalFileReader = globalThis.FileReader;
+        originalFile = globalThis.File;
+
+        // Setup mock File
+        class MockFile {
+            name: string;
+            content: string;
+            type: string;
+            constructor(parts: any[], name: string, options: any) {
+                this.content = parts[0];
+                this.name = name;
+                this.type = options.type;
+            }
+        }
+        globalThis.File = MockFile as any;
+
+        // Setup mock FileReader
+        class MockFileReader {
+            onload: any = null;
+            onerror: any = null;
+            readAsText(file: any) {
+                setTimeout(() => {
+                    if (this.onload) {
+                        this.onload({ target: { result: file.content } });
+                    }
+                }, 0);
+            }
+        }
+        globalThis.FileReader = MockFileReader as any;
+    });
+
+    afterEach(() => {
+        globalThis.FileReader = originalFileReader;
+        globalThis.File = originalFile;
+    });
+
+    it('successfully parses valid CSV file', async () => {
+        const csvText = 'time,A\n0,1\n1,2';
+        const file = new File([csvText], 'test.csv', { type: 'text/csv' });
+        const result = await readExperimentalCSVFile(file);
+        expect(result.fileName).toBe('test.csv');
+        expect(result.datasets).toHaveLength(1);
+        expect(result.datasets[0].name).toBe('A');
+        expect(result.datasets[0].points).toEqual([
+            { time: 0, value: 1 },
+            { time: 1, value: 2 }
+        ]);
+    });
+
+    it('rejects if parsing fails', async () => {
+        const csvText = 'invalid\n1,2';
+        const file = new File([csvText], 'invalid.csv', { type: 'text/csv' });
+        await expect(readExperimentalCSVFile(file)).rejects.toThrow('CSV must have a "time" or "t" column');
+    });
+
+    it('rejects on file read error', async () => {
+        // Override mock for this specific test
+        class MockFileReaderError {
+            onload: any = null;
+            onerror: any = null;
+            readAsText() {
+                setTimeout(() => {
+                    if (this.onerror) this.onerror(new Error('Simulated read error'));
+                }, 0);
+            }
+        }
+
+        globalThis.FileReader = MockFileReaderError as any;
+
+        const file = new File([''], 'error.csv', { type: 'text/csv' });
+        await expect(readExperimentalCSVFile(file)).rejects.toThrow('Failed to read file');
     });
 });
