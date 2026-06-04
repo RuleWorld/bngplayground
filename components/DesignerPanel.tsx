@@ -354,6 +354,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
               key={tab}
               type="button"
               onClick={() => setActiveTab(tab)}
+              aria-selected={activeTab === tab}
               className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
                 activeTab === tab
                   ? 'border-primary bg-primary text-white'
