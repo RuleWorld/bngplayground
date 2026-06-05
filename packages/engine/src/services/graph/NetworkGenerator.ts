@@ -1,3 +1,8 @@
+
+interface ExtendedPerformance extends Performance {
+  memory?: { usedJSHeapSize: number };
+}
+
 // graph/NetworkGenerator.ts
 import { SpeciesGraph } from './core/SpeciesGraph';
 import { Species } from './core/Species';
@@ -326,7 +331,7 @@ function mergeReactionExpressionWithStatFactors(existingRxn: Rxn, incomingRxn: R
   const bothHaveExpr = !!existingExprRaw && !!incomingExprRaw;
   if (
     bothHaveExpr &&
-    normalizeRateExpressionForMerge(existingExprRaw!) === normalizeRateExpressionForMerge(incomingExprRaw!)
+    normalizeRateExpressionForMerge(existingExprRaw || "") === normalizeRateExpressionForMerge(incomingExprRaw || "")
   ) {
     existingRxn.rateExpression = existingExprRaw;
     existingRxn.statFactor = getSafeStatFactor(existingRxn.statFactor) + getSafeStatFactor(incomingRxn.statFactor);
@@ -937,9 +942,9 @@ export class NetworkGenerator {
             // Debug: Print rule dispatch info (reactant count and types)
             if (shouldLogNetworkGenerator) {
               const reactantInfo = (rule.reactants || [])
-                .map((reactant: any, index: number) => {
+                .map((reactant: unknown, index: number) => {
                   const reactantType =
-                    reactant && typeof reactant === 'object' && reactant.constructor
+                    reactant && typeof reactant === 'object' && 'constructor' in reactant && (reactant as { constructor?: { name: string } }).constructor
                       ? reactant.constructor.name
                       : typeof reactant;
                   const reactantText = reactant?.toString?.() ?? String(reactant);
@@ -1015,7 +1020,7 @@ export class NetworkGenerator {
               species: speciesList.length,
               reactions: reactionsList.length,
               iteration,
-              memoryUsed: (performance as any).memory?.usedJSHeapSize || 0,
+              memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
               timeElapsed: Date.now() - this.startTime
             });
           }
@@ -1029,18 +1034,19 @@ export class NetworkGenerator {
             species: speciesList.length,
             reactions: reactionsList.length,
             iteration,
-            memoryUsed: (performance as any).memory?.usedJSHeapSize || 0,
+            memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
             timeElapsed: Date.now() - this.startTime
           });
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
       // Catch limit errors and return partial results
-      if (e.name === 'NetworkGenerationLimitError') {
-        console.warn(`Network generation limit reached: ${e.message}`);
+      if (err.name === 'NetworkGenerationLimitError') {
+        console.warn(`Network generation limit reached: ${err.message}`);
         // Continue and return partial results
       } else {
-        throw e;
+        throw err;
       }
     }
 
@@ -1307,7 +1313,7 @@ export class NetworkGenerator {
       for (let pi = 0; pi < products.length; pi++) {
         const product = products[pi];
         for (const mol of product.molecules) {
-          const sourceKey = (mol as any)._sourceKey as string | undefined;
+          const sourceKey = (mol as Molecule & { _sourceKey?: string })._sourceKey as string | undefined;
           if (!sourceKey) continue;
           const _cIdx = sourceKey.indexOf(':');
             const rStr = sourceKey.slice(0, _cIdx);
@@ -1377,7 +1383,7 @@ export class NetworkGenerator {
         const addedCounts = new Map<string, number>();
         for (const product of products) {
           for (const mol of product.molecules) {
-            const sourceKey = (mol as any)._sourceKey as string | undefined;
+            const sourceKey = (mol as Molecule & { _sourceKey?: string })._sourceKey as string | undefined;
             if (sourceKey) continue;
             addedCounts.set(mol.name, (addedCounts.get(mol.name) ?? 0) + 1);
           }
@@ -1588,7 +1594,7 @@ export class NetworkGenerator {
         const changedComps: string[] = [];
         for (const productGraph of products) {
           for (const productMol of productGraph.molecules) {
-            const sourceKey = (productMol as any)._sourceKey as string | undefined;
+            const sourceKey = (productMol as Molecule & { _sourceKey?: string })._sourceKey as string | undefined;
             if (!sourceKey) continue;
             const _cIdx = sourceKey.indexOf(':');
             const rStr = sourceKey.slice(0, _cIdx);
@@ -1642,7 +1648,7 @@ export class NetworkGenerator {
       // Create reaction (each match contributes additively; duplicates are aggregated by key)
       // Semantics: effective rate = (numeric scaling) * (evaluated symbolic expression, if present).
       // Therefore, degeneracy/volume scaling must live ONLY in the numeric factor.
-      const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
+      const baseRateConstant = (rule as RxnRule & { isFunctionalRate?: boolean }).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
       // BioNetGen-style statistical factors:
       // - When multiple embeddings are returned, multiplicity is recovered by summing reactions.
       // - When only a single embedding is returned but the matched subgraph has automorphisms
@@ -1838,14 +1844,14 @@ export class NetworkGenerator {
 
       // For Arrhenius rules: use null rateExpression so the NET file writes the numeric rate.
       // The string "Arrhenius(phi,Ea0)" cannot be evaluated by downstream tools.
-      const rateExpression = (rule as any).isArrhenius ? undefined : rule.rateExpression;
+      const rateExpression = (rule as RxnRule & { isArrhenius?: boolean }).isArrhenius ? undefined : rule.rateExpression;
 
       // Local function evaluation (BNG2 %x:: syntax):
       // When a rule's rate uses a local function f(x), the function body is evaluated
       // with observables counted WITHIN the specific reactant species x (not globally).
       // BNG2 generates per-reaction constant parameters __R1_local1, __R1_local2, etc.
       // We replicate this by computing the per-species rate now, at network-generation time.
-      const localFnCtx = (rule as any).localFunctionContext as {
+      const localFnCtx = (rule as RxnRule & { localFunctionContext?: { observablePatterns: Array<{ name: string; pattern: string }>; bodyTemplate: string } }).localFunctionContext as {
         observablePatterns: Array<{ name: string; pattern: string }>;
         bodyTemplate: string;
       } | undefined;
@@ -2542,7 +2548,7 @@ export class NetworkGenerator {
           // Skip synthetic wildcard components added by completeMissingComponents.
           // These are background expansions (e.g. b!? on A when only b was written in the rule)
           // and should NOT be counted as explicitly-constrained equivalent sites.
-          if ((comp as any).syntheticWildcard) continue;
+          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
           const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
           entry.total += 1;
           if (comp.edges.size > 0) entry.bound += 1;
@@ -2654,7 +2660,7 @@ export class NetworkGenerator {
           // These are NOT explicitly written in the rule and must NOT be counted as
           // equivalent-site selectors — doing so causes spurious spectator corrections
           // for rules like A(b)+B(a) where expansion produces A(b,b!?,b!?).
-          if ((comp as any).syntheticWildcard) continue;
+          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
           const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
           entry.total += 1;
           // Count as bound if has a concrete bond edge OR is a bound wildcard (+)
@@ -2826,7 +2832,7 @@ export class NetworkGenerator {
             break;
           }
         }
-        const emb = Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx!], reactantSpeciesList[repPatternIdx!].graph, currentMatches[repPatternIdx!]));
+        const emb = repPatternIdx !== undefined ? Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx], reactantSpeciesList[repPatternIdx].graph, currentMatches[repPatternIdx])) : 1;
         embCounts.push(emb);
       }
 
@@ -3050,7 +3056,7 @@ export class NetworkGenerator {
     const { scalingVolume } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
 
     const hasRateExpression = !!rule.rateExpression;
-    const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
+    const baseRateConstant = (rule as RxnRule & { isFunctionalRate?: boolean }).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
 
     let effectiveRate = baseRateConstant * multiplicity;
 
@@ -3103,7 +3109,7 @@ export class NetworkGenerator {
 
     // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
     // not the un-evaluatable "Arrhenius(phi, Eact)" string.
-    let finalRateExpr = (rule as any).isArrhenius ? undefined : rule.rateExpression;
+    let finalRateExpr = (rule as RxnRule & { isArrhenius?: boolean }).isArrhenius ? undefined : rule.rateExpression;
     let exprScaleFactor = multiplicity;
 
     const allIdenticalReactants =
@@ -3281,7 +3287,7 @@ export class NetworkGenerator {
         reactantGraphs,
         matches,
         usedReactantPatternMols,
-        !!(rule as any).isMoveConnected
+        !!(rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected
       );
 
       if (!fullProductGraph) {
@@ -3301,9 +3307,8 @@ export class NetworkGenerator {
         let invalidInterComplexBond = false;
         for (const [key1, partners] of fullProductGraph.adjacency) {
           if (invalidInterComplexBond) break;
-          const _dIdx14 = key1.indexOf('.');
-          const mol1Idx = parseInt(key1.slice(0, _dIdx14), 10);
-          const mol1 = fullProductGraph.molecules[mol1Idx] as any;
+          const mol1Idx = parseInt(key1.split('.')[0], 10);
+          const mol1 = fullProductGraph.molecules[mol1Idx] as Molecule & { _sourceKey?: string };
           if (!mol1?._sourceKey) continue;
           const _cIdx5 = mol1._sourceKey.indexOf(':');
           const r1 = parseInt(mol1._sourceKey.slice(0, _cIdx5), 10);
@@ -3312,9 +3317,8 @@ export class NetworkGenerator {
             const bondId = key1 < key2 ? `${key1}||${key2}` : `${key2}||${key1}`;
             if (seenBondIds.has(bondId)) continue;
             seenBondIds.add(bondId);
-            const _dIdx15 = key2.indexOf('.');
-            const mol2Idx = parseInt(key2.slice(0, _dIdx15), 10);
-            const mol2 = fullProductGraph.molecules[mol2Idx] as any;
+            const mol2Idx = parseInt(key2.split('.')[0], 10);
+            const mol2 = fullProductGraph.molecules[mol2Idx] as Molecule & { _sourceKey?: string };
             if (!mol2?._sourceKey) continue;
             const _cIdx6 = mol2._sourceKey.indexOf(':');
             const sk2Parts = [mol2._sourceKey.slice(0, _cIdx6), mol2._sourceKey.slice(_cIdx6 + 1)];
@@ -3445,7 +3449,7 @@ export class NetworkGenerator {
     // NOTE: Pre-calculate component state changes for MoveConnected rules
     // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
     const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
-    if ((rule as any).isMoveConnected) {
+    if ((rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected) {
       for (let ri = 0; ri < reactantGraphs.length; ri++) {
         const rg = reactantGraphs[ri];
 
@@ -3658,7 +3662,7 @@ export class NetworkGenerator {
             const newMol = this.cloneMoleculeStructure(oldMol);
 
             // NOTE: Apply MoveConnected deltas to bystanders
-            if ((rule as any).isMoveConnected && anchors.size > 0) {
+            if ((rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected && anchors.size > 0) {
               // Use the first available anchor to determine the delta
               const anchorKey = anchors.keys().next().value;
               if (anchorKey) {
@@ -3742,8 +3746,8 @@ export class NetworkGenerator {
                     const bondLabel = oldMol.components[c].edges.keys().next().value;
                     const anchorMol = targetGraph.molecules[anchorLoc.molIdx];
                     const anchorComp = anchorMol?.components?.[nC];
-                    const explicitUnbound = (anchorMol as any)?._explicitUnboundComponents as Set<number> | undefined;
-                    const explicitBonded = (anchorMol as any)?._explicitBondedComponents as Set<number> | undefined;
+                    const explicitUnbound = (anchorMol as (Molecule & { _explicitUnboundComponents?: Set<number> }) | undefined)?._explicitUnboundComponents as Set<number> | undefined;
+                    const explicitBonded = (anchorMol as (Molecule & { _explicitBondedComponents?: Set<number> }) | undefined)?._explicitBondedComponents as Set<number> | undefined;
                     if (explicitUnbound && explicitUnbound.has(nC)) {
                       continue;
                     }
@@ -4084,7 +4088,7 @@ export class NetworkGenerator {
     // Priority 3: Any available molecule with same name
 
     const scorePatternMolMatch = (
-      pMol: any,
+      pMol: Molecule,
       rpm: { reactantIdx: number; patternMolIdx: number; name: string; targetMolIdx: number; isBound: boolean },
       _pMolIsBound: boolean
     ): number => {
@@ -4112,16 +4116,16 @@ export class NetworkGenerator {
 
       // Prefer compatible component states. This helps disambiguate identical molecule names
       // in symmetric complexes (e.g., multiple R molecules with different Y1/Y2 states).
-      const rpCompByName = new Map<string, any>();
+      const rpCompByName = new Map<string, Component>();
       for (const c of rpMol.components) rpCompByName.set(c.name, c);
-      const targetCompByName = new Map<string, any>();
+      const targetCompByName = new Map<string, Component>();
       for (const c of targetMol.components) targetCompByName.set(c.name, c);
 
       // Reward overlap of *specified* component names between the two pattern molecules.
       // This is important because BNGL patterns often omit components as wildcards, and
       // different molecules in the same rule may specify different components.
-      const rpCompNames = new Set<string>(rpMol.components.map((c: any) => c.name));
-      const pCompNames = new Set<string>(pMol.components.map((c: any) => c.name));
+      const rpCompNames = new Set<string>(rpMol.components.map((c: Component) => c.name));
+      const pCompNames = new Set<string>(pMol.components.map((c: Component) => c.name));
       let sharedCompNames = 0;
       for (const name of pCompNames) {
         if (rpCompNames.has(name)) sharedCompNames++;
@@ -4163,9 +4167,9 @@ export class NetworkGenerator {
               !rcForBondCheck ||
               (!rcForBondCheck.wildcard && rcForBondCheck.edges.size === 0);
             const repeatedSiteName =
-              pMol.components.filter((c: any) => c.name === pc.name).length > 1 ||
-              rpMol.components.filter((c: any) => c.name === pc.name).length > 1 ||
-              targetMol.components.filter((c: any) => c.name === pc.name).length > 1;
+              pMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
+              rpMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
+              targetMol.components.filter((c: Component) => c.name === pc.name).length > 1;
             if (mustStartUnbound && tc.edges.size !== 0 && !repeatedSiteName) {
               return -Infinity;
             }
@@ -4352,7 +4356,7 @@ export class NetworkGenerator {
       const reactantPatternMol = reactantPattern.molecules[reactantPatternMolIdx];
       const targetMol = reactantGraphs[mapping.reactantIdx].molecules[mapping.targetMolIdx];
 
-      const findComponentByNameOccurrence = (components: any[], name: string, occurrence: number): any | undefined => {
+      const findComponentByNameOccurrence = (components: Component[], name: string, occurrence: number): Component | undefined => {
         let seen = 0;
         for (const comp of components) {
           if (comp.name !== name) continue;
@@ -4362,7 +4366,7 @@ export class NetworkGenerator {
         return undefined;
       };
 
-      const findComponentIndexByNameOccurrence = (components: any[], name: string, occurrence: number): number => {
+      const findComponentIndexByNameOccurrence = (components: Component[], name: string, occurrence: number): number => {
         let seen = 0;
         for (let idx = 0; idx < components.length; idx++) {
           if (components[idx].name !== name) continue;
@@ -4514,7 +4518,8 @@ export class NetworkGenerator {
       const queue = [startMolIdx];
 
       while (queue.length > 0) {
-        const molIdx = queue.shift()!;
+        const molIdx = queue.shift();
+        if (molIdx === undefined) continue;
 
         // Find all molecules bonded to this one
         const currentMol = reactantGraph.molecules[molIdx];
@@ -4640,7 +4645,8 @@ export class NetworkGenerator {
             const toProcess = [partnerMolIdx];
             const visited = new Set<number>([partnerMolIdx, mapping.targetMolIdx]);
             while (toProcess.length > 0) {
-              const molIdx = toProcess.pop()!;
+              const molIdx = toProcess.pop();
+              if (molIdx === undefined) continue;
 
               const currentMol = reactantGraph.molecules[molIdx];
               if (currentMol) {
@@ -5486,15 +5492,15 @@ export class NetworkGenerator {
         }
 
         if (markExplicitUnbound) {
-          const unboundSet = (productMol as any)._explicitUnboundComponents ?? new Set<number>();
+          const unboundSet = (productMol as Molecule & { _explicitUnboundComponents?: Set<number> })._explicitUnboundComponents ?? new Set<number>();
           unboundSet.add(candidateIdx);
-          (productMol as any)._explicitUnboundComponents = unboundSet;
+          (productMol as Molecule & { _explicitUnboundComponents?: Set<number> })._explicitUnboundComponents = unboundSet;
         }
 
         if (pComp.edges.size > 0 && !pComp.wildcard) {
-          const bondedSet = (productMol as any)._explicitBondedComponents ?? new Set<number>();
+          const bondedSet = (productMol as Molecule & { _explicitBondedComponents?: Set<number> })._explicitBondedComponents ?? new Set<number>();
           bondedSet.add(candidateIdx);
-          (productMol as any)._explicitBondedComponents = bondedSet;
+          (productMol as Molecule & { _explicitBondedComponents?: Set<number> })._explicitBondedComponents = bondedSet;
         }
 
         if (shouldLogNetworkGenerator) {
@@ -5518,7 +5524,7 @@ export class NetworkGenerator {
           if (!bondEndpoints.has(bondLabel)) {
             bondEndpoints.set(bondLabel, []);
           }
-          bondEndpoints.get(bondLabel)!.push({ pMolIdx, pCompIdx });
+          bondEndpoints.get(bondLabel)?.push({ pMolIdx, pCompIdx });
         }
       }
     }
@@ -5702,7 +5708,8 @@ export class NetworkGenerator {
 
     if (speciesMap.has(canonical)) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      return speciesMap.get(canonical)!;
+      const existing = speciesMap.get(canonical);
+      if (existing) return existing;
     }
 
     if (speciesList.length >= this.options.maxSpecies) {
@@ -5764,7 +5771,7 @@ export class NetworkGenerator {
     if (now - this.lastMemoryCheck > this.options.checkInterval) {
       this.lastMemoryCheck = now;
 
-      const memory = (performance as any).memory;
+      const memory = (performance as ExtendedPerformance).memory;
       if (memory && memory.usedJSHeapSize > this.options.memoryLimit) {
         throw new Error(
           `Network generation stopped: memory usage (${(memory.usedJSHeapSize / 1e6).toFixed(0)} MB) ` +
