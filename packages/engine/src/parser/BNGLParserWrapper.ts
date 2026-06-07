@@ -9,6 +9,7 @@ import { BNGLexer } from './generated/BNGLexer';
 import { BNGParser } from './generated/BNGParser';
 import { BNGLVisitor } from './BNGLVisitor';
 import type { BNGLModel } from '../types';
+import { BNGLParser } from '../services/graph/core/BNGLParser';
 
 export interface ParseError {
   line: number;
@@ -452,6 +453,11 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       });
     }
 
+    if (errors.length === 0 && model) {
+      const semanticErrors = validateModelSemantics(model);
+      errors.push(...semanticErrors);
+    }
+
     return {
       success: errors.length === 0,
       model,
@@ -479,4 +485,151 @@ export function parseBNGLStrict(input: string): BNGLModel {
   }
 
   return result.model;
+}
+
+export function validateModelSemantics(model: BNGLModel): ParseError[] {
+  const errors: ParseError[] = [];
+  
+  if (!model.moleculeTypes || model.moleculeTypes.length === 0) {
+    return errors;
+  }
+
+  // 1. Build declared molecule types map
+  const declaredMoleculeTypes = new Map<string, Set<string>>();
+  for (const mt of model.moleculeTypes) {
+    const componentNames = new Set<string>();
+    for (const comp of mt.components) {
+      const baseName = comp.split('~')[0].trim();
+      componentNames.add(baseName);
+    }
+    declaredMoleculeTypes.set(mt.name, componentNames);
+  }
+
+  // Helper function to check a molecule's components
+  const checkMoleculeComponents = (mol: any, line: number, column: number, contextMsg: string): ParseError | null => {
+    const declaredComps = declaredMoleculeTypes.get(mol.name);
+    if (!declaredComps) {
+      const prefix = contextMsg ? `${contextMsg}: ` : '';
+      return {
+        line,
+        column,
+        message: `${prefix}Molecule name ${mol.name} not declared in molecule types`
+      };
+    }
+
+    const presentComps = new Set(mol.components.map((c: any) => c.name));
+    const missing: string[] = [];
+    for (const comp of declaredComps) {
+      if (!presentComps.has(comp)) {
+        missing.push(comp);
+      }
+    }
+
+    if (missing.length > 0) {
+      const compStr = mol.components.length > 0 || mol.hasExplicitEmptyComponentList
+        ? '(' + mol.components.map((c: any) => c.toString()).join(',') + ')'
+        : '()';
+      const molStr = `${mol.name}${compStr}`;
+      const prefix = contextMsg ? `${contextMsg}: ` : '';
+      return {
+        line,
+        column,
+        message: `${prefix}Component(s) ${missing.join(',')} missing from molecule ${molStr}`
+      };
+    }
+
+    return null;
+  };
+
+  // 2. Validate seed species
+  for (const sp of model.species || []) {
+    const line = sp.line ?? 0;
+    const column = sp.column ?? 0;
+    try {
+      const graph = BNGLParser.parseSpeciesGraph(sp.name);
+      for (const mol of graph.molecules) {
+        const err = checkMoleculeComponents(mol, line, column, '');
+        if (err) {
+          errors.push(err);
+        }
+      }
+    } catch (e) {
+      // Ignore parse errors of species names here
+    }
+  }
+
+  // 3. Validate reaction rules RHS (created molecules)
+  for (const rule of model.reactionRules || []) {
+    const line = rule.line ?? 0;
+    const column = rule.column ?? 0;
+    
+    const reactantMols: any[] = [];
+    for (const rStr of rule.literalReactants || rule.reactants) {
+      try {
+        const graph = BNGLParser.parseSpeciesGraph(rStr);
+        reactantMols.push(...graph.molecules);
+      } catch (e) {}
+    }
+
+    const productMols: any[] = [];
+    for (const pStr of rule.literalProducts || rule.products) {
+      try {
+        const graph = BNGLParser.parseSpeciesGraph(pStr);
+        productMols.push(...graph.molecules);
+      } catch (e) {}
+    }
+
+    const reactantCounts = new Map<string, number>();
+    for (const rMol of reactantMols) {
+      reactantCounts.set(rMol.name, (reactantCounts.get(rMol.name) ?? 0) + 1);
+    }
+
+    const incompleteProductsByName = new Map<string, any[]>();
+    for (const pMol of productMols) {
+      const declaredComps = declaredMoleculeTypes.get(pMol.name);
+      if (!declaredComps) {
+        errors.push({
+          line,
+          column,
+          message: `Molecule created in reaction rule: Molecule name ${pMol.name} not declared in molecule types`
+        });
+        continue;
+      }
+
+      const presentComps = new Set(pMol.components.map((c: any) => c.name));
+      const hasMissing = Array.from(declaredComps).some(comp => !presentComps.has(comp));
+      if (hasMissing) {
+        if (!incompleteProductsByName.has(pMol.name)) {
+          incompleteProductsByName.set(pMol.name, []);
+        }
+        incompleteProductsByName.get(pMol.name)!.push(pMol);
+      }
+    }
+
+    for (const [name, incompleteList] of incompleteProductsByName.entries()) {
+      const L = reactantCounts.get(name) ?? 0;
+      if (incompleteList.length > L) {
+        const pMol = incompleteList[0];
+        const declaredComps = declaredMoleculeTypes.get(name)!;
+        const presentComps = new Set(pMol.components.map((c: any) => c.name));
+        const missing: string[] = [];
+        for (const comp of declaredComps) {
+          if (!presentComps.has(comp)) {
+            missing.push(comp);
+          }
+        }
+        const compStr = pMol.components.length > 0 || pMol.hasExplicitEmptyComponentList
+          ? '(' + pMol.components.map((c: any) => c.toString()).join(',') + ')'
+          : '()';
+        const molStr = `${pMol.name}${compStr}`;
+        errors.push({
+          line,
+          column,
+          message: `Molecule created in reaction rule: Component(s) ${missing.join(',')} missing from molecule ${molStr}`
+        });
+      }
+    }
+  }
+
+  return errors;
 }
