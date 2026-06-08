@@ -420,6 +420,27 @@ export function getCompiledRateFunction(
   }
 }
 
+/**
+ * Evaluates a mathematical expression representing a functional reaction rate or rule rate.
+ *
+ * This function compiles the mathematical expression into an executable JavaScript function (with caching),
+ * substitutes custom functions via pre-expansion, and evaluates it using the provided parameters and
+ * observable values as the context.
+ *
+ * Invariants/Behaviors:
+ * - If the evaluation throws or returns a non-numeric value (like NaN or string), it logs an error and returns 0.
+ * - If the evaluation returns a non-finite number (like Infinity), it logs a warning but still returns the value.
+ * - Compilation is cached using an LRU-like bounded cache based on the expression string to optimize repeated evaluations.
+ * - Fails and throws if the `functionalRatesEnabled` feature flag is false.
+ *
+ * @param expression - The mathematical string expression to evaluate (e.g., "k1 * A * B").
+ * @param parameters - A record mapping parameter names to their current numeric values.
+ * @param observableValues - A record mapping observable names to their current numeric values.
+ * @param functions - Optional custom function definitions to pre-expand before compilation.
+ * @param prebuiltContext - An optional pre-merged object of parameters and observables to avoid reallocation in tight loops.
+ * @param evaluatorOverride - An optional SafeExpressionEvaluator instance to override the default global evaluator.
+ * @returns The numeric result of the evaluated expression. Returns 0 if evaluation yields a non-numeric result.
+ */
 export function evaluateFunctionalRate(
   expression: string,
   parameters: Record<string, number>,
