@@ -22,6 +22,21 @@ import {
     ParsedSpeciesGraph,
 } from '../types/index.js';
 
+/**
+ * Wraps a payload into a standardized Model Context Protocol (MCP) tool response format.
+ *
+ * MCP clients expect a text representation for human readability and optionally a structured
+ * payload for programmatic use. This function takes data (often the output of engine operations),
+ * stringifies it into a text array for the `content` field, and embeds the raw data into
+ * `structuredContent`.
+ *
+ * @param data - The structured payload to return to the client.
+ * @returns An MCP `ToolResult` containing both a JSON-stringified text representation and the raw structured data.
+ *
+ * @remarks
+ * This function strictly formats responses for the MCP server boundary and contains no engine
+ * or BNGL logic. Handlers should use engine functions to perform calculations and pass the result here.
+ */
 export function createToolResult<T>(data: T): ToolResult<T> {
     return {
         content: [

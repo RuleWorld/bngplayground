@@ -115,6 +115,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
           onChange={handleInputChange}
           onKeyDown={handleKeyDown}
           placeholder={placeholder}
+          aria-label="Semantic search"
           className="w-full pl-10 pr-24 py-2.5 rounded-lg border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-800 dark:text-slate-200 placeholder-slate-400 dark:placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-primary/50 focus:border-primary select-text"
         />
 

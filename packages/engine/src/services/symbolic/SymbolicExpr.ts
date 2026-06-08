@@ -18,34 +18,80 @@ export type SymExpr =
 
 // ─── Constructors ────────────────────────────────────────────────────────────
 
+/**
+ * Constructs a symbolic constant node.
+ *
+ * @param v - The numerical value of the constant.
+ * @returns A symbolic expression representing the constant value.
+ */
 export function symConst(v: number): SymExpr {
   return { kind: 'const', value: v };
 }
 
+/**
+ * Constructs a symbolic variable node.
+ *
+ * @param name - The identifier name of the variable.
+ * @returns A symbolic expression representing the variable.
+ */
 export function symVar(name: string): SymExpr {
   return { kind: 'var', name };
 }
 
+/**
+ * Constructs a symbolic addition node representing the sum of multiple terms.
+ * Automatically simplifies if given 0 or 1 terms.
+ *
+ * @param terms - A variadic list of symbolic expressions to be added.
+ * @returns A symbolic expression representing the addition.
+ */
 export function symAdd(...terms: SymExpr[]): SymExpr {
   if (terms.length === 0) return symConst(0);
   if (terms.length === 1) return terms[0];
   return { kind: 'add', terms };
 }
 
+/**
+ * Constructs a symbolic multiplication node representing the product of multiple factors.
+ * Automatically simplifies if given 0 or 1 factors.
+ *
+ * @param factors - A variadic list of symbolic expressions to be multiplied.
+ * @returns A symbolic expression representing the multiplication.
+ */
 export function symMul(...factors: SymExpr[]): SymExpr {
   if (factors.length === 0) return symConst(1);
   if (factors.length === 1) return factors[0];
   return { kind: 'mul', factors };
 }
 
+/**
+ * Constructs a symbolic division node representing a numerator divided by a denominator.
+ *
+ * @param num - The symbolic expression for the numerator.
+ * @param den - The symbolic expression for the denominator.
+ * @returns A symbolic expression representing the division.
+ */
 export function symDiv(num: SymExpr, den: SymExpr): SymExpr {
   return { kind: 'div', num, den };
 }
 
+/**
+ * Constructs a symbolic power node representing a base raised to a numerical exponent.
+ *
+ * @param base - The symbolic expression for the base.
+ * @param exp - The numerical exponent.
+ * @returns A symbolic expression representing the exponentiation.
+ */
 export function symPow(base: SymExpr, exp: number): SymExpr {
   return { kind: 'pow', base, exp };
 }
 
+/**
+ * Constructs a symbolic negation node.
+ *
+ * @param expr - The symbolic expression to be negated.
+ * @returns A symbolic expression representing the negation.
+ */
 export function symNeg(expr: SymExpr): SymExpr {
   return { kind: 'neg', expr };
 }

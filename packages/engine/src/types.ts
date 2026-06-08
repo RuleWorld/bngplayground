@@ -18,6 +18,8 @@ export interface BNGLSpecies {
     initialConcentration: number;
     isConstant?: boolean;
     initialExpression?: string;
+    line?: number;
+    column?: number;
 }
 
 export interface BNGLObservable {
@@ -95,6 +97,8 @@ export interface ReactionRule {
     name?: string;
     reactants: string[];
     products: string[];
+    literalReactants?: string[];
+    literalProducts?: string[];
     rate: string;
     rateExpression?: string;
     reverseRate?: string;
@@ -117,6 +121,8 @@ export interface ReactionRule {
     reverseArrheniusPhi?: string;
     reverseArrheniusEact?: string;
     reverseArrheniusA?: string;
+    line?: number;
+    column?: number;
 }
 
 export interface BNGLAction {

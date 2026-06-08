@@ -1,3 +1,8 @@
+
+interface ExtendedPerformance extends Performance {
+  memory?: { usedJSHeapSize: number };
+}
+
 // graph/NetworkGenerator.ts
 import { SpeciesGraph } from './core/SpeciesGraph';
 import { Species } from './core/Species';
@@ -326,7 +331,7 @@ function mergeReactionExpressionWithStatFactors(existingRxn: Rxn, incomingRxn: R
   const bothHaveExpr = !!existingExprRaw && !!incomingExprRaw;
   if (
     bothHaveExpr &&
-    normalizeRateExpressionForMerge(existingExprRaw!) === normalizeRateExpressionForMerge(incomingExprRaw!)
+    normalizeRateExpressionForMerge(existingExprRaw || "") === normalizeRateExpressionForMerge(incomingExprRaw || "")
   ) {
     existingRxn.rateExpression = existingExprRaw;
     existingRxn.statFactor = getSafeStatFactor(existingRxn.statFactor) + getSafeStatFactor(incomingRxn.statFactor);
@@ -937,9 +942,9 @@ export class NetworkGenerator {
             // Debug: Print rule dispatch info (reactant count and types)
             if (shouldLogNetworkGenerator) {
               const reactantInfo = (rule.reactants || [])
-                .map((reactant: any, index: number) => {
+                .map((reactant: unknown, index: number) => {
                   const reactantType =
-                    reactant && typeof reactant === 'object' && reactant.constructor
+                    reactant && typeof reactant === 'object' && 'constructor' in reactant && (reactant as { constructor?: { name: string } }).constructor
                       ? reactant.constructor.name
                       : typeof reactant;
                   const reactantText = reactant?.toString?.() ?? String(reactant);
@@ -1015,7 +1020,7 @@ export class NetworkGenerator {
               species: speciesList.length,
               reactions: reactionsList.length,
               iteration,
-              memoryUsed: (performance as any).memory?.usedJSHeapSize || 0,
+              memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
               timeElapsed: Date.now() - this.startTime
             });
           }
@@ -1029,18 +1034,19 @@ export class NetworkGenerator {
             species: speciesList.length,
             reactions: reactionsList.length,
             iteration,
-            memoryUsed: (performance as any).memory?.usedJSHeapSize || 0,
+            memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
             timeElapsed: Date.now() - this.startTime
           });
         }
       }
-    } catch (e: any) {
+    } catch (e: unknown) {
+      const err = e instanceof Error ? e : new Error(String(e));
       // Catch limit errors and return partial results
-      if (e.name === 'NetworkGenerationLimitError') {
-        console.warn(`Network generation limit reached: ${e.message}`);
+      if (err.name === 'NetworkGenerationLimitError') {
+        console.warn(`Network generation limit reached: ${err.message}`);
         // Continue and return partial results
       } else {
-        throw e;
+        throw err;
       }
     }
 
@@ -1307,9 +1313,11 @@ export class NetworkGenerator {
       for (let pi = 0; pi < products.length; pi++) {
         const product = products[pi];
         for (const mol of product.molecules) {
-          const sourceKey = (mol as any)._sourceKey as string | undefined;
+          const sourceKey = (mol as Molecule & { _sourceKey?: string })._sourceKey as string | undefined;
           if (!sourceKey) continue;
-          const [rStr, molIdxStr] = sourceKey.split(':');
+          const _cIdx = sourceKey.indexOf(':');
+            const rStr = sourceKey.slice(0, _cIdx);
+            const molIdxStr = sourceKey.slice(_cIdx + 1);
           if (rStr !== '0') continue; // unimolecular: only reactantIdx=0
           const molIdx = Number(molIdxStr);
           if (!Number.isFinite(molIdx)) continue;
@@ -1342,7 +1350,9 @@ export class NetworkGenerator {
           if (!partners) continue;
 
           for (const partnerKey of partners) {
-            const [mol2Str, comp2Str] = partnerKey.split('.');
+            const _dIdx = partnerKey.indexOf('.');
+            const mol2Str = partnerKey.slice(0, _dIdx);
+            const comp2Str = partnerKey.slice(_dIdx + 1);
             const mol2Idx = Number(mol2Str);
             const comp2Idx = Number(comp2Str);
             if (!Number.isFinite(mol2Idx) || !Number.isFinite(comp2Idx)) continue;
@@ -1373,7 +1383,7 @@ export class NetworkGenerator {
         const addedCounts = new Map<string, number>();
         for (const product of products) {
           for (const mol of product.molecules) {
-            const sourceKey = (mol as any)._sourceKey as string | undefined;
+            const sourceKey = (mol as Molecule & { _sourceKey?: string })._sourceKey as string | undefined;
             if (sourceKey) continue;
             addedCounts.set(mol.name, (addedCounts.get(mol.name) ?? 0) + 1);
           }
@@ -1584,9 +1594,11 @@ export class NetworkGenerator {
         const changedComps: string[] = [];
         for (const productGraph of products) {
           for (const productMol of productGraph.molecules) {
-            const sourceKey = (productMol as any)._sourceKey as string | undefined;
+            const sourceKey = (productMol as Molecule & { _sourceKey?: string })._sourceKey as string | undefined;
             if (!sourceKey) continue;
-            const [rStr, molIdxStr] = sourceKey.split(':');
+            const _cIdx = sourceKey.indexOf(':');
+            const rStr = sourceKey.slice(0, _cIdx);
+            const molIdxStr = sourceKey.slice(_cIdx + 1);
             if (rStr !== '0') continue;
             const molIdx = Number(molIdxStr);
             if (!Number.isFinite(molIdx)) continue;
@@ -1636,7 +1648,7 @@ export class NetworkGenerator {
       // Create reaction (each match contributes additively; duplicates are aggregated by key)
       // Semantics: effective rate = (numeric scaling) * (evaluated symbolic expression, if present).
       // Therefore, degeneracy/volume scaling must live ONLY in the numeric factor.
-      const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
+      const baseRateConstant = (rule as RxnRule & { isFunctionalRate?: boolean }).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
       // BioNetGen-style statistical factors:
       // - When multiple embeddings are returned, multiplicity is recovered by summing reactions.
       // - When only a single embedding is returned but the matched subgraph has automorphisms
@@ -1832,14 +1844,14 @@ export class NetworkGenerator {
 
       // For Arrhenius rules: use null rateExpression so the NET file writes the numeric rate.
       // The string "Arrhenius(phi,Ea0)" cannot be evaluated by downstream tools.
-      const rateExpression = (rule as any).isArrhenius ? undefined : rule.rateExpression;
+      const rateExpression = (rule as RxnRule & { isArrhenius?: boolean }).isArrhenius ? undefined : rule.rateExpression;
 
       // Local function evaluation (BNG2 %x:: syntax):
       // When a rule's rate uses a local function f(x), the function body is evaluated
       // with observables counted WITHIN the specific reactant species x (not globally).
       // BNG2 generates per-reaction constant parameters __R1_local1, __R1_local2, etc.
       // We replicate this by computing the per-species rate now, at network-generation time.
-      const localFnCtx = (rule as any).localFunctionContext as {
+      const localFnCtx = (rule as RxnRule & { localFunctionContext?: { observablePatterns: Array<{ name: string; pattern: string }>; bodyTemplate: string } }).localFunctionContext as {
         observablePatterns: Array<{ name: string; pattern: string }>;
         bodyTemplate: string;
       } | undefined;
@@ -1915,7 +1927,8 @@ export class NetworkGenerator {
         const targetCompKey = match.componentMap.get(`${patternMolIdx}.${patternCompIdx}`);
         if (!targetCompKey) return false;
 
-        const targetCompIdx = Number(targetCompKey.split('.')[1]);
+        // ⚡ Bolt: Use slice directly to avoid split() array allocation
+        const targetCompIdx = Number(targetCompKey.slice(targetCompKey.indexOf('.') + 1));
         const targetComp = targetMol.components[targetCompIdx];
         if (!targetComp) return false;
 
@@ -2536,7 +2549,7 @@ export class NetworkGenerator {
           // Skip synthetic wildcard components added by completeMissingComponents.
           // These are background expansions (e.g. b!? on A when only b was written in the rule)
           // and should NOT be counted as explicitly-constrained equivalent sites.
-          if ((comp as any).syntheticWildcard) continue;
+          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
           const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
           entry.total += 1;
           if (comp.edges.size > 0) entry.bound += 1;
@@ -2648,7 +2661,7 @@ export class NetworkGenerator {
           // These are NOT explicitly written in the rule and must NOT be counted as
           // equivalent-site selectors — doing so causes spurious spectator corrections
           // for rules like A(b)+B(a) where expansion produces A(b,b!?,b!?).
-          if ((comp as any).syntheticWildcard) continue;
+          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
           const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
           entry.total += 1;
           // Count as bound if has a concrete bond edge OR is a bound wildcard (+)
@@ -2820,7 +2833,7 @@ export class NetworkGenerator {
             break;
           }
         }
-        const emb = Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx!], reactantSpeciesList[repPatternIdx!].graph, currentMatches[repPatternIdx!]));
+        const emb = repPatternIdx !== undefined ? Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx], reactantSpeciesList[repPatternIdx].graph, currentMatches[repPatternIdx])) : 1;
         embCounts.push(emb);
       }
 
@@ -3044,7 +3057,7 @@ export class NetworkGenerator {
     const { scalingVolume } = this.getVolumeScalingInfo(reactantSpeciesList, productIndices.map(idx => allSpecies[idx]));
 
     const hasRateExpression = !!rule.rateExpression;
-    const baseRateConstant = (rule as any).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
+    const baseRateConstant = (rule as RxnRule & { isFunctionalRate?: boolean }).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
 
     let effectiveRate = baseRateConstant * multiplicity;
 
@@ -3097,7 +3110,7 @@ export class NetworkGenerator {
 
     // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
     // not the un-evaluatable "Arrhenius(phi, Eact)" string.
-    let finalRateExpr = (rule as any).isArrhenius ? undefined : rule.rateExpression;
+    let finalRateExpr = (rule as RxnRule & { isArrhenius?: boolean }).isArrhenius ? undefined : rule.rateExpression;
     let exprScaleFactor = multiplicity;
 
     const allIdenticalReactants =
@@ -3275,7 +3288,7 @@ export class NetworkGenerator {
         reactantGraphs,
         matches,
         usedReactantPatternMols,
-        !!(rule as any).isMoveConnected
+        !!(rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected
       );
 
       if (!fullProductGraph) {
@@ -3295,20 +3308,23 @@ export class NetworkGenerator {
         let invalidInterComplexBond = false;
         for (const [key1, partners] of fullProductGraph.adjacency) {
           if (invalidInterComplexBond) break;
-          const mol1Idx = parseInt(key1.split('.')[0], 10);
-          const mol1 = fullProductGraph.molecules[mol1Idx] as any;
+          // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
+          const mol1Idx = parseInt(key1, 10);
+          const mol1 = fullProductGraph.molecules[mol1Idx] as Molecule & { _sourceKey?: string };
           if (!mol1?._sourceKey) continue;
-          const sk1Parts = mol1._sourceKey.split(':');
-          const r1 = parseInt(sk1Parts[0], 10);
-          const rMol1 = parseInt(sk1Parts[1], 10);
+          const _cIdx5 = mol1._sourceKey.indexOf(':');
+          const r1 = parseInt(mol1._sourceKey.slice(0, _cIdx5), 10);
+          const rMol1 = parseInt(mol1._sourceKey.slice(_cIdx5 + 1), 10);
           for (const key2 of partners) {
             const bondId = key1 < key2 ? `${key1}||${key2}` : `${key2}||${key1}`;
             if (seenBondIds.has(bondId)) continue;
             seenBondIds.add(bondId);
-            const mol2Idx = parseInt(key2.split('.')[0], 10);
-            const mol2 = fullProductGraph.molecules[mol2Idx] as any;
+            // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
+            const mol2Idx = parseInt(key2, 10);
+            const mol2 = fullProductGraph.molecules[mol2Idx] as Molecule & { _sourceKey?: string };
             if (!mol2?._sourceKey) continue;
-            const sk2Parts = mol2._sourceKey.split(':');
+            const _cIdx6 = mol2._sourceKey.indexOf(':');
+            const sk2Parts = [mol2._sourceKey.slice(0, _cIdx6), mol2._sourceKey.slice(_cIdx6 + 1)];
             const r2 = parseInt(sk2Parts[0], 10);
             if (r1 === r2) continue; // Intra-complex bond — always OK
             const rMol2 = parseInt(sk2Parts[1], 10);
@@ -3421,7 +3437,9 @@ export class NetworkGenerator {
             const mol = subgraph.molecules[i];
             if (mol._sourceKey) {
               usedReactantMolsInReaction.add(mol._sourceKey);
-              const [rIdx, mIdx] = mol._sourceKey.split(':').map(Number);
+              const _cIdx2 = mol._sourceKey.indexOf(':');
+              const rIdx = Number(mol._sourceKey.slice(0, _cIdx2));
+              const mIdx = Number(mol._sourceKey.slice(_cIdx2 + 1));
               survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
             }
           }
@@ -3434,7 +3452,7 @@ export class NetworkGenerator {
     // NOTE: Pre-calculate component state changes for MoveConnected rules
     // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
     const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
-    if ((rule as any).isMoveConnected) {
+    if ((rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected) {
       for (let ri = 0; ri < reactantGraphs.length; ri++) {
         const rg = reactantGraphs[ri];
 
@@ -3539,7 +3557,8 @@ export class NetworkGenerator {
             const neighbors = rg.adjacency.get(adjKey);
             if (neighbors) {
               for (const neighbor of neighbors) {
-                const [nMStr] = neighbor.split('.');
+                const _dIdx2 = neighbor.indexOf('.');
+                const nMStr = neighbor.slice(0, _dIdx2);
                 const nM = Number(nMStr);
                 const nKey = `${r}:${nM}`;
 
@@ -3595,7 +3614,9 @@ export class NetworkGenerator {
               const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
               if (!neighbors) continue;
               for (const neighbor of neighbors) {
-                const [nMStr, nCStr] = neighbor.split('.');
+                const _dIdx3 = neighbor.indexOf('.');
+                const nMStr = neighbor.slice(0, _dIdx3);
+                const nCStr = neighbor.slice(_dIdx3 + 1);
                 const nM = Number(nMStr);
                 const nC = Number(nCStr);
                 const nKey = `${r}:${nM}`;
@@ -3644,7 +3665,7 @@ export class NetworkGenerator {
             const newMol = this.cloneMoleculeStructure(oldMol);
 
             // NOTE: Apply MoveConnected deltas to bystanders
-            if ((rule as any).isMoveConnected && anchors.size > 0) {
+            if ((rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected && anchors.size > 0) {
               // Use the first available anchor to determine the delta
               const anchorKey = anchors.keys().next().value;
               if (anchorKey) {
@@ -3690,7 +3711,9 @@ export class NetworkGenerator {
               const neighbors = rg.adjacency.get(adjKey);
               if (neighbors) {
                 for (const neighbor of neighbors) {
-                  const [nMStr, nCStr] = neighbor.split('.');
+                  const _dIdx3 = neighbor.indexOf('.');
+                const nMStr = neighbor.slice(0, _dIdx3);
+                const nCStr = neighbor.slice(_dIdx3 + 1);
                   const nM = Number(nMStr);
                   const nC = Number(nCStr);
 
@@ -3715,7 +3738,9 @@ export class NetworkGenerator {
               const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
               if (neighbors) {
                 for (const neighbor of neighbors) {
-                  const [nMStr, nCStr] = neighbor.split('.');
+                  const _dIdx3 = neighbor.indexOf('.');
+                const nMStr = neighbor.slice(0, _dIdx3);
+                const nCStr = neighbor.slice(_dIdx3 + 1);
                   const nM = Number(nMStr);
                   const nC = Number(nCStr);
                   const nKey = `${r}:${nM}`;
@@ -3724,8 +3749,8 @@ export class NetworkGenerator {
                     const bondLabel = oldMol.components[c].edges.keys().next().value;
                     const anchorMol = targetGraph.molecules[anchorLoc.molIdx];
                     const anchorComp = anchorMol?.components?.[nC];
-                    const explicitUnbound = (anchorMol as any)?._explicitUnboundComponents as Set<number> | undefined;
-                    const explicitBonded = (anchorMol as any)?._explicitBondedComponents as Set<number> | undefined;
+                    const explicitUnbound = (anchorMol as (Molecule & { _explicitUnboundComponents?: Set<number> }) | undefined)?._explicitUnboundComponents as Set<number> | undefined;
+                    const explicitBonded = (anchorMol as (Molecule & { _explicitBondedComponents?: Set<number> }) | undefined)?._explicitBondedComponents as Set<number> | undefined;
                     if (explicitUnbound && explicitUnbound.has(nC)) {
                       continue;
                     }
@@ -3809,7 +3834,9 @@ export class NetworkGenerator {
                 const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
                 if (neighbors) {
                   for (const neighbor of neighbors) {
-                    const [nMStr, nCStr] = neighbor.split('.');
+                    const _dIdx3 = neighbor.indexOf('.');
+                const nMStr = neighbor.slice(0, _dIdx3);
+                const nCStr = neighbor.slice(_dIdx3 + 1);
                     const nM = Number(nMStr);
                     const nC = Number(nCStr);
 
@@ -3870,7 +3897,9 @@ export class NetworkGenerator {
           const anchorMol = graph.molecules[anchorIdx];
           if (!anchorMol._sourceKey) continue;
 
-          const [rStr, mStr] = anchorMol._sourceKey.split(':');
+          const _cIdx3 = anchorMol._sourceKey.indexOf(':');
+          const rStr = anchorMol._sourceKey.slice(0, _cIdx3);
+          const mStr = anchorMol._sourceKey.slice(_cIdx3 + 1);
           const reactantIdx = Number(rStr);
           const reactantMolIdx = Number(mStr);
           if (!Number.isFinite(reactantIdx) || !Number.isFinite(reactantMolIdx)) continue;
@@ -4062,7 +4091,7 @@ export class NetworkGenerator {
     // Priority 3: Any available molecule with same name
 
     const scorePatternMolMatch = (
-      pMol: any,
+      pMol: Molecule,
       rpm: { reactantIdx: number; patternMolIdx: number; name: string; targetMolIdx: number; isBound: boolean },
       _pMolIsBound: boolean
     ): number => {
@@ -4090,16 +4119,16 @@ export class NetworkGenerator {
 
       // Prefer compatible component states. This helps disambiguate identical molecule names
       // in symmetric complexes (e.g., multiple R molecules with different Y1/Y2 states).
-      const rpCompByName = new Map<string, any>();
+      const rpCompByName = new Map<string, Component>();
       for (const c of rpMol.components) rpCompByName.set(c.name, c);
-      const targetCompByName = new Map<string, any>();
+      const targetCompByName = new Map<string, Component>();
       for (const c of targetMol.components) targetCompByName.set(c.name, c);
 
       // Reward overlap of *specified* component names between the two pattern molecules.
       // This is important because BNGL patterns often omit components as wildcards, and
       // different molecules in the same rule may specify different components.
-      const rpCompNames = new Set<string>(rpMol.components.map((c: any) => c.name));
-      const pCompNames = new Set<string>(pMol.components.map((c: any) => c.name));
+      const rpCompNames = new Set<string>(rpMol.components.map((c: Component) => c.name));
+      const pCompNames = new Set<string>(pMol.components.map((c: Component) => c.name));
       let sharedCompNames = 0;
       for (const name of pCompNames) {
         if (rpCompNames.has(name)) sharedCompNames++;
@@ -4141,9 +4170,9 @@ export class NetworkGenerator {
               !rcForBondCheck ||
               (!rcForBondCheck.wildcard && rcForBondCheck.edges.size === 0);
             const repeatedSiteName =
-              pMol.components.filter((c: any) => c.name === pc.name).length > 1 ||
-              rpMol.components.filter((c: any) => c.name === pc.name).length > 1 ||
-              targetMol.components.filter((c: any) => c.name === pc.name).length > 1;
+              pMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
+              rpMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
+              targetMol.components.filter((c: Component) => c.name === pc.name).length > 1;
             if (mustStartUnbound && tc.edges.size !== 0 && !repeatedSiteName) {
               return -Infinity;
             }
@@ -4330,7 +4359,7 @@ export class NetworkGenerator {
       const reactantPatternMol = reactantPattern.molecules[reactantPatternMolIdx];
       const targetMol = reactantGraphs[mapping.reactantIdx].molecules[mapping.targetMolIdx];
 
-      const findComponentByNameOccurrence = (components: any[], name: string, occurrence: number): any | undefined => {
+      const findComponentByNameOccurrence = (components: Component[], name: string, occurrence: number): Component | undefined => {
         let seen = 0;
         for (const comp of components) {
           if (comp.name !== name) continue;
@@ -4340,7 +4369,7 @@ export class NetworkGenerator {
         return undefined;
       };
 
-      const findComponentIndexByNameOccurrence = (components: any[], name: string, occurrence: number): number => {
+      const findComponentIndexByNameOccurrence = (components: Component[], name: string, occurrence: number): number => {
         let seen = 0;
         for (let idx = 0; idx < components.length; idx++) {
           if (components[idx].name !== name) continue;
@@ -4492,7 +4521,8 @@ export class NetworkGenerator {
       const queue = [startMolIdx];
 
       while (queue.length > 0) {
-        const molIdx = queue.shift()!;
+        const molIdx = queue.shift();
+        if (molIdx === undefined) continue;
 
         // Find all molecules bonded to this one
         const currentMol = reactantGraph.molecules[molIdx];
@@ -4505,7 +4535,8 @@ export class NetworkGenerator {
             if (!partnerKeys) continue;
 
             for (const partnerKey of partnerKeys) {
-              const [partnerMolStr] = partnerKey.split('.');
+              const _dIdx4 = partnerKey.indexOf('.');
+              const partnerMolStr = partnerKey.slice(0, _dIdx4);
               const partnerMolIdx = Number(partnerMolStr);
 
               if (!visited.has(partnerMolIdx)) {
@@ -4595,14 +4626,16 @@ export class NetworkGenerator {
         if (!reactantGraphCompKey) continue;
 
         // Parse the reactant graph component key to get mol.comp
-        const [, reactantCompStr] = reactantGraphCompKey.split('.');
+        const _dIdx5 = reactantGraphCompKey.indexOf('.');
+        const reactantCompStr = reactantGraphCompKey.slice(_dIdx5 + 1);
         const reactantCompIdx = Number(reactantCompStr);
 
         // Find what this component is bonded to (support multi-site bonding)
         const bondTargets = reactantGraph.adjacency.get(`${mapping.targetMolIdx}.${reactantCompIdx}`);
         if (bondTargets && bondTargets.length > 0) {
           for (const bondTarget of bondTargets) {
-            const [partnerMolStr] = bondTarget.split('.');
+            const _dIdx6 = bondTarget.indexOf('.');
+            const partnerMolStr = bondTarget.slice(0, _dIdx6);
             const partnerMolIdx = Number(partnerMolStr);
             includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx}`);
 
@@ -4615,7 +4648,8 @@ export class NetworkGenerator {
             const toProcess = [partnerMolIdx];
             const visited = new Set<number>([partnerMolIdx, mapping.targetMolIdx]);
             while (toProcess.length > 0) {
-              const molIdx = toProcess.pop()!;
+              const molIdx = toProcess.pop();
+              if (molIdx === undefined) continue;
 
               const currentMol = reactantGraph.molecules[molIdx];
               if (currentMol) {
@@ -4625,7 +4659,8 @@ export class NetworkGenerator {
 
                   if (partnerKeys) {
                     for (const partnerKey2 of partnerKeys) {
-                      const [partnerMolStr2] = partnerKey2.split('.');
+                      const _dIdx7 = partnerKey2.indexOf('.');
+                      const partnerMolStr2 = partnerKey2.slice(0, _dIdx7);
                       const partnerMolIdx2 = Number(partnerMolStr2);
 
                       if (!visited.has(partnerMolIdx2)) {
@@ -4649,7 +4684,9 @@ export class NetworkGenerator {
 
     // Clone included molecules
     for (const key of includedMols) {
-      const [rStr, molIdxStr] = key.split(':');
+      const _cIdx4 = key.indexOf(':');
+      const rStr = key.slice(0, _cIdx4);
+      const molIdxStr = key.slice(_cIdx4 + 1);
       const r = Number(rStr);
       const molIdx = Number(molIdxStr);
 
@@ -4772,7 +4809,9 @@ export class NetworkGenerator {
         const sourceKey = productMol._sourceKey;
         if (!sourceKey) continue;
 
-        const [rStr, molIdxStr] = sourceKey.split(':');
+        const _cIdx = sourceKey.indexOf(':');
+            const rStr = sourceKey.slice(0, _cIdx);
+            const molIdxStr = sourceKey.slice(_cIdx + 1);
         const rIdx = Number(rStr);
         const sourceMolIdx = Number(molIdxStr);
 
@@ -4820,7 +4859,8 @@ export class NetworkGenerator {
                 if (!_vol3dPartners) continue;
 
                 for (const _vol3dPartnerKey of _vol3dPartners) {
-                  const [_vol3dPMolIdxStr] = _vol3dPartnerKey.split('.');
+                  const _dIdx8 = _vol3dPartnerKey.indexOf('.');
+                  const _vol3dPMolIdxStr = _vol3dPartnerKey.slice(0, _dIdx8);
                   const _vol3dPMolIdx = Number(_vol3dPMolIdxStr);
                   if (_vol3dVisited.has(_vol3dPMolIdx)) continue;
                   _vol3dVisited.add(_vol3dPMolIdx);
@@ -4897,7 +4937,8 @@ export class NetworkGenerator {
               if (!_partnerKeys) continue;
 
               for (const _partnerKey of _partnerKeys) {
-                const [_pMolIdxStr] = _partnerKey.split('.');
+                const _dIdx9 = _partnerKey.indexOf('.');
+                const _pMolIdxStr = _partnerKey.slice(0, _dIdx9);
                 const _pMolIdx = Number(_pMolIdxStr);
                 if (_bfsVisited.has(_pMolIdx)) continue;
                 _bfsVisited.add(_pMolIdx);
@@ -4960,12 +5001,16 @@ export class NetworkGenerator {
       const reactantGraph = reactantGraphs[r];
 
       for (const [key, partnerKeys] of reactantGraph.adjacency.entries()) {
-        const [molStr, compStr] = key.split('.');
+        const _dIdx10 = key.indexOf('.');
+        const molStr = key.slice(0, _dIdx10);
+        const compStr = key.slice(_dIdx10 + 1);
         const molIdx = Number(molStr);
         const compIdx = Number(compStr);
 
         for (const partnerKey of partnerKeys) {
-          const [partnerMolStr, partnerCompStr] = partnerKey.split('.');
+          const _dIdx11 = partnerKey.indexOf('.');
+          const partnerMolStr = partnerKey.slice(0, _dIdx11);
+          const partnerCompStr = partnerKey.slice(_dIdx11 + 1);
           const partnerMolIdx = Number(partnerMolStr);
           const partnerCompIdx = Number(partnerCompStr);
 
@@ -5160,7 +5205,8 @@ export class NetworkGenerator {
             const targetKey = exactComponentMapTarget;
 
             if (!targetKey) continue;
-            const idx = Number(targetKey.split('.')[1]);
+            // ⚡ Bolt: Use slice directly to avoid split() array allocation
+            const idx = Number(targetKey.slice(targetKey.indexOf('.') + 1));
             if (usedSet.has(idx)) continue;
 
             // IMPORTANT: The componentMap lookup is ambiguous when multiple components share the
@@ -5450,15 +5496,15 @@ export class NetworkGenerator {
         }
 
         if (markExplicitUnbound) {
-          const unboundSet = (productMol as any)._explicitUnboundComponents ?? new Set<number>();
+          const unboundSet = (productMol as Molecule & { _explicitUnboundComponents?: Set<number> })._explicitUnboundComponents ?? new Set<number>();
           unboundSet.add(candidateIdx);
-          (productMol as any)._explicitUnboundComponents = unboundSet;
+          (productMol as Molecule & { _explicitUnboundComponents?: Set<number> })._explicitUnboundComponents = unboundSet;
         }
 
         if (pComp.edges.size > 0 && !pComp.wildcard) {
-          const bondedSet = (productMol as any)._explicitBondedComponents ?? new Set<number>();
+          const bondedSet = (productMol as Molecule & { _explicitBondedComponents?: Set<number> })._explicitBondedComponents ?? new Set<number>();
           bondedSet.add(candidateIdx);
-          (productMol as any)._explicitBondedComponents = bondedSet;
+          (productMol as Molecule & { _explicitBondedComponents?: Set<number> })._explicitBondedComponents = bondedSet;
         }
 
         if (shouldLogNetworkGenerator) {
@@ -5482,7 +5528,7 @@ export class NetworkGenerator {
           if (!bondEndpoints.has(bondLabel)) {
             bondEndpoints.set(bondLabel, []);
           }
-          bondEndpoints.get(bondLabel)!.push({ pMolIdx, pCompIdx });
+          bondEndpoints.get(bondLabel)?.push({ pMolIdx, pCompIdx });
         }
       }
     }
@@ -5547,7 +5593,9 @@ export class NetworkGenerator {
     // Clear all existing bonds from endpoints that will participate in explicit bonds.
     // This prevents impossible multi-bond artifacts like Fc!1!3.
     for (const key of newBondComponents) {
-      const [molStr, compStr] = key.split('.');
+      const _dIdx10 = key.indexOf('.');
+        const molStr = key.slice(0, _dIdx10);
+        const compStr = key.slice(_dIdx10 + 1);
       const molIdx = Number(molStr);
       const compIdx = Number(compStr);
       if (!isNaN(molIdx) && !isNaN(compIdx)) {
@@ -5600,13 +5648,15 @@ export class NetworkGenerator {
 
       // Check all bonds in the product graph
       for (const [adjKey, partnerKeys] of productGraph.adjacency.entries()) {
-        const [molIdxStr] = adjKey.split('.');
+        const _dIdx12 = adjKey.indexOf('.');
+        const molIdxStr = adjKey.slice(0, _dIdx12);
         const mol1Idx = Number(molIdxStr);
         const mol1 = productGraph.molecules[mol1Idx];
         const mol1Comp = mol1?.compartment || productGraph.compartment;
 
         for (const partnerKey of partnerKeys) {
-          const [partnerMolIdxStr] = partnerKey.split('.');
+          const _dIdx13 = partnerKey.indexOf('.');
+          const partnerMolIdxStr = partnerKey.slice(0, _dIdx13);
           const mol2Idx = Number(partnerMolIdxStr);
           const mol2 = productGraph.molecules[mol2Idx];
           const mol2Comp = mol2?.compartment || productGraph.compartment;
@@ -5662,7 +5712,8 @@ export class NetworkGenerator {
 
     if (speciesMap.has(canonical)) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }
-      return speciesMap.get(canonical)!;
+      const existing = speciesMap.get(canonical);
+      if (existing) return existing;
     }
 
     if (speciesList.length >= this.options.maxSpecies) {
@@ -5724,7 +5775,7 @@ export class NetworkGenerator {
     if (now - this.lastMemoryCheck > this.options.checkInterval) {
       this.lastMemoryCheck = now;
 
-      const memory = (performance as any).memory;
+      const memory = (performance as ExtendedPerformance).memory;
       if (memory && memory.usedJSHeapSize > this.options.memoryLimit) {
         throw new Error(
           `Network generation stopped: memory usage (${(memory.usedJSHeapSize / 1e6).toFixed(0)} MB) ` +
@@ -5934,7 +5985,8 @@ export class NetworkGenerator {
               const bondDegree = comp.edges.size;
               const partnerKeys = reactantSpecies.graph.adjacency.get(`${molIdx}.${ci}`) ?? [];
               const neighborSigs = partnerKeys.map((pk: string) => {
-                const partnerMolIdx = parseInt(pk.split('.')[0]);
+                // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
+                const partnerMolIdx = parseInt(pk, 10);
                 const neighborMol = reactantSpecies.graph.molecules[partnerMolIdx];
                 if (!neighborMol) return '?';
                 // Local (degree-only) sig of neighbor: captures name+state+bond degree

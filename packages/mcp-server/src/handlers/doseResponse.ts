@@ -195,7 +195,7 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             }
         }
 
-        const result = computeDoseResponse({
+        const result = await computeDoseResponse({
             model,
             reactions: expanded.reactions ?? [],
             species: expanded.species,
@@ -225,9 +225,15 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             const totalSimPoints = simulated.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
 
             if (totalSimPoints === 0) {
-                return createToolResult(structureError(
-                    new Error('dose_response produced empty curves: root-finding did not converge and simulation fallback also failed. Try method="simulate", increasing t_end, or narrowing the input range.'),
-                ));
+                return createToolResult({
+                inputParameter: result.inputParameter,
+                methodUsed: result.methodUsed,
+                fallbackUsed: result.fallbackUsed,
+                warning: result.warning,
+                failedDoses: result.failedDoses,
+                summary: result.summary,
+                curves: result.curves,
+            });
             }
 
             return createToolResult({

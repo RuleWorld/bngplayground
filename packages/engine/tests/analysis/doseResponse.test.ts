@@ -69,8 +69,8 @@ describe('Dose-response: linear production/degradation', () => {
 
   const model = makeModel(species, parametricReactions, parameters);
 
-  it('should produce a linear dose-response curve for B vs k_convert', () => {
-    const result = computeDoseResponse({
+  it('should produce a linear dose-response curve for B vs k_convert', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions: parametricReactions,
       species,
@@ -99,8 +99,8 @@ describe('Dose-response: linear production/degradation', () => {
     }
   });
 
-  it('should fit Hill coefficient near 1 for linear response', () => {
-    const result = computeDoseResponse({
+  it('should fit Hill coefficient near 1 for linear response', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions: parametricReactions,
       species,
@@ -182,8 +182,8 @@ describe('Dose-response: Hill fit on synthetic sigmoidal data', () => {
   const parameters = { k_source: 1 };
   const model = makeModel(species, reactions, parameters);
 
-  it('should produce a sigmoidal curve with Hill n approximately 2', () => {
-    const result = computeDoseResponse({
+  it('should produce a sigmoidal curve with Hill n approximately 2', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,
@@ -232,8 +232,8 @@ describe('Dose-response: log scale vs linear scale', () => {
   const parameters = { k_convert: 0.01 };
   const model = makeModel(species, reactions, parameters);
 
-  it('log scale should produce geometrically spaced dose points', () => {
-    const result = computeDoseResponse({
+  it('log scale should produce geometrically spaced dose points', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,
@@ -261,8 +261,8 @@ describe('Dose-response: log scale vs linear scale', () => {
     expect(doses[doses.length - 1]).toBeCloseTo(100, 0);
   });
 
-  it('linear scale should produce evenly spaced dose points', () => {
-    const result = computeDoseResponse({
+  it('linear scale should produce evenly spaced dose points', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,
@@ -313,10 +313,10 @@ describe('Dose-response: failed doses', () => {
   const parameters = { k_deg: 1 };
   const model = makeModel(species, reactions, parameters);
 
-  it('should record failed doses when steady state cannot converge', () => {
+  it('should record failed doses when steady state cannot converge', async () => {
     // Use a very tight tolerance and a range that includes very small
     // values near zero where the dynamics become poorly conditioned.
-    const result = computeDoseResponse({
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,
@@ -342,10 +342,10 @@ describe('Dose-response: failed doses', () => {
     }
   });
 
-  it('should populate failedDoses for extreme parameter ranges', () => {
+  it('should populate failedDoses for extreme parameter ranges', async () => {
     // Use a range including effectively zero degradation rates.
     // With k_deg very close to 0, A -> infinity which won't converge.
-    const result = computeDoseResponse({
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,
@@ -383,8 +383,8 @@ describe('Dose-response: multiple observables', () => {
   const parameters = { k_convert: 0.1 };
   const model = makeModel(species, reactions, parameters);
 
-  it('should return separate curves for each observable', () => {
-    const result = computeDoseResponse({
+  it('should return separate curves for each observable', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,
@@ -444,8 +444,8 @@ describe('Dose-response: observable with speciesIndices and coefficients', () =>
 
   const model = makeModel(species, reactions, parameters, observables);
 
-  it('should evaluate composite observables correctly', () => {
-    const result = computeDoseResponse({
+  it('should evaluate composite observables correctly', async () => {
+    const result = await computeDoseResponse({
       model,
       reactions,
       species,

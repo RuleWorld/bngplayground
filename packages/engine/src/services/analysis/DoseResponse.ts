@@ -76,6 +76,10 @@ export interface DoseResponseResult {
   inputParameter: string;
   curves: DoseResponseCurve[];
   failedDoses: number[];
+  fallbackUsed?: string;
+  warning?: string;
+  methodUsed?: string;
+  summary?: any;
 }
 
 // ── Internal helpers ───────────────────────────────────────────────
@@ -392,9 +396,101 @@ function detectBifurcationPoints(
  * the input parameter across the specified range and finding the
  * steady state at each dose.
  */
-export function computeDoseResponse(
+import { simulate } from "../simulation/SimulationLoop";
+import { evaluateFunctionalRate, clearAllEvaluatorCaches } from "../simulation/ExpressionEvaluator";
+
+function cloneExpandedModel(model: BNGLModel): BNGLModel {
+    return structuredClone(model);
+}
+
+function updateMassActionRates(model: BNGLModel): void {
+    const context = model.parameters ?? {};
+    for (const reaction of model.reactions ?? []) {
+        if (!reaction.isFunctionalRate && reaction.rate && typeof reaction.rate === 'string') {
+            try {
+                const updatedRate = evaluateFunctionalRate(reaction.rate, context, {}, model.functions);
+                if (Number.isFinite(updatedRate)) {
+                    reaction.rateConstant = updatedRate;
+                }
+            } catch {
+                // Keep the existing concrete rate when a symbolic update fails.
+            }
+        }
+    }
+    clearAllEvaluatorCaches();
+}
+
+async function computeDoseResponseBySimulation(
+    expandedModel: any,
+    inputParameter: string,
+    observables: string[],
+    inputMin: number,
+    inputMax: number,
+    nPoints: number,
+    logScale: boolean,
+    tEnd: number,
+): Promise<{ curves: Array<{ observable: string; doses: number[]; responses: number[] }>; failedDoses: number[] }> {
+    const doses = generateDosePoints(inputMin, inputMax, nPoints, logScale);
+    const failedDoses: number[] = [];
+    const responsesByObservable = new Map<string, number[]>();
+    const successfulDoses: number[] = [];
+
+    observables.forEach((obs) => {
+        responsesByObservable.set(obs, []);
+    });
+
+    const simOptions = {
+        method: 'ode',
+        t_end: tEnd,
+        n_steps: 200,
+        solver: 'auto',
+    } as any;
+
+    for (const dose of doses) {
+        try {
+            const runModel = cloneExpandedModel(expandedModel);
+            runModel.parameters[inputParameter] = dose;
+            updateMassActionRates(runModel);
+
+            const simResult = await simulate(0, runModel, simOptions, {
+                checkCancelled: () => { },
+                postMessage: () => { },
+            });
+
+            const finalRow = simResult.data?.[simResult.data.length - 1];
+            if (!finalRow) {
+                failedDoses.push(dose);
+                continue;
+            }
+
+            const values = observables.map((obs) => Number(finalRow[obs]));
+            if (values.some((value) => !Number.isFinite(value))) {
+                failedDoses.push(dose);
+                continue;
+            }
+
+            successfulDoses.push(dose);
+            observables.forEach((obs, index) => {
+                responsesByObservable.get(obs)!.push(values[index]);
+            });
+        } catch {
+            failedDoses.push(dose);
+        }
+    }
+
+    return {
+        curves: observables.map((obs) => ({
+            observable: obs,
+            doses: successfulDoses,
+            responses: responsesByObservable.get(obs) ?? [],
+        })),
+        failedDoses,
+    };
+}
+
+export async function computeDoseResponse(
   config: DoseResponseConfig,
-): DoseResponseResult {
+): Promise<DoseResponseResult> {
   const {
     model,
     reactions,
@@ -410,6 +506,31 @@ export function computeDoseResponse(
 
   const n = species.length;
 
+  if (config.method === 'simulate') {
+    const tEnd = config.t_end ?? 1e4;
+    const simulated = await computeDoseResponseBySimulation(
+        model,
+        inputParameter,
+        observables,
+        inputRange.min,
+        inputRange.max,
+        nPoints,
+        logScale,
+        tEnd,
+    );
+    return {
+        inputParameter,
+        methodUsed: 'simulate',
+        failedDoses: simulated.failedDoses,
+        summary: {
+            nCurves: simulated.curves.length,
+            nFailed: simulated.failedDoses.length,
+            nFitted: 0,
+            nBifurcationPoints: 0,
+        },
+        curves: simulated.curves,
+    } as DoseResponseResult;
+  }
   // Build stoichiometry matrix (constant across doses).
   const S = buildStoichiometryMatrix(species, reactions);
 
@@ -550,11 +671,50 @@ export function computeDoseResponse(
     }
   }
 
+  const totalRootfindPoints = curves.reduce((acc, curve) => acc + curve.responses.length, 0);
+  if (totalRootfindPoints === 0) {
+      const simulated = await computeDoseResponseBySimulation(
+          model,
+          inputParameter,
+          observables,
+          inputRange.min,
+          inputRange.max,
+          nPoints,
+          logScale,
+          config.t_end ?? 1e4,
+      );
+
+      return {
+          inputParameter,
+          methodUsed: 'simulate',
+          fallbackUsed: 'rootfind_to_simulate',
+          warning: 'Root-finding produced no curve points; returned simulation-based fallback curves instead.',
+          failedDoses: simulated.failedDoses,
+          summary: {
+              nCurves: simulated.curves.length,
+              nFailed: simulated.failedDoses.length,
+              nFitted: 0,
+              nBifurcationPoints: 0,
+          },
+          curves: simulated.curves,
+      } as DoseResponseResult;
+  }
+
   return {
     inputParameter,
+    methodUsed: 'rootfind',
+    summary: {
+        nCurves: curves.length,
+        nFailed: failedDoses.length,
+        nFitted: curves.filter((c) => c.hillFit !== undefined).length,
+        nBifurcationPoints: curves.reduce(
+            (acc, c) => acc + (c.bifurcationPoints?.length ?? 0),
+            0,
+        ),
+    },
     curves,
     failedDoses,
-  };
+  } as DoseResponseResult;
 }
 
 // ── Synchronous Hill fit (no dependency on async nelderMead) ────────

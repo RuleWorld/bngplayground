@@ -91,22 +91,14 @@ export class SecureStorage {
     }
 
     if (typeof globalThis.crypto === 'undefined' || !globalThis.crypto.subtle || typeof globalThis.indexedDB === 'undefined') {
-      console.warn('SecureStorage: crypto or indexedDB not available. Reading fallback insecure value.');
-      try {
-        return atob(encryptedText);
-      } catch {
-        return encryptedText;
-      }
+      console.warn('SecureStorage: crypto or indexedDB not available. Returning null to prevent insecure fallback.');
+      return null;
     }
 
     try {
       if (!encryptedText.startsWith('enc:')) {
-        try {
-          const decoded = atob(encryptedText);
-          return decoded;
-        } catch {
-          return encryptedText;
-        }
+        console.warn('SecureStorage: Invalid encrypted format, returning null.');
+        return null;
       }
 
       const parts = encryptedText.split(':');
@@ -128,12 +120,8 @@ export class SecureStorage {
       const dec = new TextDecoder();
       return dec.decode(decrypted);
     } catch (e) {
-      console.warn('SecureStorage: Decryption failed, reading fallback insecure value.', e);
-      try {
-          return atob(encryptedText);
-      } catch {
-          return encryptedText;
-      }
+      console.warn('SecureStorage: Decryption failed. Returning null to prevent insecure fallback.', e);
+      return null;
     }
   }
 }

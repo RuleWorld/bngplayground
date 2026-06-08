@@ -245,7 +245,10 @@ export class SpeciesGraph {
 
         if (oldPartners) {
           for (const oldPartner of oldPartners) {
-            const [oldPartnerMol, oldPartnerComp] = oldPartner.split('.').map(Number);
+            // ⚡ Bolt: Use parseInt and slice directly to avoid split().map() array allocation
+            const dotIdx = oldPartner.indexOf('.');
+            const oldPartnerMol = parseInt(oldPartner, 10);
+            const oldPartnerComp = dotIdx !== -1 ? Number(oldPartner.slice(dotIdx + 1)) : 0;
             const newPartnerMol = offset + oldPartnerMol;
             const newPartnerComp = oldPartnerComp;
 
@@ -292,7 +295,8 @@ export class SpeciesGraph {
         const partners = this.adjacency.get(key);
         if (partners) {
           for (const partner of partners) {
-            const [pMol] = partner.split('.').map(Number);
+            // ⚡ Bolt: Use parseInt directly to avoid split().map() array allocation
+            const pMol = parseInt(partner, 10);
             if (!visited.has(pMol)) {
               visited.add(pMol);
               queue.push(pMol);
@@ -329,7 +333,8 @@ export class SpeciesGraph {
           const partners = this.adjacency.get(key);
           if (partners) {
             for (const partner of partners) {
-              const [pMol] = partner.split('.').map(Number);
+              // ⚡ Bolt: Use parseInt directly to avoid split().map() array allocation
+              const pMol = parseInt(partner, 10);
               if (!visited.has(pMol)) {
                 visited.add(pMol);
                 queue.push(pMol);
@@ -361,7 +366,10 @@ export class SpeciesGraph {
           const partners = this.adjacency.get(key);
           if (partners) {
             for (const partner of partners) {
-              const [pMolIdx, pCompIdx] = partner.split('.').map(Number);
+              // ⚡ Bolt: Use parseInt and slice directly to avoid split().map() array allocation
+              const dotIdx = partner.indexOf('.');
+              const pMolIdx = parseInt(partner, 10);
+              const pCompIdx = dotIdx !== -1 ? Number(partner.slice(dotIdx + 1)) : 0;
               // Create canonical bond key to avoid duplicates
               const bondKey = oldMolIdx < pMolIdx || (oldMolIdx === pMolIdx && compIdx < pCompIdx)
                 ? `${oldMolIdx}.${compIdx}-${pMolIdx}.${pCompIdx}`

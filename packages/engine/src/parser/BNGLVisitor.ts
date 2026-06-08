@@ -486,7 +486,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       name,
       initialConcentration: concentration,
       isConstant,
-      initialExpression: exprCtx ? exprCtx.text : '0'
+      initialExpression: exprCtx ? exprCtx.text : '0',
+      line: ctx.start?.line,
+      column: ctx.start?.charPositionInLine
     });
     this.speciesExpressions.push(exprCtx ? exprCtx.text : '0');
   }
@@ -601,12 +603,14 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // !? wildcards (e.g. CD40(l!?) in cd40-signaling). Synthetic wildcards are treated as absent
     // in the product-implied-free filter (GPCR fix), while explicit !? wildcards are carry-through.
     const reactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
+    const literalReactants: string[] = reactantSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: false }));
 
     // Get products - collect all species and skip '0'
     const productSpecies = productCtx.species_def();
 
     // Mixed products like "A + 0" should result in ["A"]
     const products: string[] = productSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: true }));
+    const literalProducts: string[] = productSpecies.map(sd => this.getSpeciesString(sd, { completeMissingComponents: false }));
 
     // Get rate(s)
     const rateExpressions = rateLawCtx.expression();
@@ -767,6 +771,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       name: name || `_R${this.reactionRules.length + 1}`,
       reactants,
       products,
+      literalReactants,
+      literalProducts,
       rate,
       rateExpression: rate, // Always preserve the rate expression string
       reactionString: reactantCtx.text + (isBidirectional ? ' <-> ' : ' -> ') + productCtx.text,
@@ -785,6 +791,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       reverseArrheniusPhi,
       reverseArrheniusEact,
       reverseArrheniusA,
+      line: ctx.start?.line,
+      column: ctx.start?.charPositionInLine,
     });
   }
 

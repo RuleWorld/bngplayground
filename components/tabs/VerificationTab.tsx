@@ -282,6 +282,7 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                                                 onClick={() => removeConstraint(constraint.id)}
                                                 className="text-red-500 hover:text-red-700 text-sm"
                                                 title="Remove constraint"
+                                                aria-label="Remove constraint"
                                             >
                                                 ✕
                                             </button>

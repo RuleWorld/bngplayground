@@ -180,7 +180,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
   };
 
   return (
-    <button type="button" className={containerClasses} onClick={handleSelect}>
+    <button type="button" className={containerClasses} onClick={handleSelect} aria-label={`Select rule ${displayName}`}>
       <div className="mb-3 flex items-center justify-between gap-4">
         <span className="text-sm font-semibold text-slate-700 dark:text-slate-200">{displayName}</span>
         <span className="text-xs font-mono text-slate-500 dark:text-slate-300">{rule.rate}</span>
