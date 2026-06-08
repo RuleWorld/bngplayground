@@ -1927,7 +1927,8 @@ export class NetworkGenerator {
         const targetCompKey = match.componentMap.get(`${patternMolIdx}.${patternCompIdx}`);
         if (!targetCompKey) return false;
 
-        const targetCompIdx = Number(targetCompKey.split('.')[1]);
+        // ⚡ Bolt: Use slice directly to avoid split() array allocation
+        const targetCompIdx = Number(targetCompKey.slice(targetCompKey.indexOf('.') + 1));
         const targetComp = targetMol.components[targetCompIdx];
         if (!targetComp) return false;
 
@@ -3307,7 +3308,8 @@ export class NetworkGenerator {
         let invalidInterComplexBond = false;
         for (const [key1, partners] of fullProductGraph.adjacency) {
           if (invalidInterComplexBond) break;
-          const mol1Idx = parseInt(key1.split('.')[0], 10);
+          // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
+          const mol1Idx = parseInt(key1, 10);
           const mol1 = fullProductGraph.molecules[mol1Idx] as Molecule & { _sourceKey?: string };
           if (!mol1?._sourceKey) continue;
           const _cIdx5 = mol1._sourceKey.indexOf(':');
@@ -3317,7 +3319,8 @@ export class NetworkGenerator {
             const bondId = key1 < key2 ? `${key1}||${key2}` : `${key2}||${key1}`;
             if (seenBondIds.has(bondId)) continue;
             seenBondIds.add(bondId);
-            const mol2Idx = parseInt(key2.split('.')[0], 10);
+            // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
+            const mol2Idx = parseInt(key2, 10);
             const mol2 = fullProductGraph.molecules[mol2Idx] as Molecule & { _sourceKey?: string };
             if (!mol2?._sourceKey) continue;
             const _cIdx6 = mol2._sourceKey.indexOf(':');
@@ -5202,7 +5205,8 @@ export class NetworkGenerator {
             const targetKey = exactComponentMapTarget;
 
             if (!targetKey) continue;
-            const idx = Number(targetKey.split('.')[1]);
+            // ⚡ Bolt: Use slice directly to avoid split() array allocation
+            const idx = Number(targetKey.slice(targetKey.indexOf('.') + 1));
             if (usedSet.has(idx)) continue;
 
             // IMPORTANT: The componentMap lookup is ambiguous when multiple components share the
@@ -5981,7 +5985,8 @@ export class NetworkGenerator {
               const bondDegree = comp.edges.size;
               const partnerKeys = reactantSpecies.graph.adjacency.get(`${molIdx}.${ci}`) ?? [];
               const neighborSigs = partnerKeys.map((pk: string) => {
-                const partnerMolIdx = parseInt(pk.split('.')[0]);
+                // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
+                const partnerMolIdx = parseInt(pk, 10);
                 const neighborMol = reactantSpecies.graph.molecules[partnerMolIdx];
                 if (!neighborMol) return '?';
                 // Local (degree-only) sig of neighbor: captures name+state+bond degree
