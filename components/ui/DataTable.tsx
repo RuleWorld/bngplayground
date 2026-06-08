@@ -8,7 +8,7 @@ interface DataTableProps {
 export const DataTable: React.FC<DataTableProps> = ({ headers, rows }) => {
   return (
     <div className="overflow-x-auto border border-stone-200 dark:border-slate-700 rounded-lg">
-      <table className="min-w-full divide-y divide-stone-200 dark:divide-slate-700">
+      <table aria-label="Data table" className="min-w-full divide-y divide-stone-200 dark:divide-slate-700">
         <thead className="bg-slate-50 dark:bg-slate-800">
           <tr>
             {headers.map((header, index) => (

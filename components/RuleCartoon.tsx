@@ -209,7 +209,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
         </div>
 
         <div className="flex flex-col items-center gap-1 text-slate-500 dark:text-slate-300">
-          <svg className="h-6 w-16" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <svg aria-hidden="true" className="h-6 w-16" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
             <path
               d="M2 12H60M60 12L52 4M60 12L52 20"
               stroke="currentColor"
@@ -220,7 +220,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
           </svg>
           {rule.isBidirectional && rule.reverseRate && (
             <>
-              <svg className="h-6 w-16 rotate-180" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg aria-hidden="true" className="h-6 w-16 rotate-180" viewBox="0 0 64 24" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path
                   d="M2 12H60M60 12L52 4M60 12L52 20"
                   stroke="currentColor"

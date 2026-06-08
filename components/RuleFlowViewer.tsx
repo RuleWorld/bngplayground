@@ -195,7 +195,7 @@ export const RuleFlowViewer: React.FC<RuleFlowViewerProps> = ({ graph, selectedR
           Export PNG
         </button>
       </div>
-      <div
+      <div role="img" aria-label="Rule flow graph"
         ref={containerRef}
         className="h-96 w-full rounded-lg border border-stone-200 bg-white dark:bg-slate-900 dark:border-slate-700 dark:bg-slate-900"
       />

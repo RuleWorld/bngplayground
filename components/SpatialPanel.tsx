@@ -195,7 +195,7 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
         {state === 'idle' && !result ? (
           <div className="flex items-center justify-center h-full text-gray-500">
             <div className="text-center space-y-3">
-              <div className="text-5xl">🔬</div>
+              <div className="text-5xl" aria-hidden="true">🔬</div>
               <div className="text-lg font-medium">Spatial Simulation</div>
               <div className="text-sm max-w-sm">
                 Run a particle-based spatial simulation of your BNGL model.

@@ -170,6 +170,8 @@ const CustomLegend = (props: any) => {
       {payload.map((entry: any, index: number) => (
         <div
           key={`item-${index}`}
+          role="button"
+          tabIndex={0}
           onClick={() => onClick(entry)}
           onDoubleClick={(e) => {
             e.preventDefault();
@@ -844,6 +846,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               placeholder="Filter series..."
+              aria-label="Filter series"
               className="ml-1 border border-slate-200 dark:border-slate-700 dark:border-slate-700 px-2 py-1 rounded text-xs bg-transparent dark:text-slate-200 focus:ring-2 focus:ring-blue-500 outline-none"
             />
           )}

@@ -51,7 +51,7 @@ const renderComponent = (component: VisualizationComponent): React.JSX.Element =
   return (
     <span className="mr-1 inline-flex items-baseline gap-1">
       <span className="font-medium">{component.name}{state}{bond}</span>
-      {reqGlyph && <span className="text-xs text-slate-400">{reqGlyph}</span>}
+      {reqGlyph && <span aria-hidden="true" className="text-xs text-slate-400">{reqGlyph}</span>}
     </span>
   );
 };
@@ -89,6 +89,7 @@ export const CompactRuleVisualization = React.memo<CompactRuleVisualizationProps
     <button
       type="button"
       onClick={handleClick}
+      aria-label={`Select rule ${displayName}`}
       className={`${baseClasses} ${selectedClasses}`}
     >
       <div className="mb-3 flex items-center justify-between gap-4">

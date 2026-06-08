@@ -287,6 +287,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
         className="flex h-full w-full cursor-pointer flex-col items-center justify-start overflow-hidden border-r border-slate-200 bg-slate-50 py-6 transition-colors hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800"
         onClick={() => onExpand?.()}
         data-testid="designer-panel-collapsed"
+        aria-label="Designer panel (collapsed)"
       >
         <div
           className="mt-4 mb-auto flex items-center gap-3 whitespace-nowrap pointer-events-none"
@@ -316,7 +317,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
   }
 
   return (
-    <div className="flex h-full flex-col border-r border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900">
+    <div className="flex h-full flex-col border-r border-slate-200 bg-slate-50 dark:border-slate-800 dark:bg-slate-900" role="region" aria-label="Designer panel">
       <div className="border-b border-slate-200 bg-white px-4 py-4 dark:border-slate-700 dark:bg-slate-900">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <div className="space-y-1">
@@ -344,7 +345,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
           </div>
         </div>
 
-        <div className="mt-4 flex flex-wrap gap-2">
+        <div className="mt-4 flex flex-wrap gap-2" role="tablist">
           {([
             ['grammar', 'Local Grammar'],
             ['indra-nlp', 'INDRA NLP'],
@@ -355,6 +356,8 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
               type="button"
               onClick={() => setActiveTab(tab)}
               aria-selected={activeTab === tab}
+              role="tab"
+              aria-controls={tab === 'grammar' ? 'designer-tabpanel-grammar' : 'designer-tabpanel-indra'}
               className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition-colors ${
                 activeTab === tab
                   ? 'border-primary bg-primary text-white'
@@ -369,10 +372,11 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
 
       <div className="px-4 pt-4">
         <div className="mb-3">
-          <label className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
+          <label htmlFor="designer-model-name" className="mb-1 block text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
             Model Name
           </label>
           <input
+            id="designer-model-name"
             type="text"
             value={modelName ?? ''}
             onChange={handleModelNameChange}
@@ -395,7 +399,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
 
       <div className="flex min-h-0 flex-1 flex-col overflow-y-auto p-4">
         {activeTab === 'grammar' ? (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4" id="designer-tabpanel-grammar">
             <div className="flex min-h-0 flex-[1.35] gap-4">
               <div className="flex min-h-0 flex-1 flex-col">
                 <h3 className="mb-2 text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Natural Language Input</h3>
@@ -405,6 +409,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                   onChange={(event) => onTextChange(event.target.value)}
                   spellCheck={false}
                   placeholder="Type your biological sentences here..."
+                  aria-label="Natural language input"
                 />
               </div>
 
@@ -441,7 +446,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">Generated BNGL Code</h3>
                 <span className="text-xs text-slate-400">{previewLineCount(lastGeneratedCode || null)}</span>
               </div>
-              <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-slate-200 shadow-sm dark:border-slate-700">
+              <div className="min-h-0 flex-1 overflow-hidden rounded-md border border-slate-200 shadow-sm dark:border-slate-700" aria-label="Generated BNGL code">
                 <Editor
                   height="100%"
                   defaultLanguage="bngl"
@@ -465,7 +470,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
             </div>
           </div>
         ) : (
-          <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4">
+          <div className="flex min-h-0 flex-1 flex-col gap-4 pb-4" id="designer-tabpanel-indra">
             <div className="grid gap-4 lg:grid-cols-[minmax(0,1.1fr)_minmax(320px,0.9fr)]">
               <div className="rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
                 {activeTab === 'indra-nlp' ? (
@@ -478,6 +483,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                         onChange={(event) => setNlpInput(event.target.value)}
                         spellCheck={false}
                         placeholder="Describe interactions in English..."
+                        aria-label="Biological mechanisms description"
                       />
                     </div>
                     <div className="mt-4 flex flex-wrap items-center gap-3">
@@ -599,7 +605,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                 )}
               </div>
 
-              <div className="flex min-h-[320px] flex-col rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800">
+              <div className="flex min-h-[320px] flex-col rounded-lg border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-800" role="region" aria-label="Extracted statements">
                 <div className="mb-2 flex items-center justify-between">
                   <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500 dark:text-slate-300">
                     Extracted Statements
@@ -620,6 +626,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                             checked={statement.selected}
                             onChange={(event) => updateStatementSelection(statement.hash, event.target.checked, statement.sourceType)}
                             className="mt-1"
+                            aria-label={statement.english}
                           />
                           <div className="min-w-0 flex-1">
                             <div className="truncate text-sm font-medium text-slate-800 dark:text-slate-100" title={statement.english}>
@@ -662,7 +669,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                   Sync and Visualize
                 </Button>
               </div>
-              <div className="overflow-hidden rounded-md border border-slate-200 shadow-sm dark:border-slate-700">
+              <div className="overflow-hidden rounded-md border border-slate-200 shadow-sm dark:border-slate-700" aria-label="Generated BNGL code">
                 <div className="h-64 min-h-[16rem]">
                   <Editor
                     height="100%"
@@ -691,7 +698,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
 
       <CheatsheetModal isOpen={isCheatsheetOpen} onClose={() => setIsCheatsheetOpen(false)} />
       {isIndraGuideOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 px-4" role="dialog" aria-modal="true" aria-label="INDRA Guide">
           <div className="w-full max-w-xl rounded-xl bg-white p-5 shadow-xl dark:bg-slate-900">
             <div className="flex items-start justify-between gap-4">
               <div>

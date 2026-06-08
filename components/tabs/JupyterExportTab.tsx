@@ -49,7 +49,7 @@ export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglC
       <Card className="p-8 bg-gradient-to-br from-white to-slate-50 dark:from-slate-800 dark:to-slate-900 border-slate-200 dark:border-slate-700 dark:border-slate-700">
         <div className="max-w-2xl mx-auto text-center space-y-6">
           <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-orange-100 dark:bg-orange-900/30 text-orange-600 dark:text-orange-400 mb-2">
-            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden={true}>
               <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
               <path d="M14 2v4a2 2 0 0 0 2 2h4" />
               <circle cx="10" cy="13" r="2" />
@@ -102,7 +102,7 @@ export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglC
           >
             {isExporting ? (
               <>
-                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24">
+                <svg className="animate-spin h-5 w-5 text-white" viewBox="0 0 24 24" aria-hidden={true}>
                   <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
                   <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
                 </svg>
@@ -110,7 +110,7 @@ export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglC
               </>
             ) : (
               <>
-                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden={true}>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                 </svg>
                 Download Analysis Notebook (.ipynb)
@@ -126,7 +126,7 @@ export const JupyterExportTab: React.FC<JupyterExportTabProps> = ({ model, bnglC
       
       <Card className="p-6 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 border-dashed border-2 border-slate-200 dark:border-slate-700 dark:border-slate-800 flex items-center justify-center">
         <div className="flex items-start gap-4 text-slate-500 dark:text-slate-400 max-w-lg">
-          <svg className="w-6 h-6 mt-1 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <svg className="w-6 h-6 mt-1 flex-shrink-0 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden={true}>
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
           </svg>
           <p className="text-sm">

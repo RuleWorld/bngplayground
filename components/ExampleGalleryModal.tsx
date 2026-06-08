@@ -213,13 +213,14 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
                 {/* Fallback keyword search (shows when no semantic results) */}
                 {!semanticResults && (
                   <div className="relative mb-4">
-                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" />
+                    <SearchIcon className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400 pointer-events-none" aria-hidden="true" />
                     <Input
                       type="text"
                       placeholder="Or filter by keyword..."
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
                       className="pl-10"
+                      aria-label="Filter by keyword"
                     />
                   </div>
                 )}

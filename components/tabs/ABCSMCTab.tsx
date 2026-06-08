@@ -177,8 +177,9 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
           
           <div className="space-y-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Particle Count</label>
+              <label htmlFor="abc-smc-particles" className="text-xs font-semibold text-slate-500 dark:text-slate-400">Particle Count</label>
               <Input 
+                id="abc-smc-particles"
                 type="number" 
                 value={nParticles} 
                 onChange={e => setNParticles(Number(e.target.value))}
@@ -189,8 +190,9 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">Populations</label>
+              <label htmlFor="abc-smc-populations" className="text-xs font-semibold text-slate-500 dark:text-slate-400">Populations</label>
               <Input 
+                id="abc-smc-populations"
                 type="number" 
                 value={nPopulations} 
                 onChange={e => setNPopulations(Number(e.target.value))}
@@ -300,6 +302,7 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                           onChange={e => setPriors(prev => ({...prev, [name]: {...prev[name], min: Number(e.target.value)}}))}
                           className="w-full text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:ring-1 focus:ring-indigo-300 outline-none"
                           disabled={isRunning}
+                          aria-label={`${name} min`}
                         />
                       </div>
                       <span className="text-[10px] font-bold text-slate-300">to</span>
@@ -310,6 +313,7 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
                           onChange={e => setPriors(prev => ({...prev, [name]: {...prev[name], max: Number(e.target.value)}}))}
                           className="w-full text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:ring-1 focus:ring-indigo-300 outline-none"
                           disabled={isRunning}
+                          aria-label={`${name} max`}
                         />
                       </div>
                     </div>
@@ -387,6 +391,7 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
             spellCheck={false}
             placeholder="# time, Obs1, Obs2..."
             disabled={isRunning}
+            aria-label="Experimental data editor"
           />
           <div className="flex items-center justify-between text-[10px]">
             <span className="text-slate-500 dark:text-slate-400">Observables: {observableNames.join(', ')}</span>

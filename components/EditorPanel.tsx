@@ -203,6 +203,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       <Card 
         className="flex h-full w-full flex-col bg-slate-50 dark:bg-slate-900 border-r border-slate-200 dark:border-slate-700 items-center justify-start py-6 overflow-hidden cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors" 
         data-testid="editor-panel-collapsed"
+        aria-label="Editor panel (collapsed)"
         onClick={() => onExpand?.()}
       >
          <div 
@@ -260,7 +261,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   }
 
   return (
-    <Card className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="editor-panel">
+    <Card className="flex h-full min-h-0 flex-col overflow-hidden" data-testid="editor-panel" aria-label="Editor panel">
       <div className="flex flex-col gap-3 flex-1 min-h-0 overflow-y-auto pr-1">
         {/* Header with Status */}
         <div className="flex items-baseline justify-between flex-wrap gap-2 mb-1">
@@ -309,7 +310,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
         )}
 
 
-        <div className="relative flex-1 min-h-[24rem] overflow-hidden">
+        <div role="region" aria-label="Code editor" className="relative flex-1 min-h-[24rem] overflow-hidden">
           <MonacoEditor
             key={editorResetKey ?? 0}
             language="bngl"
@@ -336,8 +337,8 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
       <div className="mt-4 flex flex-col gap-3 shrink-0 border-t border-slate-200 dark:border-slate-700 pt-4">
         {/* Row 1: Actions & Simulation Controls */}
         <div className="flex flex-wrap gap-3 items-center justify-between">
-          <div className="flex flex-wrap items-center gap-2">
-            <Button onClick={() => setIsGalleryOpen(true)} className="h-9 px-3">Models</Button>
+          <div role="toolbar" aria-label="Editor actions" className="flex flex-wrap items-center gap-2">
+            <Button onClick={() => setIsGalleryOpen(true)} className="h-9 px-3" aria-label="Browse example models">Models</Button>
             
             <Dropdown align="left" trigger={
               <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" title="Load model" aria-label="Load model">
@@ -350,7 +351,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             </Dropdown>
 
             <Dropdown trigger={
-              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" disabled={!modelExists && !code?.trim()} title="Export current model">
+              <Button variant="subtle" className="h-9 px-3 inline-flex items-center gap-2" disabled={!modelExists && !code?.trim()} title="Export current model" aria-label="Export options">
                 <span>Export</span>
                 <ChevronDownIcon className="w-3.5 h-3.5 text-slate-500 dark:text-slate-300" />
               </Button>
@@ -374,6 +375,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               ref={fileInputRef}
               onChange={handleFileChange}
               className="hidden"
+              aria-hidden="true"
               accept=".bngl,.sbml,.xml"
               data-testid="editor-load-input"
             />

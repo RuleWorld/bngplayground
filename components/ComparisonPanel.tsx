@@ -248,10 +248,11 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
       <div className="flex flex-wrap gap-3 mb-4">
         <div className="flex-1 min-w-[200px]">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+          <label htmlFor="comparison-param-select" className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
             Parameter to modify
           </label>
           <select
+            id="comparison-param-select"
             value={selectedParam}
             onChange={(e) => setSelectedParam(e.target.value)}
             className="w-full rounded border border-slate-300 dark:border-slate-600 dark:border-slate-600 px-2 py-1.5 text-sm bg-white dark:bg-slate-900 dark:bg-slate-800"
@@ -266,10 +267,11 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
         </div>
 
         <div className="w-32">
-          <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
+          <label htmlFor="comparison-factor-select" className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">
             Multiply by
           </label>
           <select
+            id="comparison-factor-select"
             value={comparisonFactor}
             onChange={(e) => setComparisonFactor(Number(e.target.value))}
             className="w-full rounded border border-slate-300 dark:border-slate-600 dark:border-slate-600 px-2 py-1.5 text-sm bg-white dark:bg-slate-900 dark:bg-slate-800"

@@ -864,13 +864,13 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
     <div className="space-y-6">
       <Card className="space-y-6">
         <div>
-          <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex flex-wrap gap-4 items-center" role="radiogroup" aria-label="Scan dimension">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              <input type="radio" value="1d" checked={scanType === '1d'} onChange={() => setScanType('1d')} />
+              <input type="radio" value="1d" checked={scanType === '1d'} onChange={() => setScanType('1d')} aria-checked={scanType === '1d'} />
               1D Scan
             </label>
             <label className="flex items-center gap-2 text-sm font-medium text-slate-700 dark:text-slate-200">
-              <input type="radio" value="2d" checked={scanType === '2d'} onChange={() => setScanType('2d')} />
+              <input type="radio" value="2d" checked={scanType === '2d'} onChange={() => setScanType('2d')} aria-checked={scanType === '2d'} />
               2D Scan
             </label>
             <label className="flex items-center gap-2 ml-2 text-sm text-slate-600 dark:text-slate-300">
@@ -894,7 +894,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
         <div className="grid gap-6 md:grid-cols-2">
           <div className="space-y-3">
             <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Parameter 1</h4>
-            <Select value={parameter1} onChange={(event) => setParameter1(event.target.value)}>
+            <Select id="ps-param1" value={parameter1} onChange={(event) => setParameter1(event.target.value)}>
               {parameterNames.map((param) => {
                 const isSpecies = parameterTypeMap[param] === 'species';
                 let label = param;
@@ -930,7 +930,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
           {scanType === '2d' && (
             <div className="space-y-3">
               <h4 className="text-sm font-semibold text-slate-800 dark:text-slate-100">Parameter 2</h4>
-              <Select value={parameter2} onChange={(event) => setParameter2(event.target.value)}>
+              <Select id="ps-param2" value={parameter2} onChange={(event) => setParameter2(event.target.value)}>
                 {parameterNames.map((param) => {
                   const isSpecies = parameterTypeMap[param] === 'species';
                   let label = param;
@@ -967,16 +967,16 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
 
         <div className="grid gap-3 md:grid-cols-4">
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Method</label>
-            <Select value={method} onChange={(event) => setMethod(event.target.value as 'ode' | 'ssa')}>
+            <label htmlFor="ps-method" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Method</label>
+            <Select id="ps-method" value={method} onChange={(event) => setMethod(event.target.value as 'ode' | 'ssa')}>
               <option value="ode">ODE</option>
               <option value="ssa">SSA (Stochastic)</option>
             </Select>
           </div>
           {method === 'ode' && (
             <div className="space-y-1">
-              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Solver</label>
-              <Select value={solver} onChange={(event) => setSolver(event.target.value as typeof solver)}>
+              <label htmlFor="ps-solver" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Solver</label>
+              <Select id="ps-solver" value={solver} onChange={(event) => setSolver(event.target.value as typeof solver)}>
                 <option value="cvode">CVODE (Recommended)</option>
                 <option value="cvode_sparse">CVODE Sparse</option>
                 <option value="rosenbrock23">Rosenbrock23</option>
@@ -988,19 +988,20 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
             </div>
           )}
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">t_end</label>
-            <Input type="number" value={tEnd} min={0} onChange={(event) => setTEnd(event.target.value)} />
+            <label htmlFor="ps-t-end" className="block text-sm font-medium text-slate-700 dark:text-slate-300">t_end</label>
+            <Input id="ps-t-end" type="number" value={tEnd} min={0} onChange={(event) => setTEnd(event.target.value)} />
           </div>
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Steps</label>
-            <Input type="number" value={nSteps} min={1} onChange={(event) => setNSteps(event.target.value)} />
+            <label htmlFor="ps-steps" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Steps</label>
+            <Input id="ps-steps" type="number" value={nSteps} min={1} onChange={(event) => setNSteps(event.target.value)} />
           </div>
         </div>
 
         <div className="flex flex-wrap gap-3 items-center justify-between">
           <div className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-300">
-            <span>Select an observable:</span>
+            <label htmlFor="ps-observable" className="text-sm font-medium text-slate-600 dark:text-slate-300">Select an observable:</label>
             <Select
+              id="ps-observable"
               value={selectedObservable}
               onChange={(event) => setSelectedObservable(event.target.value)}
               className="w-48"
@@ -1207,7 +1208,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
       </Card>
 
       {error && (
-        <div className="border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30 text-red-700 dark:text-red-200 px-4 py-3 rounded-md">
+        <div className="border border-red-200 bg-red-50 dark:border-red-800 dark:bg-red-900/30 text-red-700 dark:text-red-200 px-4 py-3 rounded-md" role="alert">
           {error}
         </div>
       )}

@@ -23,7 +23,7 @@ export const AboutModal: React.FC<AboutModalProps> = ({ isOpen, onClose, focus }
                         <li><strong>Observables</strong> — Track specific molecular patterns during simulation</li>
                     </ul>
                     <h4>Example</h4>
-                    <pre className="text-xs bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 p-2 rounded overflow-x-auto">
+                    <pre className="text-xs bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 p-2 rounded overflow-x-auto" aria-label="BNGL example code">
                         {`# Define a kinase with a binding site and phosphorylation state
 A(b,Y~U~P)
 
@@ -87,7 +87,7 @@ A(b,Y~U) + B(a) <-> A(b!1,Y~U).B(a!1)  kf, kr`}
                     Built with <strong>React</strong>, <strong>TypeScript</strong>, and <strong>WebAssembly</strong> (CVODE solver). All computation runs in your browser — no server required.
                 </p>
                 <p className="text-sm text-slate-500 dark:text-slate-400 mt-4">
-                    <em>This is an educational tool. For production modeling, use the official <a href="https://bionetgen.org" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline">BioNetGen software</a>.</em>
+                    <em>This is an educational tool. For production modeling, use the official <a href="https://bionetgen.org" target="_blank" rel="noopener noreferrer" className="text-teal-600 hover:underline" aria-label="Visit BioNetGen website">BioNetGen software</a>.</em>
                 </p>
             </div>
         </Modal>

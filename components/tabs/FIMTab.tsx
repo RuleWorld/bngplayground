@@ -354,7 +354,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               {isComputing && <Button variant="danger" onClick={handleCancel}>Cancel</Button>}
             </div>
             {isComputing && (
-              <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4">
+              <div className="flex items-center gap-3 p-4 bg-blue-50 dark:bg-blue-900/20 rounded-lg mb-4" role="progressbar" aria-valuenow={progress.current} aria-valuemin={0} aria-valuemax={progress.total} aria-label="Local sensitivity computation progress">
                 <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600 dark:border-blue-400"></div>
                 <div className="flex-1">
                   <p className="text-sm font-medium text-blue-800 dark:text-blue-200">
@@ -369,7 +369,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                 </div>
               </div>
             )}
-            {error && <div className="text-sm text-red-600">{error}</div>}
+            {error && <div className="text-sm text-red-600" role="alert">{error}</div>}
           </div>
         </div>
       </Card>
@@ -459,9 +459,9 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr>
-                  <th className="px-2 py-1 text-left">#</th>
-                  <th className="px-2 py-1 text-left">Eigenvalue</th>
-                  <th className="px-2 py-1 text-left">Top contributors</th>
+                  <th scope="col" className="px-2 py-1 text-left">#</th>
+                  <th scope="col" className="px-2 py-1 text-left">Eigenvalue</th>
+                  <th scope="col" className="px-2 py-1 text-left">Top contributors</th>
                 </tr>
               </thead>
               <tbody>
@@ -473,7 +473,15 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                   const isExpanded = expandedEigen === idx;
                   return (
                     <React.Fragment key={idx}>
-                      <tr className="border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-800/50" onClick={() => setExpandedEigen(isExpanded ? null : idx)}>
+                      <tr
+                      role="button"
+                      tabIndex={0}
+                      aria-expanded={isExpanded}
+                      aria-controls={`eigen-detail-${idx}`}
+                      className="border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 cursor-pointer hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-800/50"
+                      onClick={() => setExpandedEigen(isExpanded ? null : idx)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setExpandedEigen(isExpanded ? null : idx); } }}
+                    >
                         <td className="px-2 py-1 align-top text-slate-700 dark:text-slate-300">{idx + 1}</td>
                         <td className="px-2 py-1 align-top text-slate-700 dark:text-slate-300 font-mono text-[10px]">{formatValue(val)}</td>
                         <td className="px-2 py-1">
@@ -489,7 +497,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                       </tr>
 
                       {isExpanded && (
-                        <tr className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900">
+                        <tr id={`eigen-detail-${idx}`} role="region" aria-label={`Eigenvector ${idx + 1} details`} className="bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900">
                           <td colSpan={3} className="px-4 py-3">
                             <div className="mb-2 text-sm font-medium">Eigenvector {idx + 1} — full parameter loadings</div>
                             <div className="text-xs text-slate-500 dark:text-slate-400 mb-2">Parameters are sorted by absolute loading. Parameters highlighted are those with |loading| ≥ 20% of the top contributor for this eigenvector.</div>
@@ -497,9 +505,9 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
                               <table className="min-w-full text-sm">
                                 <thead>
                                   <tr>
-                                    <th className="px-2 py-1 text-left">Parameter</th>
-                                    <th className="px-2 py-1 text-left">Loading</th>
-                                    <th className="px-2 py-1 text-left">Magnitude</th>
+                                    <th scope="col" className="px-2 py-1 text-left">Parameter</th>
+                                    <th scope="col" className="px-2 py-1 text-left">Loading</th>
+                                    <th scope="col" className="px-2 py-1 text-left">Magnitude</th>
                                   </tr>
                                 </thead>
                                 <tbody>
@@ -604,8 +612,8 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr>
-                  <th className="px-2 py-1 text-left">Parameter</th>
-                  <th className="px-2 py-1 text-left">VIF</th>
+                  <th scope="col" className="px-2 py-1 text-left">Parameter</th>
+                  <th scope="col" className="px-2 py-1 text-left">VIF</th>
                 </tr>
               </thead>
               <tbody>
@@ -811,11 +819,11 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr>
-                  <th className="px-2 py-1 text-left">Parameter</th>
-                  <th className="px-2 py-1 text-left">Value</th>
-                  <th className="px-2 py-1 text-left">FIM Contribution</th>
-                  <th className="px-2 py-1 text-left">Sensitive</th>
-                  <th className="px-2 py-1 text-left">Top Correlations</th>
+                  <th scope="col" className="px-2 py-1 text-left">Parameter</th>
+                  <th scope="col" className="px-2 py-1 text-left">Value</th>
+                  <th scope="col" className="px-2 py-1 text-left">FIM Contribution</th>
+                  <th scope="col" className="px-2 py-1 text-left">Sensitive</th>
+                  <th scope="col" className="px-2 py-1 text-left">Top Correlations</th>
                 </tr>
               </thead>
               <tbody>
@@ -993,10 +1001,10 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             <table className="min-w-full text-sm">
               <thead>
                 <tr>
-                  <th className="px-2 py-1 text-left">#</th>
-                  <th className="px-2 py-1 text-left">Parameter A</th>
-                  <th className="px-2 py-1 text-left">Parameter B</th>
-                  <th className="px-2 py-1 text-left">Correlation</th>
+                  <th scope="col" className="px-2 py-1 text-left">#</th>
+                  <th scope="col" className="px-2 py-1 text-left">Parameter A</th>
+                  <th scope="col" className="px-2 py-1 text-left">Parameter B</th>
+                  <th scope="col" className="px-2 py-1 text-left">Correlation</th>
                 </tr>
               </thead>
               <tbody>
@@ -1065,8 +1073,10 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {result?.fimMatrix && (
         <Card className="space-y-3">
           <div className="border border-gray-200 dark:border-gray-700 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button 
+            <button
               onClick={() => setShowFIMHeatmap(!showFIMHeatmap)}
+              aria-expanded={showFIMHeatmap}
+              aria-controls="fim-heatmap-panel"
               className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:bg-gray-800/50 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               <div className="flex items-center gap-2">
@@ -1085,16 +1095,16 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               <span className="text-xl">{showFIMHeatmap ? '▼' : '▶'}</span>
             </button>
             {showFIMHeatmap && (
-              <div className="p-4 bg-white text-slate-900 dark:text-slate-100 border-t border-gray-200 dark:border-gray-700 dark:border-slate-700 overflow-hidden">
+              <div id="fim-heatmap-panel" role="region" aria-label="Fisher Information Matrix heatmap" className="p-4 bg-white text-slate-900 dark:text-slate-100 border-t border-gray-200 dark:border-gray-700 dark:border-slate-700 overflow-hidden">
                 <div className="text-sm text-slate-600 dark:text-slate-400">Raw Fisher Information Matrix (rows/cols = parameters). Colors indicate magnitude.</div>
                 <div className="overflow-auto mt-2">
                   <div className="inline-block align-top">
                     <table className="border-collapse" style={{ borderSpacing: 0 }}>
                       <thead>
                         <tr>
-                          <th className="px-2 py-1" />
+                          <th scope="col" className="px-2 py-1" />
                           {result.paramNames.map((p) => (
-                            <th key={p} className="px-2 py-1 text-xs font-mono">{p}</th>
+                            <th scope="col" key={p} className="px-2 py-1 text-xs font-mono">{p}</th>
                           ))}
                         </tr>
                       </thead>
@@ -1134,8 +1144,10 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {result?.correlations && (
         <Card className="space-y-3">
           <div className="border border-gray-200 dark:border-gray-700 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button 
+            <button
               onClick={() => setShowCorrelationHeatmap(!showCorrelationHeatmap)}
+              aria-expanded={showCorrelationHeatmap}
+              aria-controls="correlation-heatmap-panel"
               className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:bg-gray-800/50 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               <div className="flex items-center gap-2">
@@ -1154,7 +1166,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               <span className="text-xl">{showCorrelationHeatmap ? '▼' : '▶'}</span>
             </button>
             {showCorrelationHeatmap && (
-              <div className="p-4 bg-white text-slate-900 dark:text-slate-100 border-t border-gray-200 dark:border-gray-700 dark:border-slate-700 overflow-hidden">
+              <div id="correlation-heatmap-panel" role="region" aria-label="Parameter correlations heatmap" className="p-4 bg-white text-slate-900 dark:text-slate-100 border-t border-gray-200 dark:border-gray-700 dark:border-slate-700 overflow-hidden">
                 <div className="text-sm text-slate-600 dark:text-slate-400">Pearson correlations between parameter estimates. Red indicates strong correlations (potential identifiability issues).</div>
                 <div className="overflow-auto mt-2">
                   <div className="inline-block align-top">
@@ -1171,23 +1183,25 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       {result?.jacobian && (
         <Card className="space-y-3">
           <div className="border border-gray-200 dark:border-gray-700 dark:border-slate-700 rounded-lg overflow-hidden">
-            <button 
+            <button
               onClick={() => setShowJacobianHeatmap(!showJacobianHeatmap)}
+              aria-expanded={showJacobianHeatmap}
+              aria-controls="jacobian-heatmap-panel"
               className="w-full flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-900/50 hover:bg-gray-100 dark:bg-gray-800/50 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200"
             >
               <h3 className="font-semibold">Jacobian (sensitivity) heatmap</h3>
               <span className="text-xl">{showJacobianHeatmap ? '▼' : '▶'}</span>
             </button>
             {showJacobianHeatmap && (
-              <div className="p-4 bg-white text-slate-900 dark:text-slate-100 border-t border-gray-200 dark:border-gray-700 dark:border-slate-700 overflow-hidden">
+              <div id="jacobian-heatmap-panel" role="region" aria-label="Jacobian sensitivity heatmap" className="p-4 bg-white text-slate-900 dark:text-slate-100 border-t border-gray-200 dark:border-gray-700 dark:border-slate-700 overflow-hidden">
                 <div className="text-sm text-slate-600 dark:text-slate-400">Rows: observables×time, Columns: parameters. Showing first 20 rows for readability.</div>
                 <div className="overflow-auto mt-2">
                   <table className="border-collapse" style={{ borderSpacing: 0 }}>
                     <thead>
                       <tr>
-                        <th className="px-2 py-1">#</th>
+                        <th scope="col" className="px-2 py-1">#</th>
                         {result.paramNames.map((p) => (
-                          <th key={p} className="px-2 py-1 text-xs font-mono">{p}</th>
+                          <th scope="col" key={p} className="px-2 py-1 text-xs font-mono">{p}</th>
                         ))}
                       </tr>
                     </thead>
@@ -1219,7 +1233,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
 
       {/* Interpretation Guide */}
       <details className="border border-gray-200 dark:border-gray-700 rounded-lg p-4 mt-6">
-        <summary className="font-semibold cursor-pointer">
+        <summary className="font-semibold cursor-pointer" aria-expanded={false}>
           📖 How to interpret these results
         </summary>
         <div className="mt-3 space-y-3 text-sm text-gray-700 dark:text-slate-300">

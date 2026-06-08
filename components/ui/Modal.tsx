@@ -106,6 +106,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
           onClick={onClose}
           aria-modal="true"
           role="dialog"
+          aria-labelledby="modal-title"
     >
       <div
         ref={modalRef}
@@ -114,7 +115,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
         tabIndex={-1}
       >
         <div className="flex justify-between items-center p-4 border-b border-stone-200 dark:border-slate-700">
-          <h2 className="text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
+          <h2 id="modal-title" className="text-lg font-semibold text-slate-800 dark:text-slate-100">{title}</h2>
           <button
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"

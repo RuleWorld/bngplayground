@@ -194,7 +194,7 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
       }}
     >
       <div className="w-fit mx-auto">
-        <svg width={svgWidth} height={svgHeight}>
+        <svg width={svgWidth} height={svgHeight} role="img" aria-label="Heatmap">
           <g transform={`translate(${leftMargin}, ${topMargin})`}>
           {data.map((d, i) => {
             const cx = xIndex.get(d.x) ?? -1;
@@ -248,6 +248,8 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 
       {tooltip && (
         <div
+          role="tooltip"
+          aria-live="polite"
           className="absolute z-10 rounded border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-900 px-3 py-2 text-xs text-slate-700 dark:text-slate-200 shadow-sm"
           style={{ left: tooltip.left, top: tooltip.top, maxWidth: 320 }}
         >

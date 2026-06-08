@@ -239,10 +239,11 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
 
           {/* Caption editor */}
           <div className="mt-2">
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
+            <label htmlFor="fb-caption" className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
               Figure Caption
             </label>
             <textarea
+              id="fb-caption"
               value={figureCaption}
               onChange={e => setFigureCaption(e.target.value)}
               rows={2}
@@ -255,10 +256,11 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
         {/* Style Controls (right) */}
         <div className="w-52 shrink-0 overflow-auto border-l border-slate-200 dark:border-slate-700 pl-3 space-y-3">
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
+            <label htmlFor="fb-preset" className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
               Journal Preset
             </label>
             <Select
+              id="fb-preset"
               value={preset}
               onChange={e => setPreset(e.target.value as JournalPreset)}
             >
@@ -294,10 +296,11 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
 
           {layout === 'grid' && (
             <div>
-              <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
+              <label htmlFor="fb-grid-cols" className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
                 Grid Columns
               </label>
               <input
+                id="fb-grid-cols"
                 type="number"
                 value={gridCols}
                 onChange={e => setGridCols(Math.max(1, Math.min(4, Number(e.target.value))))}
@@ -324,10 +327,11 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
           </div>
 
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
+            <label htmlFor="fb-figure-number" className="text-xs font-medium text-slate-600 dark:text-slate-300 block mb-1">
               Figure Number
             </label>
             <input
+              id="fb-figure-number"
               type="number"
               value={figureNumber}
               onChange={e => setFigureNumber(Number(e.target.value))}

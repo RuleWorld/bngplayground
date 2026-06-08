@@ -242,6 +242,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
             onChange={e => setDefinition(e.target.value)}
             className="flex-1 px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-xs font-mono resize-none min-h-[200px]"
             spellCheck={false}
+            aria-label="Model definition JSON"
           />
           <div className="flex gap-2 mt-2">
             <Button onClick={handleRun} disabled={isRunning}>
@@ -299,6 +300,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
                 value={currentSnapshotIdx}
                 onChange={e => setCurrentSnapshotIdx(Number(e.target.value))}
                 className="flex-1"
+                aria-label="Time slider"
               />
               <span className="text-xs text-slate-500">
                 t={snapshots[snapshots.length - 1]?.time?.toFixed(1)}

@@ -54,10 +54,14 @@ const TabButton: React.FC<{
   active: boolean;
   onClick: () => void;
   children: React.ReactNode;
-}> = ({ active, onClick, children }) => (
+  id?: string;
+  ariaControls?: string;
+}> = ({ active, onClick, children, id, ariaControls }) => (
   <button
     role="tab"
     aria-selected={active}
+    id={id}
+    aria-controls={ariaControls}
     onClick={onClick}
     className={`whitespace-nowrap py-2 px-3 border-b-2 font-medium text-sm transition-colors ${active
       ? 'border-teal-600 text-teal-600 dark:text-teal-400 dark:border-teal-400'
@@ -183,15 +187,15 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   }, [model]);
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-0 border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
+    <div role="region" aria-label="Visualization panel" className="flex h-full min-h-0 flex-col gap-0 border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
       {/* Header / Tabs */}
       <div className="flex items-center justify-between px-2 bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-700 shrink-0 rounded-t-lg">
         <nav className="flex space-x-1" aria-label="Tabs" role="tablist">
-          <TabButton active={activeTab === 0} onClick={() => setActiveTab(0)}>
+          <TabButton active={activeTab === 0} onClick={() => setActiveTab(0)} id="viz-tab-0" ariaControls="viz-tabpanel-0">
             📈 Time Courses
           </TabButton>
 
-          <TabButton active={activeTab === 1} onClick={() => setActiveTab(1)}>
+          <TabButton active={activeTab === 1} onClick={() => setActiveTab(1)} id="viz-tab-1" ariaControls="viz-tabpanel-1">
             🔗 Network
           </TabButton>
 
@@ -200,7 +204,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           <div className="relative flex items-center">
             <Dropdown
               trigger={
-                <button aria-label="Analysis options" className={`flex items-center gap-1 py-2 px-3 border-b-2 font-medium text-sm transition-colors ${isAnalysisTab || activeTab === 10
+                <button aria-label="Analysis options" aria-haspopup="menu" className={`flex items-center gap-1 py-2 px-3 border-b-2 font-medium text-sm transition-colors ${isAnalysisTab || activeTab === 10
                   ? 'border-teal-600 text-teal-600 dark:text-teal-400 dark:border-teal-400'
                   : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:text-slate-300 hover:border-slate-300 dark:text-slate-400 dark:hover:text-slate-200 dark:hover:border-slate-600'
                   }`}>
@@ -312,7 +316,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
       {/* Content Panels */}
       <div className="flex-1 min-h-0 flex flex-col p-4 overflow-hidden">
         {activeTab === 0 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-2">
+          <div role="tabpanel" id="viz-tabpanel-0" aria-labelledby="viz-tab-0" aria-label="Time courses" className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-2">
             <HelpSection
               title="Time Courses"
               description="Visualize how your model's observables (species or groups of species) evolve over simulated time. This is the primary way to observe the dynamic behavior of your biological system."
@@ -352,7 +356,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'regulatory' && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-1" aria-labelledby="viz-tab-1" aria-label="Regulatory graph" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Regulatory Graph"
               description="An atom-rule dependency view linking reaction rules to atomic patterns (sites, states, and bonds). This is different from the Influence graph: it shows structural dependencies between rules and patterns rather than activation/inhibition polarity."
@@ -377,7 +381,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'contact' && (
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div role="tabpanel" id="viz-tabpanel-1" aria-labelledby="viz-tab-1" aria-label="Contact map" className="flex-1 min-h-0 flex flex-col">
             <HelpSection
               title="Contact Map"
               description="The Contact Map provides a global view of the physical structure of your model. It shows every molecule type and all possible bonds between their components."
@@ -396,7 +400,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'rules' && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-1" aria-labelledby="viz-tab-1" aria-label="Rules" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Rules Inspector"
               description="Follow specific site-level changes (atoms) through the simulation. This tool identifies exactly which bonds or states are modified by each rule and tracks their abundance over time."
@@ -421,7 +425,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'influence' && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-1" aria-labelledby="viz-tab-1" aria-label="Influence graph" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Structural Influence Graph"
               description="Shows rule-to-rule causal relationships. An edge from rule A to rule B means A's structural changes can affect B's ability to fire."
@@ -442,7 +446,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 2 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-2" aria-labelledby="viz-tab-2" aria-label="Parameter scan" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Parameter Scan"
               description="Parameter scanning allows you to run multiple simulations automatically while varying a specific value. This is used to create dose-response curves and sensitivity maps."
@@ -463,7 +467,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 3 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-3" aria-labelledby="viz-tab-3" aria-label="Steady state" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Steady State"
               description="Find the long-term equilibrium where concentrations no longer change over time. This is useful for metabolic modeling and signaling homeostasis."
@@ -488,7 +492,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 4 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-4" aria-labelledby="viz-tab-4" aria-label="Local sensitivity" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Local Sensitivity"
               description="Perform local sensitivity analysis using the Fisher Information Matrix (FIM). Determine if your parameters can be uniquely identified from your data."
@@ -509,7 +513,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 5 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-5" aria-labelledby="viz-tab-5" aria-label="Parameter estimation" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Parameter Estimation"
               description="Infer the parameter distributions that best explain your experimental data. This tool uses Variational Inference (VI) to estimate both the optimal value and the statistical uncertainty (Bayesian posterior) for each parameter."
@@ -530,7 +534,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 6 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-6" aria-labelledby="viz-tab-6" aria-label="Flux analysis" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Flux Analysis"
               description="Quantify the dynamic flow of material through each reaction. Identify which reactions are the main 'drivers' of the system at any given time point."
@@ -551,7 +555,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 7 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-7" aria-labelledby="viz-tab-7" aria-label="Verification" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Verification"
               description="Verify model behavior by defining mathematical constraints. Ensure your system respects biological limits and physical laws like mass conservation throughout the simulation."
@@ -572,7 +576,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 8 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-8" aria-labelledby="viz-tab-8" aria-label="What-If comparison" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="What-If Compare"
               description="What-If comparison allows you to see the impact of any change side-by-side. Compare different genotypes, drug treatments, or initial concentrations in one view."
@@ -593,7 +597,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 9 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-9" aria-labelledby="viz-tab-9" aria-label="Rule cartoons" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Rule Cartoons"
               description="Visualize chemical reaction rules using standardized biological symbols. This view simplifies complex rules into intuitive 'cartoons' showing molecule binding, state changes, and transformations."
@@ -612,7 +616,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 10 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-10" aria-labelledby="viz-tab-10" aria-label="Model explorer" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <HelpSection
               title="Model Explorer"
               description="Browse nearly 200 published biological models. Use them as templates for your own research or as educational examples."
@@ -633,7 +637,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 11 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-11" aria-labelledby="viz-tab-11" aria-label="Trajectory explorer" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Trajectory Explorer"
               description="In stochastic systems (SSA), every run is slightly different. The Trajectory Explorer allows you to inspect multiple individual runs to understand biological noise and variance."
@@ -652,7 +656,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 12 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-12" aria-labelledby="viz-tab-12" aria-label="Jupyter export" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Jupyter Export"
               description="Transition from the web UI to professional data science. Export your entire session as a Python-based Jupyter Notebook for reproducibility and custom analysis."
@@ -671,7 +675,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 1 && networkViewMode === 'analysis' && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-1" aria-labelledby="viz-tab-1" aria-label="Network analysis" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Network Analysis"
               description="Apply graph-theory algorithms to your reaction network. Compute centrality metrics (betweenness, PageRank, closeness), detect communities, and measure network connectivity."
@@ -691,7 +695,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
         {activeTab === 13 && (
           // Legacy tab — redirect user to Network → Analysis view
-          <div className="h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-300">
+          <div role="tabpanel" id="viz-tabpanel-13" aria-labelledby="viz-tab-13" aria-label="Network analysis redirect" className="h-full flex items-center justify-center text-sm text-slate-500 dark:text-slate-300">
             Network Analysis has moved to the
             <button
               className="mx-1 underline text-teal-600 dark:text-teal-400"
@@ -704,7 +708,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 14 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-14" aria-labelledby="viz-tab-14" aria-label="Global sensitivity" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="Global Sensitivity (Sobol)"
               description="Quantify how much each parameter contributes to the variance of your model outputs across its entire range. Sobol indices provide a robust way to identify the most (and least) influential parameters, accounting for non-linear interactions."
@@ -725,7 +729,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 15 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-15" aria-labelledby="viz-tab-15" aria-label="Profile likelihood" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <HelpSection
               title="Profile Likelihood"
               description="Evaluate the identifiability of your parameters. By 'stepping' through each parameter and re-optimizing the others, this analysis determines if a parameter is well-determined by your experimental data or if it's structurally/practically unidentifiable."
@@ -746,7 +750,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 16 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-y-auto">
+          <div role="tabpanel" id="viz-tabpanel-16" aria-labelledby="viz-tab-16" aria-label="ABC-SMC inference" className="flex-1 min-h-0 flex flex-col overflow-y-auto">
             <HelpSection
               title="ABC-SMC (Bayesian Inference)"
               description="Approximate Bayesian Computation with Sequential Monte Carlo allows you to infer parameter distributions even without a defined likelihood function. It iteratively refines a population of particles (parameter sets) to match your experimental data."
@@ -766,7 +770,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           </div>
         )}
         {activeTab === 17 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-17" aria-labelledby="viz-tab-17" aria-label="Spatial simulation" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <HelpSection
               title="Spatial Simulation"
               description="Simulate your model in a 3D volume using particle-based Monte Carlo. Molecules diffuse, interact with compartment boundaries, and react upon collision."
@@ -787,7 +791,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
         {activeTab === 18 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-18" aria-labelledby="viz-tab-18" aria-label="Bifurcation analysis" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <BifurcationTab
               model={model}
               results={results}
@@ -798,7 +802,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           </div>
         )}
         {activeTab === 19 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-19" aria-labelledby="viz-tab-19" aria-label="Temporal analysis" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <TemporalAnalysisTab
               model={model}
               results={results}
@@ -809,7 +813,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           </div>
         )}
         {activeTab === 20 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-20" aria-labelledby="viz-tab-20" aria-label="Version history" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <VersionHistoryTab
               model={model}
               bnglCode={bnglCode || ''}
@@ -821,12 +825,12 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
           </div>
         )}
         {activeTab === 21 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-21" aria-labelledby="viz-tab-21" aria-label="Multiscale modeling" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <MultiscaleTab bnglCode={bnglCode || ''} />
           </div>
         )}
         {activeTab === 22 && (
-          <div className="flex-1 min-h-0 flex flex-col overflow-hidden">
+          <div role="tabpanel" id="viz-tabpanel-22" aria-labelledby="viz-tab-22" aria-label="PK/PD framework" className="flex-1 min-h-0 flex flex-col overflow-hidden">
             <PKPDTab
               model={model}
               results={results}

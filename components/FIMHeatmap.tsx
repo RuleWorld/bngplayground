@@ -21,7 +21,7 @@ export const FIMHeatmap: React.FC<FIMHeatmapProps> = ({ correlations, paramNames
   };
 
   return (
-    <svg width={width} height={height}>
+    <svg width={width} height={height} role="img" aria-label="FIM heatmap">
       {/* Increased top margin to 120 to accommodate rotated labels */}
       <g transform="translate(100, 120)">
         {correlations.map((row, i) =>

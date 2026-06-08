@@ -165,8 +165,9 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
 
         <div className="flex flex-wrap gap-3 items-end">
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
+            <label htmlFor="expr-name" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Name</label>
             <Input
+              id="expr-name"
               value={newExprName}
               onChange={(e) => setNewExprName(e.target.value)}
               placeholder="e.g., Ratio"
@@ -174,8 +175,9 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
             />
           </div>
           <div className="flex-1 min-w-[200px] space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Expression</label>
+            <label htmlFor="expr-expression" className="block text-sm font-medium text-slate-700 dark:text-slate-300">Expression</label>
             <Input
+              id="expr-expression"
               value={newExpr}
               onChange={(e) => setNewExpr(e.target.value)}
               placeholder="e.g., A / (A + B)"

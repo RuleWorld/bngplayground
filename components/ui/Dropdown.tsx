@@ -128,7 +128,7 @@ export const Dropdown: React.FC<DropdownProps> = ({ trigger, children, direction
               'aria-haspopup': 'menu',
               tabIndex: 0,
             })
-          : <span onClick={() => setIsOpen((prev) => !prev)} tabIndex={0}>{trigger}</span>}
+          : <span onClick={() => setIsOpen((prev) => !prev)} tabIndex={0} role="button" aria-haspopup="menu" aria-expanded={isOpen}>{trigger}</span>}
       </div>
       {isOpen && ReactDOM.createPortal(
         <div

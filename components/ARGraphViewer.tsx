@@ -347,7 +347,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
 
   return (
     <div className="flex flex-col h-full min-h-0 gap-2">
-      <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
+      <div role="toolbar" aria-label="Atom-rule graph controls" className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-1">
           <span className="text-xs text-slate-500 dark:text-slate-300 mr-1">Layout:</span>
           <Button variant={activeLayout === 'hierarchical' ? 'primary' : 'subtle'} onClick={() => runLayout('hierarchical')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Hierarchical (yED-like)">
@@ -388,7 +388,7 @@ export const ARGraphViewer: React.FC<ARGraphViewerProps> = ({
         </div>
       </div>
       
-      <div className="relative w-full flex-1 min-h-0 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg shadow-sm overflow-auto">
+      <div role="img" aria-label="Atom-rule graph" className="relative w-full flex-1 min-h-0 border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 rounded-lg shadow-sm overflow-auto">
         {!layoutDone && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white dark:bg-slate-900/70 rounded-lg">
             <LoadingSpinner className="w-8 h-8 text-[#CC99FF]" />
