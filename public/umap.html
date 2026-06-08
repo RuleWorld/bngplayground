@@ -567,7 +567,7 @@
             const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
             legend.innerHTML = sorted.map(([category, count]) => {
                 const color = colorMap[category] || '#94a3b8';
-                return `<div class="legend-item" data-tag="${escapeHTML(category)}"><div class="legend-dot" style="background:${escapeHTML(color)};color:${escapeHTML(color)}"></div><div class="legend-label">${escapeHTML(category)} (${count})</div></div>`;
+                return `<div class="legend-item" data-tag="${escapeHTML(category)}"><div class="legend-dot" style="background:${escapeHTML(color)};color:${escapeHTML(color)}"></div><div class="legend-label">${escapeHTML(category)} (${escapeHTML(count)})</div></div>`;
             }).join('');
             legend.querySelectorAll('.legend-item').forEach(el => {
                 el.onclick = () => { 
