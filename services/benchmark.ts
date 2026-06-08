@@ -99,9 +99,7 @@ async function fetchModel(path: string): Promise<string> {
 export async function runBenchmark(timeoutMs: number = 60000): Promise<BenchmarkResult[]> {
   const results: BenchmarkResult[] = [];
 
-  console.log('='.repeat(60));
-  console.log('BIONETGEN WEB SIMULATOR BENCHMARK');
-  console.log('='.repeat(60));
+  console.log('=== BIONETGEN WEB SIMULATOR BENCHMARK ===');
   console.log(`Testing ${PUBLISHED_MODELS.length} models with ${timeoutMs / 1000}s timeout`);
   console.log('');
 
@@ -177,9 +175,7 @@ export async function runBenchmark(timeoutMs: number = 60000): Promise<Benchmark
 
   // Summary
   console.log('');
-  console.log('='.repeat(60));
-  console.log('SUMMARY');
-  console.log('='.repeat(60));
+  console.log('=== SUMMARY ===');
 
   const successful = results.filter(r => r.status === 'success');
   const failed = results.filter(r => r.status === 'failed');
