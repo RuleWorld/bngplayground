@@ -1,8 +1,56 @@
 // @vitest-environment jsdom
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { downloadFigure, ExportResult } from '../../../src/services/figure/FigureExporter';
+import { downloadFigure, ExportResult, extractSVGDims } from '../../../src/services/figure/FigureExporter';
 
 describe('FigureExporter', () => {
+  describe('extractSVGDims', () => {
+    const MM_TO_PX = 3.7795275591;
+
+    it('should extract dimensions from width and height in mm', () => {
+      const svg = '<svg width="100mm" height="50.5mm"></svg>';
+      const result = extractSVGDims(svg);
+      expect(result).toEqual({
+        widthMm: 100,
+        heightMm: 50.5,
+        widthPx: 100 * MM_TO_PX,
+        heightPx: 50.5 * MM_TO_PX,
+      });
+    });
+
+    it('should extract dimensions from viewBox as a fallback', () => {
+      const svg = '<svg viewBox="0 0 200 150"></svg>';
+      const result = extractSVGDims(svg);
+      expect(result).toEqual({
+        widthMm: 200 / MM_TO_PX,
+        heightMm: 150 / MM_TO_PX,
+        widthPx: 200,
+        heightPx: 150,
+      });
+    });
+
+    it('should handle viewBox with commas', () => {
+      const svg = '<svg viewBox="0,0,300,200"></svg>';
+      const result = extractSVGDims(svg);
+      expect(result).toEqual({
+        widthMm: 300 / MM_TO_PX,
+        heightMm: 200 / MM_TO_PX,
+        widthPx: 300,
+        heightPx: 200,
+      });
+    });
+
+    it('should fallback to default dimensions if neither mm nor viewBox are present', () => {
+      const svg = '<svg></svg>';
+      const result = extractSVGDims(svg);
+      expect(result).toEqual({
+        widthMm: 178,
+        heightMm: 120,
+        widthPx: 178 * MM_TO_PX,
+        heightPx: 120 * MM_TO_PX,
+      });
+    });
+  });
+
   describe('downloadFigure', () => {
     let mockCreateObjectURL: any;
     let mockRevokeObjectURL: any;

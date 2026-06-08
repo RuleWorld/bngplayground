@@ -464,7 +464,7 @@ interface SVGDims {
   heightPx: number;
 }
 
-function extractSVGDims(svg: string): SVGDims {
+export function extractSVGDims(svg: string): SVGDims {
   // Try width/height in mm
   const wMmMatch = svg.match(/\bwidth\s*=\s*"([\d.]+)mm"/);
   const hMmMatch = svg.match(/\bheight\s*=\s*"([\d.]+)mm"/);
