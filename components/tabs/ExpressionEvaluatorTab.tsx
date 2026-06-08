@@ -205,6 +205,7 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
                   <button
                     onClick={() => removeExpression(expr.id)}
                     className="ml-1 text-slate-400 hover:text-red-500"
+                    aria-label={`Remove expression ${expr.name}`}
                   >
                     ×
                   </button>
