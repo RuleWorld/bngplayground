@@ -99,6 +99,33 @@ describe('useRobustness hook', () => {
         });
     });
 
+    it('should correctly calculate zero standard deviation and handle variance clamping', async () => {
+        // Testing with 3 iterations of the same value (0.3) to test variance calculation and clamp.
+        // sum = 0.9, sumSq = 0.27. variance = (0.27/3) - (0.3*0.3) = 0.09 - 0.09 = 0
+        // Floating point operations might make this slightly negative, which is why Math.max(0, variance) is used.
+        vi.mocked(bnglService.simulateCached)
+            .mockResolvedValue({
+                headers: ['time', 'A'],
+                data: [{ time: 0, A: 0.3 }]
+            } as any);
+
+        const { result } = renderHook(() => useRobustness());
+
+        act(() => {
+            result.current.runRobustness(dummyModel, dummySimOptions, { iterations: 3, variationPercent: 10 });
+        });
+
+        await waitFor(() => {
+            expect(result.current.isRunning).toBe(false);
+        });
+
+        expect(result.current.result).not.toBeNull();
+        expect(result.current.result?.speciesData['A'].mean[0]).toBeCloseTo(0.3);
+        expect(result.current.result?.speciesData['A'].stdDev[0]).toBeCloseTo(0);
+        expect(result.current.result?.speciesData['A'].min[0]).toBe(0.3);
+        expect(result.current.result?.speciesData['A'].max[0]).toBe(0.3);
+    });
+
     it('should handle simulation errors correctly', async () => {
         vi.mocked(bnglService.simulateCached).mockRejectedValueOnce(new Error('Simulation failed dramatically'));
 
