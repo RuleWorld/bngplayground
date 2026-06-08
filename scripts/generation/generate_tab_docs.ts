@@ -160,7 +160,15 @@ function renderFullSkeleton(tabs: TabEntry[]): string {
     lines.push('');
     lines.push('**Workflow:**');
     lines.push('');
-    lines.push('<!-- TODO: describe the tab\'s intended workflow, screenshots, and common pitfalls -->');
+    lines.push('<!-- TODO: describe the tab\'s intended workflow -->');
+    lines.push('');
+    lines.push('**Screenshots:**');
+    lines.push('');
+    lines.push('<!-- TODO: add relevant screenshots -->');
+    lines.push('');
+    lines.push('**Common pitfalls:**');
+    lines.push('');
+    lines.push('<!-- TODO: describe common pitfalls and troubleshooting steps -->');
     lines.push('');
     lines.push('**MCP equivalent:**');
     lines.push('');
