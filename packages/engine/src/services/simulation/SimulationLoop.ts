@@ -309,7 +309,6 @@ export async function simulate(
 
   // 1. Prepare Model State without the JSON deep-clone hot-path.
   const model = cloneModelForSimulation(inputModel);
-  let loggedVDephos = false;
 
   const numSpecies = model.species.length;
   const speciesHeaders = model.species.map(s => s.name);
@@ -844,17 +843,6 @@ export async function simulate(
       console.error(`[Worker] CORRUPTED PARAMETERS DETECTED at start: ${corrupted.map(p => `${p}=${model.parameters[p]}`).join(', ')}`);
     } else {
       if (VERBOSE_SIM_DEBUG) console.log(`[Worker] Key parameters check passed: h2=${model.parameters['h2']}, h1=${model.parameters['h1']}`);
-
-      // Additional debug for stat3: show k_phos_max and Km_phos
-      if (model.name && model.name.toLowerCase().includes('stat3')) {
-        console.log('[Worker] stat3 params:', {
-          k_phos_max: model.parameters['k_phos_max'],
-          Km_phos: model.parameters['Km_phos'],
-          k_trans_max: model.parameters['k_trans_max']
-        });
-        console.log('[Worker] stat3 paramExpressions:', model.paramExpressions);
-        console.log('[Worker] stat3 parameters keys:', Object.keys(model.parameters || {}).length, Object.keys(model.paramExpressions || {}).length);
-      }
     }
 
     const dataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
@@ -1718,30 +1706,6 @@ export async function simulate(
             callbacks.checkCancelled();
             if (recordThisPhase) {
               const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
-              // PARITY FIX: Use 'state' (the SSA state vector), not 'y' (which is undefined here).
-              // Debug: log early outputs (capture t<=0.6 to inspect early dynamics)
-              try {
-                if (outT <= 0.6) {
-                  const obsValues = evaluateObservablesFast(state);
-                  if (VERBOSE_SIM_DEBUG) {
-                    if (obsValues['Total_pSTAT3'] === undefined) {
-                      console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3 is MISSING from obsValues, keys:', Object.keys(obsValues));
-                    } else {
-                      console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
-                    }
-                    // Also list species with nonzero pSTAT3 concentrations
-                    const nonzeroP: { name?: string; state?: number }[] = [];
-                    for (let si = 0; si < model.species.length; si++) {
-                      if (state[si] > 0 && model.species[si].name.includes('s~P')) {
-                        nonzeroP.push({ name: model.species[si].name, state: state[si] });
-                      }
-                    }
-                    console.log('[Worker Debug] Nonzero pSTAT3 species at t=', outT, nonzeroP.slice(0, 10));
-                  }
-                }
-              } catch (e: unknown) {
-                console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
-              }
               if (outT >= nextTOut || totalEvents >= maxEvents) {
                 pushDataRow(phase.suffix, outT, state as Float64Array);
                 const sp: Record<string, number> = { time: outT };
@@ -1825,131 +1789,6 @@ export async function simulate(
 
 
 
-
-    // for (let i = 0; i < numSpecies; i++) {
-    //   fs.appendFileSync(debugLog, `[SimulationLoop] Species ${i} Vol: ${speciesVolumes[i]} name: ${speciesHeaders[i]}\n`);
-    // }
-
-    // Debug: compute initial production rates for nuc pSTAT3 species once reaction volumes are available
-    try {
-      const pstatIndices: number[] = [];
-      model.species.forEach((s, idx) => {
-        if (s.name.includes('s~P') && s.name.includes('loc~nuc')) pstatIndices.push(idx);
-      });
-      if (pstatIndices.length > 0) {
-        const pstatIndicesSet = new Set(pstatIndices);
-        const prodRates: Record<string, number> = Object.create(null) as Record<string, number>;
-        for (const idx of pstatIndices) setSafeNumericField(prodRates, model.species[idx].name, 0);
-        for (let i = 0; i < concreteReactions.length; i++) {
-          const rxn = concreteReactions[i];
-          let rate = rxn.rateConstant;
-          if (rxn.isFunctionalRate && rxn.rateExpression) {
-            try {
-              const currentObs = evaluateObservablesFast(state as any as Float64Array);
-              rate = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, currentObs, model.functions, undefined, undefined);
-            } catch {
-              rate = rxn.rateConstant;
-            }
-          }
-          const velocityBase = rate * rxn.propensityFactor * reactionReactingVolumes[i];
-          let multiplicative = 1;
-          for (let j = 0; j < rxn.reactants.length; j++) multiplicative *= state[rxn.reactants[j]];
-          const velocity = velocityBase * multiplicative;
-          if (velocity !== 0) {
-            for (let j = 0; j < rxn.products.length; j++) {
-              const prodIdx = rxn.products[j];
-              if (pstatIndicesSet.has(prodIdx)) {
-                const prodName = model.species[prodIdx].name;
-                setSafeNumericField(
-                  prodRates,
-                  prodName,
-                  (prodRates[prodName] ?? 0) + velocity * (rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1)
-                );
-              }
-            }
-          }
-        }
-        if (VERBOSE_SIM_DEBUG) console.log('[Worker Debug] Initial production rates for nuc pSTAT3 species (post-vol calc):', JSON.stringify(prodRates, null, 2));
-
-        // Also list reactions that produce pSTAT3 (k, expr, reactants, reactant initial values)
-        const producingReactions: { idx: number, time?: number, k?: number, rateNum?: number, expr?: string | null, reactantNames?: string[], reactantValues?: number[], multiplicative?: number, isFunctional?: boolean, velocityBase?: number, reactants?: unknown, velocity?: number }[] = [];
-        for (let i = 0; i < concreteReactions.length; i++) {
-          const rxn = concreteReactions[i];
-          for (let j = 0; j < rxn.products.length; j++) {
-            const pIdx = rxn.products[j];
-            if (model.species[pIdx].name.includes('s~P') && model.species[pIdx].name.includes('loc~nuc')) {
-              // Compute numeric rate for functional/static rates (using minimal context)
-              let rateNum = rxn.rateConstant;
-              if (rxn.isFunctionalRate && rxn.rateExpression) {
-                try {
-                  // provide current observable context for initial probe
-                  const currentObs = evaluateObservablesFast(state as any as Float64Array);
-                  rateNum = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, currentObs, model.functions, undefined, undefined);
-                } catch {
-                  rateNum = rxn.rateConstant;
-                }
-              }
-
-              const reactantIndices = Array.from(rxn.reactants);
-              const reactantNames = reactantIndices.map(r => model.species[r].name);
-              const reactantValues = reactantIndices.map(r => state[r]);
-              const multiplicative = reactantValues.reduce((acc, v) => acc * v, 1);
-              const velocityBase = rateNum * rxn.propensityFactor * reactionReactingVolumes[i];
-              const velocity = velocityBase * multiplicative;
-
-              producingReactions.push({
-                idx: i,
-                k: rxn.rateConstant,
-                rateNum,
-                expr: rxn.rateExpression,
-                isFunctional: rxn.isFunctionalRate,
-                reactants: reactantNames,
-                reactantValues,
-                multiplicative,
-                velocityBase,
-                velocity
-              });
-              break;
-            }
-          }
-        }
-        if (VERBOSE_SIM_DEBUG) console.log('[Worker Debug] Reactions producing nuc pSTAT3 (sample):', JSON.stringify(producingReactions.slice(0, 20), null, 2));
-
-        // Also probe initial velocities for phosphorylation reactions (cytosolic U -> P)
-        try {
-          const phosReactions: { idx: number, time?: number, k?: number, rateNum?: number, expr?: string | null, reactantNames?: string[], reactantValues?: number[], multiplicative?: number, isFunctional?: boolean, velocityBase?: number, reactants?: unknown, velocity?: number }[] = [];
-          for (let i = 0; i < concreteReactions.length; i++) {
-            const rxn = concreteReactions[i];
-            const reactantNames = Array.from(rxn.reactants).map(r => model.species[r].name);
-            const productNames = Array.from(rxn.products).map(p => model.species[p].name);
-            const reactantHasUcyt = reactantNames.some(n => n.includes('s~U') && n.includes('loc~cyt'));
-            const productHasPcyt = productNames.some(n => n.includes('s~P') && n.includes('loc~cyt'));
-            if (reactantHasUcyt && productHasPcyt) {
-              let rateNum = rxn.rateConstant;
-              if (rxn.isFunctionalRate && rxn.rateExpression) {
-                try {
-                  const currentObs = evaluateObservablesFast(state as any as Float64Array);
-                  rateNum = evaluateFunctionalRate(rxn.rateExpression, model.parameters || {}, currentObs, model.functions, undefined, undefined);
-                } catch {
-                  rateNum = rxn.rateConstant;
-                }
-              }
-              const reactantIndices = Array.from(rxn.reactants);
-              const reactantValues = reactantIndices.map(r => state[r]);
-              const multiplicative = reactantValues.reduce((acc, v) => acc * v, 1);
-              const velocityBase = rateNum * rxn.propensityFactor * reactionReactingVolumes[i];
-              const velocity = velocityBase * multiplicative;
-              phosReactions.push({ idx: i, k: rxn.rateConstant, rateNum, reactantNames, reactantValues, multiplicative, velocityBase, velocity });
-            }
-          }
-          if (VERBOSE_SIM_DEBUG) console.log('[Worker Debug] Cytosolic phosphorylation reactions (sample):', JSON.stringify(phosReactions.slice(0, 20), null, 2));
-        } catch (err: unknown) {
-          console.warn('[Worker Debug] Failed to probe phosphorylation reactions:', formatCaughtError(err));
-        }
-      }
-    } catch (e: unknown) {
-      if (VERBOSE_SIM_DEBUG) console.warn('[Worker Debug] Failed post-vol pSTAT3 prod rates:', formatCaughtError(e));
-    }
 
     const buildDerivativesFunction = () => {
       if (functionalRateCount > 0) {
@@ -2107,15 +1946,6 @@ export async function simulate(
                     model.functions,
                     rateContext
                   );
-                }
-                if (!loggedVDephos && rxn.rateExpression.includes('v_dephos')) {
-                  loggedVDephos = true;
-                  console.log('[Worker Debug] v_dephos eval:', {
-                    expr: rxn.rateExpression,
-                    rate,
-                    Active_Enzyme: obsValues.Active_Enzyme,
-                    Active_Substrate: obsValues.Active_Substrate
-                  });
                 }
                 if (isNaN(rate) || !isFinite(rate)) {
                   console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}.`);
