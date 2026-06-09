@@ -1267,8 +1267,13 @@ export async function simulate(
 
 
 
-      // Global influence tracking
-      const includeInfluence = options.includeInfluence === true;
+      // Global influence tracking (guard: skip if too many reactions to avoid OOM)
+      const MAX_INFLUENCE_REACTIONS = 5000;
+      let includeInfluence = options.includeInfluence === true;
+      if (includeInfluence && numReactions > MAX_INFLUENCE_REACTIONS) {
+        console.warn(`Influence tracking disabled: ${numReactions} reactions exceeds limit of ${MAX_INFLUENCE_REACTIONS}`);
+        includeInfluence = false;
+      }
       const ruleFirings = includeInfluence ? new Int32Array(numReactions) : null;
       const influenceMatrix = includeInfluence ? new Float64Array(numReactions * numReactions) : null;
 

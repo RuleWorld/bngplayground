@@ -20,6 +20,7 @@ export class SpeciesGraph {
   private _boundCompCount?: number;
   private _maxDegree?: number;
   private _neighborList?: number[][];
+  private _bondList?: Int32Array;
 
   constructor(molecules: Molecule[] = []) {
     this.molecules = molecules;
@@ -35,6 +36,7 @@ export class SpeciesGraph {
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
     this._neighborList = undefined;
+    this._bondList = undefined;
   }
 
   get neighborList(): number[][] {
@@ -57,6 +59,35 @@ export class SpeciesGraph {
     }
     this._neighborList = list;
     return list;
+  }
+
+  get bondList(): Int32Array {
+    if (this._bondList !== undefined) return this._bondList;
+    const bonds: number[] = [];
+    const seen = new Set<string>();
+    for (const [key, partnerKeys] of this.adjacency) {
+      const dot = key.indexOf('.');
+      const m1 = parseInt(key, 10);
+      const c1 = dot !== -1 ? parseInt(key.substring(dot + 1), 10) : 0;
+      for (const partnerKey of partnerKeys) {
+        const dot2 = partnerKey.indexOf('.');
+        const m2 = parseInt(partnerKey, 10);
+        const c2 = dot2 !== -1 ? parseInt(partnerKey.substring(dot2 + 1), 10) : 0;
+        const aKey = `${m1}.${c1}`;
+        const bKey = `${m2}.${c2}`;
+        const bondKey = aKey < bKey ? `${aKey}-${bKey}` : `${bKey}-${aKey}`;
+        if (!seen.has(bondKey)) {
+          seen.add(bondKey);
+          if (aKey < bKey) {
+            bonds.push(m1, c1, m2, c2);
+          } else {
+            bonds.push(m2, c2, m1, c1);
+          }
+        }
+      }
+    }
+    this._bondList = new Int32Array(bonds);
+    return this._bondList;
   }
 
   get fingerprint(): Map<string, number> {
@@ -215,6 +246,7 @@ export class SpeciesGraph {
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
     this._neighborList = undefined;
+    this._bondList = undefined;
   }
 
   /**
@@ -332,6 +364,7 @@ export class SpeciesGraph {
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
     this._neighborList = undefined;
+    this._bondList = undefined;
   }
 
   /**
@@ -411,6 +444,7 @@ export class SpeciesGraph {
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
     this._neighborList = undefined;
+    this._bondList = undefined;
 
     return offset;
   }

@@ -116,35 +116,17 @@ export class GraphCanonicalizer {
           }
         }
 
-        // 3) Bond vertices (one per unique undirected bond)
-        // Deduplicate from adjacency map which contains both directions.
-        const bondVertexByKey = new Map<string, number>();
+        // 3) Bond vertices (one per unique undirected bond via bondList)
         const bondEndpoints: Array<{ bondV: number; v1: number; v2: number }> = [];
-
-        for (const [key, partnerKeys] of graph.adjacency) {
-          const dot1 = key.indexOf('.');
-          const m1 = parseInt(key.substring(0, dot1), 10);
-          const c1 = parseInt(key.substring(dot1 + 1), 10);
-
-          for (const partnerKey of partnerKeys) {
-            const dot2 = partnerKey.indexOf('.');
-            const m2 = parseInt(partnerKey.substring(0, dot2), 10);
-            const c2 = parseInt(partnerKey.substring(dot2 + 1), 10);
-
-            const aKey = `${m1}.${c1}`;
-            const bKey = `${m2}.${c2}`;
-            const bondKey = aKey < bKey ? `${aKey}-${bKey}` : `${bKey}-${aKey}`;
-
-            if (!bondVertexByKey.has(bondKey)) {
-              const bondVertexId = addVertex('bond', null, 'B');
-              bondVertexByKey.set(bondKey, bondVertexId);
-              bondEndpoints.push({
-                bondV: bondVertexId,
-                v1: componentVertexIds[m1]?.[c1],
-                v2: componentVertexIds[m2]?.[c2]
-              });
-            }
-          }
+        const bondList = graph.bondList;
+        for (let b = 0; b < bondList.length; b += 4) {
+          const m1 = bondList[b], c1 = bondList[b + 1], m2 = bondList[b + 2], c2 = bondList[b + 3];
+          const bondVertexId = addVertex('bond', null, 'B');
+          bondEndpoints.push({
+            bondV: bondVertexId,
+            v1: componentVertexIds[m1]?.[c1],
+            v2: componentVertexIds[m2]?.[c2]
+          });
         }
 
         const n = vertexKind.length;
@@ -228,23 +210,18 @@ export class GraphCanonicalizer {
         adjList.set(i, []);
       }
 
-      for (const [key, partnerKeys] of graph.adjacency) {
-        const dot1 = key.indexOf('.');
-        const m1 = parseInt(key.substring(0, dot1), 10);
-        const c1 = parseInt(key.substring(dot1 + 1), 10);
-        for (const partnerKey of partnerKeys) {
-          const dot2 = partnerKey.indexOf('.');
-          const m2 = parseInt(partnerKey.substring(0, dot2), 10);
-          const c2 = parseInt(partnerKey.substring(dot2 + 1), 10);
-          const si1 = originalToSortedTmp.get(m1)!;
-          const si2 = originalToSortedTmp.get(m2)!;
-          const mol1 = graph.molecules[m1];
-          const mol2 = graph.molecules[m2];
-          const compName1 = mol1.components[c1]?.name || '';
-          const compName2 = mol2.components[c2]?.name || '';
+      const bondList = graph.bondList;
+      for (let b = 0; b < bondList.length; b += 4) {
+        const m1 = bondList[b], c1 = bondList[b + 1], m2 = bondList[b + 2], c2 = bondList[b + 3];
+        const si1 = originalToSortedTmp.get(m1)!;
+        const si2 = originalToSortedTmp.get(m2)!;
+        const mol1 = graph.molecules[m1];
+        const mol2 = graph.molecules[m2];
+        const compName1 = mol1.components[c1]?.name || '';
+        const compName2 = mol2.components[c2]?.name || '';
 
-          adjList.get(si1)!.push({ neighbor: si2, myComp: compName1, neighborComp: compName2, myCompIdx: c1, neighborCompIdx: c2 });
-        }
+        adjList.get(si1)!.push({ neighbor: si2, myComp: compName1, neighborComp: compName2, myCompIdx: c1, neighborCompIdx: c2 });
+        adjList.get(si2)!.push({ neighbor: si1, myComp: compName2, neighborComp: compName1, myCompIdx: c2, neighborCompIdx: c1 });
       }
 
       // Sort each adjacency list using deterministic criteria
@@ -459,45 +436,29 @@ export class GraphCanonicalizer {
       });
     }
 
-    // 5. Collect bonds and assign IDs
+    // 5. Collect bonds and assign IDs (via bondList — no dedup needed)
     const allBonds: Array<{
       canIdx1: number, ci1: number, canIdx2: number, ci2: number,
       compName1: string, compName2: string
     }> = [];
-    const addedBondKeys = new Set<string>();
+    const bondList = graph.bondList;
+    for (let b = 0; b < bondList.length; b += 4) {
+      const m1 = bondList[b], c1 = bondList[b + 1], m2 = bondList[b + 2], c2 = bondList[b + 3];
 
-    for (const [key, partnerKeys] of graph.adjacency) {
-      const dot1 = key.indexOf('.');
-      const m1 = parseInt(key.substring(0, dot1), 10);
-      const c1 = parseInt(key.substring(dot1 + 1), 10);
-      for (const partnerKey of partnerKeys) {
-        const dot2 = partnerKey.indexOf('.');
-        const m2 = parseInt(partnerKey.substring(0, dot2), 10);
-        const c2 = parseInt(partnerKey.substring(dot2 + 1), 10);
+      const si1 = originalToSortedVector.get(m1)!;
+      const si2 = originalToSortedVector.get(m2)!;
+      const canIdx1 = sortedToCanonicalVector.get(si1)!;
+      const canIdx2 = sortedToCanonicalVector.get(si2)!;
 
-        // Get Canonical Indices
-        const si1 = originalToSortedVector.get(m1)!;
-        const si2 = originalToSortedVector.get(m2)!;
-        const canIdx1 = sortedToCanonicalVector.get(si1)!;
-        const canIdx2 = sortedToCanonicalVector.get(si2)!;
+      const mol1 = graph.molecules[m1];
+      const mol2 = graph.molecules[m2];
+      const compName1 = mol1.components[c1]?.name || '';
+      const compName2 = mol2.components[c2]?.name || '';
 
-        const mol1 = graph.molecules[m1];
-        const mol2 = graph.molecules[m2];
-        const compName1 = mol1.components[c1]?.name || '';
-        const compName2 = mol2.components[c2]?.name || '';
-
-        const bondKey = canIdx1 < canIdx2 || (canIdx1 === canIdx2 && c1 < c2)
-          ? `${canIdx1}.${c1}-${canIdx2}.${c2}`
-          : `${canIdx2}.${c2}-${canIdx1}.${c1}`;
-
-        if (!addedBondKeys.has(bondKey)) {
-          addedBondKeys.add(bondKey);
-          if (canIdx1 < canIdx2 || (canIdx1 === canIdx2 && c1 < c2)) {
-            allBonds.push({ canIdx1, ci1: c1, canIdx2, ci2: c2, compName1, compName2 });
-          } else {
-            allBonds.push({ canIdx1: canIdx2, ci1: c2, canIdx2: canIdx1, ci2: c1, compName1: compName2, compName2: compName1 });
-          }
-        }
+      if (canIdx1 < canIdx2 || (canIdx1 === canIdx2 && c1 < c2)) {
+        allBonds.push({ canIdx1, ci1: c1, canIdx2, ci2: c2, compName1, compName2 });
+      } else {
+        allBonds.push({ canIdx1: canIdx2, ci1: c2, canIdx2: canIdx1, ci2: c1, compName1: compName2, compName2: compName1 });
       }
     }
 
@@ -767,19 +728,13 @@ export class GraphCanonicalizer {
           colors[i] = sigToRank.get(localSigs[i])!;
         }
 
-        // Build adjacency matrix from graph.adjacency
-        for (const [key, partnerKeys] of graph.adjacency) {
-          const dot1 = key.indexOf('.');
-          const m1 = parseInt(key.substring(0, dot1), 10);
-
-          for (const partnerKey of partnerKeys) {
-            const dot2 = partnerKey.indexOf('.');
-            const m2 = parseInt(partnerKey.substring(0, dot2), 10);
-
-            if (m1 !== m2) {
-              flatAdj[m1 * n + m2] = 1;
-              flatAdj[m2 * n + m1] = 1;
-            }
+        // Build adjacency matrix from bondList
+        const bondList = graph.bondList;
+        for (let b = 0; b < bondList.length; b += 4) {
+          const m1 = bondList[b], m2 = bondList[b + 2];
+          if (m1 !== m2) {
+            flatAdj[m1 * n + m2] = 1;
+            flatAdj[m2 * n + m1] = 1;
           }
         }
 
@@ -830,6 +785,20 @@ export class GraphCanonicalizer {
       } as MoleculeInfo;
     });
 
+    // Precompute component name -> integer ID for edge encoding
+    const compNameToId = new Map<string, number>();
+    let nextNameId = 0;
+    for (const mol of graph.molecules) {
+      for (const comp of mol.components) {
+        if (!compNameToId.has(comp.name)) {
+          compNameToId.set(comp.name, nextNameId++);
+        }
+      }
+    }
+
+    // Pre-fetch bond list (Int32Array of [m1,c1,m2,c2] tuples)
+    const bondList = graph.bondList;
+
     // 2. Iterative refinement: update color classes based on neighbor colors
     for (let iter = 0; iter < graph.molecules.length; iter++) {
       const prevColors = moleculeInfos.map(m => m.colorClass);
@@ -838,30 +807,29 @@ export class GraphCanonicalizer {
 
       for (let molIdx = 0; molIdx < graph.molecules.length; molIdx++) {
         const mol = graph.molecules[molIdx];
-        const neighborColors: string[] = [];
+        const edgeInts: number[] = [];
 
         // Collect colors of all neighbors (molecules connected via bonds)
-        for (let compIdx = 0; compIdx < mol.components.length; compIdx++) {
-          const adjacencyKey = `${molIdx}.${compIdx}`;
-          const partnerKeys = graph.adjacency.get(adjacencyKey);
-          if (partnerKeys) {
-            for (const partnerKey of partnerKeys) {
-              const dot = partnerKey.indexOf('.');
-              const pMolIdx = parseInt(partnerKey.substring(0, dot), 10);
-              const pCompIdx = parseInt(partnerKey.substring(dot + 1), 10);
-              const pMol = graph.molecules[pMolIdx];
-              if (pMol) {
-                // Include component info and partner's color
-                const edgeSig = `${mol.components[compIdx].name}->${pMol.components[pCompIdx]?.name}:${prevColors[pMolIdx]}`;
-                neighborColors.push(edgeSig);
-              }
-            }
+        // Iterate flat bond list instead of parsing adjacency string keys
+        for (let b = 0; b < bondList.length; b += 4) {
+          const m1 = bondList[b];
+          const c1 = bondList[b + 1];
+          const m2 = bondList[b + 2];
+          const c2 = bondList[b + 3];
+
+          if (m1 === molIdx) {
+            const compNameId = compNameToId.get(mol.components[c1].name)!;
+            const partnerNameId = compNameToId.get(graph.molecules[m2].components[c2].name)!;
+            edgeInts.push((compNameId << 20) | (partnerNameId << 10) | prevColors[m2]);
+          } else if (m2 === molIdx) {
+            const compNameId = compNameToId.get(mol.components[c2].name)!;
+            const partnerNameId = compNameToId.get(graph.molecules[m1].components[c1].name)!;
+            edgeInts.push((compNameId << 20) | (partnerNameId << 10) | prevColors[m1]);
           }
         }
 
-        // Sort and combine neighbor colors for a deterministic signature
-        neighborColors.sort();
-        const combinedSig = prevColors[molIdx] + ':' + neighborColors.join(',');
+        edgeInts.sort((a, b) => a - b);
+        const combinedSig = prevColors[molIdx] + ':' + edgeInts.join(',');
         newSigs[molIdx] = combinedSig;
       }
 
