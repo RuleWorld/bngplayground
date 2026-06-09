@@ -229,6 +229,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         variant="primary"
         className="min-w-[100px]"
         aria-label="Run simulation"
+        title={!modelExists ? 'Provide a valid model to run simulation' : isSimulating ? 'Simulation is currently running' : 'Run simulation'}
       >
         {isSimulating ? (
           <>
