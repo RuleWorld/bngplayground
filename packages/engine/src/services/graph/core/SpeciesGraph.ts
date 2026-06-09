@@ -6,6 +6,7 @@ export class SpeciesGraph {
   adjacency: Map<string, string[]>;  // "molIdx.compIdx" => ["molIdx.compIdx", ...] (supports multi-site bonding)
   compartment?: string;  // species-level compartment
   adjacencyBitset?: Uint32Array;
+  private _structuralHash?: string;
 
   // Cached properties
   private _stringExact?: string;
@@ -13,14 +14,17 @@ export class SpeciesGraph {
   private _componentOffsets?: number[];
   private _componentCount?: number;
   private _fingerprint?: Map<string, number>;
+  private _typeBonds?: Map<string, number>;
 
   constructor(molecules: Molecule[] = []) {
     this.molecules = molecules;
     this.adjacency = new Map();
     this.adjacencyBitset = undefined;
+    this._structuralHash = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._typeBonds = undefined;
   }
 
   get fingerprint(): Map<string, number> {
@@ -42,6 +46,32 @@ export class SpeciesGraph {
     }
     this._fingerprint = fp;
     return this._fingerprint;
+  }
+
+  get typeBonds(): Map<string, number> {
+    if (this._typeBonds !== undefined) return this._typeBonds;
+    const tb = new Map<string, number>();
+    const processed = new Set<string>();
+    for (const [key, partnerKeys] of this.adjacency.entries()) {
+      const dot1 = key.indexOf('.');
+      const m1 = parseInt(key.substring(0, dot1), 10);
+      const name1 = this.molecules[m1]?.name;
+      if (!name1) continue;
+      for (const partner of partnerKeys) {
+        const dot2 = partner.indexOf('.');
+        const m2 = parseInt(partner.substring(0, dot2), 10);
+        const name2 = this.molecules[m2]?.name;
+        if (!name2) continue;
+        const bondKey = m1 < m2 ? `${m1}-${m2}` : `${m2}-${m1}`;
+        if (!processed.has(bondKey)) {
+          processed.add(bondKey);
+          const typeKey = name1 < name2 ? `${name1}-${name2}` : `${name2}-${name1}`;
+          tb.set(typeKey, (tb.get(typeKey) ?? 0) + 1);
+        }
+      }
+    }
+    this._typeBonds = tb;
+    return tb;
   }
 
   /**
@@ -87,9 +117,11 @@ export class SpeciesGraph {
     this._stringExact = undefined;
     this._canonicalString = undefined;
     this.adjacencyBitset = undefined;
+    this._structuralHash = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._typeBonds = undefined;
   }
 
   /**
@@ -197,9 +229,11 @@ export class SpeciesGraph {
     }
 
     this.adjacencyBitset = undefined;
+    this._structuralHash = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._typeBonds = undefined;
   }
 
   /**
@@ -269,9 +303,11 @@ export class SpeciesGraph {
     }
 
     this.adjacencyBitset = undefined;
+    this._structuralHash = undefined;
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._typeBonds = undefined;
 
     return offset;
   }
@@ -618,5 +654,46 @@ export class SpeciesGraph {
       sg._componentCount = this._componentCount;
     }
     return sg;
+  }
+
+  getStructuralHash(): string {
+    if (this._structuralHash !== undefined) return this._structuralHash;
+
+    const molDescs: string[] = [];
+    for (let i = 0; i < this.molecules.length; i++) {
+      const mol = this.molecules[i];
+      const compDescs: string[] = [];
+      for (let c = 0; c < mol.components.length; c++) {
+        const comp = mol.components[c];
+        const key = `${i}.${c}`;
+        const partners = this.adjacency.get(key);
+        let partnerDesc = '';
+        if (partners && partners.length > 0) {
+          const mapped = partners.map(partner => {
+            const dot = partner.indexOf('.');
+            const pMolIdx = parseInt(partner, 10);
+            const pCompIdx = Number(partner.slice(dot + 1));
+            const pMol = this.molecules[pMolIdx];
+            const pComp = pMol ? pMol.components[pCompIdx] : null;
+            return pMol && pComp ? `${pMol.name}.${pComp.name}` : '';
+          }).sort().join(',');
+          partnerDesc = `!${mapped}`;
+        }
+        compDescs.push(`${comp.name}${comp.state ? '~' + comp.state : ''}${partnerDesc}${comp.wildcard ? '?' + comp.wildcard : ''}`);
+      }
+      compDescs.sort();
+      const molCompStr = compDescs.length > 0 ? `(${compDescs.join(',')})` : '';
+      const compPrefix = mol.compartment ? `@${mol.compartment}:` : '';
+      molDescs.push(`${compPrefix}${mol.name}${molCompStr}`);
+    }
+
+    molDescs.sort();
+    let hash = molDescs.join('.');
+    if (this.compartment) {
+      hash = `@${this.compartment}:${hash}`;
+    }
+
+    this._structuralHash = hash;
+    return hash;
   }
 }

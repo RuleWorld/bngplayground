@@ -17,6 +17,7 @@ import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
+import { isJITSafe } from '../simulation/ExpressionEvaluator.ts';
 
 const OP_STOP = 0xFF;
 const OP_PUSH_CONST = OpCode.PUSH_CONST;
@@ -875,6 +876,107 @@ export class JITCompiler {
             return new Function("state", "propensities", source) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
+            return null;
+        }
+    }
+
+    public compileSSAPropensitiesWithFunctionalRates(
+        reactions: Array<{
+            reactants: number[] | Int32Array;
+            rateConstant: number;
+            propensityFactor: number;
+            isFunctionalRate?: boolean;
+            rateExpression?: string | null;
+        }>,
+        reactionReactingVolumes: Float64Array,
+        parameters: Record<string, number>,
+        observables: Array<{
+            name: string;
+            indices: Int32Array | number[];
+            coefficients: Float64Array | number[];
+        }>
+    ): ((state: Float64Array, propensities: Float64Array) => number) | null {
+        if (!getFeatureFlags().enableJitFastPath) {
+            return null;
+        }
+
+        try {
+            const knownVars = new Set([
+                ...Object.keys(parameters),
+                ...observables.map(o => o.name)
+            ]);
+
+            for (const rxn of reactions) {
+                if (rxn.isFunctionalRate && rxn.rateExpression) {
+                    if (!isJITSafe(rxn.rateExpression, knownVars)) {
+                        return null;
+                    }
+                }
+            }
+
+            let source = "";
+            const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
+            for (const [pName, pVal] of Object.entries(parameters)) {
+                if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(pName) && !forbiddenKeys.has(pName)) {
+                    source += `const ${pName} = ${pVal};\n`;
+                }
+            }
+
+            for (const obs of observables) {
+                if (!/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(obs.name) || forbiddenKeys.has(obs.name)) {
+                    continue;
+                }
+                let obsExpr = '0.0';
+                if (obs.indices.length > 0) {
+                    const terms: string[] = [];
+                    for (let j = 0; j < obs.indices.length; j++) {
+                        terms.push(`(state[${obs.indices[j]}] * ${obs.coefficients[j]})`);
+                    }
+                    obsExpr = terms.join(' + ');
+                }
+                source += `const ${obs.name} = ${obsExpr};\n`;
+            }
+
+            source += "let aTotal = 0;\n";
+
+            for (let i = 0; i < reactions.length; i++) {
+                const rxn = reactions[i];
+                const n = rxn.reactants.length;
+                const volume = reactionReactingVolumes[i];
+
+                let rateExpr = '';
+                if (rxn.isFunctionalRate && rxn.rateExpression) {
+                    const translated = ExpressionTranslator.translate(rxn.rateExpression);
+                    rateExpr = `(${translated})`;
+                } else {
+                    rateExpr = `${rxn.rateConstant}`;
+                }
+
+                rateExpr = `(${rateExpr}) * ${rxn.propensityFactor}`;
+
+                if (n === 0) {
+                    rateExpr = `(${rateExpr}) * ${volume}`;
+                } else if (n === 2) {
+                    rateExpr = `(${rateExpr}) / ${volume}`;
+                } else if (n === 3) {
+                    rateExpr = `(${rateExpr}) / ${volume * volume}`;
+                } else if (n > 3) {
+                    rateExpr = `(${rateExpr}) / Math.pow(${volume}, ${n - 1})`;
+                }
+
+                for (let j = 0; j < n; j++) {
+                    const idx = rxn.reactants[j];
+                    rateExpr += ` * state[${idx}]`;
+                }
+
+                source += `propensities[${i}] = ${rateExpr};\n`;
+                source += `aTotal += propensities[${i}];\n`;
+            }
+
+            source += "return aTotal;\n";
+            return new Function("state", "propensities", source) as (state: Float64Array, propensities: Float64Array) => number;
+        } catch (e) {
+            console.warn('[JITCompiler] Failed to compile SSA propensities with functional rates:', e);
             return null;
         }
     }
