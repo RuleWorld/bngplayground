@@ -1509,7 +1509,12 @@ export async function simulate(
 
         const compiledSSAPropensities = functionalRateCount === 0
           ? jitCompiler.compileSSAPropensities(concreteReactions, reactionReactingVolumes)
-          : null;
+          : jitCompiler.compileSSAPropensitiesWithFunctionalRates(
+              concreteReactions,
+              reactionReactingVolumes,
+              model.parameters || {},
+              concreteObservables
+            );
 
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);

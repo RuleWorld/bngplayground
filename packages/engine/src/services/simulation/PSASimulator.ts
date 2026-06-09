@@ -76,6 +76,33 @@ function setSafeNumberField(target: Record<string, number>, key: string, value: 
 // PSASimulator
 // ────────────────────────────────────────────────────────────────────
 
+const scalingPowerCache = new Map<number, Float64Array>();
+
+function getScalingPower(scaling: number, exp: number): number {
+  if (exp === 0) return 1.0;
+  if (exp === 1) return scaling;
+  if (exp === -1) return 1.0 / scaling;
+  if (exp === 2) return scaling * scaling;
+
+  let expCache = scalingPowerCache.get(scaling);
+  if (!expCache) {
+    expCache = new Float64Array(16); // supports exponent 0 to 15
+    expCache.fill(-1.0);
+    scalingPowerCache.set(scaling, expCache);
+  }
+
+  if (exp > 0 && exp < 16) {
+    let cachedVal = expCache[exp];
+    if (cachedVal < 0) {
+      cachedVal = Math.pow(scaling, exp);
+      expCache[exp] = cachedVal;
+    }
+    return cachedVal;
+  }
+
+  return Math.pow(scaling, exp);
+}
+
 /**
  * Executes hybrid stochastic/deterministic simulations using the
  * Partitioned Stochastic Algorithm (PSA / HAS).
@@ -178,7 +205,7 @@ export class PSASimulator {
       }
       rate *= (state[reactants[i]] / scaling - n);
     }
-    rate *= Math.pow(scaling, scalingExp - 1);
+    rate *= getScalingPower(scaling, scalingExp - 1);
 
     if (rate < 0) rate = 0;
 

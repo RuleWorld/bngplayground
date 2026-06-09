@@ -92,11 +92,71 @@ export class PLASimulator {
   private rng: SeededRandom;
   private epsilon: number;
   private pCrit: number;
+  private uniformBuffer = new Float64Array(4096);
+  private uniformIdx = 4096;
+  private normalBuffer = new Float64Array(4096);
+  private normalIdx = 4096;
 
   constructor(seed: number = 12345, options: Partial<PLAOptions> = {}) {
     this.rng = new SeededRandom(seed);
     this.epsilon = options.epsilon ?? 0.03;
     this.pCrit = options.pCrit ?? 10;
+  }
+
+  private fillUniformBuffer(): void {
+    const size = this.uniformBuffer.length;
+    for (let i = 0; i < size; i++) {
+      this.uniformBuffer[i] = this.rng.next();
+    }
+    this.uniformIdx = 0;
+  }
+
+  private nextUniform(): number {
+    if (this.uniformIdx >= this.uniformBuffer.length) {
+      this.fillUniformBuffer();
+    }
+    return this.uniformBuffer[this.uniformIdx++];
+  }
+
+  private fillNormalBuffer(): void {
+    const size = this.normalBuffer.length;
+    for (let i = 0; i < size; i += 2) {
+      let u1 = this.rng.next();
+      let u2 = this.rng.next();
+      while (u1 <= 1e-15) {
+        u1 = this.rng.next();
+      }
+      const r = Math.sqrt(-2 * Math.log(u1));
+      const theta = 2 * Math.PI * u2;
+      this.normalBuffer[i] = r * Math.cos(theta);
+      if (i + 1 < size) {
+        this.normalBuffer[i + 1] = r * Math.sin(theta);
+      }
+    }
+    this.normalIdx = 0;
+  }
+
+  private nextNormal(): number {
+    if (this.normalIdx >= this.normalBuffer.length) {
+      this.fillNormalBuffer();
+    }
+    return this.normalBuffer[this.normalIdx++];
+  }
+
+  private drawPoisson(lambda: number): number {
+    if (lambda <= 0) return 0;
+    if (lambda > 30) {
+      const z = this.nextNormal();
+      return Math.max(0, Math.round(lambda + Math.sqrt(lambda) * z));
+    }
+    const L = Math.exp(-lambda);
+    let k = 0;
+    let p = 1;
+    do {
+      k++;
+      p *= this.nextUniform();
+    } while (p > L);
+    return k - 1;
   }
 
   // ── Propensity helpers ────────────────────────────────────────────
@@ -256,13 +316,11 @@ export class PLASimulator {
           firings[v] = lambda;
           break;
         case RxnClass.POISSON_TAU_LEAP:
-          firings[v] = this.rng.poisson(lambda);
+          firings[v] = this.drawPoisson(lambda);
           break;
         case RxnClass.LANGEVIN: {
           // Normal approximation: N(lambda, lambda)
-          const u1 = this.rng.next();
-          const u2 = this.rng.next();
-          const z = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+          const z = this.nextNormal();
           firings[v] = Math.max(0, Math.round(lambda + Math.sqrt(lambda) * z));
           break;
         }
@@ -279,7 +337,7 @@ export class PLASimulator {
   private getTauES(rxn: PLAReaction): number {
     const rate = rxn.propensity;
     if (rate <= 0) return Infinity;
-    const r = this.rng.next();
+    const r = this.nextUniform();
     if (r <= 0 || r >= 1) return Infinity;
     return -Math.log(r) / rate;
   }
