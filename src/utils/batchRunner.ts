@@ -12,6 +12,28 @@ import { loadModelCatalog, getModelCatalogSync } from '../../services/modelCatal
 
 const NFSIM_MODELS = new Set<string>();
 
+const MINIMAL_BNGL = [
+    'begin model',
+    'begin parameters',
+    'k1 0.1',
+    'end parameters',
+    'begin species',
+    'A() 100',
+    'end species',
+    'begin observables',
+    'Molecules Aobs A()',
+    'end observables',
+    'begin reaction rules',
+    'A() -> B() k1',
+    'end reaction rules',
+    'begin simulation',
+    't_end 0.01',
+    'n_steps 2',
+    'method ode',
+    'end simulation',
+    'end model',
+].join('\n');
+
 // If you need extra verbosity for batch runner, flip this to true locally
 const VERBOSE_BATCH_RUNNER = false;
 
@@ -53,6 +75,34 @@ const appReporter: BatchReporter = {
         }
     }
 };
+
+type SafetyResult = Record<string, { success: boolean; error?: string }>;
+
+export async function runToolSafetyCheck(): Promise<SafetyResult> {
+    const results: SafetyResult = {};
+    const TIMEOUT = 30_000;
+    try {
+        const model = await bnglService.parse(MINIMAL_BNGL, {
+            description: 'safety-check-parse',
+            timeoutMs: TIMEOUT,
+        });
+        for (const method of ['ode', 'ssa', 'nf'] as const) {
+            try {
+                await bnglService.simulate(
+                    model,
+                    { method, t_end: 0.01, n_steps: 2, seed: 42 } as any,
+                    { description: `safety-check-${method}`, timeoutMs: method === 'nf' ? 120_000 : TIMEOUT },
+                );
+                results[method] = { success: true };
+            } catch (err) {
+                results[method] = { success: false, error: String(err) };
+            }
+        }
+    } catch (err) {
+        return { parse_error: { success: false, error: String(err) } };
+    }
+    return results;
+}
 
 export async function runModels(modelNames?: string[]) {
     const filter = normalizeFilterNames(modelNames);
@@ -128,6 +178,7 @@ export async function runNfSimModels() {
 
 // Expose on window for Playwright
 if (typeof window !== 'undefined') {
+    (window as any).runToolSafetyCheck = runToolSafetyCheck;
     (window as any).runModels = runModels;
     (window as any).runCustomModel = async (name: string, code: string) => {
         const globalAny = (window as any);

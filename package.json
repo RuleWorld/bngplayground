@@ -31,6 +31,7 @@
     "benchmark:functional-rates": "tsx scripts/benchmark_functional_rate_fast_path.ts",
     "clean:web-output:artifacts": "node scripts/clean_web_output_artifacts.mjs",
     "test:share-link": "node scripts/playwright_share_link_test.mjs",
+    "test:tool-init": "node scripts/tool_init_safety_check.mjs",
     "parity:cycle2:full": "node scripts/run_parity_cycle2.mjs",
     "parity:all:freshregen": "npx -y tsx scripts/layered_parity_check.ts --all --out artifacts/parity_layer_report.all.freshregen.detloop.json",
     "parity:summary:cycle2": "node artifacts/summarize_post_fix_deterministic.cjs artifacts/parity_layer_report.cycle2_full.json",

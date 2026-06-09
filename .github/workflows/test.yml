@@ -93,6 +93,31 @@ jobs:
           fi
           echo "Build successful: dist directory exists"
           ls -lah dist/ | head -20
+
+  # Tool initialization safety check - verifies ODE, SSA, and NFsim runtimes
+  # all load without import or initialization errors in a real browser context.
+  tool-init-safety-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+
+      - name: Install Playwright chromium
+        run: npx playwright install chromium --with-deps
+
+      - name: Run tool initialization safety check
+        run: npm run test:tool-init
   
   # Full test suite - runs on main, manual trigger, or when workflow file changes
   full-tests:
