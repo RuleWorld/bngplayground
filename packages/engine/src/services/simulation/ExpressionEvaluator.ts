@@ -608,6 +608,47 @@ function compileRateToBytecodeProgram(expandedExpr: string, varNames: string[]):
   };
 }
 
+/**
+ * Scan bytecode program to collect all unique PUSH_SPEC and PUSH_OBS operand
+ * indices. This is used by buildBytecodeEvaluator to avoid copying the entire
+ * varNames array on each rate evaluation — only the slots the expression
+ * actually reads are populated.
+ */
+function collectReferencedSlots(program: BytecodeProgram): Int32Array {
+  const code = program.code;
+  const view = program.view;
+  const seen = new Set<number>();
+  const slots: number[] = [];
+  let pc = 0;
+
+  while (pc < code.length) {
+    const op = code[pc++];
+    if (op === OP_STOP) break;
+
+    switch (op) {
+      case 0: { // PUSH_CONST — 8-byte operand
+        pc += 8;
+        break;
+      }
+      case 1:  // PUSH_SPEC
+      case 2: { // PUSH_OBS — 4-byte Int32 operand
+        const idx = view.getInt32(pc, true);
+        pc += 4;
+        if (!seen.has(idx)) {
+          seen.add(idx);
+          slots.push(idx);
+        }
+        break;
+      }
+      default:
+        // All other opcodes (3-34) have no operands
+        break;
+    }
+  }
+
+  return new Int32Array(slots);
+}
+
 function buildBytecodeEvaluator(
   program: BytecodeProgram,
   varNames: string[]
@@ -615,9 +656,14 @@ function buildBytecodeEvaluator(
   // Reuse buffers across calls to avoid per-step allocations in hot loops.
   const valueSlots = new Float64Array(varNames.length);
   const stack = new Float64Array(Math.max(64, program.code.length));
+  const referencedSlots = collectReferencedSlots(program);
 
   return (ctx: Record<string, number>) => {
-    for (let i = 0; i < varNames.length; i++) {
+    // Only copy the slots the bytecode actually reads (O(referenced) vs O(V)).
+    // The bytecode only ever reads valueSlots at the indices corresponding to
+    // variables that appear in the expression; everything else stays at 0.
+    for (let s = 0; s < referencedSlots.length; s++) {
+      const i = referencedSlots[s];
       const value = ctx[varNames[i]];
       valueSlots[i] = typeof value === 'number' ? value : 0;
     }
