@@ -82,15 +82,22 @@ export const PROFILE_DATA = {
   degeneracyCount: 0,
   speciesDedup: 0,
   speciesDedupCount: 0,
+  matchComponents: 0,
+  matchComponentsCount: 0,
 };
 
 export function resetProfileData() {
   for (const key of Object.keys(PROFILE_DATA) as Array<keyof typeof PROFILE_DATA>) {
-    PROFILE_DATA[key] = 0;
+    (PROFILE_DATA[key] as number) = 0;
   }
+  GraphMatcher.matchComponentsTime = 0;
+  GraphMatcher.matchComponentsCount = 0;
 }
 
 export function printProfileData() {
+  // Sync GraphMatcher statics into PROFILE_DATA for unified reporting
+  PROFILE_DATA.matchComponents = GraphMatcher.matchComponentsTime;
+  PROFILE_DATA.matchComponentsCount = GraphMatcher.matchComponentsCount;
   console.log('\n=== NetworkGenerator Profile ===');
   console.log(`  canonicalize: ${(PROFILE_DATA.canonicalize / 1000).toFixed(3)}s (${PROFILE_DATA.canonicalizeCount} calls)`);
   console.log(`  findAllMaps: ${(PROFILE_DATA.findAllMaps / 1000).toFixed(3)}s (${PROFILE_DATA.findAllMapsCount} calls)`);
@@ -98,6 +105,7 @@ export function printProfileData() {
   console.log(`  isDuplicateReaction: ${(PROFILE_DATA.isDuplicateReaction / 1000).toFixed(3)}s (${PROFILE_DATA.isDuplicateReactionCount} calls)`);
   console.log(`  degeneracy: ${(PROFILE_DATA.degeneracy / 1000).toFixed(3)}s (${PROFILE_DATA.degeneracyCount} calls)`);
   console.log(`  speciesDedup: ${(PROFILE_DATA.speciesDedup / 1000).toFixed(3)}s (${PROFILE_DATA.speciesDedupCount} calls)`);
+  console.log(`  matchComponents: ${(PROFILE_DATA.matchComponents / 1000).toFixed(3)}s (${PROFILE_DATA.matchComponentsCount} calls)`);
   console.log('================================\n');
 }
 

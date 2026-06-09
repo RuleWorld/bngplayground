@@ -1825,8 +1825,10 @@ export async function simulate(
             maxReactants = concreteReactions[i].reactants.length;
           }
         }
+        // S3-1: Precompute ridxKey strings once to avoid per-call template-literal allocation
+        const ridxKeys = Array.from({ length: maxReactants }, (_, j) => `ridx${j}`);
         for (let j = 0; j < maxReactants; j++) {
-          allVarNames.push(`ridx${j}`);
+          allVarNames.push(ridxKeys[j]);
         }
 
         // Collect functional rate expressions and build index mapping
@@ -1901,23 +1903,24 @@ export async function simulate(
         };
         // Initialize with parameters
         refreshRateContextParameters();
+        // S3-2: Pre-filter observable names for rateContext — removes per-iteration guard checks
+        const safeRateObservableNames = observableNames.filter(n =>
+          n !== '__proto__' && n !== 'constructor' && n !== 'prototype'
+        );
         // Initialize observable slots
-        for (let i = 0; i < observableNames.length; i++) {
-          const observableName = observableNames[i];
-          if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
-            setSafeNumericField(rateContext, observableName, 0);
-          }
+        for (let i = 0; i < safeRateObservableNames.length; i++) {
+          rateContext[safeRateObservableNames[i]] = 0;
         }
         // Initialize species name slots
         for (let k = 0; k < model.species.length; k++) {
           const speciesName = model.species[k].name;
           if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
-            setSafeNumericField(rateContext, speciesName, 0);
+            rateContext[speciesName] = 0;
           }
         }
         // Initialize ridxN slots
         for (let j = 0; j < maxReactants; j++) {
-          rateContext[`ridx${j}`] = 0;
+          rateContext[ridxKeys[j]] = 0;
         }
 
         return (yIn: Float64Array, dydt: Float64Array) => {
@@ -1931,12 +1934,11 @@ export async function simulate(
           }
 
           // Update observable values in the mutable context (in-place)
+          // S3-2: Use pre-filtered names and plain assignment — no per-iteration guard or regex
           const obsValues = evaluateObservablesFast(yIn);
-          for (let i = 0; i < observableNames.length; i++) {
-            const observableName = observableNames[i];
-            if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
-              setSafeNumericField(rateContext, observableName, obsValues[observableName]);
-            }
+          for (let i = 0; i < safeRateObservableNames.length; i++) {
+            const name = safeRateObservableNames[i];
+            rateContext[name] = obsValues[name];
           }
           // Update species values in the mutable context (in-place) — only those referenced by functional rates
           for (let ri = 0; ri < referencedSpeciesIndices.length; ri++) {
@@ -1949,9 +1951,9 @@ export async function simulate(
             let rate: number;
 
             if (rxn.isFunctionalRate && rxn.rateExpression) {
-              // Update ridxN values in the mutable context (in-place, no allocation)
+              // S3-1: Update ridxN using precomputed keys (no template-literal allocation per call)
               for (let j = 0; j < rxn.reactants.length; j++) {
-                rateContext[`ridx${j}`] = odeUsesAmountState
+                rateContext[ridxKeys[j]] = odeUsesAmountState
                   ? yIn[rxn.reactants[j]]
                   : (yIn[rxn.reactants[j]] * speciesVolumes[rxn.reactants[j]]);
               }

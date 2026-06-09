@@ -62,6 +62,9 @@ export function clearMatchCache() {
  * BioNetGen: Map::findMap() - VF2 subgraph isomorphism
  */
 export class GraphMatcher {
+  // Profiling counters for component matching (innermost hot path)
+  static matchComponentsTime = 0;
+  static matchComponentsCount = 0;
 
   /**
    * VF2++ Algorithm 1 (Egerváry & Madarasi 2018, Section 3): compute an order that prioritizes
@@ -237,23 +240,24 @@ export class GraphMatcher {
    * BioNetGen: SpeciesGraph::findMaps($pattern)
    */
   static findAllMaps(pattern: SpeciesGraph, target: SpeciesGraph, options: GraphMatchOptions = {}): MatchMap[] {
-    // Fast pre-filter: check if target has enough molecules of each type
-    if (!this.canPossiblyMatch(pattern, target)) {
-      if (shouldLogGraphMatcher && pattern.toString().includes('C3(s~b)')) {
-        console.log(`[GM_DEBUG] canPossiblyMatch failed for ${pattern.toString()} in ${target.toString()}`);
-      }
-      return [];
-    }
-
-    // Check cache using nested WeakMaps - completely avoids string serialization and O(N) hashing
+    // Check cache FIRST using nested WeakMaps - completely avoids string serialization and O(N) hashing
+    // Cache entries only exist for pairs that already passed canPossiblyMatch, so on cache hit
+    // the structural prefilter is guaranteed-true redundant work.
     const selectedCache = getSelectedCache(options.allowExtraTargetBonds ?? false, options.symmetryBreaking ?? false);
     const targetMap = selectedCache.get(pattern);
     if (targetMap !== undefined) {
       const cached = targetMap.get(target);
       if (cached !== undefined) {
-        // Return cached arrays directly (callers only read via .get()/.entries()/.values())
         return cached;
       }
+    }
+
+    // Fast pre-filter (only on cache miss): check if target has enough molecules of each type
+    if (!this.canPossiblyMatch(pattern, target)) {
+      if (shouldLogGraphMatcher && pattern.toString().includes('C3(s~b)')) {
+        console.log(`[GM_DEBUG] canPossiblyMatch failed for ${pattern.toString()} in ${target.toString()}`);
+      }
+      return [];
     }
 
     const matches: MatchMap[] = [];
@@ -538,10 +542,13 @@ class VF2State {
   nodeOrdering: number[];
   symmetryBreaking: boolean;
   allowExtraTargetBonds: boolean;
-  private componentCandidateCache: Map<number, Map<number, Map<number, Map<string, number[]>>>>;
-  private usedTargetsScratch: number[];
+  private componentCandidateCache: Map<number, Map<number, Map<number, Map<number, number[]>>>>;
   private frontierBits: Uint8Array;
   private frontierSize: number;
+  private componentOrders: number[][];
+  private scratchAssignment: Int32Array;
+  private scratchIterationCount: { value: number };
+  private mcvCandidateCache: Map<number, number[]>;
 
   constructor(
     pattern: SpeciesGraph,
@@ -565,9 +572,21 @@ class VF2State {
     this.symmetryBreaking = symmetryBreaking;
     this.allowExtraTargetBonds = allowExtraTargetBonds;
     this.componentCandidateCache = new Map();
-    this.usedTargetsScratch = [];
     this.frontierBits = new Uint8Array(Math.max(pLen, tLen));
     this.frontierSize = 0;
+
+    let maxComps = 0;
+    this.componentOrders = new Array(pattern.molecules.length);
+    for (let m = 0; m < pattern.molecules.length; m++) {
+      const mol = pattern.molecules[m];
+      this.componentOrders[m] = mol.components
+        .map((_, idx) => idx)
+        .sort((a, b) => this.componentPriority(mol.components[b]) - this.componentPriority(mol.components[a]));
+      if (mol.components.length > maxComps) maxComps = mol.components.length;
+    }
+    this.scratchAssignment = new Int32Array(maxComps);
+    this.scratchIterationCount = { value: 0 };
+    this.mcvCandidateCache = new Map();
   }
 
   isComplete(): boolean {
@@ -1081,24 +1100,37 @@ class VF2State {
    * This uses the FULL corePattern (all molecule mappings) to constrain component choices.
    */
   private matchComponentsWithBondConsistency(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
+    const profStart = performance.now();
     const patternMol = this.pattern.molecules[pMolIdx];
     if (patternMol.components.length === 0) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
       return new Map();
     }
 
-    // Order components by priority (bound components first)
-    const order = patternMol.components
-      .map((_, idx) => idx)
-      .sort((a, b) => this.componentPriority(patternMol.components[b]) - this.componentPriority(patternMol.components[a]));
-
-    const assignment = new Map<number, number>();
-    const usedTargets = new Set<number>();
-    const iterationCount = { value: 0 };
+    const order = this.componentOrders[pMolIdx];
+    const assignment = this.scratchAssignment;
+    const nComps = patternMol.components.length;
+    for (let i = 0; i < nComps; i++) assignment[i] = -1;
+    const iterationCount = this.scratchIterationCount;
+    iterationCount.value = 0;
 
     const success = this.assignComponentsWithFullContext(
-      pMolIdx, tMolIdx, order, 0, assignment, usedTargets, iterationCount
+      pMolIdx, tMolIdx, order, 0, assignment, 0, iterationCount
     );
-    return success ? assignment : null;
+    if (!success) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+      return null;
+    }
+
+    const result = new Map<number, number>();
+    for (let i = 0; i < nComps; i++) {
+      if (assignment[i] !== -1) result.set(i, assignment[i]);
+    }
+    GraphMatcher.matchComponentsTime += performance.now() - profStart;
+    GraphMatcher.matchComponentsCount++;
+    return result;
   }
 
   /**
@@ -1109,8 +1141,8 @@ class VF2State {
     tMolIdx: number,
     order: number[],
     orderIdx: number,
-    assignment: Map<number, number>,
-    usedTargets: Set<number>,
+    assignment: Int32Array,
+    usedTargetsMask: number,
     iterationCount: { value: number }
   ): boolean {
     iterationCount.value++;
@@ -1123,7 +1155,7 @@ class VF2State {
     }
 
     const pCompIdx = order[orderIdx];
-    const candidates = this.getComponentCandidates(pMolIdx, tMolIdx, pCompIdx, usedTargets);
+    const candidates = this.getComponentCandidates(pMolIdx, tMolIdx, pCompIdx, usedTargetsMask);
 
     for (const tCompIdx of candidates) {
       if (iterationCount.value > MAX_COMPONENT_ITERATIONS) {
@@ -1140,17 +1172,17 @@ class VF2State {
         continue;
       }
 
-      assignment.set(pCompIdx, tCompIdx);
-      usedTargets.add(tCompIdx);
+      assignment[pCompIdx] = tCompIdx;
+      usedTargetsMask |= (1 << tCompIdx);
 
       if (this.assignComponentsWithFullContext(
-        pMolIdx, tMolIdx, order, orderIdx + 1, assignment, usedTargets, iterationCount
+        pMolIdx, tMolIdx, order, orderIdx + 1, assignment, usedTargetsMask, iterationCount
       )) {
         return true;
       }
 
-      assignment.delete(pCompIdx);
-      usedTargets.delete(tCompIdx);
+      assignment[pCompIdx] = -1;
+      usedTargetsMask &= ~(1 << tCompIdx);
     }
 
     return false;
@@ -1165,8 +1197,7 @@ class VF2State {
     pCompIdx: number,
     tMolIdx: number,
     tCompIdx: number,
-    // currentAssignment - unused parameter removed from signature
-    _currentAssignment: Map<number, number>
+    _currentAssignment: Int32Array
   ): boolean {
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
 
@@ -1227,23 +1258,37 @@ class VF2State {
   }
 
   private matchComponents(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
+    const profStart = performance.now();
     const patternMol = this.pattern.molecules[pMolIdx];
     if (patternMol.components.length === 0) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
       return new Map();
     }
 
-    const order = patternMol.components
-      .map((_, idx) => idx)
-      .sort((a, b) => this.componentPriority(patternMol.components[b]) - this.componentPriority(patternMol.components[a]));
-
-    const assignment = new Map<number, number>();
-    const usedTargets = new Set<number>();
-    const iterationCount = { value: 0 };
+    const order = this.componentOrders[pMolIdx];
+    const assignment = this.scratchAssignment;
+    const nComps = patternMol.components.length;
+    for (let i = 0; i < nComps; i++) assignment[i] = -1;
+    const iterationCount = this.scratchIterationCount;
+    iterationCount.value = 0;
 
     const success = this.assignComponentsBacktrack(
-      pMolIdx, tMolIdx, order, 0, assignment, usedTargets, iterationCount
+      pMolIdx, tMolIdx, order, 0, assignment, 0, iterationCount
     );
-    return success ? assignment : null;
+    if (!success) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+      return null;
+    }
+
+    const result = new Map<number, number>();
+    for (let i = 0; i < nComps; i++) {
+      if (assignment[i] !== -1) result.set(i, assignment[i]);
+    }
+    GraphMatcher.matchComponentsTime += performance.now() - profStart;
+    GraphMatcher.matchComponentsCount++;
+    return result;
   }
 
   private assignComponentsBacktrack(
@@ -1251,8 +1296,8 @@ class VF2State {
     tMolIdx: number,
     order: number[],
     orderIdx: number,
-    assignment: Map<number, number>,
-    usedTargets: Set<number>,
+    assignment: Int32Array,
+    usedTargetsMask: number,
     iterationCount: { value: number }
   ): boolean {
     iterationCount.value++;
@@ -1268,39 +1313,48 @@ class VF2State {
       return true;
     }
 
-    let bestPos = orderIdx;
-    let minCandidates = Number.POSITIVE_INFINITY;
-    const candidateCache = new Map<number, number[]>();
+    const remaining = order.length - orderIdx;
+    let pCompIdx: number;
+    let candidates: number[];
 
-    for (let i = orderIdx; i < order.length; i++) {
-      const compIdx = order[i];
-      const candidatesForComp = this.getComponentCandidates(pMolIdx, tMolIdx, compIdx, usedTargets);
-      candidateCache.set(compIdx, candidatesForComp);
+    if (remaining <= 4) {
+      // Skip MCV for small component counts — reordering can't pay for itself
+      pCompIdx = order[orderIdx];
+      candidates = this.getComponentCandidates(pMolIdx, tMolIdx, pCompIdx, usedTargetsMask);
+    } else {
+      let bestPos = orderIdx;
+      let minCandidates = Number.POSITIVE_INFINITY;
+      this.mcvCandidateCache.clear();
 
-      if (candidatesForComp.length < minCandidates) {
-        minCandidates = candidatesForComp.length;
-        bestPos = i;
-        if (minCandidates === 0) {
-          break;
+      for (let i = orderIdx; i < order.length; i++) {
+        const compIdx = order[i];
+        const candidatesForComp = this.getComponentCandidates(pMolIdx, tMolIdx, compIdx, usedTargetsMask);
+        this.mcvCandidateCache.set(compIdx, candidatesForComp);
+
+        if (candidatesForComp.length < minCandidates) {
+          minCandidates = candidatesForComp.length;
+          bestPos = i;
+          if (minCandidates === 0) {
+            break;
+          }
         }
       }
-    }
 
-    if (bestPos !== orderIdx) {
-      const tmp = order[orderIdx];
-      order[orderIdx] = order[bestPos];
-      order[bestPos] = tmp;
-    }
+      if (bestPos !== orderIdx) {
+        const tmp = order[orderIdx];
+        order[orderIdx] = order[bestPos];
+        order[bestPos] = tmp;
+      }
 
-    const pCompIdx = order[orderIdx];
-    const candidates = candidateCache.get(pCompIdx) ?? [];
+      pCompIdx = order[orderIdx];
+      candidates = this.mcvCandidateCache.get(pCompIdx) ?? [];
+    }
 
     if (candidates.length === 0) {
       return false;
     }
 
     for (const tCompIdx of candidates) {
-      // Early exit if we've hit the iteration limit
       if (iterationCount.value > MAX_COMPONENT_ITERATIONS) {
         return false;
       }
@@ -1312,17 +1366,17 @@ class VF2State {
         continue;
       }
 
-      assignment.set(pCompIdx, tCompIdx);
-      usedTargets.add(tCompIdx);
+      assignment[pCompIdx] = tCompIdx;
+      usedTargetsMask |= (1 << tCompIdx);
 
       if (this.assignComponentsBacktrack(
-        pMolIdx, tMolIdx, order, orderIdx + 1, assignment, usedTargets, iterationCount
+        pMolIdx, tMolIdx, order, orderIdx + 1, assignment, usedTargetsMask, iterationCount
       )) {
         return true;
       }
 
-      assignment.delete(pCompIdx);
-      usedTargets.delete(tCompIdx);
+      assignment[pCompIdx] = -1;
+      usedTargetsMask &= ~(1 << tCompIdx);
     }
 
     return false;
@@ -1332,9 +1386,9 @@ class VF2State {
     pMolIdx: number,
     tMolIdx: number,
     pCompIdx: number,
-    usedTargets: Set<number>
+    usedTargetsMask: number
   ): number[] {
-    const usedKey = this.getUsedTargetsKey(usedTargets);
+    const usedKey = usedTargetsMask;
     let level1 = this.componentCandidateCache.get(pMolIdx);
     if (!level1) {
       level1 = new Map();
@@ -1363,7 +1417,7 @@ class VF2State {
     const candidates: number[] = [];
 
     for (let idx = 0; idx < targetMol.components.length; idx++) {
-      if (usedTargets.has(idx)) continue;
+      if ((usedTargetsMask >> idx) & 1) continue;
       const tComp = targetMol.components[idx];
       if (tComp.name !== pComp.name) continue;
       if (!this.componentStateCompatible(pComp, tComp)) continue;
@@ -1374,15 +1428,6 @@ class VF2State {
     return candidates;
   }
 
-  private getUsedTargetsKey(usedTargets: Set<number>): string {
-    this.usedTargetsScratch.length = 0;
-    for (const value of usedTargets) {
-      this.usedTargetsScratch.push(value);
-    }
-    this.usedTargetsScratch.sort((a, b) => a - b);
-    return this.usedTargetsScratch.join(',');
-  }
-
 
 
   /**
@@ -1391,16 +1436,6 @@ class VF2State {
    * components are equivalent, we constrain later ones to map to higher target indices.
    */
 
-
-  private _getComponentSignature(comp: Component): string {
-    let sig = `${comp.name}:${comp.state ?? ''}:${comp.wildcard ?? ''}`;
-    if (comp.edges.size > 0) {
-      // Include sorted bond labels to distinguish symmetric components with different bonds
-      const edges = Array.from(comp.edges.keys()).sort().join(',');
-      sig += `!${edges}`;
-    }
-    return sig;
-  }
 
   private componentPriority(comp: Component): number {
     let score = 0;
@@ -1418,7 +1453,7 @@ class VF2State {
     pCompIdx: number,
     tMolIdx: number,
     tCompIdx: number,
-    currentAssignments: Map<number, number>
+    assignment: Int32Array
   ): boolean {
     if (!this.componentBondStateCompatible(pMolIdx, pCompIdx, tMolIdx, tCompIdx)) {
       if (shouldLogGraphMatcher) {
@@ -1427,7 +1462,7 @@ class VF2State {
       return false;
     }
 
-    if (!this.componentBondConsistencySatisfied(pMolIdx, pCompIdx, tMolIdx, tCompIdx, currentAssignments)) {
+    if (!this.componentBondConsistencySatisfied(pMolIdx, pCompIdx, tMolIdx, tCompIdx, assignment)) {
       if (shouldLogGraphMatcher) {
         console.log(`[GraphMatcher] Bond consistency failed: P${pMolIdx}.${pCompIdx} vs T${tMolIdx}.${tCompIdx}`);
       }
@@ -1544,7 +1579,7 @@ class VF2State {
     pCompIdx: number,
     tMolIdx: number,
     tCompIdx: number,
-    currentAssignments: Map<number, number>
+    assignment: Int32Array
   ): boolean {
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
 
@@ -1558,8 +1593,8 @@ class VF2State {
       const partnerCompIdx = partner.compIdx;
 
       if (partnerMolIdx === pMolIdx) {
-        if (currentAssignments.has(partnerCompIdx)) {
-          const targetPartnerCompIdx = currentAssignments.get(partnerCompIdx)!;
+        if (assignment[partnerCompIdx] !== -1) {
+          const targetPartnerCompIdx = assignment[partnerCompIdx];
           if (!this.areComponentsBonded(tMolIdx, tCompIdx, tMolIdx, targetPartnerCompIdx)) {
             return false;
           }
