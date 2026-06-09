@@ -336,16 +336,22 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
       document.head.appendChild(script);
     });
   } else {
-    // Strategy 2: Worker context (including module workers)
+    // Strategy 2: Worker context (including module workers).
+    // Try classic worker importScripts first (fast, synchronous).
+    let loaded = false;
     if (typeof (globalThis as any).importScripts === 'function') {
-      // Classic workers
       const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
       try {
         (globalThis as any).importScripts(blobUrl);
+        loaded = true;
+      } catch {
+        // importScripts threw (e.g. module workers where it exists but is
+        // disallowed). Fall through to the ESM dynamic import path below.
       } finally {
         URL.revokeObjectURL(blobUrl);
       }
-    } else {
+    }
+    if (!loaded) {
       // Module workers: use Blob URL with ESM import to avoid eval
       const esmAugmented = text + '\n;export { createNFsimModule };\nexport default createNFsimModule;\n';
       const blobUrl = URL.createObjectURL(new Blob([esmAugmented], { type: 'application/javascript' }));
