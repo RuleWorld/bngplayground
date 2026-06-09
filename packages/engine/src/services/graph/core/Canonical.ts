@@ -796,36 +796,38 @@ export class GraphCanonicalizer {
       }
     }
 
-    // Pre-fetch bond list (Int32Array of [m1,c1,m2,c2] tuples)
+    // Precompute per-molecule incident-edge list from bondList ONCE.
+    // Each edge stores a static base value encoding the component-name pair,
+    // plus the partner molecule index for per-iteration color lookup.
+    // Multiplication-based encoding (compNameId * numNames + partnerNameId) * colorRange
+    // avoids the 32-bit shift overflow in the prior shift-based approach.
+    const numNames = nextNameId || 1;
+    const numMols = graph.molecules.length;
+    const colorRange = numMols || 1;
+    const incident: { partnerMol: number; edgeBase: number }[][] =
+      Array.from({ length: numMols }, () => []);
+
     const bondList = graph.bondList;
+    for (let b = 0; b < bondList.length; b += 4) {
+      const m1 = bondList[b], c1 = bondList[b + 1], m2 = bondList[b + 2], c2 = bondList[b + 3];
+      const n1 = compNameToId.get(graph.molecules[m1].components[c1].name)!;
+      const n2 = compNameToId.get(graph.molecules[m2].components[c2].name)!;
+      const base = (n1 * numNames + n2) * colorRange;
+      incident[m1].push({ partnerMol: m2, edgeBase: base });
+      incident[m2].push({ partnerMol: m1, edgeBase: (n2 * numNames + n1) * colorRange });
+    }
 
     // 2. Iterative refinement: update color classes based on neighbor colors
-    for (let iter = 0; iter < graph.molecules.length; iter++) {
+    for (let iter = 0; iter < numMols; iter++) {
       const prevColors = moleculeInfos.map(m => m.colorClass);
 
-      const newSigs = new Array<string>(graph.molecules.length);
+      const newSigs = new Array<string>(numMols);
 
-      for (let molIdx = 0; molIdx < graph.molecules.length; molIdx++) {
-        const mol = graph.molecules[molIdx];
-        const edgeInts: number[] = [];
-
-        // Collect colors of all neighbors (molecules connected via bonds)
-        // Iterate flat bond list instead of parsing adjacency string keys
-        for (let b = 0; b < bondList.length; b += 4) {
-          const m1 = bondList[b];
-          const c1 = bondList[b + 1];
-          const m2 = bondList[b + 2];
-          const c2 = bondList[b + 3];
-
-          if (m1 === molIdx) {
-            const compNameId = compNameToId.get(mol.components[c1].name)!;
-            const partnerNameId = compNameToId.get(graph.molecules[m2].components[c2].name)!;
-            edgeInts.push((compNameId << 20) | (partnerNameId << 10) | prevColors[m2]);
-          } else if (m2 === molIdx) {
-            const compNameId = compNameToId.get(mol.components[c2].name)!;
-            const partnerNameId = compNameToId.get(graph.molecules[m1].components[c1].name)!;
-            edgeInts.push((compNameId << 20) | (partnerNameId << 10) | prevColors[m1]);
-          }
+      for (let molIdx = 0; molIdx < numMols; molIdx++) {
+        const edges = incident[molIdx];
+        const edgeInts = new Array<number>(edges.length);
+        for (let e = 0; e < edges.length; e++) {
+          edgeInts[e] = edges[e].edgeBase + prevColors[edges[e].partnerMol];
         }
 
         edgeInts.sort((a, b) => a - b);
@@ -839,7 +841,7 @@ export class GraphCanonicalizer {
       uniqueIterSigs.forEach((sig, idx) => iterSigToRank.set(sig, idx));
 
       let changed = false;
-      for (let molIdx = 0; molIdx < graph.molecules.length; molIdx++) {
+      for (let molIdx = 0; molIdx < numMols; molIdx++) {
         const newRank = iterSigToRank.get(newSigs[molIdx])!;
         if (newRank !== moleculeInfos[molIdx].colorClass) {
           moleculeInfos[molIdx].colorClass = newRank;
