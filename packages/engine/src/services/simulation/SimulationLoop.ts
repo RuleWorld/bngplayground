@@ -1724,23 +1724,30 @@ export async function simulate(
                 if (outT <= 0.6) {
                   const obsValues = evaluateObservablesFast(state);
                   if (VERBOSE_SIM_DEBUG) {
-                    if (obsValues['Total_pSTAT3'] === undefined) console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3 is MISSING from obsValues, keys:', Object.keys(obsValues));
-                    else console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
+                    if (obsValues['Total_pSTAT3'] === undefined) {
+                      console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3 is MISSING from obsValues, keys:', Object.keys(obsValues));
+                    } else {
+                      console.log('[Worker Debug] Output obs at t=', outT, 'Total_pSTAT3=', obsValues['Total_pSTAT3'], 'Active_Dimer=', obsValues['Active_Dimer']);
+                    }
+                    // Also list species with nonzero pSTAT3 concentrations
+                    const nonzeroP: { name?: string; state?: number }[] = [];
+                    for (let si = 0; si < model.species.length; si++) {
+                      if (state[si] > 0 && model.species[si].name.includes('s~P')) {
+                        nonzeroP.push({ name: model.species[si].name, state: state[si] });
+                      }
+                    }
+                    console.log('[Worker Debug] Nonzero pSTAT3 species at t=', outT, nonzeroP.slice(0, 10));
                   }
-                  // Also list species with nonzero pSTAT3 concentrations
-                  const nonzeroP = [] as { idx?: number, p?: number, name?: string, state?: number }[];
-                  for (let si = 0; si < model.species.length; si++) {
-                    if (state[si] > 0 && model.species[si].name.includes('s~P')) nonzeroP.push({ name: model.species[si].name, state: state[si] });
-                  }
-                  if (VERBOSE_SIM_DEBUG) console.log('[Worker Debug] Nonzero pSTAT3 species at t=', outT, nonzeroP.slice(0, 10));
                 }
               } catch (e: unknown) {
                 console.warn('[Worker Debug] Failed to log early output obs:', formatCaughtError(e));
               }
-                if (outT >= nextTOut || totalEvents >= maxEvents) {
+              if (outT >= nextTOut || totalEvents >= maxEvents) {
                 pushDataRow(phase.suffix, outT, state as Float64Array);
                 const sp: Record<string, number> = { time: outT };
-                for (let k = 0; k < numSpecies; k++) setSafeNumericField(sp, speciesHeaders[k], state[k]);
+                for (let k = 0; k < numSpecies; k++) {
+                  setSafeNumericField(sp, speciesHeaders[k], state[k]);
+                }
                 appendSpeciesSnapshot(phase.suffix, sp);
               }
             }
