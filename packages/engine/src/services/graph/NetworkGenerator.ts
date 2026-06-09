@@ -1242,9 +1242,9 @@ export class NetworkGenerator {
         }
 
         let targetCompIdx: number | null = null;
-        const parts = targetCompKey.split('.');
-        if (parts.length === 2) {
-          const parsed = Number(parts[1]);
+        const dotIdx = targetCompKey.indexOf('.');
+        if (dotIdx !== -1) {
+          const parsed = Number(targetCompKey.slice(dotIdx + 1));
           if (Number.isFinite(parsed)) targetCompIdx = parsed;
         }
         if (targetCompIdx === null) return null;
@@ -5880,9 +5880,9 @@ export class NetworkGenerator {
           const targetCompKey = match.componentMap.get(`${molIdxInPattern}.${compIdx}`);
           let targetCompIdx: number;
           if (targetCompKey) {
-            const parts = targetCompKey.split('.');
-            if (parts.length !== 2) return null;
-            const parsed = Number(parts[1]);
+            const dotIdx = targetCompKey.indexOf('.');
+            if (dotIdx === -1) return null;
+            const parsed = Number(targetCompKey.slice(dotIdx + 1));
             if (!Number.isFinite(parsed)) return null;
             targetCompIdx = parsed;
           } else {
