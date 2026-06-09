@@ -110,30 +110,31 @@ export class GraphMatcher {
           }
         }
 
-        nextLevel.sort((a, b) => {
-          const coveredA = this.countCoveredNeighbors(pattern, a, visited);
-          const coveredB = this.countCoveredNeighbors(pattern, b, visited);
-          if (coveredA !== coveredB) {
-            return coveredB - coveredA;
-          }
-
-          const degreeA = getNeighborMolecules(pattern, a).length;
-          const degreeB = getNeighborMolecules(pattern, b).length;
-          if (degreeA !== degreeB) {
-            return degreeB - degreeA;
-          }
-
-          const freqA = labelFrequency.get(pattern.molecules[a].name) ?? 0;
-          const freqB = labelFrequency.get(pattern.molecules[b].name) ?? 0;
-          if (freqA !== freqB) {
-            return freqA - freqB;
-          }
-
-          return a - b;
+        // X-4: decorate-then-sort — precompute covered/degree/freq once per node
+        const k = nextLevel.length;
+        const covered = new Array(k);
+        const degree = new Array(k);
+        const freq = new Array(k);
+        for (let ni = 0; ni < k; ni++) {
+          const node = nextLevel[ni];
+          covered[ni] = this.countCoveredNeighbors(pattern, node, visited);
+          degree[ni] = getNeighborMolecules(pattern, node).length;
+          freq[ni] = labelFrequency.get(pattern.molecules[node].name) ?? 0;
+        }
+        // sort indices by covered desc, degree desc, freq asc, index asc
+        const indices = new Array(k);
+        for (let ni = 0; ni < k; ni++) indices[ni] = ni;
+        indices.sort((a, b) => {
+          if (covered[a] !== covered[b]) return covered[b] - covered[a];
+          if (degree[a] !== degree[b]) return degree[b] - degree[a];
+          if (freq[a] !== freq[b]) return freq[a] - freq[b];
+          return nextLevel[a] - nextLevel[b];
         });
+        const sorted = new Array(k);
+        for (let ni = 0; ni < k; ni++) sorted[ni] = nextLevel[indices[ni]];
 
-        const deduplicated = Array.from(new Set(nextLevel));
-        for (const node of deduplicated) {
+        // X-3: nextLevel is already duplicate-free (Set guard at push), so iterate directly
+        for (const node of sorted) {
           visited.add(node);
           queue.push(node);
           ordering.push(node);
@@ -543,12 +544,16 @@ class VF2State {
   symmetryBreaking: boolean;
   allowExtraTargetBonds: boolean;
   private componentCandidateCache: Map<number, Map<number, Map<number, Map<number, number[]>>>>;
+  private componentCandidateCacheLarge: Map<number, Map<number, Map<number, Map<string, number[]>>>>;
   private frontierBits: Uint8Array;
   private frontierSize: number;
   private componentOrders: number[][];
   private scratchAssignment: Int32Array;
   private scratchIterationCount: { value: number };
   private mcvCandidateCache: Map<number, number[]>;
+  private orderScratch: number[];
+  private largeUsedFlags: Set<number>;
+  private largeUsedKeyScratch: number[];
 
   constructor(
     pattern: SpeciesGraph,
@@ -572,6 +577,7 @@ class VF2State {
     this.symmetryBreaking = symmetryBreaking;
     this.allowExtraTargetBonds = allowExtraTargetBonds;
     this.componentCandidateCache = new Map();
+    this.componentCandidateCacheLarge = new Map();
     this.frontierBits = new Uint8Array(Math.max(pLen, tLen));
     this.frontierSize = 0;
 
@@ -587,6 +593,9 @@ class VF2State {
     this.scratchAssignment = new Int32Array(maxComps);
     this.scratchIterationCount = { value: 0 };
     this.mcvCandidateCache = new Map();
+    this.orderScratch = new Array(maxComps);
+    this.largeUsedFlags = new Set<number>();
+    this.largeUsedKeyScratch = [];
   }
 
   isComplete(): boolean {
@@ -1102,21 +1111,32 @@ class VF2State {
   private matchComponentsWithBondConsistency(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
     const profStart = performance.now();
     const patternMol = this.pattern.molecules[pMolIdx];
+    const targetMol = this.target.molecules[tMolIdx];
     if (patternMol.components.length === 0) {
       GraphMatcher.matchComponentsTime += performance.now() - profStart;
       GraphMatcher.matchComponentsCount++;
       return new Map();
     }
 
-    const order = this.componentOrders[pMolIdx];
-    const assignment = this.scratchAssignment;
+    // X-1 guard: bitmask overflows for >31 target components
+    if (targetMol.components.length > 31) {
+      const result = this.matchComponentsWithBondConsistencyLarge(pMolIdx, tMolIdx);
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+      return result;
+    }
+
+    const cachedOrder = this.componentOrders[pMolIdx];
+    // X-2: copy to per-instance scratch so MCV swaps don't mutate the cached order
     const nComps = patternMol.components.length;
+    for (let i = 0; i < nComps; i++) this.orderScratch[i] = cachedOrder[i];
+    const assignment = this.scratchAssignment;
     for (let i = 0; i < nComps; i++) assignment[i] = -1;
     const iterationCount = this.scratchIterationCount;
     iterationCount.value = 0;
 
     const success = this.assignComponentsWithFullContext(
-      pMolIdx, tMolIdx, order, 0, assignment, 0, iterationCount
+      pMolIdx, tMolIdx, this.orderScratch, 0, assignment, 0, iterationCount
     );
     if (!success) {
       GraphMatcher.matchComponentsTime += performance.now() - profStart;
@@ -1225,6 +1245,81 @@ class VF2State {
     return true;
   }
 
+  private assignComponentsWithFullContextLarge(
+    pMolIdx: number,
+    tMolIdx: number,
+    order: number[],
+    orderIdx: number,
+    assignment: Int32Array,
+    usedTargets: Set<number>,
+    iterationCount: { value: number }
+  ): boolean {
+    iterationCount.value++;
+    if (iterationCount.value > MAX_COMPONENT_ITERATIONS) {
+      return false;
+    }
+
+    if (orderIdx >= order.length) {
+      return true;
+    }
+
+    const pCompIdx = order[orderIdx];
+    const candidates = this.getComponentCandidatesLarge(pMolIdx, tMolIdx, pCompIdx, usedTargets);
+
+    for (const tCompIdx of candidates) {
+      if (iterationCount.value > MAX_COMPONENT_ITERATIONS) {
+        return false;
+      }
+
+      if (!this.isComponentAssignmentValid(pMolIdx, pCompIdx, tMolIdx, tCompIdx, assignment)) {
+        continue;
+      }
+
+      if (!this.checkInterMoleculeBondConsistency(pMolIdx, pCompIdx, tMolIdx, tCompIdx, assignment)) {
+        continue;
+      }
+
+      assignment[pCompIdx] = tCompIdx;
+      usedTargets.add(tCompIdx);
+
+      if (this.assignComponentsWithFullContextLarge(
+        pMolIdx, tMolIdx, order, orderIdx + 1, assignment, usedTargets, iterationCount
+      )) {
+        return true;
+      }
+
+      assignment[pCompIdx] = -1;
+      usedTargets.delete(tCompIdx);
+    }
+
+    return false;
+  }
+
+  private matchComponentsWithBondConsistencyLarge(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
+    const patternMol = this.pattern.molecules[pMolIdx];
+    const nComps = patternMol.components.length;
+    if (nComps === 0) return new Map();
+
+    const cachedOrder = this.componentOrders[pMolIdx];
+    for (let i = 0; i < nComps; i++) this.orderScratch[i] = cachedOrder[i];
+    const assignment = this.scratchAssignment;
+    for (let i = 0; i < nComps; i++) assignment[i] = -1;
+    const iterationCount = this.scratchIterationCount;
+    iterationCount.value = 0;
+    this.largeUsedFlags.clear();
+
+    const success = this.assignComponentsWithFullContextLarge(
+      pMolIdx, tMolIdx, this.orderScratch, 0, assignment, this.largeUsedFlags, iterationCount
+    );
+    if (!success) return null;
+
+    const result = new Map<number, number>();
+    for (let i = 0; i < nComps; i++) {
+      if (assignment[i] !== -1) result.set(i, assignment[i]);
+    }
+    return result;
+  }
+
   private buildBondPartnerLookup(): Map<string, BondEndpoint> {
     const lookup = new Map<string, BondEndpoint>();
     const grouped = new Map<number, BondEndpoint[]>();
@@ -1260,21 +1355,32 @@ class VF2State {
   private matchComponents(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
     const profStart = performance.now();
     const patternMol = this.pattern.molecules[pMolIdx];
+    const targetMol = this.target.molecules[tMolIdx];
     if (patternMol.components.length === 0) {
       GraphMatcher.matchComponentsTime += performance.now() - profStart;
       GraphMatcher.matchComponentsCount++;
       return new Map();
     }
 
-    const order = this.componentOrders[pMolIdx];
-    const assignment = this.scratchAssignment;
+    // X-1 guard: bitmask overflows for >31 target components
+    if (targetMol.components.length > 31) {
+      const result = this.matchComponentsLarge(pMolIdx, tMolIdx);
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+      return result;
+    }
+
+    const cachedOrder = this.componentOrders[pMolIdx];
+    // X-2: copy to per-instance scratch so MCV swaps don't mutate the cached order
     const nComps = patternMol.components.length;
+    for (let i = 0; i < nComps; i++) this.orderScratch[i] = cachedOrder[i];
+    const assignment = this.scratchAssignment;
     for (let i = 0; i < nComps; i++) assignment[i] = -1;
     const iterationCount = this.scratchIterationCount;
     iterationCount.value = 0;
 
     const success = this.assignComponentsBacktrack(
-      pMolIdx, tMolIdx, order, 0, assignment, 0, iterationCount
+      pMolIdx, tMolIdx, this.orderScratch, 0, assignment, 0, iterationCount
     );
     if (!success) {
       GraphMatcher.matchComponentsTime += performance.now() - profStart;
@@ -1380,6 +1486,133 @@ class VF2State {
     }
 
     return false;
+  }
+
+  private getUsedTargetsKey(usedTargets: Set<number>): string {
+    this.largeUsedKeyScratch.length = 0;
+    for (const value of usedTargets) {
+      this.largeUsedKeyScratch.push(value);
+    }
+    this.largeUsedKeyScratch.sort((a, b) => a - b);
+    return this.largeUsedKeyScratch.join(',');
+  }
+
+  private getComponentCandidatesLarge(
+    pMolIdx: number,
+    tMolIdx: number,
+    pCompIdx: number,
+    usedTargets: Set<number>
+  ): number[] {
+    const usedKey = this.getUsedTargetsKey(usedTargets);
+    let level1 = this.componentCandidateCacheLarge.get(pMolIdx);
+    if (!level1) {
+      level1 = new Map();
+      this.componentCandidateCacheLarge.set(pMolIdx, level1);
+    }
+
+    let level2 = level1.get(tMolIdx);
+    if (!level2) {
+      level2 = new Map();
+      level1.set(tMolIdx, level2);
+    }
+
+    let level3 = level2.get(pCompIdx);
+    if (!level3) {
+      level3 = new Map();
+      level2.set(pCompIdx, level3);
+    }
+
+    const cached = level3.get(usedKey);
+    if (cached) {
+      return cached;
+    }
+
+    const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
+    const targetMol = this.target.molecules[tMolIdx];
+    const candidates: number[] = [];
+
+    for (let idx = 0; idx < targetMol.components.length; idx++) {
+      if (usedTargets.has(idx)) continue;
+      const tComp = targetMol.components[idx];
+      if (tComp.name !== pComp.name) continue;
+      if (!this.componentStateCompatible(pComp, tComp)) continue;
+      candidates.push(idx);
+    }
+
+    level3.set(usedKey, candidates);
+    return candidates;
+  }
+
+  private assignComponentsBacktrackLarge(
+    pMolIdx: number,
+    tMolIdx: number,
+    order: number[],
+    orderIdx: number,
+    assignment: Int32Array,
+    usedTargets: Set<number>,
+    iterationCount: { value: number }
+  ): boolean {
+    iterationCount.value++;
+    if (iterationCount.value > MAX_COMPONENT_ITERATIONS) {
+      return false;
+    }
+
+    if (orderIdx >= order.length) {
+      return true;
+    }
+
+    const pCompIdx = order[orderIdx];
+    const candidates = this.getComponentCandidatesLarge(pMolIdx, tMolIdx, pCompIdx, usedTargets);
+
+    for (const tCompIdx of candidates) {
+      if (iterationCount.value > MAX_COMPONENT_ITERATIONS) {
+        return false;
+      }
+
+      if (!this.isComponentAssignmentValid(pMolIdx, pCompIdx, tMolIdx, tCompIdx, assignment)) {
+        continue;
+      }
+
+      assignment[pCompIdx] = tCompIdx;
+      usedTargets.add(tCompIdx);
+
+      if (this.assignComponentsBacktrackLarge(
+        pMolIdx, tMolIdx, order, orderIdx + 1, assignment, usedTargets, iterationCount
+      )) {
+        return true;
+      }
+
+      assignment[pCompIdx] = -1;
+      usedTargets.delete(tCompIdx);
+    }
+
+    return false;
+  }
+
+  private matchComponentsLarge(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
+    const patternMol = this.pattern.molecules[pMolIdx];
+    const targetMol = this.target.molecules[tMolIdx];
+    const nComps = patternMol.components.length;
+    if (nComps === 0) return new Map();
+
+    const cachedOrder = this.componentOrders[pMolIdx];
+    for (let i = 0; i < nComps; i++) this.orderScratch[i] = cachedOrder[i];
+    const assignment = this.scratchAssignment;
+    for (let i = 0; i < nComps; i++) assignment[i] = -1;
+    const iterationCount = this.scratchIterationCount;
+    iterationCount.value = 0;
+    this.largeUsedFlags.clear();
+
+    const success = this.assignComponentsBacktrackLarge(
+      pMolIdx, tMolIdx, this.orderScratch, 0, assignment, this.largeUsedFlags, iterationCount
+    );
+    if (!success) return null;
+
+    const result = new Map<number, number>();
+    for (let i = 0; i < nComps; i++) {
+      if (assignment[i] !== -1) result.set(i, assignment[i]);
+    }
+    return result;
   }
 
   private getComponentCandidates(
