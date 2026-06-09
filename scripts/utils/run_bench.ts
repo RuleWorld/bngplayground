@@ -46,12 +46,10 @@ async function runBenchmarks() {
 
     if (!fs.existsSync(tempDir)) fs.mkdirSync(tempDir);
 
-    let categories: string[];
     const models: { name: string; path: string; category: string }[] = [];
 
     try {
         const modelFiles = listAllRuleHubModelFiles(projectRoot);
-        categories = [...new Set(modelFiles.map((entry) => entry.source))].sort();
         for (const entry of modelFiles) {
             models.push({
                 name: path.basename(entry.filePath, '.bngl'),

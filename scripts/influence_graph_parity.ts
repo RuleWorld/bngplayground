@@ -46,7 +46,7 @@ const compareInfluenceGraphs = async (bnglFilePath: string) => {
     const parsedModel: BNGLModel = parseBNGL(bnglContent);
 
     console.log('Building rule overlays...');
-    const overlays = buildRuleOverlays(parsedModel.reactionRules, parsedModel.moleculeTypes);
+    const overlays = buildRuleOverlays(parsedModel.reactionRules);
 
     console.log('Computing influence graph...');
     const influenceGraph = computeInfluenceGraph(overlays, parsedModel.reactionRules);

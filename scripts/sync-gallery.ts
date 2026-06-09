@@ -62,13 +62,53 @@ async function main() {
 
   console.log(`  Loaded ${slim.length} models, ${gallery.categories.length} categories`);
 
-  const modelEntries = slim.map(e => 
-    `    { id: ${JSON.stringify(e.id)}, name: ${JSON.stringify(e.name)}, description: ${JSON.stringify(e.description)}, tags: ${JSON.stringify(e.tags || [])} }`
+  // Sanitization functions to prevent injection/taint issues
+  const sanitizeStr = (val: unknown): string => {
+    if (typeof val !== 'string') return '';
+    // Strip control characters and backslashes that could be used for injection
+    return val.replace(/[\u0000-\u001F\u007F-\u009F\\]/g, '');
+  };
+
+  const sanitizeStrArray = (val: unknown): string[] => {
+    if (!Array.isArray(val)) return [];
+    return val.map(sanitizeStr);
+  };
+
+  // Sanitize manifests and configs
+  const sanitizedSlim = slim.map(e => ({
+    id: sanitizeStr(e.id),
+    name: sanitizeStr(e.name),
+    description: sanitizeStr(e.description),
+    tags: sanitizeStrArray(e.tags),
+    compatibility: {
+      bng2: !!e.compatibility?.bng2,
+      nfsim: !!e.compatibility?.nfsim,
+      methods: sanitizeStrArray(e.compatibility?.methods),
+    },
+    excluded: !!(e as any).excluded
+  }));
+
+  const sanitizedCategories = gallery.categories.map(cat => ({
+    id: sanitizeStr(cat.id),
+    name: sanitizeStr(cat.name),
+    description: sanitizeStr(cat.description),
+    sortOrder: Number(cat.sortOrder) || 0
+  }));
+
+  const sanitizedAssignments: Record<string, string[]> = {};
+  if (gallery.assignments) {
+    for (const [key, val] of Object.entries(gallery.assignments)) {
+      sanitizedAssignments[sanitizeStr(key)] = sanitizeStrArray(val);
+    }
+  }
+
+  const modelEntries = sanitizedSlim.map(e => 
+    `    { id: ${JSON.stringify(e.id)}, name: ${JSON.stringify(e.name)}, description: ${JSON.stringify(e.description)}, tags: ${JSON.stringify(e.tags)} }`
   ).join(',\n');
 
-  const bng2Compatible = slim.filter(e => e.compatibility?.bng2).map(e => e.id);
-  const nfsimCompatible = slim.filter(e => e.compatibility?.nfsim).map(e => e.id);
-  const excluded = slim.filter(e => (e.compatibility as any)?.excluded).map(e => e.id);
+  const bng2Compatible = sanitizedSlim.filter(e => e.compatibility?.bng2).map(e => e.id);
+  const nfsimCompatible = sanitizedSlim.filter(e => e.compatibility?.nfsim).map(e => e.id);
+  const excluded = sanitizedSlim.filter(e => e.excluded).map(e => e.id);
 
   const output = `// AUTO-GENERATED — DO NOT EDIT
 // Source: RuleHub manifest-slim.json + gallery.json
@@ -93,8 +133,8 @@ export const BNG2_COMPATIBLE = new Set(${JSON.stringify(bng2Compatible)});
 export const NFSIM_COMPATIBLE = new Set(${JSON.stringify(nfsimCompatible)});
 export const EXCLUDED = new Set(${JSON.stringify(excluded)});
 
-const GALLERY_CATEGORIES: { id: string; name: string; description: string; sortOrder: number }[] = ${JSON.stringify(gallery.categories, null, 2)};
-const ASSIGNMENTS: Record<string, string[]> = ${JSON.stringify(gallery.assignments, null, 2)};
+const GALLERY_CATEGORIES: { id: string; name: string; description: string; sortOrder: number }[] = ${JSON.stringify(sanitizedCategories, null, 2)};
+const ASSIGNMENTS: Record<string, string[]> = ${JSON.stringify(sanitizedAssignments, null, 2)};
 
 function buildCategory(cat: typeof GALLERY_CATEGORIES[0]): ModelCategory {
   const modelIds = Object.entries(ASSIGNMENTS)
@@ -125,12 +165,12 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
   const outDir = resolve('src/generated');
   mkdirSync(outDir, { recursive: true });
   // Validate all model entries before writing
-  for (const entry of slim) {
+  for (const entry of sanitizedSlim) {
     if (typeof entry.id !== 'string' || typeof entry.name !== 'string') {
       throw new Error(`Invalid model entry: missing id or name`);
     }
   }
-  for (const cat of gallery.categories) {
+  for (const cat of sanitizedCategories) {
     if (typeof cat.id !== 'string' || typeof cat.name !== 'string') {
       throw new Error(`Invalid category entry: missing id or name`);
     }
@@ -139,7 +179,7 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
   const outPath = resolve(outDir, 'gallery-data.ts');
   writeFileSync(outPath, output);
 
-  console.log(`Generated: ${slim.length} models, ${gallery.categories.length} categories, ${Object.keys(gallery.assignments).length} assignments`);
+  console.log(`Generated: ${sanitizedSlim.length} models, ${sanitizedCategories.length} categories, ${Object.keys(sanitizedAssignments).length} assignments`);
 }
 
 main().catch(err => {

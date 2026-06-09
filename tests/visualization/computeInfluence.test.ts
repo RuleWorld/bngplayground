@@ -33,7 +33,7 @@ describe('computeInfluenceGraph', () => {
             },
         ];
 
-        const overlays = buildRuleOverlays(rules, molTypes);
+        const overlays = buildRuleOverlays(rules);
         const graph = computeInfluenceGraph(overlays, rules);
 
         expect(graph.nodes).toHaveLength(2);
@@ -66,7 +66,7 @@ describe('computeInfluenceGraph', () => {
             },
         ];
 
-        const overlays = buildRuleOverlays(rules, molTypes);
+        const overlays = buildRuleOverlays(rules);
         const graph = computeInfluenceGraph(overlays, rules);
 
         // Rule "Unbind" should inhibit "Phospho"
@@ -97,7 +97,7 @@ describe('computeInfluenceGraph', () => {
             },
         ];
 
-        const overlays = buildRuleOverlays(rules, molTypes);
+        const overlays = buildRuleOverlays(rules);
         const graph = computeInfluenceGraph(overlays, rules);
 
         expect(graph.nodes).toHaveLength(2);
@@ -120,7 +120,7 @@ describe('computeInfluenceGraph', () => {
             },
         ];
 
-        const overlays = buildRuleOverlays(rules, molTypes);
+        const overlays = buildRuleOverlays(rules);
         const graph = computeInfluenceGraph(overlays, rules);
 
         // Bidirectional -> 2 nodes (forward + reverse)
