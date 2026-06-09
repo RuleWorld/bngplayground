@@ -394,6 +394,8 @@ export class NetworkGenerator {
   private options: GeneratorOptions;
   // NEW: map Molecule name -> set of species indices that contain that molecule
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
+  // NEW: map Structural Hash -> Canonical String (for fast prefiltering)
+  private structuralHashMap: Map<string, string> = new Map();
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
   private compartmentMap: Map<string, CompartmentInfo> = new Map();
@@ -820,6 +822,7 @@ export class NetworkGenerator {
 
     // Reset inverted index and caches
     this.speciesByMoleculeIndex.clear();
+    this.structuralHashMap.clear();
     clearMatchCache();
 
     const speciesMap = new Map<string, Species>();
@@ -5707,8 +5710,17 @@ export class NetworkGenerator {
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
 
-    // Use pure canonicalization for deduplication (fastest O(1) string equality map)
-    const canonical = profiledCanonicalize(graph);
+    // Use structural hash prefiltering to avoid canonicalization
+    const structHash = graph.getStructuralHash();
+    let canonical: string;
+    const cached = this.structuralHashMap.get(structHash);
+    if (cached !== undefined) {
+      canonical = cached;
+      graph.cachedCanonical = canonical;
+    } else {
+      canonical = profiledCanonicalize(graph);
+      this.structuralHashMap.set(structHash, canonical);
+    }
 
     if (speciesMap.has(canonical)) {
       if (profilingEnabled) { PROFILE_DATA.speciesDedup += performance.now() - _dedupStart; PROFILE_DATA.speciesDedupCount++; }

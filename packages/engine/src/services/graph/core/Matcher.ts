@@ -393,6 +393,19 @@ export class GraphMatcher {
       return false;
     }
 
+    // 3.5 Type-connectivity check
+    const patternBondsMap = pattern.typeBonds;
+    const targetBondsMap = target.typeBonds;
+    for (const [pairKey, patCount] of patternBondsMap.entries()) {
+      if (pairKey.includes('*')) {
+        continue;
+      }
+      const tarCount = targetBondsMap.get(pairKey) ?? 0;
+      if (tarCount < patCount) {
+        return false;
+      }
+    }
+
     // 4. Name-based molecule count checks
     const targetTotal = target.molecules.length;
     const patternTotal = pattern.molecules.length;
