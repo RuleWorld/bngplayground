@@ -54,7 +54,7 @@ export const Header: React.FC<HeaderProps> = ({
 
   return (
     <>
-      <header className="bg-white dark:bg-slate-800 border-b border-stone-200 dark:border-slate-700 shadow-sm sticky top-0 z-40">
+      <header role="banner" className="bg-white dark:bg-slate-800 border-b border-stone-200 dark:border-slate-700 shadow-sm sticky top-0 z-40">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-3.5">
             {/* Logo + Title */}
@@ -74,7 +74,7 @@ export const Header: React.FC<HeaderProps> = ({
                 </h1>
 
                 {/* Subtle Mode Switcher */}
-                <div className="flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
+                <div role="group" aria-label="View mode" className="flex border border-slate-200 dark:border-slate-700 rounded overflow-hidden">
                   <button
                     onClick={() => onViewModeChange('code')}
                     aria-pressed={viewMode === 'code'}
@@ -101,7 +101,7 @@ export const Header: React.FC<HeaderProps> = ({
             </div>
 
             {/* Actions */}
-            <div className="flex items-center gap-2">
+            <div aria-label="Main navigation" className="flex items-center gap-2">
               {code && (
                 <div className="flex items-center gap-1 mr-1">
                   <ShareButton
@@ -235,6 +235,7 @@ export const Header: React.FC<HeaderProps> = ({
           type="file"
           ref={fileInputRef}
           style={{ display: 'none' }}
+          aria-hidden="true"
           accept=".sbml,.xml"
           onChange={(e) => {
             const file = e.target.files?.[0];

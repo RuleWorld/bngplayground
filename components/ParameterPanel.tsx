@@ -180,11 +180,11 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
   if (localParams.length === 0) return null;
 
   return (
-    <div className="flex flex-col gap-2 p-3 mt-4 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800/50 rounded-lg">
+    <div className="flex flex-col gap-2 p-3 mt-4 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800/50 rounded-lg" aria-label="Parameter controls">
       <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-200">
         Parameter Sliders (Log Scale)
       </h3>
-      <div className="flex flex-col gap-3 max-h-48 overflow-y-auto pr-2">
+      <div className="flex flex-col gap-3 max-h-48 overflow-y-auto pr-2" role="region" aria-label="Parameter sliders">
         {localParams.map((param, i) => (
           <div key={`${param.name}-${i}`} className="flex flex-col gap-1">
             <div className="flex justify-between text-xs">
@@ -199,6 +199,7 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
               value={param.sliderValue}
               onChange={(e) => handleSliderChange(i, parseFloat(e.target.value))}
               className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 accent-primary-500"
+              aria-label={param.name}
             />
             <div className="flex justify-between text-[10px] text-slate-400 px-1">
               <span>{param.initialValue === 0 ? '-1' : (param.initialValue / 10).toPrecision(2)}</span>

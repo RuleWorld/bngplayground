@@ -169,8 +169,9 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
           
           <div className="space-y-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Grid Resolution</label>
+              <label htmlFor="pl-grid-resolution" className="text-xs font-bold text-slate-500 dark:text-slate-400">Grid Resolution</label>
               <input 
+                id="pl-grid-resolution"
                 type="number" 
                 value={nGrid} 
                 onChange={e => setNGrid(Number(e.target.value))}
@@ -181,8 +182,9 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
             </div>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Range Factor</label>
+              <label htmlFor="pl-range-factor" className="text-xs font-bold text-slate-500 dark:text-slate-400">Range Factor</label>
               <input 
+                id="pl-range-factor"
                 type="number" 
                 value={rangeFactor} 
                 onChange={e => setRangeFactor(Number(e.target.value))}
@@ -339,6 +341,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
               spellCheck={false}
               placeholder="# time, Obs1, Obs2..."
               disabled={isAnalyzing}
+              aria-label="Experimental data editor"
             />
             <div className="flex items-center justify-between text-[10px]">
               <span className="text-slate-500 dark:text-slate-400">Observables: {model.observables.map(o => o.name).join(', ')}</span>

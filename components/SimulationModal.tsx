@@ -71,7 +71,7 @@ export function SimulationModal({
   }, [model]);
 
   return (
-    <div className="fixed inset-0 bg-white dark:bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50">
+    <div className="fixed inset-0 bg-white dark:bg-slate-900/30 backdrop-blur-sm flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-label="Simulation progress">
       <div className="bg-white dark:bg-slate-900 dark:bg-slate-800 rounded-lg p-6 max-w-md w-full mx-4 shadow-xl relative overflow-hidden">
 
         {/* Particle Animation Background */}
@@ -94,7 +94,7 @@ export function SimulationModal({
           <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">
             {isSimulating ? 'Simulating...' : 'Generating Network...'}
           </h3>
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600" />
+          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-teal-600" aria-hidden="true" />
         </div>
 
         <p className="text-sm text-gray-700 dark:text-gray-300 mb-3 min-h-[1.5rem]">
@@ -139,7 +139,7 @@ export function SimulationModal({
                     : `${speciesCount.toLocaleString()} species generated`)}
             </span>
           </div>
-          <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-3 overflow-hidden">
+          <div className="w-full bg-gray-200 dark:bg-slate-600 rounded-full h-3 overflow-hidden" role="progressbar" aria-valuenow={progressPercent ?? undefined} aria-valuemin={0} aria-valuemax={100} aria-label="Simulation progress">
             {progressPercent !== null ? (
               <div
                 className={`h-full bg-gradient-to-r ${progressColor} transition-all duration-300 ease-out`}
@@ -166,6 +166,7 @@ export function SimulationModal({
           <button
             onClick={onCancel}
             className="flex-1 px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 transition-colors font-medium"
+            aria-label="Cancel simulation"
           >
             Cancel
           </button>

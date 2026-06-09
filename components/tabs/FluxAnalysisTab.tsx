@@ -180,10 +180,11 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
 
         <div className="flex flex-wrap gap-4 items-end">
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor="flux-time-point" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Time Point
             </label>
             <Select
+              id="flux-time-point"
               value={selectedTimeIndex.toString()}
               onChange={(e) => setSelectedTimeIndex(parseInt(e.target.value, 10))}
               className="w-32"
@@ -197,10 +198,11 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
           </div>
 
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor="flux-focus-species" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Focus Species (optional)
             </label>
             <Select
+              id="flux-focus-species"
               value={selectedSpecies ?? ''}
               onChange={(e) => setSelectedSpecies(e.target.value || null)}
               className="w-48"
@@ -215,10 +217,11 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
           </div>
 
           <div className="space-y-1">
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">
+            <label htmlFor="flux-top-n" className="block text-sm font-medium text-slate-700 dark:text-slate-300">
               Top N
             </label>
             <Select
+              id="flux-top-n"
               value={topN.toString()}
               onChange={(e) => setTopN(parseInt(e.target.value, 10))}
               className="w-24"
@@ -293,10 +296,10 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
             <table className="min-w-full text-sm">
               <thead>
                 <tr className="border-b border-slate-200 dark:border-slate-700 dark:border-slate-700">
-                  <th className="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Reaction</th>
-                  <th className="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Reactants → Products</th>
-                  <th className="text-right py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Rate Constant</th>
-                  <th className="text-right py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Flux</th>
+                  <th scope="col" className="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Reaction</th>
+                  <th scope="col" className="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Reactants → Products</th>
+                  <th scope="col" className="text-right py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Rate Constant</th>
+                  <th scope="col" className="text-right py-2 px-3 font-medium text-slate-700 dark:text-slate-300">Flux</th>
                 </tr>
               </thead>
               <tbody>

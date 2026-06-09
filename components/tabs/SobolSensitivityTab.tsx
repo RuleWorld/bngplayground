@@ -144,8 +144,9 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
           
           <div className="space-y-4">
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Base Samples (N)</label>
+              <label htmlFor="sobol-base-samples" className="text-xs font-bold text-slate-500 dark:text-slate-400">Base Samples (N)</label>
               <select 
+                id="sobol-base-samples"
                 value={nSamples} 
                 onChange={e => setNSamples(Number(e.target.value))}
                 className="bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all cursor-pointer"
@@ -175,8 +176,9 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
             </label>
 
             <div className="flex flex-col gap-1.5">
-              <label className="text-xs font-bold text-slate-500 dark:text-slate-400">Focus Observable</label>
+              <label htmlFor="sobol-focus-obs" className="text-xs font-bold text-slate-500 dark:text-slate-400">Focus Observable</label>
               <select
+                id="sobol-focus-obs"
                 value={selectedObs}
                 onChange={e => setSelectedObs(e.target.value)}
                 className="bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-amber-500 outline-none transition-all cursor-pointer"
@@ -207,7 +209,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
             </Button>
 
             {isAnalyzing && progress.total > 0 && (
-              <div className="mt-4 p-4 bg-amber-50/50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-800/50">
+              <div className="mt-4 p-4 bg-amber-50/50 dark:bg-amber-900/10 rounded-lg border border-amber-100 dark:border-amber-800/50" role="progressbar" aria-valuenow={progress.current} aria-valuemin={0} aria-valuemax={progress.total} aria-label="Sobol analysis progress">
                 <div className="flex justify-between text-[11px] font-bold text-amber-700 dark:text-amber-400 mb-2">
                   <span>Simulation Sweep</span>
                   <span>{Math.round((progress.current / progress.total) * 100)}%</span>
@@ -268,6 +270,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
                         onChange={e => setParamBounds(prev => ({...prev, [name]: {...prev[name], min: Number(e.target.value)}}))}
                         className="w-full text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:ring-1 focus:ring-amber-300 outline-none"
                         disabled={isAnalyzing}
+                        aria-label={`${name} min`}
                       />
                       <span className="text-[10px] font-bold text-slate-300">→</span>
                       <input 
@@ -276,6 +279,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
                         onChange={e => setParamBounds(prev => ({...prev, [name]: {...prev[name], max: Number(e.target.value)}}))}
                         className="w-full text-[10px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded px-1.5 py-1 focus:ring-1 focus:ring-amber-300 outline-none"
                         disabled={isAnalyzing}
+                        aria-label={`${name} max`}
                       />
                     </div>
                   )}

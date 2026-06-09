@@ -836,7 +836,16 @@ export class JITCompiler {
             for (let i = 0; i < reactions.length; i++) {
                 const rxn = reactions[i];
                 const n = rxn.reactants.length;
+                if (typeof rxn.rateConstant !== 'number' || !Number.isFinite(rxn.rateConstant)) {
+                    throw new Error(`Invalid rateConstant: expected finite number, got ${typeof rxn.rateConstant}`);
+                }
+                if (typeof rxn.propensityFactor !== 'number' || !Number.isFinite(rxn.propensityFactor)) {
+                    throw new Error(`Invalid propensityFactor: expected finite number, got ${typeof rxn.propensityFactor}`);
+                }
                 let a = rxn.rateConstant * rxn.propensityFactor;
+                if (!Number.isFinite(a)) {
+                    throw new Error(`Invalid computed rate: expected finite number, got ${a}`);
+                }
 
                 const volume = reactionReactingVolumes[i];
                 if (n === 0) {

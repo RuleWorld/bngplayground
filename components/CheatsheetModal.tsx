@@ -10,12 +10,12 @@ export const CheatsheetModal: React.FC<CheatsheetModalProps> = ({ isOpen, onClos
     if (!isOpen) return null;
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm" role="dialog" aria-modal="true" aria-labelledby="cheatsheet-title">
             <div className="bg-white dark:bg-slate-900 rounded-lg shadow-xl w-full max-w-3xl max-h-[80vh] flex flex-col border border-slate-200 dark:border-slate-700">
                 <div className="flex items-center justify-between p-4 border-b border-slate-200 dark:border-slate-800">
-                    <h2 className="text-xl font-semibold text-slate-800 dark:text-slate-100">BioNetGen Cheatsheet</h2>
+                    <h2 id="cheatsheet-title" className="text-xl font-semibold text-slate-800 dark:text-slate-100">BioNetGen Cheatsheet</h2>
                     <button onClick={onClose} aria-label="Close cheatsheet" className="text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200">
-                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                        <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
                             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
                         </svg>
                     </button>

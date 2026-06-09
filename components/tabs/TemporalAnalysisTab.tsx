@@ -186,18 +186,20 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
       </Card>
 
       {error && (
-        <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
+        <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm" role="alert">
           {error}
         </div>
       )}
 
       {/* View mode tabs */}
       {(firingLog || itResult) && (
-        <div className="flex gap-1 shrink-0">
+        <div className="flex gap-1 shrink-0" role="tablist" aria-label="Analysis view mode">
           {(['piano_roll', 'mutual_info', 'transfer_entropy', 'causal'] as const).map(mode => (
             <button
               key={mode}
               onClick={() => setViewMode(mode)}
+              role="tab"
+              aria-selected={viewMode === mode}
               className={`px-3 py-1.5 text-xs font-medium rounded-md transition-colors ${
                 viewMode === mode
                   ? 'bg-blue-600 text-white'
@@ -230,6 +232,8 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
             height={Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}
             viewBox={`0 0 1000 ${Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}`}
             className="bg-white dark:bg-slate-900 rounded"
+            role="img"
+            aria-label="Reaction firing piano roll visualization"
           >
             {/* Time axis */}
             {(() => {
@@ -323,11 +327,11 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                 </colgroup>
                 <thead>
                   <tr className="border-b-2 border-slate-200 dark:border-slate-600">
-                    <th className="p-2 text-left text-slate-600 dark:text-slate-300 font-semibold">Reaction Pair</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">MI (bits)</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">Normalized</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">p-value</th>
-                    <th className="p-2 text-center text-slate-600 dark:text-slate-300 font-semibold">Sig.</th>
+                    <th scope="col" className="p-2 text-left text-slate-600 dark:text-slate-300 font-semibold">Reaction Pair</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">MI (bits)</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">Normalized</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">p-value</th>
+                    <th scope="col" className="p-2 text-center text-slate-600 dark:text-slate-300 font-semibold">Sig.</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -393,11 +397,11 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                 </colgroup>
                 <thead>
                   <tr className="border-b-2 border-slate-200 dark:border-slate-600">
-                    <th className="p-2 text-left text-slate-600 dark:text-slate-300 font-semibold">Source → Target</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">TE (bits)</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">Reverse TE</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">Net Flow</th>
-                    <th className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">p-value</th>
+                    <th scope="col" className="p-2 text-left text-slate-600 dark:text-slate-300 font-semibold">Source → Target</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">TE (bits)</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">Reverse TE</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">Net Flow</th>
+                    <th scope="col" className="p-2 text-right text-slate-600 dark:text-slate-300 font-semibold">p-value</th>
                   </tr>
                 </thead>
                 <tbody>

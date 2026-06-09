@@ -206,8 +206,9 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
             <Card className="p-4 bg-slate-50 dark:bg-slate-900/50 border-dashed border-slate-200 dark:border-slate-800">
                 <div className="flex flex-wrap items-center gap-6">
                     <div className="flex items-center gap-3">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ensemble Size</label>
+                        <label htmlFor="te-ensemble-size" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Ensemble Size</label>
                         <input
+                            id="te-ensemble-size"
                             type="number"
                             value={ensembleSize}
                             onChange={(e) => setEnsembleSize(Math.max(1, parseInt(e.target.value) || 0))}
@@ -217,8 +218,9 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     </div>
 
                     <div className="flex items-center gap-3">
-                        <label className="text-sm font-semibold text-slate-700 dark:text-slate-300">Method</label>
+                        <label htmlFor="te-method" className="text-sm font-semibold text-slate-700 dark:text-slate-300">Method</label>
                         <select
+                            id="te-method"
                             value={method}
                             onChange={(e) => setMethod(e.target.value as 'ssa' | 'pla' | 'psa' | 'nf')}
                             disabled={isSimulating}
@@ -235,12 +237,14 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     {(method === 'ssa' || method === 'pla' || method === 'psa') && (
                         <div className="flex items-center gap-2">
                             <label
+                                htmlFor="te-seed-stochastic"
                                 className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
                                 title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
                             >
                                 Seed
                             </label>
                             <input
+                                id="te-seed-stochastic"
                                 type="number"
                                 value={seed}
                                 onChange={(e) => setSeed(e.target.value)}
@@ -255,12 +259,14 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     {method === 'psa' && (
                         <div className="flex items-center gap-2">
                             <label
+                                htmlFor="te-pop-level"
                                 className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
                                 title="Population threshold: species above this count use scaled propensities (ODE-like), below use exact SSA. Default: 100."
                             >
                                 Pop Level
                             </label>
                             <input
+                                id="te-pop-level"
                                 type="number"
                                 value={poplevel}
                                 onChange={(e) => setPoplevel(e.target.value)}
@@ -276,12 +282,14 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                         <>
                             <div className="flex items-center gap-2">
                                 <label
+                                    htmlFor="te-utl"
                                     className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
                                     title="Universal Traversal Limit: controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto."
                                 >
                                     UTL
                                 </label>
                                 <input
+                                    id="te-utl"
                                     type="number"
                                     value={utl}
                                     onChange={(e) => setUtl(e.target.value)}
@@ -292,12 +300,14 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                             </div>
                             <div className="flex items-center gap-2">
                                 <label
+                                    htmlFor="te-seed-nf"
                                     className="text-sm text-slate-600 dark:text-slate-400 cursor-help"
                                     title="Random seed for reproducible stochastic simulations. Leave empty for a random seed each run."
                                 >
                                     Seed
                                 </label>
                                 <input
+                                    id="te-seed-nf"
                                     type="number"
                                     value={seed}
                                     onChange={(e) => setSeed(e.target.value)}
@@ -340,7 +350,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                         </div>
                     )}
 
-                    {error && <div className="text-sm text-red-500 font-medium">⚠️ {error}</div>}
+                    {error && <div className="text-sm text-red-500 font-medium" role="alert">⚠️ {error}</div>}
                 </div>
             </Card>
 
@@ -396,12 +406,21 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                             const { cx, cy, payload } = props;
                                             const isSelected = selectedRunIdx === payload.index;
                                             return (
-                                                <g 
+                                                <g
                                                     key={`p-${payload.index}`}
+                                                    role="button"
+                                                    tabIndex={0}
+                                                    aria-label={`Run #${payload.id}: click to view trajectory`}
                                                     style={{ cursor: 'pointer', pointerEvents: 'all' }}
                                                     onPointerDown={(e) => {
                                                         e.stopPropagation();
                                                         setSelectedRunIdx(payload.index);
+                                                    }}
+                                                    onKeyDown={(e) => {
+                                                        if (e.key === 'Enter' || e.key === ' ') {
+                                                            e.preventDefault();
+                                                            setSelectedRunIdx(payload.index);
+                                                        }
                                                     }}
                                                 >
                                                     {/* Enhanced hit area */}
@@ -438,12 +457,13 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                 📈 {selectedRunIdx !== null ? `Trajectory Overview: Run #${runs[selectedRunIdx].id}` : 'Select a run in the map'}
                             </h4>
                             {selectedRunIdx !== null && (
-                                <button 
-                                    onClick={() => setSelectedRunIdx(null)}
-                                    className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                >
-                                    Clear Selection
-                                </button>
+                            <button
+                                onClick={() => setSelectedRunIdx(null)}
+                                aria-label="Clear selected run"
+                                className="text-[10px] bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-2 py-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                            >
+                                Clear Selection
+                            </button>
                             )}
                         </div>
                         <div className="flex-1 min-h-0">

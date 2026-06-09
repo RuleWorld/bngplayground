@@ -116,8 +116,9 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
                     <Card className="p-4 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800/50">
                         <div className="flex flex-wrap items-end gap-4">
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Parameter Variation (+/- %)</label>
+                                <label htmlFor="rob-variation" className="text-xs font-semibold text-slate-600 dark:text-slate-400">Parameter Variation (+/- %)</label>
                                 <input
+                                    id="rob-variation"
                                     type="number"
                                     value={variation}
                                     onChange={e => setVariation(Number(e.target.value))}
@@ -127,8 +128,9 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
                             </div>
 
                             <div className="flex flex-col gap-1">
-                                <label className="text-xs font-semibold text-slate-600 dark:text-slate-400">Iterations (Monte Carlo)</label>
+                                <label htmlFor="rob-iterations" className="text-xs font-semibold text-slate-600 dark:text-slate-400">Iterations (Monte Carlo)</label>
                                 <input
+                                    id="rob-iterations"
                                     type="number"
                                     value={iterations}
                                     onChange={e => setIterations(Number(e.target.value))}

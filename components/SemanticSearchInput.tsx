@@ -105,7 +105,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
           {isSearching ? (
             <div className="w-5 h-5 border-2 border-primary border-t-transparent rounded-full animate-spin" />
           ) : (
-            <SearchIcon className="w-5 h-5 text-slate-400" />
+            <SearchIcon className="w-5 h-5 text-slate-400" aria-hidden="true" />
           )}
         </div>
 
@@ -127,7 +127,7 @@ export const SemanticSearchInput: React.FC<SemanticSearchInputProps> = ({
             title="Clear search"
             aria-label="Clear search"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
           </button>

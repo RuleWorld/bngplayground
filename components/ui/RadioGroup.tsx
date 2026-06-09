@@ -8,7 +8,7 @@ interface RadioGroupProps {
 }
 
 export const RadioGroup: React.FC<RadioGroupProps> = ({ name, options, value, onChange }) => (
-    <div className="flex items-center gap-4 py-1">
+    <div role="radiogroup" aria-label={name} className="flex items-center gap-4 py-1">
         {options.map(option => (
             <label key={option.value} className="flex items-center gap-2 text-sm text-slate-700 dark:text-slate-200 cursor-pointer">
                 <input

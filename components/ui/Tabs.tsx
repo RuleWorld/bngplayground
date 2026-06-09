@@ -70,6 +70,7 @@ export const Tab: React.FC<TabProps> = ({ children, isActive, onClick, dataTabIn
       type="button"
       role="tab"
       aria-selected={isActive}
+      aria-controls={`tabpanel-${dataTabIndex}`}
       onClick={onClick}
       data-tab-index={dataTabIndex}
       className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${isActive ? activeClasses : inactiveClasses}`}
@@ -176,6 +177,7 @@ export const TabPanels: React.FC<{ children: React.ReactNode[] | React.ReactNode
       <div className="mt-4 flex-1 min-h-0 overflow-hidden">
         {React.cloneElement(activeItem as React.ReactElement<any>, {
           'aria-labelledby': tabId,
+          id: `tabpanel-${context.activeIndex}`,
         })}
       </div>
     );
@@ -184,6 +186,6 @@ export const TabPanels: React.FC<{ children: React.ReactNode[] | React.ReactNode
   return <div className="mt-4 flex-1 min-h-0 overflow-hidden">{activeItem}</div>;
 };
 
-export const TabPanel: React.FC<{ children: React.ReactNode; className?: string; 'aria-labelledby'?: string }> = ({ children, className, 'aria-labelledby': ariaLabelledBy }) => {
-  return <div role="tabpanel" aria-labelledby={ariaLabelledBy} className={`h-full ${className || ''}`}>{children}</div>;
+export const TabPanel: React.FC<{ children: React.ReactNode; className?: string; 'aria-labelledby'?: string; id?: string }> = ({ children, className, 'aria-labelledby': ariaLabelledBy, id }) => {
+  return <div id={id} role="tabpanel" aria-labelledby={ariaLabelledBy} className={`h-full ${className || ''}`}>{children}</div>;
 };

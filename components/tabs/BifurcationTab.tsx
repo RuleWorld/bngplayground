@@ -310,10 +310,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       <Card className="p-4 shrink-0">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+            <label htmlFor="bif-cont-param" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
               Continuation Parameter
             </label>
             <Select
+              id="bif-cont-param"
               value={selectedParam}
               onChange={(e) => setSelectedParam(e.target.value)}
             >
@@ -322,10 +323,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             </Select>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+            <label htmlFor="bif-species-y" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
               Species (y-axis)
             </label>
             <Select
+              id="bif-species-y"
               value={selectedSpecies1}
               onChange={(e) => setSelectedSpecies1(e.target.value)}
             >
@@ -334,10 +336,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             </Select>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+            <label htmlFor="bif-start-value" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
               Start Value
             </label>
             <input
+              id="bif-start-value"
               type="number"
               value={startValue}
               onChange={e => setStartValue(Number(e.target.value))}
@@ -346,10 +349,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+            <label htmlFor="bif-end-value" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
               End Value
             </label>
             <input
+              id="bif-end-value"
               type="number"
               value={endValue}
               onChange={e => setEndValue(Number(e.target.value))}
@@ -360,10 +364,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         </div>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-3">
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+            <label htmlFor="bif-species-2" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
               Phase Portrait Species 2
             </label>
             <Select
+              id="bif-species-2"
               value={selectedSpecies2}
               onChange={(e) => setSelectedSpecies2(e.target.value)}
             >
@@ -372,10 +377,11 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             </Select>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+            <label htmlFor="bif-max-steps" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
               Max Steps
             </label>
             <input
+              id="bif-max-steps"
               type="number"
               value={maxSteps}
               onChange={e => setMaxSteps(Number(e.target.value))}
@@ -397,7 +403,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       </Card>
 
       {error && (
-        <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
+        <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm" role="alert">
           {error}
         </div>
       )}

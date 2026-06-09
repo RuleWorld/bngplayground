@@ -71,6 +71,9 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
             {showModal && (
                 <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={handleClose}>
                     <div
+                        role="dialog"
+                        aria-modal="true"
+                        aria-label="Share model"
                         className="bg-white dark:bg-slate-900 dark:bg-slate-800 rounded-lg shadow-xl max-w-lg w-full mx-4 p-6"
                         onClick={(e) => e.stopPropagation()}
                     >

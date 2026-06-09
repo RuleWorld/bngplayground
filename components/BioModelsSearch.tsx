@@ -92,6 +92,7 @@ export const BioModelsSearch: React.FC<BioModelsSearchProps> = ({ onImportById }
             }
           }}
           placeholder="Search SBML BioModels (e.g., MAPK)"
+          aria-label="Search BioModels repository"
         />
         <Button onClick={runSearch} disabled={loading}>{loading ? 'Searching...' : 'Search'}</Button>
       </div>
@@ -102,9 +103,9 @@ export const BioModelsSearch: React.FC<BioModelsSearchProps> = ({ onImportById }
 
       {error && <div className="text-sm text-red-600 mt-2">{error}</div>}
 
-      <div className="mt-3 space-y-2 max-h-48 overflow-y-auto">
+      <ul className="mt-3 space-y-2 max-h-48 overflow-y-auto">
         {results.map(r => (
-          <div key={r.id} className="flex items-center justify-between p-2 border rounded bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800">
+          <li key={r.id} className="flex items-center justify-between p-2 border rounded bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800">
             <div className="text-sm">
               <div className="font-medium">{r.name || r.id}</div>
               <div className="text-xs text-slate-500 dark:text-slate-400">{r.id}</div>
@@ -112,9 +113,9 @@ export const BioModelsSearch: React.FC<BioModelsSearchProps> = ({ onImportById }
             <div>
               <Button onClick={() => onImportById(r.id)} className="text-xs">Import</Button>
             </div>
-          </div>
+          </li>
         ))}
-      </div>
+      </ul>
     </div>
   );
 };

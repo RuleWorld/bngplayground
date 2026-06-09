@@ -483,7 +483,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
   return (
     <div className="flex flex-col h-full gap-2">
       {/* Toolbar */}
-      <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">
+      <div role="toolbar" aria-label="Regulatory graph controls" className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">
         {/* Row 1: Layout Buttons */}
         <div className="flex items-center gap-1">
           <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Layout:</span>
@@ -551,7 +551,7 @@ export const RegulatoryGraphViewer: React.FC<RegulatoryGraphViewerProps> = ({ gr
       </div>
 
       {/* Graph Container */}
-      <div
+      <div role="img" aria-label="Regulatory graph"
         ref={containerRef}
         className="h-[600px] w-full rounded-lg border border-stone-200 bg-white dark:bg-slate-900 dark:border-slate-700 dark:bg-slate-900"
       />

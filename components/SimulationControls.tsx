@@ -221,13 +221,15 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
       : `${method.toUpperCase()}${method === 'ode' && solver !== 'auto' ? ` • ${solver}` : ''}`;
 
   return (
-    <div className="flex items-center gap-2">
+    <div role="group" aria-label="Simulation controls" className="flex items-center gap-2">
       {/* Primary action button */}
       <Button
         onClick={handleRun}
         disabled={!modelExists || isSimulating}
         variant="primary"
         className="min-w-[100px]"
+        aria-label="Run simulation"
+        title={!modelExists ? 'Provide a valid model to run simulation' : isSimulating ? 'Simulation is currently running' : 'Run simulation'}
       >
         {isSimulating ? (
           <>
@@ -260,6 +262,8 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
         {/* Options popover */}
         {showOptions && ReactDOM.createPortal(
           <div 
+            role="dialog"
+            aria-label="Simulation options"
             id="simulation-options-popover"
             ref={popoverRef}
             style={{
@@ -301,18 +305,22 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
-                <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">T End</label>
+                <label htmlFor="sim-tend" className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">T End</label>
                 <input
+                  id="sim-tend"
                   type="number"
+                  inputMode="decimal"
                   value={tEnd}
                   onChange={e => setTEnd(e.target.value)}
                   className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
                 />
               </div>
               <div>
-                <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Steps</label>
+                <label htmlFor="sim-steps" className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">Steps</label>
                 <input
+                  id="sim-steps"
                   type="number"
+                  inputMode="numeric"
                   value={nSteps}
                   onChange={e => setNSteps(e.target.value)}
                   className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
@@ -324,7 +332,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
             {method === 'ssa' && (
               <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div className="flex items-center justify-between gap-3">
-                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1 min-w-0">
+                  <label htmlFor="sim-influence" className="text-xs font-medium text-slate-700 dark:text-slate-300 flex items-center gap-1 min-w-0">
                     <span className="truncate">Track Rule Influence</span>
                     <span
                       className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -334,6 +342,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     </span>
                   </label>
                   <input
+                    id="sim-influence"
                     type="checkbox"
                     checked={includeInfluence}
                     onChange={e => setIncludeInfluence(e.target.checked)}
@@ -345,18 +354,21 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 </div>
                 <div>
                   <label
+                    htmlFor="sim-ssa-seed"
                     className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
                     title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
                   >
                     Seed
                   </label>
-                  <input
-                    type="number"
-                    value={ssaSeed}
-                    onChange={e => setSsaSeed(e.target.value)}
-                    placeholder="Random"
-                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  />
+                    <input
+                      id="sim-ssa-seed"
+                      type="number"
+                      inputMode="numeric"
+                      value={ssaSeed}
+                      onChange={e => setSsaSeed(e.target.value)}
+                      placeholder="Random"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                    />
                 </div>
               </div>
             )}
@@ -369,18 +381,21 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 </div>
                 <div>
                   <label
+                    htmlFor="sim-pla-seed"
                     className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
                     title="Random seed for reproducible stochastic simulations. Leave empty for a random seed."
                   >
                     Seed
                   </label>
-                  <input
-                    type="number"
-                    value={plaSeed}
-                    onChange={e => setPlaSeed(e.target.value)}
-                    placeholder="Random"
-                    className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
-                  />
+                    <input
+                      id="sim-pla-seed"
+                      type="number"
+                      inputMode="numeric"
+                      value={plaSeed}
+                      onChange={e => setPlaSeed(e.target.value)}
+                      placeholder="Random"
+                      className="w-full rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm text-center text-slate-800 dark:text-slate-100 placeholder:text-slate-400 dark:placeholder:text-slate-500"
+                    />
                 </div>
                 <div className="text-xs text-slate-500 dark:text-slate-400 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/50 p-2 rounded">
                   <strong>Note:</strong> PLA uses partitioned tau-leaping for efficient stochastic simulation.
@@ -399,13 +414,16 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label
+                      htmlFor="sim-poplevel"
                       className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
                       title="Population threshold: Species with counts above this value are simulated with scaled propensities (ODE-like), while species below are simulated with exact SSA. Default: 100."
                     >
                       Pop Level
                     </label>
                     <input
+                      id="sim-poplevel"
                       type="number"
+                      inputMode="numeric"
                       value={poplevel}
                       onChange={e => setPoplevel(e.target.value)}
                       placeholder="100"
@@ -414,13 +432,16 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   </div>
                   <div>
                     <label
+                      htmlFor="sim-psa-seed"
                       className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
                       title="Random seed for the stochastic component. Leave empty for default seed."
                     >
                       Seed
                     </label>
                     <input
+                      id="sim-psa-seed"
                       type="number"
+                      inputMode="numeric"
                       value={psaSeed}
                       onChange={e => setPsaSeed(e.target.value)}
                       placeholder="12345"
@@ -441,10 +462,11 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
             {method === 'ode' && (
               <div className="space-y-3 pt-3 border-t border-slate-200 dark:border-slate-700 dark:border-slate-700 animate-in fade-in slide-in-from-top-2 duration-200">
                 <div>
-                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1 block">
+                  <label htmlFor="sim-solver" className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1 block">
                     Solver Algorithm
                   </label>
                   <select
+                    id="sim-solver"
                     value={solver}
                     onChange={e => setSolver(e.target.value)}
                     className="w-full px-2 py-1.5 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-700 dark:text-slate-200"
@@ -459,8 +481,9 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 
                 <div className="grid grid-cols-2 gap-2">
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">atol</label>
+                    <label htmlFor="sim-atol" className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">atol</label>
                     <input
+                      id="sim-atol"
                       type="text"
                       value={atol}
                       onChange={e => setAtol(e.target.value)}
@@ -469,8 +492,9 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">rtol</label>
+                    <label htmlFor="sim-rtol" className="text-xs text-slate-600 dark:text-slate-400 mb-1 block">rtol</label>
                     <input
+                      id="sim-rtol"
                       type="text"
                       value={rtol}
                       onChange={e => setRtol(e.target.value)}
@@ -492,13 +516,16 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label
+                      htmlFor="sim-utl"
                       className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
                       title="Universal Traversal Limit: Controls pattern matching depth. Higher values allow more complex patterns but may slow simulation. Leave empty for auto-optimization."
                     >
                       UTL
                     </label>
                     <input
+                      id="sim-utl"
                       type="number"
+                      inputMode="numeric"
                       value={utl}
                       onChange={e => setUtl(e.target.value)}
                       placeholder="Auto"
@@ -506,7 +533,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     />
                   </div>
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1 min-w-0">
+                    <label htmlFor="sim-gml" className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1 min-w-0">
                       GML
                       <span
                         className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -516,7 +543,9 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       </span>
                     </label>
                     <input
+                      id="sim-gml"
                       type="number"
+                      inputMode="numeric"
                       value={gml}
                       onChange={e => setGml(e.target.value)}
                       placeholder="1000000"
@@ -527,7 +556,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
 
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
-                    <label className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1 min-w-0">
+                    <label htmlFor="sim-equilibrate" className="text-xs text-slate-600 dark:text-slate-400 mb-1 block flex items-center gap-1 min-w-0">
                       Equilibrate
                       <span
                         className="cursor-help text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
@@ -537,7 +566,9 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                       </span>
                     </label>
                     <input
+                      id="sim-equilibrate"
                       type="number"
+                      inputMode="decimal"
                       value={equilibrate}
                       onChange={e => setEquilibrate(e.target.value)}
                       placeholder="0"
@@ -546,13 +577,16 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                   </div>
                   <div>
                     <label
+                      htmlFor="sim-nfsim-seed"
                       className="text-xs text-slate-600 dark:text-slate-400 mb-1 block min-w-0 cursor-help"
                       title="Random seed: Set for reproducible stochastic simulations. Leave empty for random seed."
                     >
                       Seed
                     </label>
                     <input
+                      id="sim-nfsim-seed"
                       type="number"
+                      inputMode="numeric"
                       value={nfsimSeed}
                       onChange={e => setNfsimSeed(e.target.value)}
                       placeholder="Random"

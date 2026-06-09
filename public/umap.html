@@ -567,7 +567,7 @@
             const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
             legend.innerHTML = sorted.map(([category, count]) => {
                 const color = colorMap[category] || '#94a3b8';
-                return `<div class="legend-item" data-tag="${escapeHTML(category)}"><div class="legend-dot" style="background:${escapeHTML(color)};color:${escapeHTML(color)}"></div><div class="legend-label">${escapeHTML(category)} (${count})</div></div>`;
+                return `<div class="legend-item" data-tag="${escapeHTML(category)}"><div class="legend-dot" style="background:${escapeHTML(color)};color:${escapeHTML(color)}"></div><div class="legend-label">${escapeHTML(category)} (${escapeHTML(count)})</div></div>`;
             }).join('');
             legend.querySelectorAll('.legend-item').forEach(el => {
                 el.onclick = () => { 
@@ -650,17 +650,45 @@
             if (hoveredIdx >= 0) {
                 const m = models[hoveredIdx];
                 tooltip.style.display = 'block';
-                const tagBadges = m.tags.map(t => `<span class="tooltip-tag" style="background:${escapeHTML(colorMap[t] || '#64748b')}">${escapeHTML(t)}</span>`).join('');
-                const obs = m.observables && m.observables.length > 0 
-                    ? m.observables.map(escapeHTML).slice(0, 8).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
+                const obsText = m.observables && m.observables.length > 0
+                    ? m.observables.slice(0, 8).join(', ') + (m.observables.length > 8 ? ` (+${m.observables.length - 8})` : '')
                     : 'None';
                 const simMode = m.simulationMode || 'Unknown';
-                tooltip.innerHTML = `
-                    <div class="tooltip-title">${escapeHTML(m.displayName)}</div>
-                    <div class="tooltip-tags">${tagBadges}</div>
-                    <div class="tooltip-obs"><strong>Observables:</strong> ${obs}</div>
-                    <div class="tooltip-obs" style="margin-top:4px"><strong>Simulation:</strong> ${escapeHTML(simMode)}</div>
-                `;
+
+                tooltip.innerHTML = '';
+
+                const titleDiv = document.createElement('div');
+                titleDiv.className = 'tooltip-title';
+                titleDiv.textContent = m.displayName;
+                tooltip.appendChild(titleDiv);
+
+                const tagsDiv = document.createElement('div');
+                tagsDiv.className = 'tooltip-tags';
+                m.tags.forEach(t => {
+                    const tagSpan = document.createElement('span');
+                    tagSpan.className = 'tooltip-tag';
+                    tagSpan.style.background = colorMap[t] || '#64748b';
+                    tagSpan.textContent = t;
+                    tagsDiv.appendChild(tagSpan);
+                });
+                tooltip.appendChild(tagsDiv);
+
+                const obsDiv = document.createElement('div');
+                obsDiv.className = 'tooltip-obs';
+                const obsStrong = document.createElement('strong');
+                obsStrong.textContent = 'Observables: ';
+                obsDiv.appendChild(obsStrong);
+                obsDiv.appendChild(document.createTextNode(obsText));
+                tooltip.appendChild(obsDiv);
+
+                const simDiv = document.createElement('div');
+                simDiv.className = 'tooltip-obs';
+                simDiv.style.marginTop = '4px';
+                const simStrong = document.createElement('strong');
+                simStrong.textContent = 'Simulation: ';
+                simDiv.appendChild(simStrong);
+                simDiv.appendChild(document.createTextNode(simMode));
+                tooltip.appendChild(simDiv);
                 let x = e.clientX + 15, y = e.clientY - 15;
                 if (x + 360 > window.innerWidth) x = e.clientX - 375;
                 if (y < 10) y = 10;

@@ -431,7 +431,12 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
 
   const SortHeader: React.FC<{ colKey: SortKey; label: string }> = ({ colKey, label }) => (
     <th
+      scope="col"
       onClick={() => handleSortClick(colKey)}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleSortClick(colKey); } }}
+      role="columnheader"
+      tabIndex={0}
+      aria-sort={sortKey === colKey ? (sortAsc ? 'ascending' : 'descending') : 'none'}
       className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide cursor-pointer hover:text-teal-600 dark:hover:text-teal-400 select-none whitespace-nowrap"
     >
       {label}{sortKey === colKey && <span className="ml-1">{sortAsc ? '▲' : '▼'}</span>}
@@ -456,10 +461,10 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
       {/* Graph type selector + run button */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1">
-          <label className="text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">
+          <label id="graph-type-label" className="text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">
             Graph Type
           </label>
-          <div className="flex gap-1">
+          <div className="flex gap-1" role="radiogroup" aria-labelledby="graph-type-label">
             {(['molecular', 'reaction', 'regulatory'] as GraphType[]).map((gt) => (
               <Button
                 key={gt}
@@ -551,7 +556,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
             {/* ---- Cytoscape viewer — follows ARGraphViewer / ContactMapViewer pattern ---- */}
             <div className="flex flex-col gap-2">
               {/* Toolbar */}
-              <div className="flex items-center gap-1 flex-wrap bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
+              <div className="flex items-center gap-1 flex-wrap bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm" role="toolbar" aria-label="Graph layout controls">
                 <span className="text-xs text-slate-500 dark:text-slate-300 mr-1">Layout:</span>
                 {(['hierarchical', 'fcose', 'grid', 'circle'] as LayoutType[]).map(lt => {
                   const labels: Record<LayoutType, string> = {
@@ -589,7 +594,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
               </div>
 
               {/* Legend */}
-              <div className="flex items-center gap-3 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 flex-wrap">
+              <div className="flex items-center gap-3 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 flex-wrap" role="list" aria-label="Graph legend">
                 <span className="text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase">Legend</span>
                 {Array.from({ length: Math.min(result.communityCount, 6) }, (_, i) => (
                   <div key={i} className="flex items-center gap-1">
@@ -643,12 +648,12 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
               <table className="w-full text-xs">
                 <thead className="sticky top-0 bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-800 z-10">
                   <tr>
-                    <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Node</th>
+                    <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide whitespace-nowrap">Node</th>
                     <SortHeader colKey="degree" label="Degree" />
                     {directed && (
                       <>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">In</th>
-                        <th className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">Out</th>
+                        <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">In</th>
+                        <th scope="col" className="px-3 py-2 text-left text-xs font-semibold text-slate-500 dark:text-slate-300 uppercase tracking-wide">Out</th>
                       </>
                     )}
                     <SortHeader colKey="betweenness" label="Betweenness" />

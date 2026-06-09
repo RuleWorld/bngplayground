@@ -211,12 +211,12 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                     <table className="w-full border-collapse">
                         <thead>
                             <tr className="bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800">
-                                <th className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Observable</th>
-                                <th className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Operator</th>
-                                <th className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Value</th>
-                                <th className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Tolerance</th>
-                                <th className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Status</th>
-                                <th className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Actions</th>
+                                <th scope="col" className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Observable</th>
+                                <th scope="col" className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Operator</th>
+                                <th scope="col" className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Value</th>
+                                <th scope="col" className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Tolerance</th>
+                                <th scope="col" className="p-2 text-left text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Status</th>
+                                <th scope="col" className="p-2 text-center text-xs font-semibold text-slate-600 dark:text-slate-300 border-b">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -231,6 +231,7 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                                             <Select
                                                 value={constraint.observable}
                                                 onChange={(e) => updateConstraint(constraint.id, 'observable', e.target.value)}
+                                                aria-label="Constraint observable"
                                             >
                                                 {observableNames.map(name => (
                                                     <option key={name} value={name}>{name}</option>
@@ -241,6 +242,7 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                                             <Select
                                                 value={constraint.operator}
                                                 onChange={(e) => updateConstraint(constraint.id, 'operator', e.target.value as ConstraintOperator)}
+                                                aria-label="Constraint operator"
                                             >
                                                 {OPERATORS.map(op => (
                                                     <option key={op.value} value={op.value}>{op.label}</option>
@@ -255,6 +257,7 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                                                 placeholder="e.g., 100 or Initial(X)"
                                                 className="w-32"
                                                 disabled={constraint.operator === 'constant'}
+                                                aria-label="Constraint value"
                                             />
                                         </td>
                                         <td className="p-2">
@@ -265,6 +268,7 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                                                 step="0.001"
                                                 min="0"
                                                 className="w-20"
+                                                aria-label="Constraint tolerance"
                                             />
                                         </td>
                                         <td className="p-2">

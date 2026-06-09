@@ -99,9 +99,7 @@ async function fetchModel(path: string): Promise<string> {
 export async function runBenchmark(timeoutMs: number = 60000): Promise<BenchmarkResult[]> {
   const results: BenchmarkResult[] = [];
 
-  console.log('='.repeat(60));
-  console.log('BIONETGEN WEB SIMULATOR BENCHMARK');
-  console.log('='.repeat(60));
+  console.log('=== BIONETGEN WEB SIMULATOR BENCHMARK ===');
   console.log(`Testing ${PUBLISHED_MODELS.length} models with ${timeoutMs / 1000}s timeout`);
   console.log('');
 
@@ -175,49 +173,6 @@ export async function runBenchmark(timeoutMs: number = 60000): Promise<Benchmark
     results.push(result);
   }
 
-  // Summary
-  console.log('');
-  console.log('='.repeat(60));
-  console.log('SUMMARY');
-  console.log('='.repeat(60));
-
-  const successful = results.filter(r => r.status === 'success');
-  const failed = results.filter(r => r.status === 'failed');
-  const timedOut = results.filter(r => r.status === 'timeout');
-
-  console.log(`Total: ${results.length}`);
-  console.log(`Success: ${successful.length}`);
-  console.log(`Failed: ${failed.length}`);
-  console.log(`Timeout: ${timedOut.length}`);
-
-  if (failed.length > 0) {
-    console.log('\nFailed models:');
-    for (const r of failed) {
-      console.log(`  - ${r.model}: ${r.error?.substring(0, 60)}`);
-    }
-  }
-
-  if (timedOut.length > 0) {
-    console.log('\nTimed out models:');
-    for (const r of timedOut) {
-      console.log(`  - ${r.model}`);
-    }
-  }
-
-  // Performance stats for successful models
-  if (successful.length > 0) {
-    const times = successful.map(r => r.totalTime!).sort((a, b) => a - b);
-    const median = times[Math.floor(times.length / 2)];
-    const mean = times.reduce((a, b) => a + b, 0) / times.length;
-    const max = Math.max(...times);
-    const min = Math.min(...times);
-
-    console.log('\nTiming stats for successful models:');
-    console.log(`  Min: ${min.toFixed(0)}ms`);
-    console.log(`  Median: ${median.toFixed(0)}ms`);
-    console.log(`  Mean: ${mean.toFixed(0)}ms`);
-    console.log(`  Max: ${max.toFixed(0)}ms`);
-  }
 
   return results;
 }

@@ -166,7 +166,7 @@ export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
       </Card>
 
       {error && (
-        <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm">
+        <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm" role="alert">
           {error}
         </div>
       )}
@@ -327,10 +327,11 @@ export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
               </p>
               <div className="grid grid-cols-3 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+                  <label htmlFor="vh-observable" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
                     Observable
                   </label>
                   <select
+                    id="vh-observable"
                     value={bisectionObservable}
                     onChange={e => setBisectionObservable(e.target.value)}
                     className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs"
@@ -342,10 +343,11 @@ export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
                   </select>
                 </div>
                 <div>
-                  <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
+                  <label htmlFor="vh-threshold" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">
                     Threshold
                   </label>
                   <input
+                    id="vh-threshold"
                     type="number"
                     value={bisectionThreshold}
                     onChange={e => setBisectionThreshold(Number(e.target.value))}

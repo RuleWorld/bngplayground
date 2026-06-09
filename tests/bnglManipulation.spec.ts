@@ -131,19 +131,62 @@ end parameters
     });
 
     describe('perturbParameterOverrides', () => {
-        beforeEach(() => {
-            vi.spyOn(Math, 'random').mockReturnValue(1); // Max positive variation
-        });
-
         afterEach(() => {
             vi.restoreAllMocks();
         });
 
-        it('should perturb an object of parameters', () => {
+        it('should perturb an object of parameters with positive variation', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(1); // Max positive variation
             const params = { k1: 10, k2: 20 };
             const perturbed = perturbParameterOverrides(params, 10); // 10% variation
             expect(perturbed.k1).toBeCloseTo(11); // 10 * 1.1
             expect(perturbed.k2).toBeCloseTo(22); // 20 * 1.1
+        });
+
+        it('should perturb an object of parameters with negative variation', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(0); // Max negative variation
+            const params = { k1: 10, k2: 20 };
+            const perturbed = perturbParameterOverrides(params, 10); // 10% variation
+            expect(perturbed.k1).toBeCloseTo(9); // 10 * 0.9
+            expect(perturbed.k2).toBeCloseTo(18); // 20 * 0.9
+        });
+
+        it('should leave parameter values unchanged when variationPercent is 0', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(1); // Try to force max variation
+            const params = { k1: 10, k2: 20 };
+            const perturbed = perturbParameterOverrides(params, 0); // 0% variation
+            expect(perturbed.k1).toBeCloseTo(10);
+            expect(perturbed.k2).toBeCloseTo(20);
+        });
+
+        it('should leave parameter values unchanged when random gives exact mid-point', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(0.5); // Mid point
+            const params = { k1: 10, k2: 20 };
+            const perturbed = perturbParameterOverrides(params, 10); // 10% variation
+            expect(perturbed.k1).toBeCloseTo(10);
+            expect(perturbed.k2).toBeCloseTo(20);
+        });
+
+        it('should handle zero value correctly (stays zero due to multiplicative noise)', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(1); // Max positive variation
+            const params = { k0: 0 };
+            const perturbed = perturbParameterOverrides(params, 10); // 10% variation
+            expect(perturbed.k0).toBeCloseTo(0);
+        });
+
+        it('should handle empty parameter objects', () => {
+            const perturbed = perturbParameterOverrides({}, 10);
+            expect(perturbed).toEqual({});
+        });
+
+        it('should ignore properties from prototype chain', () => {
+            vi.spyOn(Math, 'random').mockReturnValue(1);
+            const proto = { kProto: 30 };
+            const params = Object.create(proto);
+            params.k1 = 10;
+            const perturbed = perturbParameterOverrides(params, 10);
+            expect(perturbed.k1).toBeCloseTo(11);
+            expect(perturbed).not.toHaveProperty('kProto');
         });
     });
 });

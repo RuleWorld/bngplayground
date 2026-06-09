@@ -11,6 +11,7 @@ export const ChevronDownIcon: React.FC<{ className?: string }> = ({ className })
             strokeLinecap="round"
             strokeLinejoin="round"
             className={className}
+            aria-hidden={true}
         >
             <polyline points="6 9 12 15 18 9" />
         </svg>

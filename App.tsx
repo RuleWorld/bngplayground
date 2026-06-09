@@ -1043,15 +1043,15 @@ function App() {
       />
 
 
-      <main className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
+      <main role="main" aria-label="Main content" className="flex-1 min-h-0 overflow-y-auto scrollbar-thin scrollbar-thumb-slate-200 dark:scrollbar-thumb-slate-800">
         <div className="container mx-auto flex min-h-full flex-col gap-6 p-4 sm:p-6 lg:p-8">
-          <div className="fixed top-20 right-8 z-50 w-full max-w-sm">
+          <div aria-live="polite" role="status" className="fixed top-20 right-8 z-50 w-full max-w-sm">
             {status && <StatusMessage status={status} onClose={handleStatusClose} />}
           </div>
 
           <div className="flex flex-1 min-h-0 min-w-0 flex-col lg:flex-row gap-0 items-stretch" style={{ height: PANEL_MAX_HEIGHT }}>
             {/* Left Panel: Editor */}
-            <div 
+            <div role="region" aria-label="Editor region"
               className={`flex min-h-0 min-w-0 flex-col overflow-hidden transition-[flex] duration-200 ${splitPosition <= 5 ? 'flex-none w-14' : ''}`} 
               style={{ 
                 height: PANEL_MAX_HEIGHT,
@@ -1117,7 +1117,14 @@ function App() {
             </div>
 
             {/* Splitter Handle */}
-            <div 
+            <div
+              role="separator"
+              aria-orientation="vertical"
+              aria-valuenow={splitPosition}
+              aria-valuemin={MIN_SPLIT_POSITION}
+              aria-valuemax={MAX_SPLIT_POSITION}
+              tabIndex={0}
+              aria-label="Resize editor panel"
               onMouseDown={handleMouseDown}
               className="flex-shrink-0 w-2 group cursor-col-resize hidden lg:flex items-center justify-center relative touch-none hover:bg-teal-500/20 transition-colors"
               title="Drag to resize panels"
@@ -1128,7 +1135,7 @@ function App() {
             </div>
 
             {/* Right Panel: Visualization */}
-            <div 
+            <div role="region" aria-label="Visualization region"
               className="flex min-w-0 flex-col min-h-0"
               style={{ 
                 height: PANEL_MAX_HEIGHT,

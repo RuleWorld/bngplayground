@@ -220,25 +220,25 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
       <Card className="p-4 shrink-0">
         <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">PK Model</label>
-            <Select value={modelType} onChange={e => setModelType(e.target.value as PKModelType)}>
+            <label htmlFor="pkpd-model" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">PK Model</label>
+            <Select id="pkpd-model" value={modelType} onChange={e => setModelType(e.target.value as PKModelType)}>
               {MODEL_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </Select>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Route</label>
-            <Select value={route} onChange={e => setRoute(e.target.value as RouteType)}>
+            <label htmlFor="pkpd-route" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Route</label>
+            <Select id="pkpd-route" value={route} onChange={e => setRoute(e.target.value as RouteType)}>
               {ROUTE_OPTIONS.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
             </Select>
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Drug Name</label>
-            <input value={drugName} onChange={e => setDrugName(e.target.value)}
+            <label htmlFor="pkpd-drug-name" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Drug Name</label>
+            <input id="pkpd-drug-name" value={drugName} onChange={e => setDrugName(e.target.value)}
               className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm" />
           </div>
           <div>
-            <label className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Dose (mg)</label>
-            <input type="number" value={dose} onChange={e => setDose(Number(e.target.value))}
+            <label htmlFor="pkpd-dose" className="text-xs font-medium text-slate-600 dark:text-slate-300 mb-1 block">Dose (mg)</label>
+            <input id="pkpd-dose" type="number" value={dose} onChange={e => setDose(Number(e.target.value))}
               className="w-full px-2 py-1.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-sm" step="any" />
           </div>
           <div className="flex items-end">
@@ -267,8 +267,8 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
           </div>
           {route === 'iv_infusion' && (
             <div className="mb-3">
-              <label className="text-xs text-slate-500 block mb-1">Infusion Duration (hr)</label>
-              <input type="number" value={infusionDuration} onChange={e => setInfusionDuration(Number(e.target.value))}
+              <label htmlFor="pkpd-infusion-duration" className="text-xs text-slate-500 block mb-1">Infusion Duration (hr)</label>
+              <input id="pkpd-infusion-duration" type="number" value={infusionDuration} onChange={e => setInfusionDuration(Number(e.target.value))}
                 className="w-full px-2 py-1 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="0.1" />
             </div>
           )}
@@ -381,14 +381,14 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
             <h4 className="text-xs font-semibold text-slate-500 mb-1">Therapeutic Window</h4>
             <div className="space-y-1">
               <div className="flex items-center gap-1">
-                <label className="text-[10px] text-slate-400 w-10">Min:</label>
-                <input type="number" placeholder="Cmin_eff"
+                <label htmlFor="pkpd-therapeutic-min" className="text-[10px] text-slate-400 w-10">Min:</label>
+                <input id="pkpd-therapeutic-min" type="number" placeholder="Cmin_eff"
                   onChange={e => setTherapeuticMin(e.target.value ? Number(e.target.value) : null)}
                   className="flex-1 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="any" />
               </div>
               <div className="flex items-center gap-1">
-                <label className="text-[10px] text-slate-400 w-10">Max:</label>
-                <input type="number" placeholder="Cmax_tox"
+                <label htmlFor="pkpd-therapeutic-max" className="text-[10px] text-slate-400 w-10">Max:</label>
+                <input id="pkpd-therapeutic-max" type="number" placeholder="Cmax_tox"
                   onChange={e => setTherapeuticMax(e.target.value ? Number(e.target.value) : null)}
                   className="flex-1 px-1 py-0.5 rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-xs" step="any" />
               </div>

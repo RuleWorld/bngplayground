@@ -635,9 +635,9 @@ export async function simulate(
     }
     // 2. Suffix notation: Species@Comp (fallback)
     if (!compName) {
-      const parts = s.name.split('@');
-      if (parts.length > 1) {
-        compName = parts[parts.length - 1].trim();
+      const atIdx = s.name.lastIndexOf('@');
+      if (atIdx !== -1 && atIdx < s.name.length - 1) {
+        compName = s.name.slice(atIdx + 1).trim();
       }
     }
 
@@ -674,8 +674,10 @@ export async function simulate(
         if (colonIdx > 0) compName = speciesName.substring(1, colonIdx);
       }
       if (!compName) {
-        const parts = speciesName.split('@');
-        if (parts.length > 1) compName = parts[parts.length - 1].trim();
+        const atIdx = speciesName.lastIndexOf('@');
+        if (atIdx !== -1 && atIdx < speciesName.length - 1) {
+          compName = speciesName.slice(atIdx + 1).trim();
+        }
       }
 
       const comp = compName ? compartmentMapForDim.get(compName) : null;
@@ -1334,14 +1336,22 @@ export async function simulate(
       const ruleNames = concreteReactions.map((rxn) => {
         if (rxn.ruleName) return rxn.ruleName;
         // Fallback: construct readable name from reactants and products
+        const cleanName = (name: string) => {
+          let cleaned = name;
+          const atIdx = cleaned.indexOf('@');
+          if (atIdx !== -1) cleaned = cleaned.slice(0, atIdx);
+          const parenIdx = cleaned.indexOf('(');
+          if (parenIdx !== -1) cleaned = cleaned.slice(0, parenIdx);
+          return cleaned;
+        };
         const reactantNames = Array.from(rxn.reactants).map(idx => {
           const name = model.species[idx]?.name || `S${idx}`;
           // Simplify species names: remove compartments and states for compactness
-          return name.split('@')[0].split('(')[0];
+          return cleanName(name);
         });
         const productNames = Array.from(rxn.products).map(idx => {
           const name = model.species[idx]?.name || `S${idx}`;
-          return name.split('@')[0].split('(')[0];
+          return cleanName(name);
         });
 
         // Build compact name like "A+B→C" or "A→∅" for degradation

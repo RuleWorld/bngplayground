@@ -32,8 +32,9 @@ export const StatusMessage: React.FC<StatusMessageProps> = ({ status, onClose })
         return () => clearTimeout(timer);
     }, [onClose, status]);
 
+    const isError = status.type === 'error';
     return (
-        <div className={`flex items-center gap-4 p-4 rounded-lg border shadow-lg ${colors[status.type]} animate-fade-in-up`}>
+        <div className={`flex items-center gap-4 p-4 rounded-lg border shadow-lg ${colors[status.type]} animate-fade-in-up`} role="alert" aria-live={isError ? "assertive" : "polite"}>
             {icons[status.type]}
             <p className="text-sm font-medium">{status.message}</p>
             <button 

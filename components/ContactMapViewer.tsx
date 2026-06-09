@@ -682,7 +682,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
 
   return (
     <div className="flex flex-col h-full gap-2">
-      <div className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
+      <div role="toolbar" aria-label="Contact map controls" className="flex flex-col gap-1 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 shadow-sm">
         <div className="flex items-center gap-1">
           <span className="text-xs text-slate-500 dark:text-slate-400 mr-1">Layout:</span>
           <Button variant={activeLayout === 'hierarchical' ? 'primary' : 'subtle'} onClick={() => runLayout('hierarchical')} disabled={isLayoutRunning} className="text-xs h-6 px-1.5" title="Hierarchical (dagre)">
@@ -717,7 +717,7 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
         </div>
       </div>
 
-      <div className="flex-1 min-h-0 relative w-full border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-900 rounded-lg shadow-sm flex flex-col" data-testid="contact-map-panel">
+      <div role="img" aria-label="Contact map" className="flex-1 min-h-0 relative w-full border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-900 rounded-lg shadow-sm flex flex-col" data-testid="contact-map-panel">
         {!layoutDone && (
           <div className="absolute inset-0 z-10 flex flex-col items-center justify-center bg-white dark:bg-slate-900/70 dark:bg-slate-900/70 rounded-lg">
             <LoadingSpinner className="w-8 h-8 text-[#0ea5e9]" />

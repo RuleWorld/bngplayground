@@ -163,10 +163,11 @@ export const RulesTab: React.FC<RulesTabProps> = ({ model, results, selectedRule
     <div className="flex flex-col gap-4">
       {/* Rule Selector - Horizontal Top Bar */}
       <div className="flex items-center gap-3 shrink-0 bg-slate-50/50 dark:bg-slate-900/30 p-2 rounded-lg border border-slate-100 dark:border-slate-800">
-        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
+        <label htmlFor="rules-select" className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase tracking-wider shrink-0">
           Rule:
         </label>
         <select
+          id="rules-select"
           value={selectedRuleId || ''}
           onChange={(e) => onSelectRule?.(e.target.value)}
           className="flex-1 max-w-md px-3 py-1.5 text-sm border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-200 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"

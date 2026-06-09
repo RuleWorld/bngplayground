@@ -183,6 +183,7 @@ export const ContactMapTab: React.FC<ContactMapTabProps> = ({ model, results, on
                                     setIsPlaying(false);
                                 }}
                                 className="flex-1"
+                                aria-label="Time slider"
                             />
                             <span className="text-xs text-slate-500 dark:text-slate-400 whitespace-nowrap tabular-nums">
                                 t = {currentSnapshot?.time.toFixed(2) ?? '0'}

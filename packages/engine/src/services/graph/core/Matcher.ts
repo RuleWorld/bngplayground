@@ -19,8 +19,7 @@ const getNeighborMolecules = (graph: SpeciesGraph, molIdx: number): number[] => 
 
     // Support multi-site bonding: iterate over all partners
     for (const partnerKey of partnerKeys) {
-      const [partnerMolStr] = partnerKey.split('.');
-      const partnerMolIdx = Number(partnerMolStr);
+      const partnerMolIdx = parseInt(partnerKey, 10);
       if (!Number.isNaN(partnerMolIdx)) {
         neighbors.add(partnerMolIdx);
       }
@@ -1576,8 +1575,7 @@ class VF2State {
           }
           // For multi-site bonding, check if any neighbor is in the same molecule
           const hasSameMolNeighbor = neighborKeys.some(neighborKey => {
-            const [neighborMolIdxStr] = neighborKey.split('.');
-            return Number(neighborMolIdxStr) === tMolIdx;
+            return parseInt(neighborKey, 10) === tMolIdx;
           });
           if (!hasSameMolNeighbor) {
             return false;
@@ -1603,8 +1601,7 @@ class VF2State {
         // For multi-site bonding, check all neighbors
         // Use the first neighbor for now (simplification - may need more sophisticated handling)
         const neighborKey = neighborKeys[0];
-        const [neighborMolIdxStr] = neighborKey.split('.');
-        const neighborMolIdx = Number(neighborMolIdxStr);
+        const neighborMolIdx = parseInt(neighborKey, 10);
         if (this.coreTarget.has(neighborMolIdx)) {
           const mappedPatternMol = this.coreTarget.get(neighborMolIdx)!;
           if (mappedPatternMol !== partnerMolIdx) {

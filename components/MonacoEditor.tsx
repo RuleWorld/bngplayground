@@ -537,7 +537,7 @@ useEffect(() => {
   monaco.editor.setModelMarkers(model, 'bngl-validation', markerData);
 }, [markers]);
 
-return <div ref={editorRef} className="w-full h-full border border-stone-300 dark:border-slate-700 rounded-md" />;
+return <div ref={editorRef} className="w-full h-full border border-stone-300 dark:border-slate-700 rounded-md" aria-label="Code editor" />;
 };
 
 export default MonacoEditor;

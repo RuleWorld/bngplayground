@@ -606,8 +606,9 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Mean</label>
+                      <label htmlFor={`pe-mean-${prior.name}`} className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Mean</label>
                       <Input
+                        id={`pe-mean-${prior.name}`}
                         type="number"
                         step="any"
                         value={prior.mean}
@@ -616,8 +617,9 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Std</label>
+                      <label htmlFor={`pe-std-${prior.name}`} className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Std</label>
                       <Input
+                        id={`pe-std-${prior.name}`}
                         type="number"
                         step="any"
                         min={0}
@@ -629,8 +631,9 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Min</label>
+                      <label htmlFor={`pe-min-${prior.name}`} className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Min</label>
                       <Input
+                        id={`pe-min-${prior.name}`}
                         type="number"
                         step="any"
                         value={prior.min}
@@ -639,8 +642,9 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                       />
                     </div>
                     <div className="space-y-1">
-                      <label className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Max</label>
+                      <label htmlFor={`pe-max-${prior.name}`} className="text-[10px] text-slate-500 dark:text-slate-400 font-bold uppercase">Max</label>
                       <Input
+                        id={`pe-max-${prior.name}`}
                         type="number"
                         step="any"
                         value={prior.max}
@@ -661,8 +665,9 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
           </h3>
           <div className="space-y-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Algorithm</label>
+              <label htmlFor="pe-algorithm" className="text-xs font-medium text-slate-700 dark:text-slate-300">Algorithm</label>
               <select 
+                id="pe-algorithm"
                 value={algorithm} 
                 onChange={e => setAlgorithm(e.target.value as FitAlgorithm)}
                 className="w-full h-8 text-xs bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md px-2 focus:ring-2 focus:ring-teal-500 outline-none"
@@ -675,8 +680,9 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               </select>
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-slate-700 dark:text-slate-300">Max Iterations</label>
+              <label htmlFor="pe-max-iterations" className="text-xs font-medium text-slate-700 dark:text-slate-300">Max Iterations</label>
               <Input
+                id="pe-max-iterations"
                 type="number"
                 min={50}
                 max={5000}
@@ -708,11 +714,12 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 />
               )}
             </div>
-            <div className="mt-3">
-              <label className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+              <div className="mt-3">
+              <label htmlFor="pe-bpsl" className="block text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
                 Qualitative Constraints (BPSL)
               </label>
               <textarea
+                id="pe-bpsl"
                 className="w-full h-20 text-xs font-mono rounded border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2"
                 placeholder={`# One constraint per line\nmonotone_increasing B\nsteady_state A 0.01\npeak_before B 50`}
                 value={bpslText}
@@ -792,6 +799,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                 className="w-full h-32 p-3 font-mono text-xs bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-700 rounded-md focus:ring-2 focus:ring-teal-500 outline-none resize-none"
                 spellCheck={false}
                 placeholder="# time, Obs1, Obs2..."
+                aria-label="Experimental data CSV"
               />
             ) : (
               <div className="space-y-2">
@@ -801,6 +809,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                   value={petabText}
                   onChange={e => setPetabText(e.target.value)}
                   spellCheck={false}
+                  aria-label="PEtab combined input"
                 />
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-2 text-[10px]">
                   <div className="space-y-1">
