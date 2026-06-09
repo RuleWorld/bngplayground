@@ -272,11 +272,8 @@ export class GraphMatcher {
     if (targetMap !== undefined) {
       const cached = targetMap.get(target);
       if (cached !== undefined) {
-        // Return a shallow copy to prevent mutations
-        return cached.map(m => ({
-          moleculeMap: new Map(m.moleculeMap),
-          componentMap: new Map(m.componentMap)
-        }));
+        // Return cached arrays directly (callers only read via .get()/.entries()/.values())
+        return cached;
       }
     }
 
@@ -336,51 +333,17 @@ export class GraphMatcher {
       }
     }
 
-    // 1. Build molecule type count for pattern
-    const patternCounts = new Map<string, number>();
-    let patternBonds = 0;
-    let patternBoundComps = 0;
-    let maxPatternDegree = 0;
+    // 1. Read cached topological aggregates for pattern
+    const patternCounts = pattern.molTypeCounts;
+    const patternBonds = pattern.bondCount;
+    const patternBoundComps = pattern.boundCompCount;
+    const maxPatternDegree = pattern.maxDegree;
 
-    for (let idx = 0; idx < pattern.molecules.length; idx++) {
-      const mol = pattern.molecules[idx];
-      patternCounts.set(mol.name, (patternCounts.get(mol.name) || 0) + 1);
-      
-      const deg = getNeighborMolecules(pattern, idx).length;
-      if (deg > maxPatternDegree) maxPatternDegree = deg;
-
-      for (const comp of mol.components) {
-        const edgeSize = comp.edges.size;
-        patternBonds += edgeSize;
-        if (edgeSize > 0 || comp.wildcard === '+') {
-          patternBoundComps++;
-        }
-      }
-    }
-    patternBonds = Math.floor(patternBonds / 2);
-
-    // 2. Build molecule type count and topological features for target
-    const targetCounts = new Map<string, number>();
-    let targetBonds = 0;
-    let targetBoundComps = 0;
-    let maxTargetDegree = 0;
-
-    for (let idx = 0; idx < target.molecules.length; idx++) {
-      const mol = target.molecules[idx];
-      targetCounts.set(mol.name, (targetCounts.get(mol.name) || 0) + 1);
-      
-      const deg = getNeighborMolecules(target, idx).length;
-      if (deg > maxTargetDegree) maxTargetDegree = deg;
-
-      for (const comp of mol.components) {
-        const edgeSize = comp.edges.size;
-        targetBonds += edgeSize;
-        if (edgeSize > 0) {
-          targetBoundComps++;
-        }
-      }
-    }
-    targetBonds = Math.floor(targetBonds / 2);
+    // 2. Read cached topological aggregates for target
+    const targetCounts = target.molTypeCounts;
+    const targetBonds = target.bondCount;
+    const targetBoundComps = target.boundCompCount;
+    const maxTargetDegree = target.maxDegree;
 
     // 3. Topological rejections
     if (targetBonds < patternBonds) {

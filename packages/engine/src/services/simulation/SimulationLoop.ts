@@ -22,6 +22,7 @@ import { getFeatureFlags } from '../../featureFlags';
 import { jitCompiler, type JITCompiledFunction } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
+import { FenwickTree } from '../../utils/fenwickTree';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
@@ -1288,6 +1289,7 @@ export async function simulate(
 
       // Reuse arrays to avoid allocations in hot loop
       const propensities = new Float64Array(numReactions);
+      const fenwick = new FenwickTree(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
       const propOrder = new Int32Array(numReactions);
@@ -1363,47 +1365,70 @@ export async function simulate(
         return matrix;
       };
 
+      // Precompute effective rate constants kEff[i] = k * factor / V^(n-1)
+      // for mass-action reactions, matching the JIT compiler's folding.
+      const kEff = new Float64Array(numReactions);
+      const isFunctionalRxn = new Uint8Array(numReactions);
+      for (let i = 0; i < numReactions; i++) {
+        const rxn = concreteReactions[i];
+        if (rxn.isFunctionalRate && rxn.rateExpression) {
+          isFunctionalRxn[i] = 1;
+          kEff[i] = 0; // unused
+        } else {
+          const n = rxn.reactants.length;
+          let eff = rxn.rateConstant * rxn.propensityFactor;
+          const volume = reactionReactingVolumes[i];
+          if (n === 0) {
+            eff *= volume;
+          } else if (n === 2) {
+            eff /= volume;
+          } else if (n === 3) {
+            eff /= (volume * volume);
+          } else if (n > 3) {
+            eff /= Math.pow(volume, n - 1);
+          }
+          kEff[i] = eff;
+        }
+      }
+
       // Helper: calculate propensity for a single reaction
       const calcPropensity = (rxnIdx: number): number => {
         const rxn = concreteReactions[rxnIdx];
-        const n = rxn.reactants.length;
-        let rate = rxn.rateConstant;
-        if (rxn.isFunctionalRate && rxn.rateExpression) {
+        if (isFunctionalRxn[rxnIdx]) {
           try {
             const currentObs = evaluateObservablesFast(state);
-            rate = evaluateFunctionalRate(
-              rxn.rateExpression,
+            const rate = evaluateFunctionalRate(
+              rxn.rateExpression!,
               model.parameters || {},
               currentObs,
               model.functions,
               undefined,
               undefined
             );
+            let a = rate * rxn.propensityFactor;
+            const volume = reactionReactingVolumes[rxnIdx];
+            const n = rxn.reactants.length;
+            if (n === 0) {
+              a *= volume;
+            } else if (n === 2) {
+              a /= volume;
+            } else if (n === 3) {
+              a /= (volume * volume);
+            } else if (n > 3) {
+              a /= Math.pow(volume, n - 1);
+            }
+            for (let j = 0; j < rxn.reactants.length; j++) {
+              a *= state[rxn.reactants[j]];
+            }
+            return a;
           } catch (e: unknown) {
             console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e instanceof Error ? e.message : String(e));
-            rate = 0;
+            return 0;
           }
         }
 
-        let a = rate * rxn.propensityFactor;
-
-        // PARITY NOTE: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
-        // to convert to propensity in reciprocal molecule-counts.
-        // n=0: a = k*V
-        // n=1: a = k*N
-        // n=2: a = k*N1*N2/V
-        // n=3: a = k*N1*N2*N3/V^2
-        const volume = reactionReactingVolumes[rxnIdx];
-        if (n === 0) {
-          a *= volume;
-        } else if (n === 2) {
-          a /= volume;
-        } else if (n === 3) {
-          a /= (volume * volume);
-        } else if (n > 3) {
-          a /= Math.pow(volume, n - 1);
-        }
-
+        // Mass-action: use precomputed effective rate constant
+        let a = kEff[rxnIdx];
         for (let j = 0; j < rxn.reactants.length; j++) {
           a *= state[rxn.reactants[j]];
         }
@@ -1529,6 +1554,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
               }
             }
+            fenwick.build(propensities);
           } else {
             aTotal = 0;
             for (let i = 0; i < numReactions; i++) {
@@ -1541,6 +1567,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
               }
             }
+            fenwick.build(propensities);
           }
         };
 
@@ -1576,26 +1603,9 @@ export async function simulate(
           t += tau;
 
           const r2 = rng.next() * aTotal;
-          let sumA = 0;
-          let reactionIndex = 0;
-          // Direct method: select reaction where cumulative sum exceeds r2
-          // Use < instead of <= to avoid bias toward last reaction when r2 ≈ aTotal
-          let selectedRxn = propOrder[0];
-          for (let j = 0; j < numReactions; j++) {
-            const rj = propOrder[j];
-            sumA += propensities[rj];
-            if (r2 < sumA) {
-              selectedRxn = rj;
-              break;
-            }
-            if (j > 0 && propensities[rj] > propensities[propOrder[j - 1]]) {
-              const tmp = propOrder[j];
-              propOrder[j] = propOrder[j - 1];
-              propOrder[j - 1] = tmp;
-            }
-            selectedRxn = rj;
-          }
-          reactionIndex = selectedRxn;
+          // Fenwick tree O(log R) selection replaces O(R) cumulative-sum search
+          const fenwickIdx = fenwick.find(r2);
+          const reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
@@ -1666,16 +1676,20 @@ export async function simulate(
           for (let d = 0; d < deps.length; d++) {
             const jrxn = deps[d];
             const aNew = calcPropensity(jrxn);
-            aTotal += aNew - propensities[jrxn];
+            const delta = aNew - propensities[jrxn];
+            aTotal += delta;
+            fenwick.add(jrxn, delta);
             propensities[jrxn] = aNew;
           }
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
+          // NOTE: propensities[depRxn] was already updated by the incremental loop above,
+          // so we read it directly instead of calling calcPropensity again (avoids double eval).
           if (includeInfluence && influenceMatrix && windowInfluenceMatrix && affectedReactionIndices && oldPropensityValues) {
             for (let j = 0; j < numAffected; j++) {
               const depRxn = affectedReactionIndices[j];
               const oldProp = oldPropensityValues[j];
-              const newProp = calcPropensity(depRxn);
+              const newProp = propensities[depRxn];
               if (Math.abs(newProp - oldProp) > 1e-18) {
                 const flux = newProp - oldProp;
                 const influenceOffset = reactionIndex * numReactions + depRxn;

@@ -916,11 +916,7 @@ export class NetworkGenerator {
 
         // Process all species in the current batch
         for (let batchIdx = 0; batchIdx < batchSize; batchIdx++) {
-          // Log progress every 10 species or so
-          if (speciesList.length % 10 === 0 && speciesList.length > 0) {
-            console.log(`[NetworkGenerator] Progress: ${speciesList.length} species, ${reactionsList.length} reactions...`);
-          }
-          const currentSpecies = queue.shift()!;
+          const currentSpecies = queue[batchIdx];
           const currentCanonical = profiledCanonicalize(currentSpecies);
           const currentSpeciesObj = speciesMap.get(currentCanonical)!;
 
@@ -1028,6 +1024,9 @@ export class NetworkGenerator {
             });
           }
         } // End of batch for-loop
+
+        // Remove processed items in one O(n) pass instead of O(n) per shift()
+        queue.splice(0, batchSize);
 
         // Ensure final update at end of iteration if not just updated
         const now2 = Date.now();
@@ -2364,11 +2363,19 @@ export class NetworkGenerator {
         const nextPattern = patterns[nextPatternIdx];
         const remainingPatterns = patternIndicesToMatch.slice(1);
 
-        // Optimization: Inverted index lookup for molecule types required by nextPattern
-        const requiredMols = nextPattern.molecules.map(m => m.name);
+        // Optimization: Inverted index lookup for molecule types required by nextPattern.
+        // Sort required mols by ascending set size (most-constrained-first) to minimize
+        // the initial Set copy and candidate count fed to canPossiblyMatch/findAllMaps.
+        const rawRequired = nextPattern.molecules.map(m => m.name);
+        const uniqueMols = rawRequired.length <= 1 ? rawRequired : Array.from(new Set(rawRequired));
+        const setsWithSizes = uniqueMols.map(name => ({
+          name,
+          size: this.speciesByMoleculeIndex.get(name)?.size ?? 0,
+        }));
+        setsWithSizes.sort((a, b) => a.size - b.size);
         let candidateSet: Set<number> | null = null;
-        for (const molName of requiredMols) {
-          const set = this.speciesByMoleculeIndex.get(molName);
+        for (const { name } of setsWithSizes) {
+          const set = this.speciesByMoleculeIndex.get(name);
           if (!set) { candidateSet = new Set(); break; }
           if (!candidateSet) candidateSet = new Set(set);
           else {
@@ -5740,11 +5747,6 @@ export class NetworkGenerator {
     // Set initial concentration from seeds
     const seedConcentration = (this.seedConcentrationMap?.get(canonical) ?? 0);
     species.initialConcentration = seedConcentration;
-
-    // DEBUG: Trace FB species creation
-    if (canonical.includes('FB') && canonical.includes('s~U')) {
-      console.log(`[NetworkGen] Creating Species '${canonical}': init=${seedConcentration}`);
-    }
 
     speciesMap.set(canonical, species);
     speciesList.push(species);
