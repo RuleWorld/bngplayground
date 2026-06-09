@@ -14,7 +14,7 @@ const molTypes: BNGLMoleculeType[] = [
 
 describe('buildRuleOverlays', () => {
   it('returns an empty array when no rules are provided', () => {
-    expect(buildRuleOverlays([], molTypes)).toEqual([]);
+    expect(buildRuleOverlays([])).toEqual([]);
   });
 
   it('classifies a binding rule correctly', () => {
@@ -26,7 +26,7 @@ describe('buildRuleOverlays', () => {
       isBidirectional: false,
     };
 
-    const overlays = buildRuleOverlays([rule], molTypes);
+    const overlays = buildRuleOverlays([rule]);
     expect(overlays).toHaveLength(1);
 
     const overlay = overlays[0];
@@ -54,7 +54,7 @@ describe('buildRuleOverlays', () => {
       isBidirectional: false,
     };
 
-    const overlays = buildRuleOverlays([rule], molTypes);
+    const overlays = buildRuleOverlays([rule]);
     const overlay = overlays[0];
 
     // CENTER: bond A.b—B.b should be removed
@@ -71,7 +71,7 @@ describe('buildRuleOverlays', () => {
       isBidirectional: false,
     };
 
-    const overlays = buildRuleOverlays([rule], molTypes);
+    const overlays = buildRuleOverlays([rule]);
     const overlay = overlays[0];
 
     // CENTER: state change on A.s
@@ -90,7 +90,7 @@ describe('buildRuleOverlays', () => {
       isBidirectional: false,
     };
 
-    const overlays = buildRuleOverlays([rule], molTypes);
+    const overlays = buildRuleOverlays([rule]);
     const overlay = overlays[0];
 
     // CENTER: molecule C should be added
@@ -107,7 +107,7 @@ describe('buildRuleOverlays', () => {
       isBidirectional: false,
     };
 
-    const overlays = buildRuleOverlays([rule], molTypes);
+    const overlays = buildRuleOverlays([rule]);
     const overlay = overlays[0];
 
     // CENTER: molecule C should be removed
@@ -125,7 +125,7 @@ describe('buildRuleOverlays', () => {
       isBidirectional: false,
     };
 
-    const overlays = buildRuleOverlays([rule], molTypes);
+    const overlays = buildRuleOverlays([rule]);
     const overlay = overlays[0];
 
     // CENTER: state change on A.s
@@ -153,7 +153,7 @@ describe('buildRuleOverlays', () => {
       },
     ];
 
-    const overlays = buildRuleOverlays(rules, molTypes);
+    const overlays = buildRuleOverlays(rules);
     expect(overlays).toHaveLength(2);
     expect(overlays[0].ruleIndex).toBe(0);
     expect(overlays[1].ruleIndex).toBe(1);

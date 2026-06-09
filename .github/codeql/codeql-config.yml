@@ -1,0 +1,8 @@
+name: "CodeQL custom configuration"
+
+paths-ignore:
+  - 'packages/engine/src/parser/generated/**'
+  - 'wasm-*/**'
+  - 'node_modules/**'
+  - 'public/cvode.wasm'
+  - 'public/nfsim.wasm'
