@@ -1170,7 +1170,8 @@ class VF2State {
       return false;
     }
 
-    if (orderIdx >= order.length) {
+    const nComps = this.pattern.molecules[pMolIdx].components.length;
+    if (orderIdx >= nComps) {
       return true;
     }
 
@@ -1259,7 +1260,8 @@ class VF2State {
       return false;
     }
 
-    if (orderIdx >= order.length) {
+    const nComps = this.pattern.molecules[pMolIdx].components.length;
+    if (orderIdx >= nComps) {
       return true;
     }
 
@@ -1415,11 +1417,12 @@ class VF2State {
       return false;
     }
 
-    if (orderIdx >= order.length) {
+    const nComps = this.pattern.molecules[pMolIdx].components.length;
+    if (orderIdx >= nComps) {
       return true;
     }
 
-    const remaining = order.length - orderIdx;
+    const remaining = nComps - orderIdx;
     let pCompIdx: number;
     let candidates: number[];
 
@@ -1432,7 +1435,7 @@ class VF2State {
       let minCandidates = Number.POSITIVE_INFINITY;
       this.mcvCandidateCache.clear();
 
-      for (let i = orderIdx; i < order.length; i++) {
+      for (let i = orderIdx; i < nComps; i++) {
         const compIdx = order[i];
         const candidatesForComp = this.getComponentCandidates(pMolIdx, tMolIdx, compIdx, usedTargetsMask);
         this.mcvCandidateCache.set(compIdx, candidatesForComp);
@@ -1557,7 +1560,8 @@ class VF2State {
       return false;
     }
 
-    if (orderIdx >= order.length) {
+    const nComps = this.pattern.molecules[pMolIdx].components.length;
+    if (orderIdx >= nComps) {
       return true;
     }
 
