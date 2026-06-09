@@ -65,12 +65,7 @@ function isSafeObjectKey(key: string): boolean {
 
 function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
   if (!isSafeObjectKey(key)) return;
-  Object.defineProperty(target, key, {
-    value,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
+  target[key] = value;
 }
 
 // ────────────────────────────────────────────────────────────────────

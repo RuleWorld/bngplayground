@@ -19,6 +19,7 @@ export class SpeciesGraph {
   private _bondCount?: number;
   private _boundCompCount?: number;
   private _maxDegree?: number;
+  private _neighborList?: number[][];
 
   constructor(molecules: Molecule[] = []) {
     this.molecules = molecules;
@@ -33,6 +34,29 @@ export class SpeciesGraph {
     this._bondCount = undefined;
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
+    this._neighborList = undefined;
+  }
+
+  get neighborList(): number[][] {
+    if (this._neighborList !== undefined) return this._neighborList;
+    const list: number[][] = new Array(this.molecules.length);
+    for (let i = 0; i < this.molecules.length; i++) list[i] = [];
+    for (let i = 0; i < this.molecules.length; i++) {
+      const mol = this.molecules[i];
+      if (!mol) continue;
+      for (let c = 0; c < mol.components.length; c++) {
+        const partnerKeys = this.adjacency.get(`${i}.${c}`);
+        if (!partnerKeys) continue;
+        for (const partnerKey of partnerKeys) {
+          const pMol = parseInt(partnerKey, 10);
+          if (!Number.isNaN(pMol) && list[i].indexOf(pMol) === -1) {
+            list[i].push(pMol);
+          }
+        }
+      }
+    }
+    this._neighborList = list;
+    return list;
   }
 
   get fingerprint(): Map<string, number> {
@@ -190,6 +214,7 @@ export class SpeciesGraph {
     this._bondCount = undefined;
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
+    this._neighborList = undefined;
   }
 
   /**
@@ -306,6 +331,7 @@ export class SpeciesGraph {
     this._bondCount = undefined;
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
+    this._neighborList = undefined;
   }
 
   /**
@@ -384,6 +410,7 @@ export class SpeciesGraph {
     this._bondCount = undefined;
     this._boundCompCount = undefined;
     this._maxDegree = undefined;
+    this._neighborList = undefined;
 
     return offset;
   }

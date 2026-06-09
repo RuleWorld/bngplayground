@@ -4529,10 +4529,10 @@ export class NetworkGenerator {
       // Traverse connected component, but skip broken bonds
       const visited = new Set<number>([startMolIdx]);
       const queue = [startMolIdx];
+      let head = 0;
 
-      while (queue.length > 0) {
-        const molIdx = queue.shift();
-        if (molIdx === undefined) continue;
+      while (head < queue.length) {
+        const molIdx = queue[head++];
 
         // Find all molecules bonded to this one
         const currentMol = reactantGraph.molecules[molIdx];

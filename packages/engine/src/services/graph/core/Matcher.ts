@@ -5,28 +5,7 @@ import { countEmbeddingDegeneracy } from './degeneracy.ts';
 const adjacencyKey = (molIdx: number, compIdx: number): string => `${molIdx}.${compIdx}`;
 
 const getNeighborMolecules = (graph: SpeciesGraph, molIdx: number): number[] => {
-  const neighbors = new Set<number>();
-  const molecule = graph.molecules[molIdx];
-  if (!molecule) {
-    return [];
-  }
-
-  for (let compIdx = 0; compIdx < molecule.components.length; compIdx++) {
-    const partnerKeys = graph.adjacency.get(adjacencyKey(molIdx, compIdx));
-    if (!partnerKeys) {
-      continue;
-    }
-
-    // Support multi-site bonding: iterate over all partners
-    for (const partnerKey of partnerKeys) {
-      const partnerMolIdx = parseInt(partnerKey, 10);
-      if (!Number.isNaN(partnerMolIdx)) {
-        neighbors.add(partnerMolIdx);
-      }
-    }
-  }
-
-  return Array.from(neighbors);
+  return graph.neighborList[molIdx] ?? [];
 };
 
 export interface MatchMap {
@@ -550,8 +529,9 @@ interface PendingComponentResult {
 class VF2State {
   pattern: SpeciesGraph;
   target: SpeciesGraph;
-  corePattern: Map<number, number>;
-  coreTarget: Map<number, number>;
+  corePattern: Int32Array;
+  coreTarget: Int32Array;
+  coreSize: number;
   componentMatches: Map<number, Map<number, number>>;
   pendingComponentResult?: PendingComponentResult;
   bondPartnerLookup: Map<string, BondEndpoint>;
@@ -560,6 +540,8 @@ class VF2State {
   allowExtraTargetBonds: boolean;
   private componentCandidateCache: Map<number, Map<number, Map<number, Map<string, number[]>>>>;
   private usedTargetsScratch: number[];
+  private frontierBits: Uint8Array;
+  private frontierSize: number;
 
   constructor(
     pattern: SpeciesGraph,
@@ -570,8 +552,13 @@ class VF2State {
   ) {
     this.pattern = pattern;
     this.target = target;
-    this.corePattern = new Map();
-    this.coreTarget = new Map();
+    const pLen = pattern.molecules.length;
+    const tLen = target.molecules.length;
+    this.corePattern = new Int32Array(pLen);
+    this.corePattern.fill(-1);
+    this.coreTarget = new Int32Array(tLen);
+    this.coreTarget.fill(-1);
+    this.coreSize = 0;
     this.componentMatches = new Map();
     this.bondPartnerLookup = this.buildBondPartnerLookup();
     this.nodeOrdering = nodeOrdering.length ? nodeOrdering : pattern.molecules.map((_, idx) => idx);
@@ -579,67 +566,93 @@ class VF2State {
     this.allowExtraTargetBonds = allowExtraTargetBonds;
     this.componentCandidateCache = new Map();
     this.usedTargetsScratch = [];
+    this.frontierBits = new Uint8Array(Math.max(pLen, tLen));
+    this.frontierSize = 0;
   }
 
   isComplete(): boolean {
-    return this.corePattern.size === this.pattern.molecules.length;
+    return this.coreSize === this.pattern.molecules.length;
   }
 
-  private computePatternFrontier(): Set<number> {
-    const frontier = new Set<number>();
-    for (const patternIdx of this.corePattern.keys()) {
-      for (const neighbor of getNeighborMolecules(this.pattern, patternIdx)) {
-        if (!this.corePattern.has(neighbor)) {
-          frontier.add(neighbor);
+  private computePatternFrontier(): void {
+    const bits = this.frontierBits;
+    const core = this.corePattern;
+    const n = this.pattern.molecules.length;
+    bits.fill(0, 0, n);
+    let count = 0;
+    for (let pIdx = 0; pIdx < core.length; pIdx++) {
+      if (core[pIdx] === -1) continue;
+      for (const neighbor of getNeighborMolecules(this.pattern, pIdx)) {
+        if (core[neighbor] === -1 && bits[neighbor] === 0) {
+          bits[neighbor] = 1;
+          count++;
         }
       }
     }
-    return frontier;
+    this.frontierSize = count;
   }
 
-  private computeTargetFrontier(): Set<number> {
-    const frontier = new Set<number>();
-    for (const targetIdx of this.coreTarget.keys()) {
-      for (const neighbor of getNeighborMolecules(this.target, targetIdx)) {
-        if (!this.coreTarget.has(neighbor)) {
-          frontier.add(neighbor);
+  private computeTargetFrontier(): void {
+    const bits = this.frontierBits;
+    const core = this.coreTarget;
+    const n = this.target.molecules.length;
+    bits.fill(0, 0, n);
+    let count = 0;
+    for (let tIdx = 0; tIdx < core.length; tIdx++) {
+      if (core[tIdx] === -1) continue;
+      for (const neighbor of getNeighborMolecules(this.target, tIdx)) {
+        if (core[neighbor] === -1 && bits[neighbor] === 0) {
+          bits[neighbor] = 1;
+          count++;
         }
       }
     }
-    return frontier;
+    this.frontierSize = count;
   }
 
-  private getUncoveredPatternNodes(): Set<number> {
-    const nodes = new Set<number>();
-    for (let idx = 0; idx < this.pattern.molecules.length; idx++) {
-      if (!this.corePattern.has(idx)) {
-        nodes.add(idx);
+  private computeUncoveredPatternNodes(): void {
+    const bits = this.frontierBits;
+    const core = this.corePattern;
+    const n = this.pattern.molecules.length;
+    bits.fill(0, 0, n);
+    let count = 0;
+    for (let idx = 0; idx < n; idx++) {
+      if (core[idx] === -1) {
+        bits[idx] = 1;
+        count++;
       }
     }
-    return nodes;
+    this.frontierSize = count;
   }
 
-  private getUncoveredTargetNodes(): Set<number> {
-    const nodes = new Set<number>();
-    for (let idx = 0; idx < this.target.molecules.length; idx++) {
-      if (!this.coreTarget.has(idx)) {
-        nodes.add(idx);
+  private computeUncoveredTargetNodes(): void {
+    const bits = this.frontierBits;
+    const core = this.coreTarget;
+    const n = this.target.molecules.length;
+    bits.fill(0, 0, n);
+    let count = 0;
+    for (let idx = 0; idx < n; idx++) {
+      if (core[idx] === -1) {
+        bits[idx] = 1;
+        count++;
       }
     }
-    return nodes;
+    this.frontierSize = count;
   }
 
   private neighborConsistencyCheck(pNode: number, tNode: number): boolean {
     let patternUncovered = 0;
+    const pCore = this.corePattern;
     for (const neighbor of getNeighborMolecules(this.pattern, pNode)) {
-      if (!this.corePattern.has(neighbor)) {
+      if (pCore[neighbor] === -1) {
         patternUncovered += 1;
       }
     }
 
     let targetUncovered = 0;
+    const tCore = this.coreTarget;
     for (const neighbor of getNeighborMolecules(this.target, tNode)) {
-      if (!this.coreTarget.has(neighbor)) {
+      if (tCore[neighbor] === -1) {
         targetUncovered += 1;
       }
     }
@@ -655,15 +668,23 @@ class VF2State {
    */
   getCandidatePairs(): [number, number][] {
     const pairs: [number, number][] = [];
+    const pCore = this.corePattern;
+    const tCore = this.coreTarget;
 
-    const patternFrontier = this.computePatternFrontier();
-    const targetFrontier = this.computeTargetFrontier();
+    this.computePatternFrontier();
+    const patternFrontierSize = this.frontierSize;
+    const bits = this.frontierBits;
 
-    const patternCandidates = patternFrontier.size > 0 ? patternFrontier : this.getUncoveredPatternNodes();
+    const patternCandidatesSize = patternFrontierSize > 0 ? patternFrontierSize : (() => {
+      this.computeUncoveredPatternNodes();
+      return this.frontierSize;
+    })();
+
+    if (patternCandidatesSize === 0) return pairs;
 
     let nextPatternIdx: number | undefined;
     for (const idx of this.nodeOrdering) {
-      if (patternCandidates.has(idx) && !this.corePattern.has(idx)) {
+      if (bits[idx] === 1 && pCore[idx] === -1) {
         nextPatternIdx = idx;
         break;
       }
@@ -680,16 +701,19 @@ class VF2State {
     // 
     // BNG semantics: "A.B" means A and B are in the same complex, but they don't need to
     // be directly bonded. They could be connected through intermediate molecules.
-    const isNextPatternNodeInFrontier = patternFrontier.has(nextPatternIdx);
-    const targetCandidates = (targetFrontier.size > 0 && isNextPatternNodeInFrontier)
-      ? targetFrontier
-      : this.getUncoveredTargetNodes();
+    const isNextPatternNodeInFrontier = patternFrontierSize > 0 && bits[nextPatternIdx] === 1;
 
-    const sortedTargetCandidates = Array.from(targetCandidates).sort((a, b) => a - b);
-    for (const tIdx of sortedTargetCandidates) {
-      if (this.coreTarget.has(tIdx)) {
-        continue;
-      }
+    if (isNextPatternNodeInFrontier) {
+      this.computeTargetFrontier();
+    } else {
+      this.computeUncoveredTargetNodes();
+    }
+    const targetCandidateCount = this.frontierSize;
+
+    // Iterate target candidates in order (bitset naturally gives ascending order)
+    for (let tIdx = 0; tIdx < tCore.length; tIdx++) {
+      if (bits[tIdx] !== 1) continue;
+      if (tCore[tIdx] !== -1) continue;
 
       if (!this.quickFeasibilityCheck(nextPatternIdx, tIdx)) {
         continue;
@@ -797,14 +821,14 @@ class VF2State {
    * - If pattern molecule does NOT specify a compartment, it matches ANY compartment
    */
   private labelConsistencyCut(pMol: number, tMol: number): boolean {
-    // Pattern counts: key is either "name|compartment" or "name|*" for wildcarded compartments
+    const pCore = this.corePattern;
+    const tCore = this.coreTarget;
     const patternCounts = new Map<string, number>();
-    // Also track name-only counts for patterns without compartment (compartment wildcards)
     const patternNameOnlyCounts = new Map<string, number>();
 
     const addPatternNeighbors = (sourceIdx: number, skipCandidate: boolean) => {
       for (const neighbor of getNeighborMolecules(this.pattern, sourceIdx)) {
-        if (this.corePattern.has(neighbor)) {
+        if (pCore[neighbor] !== -1) {
           continue;
         }
         if (skipCandidate && neighbor === pMol) {
@@ -813,19 +837,18 @@ class VF2State {
         const mol = this.pattern.molecules[neighbor];
         const molComp = this.getEffectiveCompartment(this.pattern, neighbor);
         if (mol.name !== '*' && molComp) {
-          // Pattern specifies compartment - must match exactly
           const key = `${mol.name}|${molComp}`;
           patternCounts.set(key, (patternCounts.get(key) ?? 0) + 1);
         } else if (mol.name !== '*') {
-          // Pattern doesn't specify compartment - track by name only (wildcard)
           patternNameOnlyCounts.set(mol.name, (patternNameOnlyCounts.get(mol.name) ?? 0) + 1);
         }
-        // If mol.name is '*', we don't count it for label-based pruning (too expensive/broad)
       }
     };
 
-    for (const coveredIdx of this.corePattern.keys()) {
-      addPatternNeighbors(coveredIdx, true);
+    for (let idx = 0; idx < pCore.length; idx++) {
+      if (pCore[idx] !== -1) {
+        addPatternNeighbors(idx, true);
+      }
     }
     addPatternNeighbors(pMol, false);
 
@@ -833,13 +856,12 @@ class VF2State {
       return true;
     }
 
-    // Target counts: "name|compartment" exact match, and also name-only counts
     const targetCounts = new Map<string, number>();
     const targetNameOnlyCounts = new Map<string, number>();
 
     const addTargetNeighbors = (sourceIdx: number, skipCandidate: boolean) => {
       for (const neighbor of getNeighborMolecules(this.target, sourceIdx)) {
-        if (this.coreTarget.has(neighbor)) {
+        if (tCore[neighbor] !== -1) {
           continue;
         }
         if (skipCandidate && neighbor === tMol) {
@@ -849,24 +871,23 @@ class VF2State {
         const molComp = this.getEffectiveCompartment(this.target, neighbor);
         const key = `${mol.name}|${molComp ?? ''}`;
         targetCounts.set(key, (targetCounts.get(key) ?? 0) + 1);
-        // Also count by name only for wildcard matching
         targetNameOnlyCounts.set(mol.name, (targetNameOnlyCounts.get(mol.name) ?? 0) + 1);
       }
     };
 
-    for (const coveredIdx of this.coreTarget.keys()) {
-      addTargetNeighbors(coveredIdx, true);
+    for (let idx = 0; idx < tCore.length; idx++) {
+      if (tCore[idx] !== -1) {
+        addTargetNeighbors(idx, true);
+      }
     }
     addTargetNeighbors(tMol, false);
 
-    // Check exact compartment requirements
     for (const [labelKey, required] of patternCounts.entries()) {
       if ((targetCounts.get(labelKey) ?? 0) < required) {
         return false;
       }
     }
 
-    // Check compartment wildcard requirements (pattern without compartment matches any)
     for (const [name, required] of patternNameOnlyCounts.entries()) {
       if ((targetNameOnlyCounts.get(name) ?? 0) < required) {
         return false;
@@ -877,14 +898,13 @@ class VF2State {
   }
 
   private checkFrontierConsistency(pMol: number, tMol: number): boolean {
-    // Build pattern counts: separate by compartmented vs non-compartmented patterns
-    // Pattern counts for exact compartment match
+    const pCore = this.corePattern;
+    const tCore = this.coreTarget;
     const patternCounts = new Map<string, number>();
-    // Pattern counts for compartment wildcard (name only)
     const patternNameOnlyCounts = new Map<string, number>();
 
     for (const neighbor of getNeighborMolecules(this.pattern, pMol)) {
-      if (this.corePattern.has(neighbor)) {
+      if (pCore[neighbor] !== -1) {
         continue;
       }
       const mol = this.pattern.molecules[neighbor];
@@ -908,7 +928,7 @@ class VF2State {
     const targetNameOnlyCounts = new Map<string, number>();
 
     for (const neighbor of getNeighborMolecules(this.target, tMol)) {
-      if (this.coreTarget.has(neighbor)) {
+      if (tCore[neighbor] !== -1) {
         continue;
       }
       const mol = this.target.molecules[neighbor];
@@ -937,9 +957,9 @@ class VF2State {
   }
 
   addPair(p: number, t: number): void {
-    this.corePattern.set(p, t);
-    this.coreTarget.set(t, p);
-    this.componentCandidateCache.clear();
+    this.corePattern[p] = t;
+    this.coreTarget[t] = p;
+    this.coreSize++;
 
     if (
       this.pendingComponentResult &&
@@ -956,21 +976,21 @@ class VF2State {
   }
 
   removePair(p: number, t: number): void {
-    this.corePattern.delete(p);
-    this.coreTarget.delete(t);
+    this.corePattern[p] = -1;
+    this.coreTarget[t] = -1;
+    this.coreSize--;
     this.componentMatches.delete(p);
-    this.componentCandidateCache.clear();
   }
 
   tryGetMatch(): MatchMap | null {
-    // Component maps recorded during VF2 descent are usually correct.
-    // However, in symmetric/repeated-site cases (e.g., BAB), a molecule-level mapping can be
-    // feasible while an earlier component assignment becomes inconsistent once all molecules
-    // are mapped. Recompute only when needed.
-
     const componentMap = new Map<string, string>();
+    const molMap = new Map<number, number>();
 
-    for (const [pMolIdx, tMolIdx] of this.corePattern.entries()) {
+    for (let pMolIdx = 0; pMolIdx < this.corePattern.length; pMolIdx++) {
+      const tMolIdx = this.corePattern[pMolIdx];
+      if (tMolIdx === -1) continue;
+      molMap.set(pMolIdx, tMolIdx);
+
       const storedMap = this.componentMatches.get(pMolIdx);
 
       let perMolMap: Map<number, number> | null = null;
@@ -980,7 +1000,6 @@ class VF2State {
         perMolMap = this.matchComponentsWithBondConsistency(pMolIdx, tMolIdx);
       }
 
-      // If we cannot produce a bond-consistent component mapping, the molecule mapping is not a valid match.
       if (!perMolMap) {
         return null;
       }
@@ -991,7 +1010,7 @@ class VF2State {
     }
 
     return {
-      moleculeMap: new Map(this.corePattern),
+      moleculeMap: molMap,
       componentMap
     };
   }
@@ -1034,9 +1053,9 @@ class VF2State {
         if (partner.molIdx === pMolIdx) continue;
 
         const partnerMolIdx = partner.molIdx;
-        if (!this.corePattern.has(partnerMolIdx)) continue;
+        if (this.corePattern[partnerMolIdx] === -1) continue;
 
-        const targetPartnerMolIdx = this.corePattern.get(partnerMolIdx)!;
+        const targetPartnerMolIdx = this.corePattern[partnerMolIdx];
         const partnerStoredMap = this.componentMatches.get(partnerMolIdx);
         if (!partnerStoredMap) {
           // Can't validate without partner's mapping.
@@ -1161,9 +1180,9 @@ class VF2State {
       if (partnerMolIdx === pMolIdx) continue;
 
       // Check if partner molecule is in corePattern (already matched)
-      if (!this.corePattern.has(partnerMolIdx)) continue;
+      if (this.corePattern[partnerMolIdx] === -1) continue;
 
-      const targetPartnerMolIdx = this.corePattern.get(partnerMolIdx)!;
+      const targetPartnerMolIdx = this.corePattern[partnerMolIdx];
 
       // Component-level bond feasibility: pattern's (partner.molIdx, partner.compIdx) must map to
       // some compatible component on the already-mapped target partner molecule that is bonded to (tMolIdx,tCompIdx).
@@ -1557,12 +1576,8 @@ class VF2State {
             return false;
           }
         }
-      } else if (this.corePattern.has(partnerMolIdx)) {
-        // The bond partner's molecule is already matched in corePattern.
-        // NOTE: Instead of requiring the frozen componentMatches to satisfy the bond,
-        // we check if SOME component of the target partner molecule could satisfy this bond.
-        // This is essential for finding multiple symmetric embeddings (e.g., BAB).
-        const targetPartnerMolIdx = this.corePattern.get(partnerMolIdx)!;
+      } else if (this.corePattern[partnerMolIdx] !== -1) {
+        const targetPartnerMolIdx = this.corePattern[partnerMolIdx];
 
         const hasCompatiblePartner = this.hasCompatibleBondedPartnerComponent(tMolIdx, tCompIdx, partnerMolIdx, partnerCompIdx, targetPartnerMolIdx);
 
@@ -1574,12 +1589,10 @@ class VF2State {
         if (!neighborKeys || neighborKeys.length === 0) {
           return false;
         }
-        // For multi-site bonding, check all neighbors
-        // Use the first neighbor for now (simplification - may need more sophisticated handling)
         const neighborKey = neighborKeys[0];
         const neighborMolIdx = parseInt(neighborKey, 10);
-        if (this.coreTarget.has(neighborMolIdx)) {
-          const mappedPatternMol = this.coreTarget.get(neighborMolIdx)!;
+        if (this.coreTarget[neighborMolIdx] !== -1) {
+          const mappedPatternMol = this.coreTarget[neighborMolIdx];
           if (mappedPatternMol !== partnerMolIdx) {
             return false;
           }

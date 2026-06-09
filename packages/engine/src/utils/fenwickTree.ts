@@ -5,10 +5,12 @@
 export class FenwickTree {
   private tree: Float64Array;
   readonly size: number;
+  private highBit: number;
 
   constructor(size: number) {
     this.size = size;
     this.tree = new Float64Array(size + 1);
+    this.highBit = 1 << (Math.floor(Math.log2(size)) + 1);
   }
 
   add(idx: number, delta: number): void {
@@ -49,7 +51,7 @@ export class FenwickTree {
     const tree = this.tree;
     const n = this.size;
     let idx = 0;
-    let bitMask = 1 << (Math.floor(Math.log2(n)) + 1);
+    let bitMask = this.highBit;
     while (bitMask !== 0) {
       const next = idx + bitMask;
       if (next <= n && tree[next] <= target) {

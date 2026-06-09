@@ -60,16 +60,12 @@ function isSafeObjectKey(key: string): boolean {
 
 function setSafeNumericField(target: Record<string, number>, key: string, value: number): void {
   if (!isSafeObjectKey(key)) return;
-  // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
-  // Security is maintained by the isSafeObjectKey check above.
-  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  target[key] = value;
 }
 
 function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
   if (!isSafeObjectKey(key)) return;
-  // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
-  // Security is maintained by the isSafeObjectKey check above.
-  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  target[key] = value;
 }
 
 function extractIfConditions(expression: string): string[] {
@@ -1844,6 +1840,29 @@ export async function simulate(
           }
         }
 
+        // Precompute which species names are referenced by any functional rate expression
+        // to avoid writing ALL species to rateContext on every derivative call.
+        const referencedSpeciesIndices: number[] = [];
+        const referencedSpeciesNames: string[] = [];
+        if (functionalRateExprs.length > 0) {
+          const refSet = new Set<number>();
+          for (const expr of functionalRateExprs) {
+            for (let k = 0; k < model.species.length; k++) {
+              const speciesName = model.species[k].name;
+              const escapedName = speciesName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapedName}(?:$|[^A-Za-z0-9_])`);
+              if (re.test(expr)) {
+                refSet.add(k);
+              }
+            }
+          }
+          const sorted = Array.from(refSet).sort((a, b) => a - b);
+          for (const k of sorted) {
+            referencedSpeciesIndices.push(k);
+            referencedSpeciesNames.push(model.species[k].name);
+          }
+        }
+
         // Pre-compile with JIT where possible (Optimization B: 16.7x),
         // falling back to AST-walk (Optimization A: 8x)
         let compiledRates: PreCompiledRateWithJIT[] = [];
@@ -1919,16 +1938,10 @@ export async function simulate(
               setSafeNumericField(rateContext, observableName, obsValues[observableName]);
             }
           }
-          // Update species values in the mutable context (in-place)
-          for (let k = 0; k < model.species.length; k++) {
-            const speciesName = model.species[k].name;
-            if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
-              setSafeNumericField(
-                rateContext,
-                speciesName,
-                odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k])
-              );
-            }
+          // Update species values in the mutable context (in-place) — only those referenced by functional rates
+          for (let ri = 0; ri < referencedSpeciesIndices.length; ri++) {
+            const k = referencedSpeciesIndices[ri];
+            rateContext[referencedSpeciesNames[ri]] = odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k]);
           }
 
           for (let i = 0; i < concreteReactions.length; i++) {
