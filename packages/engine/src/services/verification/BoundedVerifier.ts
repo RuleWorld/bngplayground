@@ -7,16 +7,9 @@
  * contact-map layer but bounded by resource limits.
  *
  * KNOWN LIMITATIONS (tracked for future refactoring):
- * - Uses hand-rolled species parsing instead of BNGLParser.parseSpeciesGraph()
- * - Uses sort-based canonicalization instead of GraphCanonicalizer (may be incorrect
- *   for symmetric species with automorphisms)
- * - Pattern matching doesn't use GraphMatcher subgraph isomorphism
  * - Rule application returns literal product patterns instead of transforming
  *   concrete species (limits reachability to single-step products)
  * - Deadlock check considers species types independently, not populations
- *
- * TODO: Refactor to use BNGLParser + GraphCanonicalizer + GraphMatcher from
- * packages/engine/src/services/graph/core/ for correctness on symmetric models.
  */
 
 import type { BNGLModel, ReactionRule } from '../../types';

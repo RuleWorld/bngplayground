@@ -15,6 +15,12 @@ export class SpeciesGraph {
   private _componentCount?: number;
   private _fingerprint?: Map<string, number>;
   private _typeBonds?: Map<string, number>;
+  private _molTypeCounts?: Map<string, number>;
+  private _bondCount?: number;
+  private _boundCompCount?: number;
+  private _maxDegree?: number;
+  private _neighborList?: number[][];
+  private _bondList?: Int32Array;
 
   constructor(molecules: Molecule[] = []) {
     this.molecules = molecules;
@@ -25,6 +31,63 @@ export class SpeciesGraph {
     this._componentCount = undefined;
     this._fingerprint = undefined;
     this._typeBonds = undefined;
+    this._molTypeCounts = undefined;
+    this._bondCount = undefined;
+    this._boundCompCount = undefined;
+    this._maxDegree = undefined;
+    this._neighborList = undefined;
+    this._bondList = undefined;
+  }
+
+  get neighborList(): number[][] {
+    if (this._neighborList !== undefined) return this._neighborList;
+    const list: number[][] = new Array(this.molecules.length);
+    for (let i = 0; i < this.molecules.length; i++) list[i] = [];
+    for (let i = 0; i < this.molecules.length; i++) {
+      const mol = this.molecules[i];
+      if (!mol) continue;
+      for (let c = 0; c < mol.components.length; c++) {
+        const partnerKeys = this.adjacency.get(`${i}.${c}`);
+        if (!partnerKeys) continue;
+        for (const partnerKey of partnerKeys) {
+          const pMol = parseInt(partnerKey, 10);
+          if (!Number.isNaN(pMol) && list[i].indexOf(pMol) === -1) {
+            list[i].push(pMol);
+          }
+        }
+      }
+    }
+    this._neighborList = list;
+    return list;
+  }
+
+  get bondList(): Int32Array {
+    if (this._bondList !== undefined) return this._bondList;
+    const bonds: number[] = [];
+    const seen = new Set<string>();
+    for (const [key, partnerKeys] of this.adjacency) {
+      const dot = key.indexOf('.');
+      const m1 = parseInt(key, 10);
+      const c1 = dot !== -1 ? parseInt(key.substring(dot + 1), 10) : 0;
+      for (const partnerKey of partnerKeys) {
+        const dot2 = partnerKey.indexOf('.');
+        const m2 = parseInt(partnerKey, 10);
+        const c2 = dot2 !== -1 ? parseInt(partnerKey.substring(dot2 + 1), 10) : 0;
+        const aKey = `${m1}.${c1}`;
+        const bKey = `${m2}.${c2}`;
+        const bondKey = aKey < bKey ? `${aKey}-${bKey}` : `${bKey}-${aKey}`;
+        if (!seen.has(bondKey)) {
+          seen.add(bondKey);
+          if (aKey < bKey) {
+            bonds.push(m1, c1, m2, c2);
+          } else {
+            bonds.push(m2, c2, m1, c1);
+          }
+        }
+      }
+    }
+    this._bondList = new Int32Array(bonds);
+    return this._bondList;
   }
 
   get fingerprint(): Map<string, number> {
@@ -72,6 +135,62 @@ export class SpeciesGraph {
     }
     this._typeBonds = tb;
     return tb;
+  }
+
+  get molTypeCounts(): Map<string, number> {
+    if (this._molTypeCounts !== undefined) return this._molTypeCounts;
+    const counts = new Map<string, number>();
+    for (const mol of this.molecules) {
+      counts.set(mol.name, (counts.get(mol.name) ?? 0) + 1);
+    }
+    this._molTypeCounts = counts;
+    return counts;
+  }
+
+  get bondCount(): number {
+    if (this._bondCount !== undefined) return this._bondCount;
+    let count = 0;
+    for (const mol of this.molecules) {
+      for (const comp of mol.components) {
+        count += comp.edges.size;
+      }
+    }
+    this._bondCount = Math.floor(count / 2);
+    return this._bondCount;
+  }
+
+  get boundCompCount(): number {
+    if (this._boundCompCount !== undefined) return this._boundCompCount;
+    let count = 0;
+    for (const mol of this.molecules) {
+      for (const comp of mol.components) {
+        if (comp.edges.size > 0) count++;
+      }
+    }
+    this._boundCompCount = count;
+    return count;
+  }
+
+  get maxDegree(): number {
+    if (this._maxDegree !== undefined) return this._maxDegree;
+    let max = 0;
+    for (let idx = 0; idx < this.molecules.length; idx++) {
+      let deg = 0;
+      const molecule = this.molecules[idx];
+      if (!molecule) continue;
+      const seen = new Set<number>();
+      for (let compIdx = 0; compIdx < molecule.components.length; compIdx++) {
+        const partnerKeys = this.adjacency.get(`${idx}.${compIdx}`);
+        if (!partnerKeys) continue;
+        for (const partnerKey of partnerKeys) {
+          const partnerMolIdx = parseInt(partnerKey, 10);
+          if (!Number.isNaN(partnerMolIdx)) seen.add(partnerMolIdx);
+        }
+      }
+      if (seen.size > max) max = seen.size;
+    }
+    this._maxDegree = max;
+    return max;
   }
 
   /**
@@ -122,6 +241,12 @@ export class SpeciesGraph {
     this._componentCount = undefined;
     this._fingerprint = undefined;
     this._typeBonds = undefined;
+    this._molTypeCounts = undefined;
+    this._bondCount = undefined;
+    this._boundCompCount = undefined;
+    this._maxDegree = undefined;
+    this._neighborList = undefined;
+    this._bondList = undefined;
   }
 
   /**
@@ -234,6 +359,12 @@ export class SpeciesGraph {
     this._componentCount = undefined;
     this._fingerprint = undefined;
     this._typeBonds = undefined;
+    this._molTypeCounts = undefined;
+    this._bondCount = undefined;
+    this._boundCompCount = undefined;
+    this._maxDegree = undefined;
+    this._neighborList = undefined;
+    this._bondList = undefined;
   }
 
   /**
@@ -308,6 +439,12 @@ export class SpeciesGraph {
     this._componentCount = undefined;
     this._fingerprint = undefined;
     this._typeBonds = undefined;
+    this._molTypeCounts = undefined;
+    this._bondCount = undefined;
+    this._boundCompCount = undefined;
+    this._maxDegree = undefined;
+    this._neighborList = undefined;
+    this._bondList = undefined;
 
     return offset;
   }

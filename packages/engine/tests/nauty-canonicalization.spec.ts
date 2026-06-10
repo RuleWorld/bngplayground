@@ -64,5 +64,51 @@ describe('Nauty canonicalization', () => {
 
     expect(results.size).toBe(1);
   });
+
+  it('handles ≥1025-molecule species without color overflow (C-1 regression)', () => {
+    // Build a linear homopolymer chain of 1025 identical A(a) molecules.
+    // WL color ranks reach ≥1024, which overflowed the 10-bit color field
+    // in the prior shift-based encoding.
+    const N = 1025;
+    const mols1: Molecule[] = [];
+    for (let i = 0; i < N; i++) {
+      mols1.push(new Molecule('A', [new Component('a')]));
+    }
+    const g1 = new SpeciesGraph(mols1);
+    for (let i = 0; i < N - 1; i++) {
+      g1.addBond(i, 0, i + 1, 0);
+    }
+
+    // Same chain with molecules in reverse order
+    const mols2: Molecule[] = [];
+    for (let i = 0; i < N; i++) {
+      mols2.push(new Molecule('A', [new Component('a')]));
+    }
+    const g2 = new SpeciesGraph(mols2);
+    for (let i = 0; i < N - 1; i++) {
+      g2.addBond(N - 1 - i, 0, N - 2 - i, 0);
+    }
+
+    const c1 = GraphCanonicalizer.canonicalize(g1);
+    const c2 = GraphCanonicalizer.canonicalize(g2);
+    expect(c1).toEqual(c2);
+  });
+
+  it('handles intramolecular bonds correctly in WL refinement (C-3 regression)', () => {
+    // Single molecule with an intramolecular bond: A(a!1,b!1)
+    // Self-bond (m1 === m2) must contribute two half-edges in the WL signature.
+    const g = new SpeciesGraph([new Molecule('A', [new Component('a'), new Component('b')])]);
+    g.addBond(0, 0, 0, 1);
+
+    // Should not throw and produce a deterministic result
+    const result = GraphCanonicalizer.canonicalize(g);
+    expect(result).toBeTruthy();
+
+    // Verify invariance: build the same graph with swapped component order
+    const g2 = new SpeciesGraph([new Molecule('A', [new Component('b'), new Component('a')])]);
+    g2.addBond(0, 0, 0, 1); // b bonded to a
+    const result2 = GraphCanonicalizer.canonicalize(g2);
+    expect(result2).toEqual(result);
+  });
 });
 

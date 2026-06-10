@@ -22,6 +22,7 @@
  */
 
 import { SeededRandom } from '../../utils/random';
+import { FenwickTree } from '../../utils/fenwickTree';
 import { countPatternMatches } from '../parity/PatternMatcher';
 import type { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 
@@ -64,12 +65,7 @@ function isSafeObjectKey(key: string): boolean {
 
 function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
   if (!isSafeObjectKey(key)) return;
-  Object.defineProperty(target, key, {
-    value,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
+  target[key] = value;
 }
 
 // ────────────────────────────────────────────────────────────────────
@@ -266,19 +262,20 @@ export class PSASimulator {
     state: Float64Array,
     poplevel: number,
     pScaleChecker: boolean,
+    fenwick?: FenwickTree,
   ): number {
-    let aTot = 0;
-    // Recompute only dependent reactions
+    // Incremental delta update (SSA's pattern: faster than full O(R) sum)
+    let aDelta = 0;
     for (const jrxn of rxnUpdateRxn[irxn]) {
+      const oldProp = reactions[jrxn].propensity;
       const { rate, scaling } = this.rxnRateScaled(reactions[jrxn], state, poplevel, pScaleChecker);
       reactions[jrxn].propensity = rate;
       reactions[jrxn].scaling = scaling;
+      const delta = rate - oldProp;
+      aDelta += delta;
+      if (fenwick) fenwick.add(jrxn, delta);
     }
-    // Recompute total (safer than incremental for floating-point)
-    for (let i = 0; i < reactions.length; i++) {
-      aTot += reactions[i].propensity;
-    }
-    return aTot;
+    return aDelta;
   }
 
   // ── Reaction selection ──────────────────────────────────────────
@@ -291,10 +288,28 @@ export class PSASimulator {
     reactions: PSAReaction[],
     aTot: number,
     propOrder: number[],
+    fenwick: FenwickTree | null,
   ): number {
     const na = propOrder.length;
     if (aTot <= 0) return na;
 
+    if (fenwick) {
+      // O(log R) selection via Fenwick tree
+      let attempts = 0;
+      while (attempts < 10) {
+        attempts++;
+        let f = this.rng.next() * aTot;
+        while (f === 0) f = this.rng.next() * aTot;
+        const idx = fenwick.find(f);
+        if (idx < na) return idx;
+        // Overshot - retry with recalculated total
+        aTot = fenwick.total();
+        if (aTot <= 0) return na;
+      }
+      return na;
+    }
+
+    // Fallback: O(R) cumulative-sum with move-to-front
     let attempts = 0;
     while (attempts < 10) {
       attempts++;
@@ -306,7 +321,6 @@ export class PSASimulator {
       for (irxn = 0; irxn < na; irxn++) {
         aSum += reactions[propOrder[irxn]].propensity;
         if (f <= aSum) break;
-        // Speed up: swap neighbors in descending propensity order
         if (irxn > 0 && reactions[propOrder[irxn]].propensity > reactions[propOrder[irxn - 1]].propensity) {
           const tmp = propOrder[irxn];
           propOrder[irxn] = propOrder[irxn - 1];
@@ -315,9 +329,8 @@ export class PSASimulator {
       }
 
       if (irxn < na) return propOrder[irxn];
-      // Overshot - retry with recalculated total
       if (aSum === 0) return na;
-      aTot = aSum; // adjust for next attempt
+      aTot = aSum;
     }
 
     return na;
@@ -421,6 +434,12 @@ export class PSASimulator {
     const propOrder: number[] = new Array(nReactions);
     for (let i = 0; i < nReactions; i++) propOrder[i] = i;
 
+    // Fenwick tree for O(log R) reaction selection
+    const fenwick = new FenwickTree(nReactions);
+    const initProps: number[] = new Array(nReactions);
+    for (let i = 0; i < nReactions; i++) initProps[i] = reactions[i].propensity;
+    fenwick.build(initProps);
+
     // Build observable evaluator
     const observableIndices: Map<string, { indices: number[]; coefficients: number[] }> = new Map();
     for (const obs of model.observables) {
@@ -497,6 +516,7 @@ export class PSASimulator {
     const MAX_TOTAL_STEPS = 1_000_000_000;
     let nSteps = 0;
     let hitMaxSteps = false;
+    let recalcCount = 0;
 
     // === MAIN SIMULATION LOOP (mirrors adaptive_scaling_network) ===
     for (let step = 1; step <= n_steps; step++) {
@@ -507,6 +527,18 @@ export class PSASimulator {
         if (nSteps >= MAX_TOTAL_STEPS) {
           hitMaxSteps = true;
           break;
+        }
+
+        // Periodic full aTot resync for numerical hygiene
+        if (recalcCount++ >= 100) {
+          recalcCount = 0;
+          aTot = 0;
+          const rebuildVals: number[] = new Array(nReactions);
+          for (let i = 0; i < nReactions; i++) {
+            rebuildVals[i] = reactions[i].propensity;
+            aTot += reactions[i].propensity;
+          }
+          fenwick.build(rebuildVals);
         }
 
         // Determine time to next reaction
@@ -520,19 +552,15 @@ export class PSASimulator {
         if (tRemain < 0) break;
 
         // Select next reaction
-        const irxn = this.selectNextRxn(reactions, aTot, propOrder);
+        const irxn = this.selectNextRxn(reactions, aTot, propOrder, fenwick);
         if (irxn === nReactions) break; // aTot = 0
 
         // Fire reaction (HAS update: changes by +/- scaling)
         const forceUpdate = this.updateConcentrationsHas(irxn, reactions, state, fixedSpecies);
         nSteps++;
 
-        // Update propensities
-        if (forceUpdate) {
-          aTot = this.updateRxnRatesHas(irxn, reactions, rxnUpdateRxn, state, poplevel, pScaleChecker);
-        } else {
-          aTot = this.updateRxnRatesHas(irxn, reactions, rxnUpdateRxn, state, poplevel, pScaleChecker);
-        }
+        // Update propensities (incremental delta, periodic full resync above)
+        aTot += this.updateRxnRatesHas(irxn, reactions, rxnUpdateRxn, state, poplevel, pScaleChecker, fenwick);
       }
 
       if (hitMaxSteps) {

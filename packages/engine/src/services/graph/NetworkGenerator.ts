@@ -82,15 +82,22 @@ export const PROFILE_DATA = {
   degeneracyCount: 0,
   speciesDedup: 0,
   speciesDedupCount: 0,
+  matchComponents: 0,
+  matchComponentsCount: 0,
 };
 
 export function resetProfileData() {
   for (const key of Object.keys(PROFILE_DATA) as Array<keyof typeof PROFILE_DATA>) {
-    PROFILE_DATA[key] = 0;
+    (PROFILE_DATA[key] as number) = 0;
   }
+  GraphMatcher.matchComponentsTime = 0;
+  GraphMatcher.matchComponentsCount = 0;
 }
 
 export function printProfileData() {
+  // Sync GraphMatcher statics into PROFILE_DATA for unified reporting
+  PROFILE_DATA.matchComponents = GraphMatcher.matchComponentsTime;
+  PROFILE_DATA.matchComponentsCount = GraphMatcher.matchComponentsCount;
   console.log('\n=== NetworkGenerator Profile ===');
   console.log(`  canonicalize: ${(PROFILE_DATA.canonicalize / 1000).toFixed(3)}s (${PROFILE_DATA.canonicalizeCount} calls)`);
   console.log(`  findAllMaps: ${(PROFILE_DATA.findAllMaps / 1000).toFixed(3)}s (${PROFILE_DATA.findAllMapsCount} calls)`);
@@ -98,6 +105,7 @@ export function printProfileData() {
   console.log(`  isDuplicateReaction: ${(PROFILE_DATA.isDuplicateReaction / 1000).toFixed(3)}s (${PROFILE_DATA.isDuplicateReactionCount} calls)`);
   console.log(`  degeneracy: ${(PROFILE_DATA.degeneracy / 1000).toFixed(3)}s (${PROFILE_DATA.degeneracyCount} calls)`);
   console.log(`  speciesDedup: ${(PROFILE_DATA.speciesDedup / 1000).toFixed(3)}s (${PROFILE_DATA.speciesDedupCount} calls)`);
+  console.log(`  matchComponents: ${(PROFILE_DATA.matchComponents / 1000).toFixed(3)}s (${PROFILE_DATA.matchComponentsCount} calls)`);
   console.log('================================\n');
 }
 
@@ -916,11 +924,7 @@ export class NetworkGenerator {
 
         // Process all species in the current batch
         for (let batchIdx = 0; batchIdx < batchSize; batchIdx++) {
-          // Log progress every 10 species or so
-          if (speciesList.length % 10 === 0 && speciesList.length > 0) {
-            console.log(`[NetworkGenerator] Progress: ${speciesList.length} species, ${reactionsList.length} reactions...`);
-          }
-          const currentSpecies = queue.shift()!;
+          const currentSpecies = queue[batchIdx];
           const currentCanonical = profiledCanonicalize(currentSpecies);
           const currentSpeciesObj = speciesMap.get(currentCanonical)!;
 
@@ -1028,6 +1032,9 @@ export class NetworkGenerator {
             });
           }
         } // End of batch for-loop
+
+        // Remove processed items in one O(n) pass instead of O(n) per shift()
+        queue.splice(0, batchSize);
 
         // Ensure final update at end of iteration if not just updated
         const now2 = Date.now();
@@ -2364,11 +2371,19 @@ export class NetworkGenerator {
         const nextPattern = patterns[nextPatternIdx];
         const remainingPatterns = patternIndicesToMatch.slice(1);
 
-        // Optimization: Inverted index lookup for molecule types required by nextPattern
-        const requiredMols = nextPattern.molecules.map(m => m.name);
+        // Optimization: Inverted index lookup for molecule types required by nextPattern.
+        // Sort required mols by ascending set size (most-constrained-first) to minimize
+        // the initial Set copy and candidate count fed to canPossiblyMatch/findAllMaps.
+        const rawRequired = nextPattern.molecules.map(m => m.name);
+        const uniqueMols = rawRequired.length <= 1 ? rawRequired : Array.from(new Set(rawRequired));
+        const setsWithSizes = uniqueMols.map(name => ({
+          name,
+          size: this.speciesByMoleculeIndex.get(name)?.size ?? 0,
+        }));
+        setsWithSizes.sort((a, b) => a.size - b.size);
         let candidateSet: Set<number> | null = null;
-        for (const molName of requiredMols) {
-          const set = this.speciesByMoleculeIndex.get(molName);
+        for (const { name } of setsWithSizes) {
+          const set = this.speciesByMoleculeIndex.get(name);
           if (!set) { candidateSet = new Set(); break; }
           if (!candidateSet) candidateSet = new Set(set);
           else {
@@ -4522,10 +4537,10 @@ export class NetworkGenerator {
       // Traverse connected component, but skip broken bonds
       const visited = new Set<number>([startMolIdx]);
       const queue = [startMolIdx];
+      let head = 0;
 
-      while (queue.length > 0) {
-        const molIdx = queue.shift();
-        if (molIdx === undefined) continue;
+      while (head < queue.length) {
+        const molIdx = queue[head++];
 
         // Find all molecules bonded to this one
         const currentMol = reactantGraph.molecules[molIdx];
@@ -5740,11 +5755,6 @@ export class NetworkGenerator {
     // Set initial concentration from seeds
     const seedConcentration = (this.seedConcentrationMap?.get(canonical) ?? 0);
     species.initialConcentration = seedConcentration;
-
-    // DEBUG: Trace FB species creation
-    if (canonical.includes('FB') && canonical.includes('s~U')) {
-      console.log(`[NetworkGen] Creating Species '${canonical}': init=${seedConcentration}`);
-    }
 
     speciesMap.set(canonical, species);
     speciesList.push(species);

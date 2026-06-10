@@ -22,6 +22,7 @@ import { getFeatureFlags } from '../../featureFlags';
 import { jitCompiler, type JITCompiledFunction } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
+import { FenwickTree } from '../../utils/fenwickTree';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
@@ -59,16 +60,12 @@ function isSafeObjectKey(key: string): boolean {
 
 function setSafeNumericField(target: Record<string, number>, key: string, value: number): void {
   if (!isSafeObjectKey(key)) return;
-  // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
-  // Security is maintained by the isSafeObjectKey check above.
-  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  target[key] = value;
 }
 
 function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
   if (!isSafeObjectKey(key)) return;
-  // ⚡ Bolt Optimization: Use direct assignment for ~10x faster execution in hot loops.
-  // Security is maintained by the isSafeObjectKey check above.
-  Object.defineProperty(target, key, { value, writable: true, enumerable: true, configurable: true });
+  target[key] = value;
 }
 
 function extractIfConditions(expression: string): string[] {
@@ -1270,8 +1267,13 @@ export async function simulate(
 
 
 
-      // Global influence tracking
-      const includeInfluence = options.includeInfluence === true;
+      // Global influence tracking (guard: skip if too many reactions to avoid OOM)
+      const MAX_INFLUENCE_REACTIONS = 5000;
+      let includeInfluence = options.includeInfluence === true;
+      if (includeInfluence && numReactions > MAX_INFLUENCE_REACTIONS) {
+        console.warn(`Influence tracking disabled: ${numReactions} reactions exceeds limit of ${MAX_INFLUENCE_REACTIONS}`);
+        includeInfluence = false;
+      }
       const ruleFirings = includeInfluence ? new Int32Array(numReactions) : null;
       const influenceMatrix = includeInfluence ? new Float64Array(numReactions * numReactions) : null;
 
@@ -1288,6 +1290,7 @@ export async function simulate(
 
       // Reuse arrays to avoid allocations in hot loop
       const propensities = new Float64Array(numReactions);
+      const fenwick = new FenwickTree(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
       const propOrder = new Int32Array(numReactions);
@@ -1363,47 +1366,70 @@ export async function simulate(
         return matrix;
       };
 
+      // Precompute effective rate constants kEff[i] = k * factor / V^(n-1)
+      // for mass-action reactions, matching the JIT compiler's folding.
+      const kEff = new Float64Array(numReactions);
+      const isFunctionalRxn = new Uint8Array(numReactions);
+      for (let i = 0; i < numReactions; i++) {
+        const rxn = concreteReactions[i];
+        if (rxn.isFunctionalRate && rxn.rateExpression) {
+          isFunctionalRxn[i] = 1;
+          kEff[i] = 0; // unused
+        } else {
+          const n = rxn.reactants.length;
+          let eff = rxn.rateConstant * rxn.propensityFactor;
+          const volume = reactionReactingVolumes[i];
+          if (n === 0) {
+            eff *= volume;
+          } else if (n === 2) {
+            eff /= volume;
+          } else if (n === 3) {
+            eff /= (volume * volume);
+          } else if (n > 3) {
+            eff /= Math.pow(volume, n - 1);
+          }
+          kEff[i] = eff;
+        }
+      }
+
       // Helper: calculate propensity for a single reaction
       const calcPropensity = (rxnIdx: number): number => {
         const rxn = concreteReactions[rxnIdx];
-        const n = rxn.reactants.length;
-        let rate = rxn.rateConstant;
-        if (rxn.isFunctionalRate && rxn.rateExpression) {
+        if (isFunctionalRxn[rxnIdx]) {
           try {
             const currentObs = evaluateObservablesFast(state);
-            rate = evaluateFunctionalRate(
-              rxn.rateExpression,
+            const rate = evaluateFunctionalRate(
+              rxn.rateExpression!,
               model.parameters || {},
               currentObs,
               model.functions,
               undefined,
               undefined
             );
+            let a = rate * rxn.propensityFactor;
+            const volume = reactionReactingVolumes[rxnIdx];
+            const n = rxn.reactants.length;
+            if (n === 0) {
+              a *= volume;
+            } else if (n === 2) {
+              a /= volume;
+            } else if (n === 3) {
+              a /= (volume * volume);
+            } else if (n > 3) {
+              a /= Math.pow(volume, n - 1);
+            }
+            for (let j = 0; j < rxn.reactants.length; j++) {
+              a *= state[rxn.reactants[j]];
+            }
+            return a;
           } catch (e: unknown) {
             console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e instanceof Error ? e.message : String(e));
-            rate = 0;
+            return 0;
           }
         }
 
-        let a = rate * rxn.propensityFactor;
-
-        // PARITY NOTE: For SSA, bimolecular rates (k_molar) must be scaled by 1/V
-        // to convert to propensity in reciprocal molecule-counts.
-        // n=0: a = k*V
-        // n=1: a = k*N
-        // n=2: a = k*N1*N2/V
-        // n=3: a = k*N1*N2*N3/V^2
-        const volume = reactionReactingVolumes[rxnIdx];
-        if (n === 0) {
-          a *= volume;
-        } else if (n === 2) {
-          a /= volume;
-        } else if (n === 3) {
-          a /= (volume * volume);
-        } else if (n > 3) {
-          a /= Math.pow(volume, n - 1);
-        }
-
+        // Mass-action: use precomputed effective rate constant
+        let a = kEff[rxnIdx];
         for (let j = 0; j < rxn.reactants.length; j++) {
           a *= state[rxn.reactants[j]];
         }
@@ -1529,6 +1555,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
               }
             }
+            fenwick.build(propensities);
           } else {
             aTotal = 0;
             for (let i = 0; i < numReactions; i++) {
@@ -1541,6 +1568,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
               }
             }
+            fenwick.build(propensities);
           }
         };
 
@@ -1576,26 +1604,9 @@ export async function simulate(
           t += tau;
 
           const r2 = rng.next() * aTotal;
-          let sumA = 0;
-          let reactionIndex = 0;
-          // Direct method: select reaction where cumulative sum exceeds r2
-          // Use < instead of <= to avoid bias toward last reaction when r2 ≈ aTotal
-          let selectedRxn = propOrder[0];
-          for (let j = 0; j < numReactions; j++) {
-            const rj = propOrder[j];
-            sumA += propensities[rj];
-            if (r2 < sumA) {
-              selectedRxn = rj;
-              break;
-            }
-            if (j > 0 && propensities[rj] > propensities[propOrder[j - 1]]) {
-              const tmp = propOrder[j];
-              propOrder[j] = propOrder[j - 1];
-              propOrder[j - 1] = tmp;
-            }
-            selectedRxn = rj;
-          }
-          reactionIndex = selectedRxn;
+          // Fenwick tree O(log R) selection replaces O(R) cumulative-sum search
+          const fenwickIdx = fenwick.find(r2);
+          const reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
@@ -1666,16 +1677,20 @@ export async function simulate(
           for (let d = 0; d < deps.length; d++) {
             const jrxn = deps[d];
             const aNew = calcPropensity(jrxn);
-            aTotal += aNew - propensities[jrxn];
+            const delta = aNew - propensities[jrxn];
+            aTotal += delta;
+            fenwick.add(jrxn, delta);
             propensities[jrxn] = aNew;
           }
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
+          // NOTE: propensities[depRxn] was already updated by the incremental loop above,
+          // so we read it directly instead of calling calcPropensity again (avoids double eval).
           if (includeInfluence && influenceMatrix && windowInfluenceMatrix && affectedReactionIndices && oldPropensityValues) {
             for (let j = 0; j < numAffected; j++) {
               const depRxn = affectedReactionIndices[j];
               const oldProp = oldPropensityValues[j];
-              const newProp = calcPropensity(depRxn);
+              const newProp = propensities[depRxn];
               if (Math.abs(newProp - oldProp) > 1e-18) {
                 const flux = newProp - oldProp;
                 const influenceOffset = reactionIndex * numReactions + depRxn;
@@ -1815,8 +1830,10 @@ export async function simulate(
             maxReactants = concreteReactions[i].reactants.length;
           }
         }
+        // S3-1: Precompute ridxKey strings once to avoid per-call template-literal allocation
+        const ridxKeys = Array.from({ length: maxReactants }, (_, j) => `ridx${j}`);
         for (let j = 0; j < maxReactants; j++) {
-          allVarNames.push(`ridx${j}`);
+          allVarNames.push(ridxKeys[j]);
         }
 
         // Collect functional rate expressions and build index mapping
@@ -1827,6 +1844,29 @@ export async function simulate(
           if (rxn.isFunctionalRate && rxn.rateExpression) {
             functionalRateIndices.push(i);
             functionalRateExprs.push(rxn.rateExpression);
+          }
+        }
+
+        // Precompute which species names are referenced by any functional rate expression
+        // to avoid writing ALL species to rateContext on every derivative call.
+        const referencedSpeciesIndices: number[] = [];
+        const referencedSpeciesNames: string[] = [];
+        if (functionalRateExprs.length > 0) {
+          const refSet = new Set<number>();
+          for (const expr of functionalRateExprs) {
+            for (let k = 0; k < model.species.length; k++) {
+              const speciesName = model.species[k].name;
+              const escapedName = speciesName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+              const re = new RegExp(`(?:^|[^A-Za-z0-9_])${escapedName}(?:$|[^A-Za-z0-9_])`);
+              if (re.test(expr)) {
+                refSet.add(k);
+              }
+            }
+          }
+          const sorted = Array.from(refSet).sort((a, b) => a - b);
+          for (const k of sorted) {
+            referencedSpeciesIndices.push(k);
+            referencedSpeciesNames.push(model.species[k].name);
           }
         }
 
@@ -1868,23 +1908,24 @@ export async function simulate(
         };
         // Initialize with parameters
         refreshRateContextParameters();
+        // S3-2: Pre-filter observable names for rateContext — removes per-iteration guard checks
+        const safeRateObservableNames = observableNames.filter(n =>
+          n !== '__proto__' && n !== 'constructor' && n !== 'prototype'
+        );
         // Initialize observable slots
-        for (let i = 0; i < observableNames.length; i++) {
-          const observableName = observableNames[i];
-          if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
-            setSafeNumericField(rateContext, observableName, 0);
-          }
+        for (let i = 0; i < safeRateObservableNames.length; i++) {
+          rateContext[safeRateObservableNames[i]] = 0;
         }
         // Initialize species name slots
         for (let k = 0; k < model.species.length; k++) {
           const speciesName = model.species[k].name;
           if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
-            setSafeNumericField(rateContext, speciesName, 0);
+            rateContext[speciesName] = 0;
           }
         }
         // Initialize ridxN slots
         for (let j = 0; j < maxReactants; j++) {
-          rateContext[`ridx${j}`] = 0;
+          rateContext[ridxKeys[j]] = 0;
         }
 
         return (yIn: Float64Array, dydt: Float64Array) => {
@@ -1898,23 +1939,16 @@ export async function simulate(
           }
 
           // Update observable values in the mutable context (in-place)
+          // S3-2: Use pre-filtered names and plain assignment — no per-iteration guard or regex
           const obsValues = evaluateObservablesFast(yIn);
-          for (let i = 0; i < observableNames.length; i++) {
-            const observableName = observableNames[i];
-            if (observableName !== '__proto__' && observableName !== 'constructor' && observableName !== 'prototype') {
-              setSafeNumericField(rateContext, observableName, obsValues[observableName]);
-            }
+          for (let i = 0; i < safeRateObservableNames.length; i++) {
+            const name = safeRateObservableNames[i];
+            rateContext[name] = obsValues[name];
           }
-          // Update species values in the mutable context (in-place)
-          for (let k = 0; k < model.species.length; k++) {
-            const speciesName = model.species[k].name;
-            if (speciesName !== '__proto__' && speciesName !== 'constructor' && speciesName !== 'prototype') {
-              setSafeNumericField(
-                rateContext,
-                speciesName,
-                odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k])
-              );
-            }
+          // Update species values in the mutable context (in-place) — only those referenced by functional rates
+          for (let ri = 0; ri < referencedSpeciesIndices.length; ri++) {
+            const k = referencedSpeciesIndices[ri];
+            rateContext[referencedSpeciesNames[ri]] = odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k]);
           }
 
           for (let i = 0; i < concreteReactions.length; i++) {
@@ -1922,9 +1956,9 @@ export async function simulate(
             let rate: number;
 
             if (rxn.isFunctionalRate && rxn.rateExpression) {
-              // Update ridxN values in the mutable context (in-place, no allocation)
+              // S3-1: Update ridxN using precomputed keys (no template-literal allocation per call)
               for (let j = 0; j < rxn.reactants.length; j++) {
-                rateContext[`ridx${j}`] = odeUsesAmountState
+                rateContext[ridxKeys[j]] = odeUsesAmountState
                   ? yIn[rxn.reactants[j]]
                   : (yIn[rxn.reactants[j]] * speciesVolumes[rxn.reactants[j]]);
               }

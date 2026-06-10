@@ -41,6 +41,14 @@ interface PLAReaction {
   products: Int32Array;
   /** Net stoichiometry change vector (species-indexed) */
   netChange: Float64Array;
+  /** Unique reactant indices (no duplicates) */
+  uniqReactantIdx: Int32Array;
+  /** Stoichiometry for each unique reactant */
+  uniqReactantStoich: Int32Array;
+  /** Nonzero species indices in netChange */
+  nzSpecies: Int32Array;
+  /** Corresponding nonzero values in netChange */
+  nzChange: Float64Array;
   /** Rate constant (numeric) */
   rateConstant: number;
   /** Current propensity a_v */
@@ -56,12 +64,7 @@ function isSafeObjectKey(key: string): boolean {
 
 function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
   if (!isSafeObjectKey(key)) return;
-  Object.defineProperty(target, key, {
-    value,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
+  target[key] = value;
 }
 
 /**
@@ -168,15 +171,12 @@ export class PLASimulator {
   private computePropensity(rxn: PLAReaction, state: Float64Array): number {
     let prop = rxn.rateConstant;
 
-    // Count reactant stoichiometries
-    const counts = new Map<number, number>();
-    for (let i = 0; i < rxn.reactants.length; i++) {
-      const idx = rxn.reactants[i];
-      counts.set(idx, (counts.get(idx) || 0) + 1);
-    }
-
-    for (const [idx, stoich] of counts) {
-      const pop = state[idx];
+    // Use precomputed unique reactant indices and stoichiometries
+    const uIdx = rxn.uniqReactantIdx;
+    const uStoich = rxn.uniqReactantStoich;
+    for (let i = 0; i < uIdx.length; i++) {
+      const pop = state[uIdx[i]];
+      const stoich = uStoich[i];
       if (stoich === 1) {
         prop *= pop;
       } else if (stoich === 2) {
@@ -184,8 +184,8 @@ export class PLASimulator {
       } else {
         // General binomial coefficient: C(pop, stoich)
         let factor = 1;
-        for (let i = 0; i < stoich; i++) {
-          factor *= (pop - i) / (i + 1);
+        for (let j = 0; j < stoich; j++) {
+          factor *= (pop - j) / (j + 1);
         }
         prop *= factor;
       }
@@ -213,35 +213,33 @@ export class PLASimulator {
     state: Float64Array,
     numSpecies: number
   ): number {
-    let minTau = Infinity;
+    const mu = new Float64Array(numSpecies);
+    const sigma2 = new Float64Array(numSpecies);
 
+    // Accumulate mu and sigma2 reaction-by-reaction over nonzero netChange entries
+    for (let v = 0; v < reactions.length; v++) {
+      if (classif[v] === RxnClass.EXACT_STOCHASTIC) continue;
+      const prop = reactions[v].propensity;
+      if (prop < 1e-15) continue;
+      const nzSp = reactions[v].nzSpecies;
+      const nzCh = reactions[v].nzChange;
+      for (let k = 0; k < nzSp.length; k++) {
+        const change = nzCh[k];
+        const spIdx = nzSp[k];
+        mu[spIdx] += change * prop;
+        sigma2[spIdx] += change * change * prop;
+      }
+    }
+
+    let minTau = Infinity;
     for (let i = 0; i < numSpecies; i++) {
       const xi = state[i];
       const threshold = Math.max(this.epsilon * xi, 1.0);
-
-      let mu = 0;     // E[dX_i]
-      let sigma2 = 0; // Var[dX_i]
-
-      for (let v = 0; v < reactions.length; v++) {
-        // Only consider non-ES reactions for tau calculation
-        if (classif[v] === RxnClass.EXACT_STOCHASTIC) continue;
-
-        const rxn = reactions[v];
-        const prop = rxn.propensity;
-        if (prop < 1e-15) continue;
-
-        const change = rxn.netChange[i];
-        if (change !== 0) {
-          mu += change * prop;
-          sigma2 += change * change * prop;
-        }
+      if (Math.abs(mu[i]) > 1e-15) {
+        minTau = Math.min(minTau, threshold / Math.abs(mu[i]));
       }
-
-      if (Math.abs(mu) > 1e-15) {
-        minTau = Math.min(minTau, threshold / Math.abs(mu));
-      }
-      if (sigma2 > 1e-15) {
-        minTau = Math.min(minTau, (threshold * threshold) / sigma2);
+      if (sigma2[i] > 1e-15) {
+        minTau = Math.min(minTau, (threshold * threshold) / sigma2[i]);
       }
     }
 
@@ -587,10 +585,38 @@ export class PLASimulator {
       for (const idx of reactantIndices) netChange[idx]--;
       for (const idx of productIndices) netChange[idx]++;
 
+      // Precompute unique reactant indices and stoichiometries
+      const stoichMap = new Map<number, number>();
+      for (const idx of reactantIndices) stoichMap.set(idx, (stoichMap.get(idx) || 0) + 1);
+      const uniqReactantIdx = new Int32Array(stoichMap.size);
+      const uniqReactantStoich = new Int32Array(stoichMap.size);
+      let si = 0;
+      for (const [idx, stoich] of stoichMap) {
+        uniqReactantIdx[si] = idx;
+        uniqReactantStoich[si] = stoich;
+        si++;
+      }
+
+      // Precompute nonzero netChange entries (sparse representation)
+      const nzList: number[] = [];
+      const nzValList: number[] = [];
+      for (let i = 0; i < numSpecies; i++) {
+        if (netChange[i] !== 0) {
+          nzList.push(i);
+          nzValList.push(netChange[i]);
+        }
+      }
+      const nzSpecies = new Int32Array(nzList);
+      const nzChange = new Float64Array(nzValList);
+
       return {
         reactants: new Int32Array(reactantIndices),
         products: new Int32Array(productIndices),
         netChange,
+        uniqReactantIdx,
+        uniqReactantStoich,
+        nzSpecies,
+        nzChange,
         rateConstant: r.rateConstant || 0,
         propensity: 0,
       };
