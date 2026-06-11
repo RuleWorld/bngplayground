@@ -175,7 +175,7 @@ export class SpeciesGraph {
     if (this._maxDegree !== undefined) return this._maxDegree;
     let max = 0;
     for (let idx = 0; idx < this.molecules.length; idx++) {
-      let deg = 0;
+      const deg = 0;
       const molecule = this.molecules[idx];
       if (!molecule) continue;
       const seen = new Set<number>();
@@ -292,9 +292,10 @@ export class SpeciesGraph {
     if (component && partners) {
       for (const [label] of component.edges.entries()) {
         for (const partner of partners) {
-          const [pMolStr, pCompStr] = partner.split('.');
-          const pMol = Number(pMolStr);
-          const pComp = Number(pCompStr);
+          // ⚡ Bolt: Avoid split() array allocation
+          const pDot = partner.indexOf('.');
+          const pMol = parseInt(partner, 10);
+          const pComp = pDot !== -1 ? Number(partner.substring(pDot + 1)) : NaN;
           const pComponent = this.molecules[pMol]?.components[pComp];
           if (!pComponent) continue;
           if (pComponent.edges.has(label) && pComponent.edges.get(label) === comp) {
@@ -334,9 +335,10 @@ export class SpeciesGraph {
         }
 
         // Clear partner component edges that point to us
-        const [pMolStr, pCompStr] = partner.split('.');
-        const pMol = Number(pMolStr);
-        const pComp = Number(pCompStr);
+        // ⚡ Bolt: Avoid split() array allocation
+        const pDot = partner.indexOf('.');
+        const pMol = parseInt(partner, 10);
+        const pComp = pDot !== -1 ? Number(partner.substring(pDot + 1)) : NaN;
         const pMolecule = this.molecules[pMol];
         if (pMolecule) {
           const pComponent = pMolecule.components[pComp];
@@ -624,14 +626,16 @@ export class SpeciesGraph {
     };
 
     for (const [key, partnerKeys] of this.adjacency.entries()) {
-      const [molAStr, compAStr] = key.split('.');
-      const molA = Number(molAStr);
-      const compA = Number(compAStr);
+      // ⚡ Bolt: Avoid split() array allocation
+      const dotA = key.indexOf('.');
+      const molA = parseInt(key, 10);
+      const compA = dotA !== -1 ? Number(key.substring(dotA + 1)) : NaN;
 
       for (const partnerKey of partnerKeys) {
-        const [molBStr, compBStr] = partnerKey.split('.');
-        const molB = Number(molBStr);
-        const compB = Number(compBStr);
+        // ⚡ Bolt: Avoid split() array allocation
+        const dotB = partnerKey.indexOf('.');
+        const molB = parseInt(partnerKey, 10);
+        const compB = dotB !== -1 ? Number(partnerKey.substring(dotB + 1)) : NaN;
 
         if (
           Number.isNaN(molA) ||

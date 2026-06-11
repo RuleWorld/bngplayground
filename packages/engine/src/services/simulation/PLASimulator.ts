@@ -125,7 +125,7 @@ export class PLASimulator {
     const size = this.normalBuffer.length;
     for (let i = 0; i < size; i += 2) {
       let u1 = this.rng.next();
-      let u2 = this.rng.next();
+      const u2 = this.rng.next();
       while (u1 <= 1e-15) {
         u1 = this.rng.next();
       }
