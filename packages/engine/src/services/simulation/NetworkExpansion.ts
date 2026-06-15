@@ -719,10 +719,11 @@ export async function generateExpandedNetwork(
         // Extract base molecule names from the string representation
         // ⚡ Bolt Optimization: Use fast index-based parsing instead of chained array
         // methods (.split.map) and regular expressions to avoid allocation overhead in hot loops.
-        const parts = s.name.split('.');
         const mols: string[] = [];
-        for (let i = 0; i < parts.length; i++) {
-            let m = parts[i];
+        let start = 0;
+        let end;
+        const processPart = (part: string) => {
+            let m = part;
             // replace(/^@[^:]+::?/, '')
             if (m.charCodeAt(0) === 64) { // '@'
                 const colonIdx = m.indexOf(':');
@@ -745,7 +746,14 @@ export async function generateExpandedNetwork(
                 m = m.substring(0, parenIdx);
             }
             mols.push(m);
+        };
+
+        while ((end = s.name.indexOf('.', start)) !== -1) {
+            processPart(s.name.substring(start, end));
+            start = end + 1;
         }
+        processPart(s.name.substring(start));
+
         for (let i = 0; i < mols.length; i++) {
             const m = mols[i];
             if (!molToSpecies.has(m)) molToSpecies.set(m, new Set());
@@ -794,10 +802,12 @@ export async function generateExpandedNetwork(
                 // Optimization Step 1: Filter Candidates
                 // Remove compartment tags to find base molecules required by the pattern.
                 const cleanPat = removeCompartment(trimmedPat);
-                const patParts = cleanPat.split('.');
                 const patMols: string[] = [];
-                for (let j = 0; j < patParts.length; j++) {
-                    let m = patParts[j];
+
+                let start = 0;
+                let end;
+                const processPatPart = (part: string) => {
+                    let m = part;
                     const parenIdx = m.indexOf('(');
                     if (parenIdx !== -1) {
                         m = m.substring(0, parenIdx);
@@ -805,7 +815,13 @@ export async function generateExpandedNetwork(
                     if (m) {
                         patMols.push(m);
                     }
+                };
+
+                while ((end = cleanPat.indexOf('.', start)) !== -1) {
+                    processPatPart(cleanPat.substring(start, end));
+                    start = end + 1;
                 }
+                processPatPart(cleanPat.substring(start));
 
                 let candidates: Iterable<number> = generatedSpecies.keys();
 
