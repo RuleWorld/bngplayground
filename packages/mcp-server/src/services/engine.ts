@@ -344,7 +344,10 @@ export function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
 
 export function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }> {
     const bonds = new Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }>();
-    const sanitize = (name: string) => name.split('.')[0];
+    const sanitize = (name: string) => {
+        const dotIdx = name.indexOf('.');
+        return dotIdx === -1 ? name : name.slice(0, dotIdx);
+    };
 
     graphs.forEach((graph) => {
         graph.molecules.forEach((molecule, molIdx) => {
@@ -355,9 +358,9 @@ export function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: 
                     return;
                 }
                 for (const partnerKey of partnerKeys) {
-                    const [partnerMolIdxStr, partnerCompIdxStr] = partnerKey.split('.');
-                    const partnerMolIdx = Number.parseInt(partnerMolIdxStr, 10);
-                    const partnerCompIdx = Number.parseInt(partnerCompIdxStr, 10);
+                    const dotIdx = partnerKey.indexOf('.');
+                    const partnerMolIdx = Number.parseInt(dotIdx === -1 ? partnerKey : partnerKey.slice(0, dotIdx), 10);
+                    const partnerCompIdx = Number.parseInt(dotIdx === -1 ? 'NaN' : partnerKey.slice(dotIdx + 1), 10);
                     if (Number.isNaN(partnerMolIdx) || Number.isNaN(partnerCompIdx)) {
                         continue;
                     }
@@ -419,7 +422,8 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
                 if (molecule.name === '0') {
                     return;
                 }
-                const moleculeName = molecule.name.split('.')[0];
+                const dotIdx = molecule.name.indexOf('.');
+                const moleculeName = dotIdx === -1 ? molecule.name : molecule.name.slice(0, dotIdx);
                 if (!moleculeMap.has(moleculeName)) {
                     moleculeMap.set(moleculeName, new Set());
                 }

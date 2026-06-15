@@ -94,9 +94,9 @@ export const buildVisualizationMolecule = (
       const partnerKeys = graph.adjacency.get(`${molIdx}.${compIdx}`);
       if (partnerKeys && partnerKeys.length > 0) {
         const partnerKey = partnerKeys[0]; // Use first partner for visualization
-        const [partnerMolIdxStr, partnerCompIdxStr] = partnerKey.split('.');
-        const partnerMolIdx = Number.parseInt(partnerMolIdxStr, 10);
-        const partnerCompIdx = Number.parseInt(partnerCompIdxStr, 10);
+        const dotIdx = partnerKey.indexOf('.');
+        const partnerMolIdx = Number.parseInt(dotIdx === -1 ? partnerKey : partnerKey.slice(0, dotIdx), 10);
+        const partnerCompIdx = Number.parseInt(dotIdx === -1 ? 'NaN' : partnerKey.slice(dotIdx + 1), 10);
         const partnerMolecule = graph.molecules[partnerMolIdx];
         const partnerComponent = partnerMolecule?.components[partnerCompIdx];
         if (partnerMolecule && partnerComponent) {
@@ -156,9 +156,9 @@ export const extractBonds = (graphs: SpeciesGraph[]): Map<string, BondInfo> => {
         }
 
         for (const partnerKey of partnerKeys) {
-          const [partnerMolIdxStr, partnerCompIdxStr] = partnerKey.split('.');
-          const partnerMolIdx = Number.parseInt(partnerMolIdxStr, 10);
-          const partnerCompIdx = Number.parseInt(partnerCompIdxStr, 10);
+          const dotIdx = partnerKey.indexOf('.');
+          const partnerMolIdx = Number.parseInt(dotIdx === -1 ? partnerKey : partnerKey.slice(0, dotIdx), 10);
+          const partnerCompIdx = Number.parseInt(dotIdx === -1 ? 'NaN' : partnerKey.slice(dotIdx + 1), 10);
 
           if (
             Number.isNaN(partnerMolIdx) ||

@@ -128,7 +128,9 @@ const extractAtomicPatternsBNG2 = (
           let bondKey: string | undefined;
           if (partners && partners.length > 0) {
             // Build bond key as "molA:compA|molB:compB" (sorted)
-            const [pm, pc] = partners[0].split('.').map(Number);
+            const dotIdx = partners[0].indexOf('.');
+            const pm = Number(dotIdx === -1 ? partners[0] : partners[0].slice(0, dotIdx));
+            const pc = Number(dotIdx === -1 ? 'NaN' : partners[0].slice(dotIdx + 1));
             const partnerMol = graph.molecules[pm];
             const partnerComp = partnerMol?.components[pc];
             if (partnerMol && partnerComp) {
