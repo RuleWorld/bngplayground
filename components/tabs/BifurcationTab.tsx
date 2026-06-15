@@ -206,64 +206,37 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         setError('Steady state did not converge at start value; continuation may be on the wrong branch.');
       }
 
-      // Apply conserved moiety system reduction to eliminate structural zero eigenvalues
-      let reducedInfo: any = null;
-      if (engine.detectConservedMoieties && engine.reduceSystem) {
-        const moieties = engine.detectConservedMoieties(indexedReactions, nSpecies);
-        const y0 = Array.from(seedState);
-        engine.computeConservationConstants(moieties, y0);
-        reducedInfo = engine.reduceSystem(indexedReactions, nSpecies, y0, moieties);
+      // T4: Check if continuation parameter affects any conserved pool (e.g., total enzyme).
+      // Detect by scanning the raw model's species for initialExpression references.
+      const paramAffectsConservedPool = model.species?.some(
+        (s: any) => s.initialExpression && s.initialExpression.includes(selectedParam)
+      ) ?? false;
+      if (paramAffectsConservedPool) {
+        setError('Parameter appears to affect a conserved pool total; moiety reduction disabled to avoid incorrect results.');
       }
 
-      let rawResult: any;
-      if (reducedInfo) {
-        const reducedSeed = new Float64Array(reducedInfo.reducedSize);
-        for (let i = 0; i < reducedInfo.reducedSize; i++) {
-          reducedSeed[i] = seedState[reducedInfo.independentSpecies[i]];
-        }
-
-        rawResult = engine.continuation({
-          nSpecies: reducedInfo.reducedSize,
-          rhsFn: (yReduced: Float64Array, p: number, dydtReduced: Float64Array) => {
-            params[selectedParam] = p;
-            if (compiled.updateParameters) compiled.updateParameters(params);
-            const fullState = new Float64Array(reducedInfo.reconstruct(Array.from(yReduced)));
-            const fullDydt = new Float64Array(nSpecies);
-            evaluateRhs(0, fullState, fullDydt);
-            for (let i = 0; i < reducedInfo.reducedSize; i++) {
-              dydtReduced[i] = fullDydt[reducedInfo.independentSpecies[i]];
-            }
-          },
-          initialState: reducedSeed,
-          parameterStart: startValue,
-          parameterEnd: endValue,
-          stepSize: (endValue - startValue) / maxSteps,
-          maxSteps,
-        });
-
-        // Reconstruct full-state paths
-        rawResult.path = rawResult.path.map((pt: any) => ({
-          ...pt,
-          y: new Float64Array(reducedInfo.reconstruct(Array.from(pt.y))),
-        }));
-      } else {
-        rawResult = engine.continuation({
-          nSpecies,
-          rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
-            params[selectedParam] = p;
-            if (compiled.updateParameters) compiled.updateParameters(params);
-            evaluateRhs(0, y, dydt);
-          },
-          initialState: seedState,
-          parameterStart: startValue,
-          parameterEnd: endValue,
-          stepSize: (endValue - startValue) / maxSteps,
-          maxSteps,
-        });
-      }
+      // Use continuationWithConservation (handles moiety reduction, seeding, reconstruction)
+      const rawResult = engine.continuationWithConservation({
+        nSpecies,
+        reactions: indexedReactions,
+        rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
+          params[selectedParam] = p;
+          if (compiled.updateParameters) compiled.updateParameters(params);
+          evaluateRhs(0, y, dydt);
+        },
+        updateParams: (p: number) => {
+          params[selectedParam] = p;
+          if (compiled.updateParameters) compiled.updateParameters(params);
+        },
+        initialGuess: ssInitial,
+        parameterStart: startValue,
+        parameterEnd: endValue,
+        stepSize: (endValue - startValue) / maxSteps,
+        maxSteps,
+        skipReduction: paramAffectsConservedPool,
+      });
 
       const speciesIdx = speciesIndexMap.get(selectedSpecies1 || expandedModel.species[0]?.name) ?? -1;
-      // P2: no mockResult stub — build the result directly
       const foldCount = rawResult.bifurcations.filter(
         (b: any) => b.type === 'saddle-node' || b.type === 'transcritical'
       ).length;

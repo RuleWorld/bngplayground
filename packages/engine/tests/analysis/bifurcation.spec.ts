@@ -176,7 +176,6 @@ describe('Continuation', () => {
     const { generateExpandedNetwork } = await import('../../src/services/simulation/NetworkExpansion');
     const { Rxn } = await import('../../src/services/graph/core/Rxn');
     const { JITCompiler } = await import('../../src/services/analysis/JITCompiler');
-    const { continuation } = await import('../../src/services/analysis/Continuation');
 
     const dnaDamageModel = `
 begin model
@@ -274,52 +273,85 @@ end model
       }
     );
 
-    const { detectConservedMoieties, computeConservationConstants, reduceSystem } = await import('../../src/services/analysis/ConservedMoietyDetector');
+    const { continuationWithConservation } = await import('../../src/services/analysis/ContinuationWithConservation');
 
     const initialState = new Float64Array(nSpecies);
     expandedModel.species.forEach((s: any, i: number) => { initialState[i] = s.initialConcentration; });
 
-    const moieties = detectConservedMoieties(indexedReactions, nSpecies);
-    const y0 = Array.from(initialState);
-    computeConservationConstants(moieties, y0);
-    const reducedInfo = reduceSystem(indexedReactions, nSpecies, y0, moieties);
-
-    // Initial reduced state
-    const initialReducedState = new Float64Array(reducedInfo.reducedSize);
-    for (let i = 0; i < reducedInfo.reducedSize; i++) {
-      initialReducedState[i] = initialState[reducedInfo.independentSpecies[i]];
-    }
-
-    const result = await continuation({
-      nSpecies: reducedInfo.reducedSize,
-      rhsFn: (yReduced: Float64Array, p: number, dydtReduced: Float64Array) => {
+    const result = await continuationWithConservation({
+      nSpecies,
+      reactions: indexedReactions,
+      rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
         params['k_sense'] = p;
-        if (compiled?.updateParameters) {
-          compiled.updateParameters(params);
-        }
-        const fullState = new Float64Array(reducedInfo.reconstruct(Array.from(yReduced)));
-        const fullDydt = new Float64Array(nSpecies);
-        compiled.evaluate(0, fullState, fullDydt);
-        for (let i = 0; i < reducedInfo.reducedSize; i++) {
-          dydtReduced[i] = fullDydt[reducedInfo.independentSpecies[i]];
-        }
+        if (compiled?.updateParameters) compiled.updateParameters(params);
+        compiled.evaluate(0, y, dydt);
       },
-      initialState: initialReducedState,
+      updateParams: (p: number) => {
+        params['k_sense'] = p;
+        if (compiled?.updateParameters) compiled.updateParameters(params);
+      },
+      initialGuess: initialState,
       parameterStart: 0.001,
       parameterEnd: 10,
       stepSize: 10 / 500,
       maxSteps: 500,
     });
 
-    // Reconstruct full path for assertions (or plotting)
-    const fullPath = result.path.map(pt => ({
-      ...pt,
-      y: new Float64Array(reducedInfo.reconstruct(Array.from(pt.y))),
-    }));
-
-    expect(fullPath.length).toBeGreaterThan(0);
+    expect(result.path.length).toBeGreaterThan(0);
+    // Verify full-dimension reconstruction
+    for (const pt of result.path) {
+      expect(pt.y.length).toBe(nSpecies);
+    }
     // There shouldn't be any real bifurcations in this steady-state tracking of DNA damage repair
     expect(result.bifurcations.length).toBe(0);
+  });
+});
+
+describe('ContinuationWithConservation', () => {
+  it('detects two known saddle-node folds through the reduction path', async () => {
+    const { continuationWithConservation } = await import('../../src/services/analysis/ContinuationWithConservation');
+    // 2-species system: dx/dt = p + x - x^3, dy/dt = 0 (y is conserved).
+    // The normal form dx/dt = p + x - x^3 has saddle-node folds at p = ±2/(3√3).
+    // Species y = constant forces conserved-moiety reduction, exercising the full pipeline.
+    const nSpecies = 2;
+    const reactions = [
+      { reactants: [0, 0], products: [0] }, // dummy reaction for stoichiometry
+    ];
+    const result = await continuationWithConservation({
+      nSpecies,
+      reactions,
+      rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
+        dydt[0] = p + y[0] - y[0] * y[0] * y[0];
+        dydt[1] = 0;
+      },
+      initialGuess: new Float64Array([2.0, 1.0]),
+      parameterStart: -2,
+      parameterEnd: 2,
+      stepSize: 0.02,
+      maxSteps: 500,
+      seedFromSteadyState: false,
+    });
+
+    // Pipeline must have applied reduction (y has a conservation law)
+    expect(result.reduced).toBe(true);
+    expect(result.seedConverged).toBe(false); // no Newton at paramStart since we disabled seeding
+    expect(result.path.length).toBeGreaterThan(0);
+
+    // All path points must be full-dimension
+    for (const pt of result.path) {
+      expect(pt.y.length).toBe(nSpecies);
+    }
+
+    // Should detect exactly 2 saddle-node bifurcations
+    const folds = result.bifurcations.filter(b => b.type === 'saddle-node');
+    expect(folds.length).toBe(2);
+
+    // The known analytic fold locations are at ±2/(3√3) ≈ ±0.3849
+    // Sort by parameter value: lower fold first
+    const foldParams = folds.map(b => b.parameterValue).sort((a, b) => a - b);
+    const expectedFold = 2 / (3 * Math.sqrt(3));
+    expect(foldParams[0]).toBeCloseTo(-expectedFold, 1);
+    expect(foldParams[1]).toBeCloseTo(expectedFold, 1);
   });
 });
 
