@@ -335,6 +335,16 @@ export function detectBifurcation(
   // Match eigenvalues from curr to prev by nearest-neighbor in complex plane
   const matchedPrev = matchEigenvalues(curr.eigenvalues, prev.eigenvalues);
 
+  // Compute spectral radius at both points to dynamically scale the noise threshold
+  const maxEvMagPrev = prev.eigenvalues.length > 0
+    ? Math.max(...prev.eigenvalues.map(e => Math.sqrt(e.real * e.real + e.imag * e.imag)))
+    : 0;
+  const maxEvMagCurr = curr.eigenvalues.length > 0
+    ? Math.max(...curr.eigenvalues.map(e => Math.sqrt(e.real * e.real + e.imag * e.imag)))
+    : 0;
+  const maxEvMag = Math.max(maxEvMagPrev, maxEvMagCurr);
+  const threshold = Math.max(1e-11, maxEvMag * 1e-11);
+
   // Saddle-node: a real eigenvalue crosses zero
   for (let i = 0; i < curr.eigenvalues.length; i++) {
     const eCurr = curr.eigenvalues[i];
@@ -343,7 +353,7 @@ export function detectBifurcation(
 
     // Only consider real eigenvalues (small imaginary part)
     if (Math.abs(ePrev.imag) < 1e-8 && Math.abs(eCurr.imag) < 1e-8) {
-      if (ePrev.real * eCurr.real < 0) {
+      if (ePrev.real * eCurr.real < 0 && Math.max(Math.abs(ePrev.real), Math.abs(eCurr.real)) > threshold) {
         // Real eigenvalue crossed zero -> saddle-node (fold)
         // Linear interpolation for bifurcation parameter
         const t = Math.abs(ePrev.real) / (Math.abs(ePrev.real) + Math.abs(eCurr.real));
@@ -382,7 +392,7 @@ export function detectBifurcation(
       }
     }
 
-    if (bestMatch && bestMatch.e1.real * cp.e1.real < 0) {
+    if (bestMatch && bestMatch.e1.real * cp.e1.real < 0 && Math.max(Math.abs(bestMatch.e1.real), Math.abs(cp.e1.real)) > threshold) {
       // Hopf bifurcation!
       const t = Math.abs(bestMatch.e1.real) / (Math.abs(bestMatch.e1.real) + Math.abs(cp.e1.real));
       const pBif = prev.parameterValue + t * (curr.parameterValue - prev.parameterValue);
