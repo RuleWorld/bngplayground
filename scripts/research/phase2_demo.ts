@@ -90,7 +90,7 @@ async function example1_parameterEstimation() {
 async function example2_neuralODESurrogate() {
   console.log('=== Example 2: Neural ODE Surrogate Training ===\n');
   
-  const nParams = 3;
+  const nParams = 2;
   const nSpecies = 5;
   const nTimePoints = 101;
   
@@ -119,8 +119,7 @@ async function example2_neuralODESurrogate() {
   console.log('Generating training dataset...');
   const paramRanges: [number, number][] = [
     [0.01, 0.2],   // k_rate
-    [0.5, 2.0],    // amplitude
-    [0.0, 1.0]     // unused param
+    [0.5, 2.0]     // amplitude
   ];
   const timePoints = Array.from({ length: nTimePoints }, (_, i) => i);
   
@@ -170,7 +169,7 @@ async function example2_neuralODESurrogate() {
   
   // Fast prediction example
   console.log('Testing fast prediction...');
-  const testParams = [0.1, 1.0, 0.5];
+  const testParams = [0.1, 1.0];
   const testTime = Array.from({ length: 21 }, (_, i) => i * 5); // Every 5 time units
   
   const start = performance.now();
