@@ -20,6 +20,8 @@ interface NetworkGenerationOptions {
 
 // (Removed unused vulnerable regex)
 
+const LINE_SPLIT_REGEX = /\r?\n/;
+
 const escapeRegex = (value: string) => {
   const ESCAPE_CODES: Record<number, true> = {
     92: true,
@@ -298,7 +300,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
     const beginPattern = new RegExp('^\\s*begin\\s+' + escapedBlock + '\\b', 'i');
     const endPattern = new RegExp('^\\s*end\\s+' + escapedBlock + '\\b', 'i');
 
-    const lines = sourceCode.split(/\r?\n/);
+    const lines = sourceCode.split(LINE_SPLIT_REGEX);
     const collected: string[] = [];
     let inBlock = false;
 
@@ -335,7 +337,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
   if (paramsContent) {
     // First pass: collect all parameter expressions (may reference other params)
     const paramExpressions: Record<string, string> = {};
-    for (const line of paramsContent.split(/\r?\n/)) {
+    for (const line of paramsContent.split(LINE_SPLIT_REGEX)) {
       maybeCancel();
       const cleaned = cleanLine(line);
       if (cleaned) {
@@ -394,7 +396,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
     molTypesContent = getBlockContent('molecules', code);
   }
   if (molTypesContent) {
-    for (const line of molTypesContent.split(/\r?\n/)) {
+    for (const line of molTypesContent.split(LINE_SPLIT_REGEX)) {
       maybeCancel();
       const cleaned = cleanLine(line);
       if (cleaned) {
@@ -454,7 +456,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
   const compartmentsContent = getBlockContent('compartments', code);
   if (compartmentsContent) {
     model.compartments = [];
-    for (const rawLine of compartmentsContent.split(/\r?\n/)) {
+    for (const rawLine of compartmentsContent.split(LINE_SPLIT_REGEX)) {
       maybeCancel();
       const cleaned = cleanLine(rawLine);
       if (!cleaned) continue;
@@ -475,7 +477,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
 
   const observablesContent = getBlockContent('observables', code);
   if (observablesContent) {
-    for (const line of observablesContent.split(/\r?\n/)) {
+    for (const line of observablesContent.split(LINE_SPLIT_REGEX)) {
       maybeCancel();
       const cleaned = cleanLine(line);
       if (cleaned) {
@@ -503,7 +505,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
   const functionsContent = getBlockContent('functions', code);
   if (functionsContent) {
     model.functions = [];
-    for (const line of functionsContent.split(/\r?\n/)) {
+    for (const line of functionsContent.split(LINE_SPLIT_REGEX)) {
       maybeCancel();
       const cleaned = cleanLine(line);
       if (!cleaned) continue;
@@ -530,7 +532,7 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
     const statements: string[] = [];
     let current = '';
 
-    for (const line of rulesContent.split(/\r?\n/)) {
+    for (const line of rulesContent.split(LINE_SPLIT_REGEX)) {
       maybeCancel();
       const cleaned = cleanLine(line);
       if (!cleaned) continue;
