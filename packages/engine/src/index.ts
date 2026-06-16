@@ -256,7 +256,7 @@ export { computeFirstPassageTimes } from './services/analysis/FirstPassageTime';
 export type { FirstPassageTimeConfig, FPTDistribution } from './services/analysis/FirstPassageTime';
 
 // ── Dose-Response ──────────────────────────────────────────────────
-export { computeDoseResponse } from './services/analysis/DoseResponse';
+export { computeDoseResponse, computeDoseResponseBySimulation } from './services/analysis/DoseResponse';
 export type { DoseResponseConfig, DoseResponseResult, DoseResponseCurve, HillFit } from './services/analysis/DoseResponse';
 
 // ── Perturbation Screen ────────────────────────────────────────────

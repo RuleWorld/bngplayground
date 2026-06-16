@@ -192,7 +192,7 @@ function buildRhsFn(
 /**
  * Generate dose points in log or linear scale.
  */
-function generateDosePoints(
+export function generateDosePoints(
   min: number,
   max: number,
   nPoints: number,
@@ -420,7 +420,7 @@ function updateMassActionRates(model: BNGLModel): void {
     clearAllEvaluatorCaches();
 }
 
-async function computeDoseResponseBySimulation(
+export async function computeDoseResponseBySimulation(
     expandedModel: any,
     inputParameter: string,
     observables: string[],
