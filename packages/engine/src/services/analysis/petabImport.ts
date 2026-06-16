@@ -107,10 +107,22 @@ function parseSimpleYAML(text: string): Record<string, unknown> {
 }
 
 function parseTSV(text: string): Record<string, string>[] {
-  const lines = text
-    .split('\n')
-    .map((line) => line.trim())
-    .filter((line) => line && !line.startsWith('#'));
+  // ⚡ Bolt: Use zero-allocation index scanning instead of .split('\n').map().filter()
+  const lines: string[] = [];
+  let startIdx = 0;
+  const len = text.length;
+  while (startIdx < len) {
+    let endIdx = text.indexOf('\n', startIdx);
+    if (endIdx === -1) endIdx = len;
+    let s = startIdx;
+    let e = endIdx;
+    while (s < e && text.charCodeAt(s) <= 32) s++;
+    while (e > s && text.charCodeAt(e - 1) <= 32) e--;
+    if (s < e && text.charCodeAt(s) !== 35) { // 35 is '#'
+      lines.push(text.substring(s, e));
+    }
+    startIdx = endIdx + 1;
+  }
 
   if (lines.length < 2) return [];
 
@@ -318,8 +330,40 @@ export function parsePEtabCombined(text: string): PEtabProblem {
     currentLines = [];
   };
 
-  for (const line of text.split('\n')) {
-    const sectionMatch = line.trim().match(/^\[(\w+)\]$/);
+  // ⚡ Bolt: Use fast index scanning instead of .split('\n')
+  let startIdx = 0;
+  const len = text.length;
+  while (startIdx < len) {
+    let endIdx = text.indexOf('\n', startIdx);
+    if (endIdx === -1) endIdx = len;
+    const line = text.substring(startIdx, endIdx);
+    startIdx = endIdx + 1;
+
+    let s = 0;
+    let e = line.length;
+    while (s < e && line.charCodeAt(s) <= 32) s++;
+    while (e > s && line.charCodeAt(e - 1) <= 32) e--;
+    const trimmed = (s > 0 || e < line.length) ? line.substring(s, e) : line;
+
+    let sectionMatch: [string, string] | null = null;
+    if (trimmed.length > 2 && trimmed.charCodeAt(0) === 91 && trimmed.charCodeAt(trimmed.length - 1) === 93) { // '[' and ']'
+      const inner = trimmed.substring(1, trimmed.length - 1);
+      let valid = true;
+      for (let j = 0; j < inner.length; j++) {
+        const code = inner.charCodeAt(j);
+        if (!(code >= 48 && code <= 57) && // 0-9
+            !(code >= 65 && code <= 90) && // A-Z
+            !(code >= 97 && code <= 122) && // a-z
+            !(code === 95)) { // _
+          valid = false;
+          break;
+        }
+      }
+      if (valid) {
+        sectionMatch = [trimmed, inner];
+      }
+    }
+
     if (sectionMatch) {
       flush();
       currentSection = sectionMatch[1];
