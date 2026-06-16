@@ -183,7 +183,46 @@ function renderFullSkeleton(tabs: TabEntry[]): string {
     lines.push('');
     lines.push('**MCP equivalent:**');
     lines.push('');
-    lines.push('<!-- TODO: list the MCP tools that expose equivalent functionality for agent-driven use -->');
+
+    // Mapping of tab component names to equivalent MCP tools
+    const mcpTools: Record<string, string[]> = {
+      "StructureAnalysisTab": ["get_contact_map", "query_pathway_commons"],
+      "SteadyStateTab": ["symbolic_steady_state", "simulate"],
+      "ParameterScanTab": ["parameter_scan"],
+      "CartoonTab": ["generate_network"],
+      "TemporalAnalysisTab": ["temporal_analysis"],
+      "TrajectoryExplorerTab": ["simulate"],
+      "VerificationTab": ["verify_model"],
+      "SobolSensitivityTab": ["sobol_sensitivity"],
+      "ABCSMCTab": ["bayesian_inference"],
+      "ContactMapTab": ["get_contact_map"],
+      "RulesTab": ["parse_bngl"],
+      "RobustnessTab": ["perturbation_screen"],
+      "BifurcationTab": ["bifurcation_analysis"],
+      "FIMTab": ["optimal_experiment"],
+      "MultiscaleTab": ["multiscale_simulation"],
+      "ParametersTab": ["fit_parameters"],
+      "RegulatoryTab": ["reaction_information_flow"],
+      "VersionHistoryTab": ["compare_models"],
+      "DebuggerTab": ["diagnose_model", "explain_model"],
+      "ProfileLikelihoodTab": ["identifiability_analysis"],
+      "FluxAnalysisTab": ["qssa_reduction"],
+      "JupyterExportTab": ["export_model"],
+      "ParameterEstimationTab": ["fit_parameters", "import_petab", "reduce_model"],
+      "ExpressionEvaluatorTab": ["simulate"],
+      "ModelExplorerTab": ["search_structure", "edit_model", "compose_model"],
+      "PKPDTab": ["pkpd", "dose_response"],
+      "NetworkAnalysisTab": ["generate_network"]
+    };
+
+    const tools = mcpTools[t.componentName] || [];
+    if (tools.length > 0) {
+      for (const tool of tools) {
+        lines.push(`- \`${tool}\``);
+      }
+    } else {
+      lines.push('<!-- TODO: list the MCP tools that expose equivalent functionality for agent-driven use -->');
+    }
     lines.push('');
     lines.push('**See also:**');
     lines.push('');
