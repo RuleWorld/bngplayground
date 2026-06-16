@@ -693,20 +693,39 @@ export function convertToGPUReactions(
     rateConstant: number;
   }>
 ): { gpuReactions: GPUReaction[]; rateConstants: number[] } {
-  const gpuReactions: GPUReaction[] = [];
-  const rateConstants: number[] = [];
+  const len = reactions.length;
+  const gpuReactions: GPUReaction[] = new Array(len);
+  const rateConstants: number[] = new Array(len);
 
-  reactions.forEach((rxn, idx) => {
-    gpuReactions.push({
-      reactantIndices: rxn.reactants.map(r => r.index),
-      reactantStoich: rxn.reactants.map(r => r.stoichiometry),
-      productIndices: rxn.products.map(p => p.index),
-      productStoich: rxn.products.map(p => p.stoichiometry),
+  for (let idx = 0; idx < len; idx++) {
+    const rxn = reactions[idx];
+
+    const rLen = rxn.reactants.length;
+    const reactantIndices = new Array(rLen);
+    const reactantStoich = new Array(rLen);
+    for (let i = 0; i < rLen; i++) {
+      reactantIndices[i] = rxn.reactants[i].index;
+      reactantStoich[i] = rxn.reactants[i].stoichiometry;
+    }
+
+    const pLen = rxn.products.length;
+    const productIndices = new Array(pLen);
+    const productStoich = new Array(pLen);
+    for (let i = 0; i < pLen; i++) {
+      productIndices[i] = rxn.products[i].index;
+      productStoich[i] = rxn.products[i].stoichiometry;
+    }
+
+    gpuReactions[idx] = {
+      reactantIndices,
+      reactantStoich,
+      productIndices,
+      productStoich,
       rateConstantIndex: idx,
       isForward: true
-    });
-    rateConstants.push(rxn.rateConstant);
-  });
+    };
+    rateConstants[idx] = rxn.rateConstant;
+  }
 
   return { gpuReactions, rateConstants };
 }
