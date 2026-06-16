@@ -164,7 +164,18 @@ function renderFullSkeleton(tabs: TabEntry[]): string {
     lines.push('');
     lines.push('**Screenshots:**');
     lines.push('');
-    lines.push('<!-- TODO: add relevant screenshots -->');
+    const possibleImages = [`${t.id}.png`, `${t.id}-v2.png`];
+    let hasScreenshot = false;
+    for (const img of possibleImages) {
+      if (existsSync(join(resolve('docs/assets/screenshots'), img))) {
+        lines.push(`![Screenshot of ${t.label}](assets/screenshots/${img})`);
+        lines.push('');
+        hasScreenshot = true;
+      }
+    }
+    if (!hasScreenshot) {
+      lines.push('<!-- TODO: add relevant screenshots -->');
+    }
     lines.push('');
     lines.push('**Common pitfalls:**');
     lines.push('');
