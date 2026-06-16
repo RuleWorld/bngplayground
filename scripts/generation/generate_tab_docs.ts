@@ -179,7 +179,9 @@ function renderFullSkeleton(tabs: TabEntry[]): string {
     lines.push('');
     lines.push('**Common pitfalls:**');
     lines.push('');
-    lines.push('<!-- TODO: describe common pitfalls and troubleshooting steps -->');
+    lines.push('- **Empty plots/No data:** Ensure you have successfully parsed the model and run a simulation first. Many tabs depend on the current simulation results.');
+    lines.push('- **Performance lag:** Large networks or long time courses with many data points can cause UI slowdowns. Try reducing the time span or using data decimation.');
+    lines.push('- **Missing observables:** If a specific molecule or state is missing from dropdowns, verify it is explicitly defined as an Observable in the BNGL source.');
     lines.push('');
     lines.push('**MCP equivalent:**');
     lines.push('');
