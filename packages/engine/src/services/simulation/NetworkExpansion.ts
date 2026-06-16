@@ -720,39 +720,41 @@ export async function generateExpandedNetwork(
         // ⚡ Bolt Optimization: Use fast index-based parsing instead of chained array
         // methods (.split.map) and regular expressions to avoid allocation overhead in hot loops.
         const mols: string[] = [];
+        const name = s.name;
         let start = 0;
-        let end;
-        const processPart = (part: string) => {
-            let m = part;
-            // replace(/^@[^:]+::?/, '')
-            if (m.charCodeAt(0) === 64) { // '@'
-                const colonIdx = m.indexOf(':');
-                if (colonIdx > 0) {
-                    if (m.charCodeAt(colonIdx + 1) === 58) { // ':'
-                        m = m.substring(colonIdx + 2);
+        while (start < name.length) {
+            let dotIdx = name.indexOf('.', start);
+            if (dotIdx === -1) dotIdx = name.length;
+
+            let mStart = start;
+            if (name.charCodeAt(mStart) === 64) { // '@'
+                const colonIdx = name.indexOf(':', mStart);
+                if (colonIdx > 0 && colonIdx < dotIdx) {
+                    if (name.charCodeAt(colonIdx + 1) === 58) { // ':'
+                        mStart = colonIdx + 2;
                     } else {
-                        m = m.substring(colonIdx + 1);
+                        mStart = colonIdx + 1;
                     }
                 }
             }
 
-            // replace(/@[^@]+$/, '')
-            const lastAtIdx = m.lastIndexOf('@');
-            if (lastAtIdx !== -1) {
-                m = m.substring(0, lastAtIdx);
-            }
-            const parenIdx = m.indexOf('(');
-            if (parenIdx !== -1) {
-                m = m.substring(0, parenIdx);
-            }
-            mols.push(m);
-        };
+            let parenIdx = name.indexOf('(', mStart);
+            let mEnd = parenIdx !== -1 && parenIdx < dotIdx ? parenIdx : dotIdx;
 
-        while ((end = s.name.indexOf('.', start)) !== -1) {
-            processPart(s.name.substring(start, end));
-            start = end + 1;
+            let lastAtIdx = -1;
+            for (let i = mEnd - 1; i >= mStart; i--) {
+                if (name.charCodeAt(i) === 64) { // '@'
+                    lastAtIdx = i;
+                    break;
+                }
+            }
+            if (lastAtIdx !== -1) {
+                mEnd = lastAtIdx;
+            }
+
+            mols.push(name.substring(mStart, mEnd));
+            start = dotIdx + 1;
         }
-        processPart(s.name.substring(start));
 
         for (let i = 0; i < mols.length; i++) {
             const m = mols[i];
