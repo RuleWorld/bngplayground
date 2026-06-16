@@ -120,6 +120,7 @@ export const Modal: React.FC<ModalProps> = ({ isOpen, onClose, title, children, 
             onClick={onClose}
             className="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200"
             aria-label="Close modal"
+            title="Close modal"
           >
             <XIcon className="w-6 h-6" />
           </button>
