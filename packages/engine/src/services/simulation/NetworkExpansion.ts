@@ -738,7 +738,7 @@ export async function generateExpandedNetwork(
                 }
             }
 
-            let parenIdx = name.indexOf('(', mStart);
+            const parenIdx = name.indexOf('(', mStart);
             let mEnd = parenIdx !== -1 && parenIdx < dotIdx ? parenIdx : dotIdx;
 
             let lastAtIdx = -1;
