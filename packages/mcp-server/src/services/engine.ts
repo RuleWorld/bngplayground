@@ -66,6 +66,20 @@ export function parseArgs<T extends z.ZodTypeAny>(toolName: string, schema: T, a
     return parsed.data;
 }
 
+/**
+ * Parses a string of BNGL code into a structured BNGLModel.
+ *
+ * This function attempts to parse the provided BNGL code using the internal
+ * `parseBNGLWithANTLR` engine function. If the parsing is successful and a
+ * model is produced, it returns the parsed model. If the parsing fails or
+ * results in no model, it constructs an error string from the ANTLR parsing
+ * errors (combining line, column, and message for each error) and throws a
+ * standard Error.
+ *
+ * @param code The plain text string containing the BNGL code to parse.
+ * @returns The parsed BNGLModel object.
+ * @throws {Error} If parsing fails, throws an Error containing details about the parse failures.
+ */
 export function parseModelOrThrow(code: string): BNGLModel {
     const result = parseBNGLWithANTLR(code);
     if (!result.success || !result.model) {
