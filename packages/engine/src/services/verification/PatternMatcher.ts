@@ -26,9 +26,14 @@ export function parseSpeciesString(specStr: string): ParsedMolecule[] {
   const molecules: ParsedMolecule[] = [];
   const molStrings = splitTopLevel(specStr, '.');
 
-  for (const molStr of molStrings) {
-    const trimmed = molStr.trim();
-    if (trimmed.length === 0) continue;
+  for (let i = 0; i < molStrings.length; i++) {
+    const molStr = molStrings[i];
+    let s = 0;
+    let e = molStr.length;
+    while(s < e && molStr.charCodeAt(s) <= 32) s++;
+    while(e > s && molStr.charCodeAt(e - 1) <= 32) e--;
+    if (s === e) continue;
+    const trimmed = molStr.substring(s, e);
 
     const parenStart = trimmed.indexOf('(');
     if (parenStart === -1) {
@@ -41,12 +46,27 @@ export function parseSpeciesString(specStr: string): ParsedMolecule[] {
     const compBody = trimmed.substring(parenStart + 1, parenEnd === -1 ? trimmed.length : parenEnd);
 
     const components: ParsedComponent[] = [];
-    if (compBody.trim().length > 0) {
-      const compParts = compBody.split(',');
-      for (const part of compParts) {
-        const t = part.trim();
-        if (t.length === 0) continue;
-        components.push(parseComponentString(t));
+    let cs = 0;
+    let ce = compBody.length;
+    while(cs < ce && compBody.charCodeAt(cs) <= 32) cs++;
+    while(ce > cs && compBody.charCodeAt(ce - 1) <= 32) ce--;
+
+    if (cs < ce) {
+      let startIdx = cs;
+      const len = ce;
+      while (startIdx < len) {
+        let endIdx = compBody.indexOf(',', startIdx);
+        if (endIdx === -1 || endIdx > len) endIdx = len;
+
+        let subS = startIdx;
+        let subE = endIdx;
+        while(subS < subE && compBody.charCodeAt(subS) <= 32) subS++;
+        while(subE > subS && compBody.charCodeAt(subE - 1) <= 32) subE--;
+
+        if (subS < subE) {
+           components.push(parseComponentString(compBody.substring(subS, subE)));
+        }
+        startIdx = endIdx + 1;
       }
     }
 
@@ -87,20 +107,19 @@ function parseComponentString(compStr: string): ParsedComponent {
 function splitTopLevel(input: string, delimiter: string): string[] {
   const parts: string[] = [];
   let depth = 0;
-  let current = '';
+  let start = 0;
   for (let i = 0; i < input.length; i++) {
     const ch = input[i];
     if (ch === '(') depth++;
     else if (ch === ')') depth--;
-
-    if (ch === delimiter && depth === 0) {
-      parts.push(current);
-      current = '';
-    } else {
-      current += ch;
+    else if (ch === delimiter && depth === 0) {
+      parts.push(input.substring(start, i));
+      start = i + 1;
     }
   }
-  if (current.length > 0) parts.push(current);
+  if (start < input.length) {
+    parts.push(input.substring(start));
+  }
   return parts;
 }
 
@@ -122,9 +141,11 @@ export function canonicalizeSpecies(molecules: ParsedMolecule[]): string {
   });
 
   // First pass: assign canonical bond numbers in sorted order
-  for (const mol of sortedMols) {
+  for (let i = 0; i < sortedMols.length; i++) {
+    const mol = sortedMols[i];
     const sortedComps = [...mol.components].sort((a, b) => a.name.localeCompare(b.name));
-    for (const comp of sortedComps) {
+    for (let j = 0; j < sortedComps.length; j++) {
+      const comp = sortedComps[j];
       if (comp.bondLabel && /^\d+$/.test(comp.bondLabel)) {
         if (!bondMap.has(comp.bondLabel)) {
           bondMap.set(comp.bondLabel, nextBond++);
@@ -134,31 +155,41 @@ export function canonicalizeSpecies(molecules: ParsedMolecule[]): string {
   }
 
   // Second pass: produce canonical string
-  const molStrings = sortedMols.map(mol => {
+  let result = '';
+  for (let i = 0; i < sortedMols.length; i++) {
+    const mol = sortedMols[i];
     const sortedComps = [...mol.components].sort((a, b) => a.name.localeCompare(b.name));
-    const compStr = sortedComps.map(comp => {
-      let s = comp.name;
-      if (comp.state) s += `~${comp.state}`;
-      if (comp.bondLabel && /^\d+$/.test(comp.bondLabel)) {
-        s += `!${bondMap.get(comp.bondLabel)}`;
-      } else if (comp.bondLabel) {
-        s += `!${comp.bondLabel}`;
-      }
-      return s;
-    }).join(',');
-    return `${mol.name}(${compStr})`;
-  });
 
-  return molStrings.join('.');
+    let compStr = '';
+    for (let j = 0; j < sortedComps.length; j++) {
+      const comp = sortedComps[j];
+      compStr += comp.name;
+      if (comp.state) compStr += '~' + comp.state;
+      if (comp.bondLabel && /^\d+$/.test(comp.bondLabel)) {
+        compStr += '!' + bondMap.get(comp.bondLabel);
+      } else if (comp.bondLabel) {
+        compStr += '!' + comp.bondLabel;
+      }
+      if (j < sortedComps.length - 1) compStr += ',';
+    }
+
+    result += mol.name + '(' + compStr + ')';
+    if (i < sortedMols.length - 1) result += '.';
+  }
+
+  return result;
 }
 
 function moleculeSignature(mol: ParsedMolecule): string {
   const sortedComps = [...mol.components].sort((a, b) => a.name.localeCompare(b.name));
-  return sortedComps.map(c => {
-    let s = c.name;
-    if (c.state) s += `~${c.state}`;
-    return s;
-  }).join(',');
+  let sig = '';
+  for (let i = 0; i < sortedComps.length; i++) {
+    const c = sortedComps[i];
+    sig += c.name;
+    if (c.state) sig += '~' + c.state;
+    if (i < sortedComps.length - 1) sig += ',';
+  }
+  return sig;
 }
 
 /* ---------- Pattern matching ---------- */

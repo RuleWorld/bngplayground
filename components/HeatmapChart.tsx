@@ -63,8 +63,19 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
   }, [wantsResponsiveSizing]);
 
   // Unique sorted x and y
-  const xs = useMemo(() => Array.from(new Set(data.map((d) => d.x))).sort((a, b) => a - b), [data]);
-  const ys = useMemo(() => Array.from(new Set(data.map((d) => d.y))).sort((a, b) => a - b), [data]);
+  const { xs, ys } = useMemo(() => {
+    const xSet = new Set<number>();
+    const ySet = new Set<number>();
+    for (let i = 0; i < data.length; i++) {
+      const d = data[i];
+      xSet.add(d.x);
+      ySet.add(d.y);
+    }
+    return {
+      xs: Array.from(xSet).sort((a, b) => a - b),
+      ys: Array.from(ySet).sort((a, b) => a - b),
+    };
+  }, [data]);
 
   const cols = xs.length;
   const rows = ys.length;

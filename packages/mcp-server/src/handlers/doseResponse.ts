@@ -1,4 +1,4 @@
-import { computeDoseResponse, loadEvaluator, simulate } from '@bngplayground/engine';
+import { computeDoseResponse, computeDoseResponseBySimulation, loadEvaluator, simulate } from '@bngplayground/engine';
 import type { SimulationOptions } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { doseResponseArgsSchema } from '../schemas/index.js';
@@ -11,93 +11,6 @@ import {
     updateMassActionRates,
 } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
-
-function generateDosePoints(min: number, max: number, nPoints: number, logScale: boolean): number[] {
-    const doses = new Array<number>(nPoints);
-    if (logScale && min > 0 && max > 0) {
-        const logMin = Math.log(min);
-        const logMax = Math.log(max);
-        for (let i = 0; i < nPoints; i++) {
-            const frac = nPoints > 1 ? i / (nPoints - 1) : 0;
-            doses[i] = Math.exp(logMin + frac * (logMax - logMin));
-        }
-        return doses;
-    }
-
-    for (let i = 0; i < nPoints; i++) {
-        const frac = nPoints > 1 ? i / (nPoints - 1) : 0;
-        doses[i] = min + frac * (max - min);
-    }
-    return doses;
-}
-
-async function computeDoseResponseBySimulation(
-    expandedModel: any,
-    inputParameter: string,
-    observables: string[],
-    inputMin: number,
-    inputMax: number,
-    nPoints: number,
-    logScale: boolean,
-    tEnd: number,
-): Promise<{ curves: Array<{ observable: string; doses: number[]; responses: number[] }>; failedDoses: number[] }> {
-    const doses = generateDosePoints(inputMin, inputMax, nPoints, logScale);
-    const failedDoses: number[] = [];
-    const responsesByObservable = new Map<string, number[]>();
-    const successfulDoses: number[] = [];
-
-    observables.forEach((obs) => {
-        responsesByObservable.set(obs, []);
-    });
-
-    const simOptions: SimulationOptions = {
-        method: 'ode',
-        t_end: tEnd,
-        n_steps: 200,
-        solver: 'auto',
-    };
-
-    for (const dose of doses) {
-        try {
-            const runModel = cloneExpandedModel(expandedModel);
-            runModel.parameters[inputParameter] = dose;
-            updateMassActionRates(runModel);
-
-            const simResult = await simulate(0, runModel, simOptions, {
-                checkCancelled: () => { },
-                postMessage: () => { },
-            });
-
-            const finalRow = simResult.data?.[simResult.data.length - 1];
-            if (!finalRow) {
-                failedDoses.push(dose);
-                continue;
-            }
-
-            const values = observables.map((obs) => Number(finalRow[obs]));
-            if (values.some((value) => !Number.isFinite(value))) {
-                failedDoses.push(dose);
-                continue;
-            }
-
-            successfulDoses.push(dose);
-            observables.forEach((obs, index) => {
-                responsesByObservable.get(obs)!.push(values[index]);
-            });
-        } catch {
-            failedDoses.push(dose);
-        }
-    }
-
-    return {
-        curves: observables.map((obs) => ({
-            observable: obs,
-            doses: successfulDoses,
-            responses: responsesByObservable.get(obs) ?? [],
-        })),
-        failedDoses,
-    };
-}
 
 /**
  * dose_response

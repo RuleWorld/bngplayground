@@ -38,7 +38,7 @@ export const ExternalLegend: React.FC<{
               title="Double-click to isolate"
               aria-pressed={isVisible}
               aria-label={`${isVisible ? 'Hide' : 'Show'} series ${entry.name}`}
-              className={`flex items-center cursor-pointer transition-opacity ${!isVisible ? 'opacity-40' : isHighlighted ? 'opacity-100' : 'opacity-60'} hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -ml-1`}
+              className={`flex items-center cursor-pointer transition-opacity ${!isVisible ? 'opacity-40' : isHighlighted ? 'opacity-100' : 'opacity-60'} hover:bg-slate-50 dark:hover:bg-slate-800 rounded px-1 -ml-1 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}
             >
               <div
                 style={{
@@ -92,7 +92,7 @@ export const InlineLegend: React.FC<{
               ${entry.inactive ? 'opacity-40 grayscale-[0.5]' : 'opacity-100'} 
               hover:bg-slate-100 dark:hover:bg-slate-800/80 rounded-md px-2 py-1
               border border-transparent hover:border-slate-200 dark:hover:border-slate-700
-              select-none active:scale-95`}
+              select-none active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50`}
           >
             <div
               className={`shrink-0 transition-transform ${entry.inactive ? 'scale-75' : 'scale-100'}`}

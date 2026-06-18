@@ -3,14 +3,21 @@ import { WorkerPool } from './WorkerPool';
 
 describe('WorkerPool', () => {
   let pool: WorkerPool;
+  let mockWorkers: any[] = [];
 
   beforeEach(() => {
+    mockWorkers = [];
     // Mock global Worker
     const mockWorker = class {
       onmessage: any = null;
       onerror: any = null;
       postMessage = vi.fn();
       terminate = vi.fn();
+
+      constructor() {
+        mockWorkers.push(this);
+      }
+
       addEventListener = vi.fn((event, handler) => {
         if (event === 'message') {
            // Simulate READY immediately
@@ -39,19 +46,17 @@ describe('WorkerPool', () => {
 
       const submitPromise = pool.submit('RUN_SIMULATION', { dummy: 'data' });
 
-      // We need access to the workers array to trigger the error
-      // Since it's private, we'll use a hack to get it for testing
-      const workers = (pool as any).workers;
-
       // Wait for task to be picked up
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // Verify worker has the task
-      expect(workers[0].currentTask).toBe(mockUUID);
+      expect(mockWorkers[0].postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({ id: mockUUID })
+      );
 
       // Trigger error - note that ErrorEvent might not be defined in Node
       // so we construct a mock object that duck-types it.
-      workers[0].worker.onerror({ message: 'Test error' });
+      mockWorkers[0].onerror({ message: 'Test error' });
 
       // The promise should be rejected
       await expect(submitPromise).rejects.toThrow('Worker error: Test error');
@@ -60,16 +65,13 @@ describe('WorkerPool', () => {
     it('should not throw if onerror is called without a current task', async () => {
       await pool.initialize();
 
-      const workers = (pool as any).workers;
-
       // Trigger error when no task is running
       expect(() => {
-        workers[0].worker.onerror({ message: 'Test error' });
+        mockWorkers[0].onerror({ message: 'Test error' });
       }).not.toThrow();
 
-      // Ensure it resets busy state and currentTask
-      expect(workers[0].busy).toBe(false);
-      expect(workers[0].currentTask).toBe(null);
+      // Ensure it resets busy state
+      expect(pool.getStats().busyWorkers).toBe(0);
     });
 
     it('should handle worker RESULT with type ERROR', async () => {
@@ -80,13 +82,11 @@ describe('WorkerPool', () => {
 
       const submitPromise = pool.submit('RUN_SIMULATION', { dummy: 'data' });
 
-      const workers = (pool as any).workers;
-
       // Wait for task to be picked up
       await new Promise(resolve => setTimeout(resolve, 10));
 
       // Trigger error message from worker
-      workers[0].worker.onmessage({
+      mockWorkers[0].onmessage({
         data: {
           id: mockUUID,
           type: 'ERROR',

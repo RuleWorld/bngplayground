@@ -228,8 +228,15 @@ export function continuation(
     const prevPoint = path[path.length - 1];
     const bif = detectBifurcation(prevPoint, newPoint, config);
     if (bif) {
-      bif.pathIndex = path.length;
-      bifurcations.push(bif);
+      // Deduplicate: skip if too close to the last bifurcation of same type
+      const minSpacing = 1e-4;
+      const isDuplicate = bifurcations.some(
+        b => b.type === bif.type && Math.abs(b.parameterValue - bif.parameterValue) < minSpacing,
+      );
+      if (!isDuplicate) {
+        bif.pathIndex = path.length;
+        bifurcations.push(bif);
+      }
     }
 
     path.push(newPoint);
@@ -271,26 +278,82 @@ export function continuation(
 // ── Bifurcation detection ───────────────────────────────────────────
 
 /**
+ * Match eigenvalues between consecutive continuation steps using
+ * nearest-neighbor proximity in the complex plane. This is robust
+ * to eigenvalue crossing (where sorting by real part fails).
+ *
+ * Returns an array where result[i] is the matched eigenvalue from `prev`
+ * corresponding to `curr[i]`, or null if no good match exists.
+ */
+function matchEigenvalues(
+  curr: Array<ComplexNumber>,
+  prev: Array<ComplexNumber>,
+): Array<ComplexNumber | null> {
+  const used = new Set<number>();
+  const result: Array<ComplexNumber | null> = [];
+
+  for (const ce of curr) {
+    let bestIdx = -1;
+    let bestDist = Infinity;
+
+    for (let j = 0; j < prev.length; j++) {
+      if (used.has(j)) continue;
+      const pe = prev[j];
+      const dist = (ce.real - pe.real) ** 2 + (ce.imag - pe.imag) ** 2;
+      if (dist < bestDist) {
+        bestDist = dist;
+        bestIdx = j;
+      }
+    }
+
+    if (bestIdx >= 0) {
+      used.add(bestIdx);
+      result.push(prev[bestIdx]);
+    } else {
+      result.push(null);
+    }
+  }
+
+  return result;
+}
+
+/**
  * Detect if a bifurcation occurred between two consecutive continuation
- * points by monitoring eigenvalue sign changes.
+ * points by monitoring eigenvalue sign changes. Uses nearest-neighbor
+ * eigenvalue matching to avoid false positives from eigenvalue crossing.
+ *
+ * @param minSpacing  Minimum parameter distance from the last detected
+ *                    bifurcation of the same type (prevents duplicates).
+ *
+ * Returns the first (interpolated) bifurcation point or null.
  */
 export function detectBifurcation(
   prev: ContinuationPoint,
   curr: ContinuationPoint,
   _config: ContinuationConfig,
 ): BifurcationPoint | null {
-  // Sort eigenvalues by real part for consistent matching between steps
-  const sortedPrev = [...prev.eigenvalues].sort((a, b) => a.real - b.real);
-  const sortedCurr = [...curr.eigenvalues].sort((a, b) => a.real - b.real);
+  // Match eigenvalues from curr to prev by nearest-neighbor in complex plane
+  const matchedPrev = matchEigenvalues(curr.eigenvalues, prev.eigenvalues);
+
+  // Compute spectral radius at both points to dynamically scale the noise threshold
+  const maxEvMagPrev = prev.eigenvalues.length > 0
+    ? Math.max(...prev.eigenvalues.map(e => Math.sqrt(e.real * e.real + e.imag * e.imag)))
+    : 0;
+  const maxEvMagCurr = curr.eigenvalues.length > 0
+    ? Math.max(...curr.eigenvalues.map(e => Math.sqrt(e.real * e.real + e.imag * e.imag)))
+    : 0;
+  const maxEvMag = Math.max(maxEvMagPrev, maxEvMagCurr);
+  const threshold = Math.max(1e-11, maxEvMag * 1e-11);
 
   // Saddle-node: a real eigenvalue crosses zero
-  for (let i = 0; i < sortedPrev.length && i < sortedCurr.length; i++) {
-    const ePrev = sortedPrev[i];
-    const eCurr = sortedCurr[i];
+  for (let i = 0; i < curr.eigenvalues.length; i++) {
+    const eCurr = curr.eigenvalues[i];
+    const ePrev = matchedPrev[i];
+    if (!ePrev) continue;
 
     // Only consider real eigenvalues (small imaginary part)
     if (Math.abs(ePrev.imag) < 1e-8 && Math.abs(eCurr.imag) < 1e-8) {
-      if (ePrev.real * eCurr.real < 0) {
+      if (ePrev.real * eCurr.real < 0 && Math.max(Math.abs(ePrev.real), Math.abs(eCurr.real)) > threshold) {
         // Real eigenvalue crossed zero -> saddle-node (fold)
         // Linear interpolation for bifurcation parameter
         const t = Math.abs(ePrev.real) / (Math.abs(ePrev.real) + Math.abs(eCurr.real));
@@ -317,19 +380,19 @@ export function detectBifurcation(
   const currPairs = findComplexPairs(curr.eigenvalues);
 
   for (const cp of currPairs) {
-    // Find matching pair in prev (closest by imaginary part)
+    // Find matching pair in prev (closest by distance in complex plane)
     let bestMatch: { e1: ComplexNumber; e2: ComplexNumber } | null = null;
     let bestDist = Infinity;
 
     for (const pp of prevPairs) {
-      const dist = Math.abs(pp.e1.imag - cp.e1.imag) + Math.abs(pp.e1.real - cp.e1.real);
+      const dist = (pp.e1.real - cp.e1.real) ** 2 + (pp.e1.imag - cp.e1.imag) ** 2;
       if (dist < bestDist) {
         bestDist = dist;
         bestMatch = pp;
       }
     }
 
-    if (bestMatch && bestMatch.e1.real * cp.e1.real < 0) {
+    if (bestMatch && bestMatch.e1.real * cp.e1.real < 0 && Math.max(Math.abs(bestMatch.e1.real), Math.abs(cp.e1.real)) > threshold) {
       // Hopf bifurcation!
       const t = Math.abs(bestMatch.e1.real) / (Math.abs(bestMatch.e1.real) + Math.abs(cp.e1.real));
       const pBif = prev.parameterValue + t * (curr.parameterValue - prev.parameterValue);

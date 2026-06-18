@@ -160,23 +160,82 @@ function renderFullSkeleton(tabs: TabEntry[]): string {
     lines.push('');
     lines.push('**Workflow:**');
     lines.push('');
-    lines.push('<!-- TODO: describe the tab\'s intended workflow -->');
+    lines.push('Explain the typical user journey, from input to output. What does the user need to provide? What does the tab produce or analyze?');
     lines.push('');
     lines.push('**Screenshots:**');
     lines.push('');
-    lines.push('<!-- TODO: add relevant screenshots -->');
+    const possibleImages = [`${t.id}.png`, `${t.id}-v2.png`];
+    let hasScreenshot = false;
+    for (const img of possibleImages) {
+      if (existsSync(join(resolve('docs/assets/screenshots'), img))) {
+        lines.push(`![Screenshot of ${t.label}](assets/screenshots/${img})`);
+        lines.push('');
+        hasScreenshot = true;
+      }
+    }
+    if (!hasScreenshot) {
+      lines.push('<!-- TODO: add relevant screenshots -->');
+    }
     lines.push('');
     lines.push('**Common pitfalls:**');
     lines.push('');
-    lines.push('<!-- TODO: describe common pitfalls and troubleshooting steps -->');
+    lines.push('- **Empty plots/No data:** Ensure you have successfully parsed the model and run a simulation first. Many tabs depend on the current simulation results.');
+    lines.push('- **Performance lag:** Large networks or long time courses with many data points can cause UI slowdowns. Try reducing the time span or using data decimation.');
+    lines.push('- **Missing observables:** If a specific molecule or state is missing from dropdowns, verify it is explicitly defined as an Observable in the BNGL source.');
     lines.push('');
     lines.push('**MCP equivalent:**');
     lines.push('');
-    lines.push('<!-- TODO: list the MCP tools that expose equivalent functionality for agent-driven use -->');
+
+    // Mapping of tab component names to equivalent MCP tools
+    const mcpTools: Record<string, string[]> = {
+      "StructureAnalysisTab": ["get_contact_map", "query_pathway_commons"],
+      "SteadyStateTab": ["symbolic_steady_state", "simulate"],
+      "ParameterScanTab": ["parameter_scan"],
+      "CartoonTab": ["generate_network"],
+      "TemporalAnalysisTab": ["temporal_analysis"],
+      "TrajectoryExplorerTab": ["simulate"],
+      "VerificationTab": ["verify_model"],
+      "SobolSensitivityTab": ["sobol_sensitivity"],
+      "ABCSMCTab": ["bayesian_inference"],
+      "ContactMapTab": ["get_contact_map"],
+      "RulesTab": ["parse_bngl"],
+      "RobustnessTab": ["perturbation_screen"],
+      "BifurcationTab": ["bifurcation_analysis"],
+      "FIMTab": ["optimal_experiment"],
+      "MultiscaleTab": ["multiscale_simulation"],
+      "ParametersTab": ["fit_parameters"],
+      "RegulatoryTab": ["reaction_information_flow"],
+      "VersionHistoryTab": ["compare_models"],
+      "DebuggerTab": ["diagnose_model", "explain_model"],
+      "ProfileLikelihoodTab": ["identifiability_analysis"],
+      "FluxAnalysisTab": ["qssa_reduction"],
+      "JupyterExportTab": ["export_model"],
+      "ParameterEstimationTab": ["fit_parameters", "import_petab", "reduce_model"],
+      "ExpressionEvaluatorTab": ["simulate"],
+      "ModelExplorerTab": ["search_structure", "edit_model", "compose_model"],
+      "PKPDTab": ["pkpd", "dose_response"],
+      "NetworkAnalysisTab": ["generate_network"]
+    };
+
+    const tools = mcpTools[t.componentName] || [];
+    if (tools.length > 0) {
+      for (const tool of tools) {
+        lines.push(`- \`${tool}\``);
+      }
+    } else {
+      lines.push('<!-- TODO: list the MCP tools that expose equivalent functionality for agent-driven use -->');
+    }
     lines.push('');
     lines.push('**See also:**');
     lines.push('');
-    lines.push('<!-- TODO: cross-references to tutorials, design docs, and related tabs -->');
+    lines.push('- [Quickstart Guide](quickstart.md)');
+    lines.push('- [Solvers Documentation](solvers.md)');
+    lines.push('- [MCP Server Reference](mcp-server.md)');
+    const relatedTabs = tabs.filter((other) => other.category === t.category && other.id !== t.id);
+    if (relatedTabs.length > 0) {
+      const relatedLinks = relatedTabs.map((other) => `[${other.label}](#${other.id})`);
+      lines.push(`- Related tabs: ${relatedLinks.join(', ')}`);
+    }
     lines.push('');
     lines.push('---');
     lines.push('');

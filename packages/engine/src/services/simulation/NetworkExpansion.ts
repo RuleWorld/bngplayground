@@ -719,33 +719,43 @@ export async function generateExpandedNetwork(
         // Extract base molecule names from the string representation
         // ⚡ Bolt Optimization: Use fast index-based parsing instead of chained array
         // methods (.split.map) and regular expressions to avoid allocation overhead in hot loops.
-        const parts = s.name.split('.');
         const mols: string[] = [];
-        for (let i = 0; i < parts.length; i++) {
-            let m = parts[i];
-            // replace(/^@[^:]+::?/, '')
-            if (m.charCodeAt(0) === 64) { // '@'
-                const colonIdx = m.indexOf(':');
-                if (colonIdx > 0) {
-                    if (m.charCodeAt(colonIdx + 1) === 58) { // ':'
-                        m = m.substring(colonIdx + 2);
+        const name = s.name;
+        let start = 0;
+        while (start < name.length) {
+            let dotIdx = name.indexOf('.', start);
+            if (dotIdx === -1) dotIdx = name.length;
+
+            let mStart = start;
+            if (name.charCodeAt(mStart) === 64) { // '@'
+                const colonIdx = name.indexOf(':', mStart);
+                if (colonIdx > 0 && colonIdx < dotIdx) {
+                    if (name.charCodeAt(colonIdx + 1) === 58) { // ':'
+                        mStart = colonIdx + 2;
                     } else {
-                        m = m.substring(colonIdx + 1);
+                        mStart = colonIdx + 1;
                     }
                 }
             }
 
-            // replace(/@[^@]+$/, '')
-            const lastAtIdx = m.lastIndexOf('@');
+            const parenIdx = name.indexOf('(', mStart);
+            let mEnd = parenIdx !== -1 && parenIdx < dotIdx ? parenIdx : dotIdx;
+
+            let lastAtIdx = -1;
+            for (let i = mEnd - 1; i >= mStart; i--) {
+                if (name.charCodeAt(i) === 64) { // '@'
+                    lastAtIdx = i;
+                    break;
+                }
+            }
             if (lastAtIdx !== -1) {
-                m = m.substring(0, lastAtIdx);
+                mEnd = lastAtIdx;
             }
-            const parenIdx = m.indexOf('(');
-            if (parenIdx !== -1) {
-                m = m.substring(0, parenIdx);
-            }
-            mols.push(m);
+
+            mols.push(name.substring(mStart, mEnd));
+            start = dotIdx + 1;
         }
+
         for (let i = 0; i < mols.length; i++) {
             const m = mols[i];
             if (!molToSpecies.has(m)) molToSpecies.set(m, new Set());
@@ -794,10 +804,12 @@ export async function generateExpandedNetwork(
                 // Optimization Step 1: Filter Candidates
                 // Remove compartment tags to find base molecules required by the pattern.
                 const cleanPat = removeCompartment(trimmedPat);
-                const patParts = cleanPat.split('.');
                 const patMols: string[] = [];
-                for (let j = 0; j < patParts.length; j++) {
-                    let m = patParts[j];
+
+                let start = 0;
+                let end;
+                const processPatPart = (part: string) => {
+                    let m = part;
                     const parenIdx = m.indexOf('(');
                     if (parenIdx !== -1) {
                         m = m.substring(0, parenIdx);
@@ -805,7 +817,13 @@ export async function generateExpandedNetwork(
                     if (m) {
                         patMols.push(m);
                     }
+                };
+
+                while ((end = cleanPat.indexOf('.', start)) !== -1) {
+                    processPatPart(cleanPat.substring(start, end));
+                    start = end + 1;
                 }
+                processPatPart(cleanPat.substring(start));
 
                 let candidates: Iterable<number> = generatedSpecies.keys();
 

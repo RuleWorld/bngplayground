@@ -146,10 +146,15 @@ function setBoundedCache<K, V>(map: Map<K, V>, key: K, value: V, maxSize: number
 }
 
 function bumpPatchVersion(v: string): string {
-  const parts = v.split('.').map((p) => parseInt(p, 10));
-  if (parts.length !== 3 || parts.some((n) => Number.isNaN(n))) return v;
-  parts[2] = parts[2] + 1;
-  return `${parts[0]}.${parts[1]}.${parts[2]}`;
+  const dot1 = v.indexOf('.');
+  const dot2 = v.indexOf('.', dot1 + 1);
+  const dot3 = v.indexOf('.', dot2 + 1);
+  if (dot1 === -1 || dot2 === -1 || dot3 !== -1) return v;
+  const major = parseInt(v.substring(0, dot1), 10);
+  const minor = parseInt(v.substring(dot1 + 1, dot2), 10);
+  const patch = parseInt(v.substring(dot2 + 1), 10);
+  if (Number.isNaN(major) || Number.isNaN(minor) || Number.isNaN(patch)) return v;
+  return `${major}.${minor}.${patch + 1}`;
 }
 
 export function clearAllEvaluatorCaches() {

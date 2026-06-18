@@ -206,6 +206,8 @@ export type { SteadyState, SteadyStateConfig } from './services/analysis/SteadyS
 export { qrEigenvalues, arnoldiEigenvalues } from './services/analysis/EigenSolver';
 export { continuation, detectBifurcation } from './services/analysis/Continuation';
 export type { ContinuationConfig, ContinuationPoint, BifurcationPoint, ContinuationResult } from './services/analysis/Continuation';
+export { continuationWithConservation } from './services/analysis/ContinuationWithConservation';
+export type { ConservedContinuationConfig, ConservedContinuationResult } from './services/analysis/ContinuationWithConservation';
 export { attributeBifurcation, eigenvalueSensitivity } from './services/analysis/BifurcationAttribution';
 export type { AttributionResult as BifurcationAttributionResult } from './services/analysis/BifurcationAttribution';
 export { computeNullclines } from './services/analysis/Nullclines';
@@ -254,7 +256,7 @@ export { computeFirstPassageTimes } from './services/analysis/FirstPassageTime';
 export type { FirstPassageTimeConfig, FPTDistribution } from './services/analysis/FirstPassageTime';
 
 // ── Dose-Response ──────────────────────────────────────────────────
-export { computeDoseResponse } from './services/analysis/DoseResponse';
+export { computeDoseResponse, computeDoseResponseBySimulation } from './services/analysis/DoseResponse';
 export type { DoseResponseConfig, DoseResponseResult, DoseResponseCurve, HillFit } from './services/analysis/DoseResponse';
 
 // ── Perturbation Screen ────────────────────────────────────────────

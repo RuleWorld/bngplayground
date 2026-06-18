@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useMemo } from 'react';
+import React, { useState, useCallback, useMemo, useEffect } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
@@ -25,6 +25,7 @@ interface ContinuationPointUI {
   steadyState: number;
   stable: boolean;
   branchId: number;
+  y?: number[];
 }
 
 interface BifurcationPointUI {
@@ -57,6 +58,10 @@ interface NullclineResultUI {
   yNullclines: Array<{ points: NullclinePointUI[] }>;
   vectorField: Array<{ x: number; y: number; dx: number; dy: number }>;
   fixedPoints: FixedPointUI[];
+  xRange?: [number, number];
+  yRange?: [number, number];
+  /** True when model has >2 species: phase plane is a 2D slice at ss values */
+  isSlice?: boolean;
 }
 
 export const BifurcationTab: React.FC<BifurcationTabProps> = ({
@@ -73,6 +78,25 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
   const [nullclineResult, setNullclineResult] = useState<NullclineResultUI | null>(null);
   const [selectedBifurcation, setSelectedBifurcation] = useState<BifurcationPointUI | null>(null);
   const [error, setError] = useState<string | null>(null);
+
+  // Reset state when model changes to prevent stale selection/pollution and crashes
+  useEffect(() => {
+    if (model) {
+      const params = Object.keys(model.parameters);
+      const speciesList = model.species || [];
+      setSelectedParam(params[0] || '');
+      setSelectedSpecies1(speciesList[0]?.name || '');
+      setSelectedSpecies2('');
+    } else {
+      setSelectedParam('');
+      setSelectedSpecies1('');
+      setSelectedSpecies2('');
+    }
+    setContinuationResult(null);
+    setNullclineResult(null);
+    setSelectedBifurcation(null);
+    setError(null);
+  }, [model]);
   const parameterOptions = useMemo(() => {
     if (!model) return [];
     return Object.keys(model.parameters).map(p => ({ value: p, label: `${p} = ${model.parameters[p]}` }));
@@ -95,16 +119,6 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       // Dynamic import to avoid bundling engine in UI
       const engine = await import('@bngplayground/engine');
 
-      // First run a simulation to get initial steady state
-      onSimulate({
-        method: 'ode',
-        t_end: 2000,
-        n_steps: 500,
-        steadyState: true,
-        steadyStateTolerance: 1e-8,
-        steadyStateWindow: 12,
-      });
-
       // Expand the model and compile its RHS
       const expandedModel = await engine.generateExpandedNetwork(model, () => {}, () => {});
       const nSpecies = expandedModel.species.length;
@@ -120,16 +134,12 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       const indexedReactions = (expandedModel.reactions ?? []).map((reaction: any) => new engine.Rxn(
         reaction.reactants.map((name: string) => {
           const idx = speciesIndexMap.get(String(name).trim());
-          if (idx === undefined) {
-            throw new Error(`Unknown reactant species: ${String(name)}`);
-          }
+          if (idx === undefined) throw new Error(`Unknown reactant species: ${String(name)}`);
           return idx;
         }),
         reaction.products.map((name: string) => {
           const idx = speciesIndexMap.get(String(name).trim());
-          if (idx === undefined) {
-            throw new Error(`Unknown product species: ${String(name)}`);
-          }
+          if (idx === undefined) throw new Error(`Unknown product species: ${String(name)}`);
           return idx;
         }),
         reaction.rateConstant,
@@ -145,6 +155,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         },
       ));
 
+      // P0: JIT failure is fatal — no silent zero-field fallback
       const jit = new engine.JITCompiler();
       let compiled: any;
       try {
@@ -161,73 +172,91 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           }
         );
       } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : String(err);
-        console.warn('[BifurcationTab] JIT compilation failed, using fallback RHS', {
-          modelName: model.name ?? 'unnamed-model',
-          parameterName: selectedParam,
-          nSpecies,
-          nReactions: indexedReactions.length,
-          error: errorMessage,
-        });
+        const msg = err instanceof Error ? err.message : String(err);
+        setError(`Could not compile model RHS for continuation: ${msg}`);
+        setIsRunning(false);
+        return;
       }
 
+      // evaluateRhs: compiled is guaranteed defined here (P0)
       const evaluateRhs = (t: number, y: Float64Array, dydt: Float64Array) => {
-        if (compiled) {
-          compiled.evaluate(t, y, dydt);
-        } else {
-          for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-        }
+        compiled.evaluate(t, y, dydt);
       };
 
-      // The continuation would be run by the engine's continuation function
-      // For now, set up the result structure
-      // In production, this calls engine.continuation() directly
-      const mockResult: ContinuationResultUI = {
-        points: [],
-        bifurcations: [],
-        branches: 0,
-        parameterName: selectedParam,
-      };
+      if (!(selectedParam in params)) {
+        throw new Error(`Unknown continuation parameter: ${selectedParam}`);
+      }
 
-      // Generate continuation points using the engine if available
-      if (engine.continuation) {
-        const initialState = new Float64Array(nSpecies);
-        expandedModel.species.forEach((s: any, i: number) => { initialState[i] = s.initialConcentration; });
-        if (!(selectedParam in params)) {
-          throw new Error(`Unknown continuation parameter: ${selectedParam}`);
-        }
+      // P1a: Compute steady state synchronously in-engine at startValue, not from raw ICs
+      const ssInitial = new Float64Array(nSpecies);
+      expandedModel.species.forEach((s: any, i: number) => { ssInitial[i] = s.initialConcentration; });
+      params[selectedParam] = startValue;
+      if (compiled.updateParameters) compiled.updateParameters(params);
 
-        const result = engine.continuation({
+      const ss = engine.findSteadyState(
+        {
           nSpecies,
-          rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
-            params[selectedParam] = p;
-            if (compiled?.updateParameters) {
-              compiled.updateParameters(params);
-            }
-            evaluateRhs(0, y, dydt);
-          },
-          initialState,
-          parameterStart: startValue,
-          parameterEnd: endValue,
-          stepSize: (endValue - startValue) / maxSteps,
-          maxSteps,
-        });
+          parameters: params,
+          rhsFn: (y: Float64Array, dydt: Float64Array) => evaluateRhs(0, y, dydt),
+        },
+        ssInitial,
+      );
+      const seedState = ss.converged ? ss.y : ssInitial;
+      if (!ss.converged) {
+        setError('Steady state did not converge at start value; continuation may be on the wrong branch.');
+      }
 
-        const speciesIdx = speciesIndexMap.get(selectedSpecies1 || expandedModel.species[0]?.name) ?? -1;
-        mockResult.points = result.path.map((p: any) => ({
+      // T4: Check if continuation parameter affects any conserved pool (e.g., total enzyme).
+      // Detect by scanning the raw model's species for initialExpression references.
+      const paramAffectsConservedPool = model.species?.some(
+        (s: any) => s.initialExpression && s.initialExpression.includes(selectedParam)
+      ) ?? false;
+      if (paramAffectsConservedPool) {
+        setError('Parameter appears to affect a conserved pool total; moiety reduction disabled to avoid incorrect results.');
+      }
+
+      // Use continuationWithConservation (handles moiety reduction, seeding, reconstruction)
+      const rawResult = engine.continuationWithConservation({
+        nSpecies,
+        reactions: indexedReactions,
+        rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
+          params[selectedParam] = p;
+          if (compiled.updateParameters) compiled.updateParameters(params);
+          evaluateRhs(0, y, dydt);
+        },
+        updateParams: (p: number) => {
+          params[selectedParam] = p;
+          if (compiled.updateParameters) compiled.updateParameters(params);
+        },
+        initialGuess: ssInitial,
+        parameterStart: startValue,
+        parameterEnd: endValue,
+        stepSize: (endValue - startValue) / maxSteps,
+        maxSteps,
+        skipReduction: paramAffectsConservedPool,
+      });
+
+      const speciesIdx = speciesIndexMap.get(selectedSpecies1 || expandedModel.species[0]?.name) ?? -1;
+      const foldCount = rawResult.bifurcations.filter(
+        (b: any) => b.type === 'saddle-node' || b.type === 'transcritical'
+      ).length;
+      const result: ContinuationResultUI = {
+        points: rawResult.path.map((p: any) => ({
           parameterValue: p.parameterValue,
           steadyState: p.y[speciesIdx >= 0 ? speciesIdx : 0],
           stable: p.stable,
           branchId: 0,
-        }));
-        mockResult.bifurcations = result.bifurcations.map((b: any) => ({
+          y: Array.from(p.y),
+        })),
+        bifurcations: rawResult.bifurcations.map((b: any) => ({
           parameterValue: b.parameterValue,
           type: b.type,
-        }));
-        mockResult.branches = 1;
-      }
+        })),
+        branches: foldCount + 1,
+        parameterName: selectedParam,
+      };
 
-      setContinuationResult(mockResult);
+      setContinuationResult(result);
 
       // Compute nullclines if two species are selected
       if (selectedSpecies1 && selectedSpecies2 && engine.computeNullclines) {
@@ -235,33 +264,52 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         const idx2 = speciesIndexMap.get(selectedSpecies2) ?? -1;
 
         if (idx1 >= 0 && idx2 >= 0) {
-          const fixed = new Float64Array(nSpecies);
-          expandedModel.species.forEach((s: any, i: number) => { fixed[i] = s.initialConcentration; });
+          // P1b: freeze held species at converged steady state, not initial concentrations
+          const fixed = new Float64Array(seedState);
 
-          if (compiled && compiled.updateParameters) {
-            compiled.updateParameters(model.parameters);
-          }
+          // Reset params back to model values (parameter scan is done; nullclines use nominal params)
+          Object.assign(params, expandedModel.parameters ?? model.parameters);
+          if (compiled.updateParameters) compiled.updateParameters(params);
+
+          // Compute dynamic ranges from continuation path
+          const vals1 = result.points
+            .map(p => p.y && idx1 >= 0 ? p.y[idx1] : p.steadyState)
+            .filter(v => typeof v === 'number' && !isNaN(v) && isFinite(v));
+          const vals2 = result.points
+            .map(p => p.y && idx2 >= 0 ? p.y[idx2] : 0)
+            .filter(v => typeof v === 'number' && !isNaN(v) && isFinite(v));
+
+          const ssVal1 = fixed[idx1] ?? 0;
+          const ssVal2 = fixed[idx2] ?? 0;
+          const maxVal1 = vals1.length > 0 ? Math.max(...vals1, ssVal1) : Math.max(ssVal1, 1);
+          const maxVal2 = vals2.length > 0 ? Math.max(...vals2, ssVal2) : Math.max(ssVal2, 1);
+
+          const xRange: [number, number] = [0, Math.max(10, maxVal1 * 1.5)];
+          const yRange: [number, number] = [0, Math.max(10, maxVal2 * 1.5)];
+
           const ncResult = engine.computeNullclines({
             rhsFn: (state: Float64Array) => {
-              // State provided by computeNullclines is only 2D [x, y].
-              // We must inject it into the full N-dimensional state vector
-              // using the fixed initial concentrations for all other species.
+              // Inject 2D scan variables into full N-dimensional state frozen at ss
               const fullState = new Float64Array(fixed);
               fullState[idx1] = state[0];
               fullState[idx2] = state[1];
-
               const dydt = new Float64Array(nSpecies);
               evaluateRhs(0, fullState, dydt);
               return new Float64Array([dydt[idx1], dydt[idx2]]);
             },
-            xRange: [0, fixed[idx1] * 3 || 10] as [number, number],
-            yRange: [0, fixed[idx2] * 3 || 10] as [number, number],
+            xRange,
+            yRange,
             nGridX: 200,
             nGridY: 200,
             xIndex: idx1,
             yIndex: idx2,
           });
-          setNullclineResult(ncResult);
+          setNullclineResult({
+            ...ncResult,
+            xRange,
+            yRange,
+            isSlice: nSpecies > 2,
+          });
         }
       }
     } catch (err: any) {
@@ -269,7 +317,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
     } finally {
       setIsRunning(false);
     }
-  }, [model, selectedParam, selectedSpecies1, selectedSpecies2, startValue, endValue, maxSteps, onSimulate]);
+  }, [model, selectedParam, selectedSpecies1, selectedSpecies2, startValue, endValue, maxSteps]);
 
   const stablePoints = useMemo(() =>
     continuationResult?.points.filter(p => p.stable) ?? [], [continuationResult]);
@@ -296,7 +344,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
   }
 
   return (
-    <div className="space-y-4 h-full flex flex-col overflow-auto p-2">
+    <div className="space-y-4 flex-1 min-h-0 overflow-y-auto p-2 flex flex-col">
       <div className="p-3 rounded-md bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-200 flex items-start gap-3 shrink-0">
         <InfoIcon className="w-5 h-5 mt-0.5 flex-shrink-0" />
         <p className="text-sm">
@@ -410,8 +458,8 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       {/* Bifurcation Diagram */}
       {continuationResult && continuationResult.points.length > 0 && (
-        <Card className="p-4 flex-1 min-h-[300px]">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">
+        <Card className="p-4 flex flex-col overflow-hidden">
+          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2 shrink-0">
             Bifurcation Diagram — {continuationResult.parameterName}
             {continuationResult.bifurcations.length > 0 && (
               <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
@@ -419,154 +467,207 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
               </span>
             )}
           </h3>
-          <ResponsiveContainer width="100%" height={340}>
-            <ScatterChart margin={{ ...CHART_MARGIN, bottom: 50 }}>
-              <CartesianGrid {...CHART_GRID} />
-              <XAxis
-                dataKey="parameterValue"
-                type="number"
-                name={continuationResult.parameterName}
-                axisLine={CHART_AXIS_LINE}
-                tickLine={CHART_TICK_LINE}
-                tick={CHART_TICK}
-                /* x-axis label rendered externally below */
-                tickFormatter={(v: number) => formatValue(v)}
-              />
-              <YAxis
-                dataKey="steadyState"
-                type="number"
-                name="Concentration"
-                axisLine={CHART_AXIS_LINE}
-                tickLine={CHART_TICK_LINE}
-                tick={CHART_TICK}
-                label={{ value: selectedSpecies1 || 'Concentration', angle: -90, position: 'insideLeft', offset: -10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
-                tickFormatter={(v: number) => formatValue(v)}
-              />
-              <Tooltip
-                cursor={CHART_TOOLTIP_CURSOR}
-                formatter={(value, name) => [typeof value === 'number' ? value.toPrecision(4) : String(value ?? ''), name]}
-                labelFormatter={(label) => {
-                  const formattedLabel = typeof label === 'number' ? label.toPrecision(4) : String(label ?? '');
-                  return `${continuationResult.parameterName} = ${formattedLabel}`;
-                }}
-              />
-              {/* Stable branch - solid */}
-              <Scatter
-                name="Stable"
-                data={stablePoints}
-                fill={CHART_COLORS[0]}
-                line={{ stroke: CHART_COLORS[0], strokeWidth: CHART_LINE_WIDTH }}
-                lineType="joint"
-                shape="circle"
-                legendType="circle"
-              />
-              {/* Unstable branch - open circles */}
-              <Scatter
-                name="Unstable"
-                data={unstablePoints}
-                fill="none"
-                stroke={CHART_COLORS[1]}
-                line={{ stroke: CHART_COLORS[1], strokeWidth: CHART_LINE_WIDTH, strokeDasharray: '5 5' }}
-                lineType="joint"
-                shape="circle"
-                legendType="circle"
-              />
-              {/* Bifurcation points */}
-              <Scatter
-                name="Bifurcation"
-                data={bifurcationMarkers}
-                fill={CHART_COLORS[5]}
-                shape="diamond"
-                legendType="diamond"
-                onClick={(data: any) => {
-                  const bp = continuationResult.bifurcations.find(
-                    b => Math.abs(b.parameterValue - data.parameterValue) < 1e-10
-                  );
-                  if (bp) setSelectedBifurcation(bp);
-                }}
-              />
-            </ScatterChart>
-          </ResponsiveContainer>
-          {/* X-axis label below chart */}
-          <div className="text-center -mt-1 mb-1">
-            <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{continuationResult.parameterName}</span>
+          <div className="w-full" style={{ height: 300 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <ScatterChart margin={{ top: 5, right: 20, bottom: 30, left: 20 }}>
+                <CartesianGrid {...CHART_GRID} />
+                <XAxis
+                  dataKey="parameterValue"
+                  type="number"
+                  name={continuationResult.parameterName}
+                  axisLine={CHART_AXIS_LINE}
+                  tickLine={CHART_TICK_LINE}
+                  tick={CHART_TICK}
+                  label={{ value: continuationResult.parameterName, position: 'insideBottom', offset: -10, ...CHART_AXIS_LABEL_STYLE }}
+                  tickFormatter={(v: number) => formatValue(v)}
+                />
+                <YAxis
+                  dataKey="steadyState"
+                  type="number"
+                  name="Concentration"
+                  axisLine={CHART_AXIS_LINE}
+                  tickLine={CHART_TICK_LINE}
+                  tick={CHART_TICK}
+                  label={{ value: selectedSpecies1 || 'Concentration', angle: -90, position: 'insideLeft', offset: 10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
+                  tickFormatter={(v: number) => formatValue(v)}
+                />
+                <Tooltip
+                  cursor={CHART_TOOLTIP_CURSOR}
+                  formatter={(value, name) => [typeof value === 'number' ? value.toPrecision(4) : String(value ?? ''), name]}
+                  labelFormatter={(label) => {
+                    const formattedLabel = typeof label === 'number' ? label.toPrecision(4) : String(label ?? '');
+                    return `${continuationResult.parameterName} = ${formattedLabel}`;
+                  }}
+                />
+                {/* Stable branch - solid */}
+                <Scatter
+                  name="Stable"
+                  data={stablePoints}
+                  fill={CHART_COLORS[0]}
+                  line={{ stroke: CHART_COLORS[0], strokeWidth: CHART_LINE_WIDTH }}
+                  lineType="joint"
+                  shape="circle"
+                  legendType="circle"
+                />
+                {/* Unstable branch - dashed */}
+                <Scatter
+                  name="Unstable"
+                  data={unstablePoints}
+                  fill="none"
+                  stroke={CHART_COLORS[1]}
+                  line={{ stroke: CHART_COLORS[1], strokeWidth: CHART_LINE_WIDTH, strokeDasharray: '5 5' }}
+                  lineType="joint"
+                  shape="circle"
+                  legendType="circle"
+                />
+                {/* Bifurcation points */}
+                <Scatter
+                  name="Bifurcation"
+                  data={bifurcationMarkers}
+                  fill={CHART_COLORS[5]}
+                  shape="diamond"
+                  legendType="diamond"
+                  onClick={(data: any) => {
+                    const bp = continuationResult.bifurcations.find(
+                      b => Math.abs(b.parameterValue - data.parameterValue) < 1e-10
+                    );
+                    if (bp) setSelectedBifurcation(bp);
+                  }}
+                />
+              </ScatterChart>
+            </ResponsiveContainer>
           </div>
-          {/* Legend below chart — matches TimeSeriesChart pattern */}
-          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-              <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[0] }} /> Stable
+          {/* Legend */}
+          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800/20 shrink-0">
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+              <span className="inline-block w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[0] }} /> Stable
             </span>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-              <span className="w-3 h-0.5 border-t-2 border-dashed" style={{ borderColor: CHART_COLORS[1], width: 16 }} /> Unstable
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+              <span className="inline-block w-4 h-0.5 border-t-2 border-dashed" style={{ borderColor: CHART_COLORS[1], borderTopWidth: 2 }} /> Unstable
             </span>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-              <span className="w-3 h-3" style={{ backgroundColor: CHART_COLORS[5], clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} /> Bifurcation
+            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+              <span className="inline-block w-3 h-3" style={{ backgroundColor: CHART_COLORS[5], clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} /> Bifurcation
             </span>
           </div>
         </Card>
       )}
 
       {/* Phase Portrait (Nullclines) */}
-      {nullclineResult && selectedSpecies2 && (
-        <Card className="p-4 min-h-[300px]">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2">
-            Phase Portrait — {selectedSpecies1} vs {selectedSpecies2}
-          </h3>
-          <ResponsiveContainer width="100%" height={300}>
-            <ScatterChart margin={{ ...CHART_MARGIN, bottom: 25 }}>
-              <CartesianGrid {...CHART_GRID} />
-              <XAxis
-                dataKey="x" type="number" name={selectedSpecies1}
-                axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
-              />
-              <YAxis
-                dataKey="y" type="number" name={selectedSpecies2}
-                axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
-                label={{ value: selectedSpecies2, angle: -90, position: 'insideLeft', offset: -10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
-              />
-              <Tooltip cursor={CHART_TOOLTIP_CURSOR} />
-              <Scatter
-                name={`d[${selectedSpecies1}]/dt = 0`}
-                data={nullclineResult.xNullclines.flatMap(c => c.points)}
-                fill="none"
-                line={{ stroke: CHART_COLORS[0], strokeWidth: CHART_LINE_WIDTH }}
-                lineType="joint"
-                shape={() => null}
-              />
-              <Scatter
-                name={`d[${selectedSpecies2}]/dt = 0`}
-                data={nullclineResult.yNullclines.flatMap(c => c.points)}
-                fill="none"
-                line={{ stroke: CHART_COLORS[1], strokeWidth: CHART_LINE_WIDTH }}
-                lineType="joint"
-                shape={() => null}
-              />
-              <Scatter
-                name="Fixed Points"
-                data={nullclineResult.fixedPoints}
-                fill={CHART_COLORS[5]}
-                shape="diamond"
-              />
-            </ScatterChart>
-          </ResponsiveContainer>
-          {/* X-axis label below chart */}
-          <div className="text-center -mt-1 mb-1">
-            <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">{selectedSpecies1}</span>
-          </div>
-          {/* External legend */}
-          <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-              <span className="w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[0] }} /> d[{selectedSpecies1}]/dt = 0
-            </span>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-              <span className="w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[1] }} /> d[{selectedSpecies2}]/dt = 0
-            </span>
-            <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600">
-              <span className="w-3 h-3" style={{ backgroundColor: CHART_COLORS[5], clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} /> Fixed Points
-            </span>
-          </div>
-        </Card>
-      )}
+      {nullclineResult && selectedSpecies2 && (() => {
+        // Each NullclineCurve is a connected segment from marching squares — keep them separate
+        const xSegments = nullclineResult.xNullclines.map(c =>
+          c.points.filter(p => isFinite(p.x) && isFinite(p.y))
+        ).filter(pts => pts.length >= 2);
+        const ySegments = nullclineResult.yNullclines.map(c =>
+          c.points.filter(p => isFinite(p.x) && isFinite(p.y))
+        ).filter(pts => pts.length >= 2);
+        const fixedPts = (nullclineResult.fixedPoints ?? []).filter(
+          p => isFinite(p.x) && isFinite(p.y)
+        );
+
+        const xDomain = nullclineResult.xRange ?? [0, 1] as [number, number];
+        const yDomain = nullclineResult.yRange ?? [0, 1] as [number, number];
+
+        // Custom SVG layer that draws polylines for each nullcline segment
+        // viewBox coordinates: data → pixel via linear scale using chart dimensions
+        const NullclineOverlay = (props: any) => {
+          const { xAxisMap, yAxisMap } = props;
+          const xAxis = xAxisMap && Object.values(xAxisMap as Record<string, any>)[0];
+          const yAxis = yAxisMap && Object.values(yAxisMap as Record<string, any>)[0];
+          if (!xAxis || !yAxis) return null;
+          const toPixel = (x: number, y: number) => ({
+            px: xAxis.scale(x),
+            py: yAxis.scale(y),
+          });
+          return (
+            <g>
+              {xSegments.map((pts, si) => (
+                <polyline
+                  key={`xnc-${si}`}
+                  fill="none"
+                  stroke={CHART_COLORS[0]}
+                  strokeWidth={CHART_LINE_WIDTH}
+                  strokeLinejoin="round"
+                  points={pts.map(p => { const { px, py } = toPixel(p.x, p.y); return `${px},${py}`; }).join(' ')}
+                />
+              ))}
+              {ySegments.map((pts, si) => (
+                <polyline
+                  key={`ync-${si}`}
+                  fill="none"
+                  stroke={CHART_COLORS[1]}
+                  strokeWidth={CHART_LINE_WIDTH}
+                  strokeLinejoin="round"
+                  points={pts.map(p => { const { px, py } = toPixel(p.x, p.y); return `${px},${py}`; }).join(' ')}
+                />
+              ))}
+            </g>
+          );
+        };
+
+        return (
+          <Card className="p-4 flex flex-col overflow-hidden">
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2 shrink-0">
+              Phase Portrait — {selectedSpecies1} vs {selectedSpecies2}
+            </h3>
+            {nullclineResult.isSlice && (
+              <p className="text-xs text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/30 rounded px-2 py-1 mb-2 shrink-0">
+                2D slice — other species fixed at converged steady-state values.
+                Fixed-point markers may not correspond to exact system equilibria.
+              </p>
+            )}
+            <div className="w-full" style={{ height: 300 }}>
+              <ResponsiveContainer width="100%" height="100%">
+                <ScatterChart margin={{ top: 5, right: 20, bottom: 30, left: 20 }}>
+                  <CartesianGrid {...CHART_GRID} />
+                  <XAxis
+                    dataKey="x" type="number" name={selectedSpecies1}
+                    axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
+                    domain={xDomain}
+                    label={{ value: selectedSpecies1, position: 'insideBottom', offset: -10, ...CHART_AXIS_LABEL_STYLE }}
+                    tickFormatter={(v: number) => formatValue(v)}
+                    allowDataOverflow
+                  />
+                  <YAxis
+                    dataKey="y" type="number" name={selectedSpecies2}
+                    axisLine={CHART_AXIS_LINE} tickLine={CHART_TICK_LINE} tick={CHART_TICK}
+                    domain={yDomain}
+                    label={{ value: selectedSpecies2, angle: -90, position: 'insideLeft', offset: 10, ...CHART_AXIS_LABEL_STYLE, style: { textAnchor: 'middle' } }}
+                    tickFormatter={(v: number) => formatValue(v)}
+                    allowDataOverflow
+                  />
+                  <Tooltip cursor={CHART_TOOLTIP_CURSOR} formatter={(v: any) => [typeof v === 'number' ? formatValue(v) : v]} />
+                  {/* SVG polyline overlay for nullclines */}
+                  <NullclineOverlay />
+                  {/* Fixed points */}
+                  <Scatter
+                    data={fixedPts}
+                    fill={CHART_COLORS[5]}
+                    shape="diamond"
+                    name="Fixed Points"
+                    legendType="diamond"
+                  />
+                </ScatterChart>
+              </ResponsiveContainer>
+            </div>
+            {/* Legend */}
+            <div className="flex flex-wrap justify-center items-center gap-x-4 gap-y-1 pt-2 pb-1 border-t border-slate-100 dark:border-slate-800/20 shrink-0">
+              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+                <span className="inline-block w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[0] }} />
+                d[{selectedSpecies1}]/dt = 0
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+                <span className="inline-block w-4 h-0.5" style={{ backgroundColor: CHART_COLORS[1] }} />
+                d[{selectedSpecies2}]/dt = 0
+              </span>
+              <span className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-400">
+                <span className="inline-block w-3 h-3" style={{ backgroundColor: CHART_COLORS[5], clipPath: 'polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%)' }} />
+                Fixed Points
+              </span>
+            </div>
+          </Card>
+        );
+      })()}
 
       {/* Bifurcation Attribution Panel */}
       {selectedBifurcation && (

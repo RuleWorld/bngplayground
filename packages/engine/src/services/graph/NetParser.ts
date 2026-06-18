@@ -42,7 +42,6 @@ function parseCommaSeparated(str: string, filterEmpty: boolean = true): string[]
 export function parseNetFile(content: string): NetFileParseResult {
   const errors: string[] = [];
   const warnings: string[] = [];
-  const lines = content.split('\n');
 
   const model: BNGLModel = {
     parameters: {},
@@ -58,45 +57,57 @@ export function parseNetFile(content: string): NetFileParseResult {
 
   let currentSection: string | null = null;
   let lineNum = 0;
+  let start = 0;
+  const len = content.length;
 
-  for (const rawLine of lines) {
+  while (start < len) {
     lineNum++;
-    // Remove comments (everything after #)
-    const line = rawLine.split('#')[0].trim();
-    if (!line) continue;
+    let end = content.indexOf('\n', start);
+    if (end === -1) end = len;
 
-    // Check for section headers
-    if (line.startsWith('begin')) {
-      const match = line.match(/^begin\s+(\w+)/);
-      if (match) {
-        currentSection = match[1];
-        continue;
+    const hashIdx = content.indexOf('#', start);
+    let lineEndIdx = end;
+    if (hashIdx !== -1 && hashIdx < end) {
+      lineEndIdx = hashIdx;
+    }
+
+    let actualStart = start;
+    while (actualStart < lineEndIdx && content.charCodeAt(actualStart) <= 32) actualStart++;
+
+    let actualEnd = lineEndIdx - 1;
+    while (actualEnd >= actualStart && content.charCodeAt(actualEnd) <= 32) actualEnd--;
+
+    if (actualStart <= actualEnd) {
+      const line = content.substring(actualStart, actualEnd + 1);
+
+      if (line.startsWith('begin')) {
+        const match = line.match(/^begin\s+(\w+)/);
+        if (match) {
+          currentSection = match[1];
+        }
+      } else if (line.startsWith('end')) {
+        currentSection = null;
+      } else {
+        try {
+          if (currentSection === 'parameters') {
+            parseParameterLine(line, model, lineNum);
+          } else if (currentSection === 'compartments') {
+            parseCompartmentLine(line, model, lineNum);
+          } else if (currentSection === 'species') {
+            parseSpeciesLine(line, model, lineNum);
+          } else if (currentSection === 'reactions') {
+            parseReactionLine(line, model, lineNum);
+          } else if (currentSection === 'groups') {
+            parseObservableLine(line, model, lineNum);
+          } else if (currentSection === 'functions') {
+            parseFunctionLine(line, model, lineNum);
+          }
+        } catch (err: any) {
+          errors.push(`Line ${lineNum}: ${err.message}`);
+        }
       }
     }
-
-    if (line.startsWith('end')) {
-      currentSection = null;
-      continue;
-    }
-
-    // Parse section content
-    try {
-      if (currentSection === 'parameters') {
-        parseParameterLine(line, model, lineNum);
-      } else if (currentSection === 'compartments') {
-        parseCompartmentLine(line, model, lineNum);
-      } else if (currentSection === 'species') {
-        parseSpeciesLine(line, model, lineNum);
-      } else if (currentSection === 'reactions') {
-        parseReactionLine(line, model, lineNum);
-      } else if (currentSection === 'groups') {
-        parseObservableLine(line, model, lineNum);
-      } else if (currentSection === 'functions') {
-        parseFunctionLine(line, model, lineNum);
-      }
-    } catch (err: any) {
-      errors.push(`Line ${lineNum}: ${err.message}`);
-    }
+    start = end + 1;
   }
 
   return {

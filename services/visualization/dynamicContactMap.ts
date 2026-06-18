@@ -70,7 +70,8 @@ export function buildContactMapSnapshots(
 
       // State occupancy
       for (const stateKey of info.states) {
-        const mol = stateKey.split('.')[0];
+        const dotIdx = stateKey.indexOf('.');
+        const mol = dotIdx === -1 ? stateKey : stateKey.slice(0, dotIdx);
         stateCounters.set(
           stateKey,
           (stateCounters.get(stateKey) ?? 0) + concentration,
@@ -83,8 +84,10 @@ export function buildContactMapSnapshots(
 
       // Bond occupancy
       for (const bondKey of info.bonds) {
-        const parts = bondKey.split('--');
-        const mol1 = parts[0].split('.')[0];
+        const dashIdx = bondKey.indexOf('--');
+        const p0 = dashIdx === -1 ? bondKey : bondKey.slice(0, dashIdx);
+        const dotIdx = p0.indexOf('.');
+        const mol1 = dotIdx === -1 ? p0 : p0.slice(0, dotIdx);
         bondCounters.set(
           bondKey,
           (bondCounters.get(bondKey) ?? 0) + concentration,
@@ -99,7 +102,8 @@ export function buildContactMapSnapshots(
     // Normalize state fractions
     const stateFractions = new Map<string, number>();
     for (const [key, count] of stateCounters) {
-      const mol = key.split('.')[0];
+      const dotIdx = key.indexOf('.');
+      const mol = dotIdx === -1 ? key : key.slice(0, dotIdx);
       const total = molTotalForState.get(mol) ?? 1;
       stateFractions.set(key, total > 0 ? count / total : 0);
     }
@@ -107,8 +111,10 @@ export function buildContactMapSnapshots(
     // Normalize bond occupancy
     const bondOccupancy = new Map<string, number>();
     for (const [key, count] of bondCounters) {
-      const parts = key.split('--');
-      const mol1 = parts[0].split('.')[0];
+      const dashIdx = key.indexOf('--');
+      const p0 = dashIdx === -1 ? key : key.slice(0, dashIdx);
+      const dotIdx = p0.indexOf('.');
+      const mol1 = dotIdx === -1 ? p0 : p0.slice(0, dotIdx);
       const total = molTotalForBond.get(mol1) ?? 1;
       bondOccupancy.set(key, total > 0 ? count / total : 0);
     }
@@ -126,7 +132,10 @@ interface SpeciesInfo {
 function parseSpeciesInfo(headers: string[]): Array<SpeciesInfo | null> {
   return headers.map(header => {
     try {
-      const sanitize = (name: string) => name.split('.')[0];
+      const sanitize = (name: string) => {
+        const dotIdx = name.indexOf('.');
+        return dotIdx === -1 ? name : name.slice(0, dotIdx);
+      };
       const graphs = parseSpeciesGraphs([header]);
       if (graphs.length === 0) return null;
 

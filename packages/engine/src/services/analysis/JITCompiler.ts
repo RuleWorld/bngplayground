@@ -849,6 +849,7 @@ export class JITCompiler {
                 }
 
                 const volume = reactionReactingVolumes[i];
+                if (!Number.isFinite(volume)) return null;
                 if (n === 0) {
                     a *= volume;
                 } else if (n === 2) {
@@ -918,6 +919,7 @@ export class JITCompiler {
             const forbiddenKeys = new Set(['__proto__', 'prototype', 'constructor']);
             for (const [pName, pVal] of Object.entries(parameters)) {
                 if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(pName) && !forbiddenKeys.has(pName)) {
+                    if (typeof pVal !== 'number' || !Number.isFinite(pVal)) return null;
                     source += `const ${pName} = ${pVal};\n`;
                 }
             }
@@ -930,7 +932,11 @@ export class JITCompiler {
                 if (obs.indices.length > 0) {
                     const terms: string[] = [];
                     for (let j = 0; j < obs.indices.length; j++) {
-                        terms.push(`(state[${obs.indices[j]}] * ${obs.coefficients[j]})`);
+                        const idx = obs.indices[j];
+                        const coef = obs.coefficients[j];
+                        if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0) return null;
+                        if (typeof coef !== 'number' || !Number.isFinite(coef)) return null;
+                        terms.push(`(state[${idx}] * ${coef})`);
                     }
                     obsExpr = terms.join(' + ');
                 }
@@ -943,6 +949,10 @@ export class JITCompiler {
                 const rxn = reactions[i];
                 const n = rxn.reactants.length;
                 const volume = reactionReactingVolumes[i];
+                if (typeof volume !== 'number' || !Number.isFinite(volume)) return null;
+
+                if (!rxn.isFunctionalRate && (typeof rxn.rateConstant !== 'number' || !Number.isFinite(rxn.rateConstant))) return null;
+                if (typeof rxn.propensityFactor !== 'number' || !Number.isFinite(rxn.propensityFactor)) return null;
 
                 let rateExpr = '';
                 if (rxn.isFunctionalRate && rxn.rateExpression) {
@@ -966,6 +976,7 @@ export class JITCompiler {
 
                 for (let j = 0; j < n; j++) {
                     const idx = rxn.reactants[j];
+                    if (typeof idx !== 'number' || !Number.isInteger(idx) || idx < 0) return null;
                     rateExpr += ` * state[${idx}]`;
                 }
 

@@ -56,7 +56,7 @@ interface PLAReaction {
 }
 
 const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
+const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_@:.!~(),+\-][A-Za-z0-9_@:.!~(),+\-]*$/;
 
 function isSafeObjectKey(key: string): boolean {
   return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
@@ -125,7 +125,7 @@ export class PLASimulator {
     const size = this.normalBuffer.length;
     for (let i = 0; i < size; i += 2) {
       let u1 = this.rng.next();
-      let u2 = this.rng.next();
+      const u2 = this.rng.next();
       while (u1 <= 1e-15) {
         u1 = this.rng.next();
       }

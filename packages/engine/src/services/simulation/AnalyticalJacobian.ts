@@ -49,11 +49,11 @@ export interface JacobianReaction {
  */
 interface CompiledReaction {
   /** Net stoichiometry vector: netStoich[speciesIdx] = (product count - reactant count). */
-  netStoich: Map<number, number>;
+  netStoich: Int32Array;
   /** Reactant stoichiometry: reactantStoich[speciesIdx] = count as reactant. */
-  reactantStoich: Map<number, number>;
+  reactantStoichVals: Int32Array;
   /** Unique reactant indices (sorted for determinism). */
-  reactantIndices: number[];
+  reactantIndices: Int32Array;
   /** Effective rate constant. */
   k: number;
   /** Whether this reaction uses functional rates (needs FD fallback). */
@@ -90,11 +90,23 @@ function compileReaction(rxn: JacobianReaction): CompiledReaction {
     }
   }
 
-  const reactantIndices = Array.from(reactantStoich.keys()).sort((a, b) => a - b);
+  const reactantIndicesArr = Array.from(reactantStoich.keys()).sort((a, b) => a - b);
+  const reactantIndices = new Int32Array(reactantIndicesArr);
+  const reactantStoichVals = new Int32Array(reactantIndicesArr.length);
+  for (let i = 0; i < reactantIndicesArr.length; i++) {
+    reactantStoichVals[i] = reactantStoich.get(reactantIndicesArr[i])!;
+  }
+
+  const netStoichFlat = new Int32Array(netStoich.size * 2);
+  let idx = 0;
+  for (const [k, v] of netStoich) {
+    netStoichFlat[idx++] = k;
+    netStoichFlat[idx++] = v;
+  }
 
   return {
-    netStoich,
-    reactantStoich,
+    netStoich: netStoichFlat,
+    reactantStoichVals,
     reactantIndices,
     k: rxn.rateConstant,
     isFunctional: rxn.isFunctionalRate,
@@ -116,8 +128,14 @@ function massActionDerivative(
   j: number,
   y: Float64Array,
 ): number {
-  const sj = compiled.reactantStoich.get(j);
-  if (sj === undefined || sj === 0) return 0;
+  let sj = 0;
+  for (let i = 0; i < compiled.reactantIndices.length; i++) {
+    if (compiled.reactantIndices[i] === j) {
+      sj = compiled.reactantStoichVals[i];
+      break;
+    }
+  }
+  if (sj === 0) return 0;
 
   const yj = y[j];
 
@@ -128,9 +146,10 @@ function massActionDerivative(
     if (sj >= 2) return 0;
     // sj == 1: compute k * product_{m != j}( y[m]^s_m )
     let prod = compiled.k;
-    for (const m of compiled.reactantIndices) {
+    for (let i = 0; i < compiled.reactantIndices.length; i++) {
+      const m = compiled.reactantIndices[i];
       if (m === j) continue;
-      const sm = compiled.reactantStoich.get(m)!;
+      const sm = compiled.reactantStoichVals[i];
       const ym = y[m];
       if (ym === 0) return 0; // entire product is zero
       if (sm === 1) {
@@ -157,9 +176,10 @@ function massActionDerivative(
   }
 
   // product of other reactants
-  for (const m of compiled.reactantIndices) {
+  for (let i = 0; i < compiled.reactantIndices.length; i++) {
+      const m = compiled.reactantIndices[i];
     if (m === j) continue;
-    const sm = compiled.reactantStoich.get(m)!;
+    const sm = compiled.reactantStoichVals[i];
     const ym = y[m];
     if (ym === 0) return 0;
     if (sm === 1) {
@@ -227,12 +247,15 @@ export function buildJacobianFunction(
 
       // For each species j that is a reactant in this reaction,
       // compute dv_r/dy_j and accumulate S[i][r] * dv_r/dy_j into J.
-      for (const j of rxn.reactantIndices) {
+      for (let idx = 0; idx < rxn.reactantIndices.length; idx++) {
+        const j = rxn.reactantIndices[idx];
         const dvdy_j = massActionDerivative(rxn, j, y);
         if (dvdy_j === 0) continue;
 
         // Accumulate into J[j * N + i] for each species i with nonzero net stoichiometry
-        for (const [i, S_ir] of rxn.netStoich) {
+        for (let k = 0; k < rxn.netStoich.length; k += 2) {
+          const i = rxn.netStoich[k];
+          const S_ir = rxn.netStoich[k + 1];
           J[j * N + i] += S_ir * dvdy_j;
         }
       }
@@ -273,11 +296,19 @@ export function buildJacobianFunction(
         // This reduces time complexity from O(N^2 * R) to O(N * R + N) inside this hot loop.
         massActionContribs.fill(0);
         for (const rxn of massActionRxns) {
-          const sj = rxn.reactantStoich.get(j);
+          let sj = 0;
+          for (let k = 0; k < rxn.reactantIndices.length; k++) {
+            if (rxn.reactantIndices[k] === j) {
+              sj = rxn.reactantStoichVals[k];
+              break;
+            }
+          }
           if (!sj) continue;
           const deriv = massActionDerivative(rxn, j, y);
           if (deriv === 0) continue;
-          for (const [i, S_ir] of rxn.netStoich) {
+          for (let k = 0; k < rxn.netStoich.length; k += 2) {
+            const i = rxn.netStoich[k];
+            const S_ir = rxn.netStoich[k + 1];
             massActionContribs[i] += S_ir * deriv;
           }
         }

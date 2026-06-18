@@ -38,6 +38,19 @@ type CompiledRhs = {
   updateParameters?: (params: Record<string, number>) => void;
   evaluate: (t: number, y: Float64Array, dydt: Float64Array) => void;
 };
+type ContinuationWithConservationFn = (args: {
+  nSpecies: number;
+  reactions: Array<{ reactants: number[]; products: number[] }>;
+  rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => void;
+  updateParams?: (p: number) => void;
+  initialGuess: Float64Array;
+  parameterStart: number;
+  parameterEnd: number;
+  stepSize: number;
+  maxSteps: number;
+  skipReduction?: boolean;
+}) => EngineContinuationResult | Promise<EngineContinuationResult>;
+
 type EngineModule = {
   JITCompiler: new (model: unknown) => {
     compileFromRxns: (
@@ -48,15 +61,7 @@ type EngineModule = {
       metadata: Record<string, string>
     ) => CompiledRhs;
   };
-  continuation: (args: {
-    nSpecies: number;
-    rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => void;
-    initialState: Float64Array;
-    parameterStart: number;
-    parameterEnd: number;
-    stepSize: number;
-    maxSteps: number;
-  }) => EngineContinuationResult | Promise<EngineContinuationResult>;
+  continuationWithConservation: ContinuationWithConservationFn;
 };
 
 function assertEngineModule(module: unknown): asserts module is EngineModule {
@@ -64,8 +69,8 @@ function assertEngineModule(module: unknown): asserts module is EngineModule {
     throw new Error('Failed to load engine module.');
   }
   const maybeModule = module as Partial<EngineModule>;
-  if (typeof maybeModule.JITCompiler !== 'function' || typeof maybeModule.continuation !== 'function') {
-    throw new Error('Engine module is missing required bifurcation analysis exports.');
+  if (typeof maybeModule.JITCompiler !== 'function' || typeof maybeModule.continuationWithConservation !== 'function') {
+    throw new Error('Engine module is missing required bifurcation analysis exports (JITCompiler, continuationWithConservation).');
   }
 }
 
@@ -97,13 +102,12 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
     );
 
     // Build RHS function from expanded model using JIT compiler.
-    // Continuation needs a direct derivative callback, so we compile once and
-    // update the tracked parameter before each RHS evaluation.
     let rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => void;
+    let compiled: any;
     try {
       const jit = new engine.JITCompiler(expandedModel);
       const reactionRules = expandedModel.reactions ?? [];
-      const compiled = jit.compileFromRxns(reactionRules, nSpecies, speciesIndexMap, params, {
+      compiled = jit.compileFromRxns(reactionRules, nSpecies, speciesIndexMap, params, {
         modelName: model.name ?? 'unnamed-model',
         analysis: 'bifurcation-mcp',
         parameterName,
@@ -116,16 +120,10 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
         compiled.evaluate(0, y, dydt);
       };
     } catch (jitError: unknown) {
-      // Fallback is intentional, but log the root cause for observability/debugging.
-      console.warn(
-        `[bifurcationAnalysis] Failed to compile JIT RHS; falling back to zero RHS: ${
-          jitError instanceof Error ? jitError.message : String(jitError)
-        }`
+      const msg = jitError instanceof Error ? jitError.message : String(jitError);
+      return createToolResult(
+        structureError(new Error(`Could not compile model RHS for bifurcation analysis: ${msg}`))
       );
-      // Fallback: zero RHS (continuation will report no bifurcations)
-      rhsFn = (_y: Float64Array, _p: number, dydt: Float64Array) => {
-        for (let i = 0; i < nSpecies; i++) dydt[i] = 0;
-      };
     }
 
     // Build initial state from seed species concentrations
@@ -135,11 +133,30 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
       )
     );
 
-    // Run continuation
-    const result = await engine.continuation({
+    // Build reaction entries for conserved-moiety detection
+    const reactionEntries = (expandedModel.reactions ?? []).map((r: any) => ({
+      reactants: (r.reactants ?? []).map((name: string) => {
+        const idx = speciesIndexMap.get(String(name).trim());
+        if (idx === undefined) throw new Error(`Unknown reactant: ${name}`);
+        return idx;
+      }),
+      products: (r.products ?? []).map((name: string) => {
+        const idx = speciesIndexMap.get(String(name).trim());
+        if (idx === undefined) throw new Error(`Unknown product: ${name}`);
+        return idx;
+      }),
+    }));
+
+    // Run continuation with conserved-moiety reduction
+    const result = await engine.continuationWithConservation({
       nSpecies,
+      reactions: reactionEntries,
       rhsFn,
-      initialState,
+      updateParams: (p: number) => {
+        params[parameterName] = p;
+        compiled?.updateParameters?.(params);
+      },
+      initialGuess: initialState,
       parameterStart,
       parameterEnd,
       stepSize: (parameterEnd - parameterStart) / maxSteps,

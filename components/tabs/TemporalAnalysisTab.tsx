@@ -90,7 +90,11 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
     try {
       const engine = await import('@bngplayground/engine');
       if (engine.analyzeReactionInformation) {
-        const nReactions = new Set(firingLog.map(e => e.reactionIndex)).size;
+        const reactionsList = results?.expandedReactions || model?.reactions || [];
+        const nReactions = reactionsList.length > 0
+          ? reactionsList.length
+          : Math.max(...firingLog.map(e => e.reactionIndex), -1) + 1;
+
         const result = engine.analyzeReactionInformation({
           firingLog,
           nReactions,
@@ -99,12 +103,20 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
         // Compare to structural causal graph if contact map available
         if (engine.compareCausalGraphs) {
-          // Build structural edges from model rules
-          const structuralEdges = (model?.reactions || []).map((r, i) => ({
-            source: i,
-            target: i,
-            ruleName: r.name,
-          }));
+          // Build structural edges: reaction i's products overlap with reaction j's reactants
+          const structuralEdges: Array<{ source: number; target: number }> = [];
+          for (let i = 0; i < reactionsList.length; i++) {
+            const productsI = new Set(reactionsList[i].products ?? []);
+            if (productsI.size === 0) continue;
+            for (let j = 0; j < reactionsList.length; j++) {
+              if (i === j) continue;
+              const reactantsJ = reactionsList[j].reactants ?? [];
+              if (reactantsJ.some((r) => productsI.has(r))) {
+                structuralEdges.push({ source: i, target: j });
+              }
+            }
+          }
+
           const comparison = engine.compareCausalGraphs(
             result.empiricalCausalGraph,
             structuralEdges,
@@ -117,7 +129,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
     } finally {
       setIsAnalyzing(false);
     }
-  }, [firingLog, model]);
+  }, [firingLog, model, results]);
 
   // Piano roll data: group firings by reaction
   const pianoRollData = useMemo(() => {
@@ -230,6 +242,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
             ref={svgRef}
             width="100%"
             height={Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}
+            style={{ height: `${Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}px` }}
             viewBox={`0 0 1000 ${Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}`}
             className="bg-white dark:bg-slate-900 rounded"
             role="img"
@@ -306,7 +319,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
       {/* Mutual Information Heatmap */}
       {viewMode === 'mutual_info' && itResult && (
-        <Card className="p-5 flex-1 min-h-[400px]">
+        <Card className="p-5">
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Mutual Information Between Reactions
           </h3>
@@ -376,7 +389,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
       {/* Transfer Entropy */}
       {viewMode === 'transfer_entropy' && itResult && (
-        <Card className="p-5 flex-1 min-h-[400px]">
+        <Card className="p-5">
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Transfer Entropy — Directed Information Flow
           </h3>
@@ -434,7 +447,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
 
       {/* Causal Comparison */}
       {viewMode === 'causal' && causalComparison && (
-        <Card className="p-5 flex-1 min-h-[400px]">
+        <Card className="p-5">
           <h3 className="text-base font-semibold text-slate-800 dark:text-slate-100 mb-1">
             Structural vs. Empirical Causal Graph
           </h3>

@@ -1,5 +1,18 @@
 import { MCPErrorResult } from '../types/index.js';
 
+/**
+ * Analyzes an Error object from the engine or execution layer and translates
+ * it into a structured MCPErrorResult, mapping known failure conditions (like
+ * ODE divergence, BNGL syntax errors, network generation limits, timeout, etc.)
+ * into a categorized diagnosis, recovery suggestion, severity level, and related tools.
+ *
+ * Invariants:
+ * - This function must not change error behavior or swallow errors, it purely translates an existing Error into a predictable schema for the MCP client.
+ * - Always provides a 'fatal' severity fallback with generic diagnosis for unrecognized errors.
+ *
+ * @param error - The raw Error object caught during engine simulation, validation, or other operations.
+ * @returns A structured MCPErrorResult containing the original message, a diagnosis, suggested recovery steps, severity, and optionally related MCP tools.
+ */
 export function structureError(error: Error): MCPErrorResult {
     const msg = error.message;
     if (msg.includes('diverged') || msg.includes('step size')) {

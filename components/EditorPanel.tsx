@@ -220,9 +220,9 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
             <div className="flex flex-col items-center gap-1 group">
                <button 
                 onClick={(e) => { e.stopPropagation(); setIsGalleryOpen(true); }} 
-                className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-teal-600 hover:scale-110 active:scale-95 transition-all" 
-                title="Models"
-                aria-label="Models"
+                className="w-10 h-10 flex items-center justify-center rounded-full bg-white dark:bg-slate-800 shadow-sm border border-slate-200 dark:border-slate-700 text-teal-600 hover:scale-110 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500"
+                title="Browse example models"
+                aria-label="Browse example models"
               >
                   <span className="text-xl">🧬</span>
                </button>
@@ -239,12 +239,12 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
                     onParse();
                   }
                 }} 
-                className="w-11 h-11 flex items-center justify-center rounded-full bg-teal-600 shadow-lg border border-teal-500 text-white hover:scale-110 active:scale-95 transition-all" 
-                title="Quick Run"
-                aria-label="Quick Run"
+                className="w-11 h-11 flex items-center justify-center rounded-full bg-teal-600 shadow-lg border border-teal-500 text-white hover:scale-110 active:scale-95 transition-all focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:active:scale-100 disabled:opacity-80"
+                title={isSimulating ? "Simulation is running..." : "Quick Run"}
+                aria-label={isSimulating ? "Simulation is running" : "Quick Run"}
                 disabled={isSimulating}
               >
-                  {isSimulating ? <LoadingSpinner className="w-5 h-5" /> : <span className="text-xl">▶</span>}
+                  {isSimulating ? <LoadingSpinner className="w-5 h-5" /> : <span className="text-xl pl-0.5">▶</span>}
                </button>
                <span className="text-[8px] font-black uppercase text-teal-600 opacity-0 group-hover:opacity-100 transition-opacity">Run</span>
             </div>
