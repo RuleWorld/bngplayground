@@ -51,7 +51,7 @@ importers:
         specifier: latest
         version: 5.17.0-beta1
       ml-matrix:
-        specifier: ^6.8.0
+        specifier: ^6.12.2
         version: 6.12.2
       pako:
         specifier: ^2.1.0
@@ -78,7 +78,7 @@ importers:
         specifier: ^1.4.0
         version: 1.4.0
       zod:
-        specifier: ^4.3.6
+        specifier: ^4.4.3
         version: 4.4.3
     devDependencies:
       '@axe-core/playwright':
