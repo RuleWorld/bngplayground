@@ -532,6 +532,24 @@ export interface CausalGraphComparison {
     emergent: Array<{ source: number; target: number; empiricalWeight: number }>;
 }
 
+export function buildStructuralEdges(
+    reactions: Array<{ reactants: string[]; products: string[] }>,
+): Array<{ source: number; target: number }> {
+    const edges: Array<{ source: number; target: number }> = [];
+    for (let i = 0; i < reactions.length; i++) {
+        const productsI = new Set(reactions[i].products ?? []);
+        if (productsI.size === 0) continue;
+        for (let j = 0; j < reactions.length; j++) {
+            if (i === j) continue;
+            const reactantsJ = reactions[j].reactants ?? [];
+            if (reactantsJ.some((r) => productsI.has(r))) {
+                edges.push({ source: i, target: j });
+            }
+        }
+    }
+    return edges;
+}
+
 export function compareCausalGraphs(
     empirical: Array<{ source: number; target: number; weight: number }>,
     structuralEdges: Array<{ source: number; target: number }>,

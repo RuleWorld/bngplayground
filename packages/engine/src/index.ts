@@ -214,7 +214,7 @@ export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 
 // ── Temporal Information Theory ─────────────────────────────────────
-export { analyzeReactionInformation, compareCausalGraphs } from './services/analysis/ReactionInformationTheory';
+export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
 export type { ReactionITConfig, ReactionITResult, MutualInformationResult, TransferEntropyResult, PhaseLockingResult } from './services/analysis/ReactionInformationTheory';
 
 // ── Multi-Model Comparison ──────────────────────────────────────────
