@@ -58,6 +58,15 @@ export function formatZodError(toolName: string, args: ToolArgs, error: z.ZodErr
     return new Error(`Invalid arguments for ${toolName}: ${issues}. Received: ${received}`);
 }
 
+/**
+ * Parses and validates tool arguments against a Zod schema.
+ *
+ * @param toolName - The name of the tool, used for formatting error messages.
+ * @param schema - The Zod schema to validate the arguments against.
+ * @param args - The unvalidated tool arguments.
+ * @returns The parsed and validated arguments.
+ * @throws {Error} If validation fails, throws an error formatted with the issues.
+ */
 export function parseArgs<T extends z.ZodTypeAny>(toolName: string, schema: T, args: ToolArgs): z.infer<T> {
     const parsed = schema.safeParse(args ?? {});
     if (!parsed.success) {
