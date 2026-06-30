@@ -23,6 +23,7 @@ import { countPatternMatches } from '../parity/PatternMatcher';
 
 import { SeededRandom } from '../../utils/random';
 import type { SimulationOptions, SimulationResults, BNGLModel } from '../../types';
+import { splitObservablePatterns } from '../../utils/observableUtils';
 
 // ────────────────────────────────────────────────────────────────────
 // Reaction classification constants (matches C++ RxnClassifier)
@@ -639,28 +640,7 @@ export class PLASimulator {
       const matchingIndices: number[] = [];
       const coefficients: number[] = [];
       
-      let patterns = [obs.pattern];
-      if (obs.pattern.includes(',') && !obs.pattern.includes('(')) {
-        patterns = [];
-        let inWord = false;
-        let wordStart = 0;
-        let wordEnd = 0;
-        const pLen = obs.pattern.length;
-        for (let i = 0; i < pLen; i++) {
-          const char = obs.pattern.charCodeAt(i);
-          if (char === 44) { // ','
-            if (inWord) patterns.push(obs.pattern.substring(wordStart, wordEnd + 1));
-            inWord = false;
-          } else if (char !== 32) { // ' '
-            if (!inWord) {
-              inWord = true;
-              wordStart = i;
-            }
-            wordEnd = i;
-          }
-        }
-        if (inWord) patterns.push(obs.pattern.substring(wordStart, wordEnd + 1));
-      }
+      const patterns = splitObservablePatterns(obs.pattern);
       
       for (let i = 0; i < numSpecies; i++) {
         let count = 0;

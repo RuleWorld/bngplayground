@@ -5,6 +5,7 @@ import { BNGLParser } from './core/BNGLParser.ts';
 import { GraphMatcher } from './core/Matcher.ts';
 import { GraphCanonicalizer } from './core/Canonical.ts';
 import { countEmbeddingDegeneracy } from './core/degeneracy.ts';
+import { splitObservablePatterns } from '../../utils/observableUtils.ts';
 
 export class NetworkExporter {
   private static requiresGeneratedFunction(expr: string, model: BNGLModel): boolean {
@@ -23,32 +24,6 @@ export class NetworkExporter {
     return false;
   }
 
-  private static splitObservablePatterns(pattern: string): string[] {
-    const parts: string[] = [];
-    let start = 0;
-    let parenDepth = 0;
-    let braceDepth = 0;
-    let bracketDepth = 0;
-
-    for (let i = 0; i < pattern.length; i++) {
-      const ch = pattern[i];
-      if (ch === '(') parenDepth++;
-      else if (ch === ')') parenDepth = Math.max(0, parenDepth - 1);
-      else if (ch === '{') braceDepth++;
-      else if (ch === '}') braceDepth = Math.max(0, braceDepth - 1);
-      else if (ch === '[') bracketDepth++;
-      else if (ch === ']') bracketDepth = Math.max(0, bracketDepth - 1);
-      else if (ch === ',' && parenDepth === 0 && braceDepth === 0 && bracketDepth === 0) {
-        const token = pattern.slice(start, i).trim();
-        if (token.length > 0) parts.push(token);
-        start = i + 1;
-      }
-    }
-
-    const tail = pattern.slice(start).trim();
-    if (tail.length > 0) parts.push(tail);
-    return parts;
-  }
 
   private static formatNumericFactor(v: number): string {
     if (!Number.isFinite(v)) return 'NaN';
@@ -440,7 +415,7 @@ export class NetworkExporter {
 
     // Split multi-pattern observables on top-level commas only so component
     // lists like A(b,b!?) are preserved as one pattern.
-    const patternStrings = this.splitObservablePatterns(obs.pattern);
+    const patternStrings = splitObservablePatterns(obs.pattern);
 
     // Pre-compute canonical species names once for efficient compartment filtering.
     // These are needed when observable patterns have a compartment scope prefix
