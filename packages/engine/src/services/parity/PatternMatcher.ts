@@ -11,7 +11,6 @@
 
 import { BNGLParser } from '../graph/core/BNGLParser';
 import { GraphCanonicalizer } from '../graph/core/Canonical';
-import { getExpressionDependencies } from '../../parser/ExpressionDependencies';
 import { GraphMatcher } from '../graph/core/Matcher';
 import { countEmbeddingDegeneracy } from '../graph/core/degeneracy';
 import { registerCacheClearCallback } from '../../featureFlags';
@@ -411,8 +410,6 @@ export function countPatternMatches(speciesStr: string, patternStr: string): num
 }
 
 // Helper to check if a rate expression contains observable, function, OR changing parameter references
-// This implementation uses a robust parser (getExpressionDependencies) so it is NOT the cause of
-// the "observable-dependent rate" false positive in NFsim validation.
 export const isFunctionalRateExpr = (
     rateExpr: string,
     observableNames: Set<string>,
@@ -421,20 +418,30 @@ export const isFunctionalRateExpr = (
 ): boolean => {
     if (!rateExpr) return false;
 
-    // Use ANTLR parser to extract all dependencies (observables, functions, parameters)
-    const dependencies = getExpressionDependencies(rateExpr);
-
-    for (const dep of dependencies) {
-        if (observableNames.has(dep)) return true;
-        if (functionNames.has(dep)) return true;
-        if (changingParams.has(dep)) return true;
-    }
-
-    // Fallback: if the parser missed a user-defined function call, detect it via regex.
-    if (functionNames.size > 0) {
-        const escapedNames = Array.from(functionNames).map((name) => name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-        const fnRegex = new RegExp(`\\b(?:${escapedNames.join('|')})\\s*\\(`);
-        if (fnRegex.test(rateExpr)) return true;
+    const len = rateExpr.length;
+    let i = 0;
+    while (i < len) {
+        const c = rateExpr.charCodeAt(i);
+        // Match start of identifier: [A-Za-z_]
+        if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || c === 95) {
+            const start = i;
+            i++;
+            // Match rest of identifier: [A-Za-z0-9_]
+            while (i < len) {
+                const c2 = rateExpr.charCodeAt(i);
+                if ((c2 >= 65 && c2 <= 90) || (c2 >= 97 && c2 <= 122) || (c2 >= 48 && c2 <= 57) || c2 === 95) {
+                    i++;
+                } else {
+                    break;
+                }
+            }
+            const token = rateExpr.substring(start, i);
+            if (observableNames.has(token) || functionNames.has(token) || changingParams.has(token)) {
+                return true;
+            }
+        } else {
+            i++;
+        }
     }
     return false;
 };
