@@ -16,9 +16,9 @@ async function getNodeCrypto() {
 }
 
 export async function sha256Async(input: string | Uint8Array): Promise<string> {
-  if (typeof window !== 'undefined' && window.crypto?.subtle) {
+  if (typeof globalThis !== 'undefined' && (globalThis as any).crypto?.subtle) {
     const data = typeof input === 'string' ? new TextEncoder().encode(input) : (input as unknown as BufferSource);
-    const buf = await window.crypto.subtle.digest('SHA-256', data);
+    const buf = await (globalThis as any).crypto.subtle.digest('SHA-256', data);
     return bufToHex(new Uint8Array(buf));
   }
   const c = await getNodeCrypto();
@@ -51,7 +51,7 @@ export function sha256OfNetwork(networkSerialized: string): string {
 // ── Internals ──────────────────────────────────────────────────────────────
 
 function sha256Sync(input: string): string {
-  if (typeof window === 'undefined') {
+  if (typeof (globalThis as any).crypto === 'undefined' || !(globalThis as any).crypto.subtle) {
     // Node path.
     const c = require('node:crypto');
     return c.createHash('sha256').update(input).digest('hex');

@@ -1,7 +1,7 @@
 import type { IrreversibleStep } from '../types.js';
 import { extractMoleculeNames } from './graphUtils.js';
 
-export function getMoleculeCounts(side: string): Map<string, number> {
+function getMoleculeCounts(side: string): Map<string, number> {
     const counts = new Map<string, number>();
     let start = 0;
     const len = side.length;

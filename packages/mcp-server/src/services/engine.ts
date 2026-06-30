@@ -49,7 +49,7 @@ export function createToolResult<T>(data: T): ToolResult<T> {
     };
 }
 
-export function formatZodError(toolName: string, args: ToolArgs, error: z.ZodError): Error {
+function formatZodError(toolName: string, args: ToolArgs, error: z.ZodError): Error {
     const issues = error.issues.map((issue) => {
         const path = issue.path.length > 0 ? issue.path.join('.') : 'arguments';
         return `${path}: ${issue.message}`;
@@ -168,7 +168,7 @@ export function extractMoleculeNames(pattern: string): string[] {
         });
 }
 
-export function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
+function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
     const molecules = new Set<string>();
 
     model.species.forEach((species) => {
@@ -327,7 +327,7 @@ export function validateModel(model: BNGLModel, includeNFsim: boolean): Validate
     };
 }
 
-export function splitByTopLevelCommas(pattern: string): string[] {
+function splitByTopLevelCommas(pattern: string): string[] {
     const parts: string[] = [];
     let current = '';
     let depth = 0;
@@ -354,7 +354,7 @@ export function splitByTopLevelCommas(pattern: string): string[] {
     return parts;
 }
 
-export function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
+function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
     const graphs: ParsedSpeciesGraph[] = [];
     for (const pattern of patterns) {
         const pieces = splitByTopLevelCommas(String(pattern));
@@ -365,7 +365,7 @@ export function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
     return graphs;
 }
 
-export function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }> {
+function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }> {
     const bonds = new Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }>();
     const sanitize = (name: string) => {
         const dotIdx = name.indexOf('.');

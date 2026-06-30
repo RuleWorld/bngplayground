@@ -2,13 +2,13 @@ export function normalizeWhitespace(value: string): string {
     return value.replace(/\s+/g, ' ').trim();
 }
 
-export function uniquePush(target: string[], value: string): void {
+function uniquePush(target: string[], value: string): void {
     if (!target.includes(value)) {
         target.push(value);
     }
 }
 
-export function escapeRegExp(value: string): string {
+function escapeRegExp(value: string): string {
     return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
