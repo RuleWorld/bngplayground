@@ -2977,14 +2977,15 @@ export async function simulate(
           if (recordThisPhase) {
             for (const row of nfsimResults.data) {
               const adjustedRow: Record<string, number> = Object.create(null) as Record<string, number>;
-              for (const [key, value] of Object.entries(row)) {
-                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-                  continue;
-                }
+              // ⚡ Bolt Optimization: Use for...in instead of Object.entries() to avoid array allocations in hot path
+              for (const key in row) {
+                if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+
                 if (key === 'time') {
-                  adjustedRow[key] = phaseStart + value;
+                  adjustedRow[key] = phaseStart + row[key as keyof typeof row];
                 } else {
-                  adjustedRow[key] = value;
+                  adjustedRow[key] = row[key as keyof typeof row];
                 }
               }
               appendDataRow(phase.suffix, adjustedRow);
