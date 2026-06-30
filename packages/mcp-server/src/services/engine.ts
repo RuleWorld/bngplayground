@@ -544,6 +544,16 @@ export function assertScannableParameter(model: BNGLModel, parameter: string): v
     }
 }
 
+/**
+ * Mutates the model in-place by evaluating symbolic functional rates and updating
+ * the reaction's concrete `rateConstant`. Fails silently and preserves the existing
+ * rate if evaluation fails. Clears evaluator caches after processing.
+ *
+ * Note: This currently reimplements logic from the engine package (`DoseResponse.ts`),
+ * whereas MCP tools should ideally call engine functions instead of duplicating logic.
+ *
+ * @param model - The BNGLModel to update.
+ */
 export function updateMassActionRates(model: BNGLModel): void {
     const context = model.parameters ?? {};
     for (const reaction of model.reactions ?? []) {
@@ -561,6 +571,15 @@ export function updateMassActionRates(model: BNGLModel): void {
     clearAllEvaluatorCaches();
 }
 
+/**
+ * Creates a deep copy of a BNGLModel using structuredClone.
+ *
+ * Note: This currently reimplements logic from the engine package (`DoseResponse.ts`),
+ * whereas MCP tools should ideally call engine functions instead of duplicating logic.
+ *
+ * @param model - The expanded BNGLModel to clone.
+ * @returns A deep copy of the provided model.
+ */
 export function cloneExpandedModel(model: BNGLModel): BNGLModel {
     return structuredClone(model);
 }
