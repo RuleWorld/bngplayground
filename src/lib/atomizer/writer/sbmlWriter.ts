@@ -1517,6 +1517,49 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   }
 
   // 1. Compartments
+  addCompartmentsToSBML(sbmlModel, model, compartmentRuleTargets, availableCompartmentNames);
+
+  // 2. Parameters
+  addParametersToSBML(sbmlModel, effectiveParameters, parameterRuleTargets);
+
+  // 3. Species
+  addSpeciesToSBML(sbmlModel, model, speciesList, speciesIdByName, availableCompartmentNames, speciesRuleTargets, amountOnlySpeciesNames, preferInitialAmountSpeciesNames, initialExpressionSymbols, effectiveParameters);
+
+  // 4. Reactions
+  addReactionsToSBML(sbmlModel, exportableReactions, speciesIdByName, replaceSpeciesInFormula);
+
+  // 5. Rules
+  addRulesToSBML(sbmlModelAny, reconstructedRules, lib);
+
+  logger.info('SBMW017', 'generateSBML writing XML string');
+  let result = '';
+  if (typeof lib.writeSBMLToString === 'function') {
+    result = lib.writeSBMLToString(doc);
+  } else if (typeof lib.SBMLWriter === 'function') {
+    const writer = new lib.SBMLWriter();
+    try {
+      result = writer.writeSBMLToString(doc);
+    } finally {
+      if (typeof writer.delete === 'function') {
+        writer.delete();
+      }
+    }
+  } else {
+    throw new Error('libsbml instance does not provide SBML serialization APIs');
+  }
+  logger.info('SBMW018', `generateSBML complete len=${result?.length ?? 0}`);
+  doc.delete();
+
+  return result;
+}
+
+
+function addCompartmentsToSBML(
+  sbmlModel: any,
+  model: BNGLModel,
+  compartmentRuleTargets: Set<string>,
+  availableCompartmentNames: Set<string>
+) {
   logger.info('SBMW013', `generateSBML compartments count=${model.compartments?.length ?? 0}`);
   if (model.compartments && model.compartments.length > 0) {
     const compartmentNames = new Set(model.compartments.map((c) => String(c.name || '')));
@@ -1540,8 +1583,13 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
     comp.setSize(1.0);
     comp.setConstant(true);
   }
+}
 
-  // 2. Parameters
+function addParametersToSBML(
+  sbmlModel: any,
+  effectiveParameters: Map<string, number>,
+  parameterRuleTargets: Set<string>
+) {
   logger.info('SBMW014', `generateSBML parameters count=${effectiveParameters.size}`);
   if (effectiveParameters.size > 0) {
     for (const [id, val] of effectiveParameters.entries()) {
@@ -1551,8 +1599,20 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       param.setConstant(!parameterRuleTargets.has(id));
     }
   }
+}
 
-  // 3. Species
+function addSpeciesToSBML(
+  sbmlModel: any,
+  model: BNGLModel,
+  speciesList: any[],
+  speciesIdByName: Map<string, string>,
+  availableCompartmentNames: Set<string>,
+  speciesRuleTargets: Set<string>,
+  amountOnlySpeciesNames: Set<string>,
+  preferInitialAmountSpeciesNames: Set<string>,
+  initialExpressionSymbols: Map<string, number>,
+  effectiveParameters: Map<string, number>
+) {
   logger.info('SBMW015', `generateSBML species count=${speciesList.length}`);
   speciesList.forEach((s, i) => {
     const spec = sbmlModel.createSpecies();
@@ -1607,8 +1667,14 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
     spec.setBoundaryCondition(isBoundarySpecies);
     spec.setConstant(isConstantSpecies);
   });
+}
 
-  // 4. Reactions
+function addReactionsToSBML(
+  sbmlModel: any,
+  exportableReactions: any[],
+  speciesIdByName: Map<string, string>,
+  replaceSpeciesInFormula: (s: string) => string
+) {
   logger.info('SBMW016', `generateSBML reactions count=${exportableReactions.length}`);
   if (exportableReactions.length > 0) {
     exportableReactions.forEach((r, i) => {
@@ -1642,7 +1708,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       const substrateId = substrateName ? (speciesIdByName.get(substrateName) || null) : null;
 
       // Map reactants
-      r.reactants.forEach(reactName => {
+      r.reactants.forEach((reactName: string) => {
         const sid = speciesIdByName.get(reactName);
         if (!sid) return;
         const ref = rxn.createReactant();
@@ -1652,7 +1718,7 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       });
 
       // Map products
-      r.products.forEach(prodName => {
+      r.products.forEach((prodName: string) => {
         const sid = speciesIdByName.get(prodName);
         if (!sid) return;
         const ref = rxn.createProduct();
@@ -1674,7 +1740,13 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       kl.setFormula(formula);
     });
   }
+}
 
+function addRulesToSBML(
+  sbmlModelAny: any,
+  reconstructedRules: any[],
+  lib: any
+) {
   // 5. Reconstructed rules from atomizer metadata functions
   logger.info('SBMW016R', `generateSBML reconstructed rules count=${reconstructedRules.length}`);
   for (const rule of reconstructedRules) {
@@ -1701,25 +1773,4 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
       logger.warning('SBMW016R', `Rule ${rule.variable} has no supported formula setter; leaving empty math`);
     }
   }
-
-  logger.info('SBMW017', 'generateSBML writing XML string');
-  let result = '';
-  if (typeof lib.writeSBMLToString === 'function') {
-    result = lib.writeSBMLToString(doc);
-  } else if (typeof lib.SBMLWriter === 'function') {
-    const writer = new lib.SBMLWriter();
-    try {
-      result = writer.writeSBMLToString(doc);
-    } finally {
-      if (typeof writer.delete === 'function') {
-        writer.delete();
-      }
-    }
-  } else {
-    throw new Error('libsbml instance does not provide SBML serialization APIs');
-  }
-  logger.info('SBMW018', `generateSBML complete len=${result?.length ?? 0}`);
-  doc.delete();
-  
-  return result;
 }
