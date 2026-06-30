@@ -126,8 +126,9 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                                         value={shareUrl}
                                         className="flex-1 px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 truncate"
                                         onClick={(e) => (e.target as HTMLInputElement).select()}
+                                        onFocus={(e) => e.target.select()}
                                     />
-                                    <Button onClick={handleCopy} variant={copied ? 'primary' : 'subtle'}>
+                                    <Button onClick={handleCopy} variant={copied ? 'primary' : 'subtle'} aria-live="polite">
                                         {copied ? 'Copied!' : 'Copy'}
                                     </Button>
                                 </div>
@@ -147,6 +148,7 @@ export const ShareButton: React.FC<ShareButtonProps> = ({ code, className, model
                                     rows={2}
                                     className="w-full px-3 py-2 text-sm bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-700 border border-slate-200 dark:border-slate-700 dark:border-slate-600 rounded-md text-slate-600 dark:text-slate-300 font-mono"
                                     onClick={(e) => (e.target as HTMLTextAreaElement).select()}
+                                    onFocus={(e) => e.target.select()}
                                 />
                                 <p className="mt-1 text-xs text-slate-500 dark:text-slate-400">
                                     Paste this into your website to embed the simulator.
