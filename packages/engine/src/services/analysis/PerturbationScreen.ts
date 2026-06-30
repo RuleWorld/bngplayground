@@ -106,27 +106,32 @@ function computeDeviation(
   if (n === 0) return 0;
 
   switch (metric) {
-    case 'max_absolute':
-      return Math.max(
-        ...Array.from({ length: n }, (_, i) => Math.abs(wt[i] - perturbed[i])),
-      );
-    case 'integral_absolute':
-      return (
-        Array.from({ length: n }, (_, i) => Math.abs(wt[i] - perturbed[i])).reduce(
-          (a, b) => a + b,
-          0,
-        ) / n
-      );
+    case 'max_absolute': {
+      let max = 0;
+      for (let i = 0; i < n; i++) {
+        const diff = Math.abs(wt[i] - perturbed[i]);
+        if (diff > max) max = diff;
+      }
+      return max;
+    }
+    case 'integral_absolute': {
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        sum += Math.abs(wt[i] - perturbed[i]);
+      }
+      return sum / n;
+    }
     case 'endpoint':
       return Math.abs(wt[n - 1] - perturbed[n - 1]);
     case 'rmsd':
-    default:
-      return Math.sqrt(
-        Array.from({ length: n }, (_, i) => (wt[i] - perturbed[i]) ** 2).reduce(
-          (a, b) => a + b,
-          0,
-        ) / n,
-      );
+    default: {
+      let sum = 0;
+      for (let i = 0; i < n; i++) {
+        const diff = wt[i] - perturbed[i];
+        sum += diff * diff;
+      }
+      return Math.sqrt(sum / n);
+    }
   }
 }
 
