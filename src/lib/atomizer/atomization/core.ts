@@ -1115,30 +1115,37 @@ export function reconcileSCT(sct: SpeciesCompositionTable, moleculeTypes: Molecu
   for (const entry of sct.entries.values()) {
     for (const mol of entry.structure.molecules) {
       const type = typeMap.get(mol.name);
-      if (type) {
-        const typeCounts = typeCountsMap.get(type.name)!;
-        const templateMap = typeTemplateMap.get(type.name)!;
-        const molCounts = new Counter<string>(mol.components.map((c: Component) => c.name));
+      if (!type) continue;
 
-        for (const [name, count] of typeCounts.entries()) {
-          const diff = count - (molCounts.get(name) || 0);
-          if (diff > 0) {
-            const template = templateMap.get(name)!;
-            for (let i = 0; i < diff; i++) {
-              const newComp = template.copy();
-              newComp.bonds = [];
-              if (newComp.states.includes('0')) {
-                newComp.setActiveState('0');
-              } else if (newComp.states.length > 0) {
-                newComp.setActiveState(newComp.states[0]);
-              } else {
-                newComp.setActiveState('');
-              }
-              mol.addComponent(newComp);
-            }
-          }
-        }
+      const typeCounts = typeCountsMap.get(type.name)!;
+      const templateMap = typeTemplateMap.get(type.name)!;
+      fillMissingComponents(mol, typeCounts, templateMap);
+    }
+  }
+}
+
+/**
+ * Helper function to fill missing components for a molecule to match its type definition.
+ */
+function fillMissingComponents(mol: Molecule, typeCounts: Counter<string>, templateMap: Map<string, Component>): void {
+  const molCounts = new Counter<string>(mol.components.map((c: Component) => c.name));
+
+  for (const [name, count] of typeCounts.entries()) {
+    const diff = count - (molCounts.get(name) || 0);
+    if (diff <= 0) continue;
+
+    const template = templateMap.get(name)!;
+    for (let i = 0; i < diff; i++) {
+      const newComp = template.copy();
+      newComp.bonds = [];
+      if (newComp.states.includes('0')) {
+        newComp.setActiveState('0');
+      } else if (newComp.states.length > 0) {
+        newComp.setActiveState(newComp.states[0]);
+      } else {
+        newComp.setActiveState('');
       }
+      mol.addComponent(newComp);
     }
   }
 }
