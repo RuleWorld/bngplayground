@@ -69,13 +69,28 @@ function djb2(s: string): number {
 function stripBNGLComments(src: string): string {
   // BNGL line comments start with '#'. Preserve structure by replacing only
   // from '#' to end-of-line, not stripping entire lines.
-  return src
-    .split('\n')
-    .map((line) => {
-      const hash = line.indexOf('#');
-      return hash >= 0 ? line.slice(0, hash).trimEnd() : line;
-    })
-    .join('\n');
+  // ⚡ Bolt Optimization: Zero-allocation line scanning to reduce GC pressure
+  let result = '';
+  let startIdx = 0;
+  const len = src.length;
+
+  while (startIdx < len) {
+    let endIdx = src.indexOf('\n', startIdx);
+    if (endIdx === -1) endIdx = len;
+
+    const hashIdx = src.indexOf('#', startIdx);
+    if (hashIdx !== -1 && hashIdx < endIdx) {
+      let e = hashIdx;
+      while (e > startIdx && src.charCodeAt(e - 1) <= 32) e--;
+      result += src.substring(startIdx, e);
+    } else {
+      result += src.substring(startIdx, endIdx);
+    }
+
+    if (endIdx < len) result += '\n';
+    startIdx = endIdx + 1;
+  }
+  return result;
 }
 
 function formatNumber(n: number): string {
