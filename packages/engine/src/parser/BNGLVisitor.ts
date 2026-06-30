@@ -32,7 +32,7 @@ const visitorDebugLog = (...args: unknown[]): void => {
   console.log(...args);
 };
 
-export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements BNGParserVisitor<any> {
+export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements BNGParserVisitor<unknown> {
   private parameters: Record<string, number> = {};
   private moleculeTypes: BNGLMoleculeType[] = [];
   private species: BNGLSpecies[] = [];
@@ -82,19 +82,19 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     for (const block of ctx.program_block()) {
       try {
         this.visitProgram_block(block);
-      } catch (e: any) {
-        console.error('Error visiting program block:', e.message);
-        console.error(e.stack);
+      } catch (e: unknown) {
+        console.error('Error visiting program block:', (e as Error).message);
+        console.error((e as Error).stack);
         throw e;
       }
     }
 
     // Visit top-level action commands (often outside blocks, e.g. at end of file)
-    for (const action of (ctx as any).action_command?.() || []) {
+    for (const action of ("action_command" in ctx && typeof (ctx as unknown as Record<string, unknown>).action_command === "function" ? (ctx as unknown as {action_command: () => import("antlr4ts").ParserRuleContext[]}).action_command() : [])) {
       try {
-        this.visit(action);
-      } catch (e: any) {
-        console.error('Error visiting top-level action:', e.message);
+        this.visit(action as import("antlr4ts").ParserRuleContext);
+      } catch (e: unknown) {
+        console.error('Error visiting top-level action:', (e as Error).message);
       }
     }
 
@@ -103,8 +103,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (actionsBlock) {
       try {
         this.visitActions_block(actionsBlock);
-      } catch (e: any) {
-        console.error('Error visiting actions block:', e.message);
+      } catch (e: unknown) {
+        console.error('Error visiting actions block:', (e as Error).message);
       }
     }
 
@@ -113,18 +113,18 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (wrappedActionsBlock) {
       try {
         this.visitWrapped_actions_block(wrappedActionsBlock);
-      } catch (e: any) {
-        console.error('Error visiting wrapped actions block:', e.message);
+      } catch (e: unknown) {
+        console.error('Error visiting wrapped actions block:', (e as Error).message);
       }
     }
 
     // Some grammars/inputs may surface begin_actions_block explicitly
-    const beginActionsBlock = (ctx as any).begin_actions_block?.();
+    const beginActionsBlock = ("begin_actions_block" in ctx && typeof (ctx as unknown as Record<string, unknown>).begin_actions_block === "function" ? (ctx as unknown as {begin_actions_block: () => Parser.Begin_actions_blockContext}).begin_actions_block() : undefined);
     if (beginActionsBlock) {
       try {
         this.visitBegin_actions_block(beginActionsBlock);
-      } catch (e: any) {
-        console.error('Error visiting begin actions block:', e.message);
+      } catch (e: unknown) {
+        console.error('Error visiting begin actions block:', (e as Error).message);
       }
     }
 
@@ -332,7 +332,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       const nameCtx = paramNames[paramNames.length > 1 && ctx.COLON() ? 1 : 0];
       const name = nameCtx?.text || '';
 
-      const value = ctx.expression() ? ctx.expression()!.text : undefined;
+      const value = ctx.expression() ? ctx.expression()?.text : undefined;
 
       if (!name || !value) return;
 
@@ -383,8 +383,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       // Initialize with 0
       this.parameters[name] = 0;
 
-    } catch (e: any) {
-      console.error('Error in visitParameter_def:', e.message);
+    } catch (e: unknown) {
+      console.error('Error in visitParameter_def:', (e as Error).message);
     }
   }
 
@@ -399,7 +399,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const molDef = ctx.molecule_def();
     if (!molDef) return;
 
-    const nameNode = molDef.STRING() || (molDef as any).keyword_as_mol_name?.();
+    const nameNode = molDef.STRING() || ("keyword_as_mol_name" in molDef && typeof (molDef as unknown as Record<string, unknown>).keyword_as_mol_name === "function" ? (molDef as unknown as {keyword_as_mol_name: () => import("antlr4ts").ParserRuleContext}).keyword_as_mol_name() : undefined);
     if (!nameNode) return;
     const name = nameNode.text;
     const components: string[] = [];
@@ -430,7 +430,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
   visitSeed_species_block(ctx: Parser.Seed_species_blockContext): void {
     const seenLines = new Set<number>();
     for (const speciesDef of ctx.seed_species_def()) {
-      const line = (speciesDef as any).start?.line as number | undefined;
+      const line = "start" in speciesDef && (speciesDef as unknown as {start?: {line?: number}}).start ? (speciesDef as unknown as {start?: {line?: number}}).start?.line : undefined;
       if (typeof line === 'number') {
         if (seenLines.has(line)) {
           continue;
@@ -461,8 +461,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Handle compartment prefix (AT STRING COLON)
     if (ctx.AT()) {
       let foundAt = false;
-      for (let i = 0; i < ctx.children!.length; i++) {
-        const child = ctx.children![i];
+      if (!ctx.children) return;
+      for (let i = 0; i < ctx.children.length; i++) {
+        const child = ctx.children?.[i];
         if (child.text === '@') {
           foundAt = true;
           continue;
@@ -514,10 +515,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       type = 'species';
     } else if (typeCtx.MOLECULES()) {
       type = 'molecules';
-    } else if ((typeCtx as any).COUNTER?.()) {
+    } else if (("COUNTER" in typeCtx && typeof (typeCtx as unknown as Record<string, unknown>).COUNTER === "function" && (typeCtx as unknown as {COUNTER: () => unknown}).COUNTER())) {
       type = 'counter';
     } else if (typeCtx.STRING()) {
-      const text = typeCtx.STRING()!.text.toLowerCase();
+      const text = typeCtx.STRING()?.text.toLowerCase();
       if (text === 'species' || text === 'molecules' || text === 'counter') {
         type = text;
       }
@@ -568,8 +569,8 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       for (const ruleDef of rules) {
         if (ruleDef) this.visitReaction_rule_def(ruleDef);
       }
-    } catch (e: any) {
-      console.error('Error in visitReaction_rules_block:', e.message);
+    } catch (e: unknown) {
+      console.error('Error in visitReaction_rules_block:', (e as Error).message);
       throw e;
     }
   }
@@ -838,7 +839,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (strings.length === 0) return;
 
     const name = ctx.COLON() && strings.length >= 2 ? strings[1].text : strings[0].text;
-    const dimension = ctx.INT() ? parseInt(ctx.INT()!.text) : 3;
+    const dimension = ctx.INT() ? parseInt(ctx.INT()?.text) : 3;
 
     const exprCtx = ctx.expression();
     const size = exprCtx ? this.evaluateExpression(exprCtx) : 1;
@@ -933,7 +934,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const molDef = ctx.molecule_def();
     if (!molDef) return;
 
-    const nameNode = molDef.STRING() || (molDef as any).keyword_as_mol_name?.();
+    const nameNode = molDef.STRING() || ("keyword_as_mol_name" in molDef && typeof (molDef as unknown as Record<string, unknown>).keyword_as_mol_name === "function" ? (molDef as unknown as {keyword_as_mol_name: () => import("antlr4ts").ParserRuleContext}).keyword_as_mol_name() : undefined);
     if (!nameNode) return;
     const name = nameNode.text;
     const components: string[] = [];
@@ -941,7 +942,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     const compListCtx = molDef.component_def_list();
     if (compListCtx) {
       for (const compDef of compListCtx.component_def()) {
-        const compNameNode = compDef.STRING() || compDef.INT() || (compDef as any).keyword_as_component_name?.();
+        const compNameNode = compDef.STRING() || compDef.INT() || ("keyword_as_component_name" in compDef && typeof (compDef as unknown as Record<string, unknown>).keyword_as_component_name === "function" ? (compDef as unknown as {keyword_as_component_name: () => import("antlr4ts").ParserRuleContext}).keyword_as_component_name() : undefined);
         if (!compNameNode) continue;
         const compName = compNameNode.text;
         const stateList = compDef.state_list();
@@ -979,15 +980,15 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     this.actions.push({ type: 'generate_network', args });
 
     if (args.max_agg !== undefined) {
-      this.networkOptions!.maxAgg = parseInt(args.max_agg);
+      if (this.networkOptions) this.networkOptions.maxAgg = parseInt(args.max_agg);
     }
-    if (args.max_iter !== undefined) this.networkOptions!.maxIter = parseInt(args.max_iter);
-    if (args.overwrite !== undefined) this.networkOptions!.overwrite = args.overwrite === '1';
+    if (args.max_iter !== undefined && this.networkOptions) this.networkOptions.maxIter = parseInt(args.max_iter);
+    if (args.overwrite !== undefined && this.networkOptions) this.networkOptions.overwrite = args.overwrite === '1';
     if (args.max_stoich !== undefined) {
       if (args.max_stoich.startsWith('{')) {
-        this.networkOptions!.maxStoich = this.parseBNGLMap(args.max_stoich);
+        if (this.networkOptions) this.networkOptions.maxStoich = this.parseBNGLMap(args.max_stoich);
       } else {
-        this.networkOptions!.maxStoich = parseInt(args.max_stoich);
+        if (this.networkOptions) this.networkOptions.maxStoich = parseInt(args.max_stoich);
       }
     }
   }
@@ -1447,7 +1448,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     const molecules = moleculeEntries.map((entry) => {
       const mp = entry.pattern;
-      const nameNode = mp.STRING() || (mp as any).keyword_as_mol_name?.();
+      const nameNode = mp.STRING() || ("keyword_as_mol_name" in mp && typeof (mp as unknown as Record<string, unknown>).keyword_as_mol_name === "function" ? (mp as unknown as {keyword_as_mol_name: () => import("antlr4ts").ParserRuleContext}).keyword_as_mol_name() : undefined);
       if (!nameNode) return '';
       const name = nameNode.text;
       const rawPatternText = mp.text?.replace(/\s+/g, '') ?? '';
@@ -1527,7 +1528,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
             for (const comp of components) {
               const base = comp.split('~')[0].split('!')[0].trim();
               if (!byName.has(base)) byName.set(base, []);
-              byName.get(base)!.push(comp);
+              byName.get(base)?.push(comp);
             }
 
             const ordered: string[] = [];
@@ -1561,7 +1562,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         for (const tagCtx of tagCtxList) molStr += tagCtx.text;
       }
 
-      const attrCtx = (mp as any).molecule_attributes?.();
+      const attrCtx = ("molecule_attributes" in mp && typeof (mp as unknown as Record<string, unknown>).molecule_attributes === "function" ? (mp as unknown as {molecule_attributes: () => import("antlr4ts").ParserRuleContext}).molecule_attributes() : undefined);
       if (attrCtx) molStr += attrCtx.text;
 
       if (entry.compartment) {
