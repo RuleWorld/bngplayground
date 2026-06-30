@@ -292,6 +292,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     key={m}
                     onClick={() => setMethod(m as any)}
                     aria-pressed={method === m}
+                    aria-label={`Select ${m === 'default' ? 'Auto' : m === 'nf' ? 'NFsim' : m.toUpperCase()} method`}
                     className={`px-1 py-1.5 text-xs font-medium rounded transition-all text-center ${method === m
                       ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 text-teal-700 dark:text-teal-400 shadow-sm'
                       : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
