@@ -323,11 +323,18 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
             if (constraints.length > 0) {
               const obsMap = new Map<string, number[]>();
-              for (const obs of model.observables.map(o => o.name)) {
-                obsMap.set(
-                  obs,
-                  interpRows.map(row => row?.[obs] ?? 0)
-                );
+              const allModelObs = model.observables.map(o => o.name);
+              const arrays: number[][] = new Array(allModelObs.length);
+              for (let j = 0; j < allModelObs.length; j++) {
+                const arr = new Array(interpRows.length);
+                arrays[j] = arr;
+                obsMap.set(allModelObs[j], arr);
+              }
+              for (let i = 0; i < interpRows.length; i++) {
+                const row = interpRows[i];
+                for (let j = 0; j < allModelObs.length; j++) {
+                  arrays[j][i] = row?.[allModelObs[j]] ?? 0;
+                }
               }
               const bpslResult = evaluateBPSL(constraints, timePoints, obsMap);
               sse += bpslWeight * bpslResult.totalPenalty;
@@ -436,11 +443,18 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
 
     if (constraints.length > 0) {
       const obsMap = new Map<string, number[]>();
-      for (const obs of model.observables.map(o => o.name)) {
-        obsMap.set(
-          obs,
-          finalInterpRows.map(row => row?.[obs] ?? 0)
-        );
+      const allModelObs = model.observables.map(o => o.name);
+      const arrays: number[][] = new Array(allModelObs.length);
+      for (let j = 0; j < allModelObs.length; j++) {
+        const arr = new Array(finalInterpRows.length);
+        arrays[j] = arr;
+        obsMap.set(allModelObs[j], arr);
+      }
+      for (let i = 0; i < finalInterpRows.length; i++) {
+        const row = finalInterpRows[i];
+        for (let j = 0; j < allModelObs.length; j++) {
+          arrays[j][i] = row?.[allModelObs[j]] ?? 0;
+        }
       }
       bpslResults = evaluateBPSL(constraints, timePoints, obsMap);
       sse += bpslWeight * bpslResults.totalPenalty;
