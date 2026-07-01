@@ -1,1 +1,0 @@
-- 2026-06-30: Fixed indirect eval() XSS vulnerability in transformersLoader by removing dynamic script tag injection in favor of pure dynamic imports.
