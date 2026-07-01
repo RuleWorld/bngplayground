@@ -54,6 +54,9 @@ describe('WorkerPool', () => {
         expect.objectContaining({ id: mockUUID })
       );
 
+      // Additional check to satisfy observing public behavior
+      expect(pool.getStats().busyWorkers).toBe(1);
+
       // Trigger error - note that ErrorEvent might not be defined in Node
       // so we construct a mock object that duck-types it.
       mockWorkers[0].onerror({ message: 'Test error' });

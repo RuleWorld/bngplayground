@@ -23,6 +23,14 @@ export interface FigureConfig {
   preset?: 'plos' | 'nature' | 'cell' | 'default';
 }
 
+export interface PanelLayout {
+  x: number;    // px
+  y: number;    // px
+  w: number;    // px
+  h: number;    // px
+  panel: FigurePanel;
+}
+
 export interface FigureStyle {
   fontFamily: string;
   axisLabelSize: number;    // pt
@@ -303,89 +311,11 @@ export function composeFigure(config: FigureConfig): string {
   // Calculate per-panel target dimensions and positions
   // -----------------------------------------------------------------------
 
-  interface PanelLayout {
-    x: number;    // px
-    y: number;    // px
-    w: number;    // px
-    h: number;    // px
-    panel: FigurePanel;
-  }
-
   const layouts: PanelLayout[] = [];
 
-  if (config.layout === 'horizontal') {
-    const availableW = totalWidthPx - (n - 1) * gapPx;
-    const panelW = availableW / n;
+  calculateLayouts(layouts, config, n, totalWidthPx, gapPx, panels);
 
-    for (let i = 0; i < n; i++) {
-      const p = panels[i];
-      const aspect = p.height / p.width;
-      const panelH = panelW * aspect;
-      layouts.push({
-        x: i * (panelW + gapPx),
-        y: 0,
-        w: panelW,
-        h: panelH,
-        panel: p,
-      });
-    }
-  } else if (config.layout === 'vertical') {
-    let yOffset = 0;
-    for (let i = 0; i < n; i++) {
-      const p = panels[i];
-      const panelW = totalWidthPx;
-      const aspect = p.height / p.width;
-      const panelH = panelW * aspect;
-      layouts.push({ x: 0, y: yOffset, w: panelW, h: panelH, panel: p });
-      yOffset += panelH + gapPx;
-    }
-  } else {
-    // grid
-    const cols = config.gridCols ?? 2;
-    const availableW = totalWidthPx - (cols - 1) * gapPx;
-    const cellW = availableW / cols;
-
-    // Compute uniform cell height from the tallest panel's aspect ratio
-    let maxAspect = 0;
-    for (const p of panels) {
-      const a = p.height / p.width;
-      if (a > maxAspect) maxAspect = a;
-    }
-    const cellH = cellW * (maxAspect || 1);
-
-    for (let i = 0; i < n; i++) {
-      const col = i % cols;
-      const row = Math.floor(i / cols);
-      layouts.push({
-        x: col * (cellW + gapPx),
-        y: row * (cellH + gapPx),
-        w: cellW,
-        h: cellH,
-        panel: panels[i],
-      });
-    }
-  }
-
-  // -----------------------------------------------------------------------
-  // Compute total figure dimensions
-  // -----------------------------------------------------------------------
-
-  let maxX = 0;
-  let maxY = 0;
-  for (const l of layouts) {
-    const right = l.x + l.w;
-    const bottom = l.y + l.h;
-    if (right > maxX) maxX = right;
-    if (bottom > maxY) maxY = bottom;
-  }
-
-  // Space for caption below
-  const captionLineH = ptToPx(style.captionSize) * 1.4;
-  const captionLines = config.caption ? Math.ceil(config.caption.length / 80) : 0;
-  const captionBlockH = captionLines > 0 ? captionLines * captionLineH + gapPx : 0;
-
-  const figW = Math.max(maxX, totalWidthPx);
-  const figH = maxY + captionBlockH;
+  const { figW, figH, maxY } = computeDimensions(layouts, config, totalWidthPx, gapPx, style);
 
   // -----------------------------------------------------------------------
   // Build SVG
@@ -406,15 +336,82 @@ export function composeFigure(config: FigureConfig): string {
     `fill="${style.backgroundColor}" />`,
   );
 
-  // Panels
+  renderPanels(svgParts, layouts, style);
+
+  renderCaption(svgParts, config, maxY, gapPx, style);
+
+  svgParts.push('</svg>');
+  return svgParts.join('\n');
+}
+
+function calculateLayouts(layouts: PanelLayout[], config: FigureConfig, n: number, totalWidthPx: number, gapPx: number, panels: FigurePanel[]) {
+  if (config.layout === 'horizontal') {
+    const availableW = totalWidthPx - (n - 1) * gapPx;
+    const panelW = availableW / n;
+
+    for (let i = 0; i < n; i++) {
+      const p = panels[i];
+      const aspect = p.height / p.width;
+      const panelH = panelW * aspect;
+      layouts.push({ x: i * (panelW + gapPx), y: 0, w: panelW, h: panelH, panel: p });
+    }
+  } else if (config.layout === 'vertical') {
+    let yOffset = 0;
+    for (let i = 0; i < n; i++) {
+      const p = panels[i];
+      const panelW = totalWidthPx;
+      const aspect = p.height / p.width;
+      const panelH = panelW * aspect;
+      layouts.push({ x: 0, y: yOffset, w: panelW, h: panelH, panel: p });
+      yOffset += panelH + gapPx;
+    }
+  } else {
+    const cols = config.gridCols ?? 2;
+    const availableW = totalWidthPx - (cols - 1) * gapPx;
+    const cellW = availableW / cols;
+
+    let maxAspect = 0;
+    for (const p of panels) {
+      const a = p.height / p.width;
+      if (a > maxAspect) maxAspect = a;
+    }
+    const cellH = cellW * (maxAspect || 1);
+
+    for (let i = 0; i < n; i++) {
+      const col = i % cols;
+      const row = Math.floor(i / cols);
+      layouts.push({ x: col * (cellW + gapPx), y: row * (cellH + gapPx), w: cellW, h: cellH, panel: panels[i] });
+    }
+  }
+}
+
+function computeDimensions(layouts: PanelLayout[], config: FigureConfig, totalWidthPx: number, gapPx: number, style: FigureStyle) {
+  let maxX = 0;
+  let maxY = 0;
+  for (const l of layouts) {
+    const right = l.x + l.w;
+    const bottom = l.y + l.h;
+    if (right > maxX) maxX = right;
+    if (bottom > maxY) maxY = bottom;
+  }
+
+  const captionLineH = ptToPx(style.captionSize) * 1.4;
+  const captionLines = config.caption ? Math.ceil(config.caption.length / 80) : 0;
+  const captionBlockH = captionLines > 0 ? captionLines * captionLineH + gapPx : 0;
+
+  const figW = Math.max(maxX, totalWidthPx);
+  const figH = maxY + captionBlockH;
+
+  return { figW, figH, maxY };
+}
+
+function renderPanels(svgParts: string[], layouts: PanelLayout[], style: FigureStyle) {
   for (const layout of layouts) {
     const { panel } = layout;
     const parsed = parseSVG(panel.svgContent);
 
-    // Apply publication style to panel content
     const styledContent = applyPublicationStyle(parsed.innerContent, style);
 
-    // Panel label offset (above the panel or top-left inside)
     const labelFontPx = ptToPx(style.panelLabelSize);
     const labelYOffset = style.panelLabelPosition === 'above' ? -labelFontPx * 0.4 : labelFontPx;
     const labelXOffset = style.panelLabelPosition === 'above' ? 0 : labelFontPx * 0.3;
@@ -422,7 +419,6 @@ export function composeFigure(config: FigureConfig): string {
 
     svgParts.push(`<g transform="translate(${layout.x.toFixed(2)}, ${layout.y.toFixed(2)})">`);
 
-    // Nested SVG for the panel content -- preserves its own coordinate system
     svgParts.push(
       `<svg x="0" y="${panelContentY.toFixed(2)}" ` +
       `width="${layout.w.toFixed(2)}" height="${(layout.h - panelContentY).toFixed(2)}" ` +
@@ -432,7 +428,6 @@ export function composeFigure(config: FigureConfig): string {
     svgParts.push(styledContent);
     svgParts.push('</svg>');
 
-    // Panel label
     svgParts.push(
       `<text x="${labelXOffset.toFixed(2)}" y="${labelYOffset.toFixed(2)}" ` +
       `font-family="${style.fontFamily}" ` +
@@ -445,45 +440,32 @@ export function composeFigure(config: FigureConfig): string {
 
     svgParts.push('</g>');
   }
+}
 
-  // Caption
-  if (config.caption) {
-    const captionFontPx = ptToPx(style.captionSize);
-    const captionY = maxY + gapPx + captionFontPx;
-    const prefix = config.figureNumber != null ? `Figure ${config.figureNumber}. ` : '';
+function renderCaption(svgParts: string[], config: FigureConfig, maxY: number, gapPx: number, style: FigureStyle) {
+  if (!config.caption) return;
+
+  const captionFontPx = ptToPx(style.captionSize);
+  const captionY = maxY + gapPx + captionFontPx;
+  const prefix = config.figureNumber != null ? `Figure ${config.figureNumber}. ` : '';
+  svgParts.push(
+    `<text x="0" y="${captionY.toFixed(2)}" ` +
+    `font-family="${style.fontFamily}" ` +
+    `font-size="${captionFontPx.toFixed(2)}px" ` +
+    `fill="#000000">`,
+  );
+
+  if (prefix) {
     svgParts.push(
-      `<text x="0" y="${captionY.toFixed(2)}" ` +
-      `font-family="${style.fontFamily}" ` +
-      `font-size="${captionFontPx.toFixed(2)}px" ` +
-      `fill="#000000">`,
+      `<tspan font-weight="bold">${escapeXml(prefix)}</tspan>`,
     );
+  }
 
-    if (prefix) {
-      svgParts.push(
-        `<tspan font-weight="bold">${escapeXml(prefix)}</tspan>`,
-      );
-    }
-
-    // Wrap caption text (~80 chars per line)
-    const words = config.caption.split(/\s+/);
-    let line = '';
-    let lineIndex = 0;
-    for (const word of words) {
-      if (line.length + word.length + 1 > 80 && line.length > 0) {
-        if (lineIndex === 0 && prefix) {
-          svgParts.push(`<tspan>${escapeXml(line)}</tspan>`);
-        } else {
-          svgParts.push(
-            `<tspan x="0" dy="${(captionFontPx * 1.4).toFixed(2)}">${escapeXml(line)}</tspan>`,
-          );
-        }
-        line = word;
-        lineIndex++;
-      } else {
-        line = line ? line + ' ' + word : word;
-      }
-    }
-    if (line) {
+  const words = config.caption.split(/\s+/);
+  let line = '';
+  let lineIndex = 0;
+  for (const word of words) {
+    if (line.length + word.length + 1 > 80 && line.length > 0) {
       if (lineIndex === 0 && prefix) {
         svgParts.push(`<tspan>${escapeXml(line)}</tspan>`);
       } else {
@@ -491,12 +473,22 @@ export function composeFigure(config: FigureConfig): string {
           `<tspan x="0" dy="${(captionFontPx * 1.4).toFixed(2)}">${escapeXml(line)}</tspan>`,
         );
       }
+      line = word;
+      lineIndex++;
+    } else {
+      line = line ? line + ' ' + word : word;
     }
-    svgParts.push('</text>');
   }
-
-  svgParts.push('</svg>');
-  return svgParts.join('\n');
+  if (line) {
+    if (lineIndex === 0 && prefix) {
+      svgParts.push(`<tspan>${escapeXml(line)}</tspan>`);
+    } else {
+      svgParts.push(
+        `<tspan x="0" dy="${(captionFontPx * 1.4).toFixed(2)}">${escapeXml(line)}</tspan>`,
+      );
+    }
+  }
+  svgParts.push('</text>');
 }
 
 // ---------------------------------------------------------------------------

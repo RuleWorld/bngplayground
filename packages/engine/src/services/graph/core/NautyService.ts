@@ -46,7 +46,7 @@ export class NautyService {
       this.nautyModule = await createNautyModule({
         locateFile: (path: string) => {
           if (path.endsWith('.wasm')) {
-            if (typeof (globalThis as unknown as { window?: unknown }).window === 'undefined') {
+            if (typeof (globalThis as unknown as { process?: unknown }).process !== 'undefined') {
               return new URL('../../../../../../public/nauty.wasm', import.meta.url).href;
             }
             return '/nauty.wasm';

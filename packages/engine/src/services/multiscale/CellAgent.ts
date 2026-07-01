@@ -246,7 +246,11 @@ export function moveCell(
     }
   } else {
     // Random walk: isotropic displacement of magnitude speed
-    const rand = rng ? rng.next.bind(rng) : Math.random;
+    const rand = rng ? rng.next.bind(rng) : () => {
+      const a = new Uint32Array(1);
+      globalThis.crypto.getRandomValues(a);
+      return a[0] / 0x100000000;
+    };
     const theta = rand() * 2 * Math.PI;
     const phi = Math.acos(2 * rand() - 1);
     cell.position[0] += speed * Math.sin(phi) * Math.cos(theta);

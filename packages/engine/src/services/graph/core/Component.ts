@@ -1,10 +1,5 @@
 // graph/core/Component.ts
 
-export interface ComponentState {
-  name: string;
-  index: number;  // position in allowed states array
-}
-
 export class Component {
   name: string;
   states: string[];           // allowed state names (from molecule type)

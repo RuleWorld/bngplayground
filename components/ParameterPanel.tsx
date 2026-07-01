@@ -73,7 +73,7 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
     // We must NOT reset the initialValue if the code update matches our current local value.
 
     if (!isEditingRef.current) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
+
       setLocalParams(prev => {
         const prevMap = new Map();
         for (const e of prev) {

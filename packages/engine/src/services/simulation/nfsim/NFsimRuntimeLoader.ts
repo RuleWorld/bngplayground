@@ -326,14 +326,14 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
   const augmented = text + '\n;if(typeof createNFsimModule!=="undefined")self.createNFsimModule=createNFsimModule;\n';
 
   // Strategy 1: <script> tag in main thread (has document)
-  if (typeof document !== 'undefined') {
+  if (typeof globalThis !== 'undefined' && (globalThis as any).document) {
     await new Promise<void>((resolve, reject) => {
       const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
-      const script = document.createElement('script');
+      const script = (globalThis as any).document.createElement('script');
       script.src = blobUrl;
       script.onload = () => { URL.revokeObjectURL(blobUrl); resolve(); };
       script.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Failed to execute nfsim.js via script tag')); };
-      document.head.appendChild(script);
+      (globalThis as any).document.head.appendChild(script);
     });
   } else {
     // Strategy 2: Worker context (including module workers).

@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const simulationMethods = ['ode', 'ssa', 'nf', 'default'] as const;
 export const solverValues = ['auto', 'cvode', 'cvode_auto', 'cvode_sparse', 'cvode_jac', 'rosenbrock23', 'rk45', 'rk4', 'webgpu_rk4'] as const;
-export const simulateOutputModes = ['full', 'observables_only'] as const;
+const simulateOutputModes = ['full', 'observables_only'] as const;
 
 export const finiteNumber = z.number().finite();
 export const positiveInt = z.number().int().positive();

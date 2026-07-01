@@ -254,20 +254,18 @@ export class BNGLParser {
    */
   static splitMolecules(str: string): string[] {
     const parts: string[] = [];
-    let current = '';
+    let start = 0;
     let depth = 0;
     for (let i = 0; i < str.length; i++) {
-      const char = str[i];
-      if (char === '(') depth++;
-      else if (char === ')') depth--;
-      else if (char === '.' && depth === 0) {
-        parts.push(current);
-        current = '';
-        continue;
+      const char = str.charCodeAt(i);
+      if (char === 40) depth++; // '('
+      else if (char === 41) depth--; // ')'
+      else if (char === 46 && depth === 0) { // '.'
+        parts.push(str.substring(start, i));
+        start = i + 1;
       }
-      current += char;
     }
-    parts.push(current);
+    parts.push(str.substring(start));
     return parts;
   }
   static parseMolecule(molStr: string): Molecule {
@@ -488,33 +486,34 @@ export class BNGLParser {
       if (!segment || !segment.trim()) return [] as string[];
 
       const parts: string[] = [];
-      let current = '';
+      let start = 0;
       let depth = 0;
 
       for (let i = 0; i < segment.length; i++) {
-        const char = segment[i];
+        const charCode = segment.charCodeAt(i);
 
-        if (char === '(') {
+        if (charCode === 40) { // '('
           depth++;
-          current += char;
-        } else if (char === ')') {
+        } else if (charCode === 41) { // ')'
           depth--;
-          current += char;
-        } else if (depth === 0 && char === '+') {
+        } else if (depth === 0 && charCode === 43) { // '+'
           // Check if preceded by '!'. If so, it's a wildcard '!+', not a separator.
-          const prev = current.trimEnd().endsWith('!') ? '!' : '';
-          if (prev === '!') {
-            current += char;
+          // Walk back from i-1 to find last non-whitespace character
+          let j = i - 1;
+          while (j >= 0 && segment.charCodeAt(j) === 32) j--;
+
+          if (j >= 0 && segment.charCodeAt(j) === 33) { // '!'
+             // It is '!+', skip
           } else {
             // Split on + at top level
-            if (current.trim()) parts.push(current.trim());
-            current = '';
+            const part = segment.substring(start, i).trim();
+            if (part) parts.push(part);
+            start = i + 1;
           }
-        } else {
-          current += char;
         }
       }
-      if (current.trim()) parts.push(current.trim());
+      const lastPart = segment.substring(start).trim();
+      if (lastPart) parts.push(lastPart);
 
       return parts;
     };

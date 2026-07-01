@@ -73,21 +73,30 @@ export async function generateExpandedNetwork(
     // Reference: BNG2 relies on proper tokenization; this is a lightweight parser equivalent.
     const splitByTopLevelCommas = (s: string): string[] => {
         const parts: string[] = [];
-        let current = '';
+        let start = 0;
         let depth = 0;
-        for (const ch of s) {
-            if (ch === '(') depth++;
-            else if (ch === ')') depth = Math.max(0, depth - 1);
-            if (ch === ',' && depth === 0) {
-                const t = current.trim();
-                if (t) parts.push(t);
-                current = '';
-                continue;
-            }
-            current += ch;
+        const len = s.length;
+
+        if (s.indexOf(',') === -1) {
+            const t = s.trim();
+            if (t) parts.push(t);
+            return parts;
         }
-        const t = current.trim();
-        if (t) parts.push(t);
+
+        for (let i = 0; i < len; i++) {
+            const ch = s.charCodeAt(i);
+            if (ch === 40) { // '('
+                depth++;
+            } else if (ch === 41) { // ')'
+                depth = Math.max(0, depth - 1);
+            } else if (ch === 44 && depth === 0) { // ','
+                const part = s.substring(start, i).trim();
+                if (part) parts.push(part);
+                start = i + 1;
+            }
+        }
+        const part = s.substring(start).trim();
+        if (part) parts.push(part);
         return parts;
     };
 

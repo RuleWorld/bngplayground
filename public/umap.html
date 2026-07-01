@@ -564,11 +564,28 @@
         function renderLegend() {
             const legend = document.getElementById('legend');
             legend.style.display = 'flex';
+            legend.innerHTML = '';
             const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
-            legend.innerHTML = sorted.map(([category, count]) => {
+            sorted.forEach(([category, count]) => {
                 const color = colorMap[category] || '#94a3b8';
-                return `<div class="legend-item" data-tag="${escapeHTML(category)}"><div class="legend-dot" style="background:${escapeHTML(color)};color:${escapeHTML(color)}"></div><div class="legend-label">${escapeHTML(category)} (${escapeHTML(count)})</div></div>`;
-            }).join('');
+
+                const item = document.createElement('div');
+                item.className = 'legend-item';
+                item.dataset.tag = category;
+
+                const dot = document.createElement('div');
+                dot.className = 'legend-dot';
+                dot.style.background = color;
+                dot.style.color = color;
+
+                const label = document.createElement('div');
+                label.className = 'legend-label';
+                label.textContent = `${category} (${count})`;
+
+                item.appendChild(dot);
+                item.appendChild(label);
+                legend.appendChild(item);
+            });
             legend.querySelectorAll('.legend-item').forEach(el => {
                 el.onclick = () => { 
                     const tag = el.dataset.tag;
@@ -655,7 +672,7 @@
                     : 'None';
                 const simMode = m.simulationMode || 'Unknown';
 
-                tooltip.innerHTML = '';
+                tooltip.textContent = '';
 
                 const titleDiv = document.createElement('div');
                 titleDiv.className = 'tooltip-title';

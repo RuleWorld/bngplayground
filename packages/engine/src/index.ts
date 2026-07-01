@@ -214,8 +214,11 @@ export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 
 // ── Temporal Information Theory ─────────────────────────────────────
-export { analyzeReactionInformation, compareCausalGraphs } from './services/analysis/ReactionInformationTheory';
+export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
 export type { ReactionITConfig, ReactionITResult, MutualInformationResult, TransferEntropyResult, PhaseLockingResult } from './services/analysis/ReactionInformationTheory';
+
+export { analyzeResiduals } from './services/analysis/AnalyzeResiduals';
+export type { ExperimentalDataPoint as ResidualExperimentalDataPoint, ResidualAnalysisResult } from './services/analysis/AnalyzeResiduals';
 
 // ── Multi-Model Comparison ──────────────────────────────────────────
 export { compareModels, generateVariants, attributeDivergence } from './services/analysis/MultiModelComparator';

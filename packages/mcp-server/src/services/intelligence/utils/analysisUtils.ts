@@ -29,7 +29,7 @@ export function detectDiminishingReturns(
     return null;
 }
 
-export function classifySensitiveParameters(
+function classifySensitiveParameters(
     firstOrder: Array<{ name: string; value: number }>,
     totalOrder: Array<{ name: string; value: number }>,
     threshold: number = 0.01,

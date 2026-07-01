@@ -913,7 +913,9 @@ export class BNGXMLWriter {
             const compPartners = pattern.graph.adjacency.get(`${molIdx}.${compIdx}`);
             if (!compPartners) continue;
             compPartners.forEach((partnerKey) => {
-              const [pMolStr, pCompStr] = partnerKey.split('.');
+              const dotIdx = partnerKey.indexOf('.');
+              const pMolStr = dotIdx !== -1 ? partnerKey.substring(0, dotIdx) : partnerKey;
+              const pCompStr = dotIdx !== -1 ? partnerKey.substring(dotIdx + 1) : '';
               const pMolIdx = Number(pMolStr);
               const pCompIdx = Number(pCompStr);
               if (!Number.isFinite(pMolIdx) || !Number.isFinite(pCompIdx)) return;
@@ -934,7 +936,9 @@ export class BNGXMLWriter {
             const compPartners = pattern.graph.adjacency.get(`${molIdx}.${compIdx}`);
             if (!compPartners) continue;
             compPartners.forEach((partnerKey) => {
-              const [pMolStr, pCompStr] = partnerKey.split('.');
+              const dotIdx = partnerKey.indexOf('.');
+              const pMolStr = dotIdx !== -1 ? partnerKey.substring(0, dotIdx) : partnerKey;
+              const pCompStr = dotIdx !== -1 ? partnerKey.substring(dotIdx + 1) : '';
               const pMolIdx = Number(pMolStr);
               const pCompIdx = Number(pCompStr);
               if (!Number.isFinite(pMolIdx) || !Number.isFinite(pCompIdx)) return;
@@ -975,7 +979,9 @@ export class BNGXMLWriter {
 
       for (const key of mappedProductBondKeys) {
         if (!reactantBondKeys.has(key)) {
-          const [site1, site2] = key.split('|');
+          const pipeIdx = key.indexOf('|');
+          const site1 = pipeIdx !== -1 ? key.substring(0, pipeIdx) : key;
+          const site2 = pipeIdx !== -1 ? key.substring(pipeIdx + 1) : '';
           operations.push(`<AddBond site1="${site1}" site2="${site2}"/>`);
         }
       }

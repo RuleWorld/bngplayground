@@ -216,9 +216,10 @@ export function speciesMatchesPattern(
   const speciesBonds = buildBondPartnerMap(species);
 
   const used = new Array(species.length).fill(false);
+  const assignment = new Int32Array(pattern.length).fill(-1);
 
   return backtrackMatch(
-    pattern, species, 0, new Map(), used, patternBonds, speciesBonds
+    pattern, species, 0, assignment, used, patternBonds, speciesBonds
   );
 }
 
@@ -235,12 +236,27 @@ function buildBondPartnerMap(
 ): Map<string, BondPartner[]> {
   const map = new Map<string, BondPartner[]>();
   for (let mi = 0; mi < molecules.length; mi++) {
-    for (const comp of molecules[mi].components) {
-      if (comp.bondLabel && /^\d+$/.test(comp.bondLabel)) {
-        if (!map.has(comp.bondLabel)) {
-          map.set(comp.bondLabel, []);
+    const comps = molecules[mi].components;
+    for (let ci = 0; ci < comps.length; ci++) {
+      const comp = comps[ci];
+      const lbl = comp.bondLabel;
+      if (lbl) {
+        let isNum = true;
+        for (let i = 0; i < lbl.length; i++) {
+          const ch = lbl.charCodeAt(i);
+          if (ch < 48 || ch > 57) {
+            isNum = false;
+            break;
+          }
         }
-        map.get(comp.bondLabel)!.push({ molIdx: mi, compName: comp.name });
+        if (isNum) {
+          let list = map.get(lbl);
+          if (!list) {
+            list = [];
+            map.set(lbl, list);
+          }
+          list.push({ molIdx: mi, compName: comp.name });
+        }
       }
     }
   }
@@ -251,7 +267,7 @@ function backtrackMatch(
   patternMols: ParsedMolecule[],
   speciesMols: ParsedMolecule[],
   patIdx: number,
-  assignment: Map<number, number>,   // patternMolIdx -> speciesMolIdx
+  assignment: Int32Array,   // patternMolIdx -> speciesMolIdx
   used: boolean[],
   patternBonds: Map<string, BondPartner[]>,
   speciesBonds: Map<string, BondPartner[]>
@@ -268,7 +284,7 @@ function backtrackMatch(
     if (used[si]) continue;
     if (!moleculeMatches(patMol, speciesMols[si])) continue;
 
-    assignment.set(patIdx, si);
+    assignment[patIdx] = si;
     used[si] = true;
 
     if (backtrackMatch(
@@ -278,7 +294,7 @@ function backtrackMatch(
       return true;
     }
 
-    assignment.delete(patIdx);
+    assignment[patIdx] = -1;
     used[si] = false;
   }
 
@@ -333,24 +349,26 @@ function moleculeMatches(pattern: ParsedMolecule, species: ParsedMolecule): bool
  * the assigned species molecules must also have a bond between those components.
  */
 function verifyBondConsistency(
-  assignment: Map<number, number>,
+  assignment: Int32Array,
   patternBonds: Map<string, BondPartner[]>,
   speciesBonds: Map<string, BondPartner[]>
 ): boolean {
-  for (const [, partners] of patternBonds) {
+  for (const partners of patternBonds.values()) {
     if (partners.length !== 2) continue;
 
-    const [p1, p2] = partners;
-    const s1Idx = assignment.get(p1.molIdx);
-    const s2Idx = assignment.get(p2.molIdx);
-    if (s1Idx === undefined || s2Idx === undefined) return false;
+    const p1 = partners[0];
+    const p2 = partners[1];
+    const s1Idx = assignment[p1.molIdx];
+    const s2Idx = assignment[p2.molIdx];
+    if (s1Idx === -1 || s2Idx === -1) return false;
 
     // Check species has a bond between species[s1Idx].comp matching p1.compName
     // and species[s2Idx].comp matching p2.compName
     let found = false;
-    for (const [, sPartners] of speciesBonds) {
+    for (const sPartners of speciesBonds.values()) {
       if (sPartners.length !== 2) continue;
-      const [sp1, sp2] = sPartners;
+      const sp1 = sPartners[0];
+      const sp2 = sPartners[1];
       if (
         (sp1.molIdx === s1Idx && sp1.compName === p1.compName &&
          sp2.molIdx === s2Idx && sp2.compName === p2.compName) ||
