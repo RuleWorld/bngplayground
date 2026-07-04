@@ -224,6 +224,23 @@ function p1(s: Uint8Array): number {
 /*  Mutual information                                                 */
 /* ------------------------------------------------------------------ */
 
+/**
+ * Mutual information from raw joint counts. Factored out of computeMI so the
+ * shuffle-based significance test can reuse the exact same arithmetic while
+ * obtaining the joint counts far more cheaply (see the MI loop below). The
+ * numbers are byte-for-byte identical to computing all four cells directly.
+ */
+function miFromCounts(
+    c00: number, c01: number, c10: number, c11: number,
+): { mi: number; hA: number; hB: number } {
+    const total = c00 + c01 + c10 + c11;
+    const hA = binaryEntropy((c10 + c11) / total);
+    const hB = binaryEntropy((c01 + c11) / total);
+    const hAB = jointEntropy2(c00 / total, c01 / total, c10 / total, c11 / total);
+    const mi = Math.max(0, hA + hB - hAB);
+    return { mi, hA, hB };
+}
+
 function computeMI(
     sA: Uint8Array,
     sB: Uint8Array,
@@ -237,12 +254,7 @@ function computeMI(
         else if (a === 1 && b === 0) c10++;
         else c11++;
     }
-    const total = c00 + c01 + c10 + c11;
-    const hA = binaryEntropy((c10 + c11) / total);
-    const hB = binaryEntropy((c01 + c11) / total);
-    const hAB = jointEntropy2(c00 / total, c01 / total, c10 / total, c11 / total);
-    const mi = Math.max(0, hA + hB - hAB);
-    return { mi, hA, hB };
+    return miFromCounts(c00, c01, c10, c11);
 }
 
 /* ------------------------------------------------------------------ */
@@ -286,6 +298,67 @@ function computeTE(
     if (totalSamples <= 0) return 0;
 
     // Add pseudocounts
+    const totalPseudoFull = nStates * nStates * 2 * pseudo;
+
+    let te = 0;
+    for (let yH = 0; yH < nStates; yH++) {
+        for (let xH = 0; xH < nStates; xH++) {
+            for (let yN = 0; yN < 2; yN++) {
+                const cFull = countFull[(yH * nStates + xH) * 2 + yN] + pseudo;
+                const cFullMarg = (countFull[(yH * nStates + xH) * 2 + 0] + pseudo) +
+                                  (countFull[(yH * nStates + xH) * 2 + 1] + pseudo);
+                const cRed = countReduced[yH * 2 + yN] + pseudo;
+                const cRedMarg = (countReduced[yH * 2 + 0] + pseudo) +
+                                 (countReduced[yH * 2 + 1] + pseudo);
+
+                const pFull = cFull / (totalSamples + totalPseudoFull);
+                const pCondFull = cFull / cFullMarg;
+                const pCondRed = cRed / cRedMarg;
+
+                if (pCondFull > 0 && pCondRed > 0) {
+                    te += pFull * Math.log2(pCondFull / pCondRed);
+                }
+            }
+        }
+    }
+    return Math.max(0, te);
+}
+
+/**
+ * Forward transfer entropy TE(X -> Y) for the shuffle test. The Y side
+ * (per-step history states, next values, and the reduced count table) does not
+ * change when X is permuted, so it is precomputed once per pair and passed
+ * in here, along with reusable scratch buffers, to avoid re-deriving it
+ * and re-allocating on every one of the (up to) nShuffles calls. The returned
+ * value is numerically identical to computeTE(sX, sY, n, k).
+ */
+function computeTEForward(
+    sX: Uint8Array,
+    yHistArr: Int32Array,
+    yNextArr: Uint8Array,
+    countReduced: Float64Array,
+    countFull: Float64Array,
+    n: number,
+    k: number,
+    nStates: number,
+): number {
+    const pseudo = 1 / n;
+    countFull.fill(0);
+
+    let idx = 0;
+    for (let t = k; t < n; t++, idx++) {
+        let xHist = 0;
+        for (let d = 1; d <= k; d++) {
+            xHist = (xHist << 1) | sX[t - d];
+        }
+        const yHist = yHistArr[idx];
+        const yNext = yNextArr[idx];
+        countFull[(yHist * nStates + xHist) * 2 + yNext] += 1;
+    }
+
+    const totalSamples = n - k;
+    if (totalSamples <= 0) return 0;
+
     const totalPseudoFull = nStates * nStates * 2 * pseudo;
 
     let te = 0;
@@ -382,6 +455,8 @@ export function analyzeReactionInformation(config: ReactionITConfig): ReactionIT
         minCoFirings = 0,
     } = config;
 
+    _shuffleSeed = 42;
+
     const binWidth = config.binWidth ?? autoDetectBinWidth(firingLog);
     const { series, nBins, names } = discretize(firingLog, nReactions, binWidth);
 
@@ -396,6 +471,7 @@ export function analyzeReactionInformation(config: ReactionITConfig): ReactionIT
     }
 
     const k = Math.max(1, Math.min(historyLength, 8)); // cap history to 8 bits
+    const nStates = 1 << k; // 2^k, size of a k-bit history state
 
     // ---- Per-reaction entropy ----
     const entropies: Array<{ reactionIndex: number; name?: string; entropy: number }> = [];
@@ -423,13 +499,33 @@ export function analyzeReactionInformation(config: ReactionITConfig): ReactionIT
             const minH = Math.min(hVals[i], hVals[j]);
             const normMI = minH > 0 ? mi / minH : 0;
 
-            // Significance via shuffle test
+            // Significance via shuffle test.
+            // Only series[i] is permuted, so the marginal counts nA (#bins where i
+            // fires) and nB (#bins where j fires) are invariant across shuffles.
+            // A shuffled MI is therefore fully determined by the single joint count
+            // c11 = #bins where both fire; the remaining three cells follow by
+            // subtraction. We accumulate c11 over only the bins where j fires, so
+            // each shuffle costs O(#firings of j) rather than O(nBins), and the
+            // arithmetic (miFromCounts) is identical to computeMI.
+            const sI = series[i];
+            const sJ = series[j];
+            let nA = 0;
+            for (let t = 0; t < nBins; t++) nA += sI[t];
+            const jOnes: number[] = [];
+            for (let t = 0; t < nBins; t++) { if (sJ[t] === 1) jOnes.push(t); }
+            const nB = jOnes.length;
+
             let countAbove = 0;
-            const shuffled = new Uint8Array(series[i]);
+            const shuffled = new Uint8Array(sI);
             for (let s = 0; s < nShuffles; s++) {
-                shuffled.set(series[i]);
+                shuffled.set(sI);
                 shuffle(shuffled);
-                const { mi: miShuf } = computeMI(shuffled, series[j], nBins);
+                let c11 = 0;
+                for (let q = 0; q < nB; q++) c11 += shuffled[jOnes[q]];
+                const c10 = nA - c11;
+                const c01 = nB - c11;
+                const c00 = nBins - c11 - c10 - c01;
+                const { mi: miShuf } = miFromCounts(c00, c01, c10, c11);
                 if (miShuf >= mi) countAbove++;
             }
             const pValue = countAbove / nShuffles;
@@ -457,13 +553,39 @@ export function analyzeReactionInformation(config: ReactionITConfig): ReactionIT
             const teReverse = computeTE(series[j], series[i], nBins, k);
             const netFlow = teForward - teReverse;
 
-            // Shuffle test on forward TE
+            // Shuffle test on forward TE(i -> j). Only X = series[i] is permuted,
+            // so the Y = series[j] history states, next values, and reduced count
+            // table are precomputed once here and reused across every shuffle via
+            // computeTEForward (which also reuses a scratch buffer). Same math as
+            // computeTE, with no per-shuffle re-derivation or allocation.
+            const sY = series[j];
+            const nSamp = Math.max(0, nBins - k);
+            const yHistArr = new Int32Array(nSamp);
+            const yNextArr = new Uint8Array(nSamp);
+            const countReduced = new Float64Array(nStates * 2);
+            {
+                let idx = 0;
+                for (let t = k; t < nBins; t++, idx++) {
+                    let yHist = 0;
+                    for (let d = 1; d <= k; d++) {
+                        yHist = (yHist << 1) | sY[t - d];
+                    }
+                    const yNext = sY[t];
+                    yHistArr[idx] = yHist;
+                    yNextArr[idx] = yNext;
+                    countReduced[yHist * 2 + yNext] += 1;
+                }
+            }
+
             let countAbove = 0;
             const shuffled = new Uint8Array(series[i]);
+            const countFullBuf = new Float64Array(nStates * nStates * 2);
             for (let s = 0; s < nShuffles; s++) {
                 shuffled.set(series[i]);
                 shuffle(shuffled);
-                const teShuf = computeTE(shuffled, series[j], nBins, k);
+                const teShuf = computeTEForward(
+                    shuffled, yHistArr, yNextArr, countReduced, countFullBuf, nBins, k, nStates,
+                );
                 if (teShuf >= teForward) countAbove++;
             }
             const pValue = countAbove / nShuffles;

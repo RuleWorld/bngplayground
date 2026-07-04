@@ -543,7 +543,9 @@ export class JITCompiler {
                 rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
-            // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
+            // NOTE: TotalRate is handled upstream during network expansion (NetworkGenerator
+            // skips the statFactor/multiplicity baking for TotalRate rules, sf=1), so the rate
+            // constant already reflects it and this mass-action term needs no adjustment.
             for (let j = 0; j < rxn.reactantIndices.length; j++) {
                 const idx = this.normalizeSpeciesIndex(rxn.reactantIndices[j], nSpecies, i, 'reactant', j);
                 const stoich = rxn.reactantStoich[j];

@@ -20,11 +20,6 @@ export interface StructureScore {
   fittedParameters: Record<string, number>;
 }
 
-export type SimulatorFn = (
-  code: string,
-  options: any,
-) => Promise<{ headers: string[]; data: Record<string, number>[] }>;
-
 export type FitterFn = (
   code: string,
   data: any[],

@@ -220,10 +220,12 @@ function reachableMoleculeTypes(
     const current = queue[qHead++];
     // Find all edges from any component of `current`
     for (const [key, neighbors] of adj) {
-      const [molType] = key.split('.');
+      const dotIdx = key.indexOf('.');
+      const molType = dotIdx !== -1 ? key.substring(0, dotIdx) : key;
       if (molType !== current) continue;
       for (const neighborKey of neighbors) {
-        const [neighborMol] = neighborKey.split('.');
+        const dotIdx2 = neighborKey.indexOf('.');
+        const neighborMol = dotIdx2 !== -1 ? neighborKey.substring(0, dotIdx2) : neighborKey;
         if (!visited.has(neighborMol)) {
           visited.add(neighborMol);
           queue.push(neighborMol);
@@ -334,10 +336,12 @@ export function checkAbstractReachability(
       path.push(current);
     }
     for (const [key, neighbors] of adj) {
-      const [molType] = key.split('.');
+      const dotIdx = key.indexOf('.');
+      const molType = dotIdx !== -1 ? key.substring(0, dotIdx) : key;
       if (molType !== current) continue;
       for (const neighborKey of neighbors) {
-        const [neighborMol] = neighborKey.split('.');
+        const dotIdx2 = neighborKey.indexOf('.');
+        const neighborMol = dotIdx2 !== -1 ? neighborKey.substring(0, dotIdx2) : neighborKey;
         if (!visited.has(neighborMol)) {
           visited.add(neighborMol);
           bfsQueue.push(neighborMol);

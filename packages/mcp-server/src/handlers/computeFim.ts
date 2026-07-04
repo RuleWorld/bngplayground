@@ -14,6 +14,10 @@ export async function handleComputeFim(args: ToolArgs): Promise<ToolResult<any>>
         await loadEvaluator();
 
         const parameterNames = parsedArgs.parameters ?? Object.keys(model.parameters);
+        const unknownParams = parameterNames.filter((name) => !(name in model.parameters));
+        if (unknownParams.length > 0) {
+            throw new Error(`Unknown parameter(s): ${unknownParams.join(', ')}. Available parameters: ${Object.keys(model.parameters).join(', ') || '(none)'}`);
+        }
         const parameters: Record<string, number> = {};
         for (const name of parameterNames) {
             parameters[name] = model.parameters[name] ?? 1;

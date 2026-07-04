@@ -928,6 +928,30 @@ function App() {
     }
   };
 
+  const handleExportODE = async () => {
+    if (!model) {
+      setStatus({ type: 'warning', message: 'No model to export. Parse or load a model first.' });
+      return;
+    }
+    setStatus({ type: 'info', message: 'Generating ODE (.ode) file...' });
+    try {
+      const { exportModelToODE } = await import('./services/exportODE');
+      const generatedModel = await bnglService.generateNetwork(model);
+      const odeString = await exportModelToODE(generatedModel, loadedModelName?.replace(/\s+/g, '_') || 'model');
+      const blob = new Blob([odeString], { type: 'text/plain' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${loadedModelName?.replace(/\s+/g, '_') || 'model'}.ode`;
+      a.click();
+      URL.revokeObjectURL(url);
+      setStatus({ type: 'success', message: 'ODE (.ode) export generated.' });
+    } catch (e) {
+      setStatus({ type: 'error', message: 'Failed to export ODE file. Check console for details.' });
+      console.error('ODE export failed:', e);
+    }
+  };
+
   const handleExportSedML = async () => {
     if (!model) {
       setStatus({ type: 'warning', message: 'No model to export. Parse or load a model first.' });
@@ -1032,6 +1056,7 @@ function App() {
         onExportSedML={handleExportSedML}
         onExportOMEX={handleExportOMEX}
         onExportNET={handleExportNET}
+        onExportODE={handleExportODE}
         onExportBNGL={handleExportBNGL}
         code={code}
         modelName={loadedModelName}
@@ -1090,7 +1115,8 @@ function App() {
                       onExportSedML={handleExportSedML}
                       onExportOMEX={handleExportOMEX}
                       onExportBNGL={handleExportBNGL}
-                      onExportNET={handleExportNET}
+                       onExportNET={handleExportNET}
+                       onExportODE={handleExportODE}
                     />
                   </ErrorBoundary>
                 ) : (
