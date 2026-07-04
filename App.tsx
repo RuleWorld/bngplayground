@@ -1055,6 +1055,7 @@ function App() {
         onExportSedML={handleExportSedML}
         onExportOMEX={handleExportOMEX}
         onExportNET={handleExportNET}
+        onExportODE={handleExportODE}
         onExportBNGL={handleExportBNGL}
         code={code}
         modelName={loadedModelName}

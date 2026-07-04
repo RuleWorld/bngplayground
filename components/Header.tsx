@@ -20,6 +20,7 @@ interface HeaderProps {
   onExportSedML?: () => void;
   onExportOMEX?: () => void;
   onExportNET?: () => void;
+  onExportODE?: () => void;
   onExportBNGL?: () => void;
   onImportSBML?: (file: File) => void | Promise<void>;
   code?: string;
@@ -37,6 +38,7 @@ export const Header: React.FC<HeaderProps> = ({
   onExportSedML,
   onExportOMEX,
   onExportNET,
+  onExportODE,
   onExportBNGL,
   onImportSBML,
   code,
@@ -200,6 +202,14 @@ export const Header: React.FC<HeaderProps> = ({
                     <div className="flex items-center gap-2">
                       <DownloadIcon className="w-4 h-4 text-slate-400" />
                       <span>Export NET</span>
+                    </div>
+                  </DropdownItem>
+                )}
+                {onExportODE && (
+                  <DropdownItem onClick={onExportODE}>
+                    <div className="flex items-center gap-2">
+                      <DownloadIcon className="w-4 h-4 text-slate-400" />
+                      <span>Export ODE</span>
                     </div>
                   </DropdownItem>
                 )}

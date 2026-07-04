@@ -59,6 +59,10 @@ import { handleFirstPassageTime } from './handlers/firstPassageTime.js';
 import { handleLnaAnalysis } from './handlers/lnaAnalysis.js';
 import { handleReactionInformationFlow } from './handlers/reactionInformationFlow.js';
 import { handleQssaReduction } from './handlers/qssaReduction.js';
+import { handleComputeFim } from './handlers/computeFim.js';
+import { handleSuggestFix } from './handlers/suggestFix.js';
+import { handleCheckHysteresis } from './handlers/checkHysteresis.js';
+import { handleCheckPhaseHandoff } from './handlers/checkPhaseHandoff.js';
 
 const server = new Server(
   {
@@ -655,6 +659,78 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
           required: ['code'],
         },
       },
+      {
+        name: 'compute_fim',
+        description: 'Compute the Fisher Information Matrix (local sensitivity) for a BNGL model via central finite differences: eigenvalues, parameter correlations, identifiable / unidentifiable sets, and an optional collinearity index.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL model code' },
+            parameters: { type: 'array', items: { type: 'string' }, description: 'Parameter names to include (default: all)' },
+            all_timepoints: { type: 'boolean', description: 'Use all timepoints (default: true)' },
+            log_parameters: { type: 'boolean', description: 'Use log-parameter sensitivities (d/d ln p)' },
+            approx_profile: { type: 'boolean', description: 'Run approximate 1D profile scans' },
+            compute_collinearity: { type: 'boolean', description: 'Also compute the collinearity index' },
+            collinearity_subset_size: { type: 'integer', minimum: 1, description: 'Subset size for collinearity (default: 2)' },
+            method: { type: 'string', enum: ['ode', 'ssa', 'nf', 'default'] },
+            t_end: { type: 'number', minimum: 0 },
+            n_steps: { type: 'integer', minimum: 1 },
+            solver: { type: 'string', enum: ['auto', 'cvode', 'cvode_auto', 'cvode_sparse', 'cvode_jac', 'rosenbrock23', 'rk45', 'rk4', 'webgpu_rk4'] },
+            atol: { type: 'number' },
+            rtol: { type: 'number' },
+            max_agents: { type: 'integer', minimum: 1 },
+            max_reactions: { type: 'integer', minimum: 1 },
+          },
+          required: ['code'],
+        },
+      },
+      {
+        name: 'suggest_fix',
+        description: 'Analyze BNGL code for errors and suggest fixes. Optionally returns an auto-corrected version of the code.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL model code' },
+            include_auto_corrected_code: { type: 'boolean', description: 'Return an auto-corrected version of the code' },
+          },
+          required: ['code'],
+        },
+      },
+      {
+        name: 'check_hysteresis',
+        description: 'Sweep a parameter up and back down and detect hysteresis / bistability in an observable (a signature of an irreversible or memory switch).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL model code' },
+            parameter: { type: 'string', description: 'Parameter to vary' },
+            sweep_range: { type: 'array', items: { type: 'number' }, minItems: 2, maxItems: 2, description: 'Min and max values for the parameter sweep' },
+            steps: { type: 'integer', minimum: 1, description: 'Number of sweep steps (default: 20)' },
+            observable: { type: 'string', description: 'Observable to analyze (default: first)' },
+            method: { type: 'string', enum: ['ode', 'ssa'], description: 'Simulation method (default: ode)' },
+            t_end: { type: 'number', minimum: 0, description: 'End time per sweep point (default: 50)' },
+          },
+          required: ['code', 'parameter', 'sweep_range'],
+        },
+      },
+      {
+        name: 'check_phase_handoff',
+        description: 'Two-phase simulation: equilibrate, then step a parameter to a new value and track how an observable responds across the transition (e.g. stimulus on/off, dilution).',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string', description: 'BNGL model code' },
+            parameter: { type: 'string', description: 'Parameter to change at the transition' },
+            initial_value: { type: 'number', description: 'Parameter value during phase 1' },
+            final_value: { type: 'number', description: 'Parameter value during phase 2' },
+            transition_time: { type: 'number', minimum: 0, description: 'Duration of phase 1 (equilibration)' },
+            observable: { type: 'string', description: 'Observable to track (default: first)' },
+            method: { type: 'string', enum: ['ode', 'ssa'], description: 'Simulation method (default: ode)' },
+            t_end: { type: 'number', minimum: 0, description: 'End time for each phase (default: transition_time)' },
+          },
+          required: ['code', 'parameter', 'initial_value', 'final_value', 'transition_time'],
+        },
+      },
     ],
   };
 });
@@ -728,6 +804,14 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
       return handleReactionInformationFlow(args);
     case 'qssa_reduction':
       return handleQssaReduction(args);
+    case 'compute_fim':
+      return handleComputeFim(args);
+    case 'suggest_fix':
+      return handleSuggestFix(args);
+    case 'check_hysteresis':
+      return handleCheckHysteresis(args);
+    case 'check_phase_handoff':
+      return handleCheckPhaseHandoff(args);
     default:
       throw new Error(`Unknown tool: ${name}`);
   }

@@ -116,6 +116,7 @@ export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './u
 export { formatBNGL } from './utils/formatBNGL';
 export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
+export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
 export { normalizeFilterNames, safeModelName, executeMultiPhaseSimulation, runSingleBatchItem } from './utils/batchRunner';
 export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions } from './utils/batchRunner';
