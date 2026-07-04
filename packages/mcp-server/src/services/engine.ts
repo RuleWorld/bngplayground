@@ -145,6 +145,17 @@ export function applyNetworkOptions<T extends { max_agents?: number; max_reactio
     };
 }
 
+/**
+ * Asynchronously expands a BNGL model's reaction network by generating all possible species and reactions.
+ *
+ * This function calls the underlying engine's `generateExpandedNetwork` using empty progress and
+ * cancellation callbacks, meaning it does not report progress and cannot be interrupted midway.
+ * It is primarily used when network expansion must be fully completed before subsequent steps
+ * (like simulation or analysis) can proceed.
+ *
+ * @param model The unexpanded or partially expanded BNGLModel object.
+ * @returns A promise that resolves to the fully expanded BNGLModel.
+ */
 export async function expandModel(model: BNGLModel): Promise<BNGLModel> {
     return generateExpandedNetwork(
         model,
