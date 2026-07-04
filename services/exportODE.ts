@@ -6,6 +6,7 @@ import {
   countPatternMatches,
   isSpeciesMatch,
   splitObservablePatterns,
+  generateExpandedNetwork,
   type SymbolicODESystem,
   type SymExpr,
 } from '@bngplayground/engine';
@@ -251,9 +252,14 @@ function renderObservableRhs(weights: Map<number, number>): string {
 // the simulator's rate context in the concentration-space branch. TotalRate is
 // ignored for ODEs, as in the simulator.
 // ---------------------------------------------------------------------------
-export async function exportModelToODE(model: BNGLModel, modelName: string): Promise<string> {
-  const { bnglService } = await import('./bnglService');
-  const gen = await bnglService.generateNetwork(model);
+export async function exportModelToODE(
+  model: BNGLModel,
+  modelName: string,
+  expandNetwork?: (m: BNGLModel) => Promise<BNGLModel>,
+): Promise<string> {
+  const hasReactions = (model.reactions?.length ?? 0) > 0;
+  const expand = expandNetwork ?? ((m: BNGLModel) => generateExpandedNetwork(m, () => {}, () => {}));
+  const gen = hasReactions ? model : await expand(model);
 
   const species = gen.species ?? [];
   const speciesNames = species.map((s) => s.name);

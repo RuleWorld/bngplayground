@@ -936,7 +936,8 @@ function App() {
     setStatus({ type: 'info', message: 'Generating ODE (.ode) file...' });
     try {
       const { exportModelToODE } = await import('./services/exportODE');
-      const odeString = await exportModelToODE(model, loadedModelName?.replace(/\s+/g, '_') || 'model');
+      const generatedModel = await bnglService.generateNetwork(model);
+      const odeString = await exportModelToODE(generatedModel, loadedModelName?.replace(/\s+/g, '_') || 'model');
       const blob = new Blob([odeString], { type: 'text/plain' });
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');

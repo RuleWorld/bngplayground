@@ -1833,7 +1833,9 @@ export class NetworkGenerator {
           }
         }
       }
-      let effectiveRate = baseRateConstant * statFactor;
+      // BNG2 parity: TotalRate disables statFactor (sf=1), matching BNG2's toCvodeString logic.
+      const effectiveStatFactor = rule.totalRate ? 1 : statFactor;
+      let effectiveRate = baseRateConstant * effectiveStatFactor;
 
       // Arrhenius rate law calculation
       if (rule.isArrhenius && this.energyService) {
@@ -1849,7 +1851,7 @@ export class NetworkGenerator {
         // Do NOT divide by RT — that would double-divide deltaG which is already Gf/RT.
         // Reference: Sekar, Hogg & Faeder, "Energy-based Modeling in BioNetGen", IEEE BIBM 2016
         // Verified against BNG2-generated catalysis.net: __R1_local1 = exp(-(Ea0_S_kinase+(phi*(Gf_S_kinase/RT))))
-        effectiveRate = A * Math.exp(-(Eact + phi * deltaG)) * statFactor;
+        effectiveRate = A * Math.exp(-(Eact + phi * deltaG)) * effectiveStatFactor;
       }
 
       // For Arrhenius rules: use null rateExpression so the NET file writes the numeric rate.
@@ -1897,7 +1899,8 @@ export class NetworkGenerator {
           rateExpression,
           propensityFactor,
           productStoichiometries,
-          scalingVolume
+          scalingVolume,
+          totalRate: rule.totalRate
         }
       );
 
@@ -3077,7 +3080,9 @@ export class NetworkGenerator {
     const hasRateExpression = !!rule.rateExpression;
     const baseRateConstant = (rule as RxnRule & { isFunctionalRate?: boolean }).isFunctionalRate && rule.rateConstant === 0 ? 1 : rule.rateConstant;
 
-    let effectiveRate = baseRateConstant * multiplicity;
+    // BNG2 parity: TotalRate disables multiplicity (sf=1).
+    const effectiveMultiplicity = rule.totalRate ? 1 : multiplicity;
+    let effectiveRate = baseRateConstant * effectiveMultiplicity;
 
     // Compartment volume normalization is applied in the simulation RHS path.
     // Keep reaction constants in native model units here to avoid double scaling.
@@ -3093,7 +3098,7 @@ export class NetworkGenerator {
       // BNG2 parity: k = A * exp(-(Eact + phi * deltaG))
       // deltaG is already dimensionless (in units of RT) from EnergyService.
       // Do NOT divide by RT — verified against BNG2-generated catalysis.net.
-      effectiveRate = A * Math.exp(-(Eact + phi * deltaG)) * multiplicity;
+      effectiveRate = A * Math.exp(-(Eact + phi * deltaG)) * effectiveMultiplicity;
 
       // Count-based compartment correction:
       // Models using setOption("NumberPerQuantityUnit", NA) specify seed species in molecule

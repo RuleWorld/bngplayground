@@ -26,6 +26,7 @@ import { FenwickTree } from '../../utils/fenwickTree';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
+import { generateExpandedNetwork } from './NetworkExpansion';
 // import * as fs from 'node:fs';
 
 interface ConcreteReaction {
@@ -293,6 +294,11 @@ export async function buildOdeSystem(
   options: Partial<SimulationOptions> = {},
 ): Promise<OdeSystemHandle> {
   let handle: OdeSystemHandle | undefined;
+  const hasRules = (model.reactionRules?.length ?? 0) > 0;
+  const hasReactions = (model.reactions?.length ?? 0) > 0;
+  const expandedModel = hasRules && !hasReactions
+    ? await generateExpandedNetwork(model, () => {}, () => {})
+    : model;
   const opts: SimulationOptions = {
     t_end: options.t_end ?? 1,
     n_steps: options.n_steps ?? 1,
@@ -301,7 +307,7 @@ export async function buildOdeSystem(
     method: 'ode',
     captureOdeSystem: (h) => { handle = h; },
   };
-  await simulate(0, model, opts, { checkCancelled: () => {}, postMessage: () => {} });
+  await simulate(0, expandedModel, opts, { checkCancelled: () => {}, postMessage: () => {} });
   if (!handle) {
     throw new Error('buildOdeSystem: the simulator did not build an ODE right-hand side for this model.');
   }
@@ -329,11 +335,18 @@ export async function simulate(
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
   if (VERBOSE_SIM_DEBUG) console.log('[Worker] Starting simulation with', inputModel.species.length, 'species,', inputModel.reactions?.length, 'reactions, and', inputModel.reactionRules?.length ?? 0, 'rules');
 
+  // Auto-expand network if model has rules but no generated reactions yet.
+  const hasRules = (inputModel.reactionRules?.length ?? 0) > 0;
+  const hasReactions = (inputModel.reactions?.length ?? 0) > 0;
+  const expandedInput = hasRules && !hasReactions
+    ? await generateExpandedNetwork(inputModel, callbacks.checkCancelled, () => {})
+    : inputModel;
+
   // STRICT PARITY: Output time grid management
   // ... (Managed by toBngGridTime)
 
   // 1. Prepare Model State without the JSON deep-clone hot-path.
-  const model = cloneModelForSimulation(inputModel);
+  const model = cloneModelForSimulation(expandedInput);
 
   const numSpecies = model.species.length;
   const speciesHeaders = model.species.map(s => s.name);
@@ -2032,7 +2045,10 @@ export async function simulate(
             const vAnchor = reactionReactingVolumes[i] || 1.0;
             const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1) * vAnchor;
             let multiplicative = 1;
-            // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
+            // TotalRate is honored upstream: NetworkGenerator skips statFactor/multiplicity
+            // baking for TotalRate rules (sf=1), and NetworkExpansion omits statFactor from
+            // the functional-rate fold. The flux below uses the rate as-is from those sources,
+            // so no TotalRate adjustment is needed here.
             for (let j = 0; j < rxn.reactants.length; j++) {
               const ridx = rxn.reactants[j];
               const nativeVal = yIn[ridx];
