@@ -453,7 +453,8 @@ export async function exportModelToODE(
   lines.push('#   d[conc_i]/dt = sum_r netStoich_r[i] * velocity_r / vol_i');
   lines.push('# Compartment volume scaling is applied. Functional rate laws are written out');
   lines.push('# with their observables (defined below as fixed variables, amount-weighted).');
-  lines.push('# TotalRate is ignored for ODEs, as in the simulator.');
+  lines.push('# TotalRate is honored: statFactor is set to 1 during network expansion, so the');
+  lines.push('# given rate is used as the total rate (matching BNG2 and the simulator).');
   lines.push('# Format: XPPAUT (.ode). Species are indexed S1..Sn (legend below). Older XPP');
   lines.push('# builds limit name lengths, so very long parameter names may need shortening.');
   lines.push('#');
