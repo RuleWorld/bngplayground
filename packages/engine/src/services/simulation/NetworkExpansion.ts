@@ -273,6 +273,11 @@ export async function generateExpandedNetwork(
     // BNG2 Rule: Rules are expanded from the model definition.
     // We map over each rule to determine if it uses functional rates (non-mass action).
     const reactionRules = inputModel.reactionRules ?? [];
+
+    // ⚡ Bolt Optimization: Hoist Map creations out of hot rule parsing loop
+    const staticParamMap = new Map(Object.entries(inputModel.parameters || {}));
+    const staticFunctionMap = new Map((inputModel.functions || []).map(f => [f.name, { args: f.args, expr: f.expression } as any]));
+
     const rules = reactionRules.flatMap((r) => {
         // BNG2 Semantics: The first reactant often defines the "substrate" variable in rate laws.
         // E.g., for "A() -> B() k_cat*A", we need to map "A" to the runtime observable.
@@ -309,8 +314,7 @@ export async function generateExpandedNetwork(
         } else {
             try {
                 // Parity Check: Evaluate constant expressions using the Model's parameter context.
-                const paramMap = new Map(Object.entries(inputModel.parameters || {}));
-                rate = BNGLParser.evaluateExpression(expandedRate, paramMap, new Set(), new Map((inputModel.functions || []).map(f => [f.name, { args: f.args, expr: f.expression } as any])));
+                rate = BNGLParser.evaluateExpression(expandedRate, staticParamMap, new Set(), staticFunctionMap);
                 if (isNaN(rate)) rate = 0;
             } catch (e) {
                 console.warn('[NetworkExpansion] Could not evaluate rate expression:', expandedRate, '- available parameters:', Object.keys(inputModel.parameters || {}), '- using 0');
@@ -346,8 +350,7 @@ export async function generateExpandedNetwork(
                 reverseRate = 1;
             } else {
                 try {
-                    const paramMap = new Map(Object.entries(inputModel.parameters || {}));
-                    reverseRate = BNGLParser.evaluateExpression(revExpanded, paramMap, new Set(), new Map((inputModel.functions || []).map(f => [f.name, { args: f.args, expr: f.expression } as any])));
+                    reverseRate = BNGLParser.evaluateExpression(revExpanded, staticParamMap, new Set(), staticFunctionMap);
                     if (isNaN(reverseRate)) reverseRate = 0;
                 } catch (e) {
                     console.warn('[NetworkExpansion] Could not evaluate reverse rate expression:', revExpanded, '- available parameters:', Object.keys(inputModel.parameters || {}), '- using 0');

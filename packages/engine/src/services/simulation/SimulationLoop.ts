@@ -434,6 +434,9 @@ export async function simulate(
 
   const functionNames = new Set((model.functions || []).map(f => f.name));
 
+  // ⚡ Bolt Optimization: Hoist Map creations out of hot reaction parsing loop
+  const staticParamMap = new Map(Object.entries(model.parameters || {}));
+
   const concreteReactions: ConcreteReaction[] = reactions.map((r: BNGLReaction) => {
     // Map string names to integer indices.
     const reactantIndices = r.reactants.map(name => {
@@ -462,8 +465,7 @@ export async function simulate(
     // Matches BNG2 reading of parameters block.
     if ((isNaN(rate) || !isFinite(rate)) && !isFunctionalRate && typeof rateExpr === 'string') {
       try {
-        const paramMap = new Map(Object.entries(model.parameters || {}));
-        const evalVal = BNGLParser.evaluateExpression(rateExpr, paramMap, new Set());
+        const evalVal = BNGLParser.evaluateExpression(rateExpr, staticParamMap, new Set());
         if (!Number.isNaN(evalVal) && Number.isFinite(evalVal)) {
           rate = evalVal;
         }
