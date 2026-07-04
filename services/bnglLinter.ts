@@ -783,36 +783,96 @@ function checkRateExpressions(model: BNGLModel): LintDiagnostic[] {
   return diagnostics;
 }
 
-function normalizePattern(pattern: string): string {
-  return pattern.trim();
+/**
+ * Extract the molecule-type names referenced by a reactant/product pattern.
+ * Handles complexes (A(..).B(..)), compartment prefixes/suffixes, and ignores
+ * everything inside the component list — including internally-completed wildcard
+ * components such as `oh~?!?__SYN__` that the parser injects. Degradation
+ * products (0 / null / Trash) yield no names.
+ */
+function extractMoleculeNames(pattern: string): string[] {
+  if (!pattern) return [];
+  const names: string[] = [];
+
+  // Split a complex into its molecules on top-level '.' (dots outside parens).
+  const tokens: string[] = [];
+  let depth = 0;
+  let current = '';
+  for (const ch of pattern) {
+    if (ch === '(') depth++;
+    else if (ch === ')') depth = Math.max(0, depth - 1);
+    if (ch === '.' && depth === 0) {
+      tokens.push(current);
+      current = '';
+      continue;
+    }
+    current += ch;
+  }
+  if (current) tokens.push(current);
+
+  for (let token of tokens) {
+    token = token.trim();
+    if (!token) continue;
+    // Strip a leading compartment prefix like "@EC:".
+    token = token.replace(/^@[^:@()]+:/, '');
+    // Molecule name is everything before the component list '(' ...
+    const paren = token.indexOf('(');
+    let head = paren >= 0 ? token.slice(0, paren) : token;
+    // ... minus any trailing compartment suffix like "Mol@EC".
+    head = head.replace(/@[^@()]*$/, '').trim();
+    if (!head) continue;
+    if (head === '0' || head === 'null' || head === 'Trash' || head === '∅') continue;
+    names.push(head);
+  }
+  return names;
 }
 
 function checkReachability(model: BNGLModel): LintDiagnostic[] {
   const diagnostics: LintDiagnostic[] = [];
-  const reachable = new Set<string>();
 
-  model.species.forEach((sp) => {
-    const normalized = normalizePattern(sp.name);
-    if (normalized) reachable.add(normalized);
-  });
+  // Reachability is tracked at the MOLECULE-TYPE level rather than by exact
+  // pattern string. Reactant patterns contain wildcard states/bonds and
+  // internally-completed components (e.g. the synthetic `!?__SYN__` wildcards the
+  // parser adds for unmentioned components), so comparing the full pattern string
+  // against produced species is virtually never satisfied — the old check
+  // produced pervasive false positives ("rule can never fire") on models that
+  // demonstrably do fire. Molecule-level reachability is a sound
+  // over-approximation: a rule is only flagged when one of its reactant molecule
+  // types never appears in seed species and is never produced by any reachable
+  // rule. State/bond-level dead rules require full network generation to detect
+  // and are intentionally not flagged here (a false negative is far cheaper than
+  // a false "can never fire" on a working model).
+  const reachable = new Set<string>();
+  for (const sp of model.species) {
+    for (const name of extractMoleculeNames(sp.name)) reachable.add(name);
+  }
+
+  // With no seed species we cannot infer reachability; skip to avoid noise.
+  if (reachable.size === 0) return diagnostics;
+
+  const reactantMoleculesFor = (rule: BNGLModel['reactionRules'][number]): string[] => {
+    const out: string[] = [];
+    for (const r of rule.reactants || []) {
+      for (const name of extractMoleculeNames(r)) out.push(name);
+    }
+    return out;
+  };
 
   let changed = true;
   while (changed) {
     changed = false;
     for (const rule of model.reactionRules) {
-      const reactants = (rule.reactants || [])
-        .map(normalizePattern)
-        .filter(Boolean);
-      const reactantsReachable = reactants.length === 0 || reactants.every((r) => reachable.has(r));
+      const reactantMols = reactantMoleculesFor(rule);
+      const reactantsReachable =
+        reactantMols.length === 0 || reactantMols.every((m) => reachable.has(m));
       if (!reactantsReachable) continue;
 
       for (const product of rule.products || []) {
-        const normalizedProduct = normalizePattern(product);
-        if (!normalizedProduct) continue;
-
-        if (!reachable.has(normalizedProduct)) {
-          reachable.add(normalizedProduct);
-          changed = true;
+        for (const name of extractMoleculeNames(product)) {
+          if (!reachable.has(name)) {
+            reachable.add(name);
+            changed = true;
+          }
         }
       }
     }
@@ -820,22 +880,20 @@ function checkReachability(model: BNGLModel): LintDiagnostic[] {
 
   for (let idx = 0; idx < model.reactionRules.length; idx++) {
     const rule = model.reactionRules[idx];
-    const reactants = (rule.reactants || [])
-      .map(normalizePattern)
-      .filter(Boolean);
+    const reactantMols = reactantMoleculesFor(rule);
+    if (reactantMols.length === 0) continue;
 
-    if (reactants.length === 0) continue;
-
-    const missing = reactants.filter((reactant) => !reachable.has(reactant));
+    const missing = Array.from(new Set(reactantMols.filter((m) => !reachable.has(m))));
     if (missing.length === 0) continue;
 
     const location: LintLocation = { type: 'rule', name: rule.name, index: idx };
     const prettyMissing = missing.map((m) => `'${m}'`).join(', ');
+    const isPlural = missing.length !== 1;
     diagnostics.push({
       severity: 'warning',
       code: 'UNREACHABLE_RULE',
-      message: `Rule '${rule.name || `#${idx + 1}`}' can never fire because reactants ${prettyMissing} are never produced`,
-      suggestion: `Ensure ${missing.length === 1 ? 'this species' : 'these species'} appear in seed species or are produced by other reachable rules.`,
+      message: `Rule '${rule.name || `#${idx + 1}`}' can never fire because molecule ${isPlural ? 'types' : 'type'} ${prettyMissing} ${isPlural ? 'are' : 'is'} never present (not in seed species and not produced by any reachable rule)`,
+      suggestion: `Ensure ${isPlural ? 'these molecules' : 'this molecule'} appear in seed species or are produced by other reachable rules.`,
       location,
     });
   }

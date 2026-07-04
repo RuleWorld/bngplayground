@@ -697,7 +697,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             width={dimensions.width}
             height={dimensions.height}
             data={plotData}
-            margin={{ top: 10, right: 20, left: 10, bottom: chartMarginBottom }}
+            margin={{ top: 10, right: 20, left: 12, bottom: chartMarginBottom }}
             onMouseDown={handleMouseDown}
             onMouseMove={handleMouseMove}
             onMouseUp={handleMouseUp}
@@ -723,7 +723,8 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
               }}
             />
             <YAxis
-              label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: 'currentColor', fontSize: 13, fontWeight: 'bold', offset: 15, style: { textAnchor: 'middle' } }}
+              label={{ value: yAxisLabel, angle: -90, position: 'insideLeft', fill: 'currentColor', fontSize: 13, fontWeight: 'bold', offset: 6, style: { textAnchor: 'middle' } }}
+              width={74}
               scale="linear"
               domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : (yAxisScale === 'log' ? getTransformedDomain('y') : [0, 'dataMax'])}
               allowDataOverflow={true}

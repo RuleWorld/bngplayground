@@ -332,7 +332,7 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
                   </ResponsiveContainer>
                 </div>
                 {/* External legend — matches TimeSeriesChart pattern */}
-                <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 py-3 border-t border-slate-100 dark:border-slate-800/20">
+                <div className="flex flex-wrap justify-center items-center gap-x-3 gap-y-1 pt-3 pb-5 border-t border-slate-100 dark:border-slate-800/20">
                   {observableNames.map((name, i) => (
                     <span key={name} className="flex items-center gap-1.5 text-xs font-medium text-slate-600 dark:text-slate-300">
                       <span className="w-3 h-3 rounded-sm" style={{ backgroundColor: CHART_COLORS[i % CHART_COLORS.length] }} />

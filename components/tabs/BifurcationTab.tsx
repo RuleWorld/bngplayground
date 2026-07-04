@@ -157,7 +157,8 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
       // P0: JIT failure is fatal — no silent zero-field fallback
       const jit = new engine.JITCompiler();
-      let compiled: any;
+      let compiled: any = null;
+      let odeHandle: any = null;
       try {
         compiled = jit.compileFromRxns(
           indexedReactions,
@@ -171,16 +172,37 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
             callsite: 'BifurcationTab.handleRunContinuation',
           }
         );
-      } catch (err) {
-        const msg = err instanceof Error ? err.message : String(err);
-        setError(`Could not compile model RHS for continuation: ${msg}`);
-        setIsRunning(false);
-        return;
+      } catch (jitErr) {
+        // The mass-action JIT does not support functional rates, custom
+        // functions (functions block), or observable-dependent rates. Fall back
+        // to the full simulator RHS, which handles all of these. It exposes a
+        // synchronous updateParameters() so continuation can still vary the
+        // bifurcation parameter.
+        console.warn(
+          '[BifurcationTab] mass-action JIT rejected the model rate law; ' +
+          'falling back to the full functional-rate RHS:',
+          jitErr instanceof Error ? jitErr.message : String(jitErr),
+        );
+        try {
+          odeHandle = await engine.buildOdeSystem(model, { solver: 'cvode' });
+        } catch (buildErr) {
+          const msg = buildErr instanceof Error ? buildErr.message : String(buildErr);
+          setError(`Could not compile model RHS for continuation: ${msg}`);
+          setIsRunning(false);
+          return;
+        }
       }
 
-      // evaluateRhs: compiled is guaranteed defined here (P0)
-      const evaluateRhs = (t: number, y: Float64Array, dydt: Float64Array) => {
-        compiled.evaluate(t, y, dydt);
+      // Unified RHS + reparameterisation across both compile paths.
+      const evaluateRhs = compiled
+        ? (t: number, y: Float64Array, dydt: Float64Array) => { compiled.evaluate(t, y, dydt); }
+        : (_t: number, y: Float64Array, dydt: Float64Array) => { odeHandle.rhs(y, dydt); };
+      const updateParametersFn = (p: Record<string, number>) => {
+        if (compiled) {
+          if (compiled.updateParameters) compiled.updateParameters(p);
+        } else if (odeHandle.updateParameters) {
+          odeHandle.updateParameters(p);
+        }
       };
 
       if (!(selectedParam in params)) {
@@ -191,7 +213,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       const ssInitial = new Float64Array(nSpecies);
       expandedModel.species.forEach((s: any, i: number) => { ssInitial[i] = s.initialConcentration; });
       params[selectedParam] = startValue;
-      if (compiled.updateParameters) compiled.updateParameters(params);
+      updateParametersFn(params);
 
       const ss = engine.findSteadyState(
         {
@@ -221,12 +243,12 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         reactions: indexedReactions,
         rhsFn: (y: Float64Array, p: number, dydt: Float64Array) => {
           params[selectedParam] = p;
-          if (compiled.updateParameters) compiled.updateParameters(params);
+          updateParametersFn(params);
           evaluateRhs(0, y, dydt);
         },
         updateParams: (p: number) => {
           params[selectedParam] = p;
-          if (compiled.updateParameters) compiled.updateParameters(params);
+          updateParametersFn(params);
         },
         initialGuess: ssInitial,
         parameterStart: startValue,
@@ -269,7 +291,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
 
           // Reset params back to model values (parameter scan is done; nullclines use nominal params)
           Object.assign(params, expandedModel.parameters ?? model.parameters);
-          if (compiled.updateParameters) compiled.updateParameters(params);
+          updateParametersFn(params);
 
           // Compute dynamic ranges from continuation path
           const vals1 = result.points

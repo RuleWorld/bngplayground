@@ -243,6 +243,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
                   <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Simulation</div>
                   <DropdownItem onClick={() => setActiveTab(17)}>🔬 Spatial Simulation</DropdownItem>
+                  <div className="border-t border-slate-100 dark:border-slate-700 my-1" />
+                  <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Experimental</div>
                   <DropdownItem onClick={() => setActiveTab(21)}>🧫 Multi-Scale Modeling</DropdownItem>
                   <DropdownItem onClick={() => setActiveTab(20)}>📜 Version History</DropdownItem>
                 </div>

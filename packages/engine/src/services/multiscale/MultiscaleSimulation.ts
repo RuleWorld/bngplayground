@@ -14,6 +14,7 @@ import {
   moveCell,
 } from './CellAgent';
 import { ExtracellularGrid, ExtracellularGridConfig } from './ExtracellularGrid';
+import { IntracellularEngine } from './IntracellularEngine';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -161,23 +162,37 @@ function massActionRHS(
 // multiscaleSimulation – main entry point
 // ---------------------------------------------------------------------------
 
-export function multiscaleSimulation(
+export async function multiscaleSimulation(
   config: MultiscaleConfig,
   onProgress?: (fraction: number) => void,
-): MultiscaleResult {
+): Promise<MultiscaleResult> {
   const rng = new SimpleRNG(config.seed ?? 42);
 
   // ---- Build cell-type lookup ----
   const cellTypeDefs = new Map<string, CellTypeDefinition>();
-  const cellTypeRates = new Map<string, MassActionRates>();
 
   for (const ct of config.cellTypes) {
     cellTypeDefs.set(ct.name, ct);
-    // Default: zero production, zero degradation (can be overridden later)
-    cellTypeRates.set(ct.name, {
-      production: new Float64Array(0),
-      degradation: new Float64Array(0),
-    });
+  }
+
+  // ---- Compile intracellular BNGL model per cell type (CVODE / stiff BDF) ----
+  // Each cell type's model is compiled once; every cell of that type integrates
+  // its own state against the shared, compiled right-hand side. If a model is
+  // missing or fails to parse, that cell type simply runs with no intracellular
+  // dynamics (decisions can still fire on extracellular coupling).
+  const engines = new Map<string, IntracellularEngine>();
+  for (const ct of config.cellTypes) {
+    const bnglText = ct.bnglModel?.trim();
+    if (!bnglText) continue;
+    try {
+      const engine = await IntracellularEngine.create(ct.name, bnglText);
+      engines.set(ct.name, engine);
+    } catch (err) {
+      console.warn(
+        `[multiscale] no intracellular dynamics for cell type "${ct.name}": ` +
+        (err instanceof Error ? err.message : String(err)),
+      );
+    }
   }
 
   // ---- Extracellular grid ----
@@ -214,6 +229,11 @@ export function multiscaleSimulation(
         init.position[2] + (rng.next() - 0.5) * 1e-3,
       ];
       const cell = createCell(nextCellId, typeDef, pos);
+      const engine = engines.get(typeDef.name);
+      if (engine) {
+        cell.intracellularState = engine.newState();
+        engine.computeObservables(cell.intracellularState, cell.observables);
+      }
       cells.push(cell);
       lineage.push({
         cellId: nextCellId,
@@ -306,19 +326,15 @@ export function multiscaleSimulation(
     const dtStep = Math.min(config.dtDecision, config.tEnd - t);
     t += dtStep;
 
-    // 1. INTRACELLULAR: advance each cell's internal ODE
+    // 1. INTRACELLULAR: advance each cell's own BNGL model with CVODE (stiff BDF)
     for (const cell of cells) {
       if (cell.phase === 'dead') continue;
-      const rates = cellTypeRates.get(cell.cellType);
-      if (!rates || cell.intracellularState.length === 0) continue;
-      const rhs = massActionRHS(rates);
-      const nSubSteps = Math.max(1, Math.ceil(dtStep / config.dtIntracellular));
-      const subDt = dtStep / nSubSteps;
-      let tLocal = t - dtStep;
-      for (let s = 0; s < nSubSteps; s++) {
-        rk4Step(rhs, tLocal, cell.intracellularState, subDt);
-        tLocal += subDt;
-      }
+      const engine = engines.get(cell.cellType);
+      if (!engine || cell.intracellularState.length === 0) continue;
+      engine.integrate(cell.intracellularState, t - dtStep, t);
+      // Refresh the model observables so decision rules and secretion coupling
+      // see the newly integrated intracellular state.
+      engine.computeObservables(cell.intracellularState, cell.observables);
       cell.age += dtStep;
     }
 
@@ -472,6 +488,11 @@ export function multiscaleSimulation(
   // Ensure final snapshot
   if (snapshots.length === 0 || snapshots[snapshots.length - 1].time < config.tEnd - 1e-6) {
     takeSnapshot(config.tEnd);
+  }
+
+  // Release CVODE solver resources.
+  for (const engine of engines.values()) {
+    engine.dispose();
   }
 
   return {
