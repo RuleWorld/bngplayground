@@ -10,7 +10,7 @@
  * Reference: bionetgen/bng2/Network3/src/run_network.cpp
  */
 
-import { BNGLFunction, BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
+import { BNGLFunction, BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries, OdeSystemHandle } from '../../types';
 import type { SolverResult } from './ODESolver';
 
 import { BNGLParser } from '../graph/core/BNGLParser';
@@ -280,6 +280,34 @@ async function convertReactionsToGPU(
  * console.log('Final time:', results.data[results.data.length - 1].time);
  * ```
  */
+/**
+ * Build (and return) the ODE right-hand side the simulator would integrate for a
+ * model, without needing the full simulation result. Runs the normal preparation
+ * path and captures the RHS via {@link SimulationOptions.captureOdeSystem}, so the
+ * returned closure is exactly what `simulate` integrates. Intended for external
+ * integration (e.g. with `createSolver('cvode', ...)`) and for validating the
+ * `.ode` exporter against the live RHS.
+ */
+export async function buildOdeSystem(
+  model: BNGLModel,
+  options: Partial<SimulationOptions> = {},
+): Promise<OdeSystemHandle> {
+  let handle: OdeSystemHandle | undefined;
+  const opts: SimulationOptions = {
+    t_end: options.t_end ?? 1,
+    n_steps: options.n_steps ?? 1,
+    solver: options.solver ?? 'cvode',
+    ...options,
+    method: 'ode',
+    captureOdeSystem: (h) => { handle = h; },
+  };
+  await simulate(0, model, opts, { checkCancelled: () => {}, postMessage: () => {} });
+  if (!handle) {
+    throw new Error('buildOdeSystem: the simulator did not build an ODE right-hand side for this model.');
+  }
+  return handle;
+}
+
 export async function simulate(
   _jobId: number,
   inputModel: BNGLModel,
@@ -2298,6 +2326,16 @@ export async function simulate(
     };
 
     derivatives = buildDerivativesFunction();
+
+    // Expose the exact RHS the simulator integrates (test/introspection hook).
+    if (options.captureOdeSystem) {
+      options.captureOdeSystem({
+        rhs: derivatives,
+        y0: Float64Array.from(state),
+        speciesNames: model.species.map((s) => s.name),
+        numSpecies,
+      });
+    }
 
     if (functionalRateCount > 0) {
       // Just ensuring derivatives func is correct (already done above)

@@ -81,6 +81,26 @@ function substituteToken(expr: string, oldName: string, newName: string): string
   return expr.replace(new RegExp(`\\b${escapeRegExp(oldName)}\\b`, 'g'), newName);
 }
 
+/**
+ * Inline zero-argument functions: replace every `f()` with `(body)`, recursively.
+ * XPP has no zero-arg user functions, and this is exactly how the simulator
+ * evaluates such a rate (it looks up the function and evaluates its body), so
+ * inlining is semantically identical and keeps the .ode valid.
+ */
+function inlineZeroArgFunctions(expr: string, funcByName: Map<string, ExportFunction>): string {
+  let e = expr;
+  for (let pass = 0; pass < 25; pass++) {
+    let changed = false;
+    for (const [name, fn] of funcByName) {
+      if ((fn.args?.length ?? 0) !== 0) continue;
+      const re = new RegExp(`\\b${escapeRegExp(name)}\\s*\\(\\s*\\)`, 'g');
+      if (re.test(e)) { e = e.replace(re, `(${fn.expression})`); changed = true; }
+    }
+    if (!changed) break;
+  }
+  return e;
+}
+
 interface IdContext {
   paramSet: Set<string>;
   obsByName: Map<string, ExportObservable>;
@@ -237,6 +257,7 @@ export async function exportModelToODE(model: BNGLModel, modelName: string): Pro
 
   const species = gen.species ?? [];
   const speciesNames = species.map((s) => s.name);
+  const speciesIsConstant = species.map((s) => !!(s as { isConstant?: boolean }).isConstant);
   const speciesIndex = new Map<string, number>(speciesNames.map((n, i) => [n, i]));
   const speciesVarSet = new Set<string>(speciesNames.map((_, i) => speciesVarName(i)));
   const initialConcentrations = species.map((s) => (s as { initialConcentration?: number }).initialConcentration ?? 0);
@@ -340,6 +361,7 @@ export async function exportModelToODE(model: BNGLModel, modelName: string): Pro
         expr = substituteToken(expr, `ridx${j}`, amountVar);
       }
       if (/\btime\b/.test(expr)) { expr = substituteToken(expr, 'time', 't'); timeDependent = true; }
+      expr = inlineZeroArgFunctions(expr, funcByName);
       rateFactor = `(${expr})`;
       collectIdentifiers(expr, { paramSet, obsByName, funcByName, speciesVarSet, usedObservables, usedFunctions, unknownIdentifiers });
     } else {
@@ -354,6 +376,7 @@ export async function exportModelToODE(model: BNGLModel, modelName: string): Pro
     const velocity = reactantProduct.length > 0 ? `${rateFactor}*${reactantProduct}` : rateFactor;
 
     for (const [i, c] of net.entries()) {
+      if (speciesIsConstant[i]) continue; // clamped species: dS/dt = 0 (matches simulator)
       const coeff = (c * preFactor * volConst) / speciesVol[i];
       if (coeff !== 0) rhsTerms[i].push({ coeff, velocity });
     }
@@ -368,9 +391,10 @@ export async function exportModelToODE(model: BNGLModel, modelName: string): Pro
     seenFns.add(fname);
     const fn = funcByName.get(fname);
     if (!fn) continue;
-    if (/\btime\b/.test(fn.expression)) timeDependent = true;
+    const inlinedBody = inlineZeroArgFunctions(fn.expression, funcByName);
+    if (/\btime\b/.test(inlinedBody)) timeDependent = true;
     const before = usedFunctions.size;
-    collectIdentifiers(fn.expression, {
+    collectIdentifiers(inlinedBody, {
       paramSet, obsByName, funcByName, speciesVarSet,
       localArgs: new Set(fn.args ?? []),
       usedObservables, usedFunctions, unknownIdentifiers,
@@ -456,14 +480,18 @@ export async function exportModelToODE(model: BNGLModel, modelName: string): Pro
     lines.push('');
   }
 
-  const emittedFns = [...usedFunctions].filter((n) => funcByName.has(n)).sort();
+  // Zero-arg functions are inlined into expressions, never emitted (XPP has no
+  // zero-arg user functions). Only multi-arg functions become XPP functions.
+  const emittedFns = [...usedFunctions]
+    .filter((n) => funcByName.has(n) && (funcByName.get(n)!.args?.length ?? 0) > 0)
+    .sort();
   if (emittedFns.length > 0) {
     lines.push('# ---- Functions ----');
     for (const name of emittedFns) {
       const fn = funcByName.get(name)!;
-      const body = /\btime\b/.test(fn.expression) ? substituteToken(fn.expression, 'time', 't') : fn.expression;
-      const args = fn.args ?? [];
-      lines.push(args.length > 0 ? `${name}(${args.join(',')})=${body}` : `${name}=${body}`);
+      let body = inlineZeroArgFunctions(fn.expression, funcByName);
+      if (/\btime\b/.test(body)) body = substituteToken(body, 'time', 't');
+      lines.push(`${name}(${(fn.args ?? []).join(',')})=${body}`);
     }
     lines.push('');
   }

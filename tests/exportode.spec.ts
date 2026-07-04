@@ -49,7 +49,7 @@ function evalExpr(expr: string, bind: Record<string, number>): number {
   for (const nm of names) {
     e = e.split(nm).join(`(${bind[nm]})`);
   }
-   
+  // eslint-disable-next-line no-new-func
   return Function(`"use strict";return (${e});`)() as number;
 }
 

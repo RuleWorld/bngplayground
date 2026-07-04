@@ -40,7 +40,8 @@ export type { FeatureFlags } from './featureFlags';
 
 // ── Simulation ─────────────────────────────────────────────────────
 export { generateExpandedNetwork } from './services/simulation/NetworkExpansion';
-export { simulate } from './services/simulation/SimulationLoop';
+export { simulate, buildOdeSystem } from './services/simulation/SimulationLoop';
+export type { OdeSystemHandle } from './types';
 export { evaluateFunctionalRate, evaluateExpressionOrParse, loadEvaluator, clearAllEvaluatorCaches, containsRateLawMacro, expandRateLawMacros, getCacheSizes, _setEvaluatorRefForTests } from './services/simulation/ExpressionEvaluator';
 export { requiresCompartmentResolution, resolveCompartmentVolumes } from './services/simulation/CompartmentResolver';
 export { BNGXMLWriter } from './services/simulation/BNGXMLWriter';
