@@ -96,6 +96,7 @@ interface EditorPanelProps {
   onExportOMEX?: () => void;
   onExportBNGL?: () => void;
   onExportNET?: () => void;
+  onExportODE?: () => void;
   lastResized?: number;
   isCollapsed?: boolean;
   onExpand?: () => void;
@@ -125,6 +126,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
   onExportOMEX,
   onExportBNGL,
   onExportNET,
+  onExportODE,
   lastResized,
   isCollapsed,
   onExpand,
@@ -361,6 +363,7 @@ export const EditorPanel: React.FC<EditorPanelProps> = ({
               <DropdownItem onClick={() => onExportSedML?.()} disabled={!modelExists}>Export SED-ML</DropdownItem>
               <DropdownItem onClick={() => onExportOMEX?.()} disabled={!modelExists}>Export OMEX</DropdownItem>
               <DropdownItem onClick={() => onExportNET?.()} disabled={!modelExists}>Export NET</DropdownItem>
+              <DropdownItem onClick={() => onExportODE?.()} disabled={!modelExists}>Export ODE</DropdownItem>
             </Dropdown>
 
             <Button variant="subtle" onClick={() => onCodeChange(formatBNGLMini(code))} className="h-9 px-3" title="Format BNGL code" aria-label="Format BNGL code">

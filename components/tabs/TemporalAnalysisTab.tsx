@@ -67,6 +67,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
   const [causalComparison, setCausalComparison] = useState<CausalComparisonUI | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<'piano_roll' | 'mutual_info' | 'transfer_entropy' | 'causal'>('piano_roll');
+  const [zoom, setZoom] = useState<{ min: number; max: number } | null>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
   const firingLog = results?.firingLog;
@@ -86,6 +87,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
     if (!firingLog || firingLog.length === 0) return;
     setIsAnalyzing(true);
     setError(null);
+    await new Promise((resolve) => setTimeout(resolve, 30));
 
     try {
       const engine = await import('@bngplayground/engine');
@@ -101,9 +103,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
         });
         setItResult(result);
 
-        // Compare to structural causal graph if contact map available
         if (engine.compareCausalGraphs) {
-          // Build structural edges: reaction i's products overlap with reaction j's reactants
           const structuralEdges: Array<{ source: number; target: number }> = [];
           for (let i = 0; i < reactionsList.length; i++) {
             const productsI = new Set(reactionsList[i].products ?? []);
@@ -131,21 +131,27 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
     }
   }, [firingLog, model, results]);
 
-  // Piano roll data: group firings by reaction
   const pianoRollData = useMemo(() => {
     if (!firingLog || firingLog.length === 0) return null;
 
+    const keyToGroup = new Map<string, number>();
     const reactionNames = new Map<number, string>();
     const reactionTimes = new Map<number, number[]>();
 
     for (const event of firingLog) {
-      if (!reactionNames.has(event.reactionIndex)) {
-        reactionNames.set(event.reactionIndex, event.ruleName || `R${event.reactionIndex + 1}`);
+      const key = event.ruleName || `R${event.reactionIndex + 1}`;
+      let group = keyToGroup.get(key);
+      if (group === undefined) {
+        group = keyToGroup.size;
+        keyToGroup.set(key, group);
+        reactionNames.set(group, key);
+        reactionTimes.set(group, []);
       }
-      if (!reactionTimes.has(event.reactionIndex)) {
-        reactionTimes.set(event.reactionIndex, []);
-      }
-      reactionTimes.get(event.reactionIndex)!.push(event.time);
+      reactionTimes.get(group)!.push(event.time);
+    }
+
+    for (const times of reactionTimes.values()) {
+      times.sort((a, b) => a - b);
     }
 
     return { reactionNames, reactionTimes };
@@ -197,6 +203,13 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
         </div>
       </Card>
 
+      {isAnalyzing && (
+        <div className="p-3 rounded-md bg-blue-50 dark:bg-blue-900/20 text-blue-700 dark:text-blue-200 text-sm flex items-center gap-2 shrink-0" role="status" aria-live="polite">
+          <LoadingSpinner className="w-4 h-4" />
+          Computing information flow across reactions… this can take a few seconds for busy trajectories.
+        </div>
+      )}
+
       {error && (
         <div className="p-3 rounded-md bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 text-sm" role="alert">
           {error}
@@ -238,40 +251,79 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
             <b> Look for:</b> dense bands (high activity), gaps (quiescent periods), and
             correlated patterns between rows (reactions that fire together).
           </p>
+          {(() => {
+            const tFullMin = 0;
+            const tFullMax = firingLog![firingLog!.length - 1]?.time || 1;
+            const lo = zoom ? zoom.min : tFullMin;
+            const hi = zoom ? zoom.max : tFullMax;
+            const step = (tFullMax - tFullMin) / 1000 || 0.001;
+            return (
+              <div className="flex flex-col gap-1 mb-3 text-xs text-slate-600 dark:text-slate-300">
+                <div className="flex items-center gap-2">
+                  <span className="w-10">Start</span>
+                  <input type="range" min={tFullMin} max={tFullMax} step={step} value={lo}
+                    onChange={(e) => setZoom({ min: Math.min(Number(e.target.value), hi - step), max: hi })}
+                    className="flex-1" aria-label="Piano roll window start time" />
+                  <span className="w-16 text-right font-mono">{lo.toPrecision(3)}</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="w-10">End</span>
+                  <input type="range" min={tFullMin} max={tFullMax} step={step} value={hi}
+                    onChange={(e) => setZoom({ min: lo, max: Math.max(Number(e.target.value), lo + step) })}
+                    className="flex-1" aria-label="Piano roll window end time" />
+                  <span className="w-16 text-right font-mono">{hi.toPrecision(3)}</span>
+                </div>
+                {zoom && (
+                  <button onClick={() => setZoom(null)}
+                    className="self-start mt-1 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700">
+                    Reset zoom
+                  </button>
+                )}
+              </div>
+            );
+          })()}
+          {(() => {
+            const nRows = pianoRollData.reactionNames.size;
+            const rowAreaH = nRows * 40;
+            const tickAreaH = 30;
+            const totalH = Math.max(300, rowAreaH + tickAreaH + 16);
+            return (
           <svg
             ref={svgRef}
             width="100%"
-            height={Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}
-            style={{ height: `${Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}px` }}
-            viewBox={`0 0 1000 ${Math.max(300, pianoRollData.reactionNames.size * 40 + 50)}`}
+            height={totalH}
+            style={{ height: `${totalH}px` }}
+            viewBox={`0 0 1000 ${totalH}`}
             className="bg-white dark:bg-slate-900 rounded"
             role="img"
             aria-label="Reaction firing piano roll visualization"
           >
-            {/* Time axis */}
             {(() => {
-              const tMin = firingLog![0]?.time || 0;
-              const tMax = firingLog![firingLog!.length - 1]?.time || 1;
+              const tFullMin = 0;
+              const tFullMax = firingLog![firingLog!.length - 1]?.time || 1;
+              const tMin = zoom ? zoom.min : tFullMin;
+              const tMax = zoom ? zoom.max : tFullMax;
               const reactions = Array.from(pianoRollData.reactionNames.entries())
                 .sort((a, b) => a[0] - b[0]);
+              const axisY = rowAreaH + 15;
 
               return (
                 <>
-                  {/* Grid lines */}
+                  <line x1={100} y1={axisY} x2={970} y2={axisY} stroke="#cbd5e1" strokeWidth={1} />
+
                   {Array.from({ length: 11 }, (_, i) => {
                     const x = 100 + (i / 10) * 870;
                     const t = tMin + (i / 10) * (tMax - tMin);
                     return (
                       <g key={`grid-${i}`}>
-                        <line x1={x} y1={15} x2={x} y2={reactions.length * 40 + 15}
+                        <line x1={x} y1={15} x2={x} y2={rowAreaH + 15}
                           stroke="#e2e8f0" strokeWidth={0.5} />
-                        <text x={x} y={reactions.length * 40 + 35} textAnchor="middle"
-                          fontSize="11" fill="#94a3b8" fontWeight="500">{t.toPrecision(3)}</text>
+                        <text x={x} y={axisY + 14} textAnchor="middle"
+                          fontSize="11" fill="#64748b" fontWeight="500">{t.toPrecision(3)}</text>
                       </g>
                     );
                   })}
 
-                  {/* Reaction rows */}
                   {reactions.map(([rxnIdx, name], row) => {
                     const y = row * 40 + 15;
                     const rowH = 34;
@@ -279,23 +331,19 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                     const color = CHART_COLORS[row % CHART_COLORS.length];
                     return (
                       <g key={`rxn-${rxnIdx}`}>
-                        {/* Row label */}
                         <text x={95} y={y + rowH / 2 + 4} textAnchor="end" fontSize="11" fill="#334155" fontWeight="500">
-                          {name.length > 14 ? name.substring(0, 14) + '…' : name}
+                          {name.length > 14 ? name.substring(0, 14) + '\u2026' : name}
                         </text>
-                        {/* Background stripe */}
                         <rect x={100} y={y} width={870} height={rowH}
                           fill={row % 2 === 0 ? '#f8fafc' : '#f1f5f9'} opacity={0.6}
                           rx={2} />
-                        {/* Firing count badge */}
                         <text x={975} y={y + rowH / 2 + 4} textAnchor="start" fontSize="9" fill="#94a3b8">
                           {times.length.toLocaleString()}
                         </text>
-                        {/* Firing ticks */}
                         {(times.length > 3000
                           ? times.filter((_, i) => i % Math.ceil(times.length / 3000) === 0)
                           : times
-                        ).map((t, i) => {
+                        ).filter((t) => t >= tMin && t <= tMax).map((t, i) => {
                           const x = 100 + ((t - tMin) / (tMax - tMin)) * 870;
                           return (
                             <line key={i} x1={x} y1={y + 2} x2={x} y2={y + rowH - 2}
@@ -306,14 +354,13 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                     );
                   })}
 
+                  <text x={500} y={axisY + 30} textAnchor="middle" fontSize="13" fontWeight="bold" fill="#0f172a">Time</text>
                 </>
               );
             })()}
           </svg>
-          {/* Time axis label — outside SVG to avoid overlap */}
-          <div className="text-center pt-1 pb-2 border-t border-slate-100 dark:border-slate-800/20">
-            <span className="text-[13px] font-bold text-slate-900 dark:text-slate-100">Time</span>
-          </div>
+            );
+          })()}
         </Card>
       )}
 
