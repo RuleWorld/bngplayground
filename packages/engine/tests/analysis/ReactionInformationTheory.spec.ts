@@ -119,4 +119,22 @@ describe('ReactionInformationTheory', () => {
     expect(result.structuralOnly.length).toBe(1); // 1→2 is only structural
     expect(result.emergent.length).toBe(1); // 2→3 is only empirical
   });
+
+  it('protects against RangeError: Invalid array length when binWidth is extremely small', async () => {
+    const { analyzeReactionInformation } = await import('../../src/services/analysis/ReactionInformationTheory');
+    const events: ReactionFiringEvent[] = [
+      { time: 0, reactionIndex: 0, propensity: 1 },
+      { time: 1e-15, reactionIndex: 0, propensity: 1 },
+      { time: 2e-15, reactionIndex: 0, propensity: 1 },
+      { time: 3e-15, reactionIndex: 0, propensity: 1 },
+      { time: 100, reactionIndex: 0, propensity: 1 },
+    ];
+    const result = analyzeReactionInformation({
+      firingLog: events,
+      nReactions: 1,
+      nShuffles: 10,
+    });
+    expect(result).toBeDefined();
+    expect(result.entropy).toBeDefined();
+  });
 });

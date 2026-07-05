@@ -150,13 +150,21 @@ function discretize(
         if (e.time < tMin) tMin = e.time;
         if (e.time > tMax) tMax = e.time;
     }
-    const nBins = Math.max(1, Math.ceil((tMax - tMin) / binWidth) + 1);
+
+    // Protect against RangeError: Invalid array length or memory exhaustion by capping the number of bins
+    const maxBins = 100000;
+    let adjustedBinWidth = binWidth;
+    if (tMax > tMin && (tMax - tMin) / adjustedBinWidth > maxBins) {
+        adjustedBinWidth = (tMax - tMin) / maxBins;
+    }
+
+    const nBins = Math.max(1, Math.ceil((tMax - tMin) / adjustedBinWidth) + 1);
     const series: Uint8Array[] = [];
     for (let i = 0; i < nReactions; i++) series.push(new Uint8Array(nBins));
 
     const names = new Map<number, string>();
     for (const e of firingLog) {
-        const bin = Math.min(Math.floor((e.time - tMin) / binWidth), nBins - 1);
+        const bin = Math.min(Math.floor((e.time - tMin) / adjustedBinWidth), nBins - 1);
         const reactionIndex = Number.isInteger(e.reactionIndex) ? e.reactionIndex : -1;
         if (
             reactionIndex >= 0 &&

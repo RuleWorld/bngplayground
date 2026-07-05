@@ -63,7 +63,7 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
     // If semantic search returned results, use those
     if (semanticResults && semanticResults.length > 0) {
       // Map semantic results to model objects
-      return semanticResults
+      const mapped = semanticResults
         .map(result => {
           // Match by id or by filename (without .bngl extension)
           const modelId = result.id.split('/').pop() || result.id;
@@ -75,6 +75,9 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
           );
         })
         .filter((m): m is NonNullable<typeof m> => m !== undefined);
+
+      // Deduplicate the mapped models by id to prevent duplicates in the UI
+      return Array.from(new Map(mapped.map(m => [m.id, m])).values());
     }
 
     // Use keyword search if there's a search term

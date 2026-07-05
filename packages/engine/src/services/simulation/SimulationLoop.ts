@@ -22,7 +22,6 @@ import { getFeatureFlags } from '../../featureFlags';
 import { jitCompiler, type JITCompiledFunction } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
 import { SeededRandom } from '../../utils/random';
-import { FenwickTree } from '../../utils/fenwickTree';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
@@ -440,7 +439,7 @@ export async function simulate(
   const defaultRecordFromIdx = firstUnsuffixedIdx >= 0 ? firstUnsuffixedIdx : 0;
   const recordFromPhaseIdx = options.recordFromPhase !== undefined ? options.recordFromPhase : defaultRecordFromIdx;
 
-  // Seeded random number generator for SSA
+  // Seeded random number generator for SSA (used by PLA/PSA via separate imports)
   const rng = new SeededRandom(options.seed ?? 12345);
 
   const allSsa = phases.every(p => p.method === 'ssa') || options.method === 'ssa';
@@ -1333,15 +1332,69 @@ export async function simulate(
 
       // Reuse arrays to avoid allocations in hot loop
       const propensities = new Float64Array(numReactions);
-      const fenwick = new FenwickTree(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
       const propOrder = new Int32Array(numReactions);
 
-      // Reaction firing log for information-theoretic analysis
+      // === OPT 2: INLINED FENWICK TREE ===
+      // Inlining eliminates class method dispatch overhead (~2-3ns per call)
+      const fenwickTree = new Float64Array(numReactions + 1);
+      const fenwickHighBit = numReactions > 0 ? (1 << (Math.floor(Math.log2(numReactions)) + 1)) : 1;
+
+      const fenwickBuild = (values: Float64Array): void => {
+        const n = numReactions;
+        const tree = fenwickTree;
+        for (let i = 1; i <= n; i++) tree[i] = values[i - 1];
+        for (let i = 1; i <= n; i++) {
+          const j = i + (i & -i);
+          if (j <= n) tree[j] += tree[i];
+        }
+      };
+
+      const fenwickAdd = (idx: number, delta: number): void => {
+        let i = idx + 1;
+        const tree = fenwickTree;
+        const n = numReactions;
+        while (i <= n) {
+          tree[i] += delta;
+          i += i & -i;
+        }
+      };
+
+      const fenwickFind = (target: number): number => {
+        const tree = fenwickTree;
+        const n = numReactions;
+        let idx = 0;
+        let bitMask = fenwickHighBit;
+        let t = target;
+        while (bitMask !== 0) {
+          const next = idx + bitMask;
+          if (next <= n && tree[next] <= t) {
+            t -= tree[next];
+            idx = next;
+          }
+          bitMask >>= 1;
+        }
+        return idx; // 0-based index
+      };
+
+      // === OPT 1: ZERO-ALLOCATION TYPED ARRAY FIRING LOG ===
       const shouldRecordFirings = !!(options as typeof options & { recordFirings?: boolean }).recordFirings;
       const maxFiringEvents = ((options as typeof options & { maxFiringEvents?: number }).maxFiringEvents) ?? 100000;
-      const firingLog: Array<{ time: number; reactionIndex: number; ruleName?: string; propensity: number }> = [];
+      const logTimes = shouldRecordFirings ? new Float64Array(maxFiringEvents) : null;
+      const logRxnIndices = shouldRecordFirings ? new Int32Array(maxFiringEvents) : null;
+      const logPropensities = shouldRecordFirings ? new Float64Array(maxFiringEvents) : null;
+      let logCount = 0;
+
+      // === OPT 3: INLINED PRNG (Mulberry32) ===
+      // Eliminates class method dispatch overhead on every SSA event
+      let rngState = (options.seed ?? 12345) | 0;
+      const nextRand = (): number => {
+        let t = (rngState += 0x6d2b79f5);
+        t = Math.imul(t ^ (t >>> 15), t | 1);
+        t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+        return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+      };
 
       // === LAZY OBSERVABLE EVALUATION SETUP ===
       const numObservables = concreteObservables.length;
@@ -1365,6 +1418,41 @@ export async function simulate(
       }
       const dirtyObservables = new Uint8Array(numObservables);
       dirtyObservables.fill(1); // Initially all dirty
+
+      // === OPT 5: INCREMENTAL OBSERVABLE VALUES FOR SSA ===
+      // Maintain a live buffer of observable values, updated incrementally
+      // when species counts change, instead of recomputing all observables
+      // from scratch for every functional-rate propensity evaluation.
+      const ssaObsValues = new Float64Array(numObservables);
+      // Build per-species -> [(obsIdx, coefficient)] lookup for incremental updates
+      const speciesObsContribs: Array<Array<{ obsIdx: number; coeff: number }>> = Array.from({ length: numSpecies }, () => []);
+      for (let i = 0; i < numObservables; i++) {
+        const obs = concreteObservables[i];
+        for (let j = 0; j < obs.indices.length; j++) {
+          speciesObsContribs[obs.indices[j]].push({ obsIdx: i, coeff: obs.coefficients[j] });
+        }
+      }
+      // Initialize ssaObsValues from current state
+      const initSsaObsValues = (): void => {
+        ssaObsValues.fill(0);
+        for (let i = 0; i < numObservables; i++) {
+          const obs = concreteObservables[i];
+          let sum = 0;
+          for (let j = 0; j < obs.indices.length; j++) {
+            sum += state[obs.indices[j]] * obs.coefficients[j];
+          }
+          ssaObsValues[i] = sum;
+        }
+      };
+      initSsaObsValues();
+      // Build the Record for functional rate evaluation from the live buffer
+      const ssaObsRecord: Record<string, number> = Object.create(null) as Record<string, number>;
+      const buildSsaObsRecord = (): Record<string, number> => {
+        for (let i = 0; i < safeObservableNames.length; i++) {
+          ssaObsRecord[safeObservableNames[i]] = ssaObsValues[safeObservableIndices[i]];
+        }
+        return ssaObsRecord;
+      };
 
       // Extract meaningful reaction names from ruleName or reactants/products
       const ruleNames = concreteReactions.map((rxn) => {
@@ -1436,11 +1524,12 @@ export async function simulate(
       }
 
       // Helper: calculate propensity for a single reaction
+      // OPT 5: Uses ssaObsRecord (live incremental buffer) instead of evaluateObservablesFast
       const calcPropensity = (rxnIdx: number): number => {
         const rxn = concreteReactions[rxnIdx];
         if (isFunctionalRxn[rxnIdx]) {
           try {
-            const currentObs = evaluateObservablesFast(state);
+            const currentObs = buildSsaObsRecord();
             const rate = evaluateFunctionalRate(
               rxn.rateExpression!,
               model.parameters || {},
@@ -1573,6 +1662,10 @@ export async function simulate(
               concreteObservables
             );
 
+        const compiledSSAIncrementalUpdater = functionalRateCount === 0
+          ? jitCompiler.compileSSAIncrementalUpdater(concreteReactions, reactionReactingVolumes, rxnUpdateRxn)
+          : null;
+
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
           pushDataRow(phase.suffix, outT0, state as Float64Array);
@@ -1589,6 +1682,8 @@ export async function simulate(
         let recalculatePropensitiesCount = 0;
 
         const computeAllPropensities = () => {
+          // Re-sync incremental observable buffer on full recompute
+          initSsaObsValues();
           if (compiledSSAPropensities) {
             aTotal = compiledSSAPropensities(state, propensities);
             for (let i = 0; i < numReactions; i++) {
@@ -1598,7 +1693,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
               }
             }
-            fenwick.build(propensities);
+            fenwickBuild(propensities);
           } else {
             aTotal = 0;
             for (let i = 0; i < numReactions; i++) {
@@ -1611,7 +1706,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
               }
             }
-            fenwick.build(propensities);
+            fenwickBuild(propensities);
           }
         };
 
@@ -1622,7 +1717,8 @@ export async function simulate(
             console.warn(`[Worker] SSA Terminating early (maxEvents=${maxEvents} reached) at t=${(globalTime + t).toFixed(3)}. Population count may be exploding.`);
             break;
           }
-          callbacks.checkCancelled();
+          // OPT 6: Check cancellation every 1024 events instead of every event
+          if ((totalEvents & 0x3FF) === 0) callbacks.checkCancelled();
 
           if (recalculatePropensitiesCount++ >= 100) {
             computeAllPropensities();
@@ -1639,30 +1735,29 @@ export async function simulate(
             break;
           }
 
-          const r1 = rng.next();
+          // OPT 3: Inlined PRNG calls
+          const r1 = nextRand();
           const tau = (1 / aTotal) * Math.log(1 / r1);
           if (t + tau > phaseTEnd) {
             break;
           }
           t += tau;
 
-          const r2 = rng.next() * aTotal;
-          // Fenwick tree O(log R) selection replaces O(R) cumulative-sum search
-          const fenwickIdx = fenwick.find(r2);
+          const r2 = nextRand() * aTotal;
+          // OPT 2: Inlined Fenwick tree O(log R) selection
+          const fenwickIdx = fenwickFind(r2);
           const reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
           nEventsThisPhase++;
 
-          // Record firing event for information-theoretic analysis
-          if (shouldRecordFirings && firingLog.length < maxFiringEvents) {
-            firingLog.push({
-              time: t,
-              reactionIndex,
-              ruleName: ruleNames[reactionIndex],
-              propensity: propensities[reactionIndex],
-            });
+          // OPT 1: Record firing event into pre-allocated typed arrays
+          if (shouldRecordFirings && logCount < maxFiringEvents && logTimes && logRxnIndices && logPropensities) {
+            logTimes[logCount] = t;
+            logRxnIndices[logCount] = reactionIndex;
+            logPropensities[logCount] = propensities[reactionIndex];
+            logCount++;
           }
 
           // === DIN INFLUENCE TRACKING: Capture old propensities BEFORE state change ===
@@ -1701,29 +1796,43 @@ export async function simulate(
             for (let j = 0; j < products.length; j++) processSpecies(products[j]);
           }
 
-          // Apply state changes
+          // Apply state changes + OPT 5: incremental observable update
           for (let j = 0; j < firedRxn.reactants.length; j++) {
             const spIdx = firedRxn.reactants[j];
             state[spIdx]--;
-            const deps = observableDependsOnSpecies[spIdx];
-            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
+            // Incrementally decrement affected observable values
+            const contribs = speciesObsContribs[spIdx];
+            for (let k = 0; k < contribs.length; k++) {
+              ssaObsValues[contribs[k].obsIdx] -= contribs[k].coeff;
+            }
+            const obsDeps = observableDependsOnSpecies[spIdx];
+            for (let k = 0; k < obsDeps.length; k++) dirtyObservables[obsDeps[k]] = 1;
           }
           for (let j = 0; j < firedRxn.products.length; j++) {
             const spIdx = firedRxn.products[j];
             state[spIdx]++;
-            const deps = observableDependsOnSpecies[spIdx];
-            for (let k = 0; k < deps.length; k++) dirtyObservables[deps[k]] = 1;
+            // Incrementally increment affected observable values
+            const contribs = speciesObsContribs[spIdx];
+            for (let k = 0; k < contribs.length; k++) {
+              ssaObsValues[contribs[k].obsIdx] += contribs[k].coeff;
+            }
+            const obsDeps = observableDependsOnSpecies[spIdx];
+            for (let k = 0; k < obsDeps.length; k++) dirtyObservables[obsDeps[k]] = 1;
           }
 
-          // Incremental propensity update
-          const deps = rxnUpdateRxn[reactionIndex];
-          for (let d = 0; d < deps.length; d++) {
-            const jrxn = deps[d];
-            const aNew = calcPropensity(jrxn);
-            const delta = aNew - propensities[jrxn];
-            aTotal += delta;
-            fenwick.add(jrxn, delta);
-            propensities[jrxn] = aNew;
+          // OPT 4: Incremental propensity update with inlined Fenwick add
+          if (compiledSSAIncrementalUpdater) {
+            aTotal += compiledSSAIncrementalUpdater(reactionIndex, state, propensities, fenwickAdd);
+          } else {
+            const deps = rxnUpdateRxn[reactionIndex];
+            for (let d = 0; d < deps.length; d++) {
+              const jrxn = deps[d];
+              const aNew = calcPropensity(jrxn);
+              const delta = aNew - propensities[jrxn];
+              aTotal += delta;
+              fenwickAdd(jrxn, delta);
+              propensities[jrxn] = aNew;
+            }
           }
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
@@ -1826,7 +1935,15 @@ export async function simulate(
         expandedReactions: model.reactions,
         expandedSpecies: model.species,
         ssaInfluence,
-        firingLog: shouldRecordFirings && firingLog.length > 0 ? firingLog : undefined,
+        // OPT 1: Materialize firing log from typed arrays only at return time
+        firingLog: shouldRecordFirings && logCount > 0 && logTimes && logRxnIndices && logPropensities
+          ? Array.from({ length: logCount }, (_, i) => ({
+              time: logTimes[i],
+              reactionIndex: logRxnIndices[i],
+              ruleName: ruleNames[logRxnIndices[i]],
+              propensity: logPropensities[i],
+            }))
+          : undefined,
       } satisfies SimulationResults;
     }
 

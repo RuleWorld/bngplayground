@@ -995,6 +995,116 @@ export class JITCompiler {
     }
 
     /**
+     * OPT 4: JIT-compiled incremental propensity updater for SSA.
+     * 
+     * Generates a function that, given the index of the fired reaction, recomputes
+     * only the dependent propensities using hardcoded species indices and pre-folded
+     * rate constants. This eliminates the interpreted calcPropensity loop and avoids
+     * indirect array lookups in the hot path.
+     *
+     * Returns null if any reaction uses functional rates (those still need interpreted eval).
+     *
+     * The compiled function signature:
+     *   (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
+     *    fenwickAdd: (idx: number, delta: number) => void) => number
+     * 
+     * Returns the total aTotal delta from all updated propensities.
+     */
+    public compileSSAIncrementalUpdater(
+        reactions: Array<{
+            reactants: number[] | Int32Array;
+            products: number[] | Int32Array;
+            rateConstant: number;
+            propensityFactor: number;
+            isFunctionalRate?: boolean;
+            rateExpression?: string | null;
+        }>,
+        reactionReactingVolumes: Float64Array,
+        rxnUpdateRxn: Int32Array[]
+    ): ((firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
+         fenwickAdd: (idx: number, delta: number) => void) => number) | null {
+        if (!getFeatureFlags().enableJitFastPath) {
+            return null;
+        }
+
+        try {
+            const numReactions = reactions.length;
+            
+            // Bail out if any reaction uses functional rates
+            for (let i = 0; i < numReactions; i++) {
+                if (reactions[i].isFunctionalRate && reactions[i].rateExpression) {
+                    return null;
+                }
+            }
+
+            // Pre-compute effective rate constants kEff[i] = k * factor / V^(n-1)
+            const kEff = new Float64Array(numReactions);
+            for (let i = 0; i < numReactions; i++) {
+                const rxn = reactions[i];
+                const n = rxn.reactants.length;
+                let eff = rxn.rateConstant * rxn.propensityFactor;
+                const volume = reactionReactingVolumes[i];
+                if (!Number.isFinite(eff) || !Number.isFinite(volume)) return null;
+                if (n === 0) {
+                    eff *= volume;
+                } else if (n === 2) {
+                    eff /= volume;
+                } else if (n === 3) {
+                    eff /= (volume * volume);
+                } else if (n > 3) {
+                    eff /= Math.pow(volume, n - 1);
+                }
+                kEff[i] = eff;
+            }
+
+            // Generate a switch-case function body
+            let source = 'var totalDelta = 0;\nswitch (firedRxnIdx) {\n';
+
+            for (let r = 0; r < numReactions; r++) {
+                const deps = rxnUpdateRxn[r];
+                if (deps.length === 0) {
+                    source += `case ${r}: break;\n`;
+                    continue;
+                }
+
+                source += `case ${r}: {\n`;
+                for (let d = 0; d < deps.length; d++) {
+                    const jrxn = deps[d];
+                    const rxn = reactions[jrxn];
+                    const reactants = rxn.reactants;
+                    const k = kEff[jrxn];
+
+                    // Build propensity expression: kEff * state[r0] * state[r1] * ...
+                    let expr = String(k);
+                    for (let j = 0; j < reactants.length; j++) {
+                        const idx = reactants[j];
+                        if (typeof idx !== 'number' || !Number.isFinite(idx) || idx < 0 || Math.floor(idx) !== idx) {
+                            throw new Error(`Invalid reactant index: ${idx}`);
+                        }
+                        expr += ` * state[${idx}]`;
+                    }
+
+                    source += `  var a${jrxn} = ${expr};\n`;
+                    source += `  var d${jrxn} = a${jrxn} - propensities[${jrxn}];\n`;
+                    source += `  propensities[${jrxn}] = a${jrxn};\n`;
+                    source += `  totalDelta += d${jrxn};\n`;
+                    source += `  fenwickAdd(${jrxn}, d${jrxn});\n`;
+                }
+                source += '  break;\n}\n';
+            }
+
+            source += '}\nreturn totalDelta;\n';
+
+            return new Function('firedRxnIdx', 'state', 'propensities', 'fenwickAdd', source) as
+                (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
+                 fenwickAdd: (idx: number, delta: number) => void) => number;
+        } catch (e) {
+            console.warn('[JITCompiler] Failed to compile SSA incremental updater:', e);
+            return null;
+        }
+    }
+
+    /**
      * Compile a reaction network into a compact bytecode representation for WASM interpretation.
      * Returns null if any reaction uses a complex rate expression that cannot be pre-evaluated.
      */
