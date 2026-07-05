@@ -86,12 +86,22 @@ function collapseWhitespace(text: string): string {
 
 function extractSection(code: string, sectionName: string): string[] {
     const normalizedSection = collapseWhitespace(sectionName.toLowerCase());
-    const lines = code.split('\n');
     const sectionLines: string[] = [];
     let inSection = false;
 
-    for (const rawLine of lines) {
-        const line = rawLine.endsWith('\r') ? rawLine.slice(0, -1) : rawLine;
+    let startIdx = 0;
+    const len = code.length;
+    while (startIdx < len) {
+        let endIdx = code.indexOf('\n', startIdx);
+        if (endIdx === -1) endIdx = len;
+
+        let actualEnd = endIdx;
+        if (actualEnd > startIdx && code.charCodeAt(actualEnd - 1) === 13) {
+            actualEnd--; // handle \r
+        }
+
+        const line = code.substring(startIdx, actualEnd);
+        startIdx = endIdx + 1;
         const normalizedLine = collapseWhitespace(line.toLowerCase());
 
         if (!inSection) {

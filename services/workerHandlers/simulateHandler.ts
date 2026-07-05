@@ -27,6 +27,7 @@ import {
 import type { NFsimSimulationOptions } from '@bngplayground/engine';
 
 import { mergeSimulationOptionsWithModelActionDefaults } from '../bnglWorker';
+import { applyParameterOverrides } from './applyParameterOverrides';
 
 // ---- Shared context contract ------------------------------------------------
 
@@ -162,27 +163,7 @@ export async function handleSimulate(
       if (!p.parameterOverrides || Object.keys(p.parameterOverrides).length === 0) {
         model = cached;
       } else {
-        const overrides: Record<string, number> = p.parameterOverrides;
-        const nextModel: BNGLModel = {
-          ...cached,
-          parameters: { ...(cached.parameters || {}), ...overrides },
-          species: (cached.species || []).map((s) => {
-            if (overrides[s.name] !== undefined) {
-              return { ...s, initialConcentration: overrides[s.name] };
-            }
-            return s;
-          }),
-          reactions: [],
-        } as BNGLModel;
-
-        (cached.reactions || []).forEach((r) => {
-          const rateConst = nextModel.parameters[r.rate] ?? Number.parseFloat(r.rate);
-          if (isNaN(rateConst)) {
-            ctx.workerVerboseLog(`[Worker] Unresolved rate parameter: ${r.rate}`);
-          }
-          nextModel.reactions.push({ ...r, rateConstant: rateConst });
-        });
-        model = nextModel;
+        model = applyParameterOverrides(cached, p.parameterOverrides);
       }
     }
 

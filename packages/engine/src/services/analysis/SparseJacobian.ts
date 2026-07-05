@@ -219,9 +219,9 @@ export function generateAnalyticalJacobian(
     };
   });
 
+  const parameterNames = Object.keys(parameters);
   const rxnRateValues = rxnRateExprs.map((info, idx) => {
     const expr = info.expr.replace(/\bMath\./g, '');
-    const parameterNames = Object.keys(parameters);
 
     if (!info.isConstant) {
       const evaluator = SafeExpressionEvaluator.compile(expr, parameterNames);
@@ -297,7 +297,7 @@ export function generateAnalyticalJacobian(
         // Avoid array allocation ([...rxn.reactants]) and .splice() inside this hot loop.
         // Instead, find the index to skip and iterate the original array directly.
         const rxnReactants = rxn.reactants;
-        let skipIndex = -1;
+        let skipIndex: number;
         if (contrib.reactantIdxJ >= 0 && contrib.reactantIdxJ < rxnReactants.length) {
           skipIndex = contrib.reactantIdxJ;
         } else {

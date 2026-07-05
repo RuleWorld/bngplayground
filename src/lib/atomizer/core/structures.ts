@@ -681,7 +681,8 @@ export class Species {
           let bestScore = -1;
           const elementBonds = element.components.flatMap(c => c.bonds);
 
-          for (const mol of this.molecules.filter(m => m.name === element.name)) {
+          for (const mol of this.molecules) {
+            if (mol.name !== element.name) continue;
             const molBonds = mol.components.flatMap(c => c.bonds);
             const score = this.sequenceMatchRatio(molBonds, elementBonds);
             if (score > bestScore) {

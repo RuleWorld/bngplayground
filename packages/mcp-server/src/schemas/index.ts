@@ -1,8 +1,7 @@
 export {
     simulationMethods,
     solverValues,
-    finiteNumber,
-    positiveInt,
+
     parseBnglArgsSchema,
     generateNetworkArgsSchema,
     simulateArgsSchema,
@@ -13,6 +12,7 @@ export {
 
 export {
     sobolSensitivityArgsSchema,
+
     computeFimArgsSchema,
     identifiabilityArgsSchema,
     bayesianInferenceArgsSchema,
@@ -30,6 +30,7 @@ export {
     diagnoseModelArgsSchema,
     explainModelArgsSchema,
     suggestFixArgsSchema,
+
 } from './intelligence.js';
 
 export {

@@ -2,7 +2,7 @@
 import { describe, it, expect, beforeAll } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
-import { BNGLParser, NetworkGenerator, GraphCanonicalizer } from '@bngplayground/engine';
+import { BNGLParser, GraphCanonicalizer } from '@bngplayground/engine';
 import { parseBNGL } from '../services/parseBNGL';
 
 /**

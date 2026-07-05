@@ -10,7 +10,7 @@
  * Reference: bionetgen/bng2/Network3/src/run_network.cpp
  */
 
-import { BNGLFunction, BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries } from '../../types';
+import { BNGLFunction, BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries, OdeSystemHandle } from '../../types';
 import type { SolverResult } from './ODESolver';
 
 import { BNGLParser } from '../graph/core/BNGLParser';
@@ -26,6 +26,7 @@ import { FenwickTree } from '../../utils/fenwickTree';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
+import { generateExpandedNetwork } from './NetworkExpansion';
 // import * as fs from 'node:fs';
 
 interface ConcreteReaction {
@@ -280,6 +281,39 @@ async function convertReactionsToGPU(
  * console.log('Final time:', results.data[results.data.length - 1].time);
  * ```
  */
+/**
+ * Build (and return) the ODE right-hand side the simulator would integrate for a
+ * model, without needing the full simulation result. Runs the normal preparation
+ * path and captures the RHS via {@link SimulationOptions.captureOdeSystem}, so the
+ * returned closure is exactly what `simulate` integrates. Intended for external
+ * integration (e.g. with `createSolver('cvode', ...)`) and for validating the
+ * `.ode` exporter against the live RHS.
+ */
+export async function buildOdeSystem(
+  model: BNGLModel,
+  options: Partial<SimulationOptions> = {},
+): Promise<OdeSystemHandle> {
+  let handle: OdeSystemHandle | undefined;
+  const hasRules = (model.reactionRules?.length ?? 0) > 0;
+  const hasReactions = (model.reactions?.length ?? 0) > 0;
+  const expandedModel = hasRules && !hasReactions
+    ? await generateExpandedNetwork(model, () => {}, () => {})
+    : model;
+  const opts: SimulationOptions = {
+    t_end: options.t_end ?? 1,
+    n_steps: options.n_steps ?? 1,
+    solver: options.solver ?? 'cvode',
+    ...options,
+    method: 'ode',
+    captureOdeSystem: (h) => { handle = h; },
+  };
+  await simulate(0, expandedModel, opts, { checkCancelled: () => {}, postMessage: () => {} });
+  if (!handle) {
+    throw new Error('buildOdeSystem: the simulator did not build an ODE right-hand side for this model.');
+  }
+  return handle;
+}
+
 export async function simulate(
   _jobId: number,
   inputModel: BNGLModel,
@@ -301,11 +335,18 @@ export async function simulate(
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
   if (VERBOSE_SIM_DEBUG) console.log('[Worker] Starting simulation with', inputModel.species.length, 'species,', inputModel.reactions?.length, 'reactions, and', inputModel.reactionRules?.length ?? 0, 'rules');
 
+  // Auto-expand network if model has rules but no generated reactions yet.
+  const hasRules = (inputModel.reactionRules?.length ?? 0) > 0;
+  const hasReactions = (inputModel.reactions?.length ?? 0) > 0;
+  const expandedInput = hasRules && !hasReactions
+    ? await generateExpandedNetwork(inputModel, callbacks.checkCancelled, () => {})
+    : inputModel;
+
   // STRICT PARITY: Output time grid management
   // ... (Managed by toBngGridTime)
 
   // 1. Prepare Model State without the JSON deep-clone hot-path.
-  const model = cloneModelForSimulation(inputModel);
+  const model = cloneModelForSimulation(expandedInput);
 
   const numSpecies = model.species.length;
   const speciesHeaders = model.species.map(s => s.name);
@@ -434,6 +475,9 @@ export async function simulate(
 
   const functionNames = new Set((model.functions || []).map(f => f.name));
 
+  // ⚡ Bolt Optimization: Hoist Map creations out of hot reaction parsing loop
+  const staticParamMap = new Map(Object.entries(model.parameters || {}));
+
   const concreteReactions: ConcreteReaction[] = reactions.map((r: BNGLReaction) => {
     // Map string names to integer indices.
     const reactantIndices = r.reactants.map(name => {
@@ -462,8 +506,7 @@ export async function simulate(
     // Matches BNG2 reading of parameters block.
     if ((isNaN(rate) || !isFinite(rate)) && !isFunctionalRate && typeof rateExpr === 'string') {
       try {
-        const paramMap = new Map(Object.entries(model.parameters || {}));
-        const evalVal = BNGLParser.evaluateExpression(rateExpr, paramMap, new Set());
+        const evalVal = BNGLParser.evaluateExpression(rateExpr, staticParamMap, new Set());
         if (!Number.isNaN(evalVal) && Number.isFinite(evalVal)) {
           rate = evalVal;
         }
@@ -2002,7 +2045,10 @@ export async function simulate(
             const vAnchor = reactionReactingVolumes[i] || 1.0;
             const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1) * vAnchor;
             let multiplicative = 1;
-            // NOTE: BNG2 network simulations (ODE) do not implement TotalRate; treat as standard mass action.
+            // TotalRate is honored upstream: NetworkGenerator skips statFactor/multiplicity
+            // baking for TotalRate rules (sf=1), and NetworkExpansion omits statFactor from
+            // the functional-rate fold. The flux below uses the rate as-is from those sources,
+            // so no TotalRate adjustment is needed here.
             for (let j = 0; j < rxn.reactants.length; j++) {
               const ridx = rxn.reactants[j];
               const nativeVal = yIn[ridx];
@@ -2296,6 +2342,16 @@ export async function simulate(
     };
 
     derivatives = buildDerivativesFunction();
+
+    // Expose the exact RHS the simulator integrates (test/introspection hook).
+    if (options.captureOdeSystem) {
+      options.captureOdeSystem({
+        rhs: derivatives,
+        y0: Float64Array.from(state),
+        speciesNames: model.species.map((s) => s.name),
+        numSpecies,
+      });
+    }
 
     if (functionalRateCount > 0) {
       // Just ensuring derivatives func is correct (already done above)
@@ -2977,14 +3033,15 @@ export async function simulate(
           if (recordThisPhase) {
             for (const row of nfsimResults.data) {
               const adjustedRow: Record<string, number> = Object.create(null) as Record<string, number>;
-              for (const [key, value] of Object.entries(row)) {
-                if (key === '__proto__' || key === 'constructor' || key === 'prototype') {
-                  continue;
-                }
+              // ⚡ Bolt Optimization: Use for...in instead of Object.entries() to avoid array allocations in hot path
+              for (const key in row) {
+                if (!Object.prototype.hasOwnProperty.call(row, key)) continue;
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+
                 if (key === 'time') {
-                  adjustedRow[key] = phaseStart + value;
+                  adjustedRow[key] = phaseStart + row[key as keyof typeof row];
                 } else {
-                  adjustedRow[key] = value;
+                  adjustedRow[key] = row[key as keyof typeof row];
                 }
               }
               appendDataRow(phase.suffix, adjustedRow);

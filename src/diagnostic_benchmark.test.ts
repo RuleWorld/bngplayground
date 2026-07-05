@@ -3,7 +3,7 @@
  * Diagnostic Benchmark: Kozer_2014 Analysis
  * Deep dive into why this model is slow compared to BNG2.pl
  */
-import { describe, it, expect } from 'vitest';
+import { describe, it } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 import { spawnSync } from 'child_process';

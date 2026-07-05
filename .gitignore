@@ -255,3 +255,4 @@ wasm-sundials_deps/
 three-*.tgz
 
 # End of .gitignore
+coverage

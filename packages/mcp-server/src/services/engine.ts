@@ -49,7 +49,7 @@ export function createToolResult<T>(data: T): ToolResult<T> {
     };
 }
 
-export function formatZodError(toolName: string, args: ToolArgs, error: z.ZodError): Error {
+function formatZodError(toolName: string, args: ToolArgs, error: z.ZodError): Error {
     const issues = error.issues.map((issue) => {
         const path = issue.path.length > 0 ? issue.path.join('.') : 'arguments';
         return `${path}: ${issue.message}`;
@@ -58,6 +58,15 @@ export function formatZodError(toolName: string, args: ToolArgs, error: z.ZodErr
     return new Error(`Invalid arguments for ${toolName}: ${issues}. Received: ${received}`);
 }
 
+/**
+ * Parses and validates tool arguments against a Zod schema.
+ *
+ * @param toolName - The name of the tool, used for formatting error messages.
+ * @param schema - The Zod schema to validate the arguments against.
+ * @param args - The unvalidated tool arguments.
+ * @returns The parsed and validated arguments.
+ * @throws {Error} If validation fails, throws an error formatted with the issues.
+ */
 export function parseArgs<T extends z.ZodTypeAny>(toolName: string, schema: T, args: ToolArgs): z.infer<T> {
     const parsed = schema.safeParse(args ?? {});
     if (!parsed.success) {
@@ -136,6 +145,17 @@ export function applyNetworkOptions<T extends { max_agents?: number; max_reactio
     };
 }
 
+/**
+ * Asynchronously expands a BNGL model's reaction network by generating all possible species and reactions.
+ *
+ * This function calls the underlying engine's `generateExpandedNetwork` using empty progress and
+ * cancellation callbacks, meaning it does not report progress and cannot be interrupted midway.
+ * It is primarily used when network expansion must be fully completed before subsequent steps
+ * (like simulation or analysis) can proceed.
+ *
+ * @param model The unexpanded or partially expanded BNGLModel object.
+ * @returns A promise that resolves to the fully expanded BNGLModel.
+ */
 export async function expandModel(model: BNGLModel): Promise<BNGLModel> {
     return generateExpandedNetwork(
         model,
@@ -159,7 +179,7 @@ export function extractMoleculeNames(pattern: string): string[] {
         });
 }
 
-export function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
+function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
     const molecules = new Set<string>();
 
     model.species.forEach((species) => {
@@ -318,7 +338,7 @@ export function validateModel(model: BNGLModel, includeNFsim: boolean): Validate
     };
 }
 
-export function splitByTopLevelCommas(pattern: string): string[] {
+function splitByTopLevelCommas(pattern: string): string[] {
     const parts: string[] = [];
     let current = '';
     let depth = 0;
@@ -345,7 +365,7 @@ export function splitByTopLevelCommas(pattern: string): string[] {
     return parts;
 }
 
-export function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
+function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
     const graphs: ParsedSpeciesGraph[] = [];
     for (const pattern of patterns) {
         const pieces = splitByTopLevelCommas(String(pattern));
@@ -356,7 +376,7 @@ export function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
     return graphs;
 }
 
-export function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }> {
+function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }> {
     const bonds = new Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }>();
     const sanitize = (name: string) => {
         const dotIdx = name.indexOf('.');
@@ -535,6 +555,16 @@ export function assertScannableParameter(model: BNGLModel, parameter: string): v
     }
 }
 
+/**
+ * Mutates the model in-place by evaluating symbolic functional rates and updating
+ * the reaction's concrete `rateConstant`. Fails silently and preserves the existing
+ * rate if evaluation fails. Clears evaluator caches after processing.
+ *
+ * Note: This currently reimplements logic from the engine package (`DoseResponse.ts`),
+ * whereas MCP tools should ideally call engine functions instead of duplicating logic.
+ *
+ * @param model - The BNGLModel to update.
+ */
 export function updateMassActionRates(model: BNGLModel): void {
     const context = model.parameters ?? {};
     for (const reaction of model.reactions ?? []) {
@@ -552,6 +582,15 @@ export function updateMassActionRates(model: BNGLModel): void {
     clearAllEvaluatorCaches();
 }
 
+/**
+ * Creates a deep copy of a BNGLModel using structuredClone.
+ *
+ * Note: This currently reimplements logic from the engine package (`DoseResponse.ts`),
+ * whereas MCP tools should ideally call engine functions instead of duplicating logic.
+ *
+ * @param model - The expanded BNGLModel to clone.
+ * @returns A deep copy of the provided model.
+ */
 export function cloneExpandedModel(model: BNGLModel): BNGLModel {
     return structuredClone(model);
 }

@@ -16,9 +16,9 @@ async function getNodeCrypto() {
 }
 
 export async function sha256Async(input: string | Uint8Array): Promise<string> {
-  if (typeof window !== 'undefined' && window.crypto?.subtle) {
+  if (typeof globalThis !== 'undefined' && (globalThis as any).crypto?.subtle) {
     const data = typeof input === 'string' ? new TextEncoder().encode(input) : (input as unknown as BufferSource);
-    const buf = await window.crypto.subtle.digest('SHA-256', data);
+    const buf = await (globalThis as any).crypto.subtle.digest('SHA-256', data);
     return bufToHex(new Uint8Array(buf));
   }
   const c = await getNodeCrypto();
@@ -51,7 +51,7 @@ export function sha256OfNetwork(networkSerialized: string): string {
 // ── Internals ──────────────────────────────────────────────────────────────
 
 function sha256Sync(input: string): string {
-  if (typeof window === 'undefined') {
+  if (typeof (globalThis as any).crypto === 'undefined' || !(globalThis as any).crypto.subtle) {
     // Node path.
     const c = require('node:crypto');
     return c.createHash('sha256').update(input).digest('hex');
@@ -69,13 +69,28 @@ function djb2(s: string): number {
 function stripBNGLComments(src: string): string {
   // BNGL line comments start with '#'. Preserve structure by replacing only
   // from '#' to end-of-line, not stripping entire lines.
-  return src
-    .split('\n')
-    .map((line) => {
-      const hash = line.indexOf('#');
-      return hash >= 0 ? line.slice(0, hash).trimEnd() : line;
-    })
-    .join('\n');
+  // ⚡ Bolt Optimization: Zero-allocation line scanning to reduce GC pressure
+  let result = '';
+  let startIdx = 0;
+  const len = src.length;
+
+  while (startIdx < len) {
+    let endIdx = src.indexOf('\n', startIdx);
+    if (endIdx === -1) endIdx = len;
+
+    const hashIdx = src.indexOf('#', startIdx);
+    if (hashIdx !== -1 && hashIdx < endIdx) {
+      let e = hashIdx;
+      while (e > startIdx && src.charCodeAt(e - 1) <= 32) e--;
+      result += src.substring(startIdx, e);
+    } else {
+      result += src.substring(startIdx, endIdx);
+    }
+
+    if (endIdx < len) result += '\n';
+    startIdx = endIdx + 1;
+  }
+  return result;
 }
 
 function formatNumber(n: number): string {

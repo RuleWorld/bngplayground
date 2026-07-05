@@ -1,6 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
 import { Card } from '../ui/Card';
-import { Select } from '../ui/Select';
 import { Button } from '../ui/Button';
 // LoadingSpinner not required in the FIMTab header - analysis uses custom progress UI
 import { BNGLModel } from '../../types';
@@ -36,11 +35,14 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
   const [showFIMHeatmap, setShowFIMHeatmap] = useState(false);
   const [showCorrelationHeatmap, setShowCorrelationHeatmap] = useState(false);
   const [showJacobianHeatmap, setShowJacobianHeatmap] = useState(false);
-  const [analysisConfig, setAnalysisConfig] = useState<{ method: 'ode' | 'ssa'; t_end: number; n_steps: number }>(() => ({
-    method: 'ode',
-    t_end: 100,
-    n_steps: 100,
-  }));
+  const [analysisConfig, setAnalysisConfig] = useState<{ method: 'ode' | 'ssa'; t_end: number; n_steps: number }>(() => {
+    const simOpts = model?.simulationOptions;
+    return {
+      method: 'ode',
+      t_end: simOpts?.t_end ?? 100,
+      n_steps: simOpts?.n_steps ?? 100,
+    };
+  });
   const cachedModelIdRef = React.useRef<number | null>(null);
 
   const paramRuleMap = useMemo(() => {
@@ -90,17 +92,23 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       setSelected([]);
       setResult(null);
       setError(null);
-    } else if (parameterNames.length > 0 && selected.length === 0) {
-      // Fallback: select all if small count, otherwise first 10
-      setSelected(parameterNames.length <= 20 ? parameterNames.slice() : parameterNames.slice(0, 20));
+    } else {
+      const simOpts = model.simulationOptions;
+      const nextT = simOpts?.t_end ?? 100;
+      const nextN = simOpts?.n_steps ?? 100;
+      setAnalysisConfig(prev => {
+        if (prev.t_end === nextT && prev.n_steps === nextN) return prev;
+        return { ...prev, t_end: nextT, n_steps: nextN };
+      });
+      if (parameterNames.length > 0 && selected.length === 0) {
+        setSelected(parameterNames.length <= 20 ? parameterNames.slice() : parameterNames.slice(0, 20));
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [model]);
 
-  const onSelectChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const collection = e.target.selectedOptions as unknown as HTMLOptionsCollection | undefined;
-    const opts = Array.from(collection ?? []).map((o) => (o as HTMLOptionElement).value);
-    setSelected(opts);
+  const toggleParam = (p: string) => {
+    setSelected((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
   };
 
   const handleCompute = useCallback(async (overrideConfig?: { method?: 'ode' | 'ssa'; t_end: number; n_steps: number }) => {
@@ -317,14 +325,10 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
             )}
           </div>
           <div className="flex w-full max-w-xs flex-col gap-2">
-            <Button onClick={() => runPreset('quick')} disabled={isComputing} className="w-full">
-              ⚡ Quick Check (~60 sims)
-            </Button>
-            <Button onClick={() => runPreset('standard')} disabled={isComputing} variant="secondary" className="w-full">
-              🎯 Standard Analysis (~300 sims)
+            <Button onClick={() => void handleCompute()} disabled={isComputing} className="w-full">
+              🎯 Run Local Sensitivity Analysis
             </Button>
             <div className="rounded-lg border border-indigo-500/30 bg-indigo-900/30 p-3 text-xs text-indigo-200/80">
-              Active preset: {activePreset === 'quick' ? 'Quick Check' : activePreset === 'standard' ? 'Standard Analysis' : 'Custom'}<br />
               Method: {analysisConfig.method.toUpperCase()} | t_end = {analysisConfig.t_end} | steps = {analysisConfig.n_steps}
             </div>
           </div>
@@ -333,15 +337,45 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       <Card>
         <div className="grid gap-4 md:grid-cols-2">
           <div>
-            <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Parameters (multi-select)</label>
-            <Select multiple size={Math.min(12, Math.max(4, parameterNames.length))} value={selected} onChange={onSelectChange} className="h-40">
+            <div className="flex items-center justify-between">
+              <label className="block text-sm font-medium text-slate-700 dark:text-slate-300">Parameters</label>
+              <div className="flex gap-3">
+                <button
+                  type="button"
+                  onClick={() => setSelected(parameterNames.slice())}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Select all
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelected([])}
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                >
+                  Clear
+                </button>
+              </div>
+            </div>
+            <div
+              role="group"
+              aria-label="Parameters to include"
+              className="mt-1 h-40 overflow-auto rounded border border-slate-300 dark:border-slate-600 p-1 bg-white dark:bg-slate-900"
+            >
               {parameterNames.map((p) => (
-                <option key={p} value={p}>
-                  {p}
-                </option>
+                <label
+                  key={p}
+                  className="flex items-center gap-2 px-2 py-1 rounded hover:bg-slate-100 dark:hover:bg-slate-800 cursor-pointer text-sm text-slate-700 dark:text-slate-200"
+                >
+                  <input
+                    type="checkbox"
+                    checked={selected.includes(p)}
+                    onChange={() => toggleParam(p)}
+                  />
+                  <span className="truncate">{p}</span>
+                </label>
               ))}
-            </Select>
-            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">Selected: {selected.length}</div>
+            </div>
+            <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">Selected: {selected.length} / {parameterNames.length}</div>
           </div>
           <div className="flex flex-col gap-3">
             <div className="text-sm text-slate-600 dark:text-slate-400">Compute the Fisher Information Matrix (FIM) using central finite differences across all time points. This performs 2×P simulations where P is the number of selected parameters.</div>

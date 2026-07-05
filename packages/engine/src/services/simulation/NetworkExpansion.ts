@@ -73,21 +73,30 @@ export async function generateExpandedNetwork(
     // Reference: BNG2 relies on proper tokenization; this is a lightweight parser equivalent.
     const splitByTopLevelCommas = (s: string): string[] => {
         const parts: string[] = [];
-        let current = '';
+        let start = 0;
         let depth = 0;
-        for (const ch of s) {
-            if (ch === '(') depth++;
-            else if (ch === ')') depth = Math.max(0, depth - 1);
-            if (ch === ',' && depth === 0) {
-                const t = current.trim();
-                if (t) parts.push(t);
-                current = '';
-                continue;
-            }
-            current += ch;
+        const len = s.length;
+
+        if (s.indexOf(',') === -1) {
+            const t = s.trim();
+            if (t) parts.push(t);
+            return parts;
         }
-        const t = current.trim();
-        if (t) parts.push(t);
+
+        for (let i = 0; i < len; i++) {
+            const ch = s.charCodeAt(i);
+            if (ch === 40) { // '('
+                depth++;
+            } else if (ch === 41) { // ')'
+                depth = Math.max(0, depth - 1);
+            } else if (ch === 44 && depth === 0) { // ','
+                const part = s.substring(start, i).trim();
+                if (part) parts.push(part);
+                start = i + 1;
+            }
+        }
+        const part = s.substring(start).trim();
+        if (part) parts.push(part);
         return parts;
     };
 
@@ -264,6 +273,11 @@ export async function generateExpandedNetwork(
     // BNG2 Rule: Rules are expanded from the model definition.
     // We map over each rule to determine if it uses functional rates (non-mass action).
     const reactionRules = inputModel.reactionRules ?? [];
+
+    // ⚡ Bolt Optimization: Hoist Map creations out of hot rule parsing loop
+    const staticParamMap = new Map(Object.entries(inputModel.parameters || {}));
+    const staticFunctionMap = new Map((inputModel.functions || []).map(f => [f.name, { args: f.args, expr: f.expression } as any]));
+
     const rules = reactionRules.flatMap((r) => {
         // BNG2 Semantics: The first reactant often defines the "substrate" variable in rate laws.
         // E.g., for "A() -> B() k_cat*A", we need to map "A" to the runtime observable.
@@ -300,8 +314,7 @@ export async function generateExpandedNetwork(
         } else {
             try {
                 // Parity Check: Evaluate constant expressions using the Model's parameter context.
-                const paramMap = new Map(Object.entries(inputModel.parameters || {}));
-                rate = BNGLParser.evaluateExpression(expandedRate, paramMap, new Set(), new Map((inputModel.functions || []).map(f => [f.name, { args: f.args, expr: f.expression } as any])));
+                rate = BNGLParser.evaluateExpression(expandedRate, staticParamMap, new Set(), staticFunctionMap);
                 if (isNaN(rate)) rate = 0;
             } catch (e) {
                 console.warn('[NetworkExpansion] Could not evaluate rate expression:', expandedRate, '- available parameters:', Object.keys(inputModel.parameters || {}), '- using 0');
@@ -337,8 +350,7 @@ export async function generateExpandedNetwork(
                 reverseRate = 1;
             } else {
                 try {
-                    const paramMap = new Map(Object.entries(inputModel.parameters || {}));
-                    reverseRate = BNGLParser.evaluateExpression(revExpanded, paramMap, new Set(), new Map((inputModel.functions || []).map(f => [f.name, { args: f.args, expr: f.expression } as any])));
+                    reverseRate = BNGLParser.evaluateExpression(revExpanded, staticParamMap, new Set(), staticFunctionMap);
                     if (isNaN(reverseRate)) reverseRate = 0;
                 } catch (e) {
                     console.warn('[NetworkExpansion] Could not evaluate reverse rate expression:', revExpanded, '- available parameters:', Object.keys(inputModel.parameters || {}), '- using 0');
@@ -661,18 +673,19 @@ export async function generateExpandedNetwork(
         try {
             const rateExpression = (r as any).rateExpression ?? null;
             const statFactor = Number.isFinite((r as any).statFactor) ? Number((r as any).statFactor) : 1;
+            const rxnName = (r as any).name ?? '';
+            const totalRate = (r as any).totalRate ?? totalRateByRuleName.get(rxnName) ?? false;
+            // BNG2 parity: TotalRate disables the statFactor multiply (sf=1).
+            const effectiveStatFactor = totalRate ? 1 : statFactor;
             const foldedRateExpression =
-                rateExpression != null && Math.abs(statFactor - 1) > 1e-15
-                    ? `(${statFactor})*(${rateExpression})`
+                rateExpression != null && Math.abs(effectiveStatFactor - 1) > 1e-15
+                    ? `(${effectiveStatFactor})*(${rateExpression})`
                     : rateExpression;
             // Functional Rate Flag Logic:
             // Rxn objects generated by NetworkGenerator preserve `rateExpression` strings but loose the boolean flag.
             // We re-derive it: if a rate expression exists, it IS a functional rate.
             const isFunctionalRate = foldedRateExpression != null && isFunctionalRateExpr(foldedRateExpression, observableNamesSet, functionNamesSet, changingParameterNames);
             const degeneracy = (r as any).degeneracy ?? 1;
-
-            const rxnName = (r as any).name ?? '';
-            const totalRate = (r as any).totalRate ?? totalRateByRuleName.get(rxnName) ?? false;
 
             // NOTE: Use originalRate to preserve parameter names for non-functional updates
             const preservedRate = foldedRateExpression || (r as any).originalRate || String(r.rate);

@@ -23,6 +23,13 @@ export async function handleCheckPhaseHandoff(args: ToolArgs): Promise<ToolResul
         const model = parseModelOrThrow(parsedArgs.code);
         const expandedModel = await expandModel(model);
         
+        if (!(parsedArgs.parameter in model.parameters)) {
+            throw new Error(`Unknown parameter '${parsedArgs.parameter}'. Available parameters: ${Object.keys(model.parameters).join(', ') || '(none)'}`);
+        }
+        if (parsedArgs.observable && !model.observables.some((o) => o.name === parsedArgs.observable)) {
+            throw new Error(`Unknown observable '${parsedArgs.observable}'. Available observables: ${model.observables.map((o) => o.name).join(', ') || '(none)'}`);
+        }
+
         const tEnd = parsedArgs.t_end ?? parsedArgs.transition_time;
         
         await loadEvaluator();

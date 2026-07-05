@@ -8,8 +8,10 @@ interface FIMHeatmapProps {
 
 export const FIMHeatmap: React.FC<FIMHeatmapProps> = ({ correlations, paramNames, cellSize = 30 }) => {
   const n = paramNames.length;
-  const width = n * cellSize + 100;
-  const height = n * cellSize + 50;
+  const marginLeft = 100;
+  const marginTop = 120;
+  const width = n * cellSize + marginLeft + 20;
+  const height = n * cellSize + marginTop + 20;
 
   const colorFor = (v: number) => {
     // Blue for negative, Red for positive, White near 0

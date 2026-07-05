@@ -240,6 +240,19 @@ export interface SSAInfluenceTimeSeries {
     globalSummary: SSAInfluenceData;
 }
 
+/**
+ * A handle onto the ODE system the simulator integrates: the exact right-hand
+ * side closure (dy/dt = f(y)), the initial state, and species metadata. Exposed
+ * so the same RHS can be integrated externally (e.g. with CVODE) and compared,
+ * which is how the .ode exporter is validated.
+ */
+export interface OdeSystemHandle {
+    rhs: (y: Float64Array, dydt: Float64Array) => void;
+    y0: Float64Array;
+    speciesNames: string[];
+    numSpecies: number;
+}
+
 export interface SimulationOptions {
     method: 'default' | 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla' | 'psa';
     t_end: number;
@@ -285,6 +298,13 @@ export interface SimulationOptions {
     poplevel?: number;
     /** Optional callback invoked by the solver after each integration step */
     onStep?: (currentStep: number, maxSteps: number) => void;
+    /**
+     * Test/introspection hook: when set, the simulator invokes this with the ODE
+     * right-hand side it built (before integration). Does not change the normal
+     * simulation path; used to expose the RHS for external integration and .ode
+     * export validation.
+     */
+    captureOdeSystem?: (handle: OdeSystemHandle) => void;
     /** Enable Hermite dense output (continuous interpolation between steps). Default: false. */
     denseOutput?: boolean;
 }

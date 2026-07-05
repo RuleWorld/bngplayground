@@ -40,7 +40,8 @@ export type { FeatureFlags } from './featureFlags';
 
 // ── Simulation ─────────────────────────────────────────────────────
 export { generateExpandedNetwork } from './services/simulation/NetworkExpansion';
-export { simulate } from './services/simulation/SimulationLoop';
+export { simulate, buildOdeSystem } from './services/simulation/SimulationLoop';
+export type { OdeSystemHandle } from './types';
 export { evaluateFunctionalRate, evaluateExpressionOrParse, loadEvaluator, clearAllEvaluatorCaches, containsRateLawMacro, expandRateLawMacros, getCacheSizes, _setEvaluatorRefForTests } from './services/simulation/ExpressionEvaluator';
 export { requiresCompartmentResolution, resolveCompartmentVolumes } from './services/simulation/CompartmentResolver';
 export { BNGXMLWriter } from './services/simulation/BNGXMLWriter';
@@ -116,6 +117,7 @@ export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './u
 export { formatBNGL } from './utils/formatBNGL';
 export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
+export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
 export { normalizeFilterNames, safeModelName, executeMultiPhaseSimulation, runSingleBatchItem } from './utils/batchRunner';
 export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions } from './utils/batchRunner';
@@ -214,8 +216,11 @@ export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 
 // ── Temporal Information Theory ─────────────────────────────────────
-export { analyzeReactionInformation, compareCausalGraphs } from './services/analysis/ReactionInformationTheory';
+export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
 export type { ReactionITConfig, ReactionITResult, MutualInformationResult, TransferEntropyResult, PhaseLockingResult } from './services/analysis/ReactionInformationTheory';
+
+export { analyzeResiduals } from './services/analysis/AnalyzeResiduals';
+export type { ExperimentalDataPoint as ResidualExperimentalDataPoint, ResidualAnalysisResult } from './services/analysis/AnalyzeResiduals';
 
 // ── Multi-Model Comparison ──────────────────────────────────────────
 export { compareModels, generateVariants, attributeDivergence } from './services/analysis/MultiModelComparator';
