@@ -6,8 +6,15 @@
  * Follows the spatialWorker.ts message pattern.
  */
 
-import { multiscaleSimulation, parseMultiscaleModel } from '@bngplayground/engine';
+import { multiscaleSimulation, parseMultiscaleModel, CVODESolver } from '@bngplayground/engine';
 import type { MultiscaleConfig, MultiscaleResult, MultiscaleModelDefinition } from '@bngplayground/engine';
+
+// Wire up the CVODE factory (same lazy dynamic-import pattern as bnglWorker.ts).
+// The intracellular BNGL models are integrated with CVODE, so this worker must
+// provide the WASM factory before any simulation runs — otherwise CVODESolver.init
+// throws "module factory has not been injected".
+CVODESolver.cvodeModuleFactory = () =>
+  import('./cvode_loader.js').then((m: any) => m.default ?? m);
 
 /** Messages from main thread -> worker */
 export type MultiscaleWorkerRequest =
@@ -36,14 +43,14 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
     switch (msg.type) {
       case 'run': {
         cancelled = false;
-        runSimulation(msg.config);
+        void runSimulation(msg.config);
         break;
       }
 
       case 'run_from_definition': {
         cancelled = false;
         const config = parseMultiscaleModel(msg.definition);
-        runSimulation(config);
+        void runSimulation(config);
         break;
       }
 
@@ -59,9 +66,9 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
   }
 };
 
-function runSimulation(config: MultiscaleConfig): void {
+async function runSimulation(config: MultiscaleConfig): Promise<void> {
   try {
-    const result = multiscaleSimulation(config, (fraction: number) => {
+    const result = await multiscaleSimulation(config, (fraction: number) => {
       if (cancelled) {
         // Throwing from the progress callback aborts the simulation loop.
         // multiscaleSimulation catches this and returns partial results.

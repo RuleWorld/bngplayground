@@ -265,6 +265,21 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
     setPetabFiles({});
   };
 
+  // Full reset so the user can start over with a brand-new dataset / PEtab file.
+  // Clears the finished result and all data inputs, bringing the data editor back.
+  const handleStartOver = () => {
+    setResult(null);
+    setError(null);
+    setProgress({ current: 0, total: 0, elbo: 0 });
+    setVisibleFitSeries(new Set());
+    setFitInputData([]);
+    setDataInput(DEFAULT_TEST_DATA);
+    setParsedData([]);
+    setDataError(null);
+    setPetabText('');
+    setPetabFiles({});
+  };
+
   const handleAutoGenerateInput = async () => {
     if (!model) return;
     const simulationOptions = model.simulationOptions ?? {};
@@ -939,6 +954,19 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
 
         {result && (
           <div className="space-y-6">
+            {/* Results header with reset */}
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
+                Estimation Results
+              </h3>
+              <Button
+                variant="subtle"
+                className="h-7 px-3 text-xs"
+                onClick={handleStartOver}
+              >
+                ↻ Start Over / Load New Data
+              </Button>
+            </div>
             {/* Summary Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <Card className="p-4 border-l-4 border-teal-500 relative overflow-hidden">

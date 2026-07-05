@@ -251,6 +251,25 @@ export interface OdeSystemHandle {
     y0: Float64Array;
     speciesNames: string[];
     numSpecies: number;
+    /**
+     * Precomputed observable projection: each observable's value is the linear
+     * combination sum(coefficients[k] * y[indices[k]]). Captured so external
+     * integrators (e.g. per-cell multiscale simulation) can evaluate observables
+     * without re-parsing the model.
+     */
+    observables?: Array<{
+        name: string;
+        indices: Int32Array | number[];
+        coefficients: Float64Array | number[];
+    }>;
+    /**
+     * Re-parameterise the RHS in place (synchronous). Writes the given values
+     * into the (cloned) model parameters and refreshes both the mass-action JIT
+     * constants and the functional-rate context, so the next rhs() call uses the
+     * new values. Enables parameter continuation over models with functional
+     * rates / custom functions without rebuilding the whole system.
+     */
+    updateParameters?: (params: Record<string, number>) => void;
 }
 
 export interface SimulationOptions {

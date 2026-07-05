@@ -278,7 +278,7 @@ export function getContactMapStyles(isDark: boolean): any[] {
         height: 'label',
         'min-width': 20,
         color: '#000000',
-         shape: 'round-rectangle',
+        shape: 'round-rectangle',
         'z-index': 25,
         'z-index-compare': 'manual',
       },
@@ -294,10 +294,15 @@ export function getContactMapStyles(isDark: boolean): any[] {
         'line-color': edgeColor,
         'target-arrow-color': edgeColor,
         'target-arrow-shape': 'none',
-        // Clip edges at the visual boundary of compound parents,
-        // reducing the "edge passes through parent box" artefact.
-        'source-endpoint': 'outside-to-node-or-label',
-        'target-endpoint': 'outside-to-node-or-label',
+        // Clip edges at the connected node's boundary. We use the default
+        // 'outside-to-node' rather than 'outside-to-node-or-label': the
+        // label-inclusive variant computes lazily for edges whose endpoints are
+        // children of compound parents and stays stale until the endpoint node
+        // is actually moved (a manual drag), leaving bonds invisible on first
+        // render. 'outside-to-node' is the well-tested default and resolves at
+        // layout time.
+        'source-endpoint': 'outside-to-node',
+        'target-endpoint': 'outside-to-node',
         'z-index': 0,
         'z-index-compare': 'manual',
       },
@@ -452,13 +457,27 @@ function applyPackedLayout(
 }
 
 const forcePostLayoutRedraw = (cy: cytoscape.Core) => {
-  // Compound-node edge routing can occasionally remain visually stale until
-  // the first user interaction; force a deterministic refresh after layout.
+  // Compound-child edges can render with stale (uncomputed) endpoints until the
+  // endpoint node actually moves — which is why only a manual drag made bonds
+  // appear. A move-and-immediately-restore nudge does NOT work: the net-zero
+  // change within one frame is never detected, so no recomputation happens.
+  // Instead we apply a real, alternating sub-pixel shift to the nodes the edges
+  // connect to. Cytoscape sees a genuine position change and recomputes the
+  // incident edges. 0.5px is imperceptible, and alternating the direction keeps
+  // any drift bounded across repeated calls (layout re-runs, resize, etc.).
   cy.resize();
   cy.fit(undefined, 30);
   cy.style().update();
-  cy.elements().forEach((ele) => {
-    ele.emit('position');
+
+  const dir = (cy.scratch('_edgeNudgeDir') as number) || 1;
+  cy.scratch('_edgeNudgeDir', -dir);
+  const delta = 0.5 * dir;
+
+  const endpointNodes = cy.edges().connectedNodes();
+  const targets = endpointNodes.length > 0 ? endpointNodes : cy.nodes();
+  targets.forEach((ele) => {
+    const p = ele.position();
+    ele.position({ x: p.x + delta, y: p.y });
   });
 };
 
@@ -523,12 +542,12 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
           animate: false,
           shouldApply: () => layoutSequenceRef.current === layoutSequence,
           onDone: () => {
-          forcePostLayoutRedraw(cy);
-          setTimeout(() => {
-            if (layoutSequenceRef.current !== layoutSequence) return;
-            setLayoutDone(true);
-            setIsLayoutRunning(false);
-          }, 50);
+            forcePostLayoutRedraw(cy);
+            setTimeout(() => {
+              if (layoutSequenceRef.current !== layoutSequence) return;
+              setLayoutDone(true);
+              setIsLayoutRunning(false);
+            }, 50);
           },
         });
       });
@@ -548,10 +567,23 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       (window as any).__contactMapCy = cy;
     }
 
+    // The contact-map tab can mount while its panel is still zero-sized
+    // (freshly switched-to / not yet laid out). When that happens the initial
+    // layout and edge-endpoint refresh run against an empty viewport, so the
+    // compound-node edges never get their endpoints and stay invisible until a
+    // manual drag. Watch for the container reaching a real size and redo the
+    // fit + edge refresh once — this is what makes edges appear for the very
+    // first model, not just subsequent ones.
+    let sizedRefreshDone = false;
     const ro = new ResizeObserver(() => {
       const c = cyRef.current;
-      if (!c) return;
+      const el = containerRef.current;
+      if (!c || !el) return;
       c.resize();
+      if (!sizedRefreshDone && el.clientWidth > 0 && el.clientHeight > 0) {
+        sizedRefreshDone = true;
+        forcePostLayoutRedraw(c);
+      }
     });
     ro.observe(containerRef.current);
 
@@ -735,10 +767,10 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">
         <h4 className="text-xs font-semibold text-slate-500 dark:text-slate-400 uppercase">Legend</h4>
         <div className="flex items-center gap-4 text-xs flex-wrap">
-           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#D2D2D2] border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">Molecule</span></div>
-           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-white dark:bg-slate-800 border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">Component</span></div>
-           <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#FFCC00] border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">State</span></div>
-           <div className="flex items-center gap-2"><div className="w-6 h-0 border-t border-black dark:border-slate-300" /><span className="text-slate-700 dark:text-slate-300">Bond</span></div>
+          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#D2D2D2] border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">Molecule</span></div>
+          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-white dark:bg-slate-800 border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">Component</span></div>
+          <div className="flex items-center gap-2"><div className="w-3 h-3 rounded bg-[#FFCC00] border border-black dark:border-slate-400" /><span className="text-slate-700 dark:text-slate-300">State</span></div>
+          <div className="flex items-center gap-2"><div className="w-6 h-0 border-t border-black dark:border-slate-300" /><span className="text-slate-700 dark:text-slate-300">Bond</span></div>
           {ruleOverlay && (
             <>
               <div className="w-px h-4 bg-slate-300 dark:bg-slate-600" />
@@ -757,5 +789,3 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
     </div>
   );
 };
-
-

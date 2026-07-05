@@ -79,7 +79,7 @@ function compileOdeText(text: string): CompiledOde {
   };
   // new Function bodies are sloppy-mode, so `with` is permitted here (test-only).
   const evalExpr = (expr: string, scope: object): number =>
-    // eslint-disable-next-line no-new-func
+     
     (Function('__s__', `with(__s__){ return (${toJs(expr)}); }`) as (s: object) => number)(scope);
 
   const rhs = (y: Float64Array, dydt: Float64Array): void => {

@@ -58,6 +58,14 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
     }
   }, [model]);
 
+  // Full reset so the user can start over with a fresh dataset.
+  const handleStartOver = () => {
+    setResults(null);
+    setError(null);
+    setProgress({ current: 0, total: 0 });
+    setDataInput(DEFAULT_DATA);
+  };
+
 
 
   const handleRun = async () => {
@@ -407,6 +415,13 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                         {Object.values(results.profiles).filter(p => p.identifiability !== 'identifiable').length}
                      </div>
                   </div>
+                <Button
+                  variant="subtle"
+                  className="h-8 px-3 text-xs self-center"
+                  onClick={handleStartOver}
+                >
+                  ↻ Start Over / Load New Data
+                </Button>
                </div>
             </Card>
 

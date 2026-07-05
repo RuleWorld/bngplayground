@@ -477,6 +477,7 @@ export async function simulate(
 
   // ⚡ Bolt Optimization: Hoist Map creations out of hot reaction parsing loop
   const staticParamMap = new Map(Object.entries(model.parameters || {}));
+  const obsNamesSet = new Set(model.observables.map(o => o.name));
 
   const concreteReactions: ConcreteReaction[] = reactions.map((r: BNGLReaction) => {
     // Map string names to integer indices.
@@ -495,7 +496,6 @@ export async function simulate(
     const rateExpr = r.rateExpression || r.rate;
 
     // determine isFunctionalRate dynamically if not flagged
-    const obsNamesSet = new Set(model.observables.map(o => o.name));
     if (!isFunctionalRate && typeof rateExpr === 'string') {
       isFunctionalRate = isFunctionalRateExpr(rateExpr, obsNamesSet, functionNames, changingParameterNames);
     }
@@ -2350,6 +2350,23 @@ export async function simulate(
         y0: Float64Array.from(state),
         speciesNames: model.species.map((s) => s.name),
         numSpecies,
+        observables: concreteObservables.map((o) => ({
+          name: o.name,
+          indices: o.indices,
+          coefficients: o.coefficients,
+        })),
+        updateParameters: (nextParams: Record<string, number>) => {
+          if (model.parameters) {
+            for (const key of Object.keys(nextParams)) {
+              if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+              setSafeNumericField(model.parameters as Record<string, number>, key, nextParams[key]);
+            }
+          }
+          // Refresh mass-action rate constants and functional-rate context so the
+          // next derivative evaluation reflects the new parameter values.
+          compiledMassActionJit?.updateParameters?.(model.parameters);
+          refreshRateContextParameters?.();
+        },
       });
     }
 
