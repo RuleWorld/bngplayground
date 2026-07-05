@@ -130,7 +130,7 @@ importers:
         specifier: ^4.1.9
         version: 4.1.9(vitest@4.1.0(@types/node@25.9.0)(jsdom@29.1.1)(vite@8.0.13(@types/node@25.9.0)(esbuild@0.28.0)(jiti@2.7.0)(tsx@4.22.2)))
       '@webgpu/types':
-        specifier: ^0.1.68
+        specifier: ^0.1.70
         version: 0.1.70
       '@xmldom/xmldom':
         specifier: ^0.9.10

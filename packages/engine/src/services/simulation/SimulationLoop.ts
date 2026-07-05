@@ -477,6 +477,7 @@ export async function simulate(
 
   // ⚡ Bolt Optimization: Hoist Map creations out of hot reaction parsing loop
   const staticParamMap = new Map(Object.entries(model.parameters || {}));
+  const obsNamesSet = new Set(model.observables.map(o => o.name));
 
   const concreteReactions: ConcreteReaction[] = reactions.map((r: BNGLReaction) => {
     // Map string names to integer indices.
@@ -495,7 +496,6 @@ export async function simulate(
     const rateExpr = r.rateExpression || r.rate;
 
     // determine isFunctionalRate dynamically if not flagged
-    const obsNamesSet = new Set(model.observables.map(o => o.name));
     if (!isFunctionalRate && typeof rateExpr === 'string') {
       isFunctionalRate = isFunctionalRateExpr(rateExpr, obsNamesSet, functionNames, changingParameterNames);
     }
