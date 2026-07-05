@@ -164,6 +164,11 @@ export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private observableCache: Map<string, JITCompiledObservableFunction> = new Map();
     private bytecodeCache: Map<string, NetworkByteCode> = new Map();
+    // Cache for compiled SSA event updaters, keyed on a full structural signature
+    // string (not a hash) so there is zero risk of a collision returning a
+    // function compiled for a different network. Persists across replicate runs
+    // because jitCompiler is a module-level singleton (opts 8/9).
+    private ssaEventUpdaterCache: Map<string, ((firedRxnIdx: number, state: Float64Array, propensities: Float64Array, fenwickAdd: (idx: number, delta: number) => void) => number) | null> = new Map();
     private maxCacheSize: number = 50;
 
     private hashString(value: string): string {
@@ -1022,14 +1027,14 @@ export class JITCompiler {
         reactionReactingVolumes: Float64Array,
         rxnUpdateRxn: Int32Array[]
     ): ((firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
-         fenwickAdd: (idx: number, delta: number) => void) => number) | null {
+        fenwickAdd: (idx: number, delta: number) => void) => number) | null {
         if (!getFeatureFlags().enableJitFastPath) {
             return null;
         }
 
         try {
             const numReactions = reactions.length;
-            
+
             // Bail out if any reaction uses functional rates
             for (let i = 0; i < numReactions; i++) {
                 if (reactions[i].isFunctionalRate && reactions[i].rateExpression) {
@@ -1097,9 +1102,166 @@ export class JITCompiler {
 
             return new Function('firedRxnIdx', 'state', 'propensities', 'fenwickAdd', source) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
-                 fenwickAdd: (idx: number, delta: number) => void) => number;
+                    fenwickAdd: (idx: number, delta: number) => void) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA incremental updater:', e);
+            return null;
+        }
+    }
+
+    /**
+     * OPT 3: JIT-compiled combined SSA event applier for mass-action networks.
+     *
+     * Generates one function that, for the fired reaction, does everything the hot
+     * loop needs in a single call with hardcoded indices:
+     *   1. applies the net integer state change per species (reactants/products
+     *      coalesced, so catalysts cancel to nothing),
+     *   2. recomputes only the dependent propensities from the fresh state using
+     *      pre-folded effective rate constants,
+     *   3. writes them back, accumulates the total propensity delta, and
+     *   4. (only when useFenwick is true) applies the Fenwick tree delta.
+     *
+     * This removes the per-event reactant/product loops, the reaction-object
+     * dereference, and (when selection is linear) all Fenwick work from the hot
+     * loop. It returns null if any reaction uses a functional rate.
+     *
+     * Signature: (firedRxnIdx, state, propensities, fenwickAdd) => totalDelta
+     *
+     * Results are bit-identical to the interpreted state loops + calcPropensity
+     * path: net state deltas equal the per-entry decrements/increments exactly
+     * (integer counts), and the propensity expression is the same product form
+     * with the same pre-folded kEff used everywhere else.
+     */
+    public compileSSAEventUpdater(
+        reactions: Array<{
+            reactants: number[] | Int32Array;
+            products: number[] | Int32Array;
+            rateConstant: number;
+            propensityFactor: number;
+            isFunctionalRate?: boolean;
+            rateExpression?: string | null;
+        }>,
+        reactionReactingVolumes: Float64Array,
+        rxnUpdateRxn: Int32Array[],
+        useFenwick: boolean
+    ): ((firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
+        fenwickAdd: (idx: number, delta: number) => void) => number) | null {
+        if (!getFeatureFlags().enableJitFastPath) {
+            return null;
+        }
+
+        try {
+            const numReactions = reactions.length;
+
+            // Bail out if any reaction uses functional rates.
+            for (let i = 0; i < numReactions; i++) {
+                if (reactions[i].isFunctionalRate && reactions[i].rateExpression) {
+                    return null;
+                }
+            }
+
+            // Pre-compute effective rate constants kEff[i] = k * factor / V^(n-1),
+            // identical folding to compileSSAPropensities / SimulationLoop.kEff.
+            const kEff = new Float64Array(numReactions);
+            for (let i = 0; i < numReactions; i++) {
+                const rxn = reactions[i];
+                const n = rxn.reactants.length;
+                let eff = rxn.rateConstant * rxn.propensityFactor;
+                const volume = reactionReactingVolumes[i];
+                if (!Number.isFinite(eff) || !Number.isFinite(volume)) return null;
+                if (n === 0) {
+                    eff *= volume;
+                } else if (n === 2) {
+                    eff /= volume;
+                } else if (n === 3) {
+                    eff /= (volume * volume);
+                } else if (n > 3) {
+                    eff /= Math.pow(volume, n - 1);
+                }
+                kEff[i] = eff;
+            }
+
+            // Build a full structural signature string used directly as the cache
+            // key (no hashing -> no collision risk). It captures everything the
+            // generated code depends on: the selection mode, each reaction's
+            // reactants/products/kEff, and the dependency lists.
+            const sigParts: string[] = [`f=${useFenwick ? 1 : 0}`, `n=${numReactions}`];
+            for (let i = 0; i < numReactions; i++) {
+                sigParts.push(
+                    Array.from(reactions[i].reactants).join(',') + '>' +
+                    Array.from(reactions[i].products).join(',') + '#' +
+                    kEff[i].toString() + '@' +
+                    Array.from(rxnUpdateRxn[i]).join(',')
+                );
+            }
+            const cacheKey = sigParts.join(';');
+            if (this.ssaEventUpdaterCache.has(cacheKey)) {
+                return this.ssaEventUpdaterCache.get(cacheKey)!;
+            }
+
+            const validIdx = (idx: unknown): idx is number =>
+                typeof idx === 'number' && Number.isFinite(idx) && idx >= 0 && Math.floor(idx) === idx;
+
+            let source = 'var totalDelta = 0;\nswitch (firedRxnIdx) {\n';
+
+            for (let r = 0; r < numReactions; r++) {
+                source += `case ${r}: {\n`;
+
+                // (1) Net integer state change per species (coalesced).
+                const netDelta = new Map<number, number>();
+                const reactants = reactions[r].reactants;
+                const products = reactions[r].products;
+                for (let j = 0; j < reactants.length; j++) {
+                    const idx = reactants[j];
+                    if (!validIdx(idx)) throw new Error(`Invalid reactant index: ${idx}`);
+                    netDelta.set(idx, (netDelta.get(idx) ?? 0) - 1);
+                }
+                for (let j = 0; j < products.length; j++) {
+                    const idx = products[j];
+                    if (!validIdx(idx)) throw new Error(`Invalid product index: ${idx}`);
+                    netDelta.set(idx, (netDelta.get(idx) ?? 0) + 1);
+                }
+                for (const [idx, d] of netDelta) {
+                    if (d === 0) continue; // catalyst: no net change
+                    if (d === 1) source += `  state[${idx}]++;\n`;
+                    else if (d === -1) source += `  state[${idx}]--;\n`;
+                    else source += `  state[${idx}] += ${d};\n`;
+                }
+
+                // (2)-(4) Recompute dependent propensities from fresh state.
+                const deps = rxnUpdateRxn[r];
+                for (let d = 0; d < deps.length; d++) {
+                    const jrxn = deps[d];
+                    const jReactants = reactions[jrxn].reactants;
+                    let expr = kEff[jrxn].toString();
+                    for (let j = 0; j < jReactants.length; j++) {
+                        const idx = jReactants[j];
+                        if (!validIdx(idx)) throw new Error(`Invalid reactant index: ${idx}`);
+                        expr += ` * state[${idx}]`;
+                    }
+                    source += `  var a${jrxn} = ${expr};\n`;
+                    source += `  var d${jrxn} = a${jrxn} - propensities[${jrxn}];\n`;
+                    source += `  propensities[${jrxn}] = a${jrxn};\n`;
+                    source += `  totalDelta += d${jrxn};\n`;
+                    if (useFenwick) source += `  fenwickAdd(${jrxn}, d${jrxn});\n`;
+                }
+                source += '  break;\n}\n';
+            }
+
+            source += '}\nreturn totalDelta;\n';
+
+            const fn = new Function('firedRxnIdx', 'state', 'propensities', 'fenwickAdd', source) as
+                (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
+                    fenwickAdd: (idx: number, delta: number) => void) => number;
+
+            if (this.ssaEventUpdaterCache.size >= this.maxCacheSize) {
+                const oldest = this.ssaEventUpdaterCache.keys().next().value;
+                if (oldest !== undefined) this.ssaEventUpdaterCache.delete(oldest);
+            }
+            this.ssaEventUpdaterCache.set(cacheKey, fn);
+            return fn;
+        } catch (e) {
+            console.warn('[JITCompiler] Failed to compile SSA event updater:', e);
             return null;
         }
     }
@@ -1385,7 +1547,7 @@ export class JITCompiler {
             const jacRows = Array.from({ length: nSpecies }, () => new Map<number, { rxnIdx: number; coeff: number }[]>());
 
             // Map: reaction index -> species affected (non-zero net stoichiometry)
-            const rxnToAffectedSpecies: Array<{species: number, stoich: number}[]> = Array.from({ length: nReactions }, () => []);
+            const rxnToAffectedSpecies: Array<{ species: number, stoich: number }[]> = Array.from({ length: nReactions }, () => []);
             for (let s = 0; s < nSpecies; s++) {
                 for (const [rxnIdx, stoich] of speciesRxnEntries[s].entries()) {
                     if (stoich !== 0) {

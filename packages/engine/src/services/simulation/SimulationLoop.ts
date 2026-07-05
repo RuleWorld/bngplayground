@@ -21,7 +21,6 @@ import { analyzeModelStiffness, getOptimalCVODEConfig, detectModelPreset } from 
 import { getFeatureFlags } from '../../featureFlags';
 import { jitCompiler, type JITCompiledFunction } from '../analysis/JITCompiler';
 import { createReducedSystem, findConservationLaws } from '../analysis/ConservationLaws';
-import { SeededRandom } from '../../utils/random';
 import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './SparseStoichiometry';
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
@@ -296,7 +295,7 @@ export async function buildOdeSystem(
   const hasRules = (model.reactionRules?.length ?? 0) > 0;
   const hasReactions = (model.reactions?.length ?? 0) > 0;
   const expandedModel = hasRules && !hasReactions
-    ? await generateExpandedNetwork(model, () => {}, () => {})
+    ? await generateExpandedNetwork(model, () => { }, () => { })
     : model;
   const opts: SimulationOptions = {
     t_end: options.t_end ?? 1,
@@ -306,7 +305,7 @@ export async function buildOdeSystem(
     method: 'ode',
     captureOdeSystem: (h) => { handle = h; },
   };
-  await simulate(0, expandedModel, opts, { checkCancelled: () => {}, postMessage: () => {} });
+  await simulate(0, expandedModel, opts, { checkCancelled: () => { }, postMessage: () => { } });
   if (!handle) {
     throw new Error('buildOdeSystem: the simulator did not build an ODE right-hand side for this model.');
   }
@@ -319,7 +318,7 @@ export async function simulate(
   options: SimulationOptions,
   callbacks: {
     checkCancelled: () => void,
-    postMessage: (msg: { type: string; payload?: unknown; time?: number; state?: Float64Array; speciesCount?: number; observablesCount?: number; progress?: number; [key: string]: unknown }) => void
+    postMessage: (msg: { type: string; payload?: unknown; time?: number; state?: Float64Array; speciesCount?: number; observablesCount?: number; progress?: number;[key: string]: unknown }) => void
   }
 ): Promise<SimulationResults> {
   const formatCaughtError = (error: unknown): string => {
@@ -338,7 +337,7 @@ export async function simulate(
   const hasRules = (inputModel.reactionRules?.length ?? 0) > 0;
   const hasReactions = (inputModel.reactions?.length ?? 0) > 0;
   const expandedInput = hasRules && !hasReactions
-    ? await generateExpandedNetwork(inputModel, callbacks.checkCancelled, () => {})
+    ? await generateExpandedNetwork(inputModel, callbacks.checkCancelled, () => { })
     : inputModel;
 
   // STRICT PARITY: Output time grid management
@@ -438,9 +437,6 @@ export async function simulate(
   const firstUnsuffixedIdx = phases.findIndex((p) => !p.suffix);
   const defaultRecordFromIdx = firstUnsuffixedIdx >= 0 ? firstUnsuffixedIdx : 0;
   const recordFromPhaseIdx = options.recordFromPhase !== undefined ? options.recordFromPhase : defaultRecordFromIdx;
-
-  // Seeded random number generator for SSA (used by PLA/PSA via separate imports)
-  const rng = new SeededRandom(options.seed ?? 12345);
 
   const allSsa = phases.every(p => p.method === 'ssa') || options.method === 'ssa';
   const allPla = phases.every(p => p.method === 'pla') || options.method === 'pla';
@@ -974,17 +970,17 @@ export async function simulate(
     // Chunked JIT fallback (used for < 100 observables, or if CSR build fails)
     const compiledObservableEvaluator = (!csrObservableMatrix && concreteObservables.length > 0)
       ? (() => {
-          try {
-            return jitCompiler.compileObservables(concreteObservables as Array<{
-              name: string;
-              indices: Int32Array | number[];
-              coefficients: Float64Array | number[];
-              volumes?: Float64Array | number[];
-            }>, numSpecies, useAmountsForObs);
-          } catch {
-            return null;
-          }
-        })()
+        try {
+          return jitCompiler.compileObservables(concreteObservables as Array<{
+            name: string;
+            indices: Int32Array | number[];
+            coefficients: Float64Array | number[];
+            volumes?: Float64Array | number[];
+          }>, numSpecies, useAmountsForObs);
+        } catch {
+          return null;
+        }
+      })()
       : null;
 
     const evaluateObservablesIntoBuffer = (currentState: Float64Array) => {
@@ -1124,7 +1120,7 @@ export async function simulate(
     let compiledMassActionJit: JITCompiledFunction | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
     let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
-     
+
     let persistedSolverKey = '';
 
 
@@ -1174,9 +1170,9 @@ export async function simulate(
           let anyChanged = false;
           for (const name in model.paramExpressions) {
             if (Object.prototype.hasOwnProperty.call(model.paramExpressions, name)) {
-                if (!isSafeObjectKey(name)) {
-                  continue;
-                }
+              if (!isSafeObjectKey(name)) {
+                continue;
+              }
               const expr = model.paramExpressions[name];
               try {
                 const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
@@ -1259,8 +1255,8 @@ export async function simulate(
       };
       const result = await simulatePLA(plaModel, options);
       if (includeSpeciesData) {
-         // PLA simulator doesn't return full species matrices by default, 
-         // but that's fine for BNGL action parity since observables are what's plotted.
+        // PLA simulator doesn't return full species matrices by default, 
+        // but that's fine for BNGL action parity since observables are what's plotted.
       }
       return result;
     }
@@ -1378,6 +1374,33 @@ export async function simulate(
         return idx; // 0-based index
       };
 
+      // === OPT 7: ADAPTIVE REACTION SELECTION ===
+      // For small networks a flat cumulative scan beats the Fenwick tree on
+      // constant factors and cache behaviour; for large networks the O(log R)
+      // tree wins. The choice is fixed per network (numReactions doesn't change
+      // within a run), so a given model always uses one method -> reproducible.
+      // In linear mode the Fenwick tree is never built or updated.
+      const SSA_LINEAR_SELECT_MAX = 32;
+      const useFenwick = numReactions > SSA_LINEAR_SELECT_MAX;
+
+      // OPT 10: interval between full propensity recomputes. propensities[] are
+      // recomputed exactly each event (they don't drift); the periodic recompute
+      // only clears drift in the running total and the Fenwick tree, so with
+      // Neumaier-compensated accumulation of the total it can be far less frequent.
+      const SSA_RECALC_INTERVAL = 1000;
+
+      // Linear cumulative-sum selection: smallest i with prefixSum(0..i) >= target.
+      const selectLinear = (target: number): number => {
+        const p = propensities;
+        const n = numReactions;
+        let sum = 0;
+        for (let i = 0; i < n; i++) {
+          sum += p[i];
+          if (target <= sum) return i;
+        }
+        return n - 1;
+      };
+
       // === OPT 1: ZERO-ALLOCATION TYPED ARRAY FIRING LOG ===
       const shouldRecordFirings = !!(options as typeof options & { recordFirings?: boolean }).recordFirings;
       const maxFiringEvents = ((options as typeof options & { maxFiringEvents?: number }).maxFiringEvents) ?? 100000;
@@ -1385,6 +1408,8 @@ export async function simulate(
       const logRxnIndices = shouldRecordFirings ? new Int32Array(maxFiringEvents) : null;
       const logPropensities = shouldRecordFirings ? new Float64Array(maxFiringEvents) : null;
       let logCount = 0;
+      // OPT 6: hoist the loop-invariant null checks out of the per-event guard.
+      const firingActive = shouldRecordFirings && logTimes !== null && logRxnIndices !== null && logPropensities !== null;
 
       // === OPT 3: INLINED PRNG (Mulberry32) ===
       // Eliminates class method dispatch overhead on every SSA event
@@ -1396,44 +1421,54 @@ export async function simulate(
         return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
       };
 
-      // === LAZY OBSERVABLE EVALUATION SETUP ===
+      // === OBSERVABLE BUFFER SETUP ===
       const numObservables = concreteObservables.length;
-      const observableIndexToSafeName: string[] = new Array(numObservables);
-      for (let i = 0; i < safeObservableIndices.length; i++) {
-        observableIndexToSafeName[safeObservableIndices[i]] = safeObservableNames[i];
-      }
-      const observableDependsOnSpecies: number[][] = Array.from({ length: numSpecies }, () => []);
-      for (let i = 0; i < numObservables; i++) {
-        const obs = concreteObservables[i];
-        for (let j = 0; j < obs.indices.length; j++) {
-          const spIdx = obs.indices[j];
-          const arr = observableDependsOnSpecies[spIdx];
-          // Bolt optimization: since we process observables in order (0 to numObservables - 1),
-          // we only need to check the last element to avoid duplicates.
-          // This reduces O(N^2) `.includes()` lookup to O(1).
-          if (arr.length === 0 || arr[arr.length - 1] !== i) {
-            arr.push(i);
+
+      // OPT 5 (refined): ssaObsValues is read ONLY by functional-rate propensity
+      // evaluation (buildSsaObsRecord -> calcPropensity). Pure mass-action networks
+      // never read it, so for those we skip building and maintaining it entirely
+      // (observable output columns are computed from state at record time, not from
+      // this buffer). The old dirtyObservables / observableDependsOnSpecies /
+      // observableIndexToSafeName bookkeeping was write-only after OPT 5 and is gone.
+      const maintainObs = functionalRateCount > 0;
+
+      const ssaObsValues = new Float64Array(numObservables);
+
+      // OPT 4: flat CSR layout (offsets + obsIdx + coeff) for per-species observable
+      // contributions instead of an array of {obsIdx, coeff} objects, so the
+      // interpreted functional-rate update reads contiguous typed arrays. Entries
+      // for each species stay in ascending observable order, matching the old
+      // array-of-objects order exactly (bit-identical incremental updates).
+      let speciesObsOffsets = new Int32Array(1);
+      let speciesObsIdx = new Int32Array(0);
+      let speciesObsCoeff = new Float64Array(0);
+      if (maintainObs) {
+        speciesObsOffsets = new Int32Array(numSpecies + 1);
+        const counts = new Int32Array(numSpecies);
+        for (let i = 0; i < numObservables; i++) {
+          const obs = concreteObservables[i];
+          for (let j = 0; j < obs.indices.length; j++) counts[obs.indices[j]]++;
+        }
+        let total = 0;
+        for (let s = 0; s < numSpecies; s++) { speciesObsOffsets[s] = total; total += counts[s]; }
+        speciesObsOffsets[numSpecies] = total;
+        speciesObsIdx = new Int32Array(total);
+        speciesObsCoeff = new Float64Array(total);
+        const cursor = speciesObsOffsets.slice(0, numSpecies); // writable start offsets
+        for (let i = 0; i < numObservables; i++) {
+          const obs = concreteObservables[i];
+          for (let j = 0; j < obs.indices.length; j++) {
+            const sp = obs.indices[j];
+            const pos = cursor[sp]++;
+            speciesObsIdx[pos] = i;
+            speciesObsCoeff[pos] = obs.coefficients[j];
           }
         }
       }
-      const dirtyObservables = new Uint8Array(numObservables);
-      dirtyObservables.fill(1); // Initially all dirty
 
-      // === OPT 5: INCREMENTAL OBSERVABLE VALUES FOR SSA ===
-      // Maintain a live buffer of observable values, updated incrementally
-      // when species counts change, instead of recomputing all observables
-      // from scratch for every functional-rate propensity evaluation.
-      const ssaObsValues = new Float64Array(numObservables);
-      // Build per-species -> [(obsIdx, coefficient)] lookup for incremental updates
-      const speciesObsContribs: Array<Array<{ obsIdx: number; coeff: number }>> = Array.from({ length: numSpecies }, () => []);
-      for (let i = 0; i < numObservables; i++) {
-        const obs = concreteObservables[i];
-        for (let j = 0; j < obs.indices.length; j++) {
-          speciesObsContribs[obs.indices[j]].push({ obsIdx: i, coeff: obs.coefficients[j] });
-        }
-      }
-      // Initialize ssaObsValues from current state
+      // Initialize / re-sync ssaObsValues from current state (no-op for mass-action).
       const initSsaObsValues = (): void => {
+        if (!maintainObs) return;
         ssaObsValues.fill(0);
         for (let i = 0; i < numObservables; i++) {
           const obs = concreteObservables[i];
@@ -1656,14 +1691,19 @@ export async function simulate(
         const compiledSSAPropensities = functionalRateCount === 0
           ? jitCompiler.compileSSAPropensities(concreteReactions, reactionReactingVolumes)
           : jitCompiler.compileSSAPropensitiesWithFunctionalRates(
-              concreteReactions,
-              reactionReactingVolumes,
-              model.parameters || {},
-              concreteObservables
-            );
+            concreteReactions,
+            reactionReactingVolumes,
+            model.parameters || {},
+            concreteObservables
+          );
 
-        const compiledSSAIncrementalUpdater = functionalRateCount === 0
-          ? jitCompiler.compileSSAIncrementalUpdater(concreteReactions, reactionReactingVolumes, rxnUpdateRxn)
+        // OPT 3: combined state+propensity event updater (mass-action only).
+        // Cache-backed (opts 2/8/9): reused across phases and replicate runs when
+        // the network + folded rate constants are unchanged, recompiled correctly
+        // when a parameter change alters a rate constant. useFenwick decides whether
+        // the generated code also maintains the Fenwick tree.
+        const compiledSSAEventUpdater = functionalRateCount === 0
+          ? jitCompiler.compileSSAEventUpdater(concreteReactions, reactionReactingVolumes, rxnUpdateRxn, useFenwick)
           : null;
 
         if (shouldEmitPhaseStart) {
@@ -1679,13 +1719,15 @@ export async function simulate(
 
 
         let aTotal = 0;
+        let aTotalC = 0; // OPT 10: Neumaier compensation for the running propensity total
         let recalculatePropensitiesCount = 0;
 
         const computeAllPropensities = () => {
-          // Re-sync incremental observable buffer on full recompute
+          // Re-sync incremental observable buffer on full recompute (no-op for mass-action)
           initSsaObsValues();
           if (compiledSSAPropensities) {
             aTotal = compiledSSAPropensities(state, propensities);
+            aTotalC = 0;
             for (let i = 0; i < numReactions; i++) {
               const a = propensities[i];
               if (isNaN(a) || !isFinite(a)) {
@@ -1693,9 +1735,10 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
               }
             }
-            fenwickBuild(propensities);
+            if (useFenwick) fenwickBuild(propensities);
           } else {
             aTotal = 0;
+            aTotalC = 0;
             for (let i = 0; i < numReactions; i++) {
               const a = calcPropensity(i);
               propensities[i] = a;
@@ -1706,7 +1749,7 @@ export async function simulate(
                 throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
               }
             }
-            fenwickBuild(propensities);
+            if (useFenwick) fenwickBuild(propensities);
           }
         };
 
@@ -1720,16 +1763,20 @@ export async function simulate(
           // OPT 6: Check cancellation every 1024 events instead of every event
           if ((totalEvents & 0x3FF) === 0) callbacks.checkCancelled();
 
-          if (recalculatePropensitiesCount++ >= 100) {
+          if (recalculatePropensitiesCount++ >= SSA_RECALC_INTERVAL) {
             computeAllPropensities();
             recalculatePropensitiesCount = 0;
           }
-          if (aTotal < 0) {
+
+          // OPT 10: use the Neumaier-compensated total everywhere the total is read.
+          let aTot = aTotal + aTotalC;
+          if (aTot < 0) {
             computeAllPropensities(); // floating point correction
+            aTot = aTotal + aTotalC;
           }
 
-          if (!(aTotal > 0)) {
-            // If aTotal is exactly 0, we gracefully finish (stable state). 
+          if (!(aTot > 0)) {
+            // If the total is exactly 0, we gracefully finish (stable state).
             // If it was NaN, the check above would have caught it.
             console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
             break;
@@ -1737,26 +1784,31 @@ export async function simulate(
 
           // OPT 3: Inlined PRNG calls
           const r1 = nextRand();
-          const tau = (1 / aTotal) * Math.log(1 / r1);
+          const tau = (1 / aTot) * Math.log(1 / r1);
           if (t + tau > phaseTEnd) {
             break;
           }
           t += tau;
 
-          const r2 = nextRand() * aTotal;
-          // OPT 2: Inlined Fenwick tree O(log R) selection
-          const fenwickIdx = fenwickFind(r2);
-          const reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
+          const r2 = nextRand() * aTot;
+          // OPT 7: adaptive selection (linear scan for small R, Fenwick for large R)
+          let reactionIndex: number;
+          if (useFenwick) {
+            const fenwickIdx = fenwickFind(r2);
+            reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
+          } else {
+            reactionIndex = selectLinear(r2);
+          }
 
           const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
           nEventsThisPhase++;
 
-          // OPT 1: Record firing event into pre-allocated typed arrays
-          if (shouldRecordFirings && logCount < maxFiringEvents && logTimes && logRxnIndices && logPropensities) {
-            logTimes[logCount] = t;
-            logRxnIndices[logCount] = reactionIndex;
-            logPropensities[logCount] = propensities[reactionIndex];
+          // OPT 1/6: Record firing event into pre-allocated typed arrays
+          if (firingActive && logCount < maxFiringEvents) {
+            logTimes![logCount] = t;
+            logRxnIndices![logCount] = reactionIndex;
+            logPropensities![logCount] = propensities[reactionIndex];
             logCount++;
           }
 
@@ -1796,43 +1848,55 @@ export async function simulate(
             for (let j = 0; j < products.length; j++) processSpecies(products[j]);
           }
 
-          // Apply state changes + OPT 5: incremental observable update
-          for (let j = 0; j < firedRxn.reactants.length; j++) {
-            const spIdx = firedRxn.reactants[j];
-            state[spIdx]--;
-            // Incrementally decrement affected observable values
-            const contribs = speciesObsContribs[spIdx];
-            for (let k = 0; k < contribs.length; k++) {
-              ssaObsValues[contribs[k].obsIdx] -= contribs[k].coeff;
-            }
-            const obsDeps = observableDependsOnSpecies[spIdx];
-            for (let k = 0; k < obsDeps.length; k++) dirtyObservables[obsDeps[k]] = 1;
-          }
-          for (let j = 0; j < firedRxn.products.length; j++) {
-            const spIdx = firedRxn.products[j];
-            state[spIdx]++;
-            // Incrementally increment affected observable values
-            const contribs = speciesObsContribs[spIdx];
-            for (let k = 0; k < contribs.length; k++) {
-              ssaObsValues[contribs[k].obsIdx] += contribs[k].coeff;
-            }
-            const obsDeps = observableDependsOnSpecies[spIdx];
-            for (let k = 0; k < obsDeps.length; k++) dirtyObservables[obsDeps[k]] = 1;
-          }
-
-          // OPT 4: Incremental propensity update with inlined Fenwick add
-          if (compiledSSAIncrementalUpdater) {
-            aTotal += compiledSSAIncrementalUpdater(reactionIndex, state, propensities, fenwickAdd);
+          // OPT 3/4/10: apply state change + dependent propensity update.
+          let eventDelta: number;
+          if (compiledSSAEventUpdater) {
+            // Mass-action fast path: the JIT function applies the net state deltas,
+            // recomputes dependent propensities from fresh state (and updates the
+            // Fenwick tree when useFenwick), and returns the summed propensity delta.
+            eventDelta = compiledSSAEventUpdater(reactionIndex, state, propensities, fenwickAdd);
           } else {
+            // Interpreted fallback (functional rates, or JIT unavailable).
+            // Apply state changes; maintain ssaObsValues only when it is actually
+            // read (functional rates) using the flat CSR contribution arrays (OPT 4).
+            for (let j = 0; j < firedRxn.reactants.length; j++) {
+              const spIdx = firedRxn.reactants[j];
+              state[spIdx]--;
+              if (maintainObs) {
+                const end = speciesObsOffsets[spIdx + 1];
+                for (let k = speciesObsOffsets[spIdx]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] -= speciesObsCoeff[k];
+                }
+              }
+            }
+            for (let j = 0; j < firedRxn.products.length; j++) {
+              const spIdx = firedRxn.products[j];
+              state[spIdx]++;
+              if (maintainObs) {
+                const end = speciesObsOffsets[spIdx + 1];
+                for (let k = speciesObsOffsets[spIdx]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k];
+                }
+              }
+            }
+            eventDelta = 0;
             const deps = rxnUpdateRxn[reactionIndex];
             for (let d = 0; d < deps.length; d++) {
               const jrxn = deps[d];
               const aNew = calcPropensity(jrxn);
               const delta = aNew - propensities[jrxn];
-              aTotal += delta;
-              fenwickAdd(jrxn, delta);
+              eventDelta += delta;
+              if (useFenwick) fenwickAdd(jrxn, delta);
               propensities[jrxn] = aNew;
             }
+          }
+
+          // OPT 10: Neumaier-compensated accumulation of the running propensity total.
+          {
+            const tSum = aTotal + eventDelta;
+            if (Math.abs(aTotal) >= Math.abs(eventDelta)) aTotalC += (aTotal - tSum) + eventDelta;
+            else aTotalC += (eventDelta - tSum) + aTotal;
+            aTotal = tSum;
           }
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
@@ -1938,11 +2002,11 @@ export async function simulate(
         // OPT 1: Materialize firing log from typed arrays only at return time
         firingLog: shouldRecordFirings && logCount > 0 && logTimes && logRxnIndices && logPropensities
           ? Array.from({ length: logCount }, (_, i) => ({
-              time: logTimes[i],
-              reactionIndex: logRxnIndices[i],
-              ruleName: ruleNames[logRxnIndices[i]],
-              propensity: logPropensities[i],
-            }))
+            time: logTimes[i],
+            reactionIndex: logRxnIndices[i],
+            ruleName: ruleNames[logRxnIndices[i]],
+            propensity: logPropensities[i],
+          }))
           : undefined,
       } satisfies SimulationResults;
     }
@@ -2580,30 +2644,30 @@ export async function simulate(
         ? options.onStep
         : (options.maxSteps === undefined
           ? (() => {
-              let warnedApproaching = false;
-              let warnedReached = false;
-              return (currentStep: number, maxSteps: number) => {
-                // Only warn when we are close to or at the configured maximum.
-                if (maxSteps > 0) {
-                  const fraction = currentStep / maxSteps;
-                  if (!warnedReached && currentStep >= maxSteps) {
-                    warnedReached = true;
-                    console.warn(
-                      `[SimulationLoop] Reached maxSteps=${maxSteps} (default). ` +
-                      `Simulation may have been running for a long time. ` +
-                      `Consider lowering maxSteps or loosening tolerances if this is unexpected.`
-                    );
-                  } else if (!warnedApproaching && fraction >= 0.9) {
-                    warnedApproaching = true;
-                    console.warn(
-                      `[SimulationLoop] Approaching maxSteps=${maxSteps} (default, 90% used). ` +
-                      `If your simulation appears to run for a very long time, ` +
-                      `consider adjusting maxSteps or solver settings.`
-                    );
-                  }
+            let warnedApproaching = false;
+            let warnedReached = false;
+            return (currentStep: number, maxSteps: number) => {
+              // Only warn when we are close to or at the configured maximum.
+              if (maxSteps > 0) {
+                const fraction = currentStep / maxSteps;
+                if (!warnedReached && currentStep >= maxSteps) {
+                  warnedReached = true;
+                  console.warn(
+                    `[SimulationLoop] Reached maxSteps=${maxSteps} (default). ` +
+                    `Simulation may have been running for a long time. ` +
+                    `Consider lowering maxSteps or loosening tolerances if this is unexpected.`
+                  );
+                } else if (!warnedApproaching && fraction >= 0.9) {
+                  warnedApproaching = true;
+                  console.warn(
+                    `[SimulationLoop] Approaching maxSteps=${maxSteps} (default, 90% used). ` +
+                    `If your simulation appears to run for a very long time, ` +
+                    `consider adjusting maxSteps or solver settings.`
+                  );
                 }
-              };
-            })()
+              }
+            };
+          })()
           : undefined),
       // Keep a small nonzero floor in Node/WASM to avoid infinitesimal-step stalls.
       minStep: options.minStep ?? 1e-15,
@@ -2655,10 +2719,10 @@ export async function simulate(
       const rootExprs: string[] = [];
       if (model.functions) {
         for (const func of model.functions) {
-            const extracted = extractIfConditions(func.expression);
-            for (const cond of extracted) {
-              if (!rootExprs.includes(cond)) rootExprs.push(cond);
-            }
+          const extracted = extractIfConditions(func.expression);
+          for (const cond of extracted) {
+            if (!rootExprs.includes(cond)) rootExprs.push(cond);
+          }
         }
       }
 
@@ -3531,5 +3595,3 @@ export async function simulate(
     'Check that your simulate() action specifies a positive time span and that network generation succeeded.'
   );
 }
-
-
