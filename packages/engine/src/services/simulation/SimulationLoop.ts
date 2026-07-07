@@ -328,6 +328,25 @@ export async function buildOdeSystem(
   return handle;
 }
 
+/**
+ * Main entry point for executing simulations of a BNGL model.
+ *
+ * This function orchestrates the simulation pipeline:
+ * 1. Auto-expands the model network if rules are present but reactions are not.
+ * 2. Resolves and manages simulation phases (e.g., parameter/concentration changes between phases).
+ * 3. Selects and configures the appropriate ODE, SSA, or NFsim solver based on model properties and options.
+ * 4. Evaluates rate functions, tracks state variables, and yields formatted results.
+ *
+ * Invariants:
+ * - Engine functions must remain browser-API-free; they must execute purely in Node/Worker contexts.
+ * - MCP tools must rely on this engine function for simulation rather than reimplementing simulation logic.
+ *
+ * @param _jobId - A numeric identifier for the simulation job.
+ * @param inputModel - The parsed BioNetGen model object (BNGLModel) to be simulated.
+ * @param options - Configuration options specifying the solver ('ode', 'ssa', 'nfsim', 'auto', etc.), timing constraints, and output steps.
+ * @param callbacks - An object with a `checkCancelled` function for aborting the run, and a `postMessage` function to emit progress/state updates.
+ * @returns A promise that resolves to the complete SimulationResults.
+ */
 export async function simulate(
   _jobId: number,
   inputModel: BNGLModel,
