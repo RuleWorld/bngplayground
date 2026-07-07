@@ -1307,14 +1307,11 @@ export async function simulate(
       const numReactions = concreteReactions.length;
 
       // Pre-compute: which reactions depend on which species? (for sparse influence tracking)
-      const speciesDependents: Map<number, number[]> = new Map();
+      const speciesDependents: number[][] = new Array(numSpecies);
+      for (let i = 0; i < numSpecies; i++) speciesDependents[i] = [];
       for (let i = 0; i < numReactions; i++) {
         for (let j = 0; j < concreteReactions[i].reactants.length; j++) {
-          const speciesIdx = concreteReactions[i].reactants[j];
-          if (!speciesDependents.has(speciesIdx)) {
-            speciesDependents.set(speciesIdx, []);
-          }
-          speciesDependents.get(speciesIdx)!.push(i);
+          speciesDependents[concreteReactions[i].reactants[j]].push(i);
         }
       }
       // Precompute rxnUpdateRxn for SSA incremental propensity updates
@@ -1324,16 +1321,12 @@ export async function simulate(
         const rxn = concreteReactions[r];
         const deps = new Set<number>();
         for (const idx of rxn.reactants) {
-          const dependentRxns = speciesDependents.get(idx);
-          if (dependentRxns) {
-            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
-          }
+          const dependentRxns = speciesDependents[idx];
+          for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
         }
         for (const idx of rxn.products) {
-          const dependentRxns = speciesDependents.get(idx);
-          if (dependentRxns) {
-            for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
-          }
+          const dependentRxns = speciesDependents[idx];
+          for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
         }
         rxnUpdateRxn[r] = new Int32Array(Array.from(deps));
       }
@@ -1859,8 +1852,7 @@ export async function simulate(
             const products = firedRxn.products;
 
             const processSpecies = (speciesIdx: number) => {
-              const deps = speciesDependents.get(speciesIdx);
-              if (!deps) return;
+              const deps = speciesDependents[speciesIdx];
               for (let k = 0; k < deps.length; k++) {
                 const depIdx = deps[k];
                 // Check if we already recorded this one
