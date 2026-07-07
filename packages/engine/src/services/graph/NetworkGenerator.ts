@@ -3376,10 +3376,9 @@ export class NetworkGenerator {
               const mol2 = fullProductGraph.molecules[mol2Idx] as Molecule & { _sourceKey?: string };
               if (!mol2?._sourceKey) continue;
               const _cIdx6 = mol2._sourceKey.indexOf(':');
-              const sk2Parts = [mol2._sourceKey.slice(0, _cIdx6), mol2._sourceKey.slice(_cIdx6 + 1)];
-              const r2 = parseInt(sk2Parts[0], 10);
+              const r2 = parseInt(mol2._sourceKey.slice(0, _cIdx6), 10);
               if (r1 === r2) continue; // Intra-complex bond — always OK
-              const rMol2 = parseInt(sk2Parts[1], 10);
+              const rMol2 = parseInt(mol2._sourceKey.slice(_cIdx6 + 1), 10);
               // Use ORIGINAL reactant compartments (before product-pattern compartment override)
               const gr1 = reactantGraphs[r1];
               const gr2 = reactantGraphs[r2];
@@ -3421,11 +3420,11 @@ export class NetworkGenerator {
             if (!mol._sourceKey) continue;
             const explicitUnbound = explicitUnboundBySource.get(mol._sourceKey);
             if (explicitUnbound && explicitUnbound.size > 0) {
-              mol._explicitUnboundComponents = new Set(explicitUnbound);
+              mol._explicitUnboundComponents = explicitUnbound;
             }
             const explicitBonded = explicitBondedBySource.get(mol._sourceKey);
             if (explicitBonded && explicitBonded.size > 0) {
-              mol._explicitBondedComponents = new Set(explicitBonded);
+              mol._explicitBondedComponents = explicitBonded;
             }
           }
         }
@@ -3462,21 +3461,12 @@ export class NetworkGenerator {
         }
 
         for (const subgraph of productsToKeep) {
-          const sourceKeys = new Set<string>();
-          for (const mol of subgraph.molecules) {
-            if (mol._sourceKey) {
-              sourceKeys.add(mol._sourceKey);
-            }
-          }
-
           // DEDUPLICATION
           let isAlreadyIncluded = false;
-          if (sourceKeys.size > 0) {
-            for (const key of sourceKeys) {
-              if (usedReactantMolsInReaction.has(key)) {
-                isAlreadyIncluded = true;
-                break;
-              }
+          for (const mol of subgraph.molecules) {
+            if (mol._sourceKey && usedReactantMolsInReaction.has(mol._sourceKey)) {
+              isAlreadyIncluded = true;
+              break;
             }
           }
 
@@ -3490,12 +3480,16 @@ export class NetworkGenerator {
               if (mol._sourceKey) {
                 usedReactantMolsInReaction.add(mol._sourceKey);
                 const _cIdx2 = mol._sourceKey.indexOf(':');
-                const rIdx = Number(mol._sourceKey.slice(0, _cIdx2));
-                const mIdx = Number(mol._sourceKey.slice(_cIdx2 + 1));
+                const rIdx = parseInt(mol._sourceKey.slice(0, _cIdx2), 10);
+                const mIdx = parseInt(mol._sourceKey.slice(_cIdx2 + 1), 10);
                 survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
               }
             }
           } else if (shouldLogNetworkGenerator) {
+            const sourceKeys = new Set<string>();
+            for (const mol of subgraph.molecules) {
+              if (mol._sourceKey) sourceKeys.add(mol._sourceKey);
+            }
             debugNetworkLog(`[applyTransformation] Skipping duplicate product fragment containing molecules: ${Array.from(sourceKeys).join(', ')}`);
           }
         }

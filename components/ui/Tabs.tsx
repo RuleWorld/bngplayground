@@ -73,7 +73,7 @@ export const Tab: React.FC<TabProps> = ({ children, isActive, onClick, dataTabIn
       aria-controls={`tabpanel-${dataTabIndex}`}
       onClick={onClick}
       data-tab-index={dataTabIndex}
-      className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors ${isActive ? activeClasses : inactiveClasses}`}
+      className={`whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50 rounded-t-sm ${isActive ? activeClasses : inactiveClasses}`}
     >
       {children}
     </button>
@@ -101,7 +101,7 @@ export const TabList: React.FC<{ children: React.ReactNode }> = ({ children }) =
     if (tabs.length === 0) return;
 
     const currentIdx = tabs.findIndex(tab => tab === document.activeElement);
-    let nextIdx = 0;
+    let nextIdx: number;
 
     switch (e.key) {
       case 'ArrowRight':
