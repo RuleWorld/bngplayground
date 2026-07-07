@@ -57,7 +57,6 @@ export default defineConfig(() => {
         'react-is',
         'recharts',
         'cytoscape',
-        'cytoscape-cose-bilkent',
         'd3',
         'antlr4ts',
         'antlr4ts/tree/AbstractParseTreeVisitor',

@@ -107,17 +107,6 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
     return map;
   }, [model]);
 
-  const parameterNames = useMemo(() => Object.keys(parameterTypeMap), [parameterTypeMap]);
-  const observableNames = useMemo(() => (model ? model.observables.map((obs) => obs.name) : []), [model]);
-
-  const speciesMap = useMemo(() => {
-    const map = new Map<string, NonNullable<BNGLModel['species']>[number]>();
-    if (model) {
-      model.species.forEach(s => map.set(s.name, s));
-    }
-    return map;
-  }, [model]);
-
   // map from a parameter name to any species whose initialExpression references it
   const paramToSpecies = useMemo<Record<string, string[]>>(() => {
     const map: Record<string, string[]> = {};
@@ -133,6 +122,26 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
         });
       }
     });
+    return map;
+  }, [model]);
+
+  const parameterNames = useMemo(() => {
+    return Object.keys(parameterTypeMap).filter((name) => {
+      const isParam = parameterTypeMap[name] === 'parameter';
+      if (isParam && paramToSpecies[name] && paramToSpecies[name].length > 0) {
+        return false;
+      }
+      return true;
+    });
+  }, [parameterTypeMap, paramToSpecies]);
+
+  const observableNames = useMemo(() => (model ? model.observables.map((obs) => obs.name) : []), [model]);
+
+  const speciesMap = useMemo(() => {
+    const map = new Map<string, NonNullable<BNGLModel['species']>[number]>();
+    if (model) {
+      model.species.forEach(s => map.set(s.name, s));
+    }
     return map;
   }, [model]);
 
