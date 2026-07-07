@@ -62,7 +62,7 @@
     "react-markdown": "^10.1.0",
     "recharts": "^3.3.0",
     "remark-gfm": "^4.0.1",
-    "three": "^0.172.0",
+    "three": "^0.185.1",
     "umap-js": "^1.4.0",
     "zod": "^4.4.3"
   },
