@@ -564,7 +564,7 @@
         function renderLegend() {
             const legend = document.getElementById('legend');
             legend.style.display = 'flex';
-            legend.innerHTML = '';
+            legend.textContent = '';
             const sorted = [...categoryCounts.entries()].sort((a, b) => b[1] - a[1]);
             sorted.forEach(([category, count]) => {
                 const color = colorMap[category] || '#94a3b8';
