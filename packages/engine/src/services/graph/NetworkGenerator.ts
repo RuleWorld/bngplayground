@@ -4215,10 +4215,25 @@ export class NetworkGenerator {
             const mustStartUnbound =
               !rcForBondCheck ||
               (!rcForBondCheck.wildcard && rcForBondCheck.edges.size === 0);
-            const repeatedSiteName =
-              pMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
-              rpMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
-              targetMol.components.filter((c: Component) => c.name === pc.name).length > 1;
+
+            // ⚡ Bolt: Replaced chained .filter(...).length > 1 with early-exit loops
+            // to eliminate intermediate array allocations in this hot path.
+            let pCount = 0, rpCount = 0, tCount = 0;
+            let repeatedSiteName = false;
+            for (let i = 0; i < pMol.components.length; i++) {
+              if (pMol.components[i].name === pc.name && ++pCount > 1) { repeatedSiteName = true; break; }
+            }
+            if (!repeatedSiteName) {
+              for (let i = 0; i < rpMol.components.length; i++) {
+                if (rpMol.components[i].name === pc.name && ++rpCount > 1) { repeatedSiteName = true; break; }
+              }
+            }
+            if (!repeatedSiteName) {
+              for (let i = 0; i < targetMol.components.length; i++) {
+                if (targetMol.components[i].name === pc.name && ++tCount > 1) { repeatedSiteName = true; break; }
+              }
+            }
+
             if (mustStartUnbound && tc.edges.size !== 0 && !repeatedSiteName) {
               return -Infinity;
             }
@@ -4477,8 +4492,8 @@ export class NetworkGenerator {
           if (!bondPreserved) {
             // For repeated same-name components, occurrence-based matching can be ambiguous.
             // Re-check all same-name product components before concluding this bond is broken.
-            const sameNamePpComps = pMol.components.filter((comp) => comp.name === rpComp.name);
-            for (const ppComp of sameNamePpComps) {
+            for (const ppComp of pMol.components) {
+              if (ppComp.name !== rpComp.name) continue;
               if (ppComp.wildcard === '+' || ppComp.wildcard === '?') {
                 bondPreserved = true;
                 break;
