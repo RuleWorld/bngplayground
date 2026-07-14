@@ -95,20 +95,40 @@ export function parseGdat(gdat: string): GdatData {
     while(end > start && line.charCodeAt(end - 1) <= 32) end--;
     const trimmedLine = (start === 0 && end === line.length) ? line : line.substring(start, end);
 
-    let tokens: string[];
-    if (trimmedLine.includes('\t')) tokens = trimmedLine.split('\t');
-    else if (trimmedLine.includes(',')) tokens = trimmedLine.split(',');
-    else tokens = trimmedLine.split(/\s+/);
-
-    if (tokens.length === 0) continue;
-
     const row: Record<string, number> = {};
-    const limit = numHeaders < tokens.length ? numHeaders : tokens.length;
-    for (let j = 0; j < limit; j++) {
-      const value = Number(tokens[j]);
-      row[headers[j]] = Number.isFinite(value) ? value : 0;
+    let colIndex = 0;
+
+    // ⚡ Bolt Optimization: Use zero-allocation index scanning instead of .split() arrays
+    const isTab = line.includes('\t');
+    const isComma = !isTab && line.includes(',');
+
+    let tokenStart = start;
+    let inToken = true;
+    for (let j = start; j <= end; j++) {
+      const ch = j < end ? line.charCodeAt(j) : -1;
+      const isDelim = ch === -1 || (isTab ? ch === 9 : (isComma ? ch === 44 : ch <= 32));
+
+      if (isDelim) {
+        if (inToken) {
+          const valStr = line.substring(tokenStart, j);
+          if (colIndex < numHeaders && valStr.length > 0) {
+            const val = Number(valStr);
+            row[headers[colIndex]] = Number.isFinite(val) ? val : 0;
+          }
+          colIndex++;
+          inToken = false;
+        }
+      } else {
+        if (!inToken) {
+          tokenStart = j;
+          inToken = true;
+        }
+      }
     }
-    data.push(row);
+
+    if (colIndex > 0) {
+      data.push(row);
+    }
   }
 
   return { headers, data, rawHeaderLine };

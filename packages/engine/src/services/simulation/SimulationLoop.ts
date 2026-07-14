@@ -2565,9 +2565,12 @@ export async function simulate(
         })),
         updateParameters: (nextParams: Record<string, number>) => {
           if (model.parameters) {
-            for (const key of Object.keys(nextParams)) {
-              if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
-              setSafeNumericField(model.parameters as Record<string, number>, key, nextParams[key]);
+            // ⚡ Bolt Optimization: Use for...in instead of Object.keys() to avoid array allocations
+            for (const key in nextParams) {
+              if (Object.prototype.hasOwnProperty.call(nextParams, key)) {
+                if (key === '__proto__' || key === 'constructor' || key === 'prototype') continue;
+                setSafeNumericField(model.parameters as Record<string, number>, key, nextParams[key]);
+              }
             }
           }
           // Refresh mass-action rate constants and functional-rate context so the
