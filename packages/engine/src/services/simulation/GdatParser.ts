@@ -14,14 +14,25 @@ export function parseGdat(gdat: string): GdatData {
   const lines = gdat.split(/\r?\n/);
 
   let headerLineIndex = -1;
-  for (let i = lines.length - 1; i >= 0; i--) {
+  let firstCommentIndex = -1;
+  for (let i = 0; i < lines.length; i++) {
     const line = lines[i];
     let start = 0;
     while(start < line.length && line.charCodeAt(start) <= 32) start++;
     if (start < line.length && line.charCodeAt(start) === 35) { // '#'
-      headerLineIndex = i;
+      if (firstCommentIndex === -1) {
+        firstCommentIndex = i;
+      }
+      if (line.toLowerCase().includes('time')) {
+        headerLineIndex = i;
+        break;
+      }
+    } else if (start < line.length) {
       break;
     }
+  }
+  if (headerLineIndex === -1 && firstCommentIndex !== -1) {
+    headerLineIndex = firstCommentIndex;
   }
 
   let headerTokens: string[] = [];
