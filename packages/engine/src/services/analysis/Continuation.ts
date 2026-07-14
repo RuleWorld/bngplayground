@@ -78,6 +78,17 @@ export interface ContinuationResult {
 
 // ── Main continuation driver ────────────────────────────────────────
 
+/**
+ * Executes pseudo-arclength parameter continuation to trace steady-state branches
+ * and identify bifurcation points (e.g., saddle-node and Hopf bifurcations).
+ *
+ * Invariants:
+ * - Operates entirely independently of browser APIs (engine-only).
+ *
+ * @param config - The configuration for the continuation process, including the RHS function, initial state, and parameter bounds.
+ * @param onProgress - Optional callback invoked after each successful step with the current continuation point and its index.
+ * @returns A ContinuationResult containing the computed path of points, detected bifurcations, and whether it completed the parameter range.
+ */
 export function continuation(
   config: ContinuationConfig,
   onProgress?: (point: ContinuationPoint, index: number) => void,
