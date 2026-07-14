@@ -120,6 +120,16 @@ export function buildSimulationOptions(args: any) {
     return simulationOptions;
 }
 
+/**
+ * Merges network generation limits from MCP tool arguments into the model's configuration.
+ * Adapts user-provided MCP arguments (e.g., max_agents) to internal engine configuration structures (e.g., maxSpecies).
+ * If no overrides are provided, it returns the exact same model instance.
+ * Otherwise, it returns a shallow clone with a newly created `networkOptions` object containing the merged limits.
+ *
+ * @param model - The parsed BNGLModel object.
+ * @param args - An object containing optional network generation override values (max_agents, max_reactions, max_iterations, max_agg).
+ * @returns The original model if no overrides exist, otherwise a cloned model with updated networkOptions.
+ */
 export function applyNetworkOptions<T extends { max_agents?: number; max_reactions?: number; max_iterations?: number; max_agg?: number }>(
     model: BNGLModel,
     args: T,
