@@ -473,8 +473,3 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
   return initPromise;
 }
 
-export function resetNFsimRuntime(): void {
-  initPromise = null;
-  const globalAny = globalThis as unknown as { __nfsimRuntime?: NFsimRuntime };
-  delete globalAny.__nfsimRuntime;
-}
