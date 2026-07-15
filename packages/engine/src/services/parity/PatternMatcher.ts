@@ -277,7 +277,18 @@ export function countMultiMoleculePatternMatches(speciesStr: string, pattern: st
     }
 }
 
-// --- Helper: Count Matches for Molecules Observable ---
+/**
+ * Counts the number of times a BioNetGen observable pattern embeds within a given species.
+ * Evaluates matches following strict BNG2 observable semantics, accounting for structural
+ * degeneracy and explicit compartmental location requirements.
+ *
+ * It attempts fast-paths for simple compartment-bound molecule patterns (e.g. `@PM:L()`) before
+ * falling back to full sub-graph isomorphism mappings.
+ *
+ * @param speciesStr - The canonical BNGL string representing the species.
+ * @param patternStr - The pattern string to search for within the species.
+ * @returns The number of times the pattern embeds in the species.
+ */
 export function countPatternMatches(speciesStr: string, patternStr: string): number {
     const normalizedPattern = normalizeLegacySuffixCompartment(patternStr.trim());
     const patPrefixComp = normalizedPattern.match(/^@([A-Za-z0-9_]+)::?/)?.[1] ?? null;
