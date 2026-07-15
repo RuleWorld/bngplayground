@@ -361,7 +361,12 @@ export async function multiscaleSimulation(
     for (const { cell, action } of actions) {
       switch (action.type) {
         case 'divide': {
-          if (cells.filter((c) => c.phase !== 'dead').length >= maxCells) break;
+          let activeCount = 0;
+          for (let i = 0; i < cells.length; i++) {
+            if (cells[i].phase !== 'dead') activeCount++;
+            if (activeCount >= maxCells) break;
+          }
+          if (activeCount >= maxCells) break;
           cell.phase = 'dividing';
           const daughter = divideCell(cell, nextCellId, rng);
           cell.phase = 'active';
