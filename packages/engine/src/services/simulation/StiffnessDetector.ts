@@ -280,7 +280,11 @@ export class StiffnessDetector {
   /** Fraction of accepted steps in the current window. */
   get acceptanceRate(): number {
     if (this.acceptanceWindow.length === 0) return 1;
-    const acc = this.acceptanceWindow.filter(Boolean).length;
+    // ⚡ Bolt: Use inline loop instead of .filter(Boolean).length to avoid intermediate array allocation
+    let acc = 0;
+    for (let i = 0; i < this.acceptanceWindow.length; i++) {
+      if (this.acceptanceWindow[i]) acc++;
+    }
     return acc / this.acceptanceWindow.length;
   }
 
