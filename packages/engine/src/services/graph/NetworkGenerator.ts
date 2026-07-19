@@ -1437,25 +1437,33 @@ export class NetworkGenerator {
     // and produce "APC.bCat + AXIN". This is confirmed by reference .net file having such reactions.
     // The 32 extra reactions issue needs a different solution.
 
-    let filteredMatches: MatchMap[];
+    let matches: MatchMap[] = [];
     if (rule.isMatchOnce) {
       const firstMap = profiledFindFirstMap(pattern, reactantSpecies.graph, { symmetryBreaking: true });
       if (firstMap && this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, firstMap) &&
         this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, firstMap)) {
-        filteredMatches = [firstMap];
+        matches = [firstMap];
       } else {
-        filteredMatches = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true }).filter((match) =>
-          this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
-          this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
-        );
+        const maps = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true });
+        for (let mIdx = 0; mIdx < maps.length; mIdx++) {
+          const match = maps[mIdx];
+          if (this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)) {
+            matches = [match];
+            break;
+          }
+        }
       }
     } else {
-      filteredMatches = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true }).filter((match) =>
-        this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
-        this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
-      );
+      const maps = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true });
+      for (let mIdx = 0; mIdx < maps.length; mIdx++) {
+        const match = maps[mIdx];
+        if (this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
+          this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)) {
+          matches.push(match);
+        }
+      }
     }
-    const matches = rule.isMatchOnce ? filteredMatches.slice(0, 1) : filteredMatches;
 
     // Debug: log match count for any unimolecular rule
     if (shouldLogNetworkGenerator) {
@@ -2274,27 +2282,37 @@ export class NetworkGenerator {
       const isSubstrateAnchor = applyCarryThroughAnchorSkip && !carryThroughPatternIndices.has(i);
       const anchorSB = isSubstrateAnchor ? false : matchSymmetryBreaking;
 
-      let allMatches: MatchMap[];
+      let matches: MatchMap[] = [];
+      const limitOne = !!(rule.isMatchOnce || (!isSubstrateAnchor && carryThroughPatternIndices.has(i)));
       if (rule.isMatchOnce) {
         const firstMap = profiledFindFirstMap(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
         if (firstMap && this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, firstMap) &&
           this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, firstMap)) {
-          allMatches = [firstMap];
+          matches = [firstMap];
         } else {
-          allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB }).filter((match) =>
-            this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
-            this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
-          );
+          const maps = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
+          for (let mIdx = 0; mIdx < maps.length; mIdx++) {
+            const match = maps[mIdx];
+            if (this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
+              this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)) {
+              matches = [match];
+              break;
+            }
+          }
         }
       } else {
-        allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB }).filter((match) =>
-          this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
-          this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
-        );
+        const maps = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
+        for (let mIdx = 0; mIdx < maps.length; mIdx++) {
+          const match = maps[mIdx];
+          if (this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)) {
+            matches.push(match);
+            if (limitOne) {
+              break;
+            }
+          }
+        }
       }
-      // isMatchOnce and non-substrate carry-through anchors are restricted to 1 match.
-      // Substrate anchors in carry-through rules (SB=false) use all matches for full embedding count.
-      const matches = (rule.isMatchOnce || (!isSubstrateAnchor && carryThroughPatternIndices.has(i))) ? allMatches.slice(0, 1) : allMatches;
       if (matches.length === 0) continue;
 
       if (shouldLogNetworkGenerator) {
@@ -2437,26 +2455,33 @@ export class NetworkGenerator {
           if (!GraphMatcher.canPossiblyMatch(nextPattern, candidateSpecies.graph)) {
             continue;
           }
-          let allCandMaps: MatchMap[];
+          let candMaps: MatchMap[] = [];
           if (rule.isMatchOnce || isCarryThroughPattern) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
             if (firstCandMap && this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, firstCandMap) &&
               this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, firstCandMap)) {
-              allCandMaps = [firstCandMap];
+              candMaps = [firstCandMap];
             } else {
-              allCandMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((candMatch) =>
-                this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
-                this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
-              );
-              if (isCarryThroughPattern) allCandMaps = allCandMaps.slice(0, 1);
+              const maps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
+              for (let mIdx = 0; mIdx < maps.length; mIdx++) {
+                const candMatch = maps[mIdx];
+                if (this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
+                  this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)) {
+                  candMaps = [candMatch];
+                  break;
+                }
+              }
             }
           } else {
-            allCandMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((candMatch) =>
-              this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
-              this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
-            );
+            const maps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
+            for (let mIdx = 0; mIdx < maps.length; mIdx++) {
+              const candMatch = maps[mIdx];
+              if (this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
+                this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)) {
+                candMaps.push(candMatch);
+              }
+            }
           }
-          const candMaps = (rule.isMatchOnce || isCarryThroughPattern) ? allCandMaps.slice(0, 1) : allCandMaps;
 
           for (const candMatch of candMaps) {
             const nextIndices = [...currentIndices];
