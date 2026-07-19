@@ -407,7 +407,7 @@ export async function simulate(
           setSafeNumberField(model.parameters as Record<string, number>, change.parameter, newVal);
           paramMap.set(change.parameter, newVal);
           if (model.paramExpressions && isSafeObjectKey(change.parameter)) {
-            delete model.paramExpressions[change.parameter];
+            Reflect.deleteProperty(model.paramExpressions, change.parameter);
           }
           parametersUpdated = true;
         }
@@ -1159,8 +1159,7 @@ export async function simulate(
             if (model.paramExpressions) {
               const oldExpr = model.paramExpressions[change.parameter];
               if (oldExpr && isSafeObjectKey(change.parameter)) {
-
-                delete model.paramExpressions[change.parameter];
+                Reflect.deleteProperty(model.paramExpressions, change.parameter);
               }
             }
             parametersUpdated = true;
@@ -1445,11 +1444,14 @@ export async function simulate(
       if (maintainObs) {
         speciesObsOffsets = new Int32Array(numSpecies + 1);
         const counts = new Int32Array(numSpecies);
-        // All bracket accesses below use TypedArrays (Int32Array/Uint8Array/Float64Array)
-        // which only accept integer keys and are immune to prototype pollution.
+        // TypedArrays (Int32Array/Uint8Array/Float64Array) only accept integer keys
+        // and are immune to prototype pollution.
         for (let i = 0; i < numObservables; i++) {
           const obs = concreteObservables[i];
-          for (let j = 0; j < obs.indices.length; j++) counts[obs.indices[j]]++;
+          for (let j = 0; j < obs.indices.length; j++) {
+            const k = obs.indices[j];
+            counts[k] = (counts[k] ?? 0) + 1;
+          }
         }
         let total = 0;
         for (let s = 0; s < numSpecies; s++) { speciesObsOffsets[s] = total; total += counts[s]; }
@@ -1461,9 +1463,10 @@ export async function simulate(
           const obs = concreteObservables[i];
           for (let j = 0; j < obs.indices.length; j++) {
             const sp = obs.indices[j];
-            const pos = cursor[sp]++;
-            speciesObsIdx[pos] = i;
-            speciesObsCoeff[pos] = obs.coefficients[j];
+            const pos = cursor[sp];
+            cursor[sp] = pos + 1;
+            Reflect.set(speciesObsIdx, pos, i);
+            Reflect.set(speciesObsCoeff, pos, obs.coefficients[j]);
           }
         }
       }

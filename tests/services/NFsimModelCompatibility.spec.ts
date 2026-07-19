@@ -522,13 +522,6 @@ function isAggregationRule(rule: ReactionRule): boolean {
   );
 }
 
-/**
- * Check if a molecule type has multiple binding sites (cooperative binding)
- */
-function hasMultipleBindingSites(molType: MoleculeType): boolean {
-  return molType.components && molType.components.length >= 2;
-}
-
 // ============================================================================
 // Model Creation Functions for Unit Tests
 // ============================================================================

@@ -320,11 +320,6 @@ describe('NFsim Error Handling Completeness', () => {
         'Unknown error'
       ];
 
-      const contexts = errorMessages.map((msg, index) => ({
-        timestamp: new Date(),
-        executionId: `test_${index}`,
-        modelName: `model_${index}`
-      }));
 
       // Generate errors
       // **Property 4: Error Handling Completeness**
