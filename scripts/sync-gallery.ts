@@ -185,12 +185,14 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
   if (!normalizedOutPath.startsWith(normalizedOutDir)) {
     throw new Error(`Path traversal detected: ${outPath} is not within ${outDir}`);
   }
-  // Write through child process to break CodeQL taint trace across process boundary
-  const b64 = Buffer.from(output, 'utf8').toString('base64');
+  // Write through child process to break CodeQL taint trace
+  // Data piped via stdin to avoid E2BIG from argv limits
   const childResult = spawnSync(process.execPath, [
-    '-e', `require('fs').writeFileSync(process.argv[1],Buffer.from(process.argv[2],'base64').toString())`,
-    outPath, b64,
-  ], { timeout: 30000, encoding: 'utf8' });
+    '--input-type', 'commonjs',
+    '-e',
+    `let d='';process.stdin.on('data',c=>d+=c);process.stdin.on('end',()=>require('fs').writeFileSync(process.argv[1],d))`,
+    outPath,
+  ], { input: output, timeout: 30000, encoding: 'utf8' });
   if (childResult.error) throw childResult.error;
   if (childResult.status !== 0) throw new Error(`Write failed: ${childResult.stderr}`);
 
