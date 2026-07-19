@@ -8,9 +8,9 @@
  */
 
 import { spawnSync } from 'node:child_process';
-import { mkdtempSync, copyFileSync, readdirSync, readFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, copyFileSync, readFileSync, existsSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join, basename, resolve } from 'node:path';
+import { join, basename } from 'node:path';
 import { resolveBNG2Paths } from '../../tools/bng2-paths';
 
 const bng2Paths = resolveBNG2Paths();

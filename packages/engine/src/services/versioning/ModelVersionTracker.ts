@@ -1,3 +1,5 @@
+import { collapseWhitespace } from '../../utils/stringUtils';
+import { stripInlineComment } from '../../utils/stringUtils';
 /**
  * ModelVersionTracker.ts - Model version tracking with semantic diffs
  *
@@ -58,31 +60,6 @@ interface ParsedSection {
     rules: Map<string, string>;
 }
 
-function stripInlineComment(line: string): string {
-    const commentIdx = line.indexOf('#');
-    return (commentIdx === -1 ? line : line.slice(0, commentIdx)).trim();
-}
-
-function collapseWhitespace(text: string): string {
-    let result = '';
-    let pendingSpace = false;
-
-    for (let i = 0; i < text.length; i++) {
-        const ch = text[i];
-        const isWhitespace = ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === '\v';
-        if (isWhitespace) {
-            pendingSpace = result.length > 0;
-            continue;
-        }
-        if (pendingSpace) {
-            result += ' ';
-            pendingSpace = false;
-        }
-        result += ch;
-    }
-
-    return result;
-}
 
 function extractSection(code: string, sectionName: string): string[] {
     const normalizedSection = collapseWhitespace(sectionName.toLowerCase());

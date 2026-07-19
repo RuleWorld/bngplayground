@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { computeObservableValue, parseObservablePattern } from '../packages/engine/src/utils/dynamicObservable';
 import { evaluateExpression } from '../components/ExpressionInputPanel';
-import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { SpeciesGraph } from '../packages/engine/src/services/graph/core/SpeciesGraph';
 
 describe('Dynamic Observable Pattern Matching', () => {

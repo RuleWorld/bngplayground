@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
+import { toggleArrayMember } from '../../services/collections';
 
 interface FigurePanelEntry {
   id: string;
@@ -50,11 +51,7 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
   }, [availablePanels]);
 
   const togglePanel = useCallback((panelId: string) => {
-    setSelectedPanels(prev =>
-      prev.includes(panelId)
-        ? prev.filter(id => id !== panelId)
-        : [...prev, panelId]
-    );
+    setSelectedPanels(prev => toggleArrayMember(prev, panelId));
   }, []);
 
   const movePanel = useCallback((panelId: string, direction: 'up' | 'down') => {
@@ -153,7 +150,8 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
                   <button
                     key={panel.id}
                     onClick={() => togglePanel(panel.id)}
-                    className={`w-full text-left p-2 rounded text-xs transition-colors ${
+                  aria-pressed={isSelected}
+                  className={`w-full text-left p-2 rounded text-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                       isSelected
                         ? 'bg-blue-100 dark:bg-blue-900/40 border border-blue-300 dark:border-blue-600'
                         : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700'
@@ -280,7 +278,8 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
                 <button
                   key={l}
                   onClick={() => setLayout(l)}
-                  className={`px-2 py-1 text-xs rounded ${
+                  aria-pressed={layout === l}
+                  className={`px-2 py-1 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${
                     layout === l
                       ? 'bg-blue-600 text-white'
                       : 'bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300'
@@ -316,11 +315,13 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
             </label>
             <div className="flex gap-1">
               <button onClick={() => setTotalWidth(86)}
-                className={`px-2 py-1 text-xs rounded ${totalWidth === 86 ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                aria-pressed={totalWidth === 86}
+                className={`px-2 py-1 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${totalWidth === 86 ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700'}`}>
                 86 (1col)
               </button>
               <button onClick={() => setTotalWidth(178)}
-                className={`px-2 py-1 text-xs rounded ${totalWidth === 178 ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700'}`}>
+                aria-pressed={totalWidth === 178}
+                className={`px-2 py-1 text-xs rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 ${totalWidth === 178 ? 'bg-blue-600 text-white' : 'bg-slate-100 dark:bg-slate-700'}`}>
                 178 (2col)
               </button>
             </div>

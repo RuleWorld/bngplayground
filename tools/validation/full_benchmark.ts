@@ -17,8 +17,6 @@ const ROOT_DIR = path.resolve(__dirname, '..');
 
 // Path to BNG2.pl for timing comparison
 const BNG2_PATH = 'c:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
-const BNG_OUTPUT_DIR = path.join(ROOT_DIR, 'bng_test_output');
-
 interface BNG2Model {
   model: string;
   path: string;

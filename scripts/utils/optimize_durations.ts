@@ -156,7 +156,7 @@ function optimizeModel(modelName: string) {
         return;
     }
 
-    const { headers, data } = parseCSV(csvPath);
+    const { data } = parseCSV(csvPath);
     if (data.length === 0) return;
 
     const steadyTime = findSteadyStateTime(data);

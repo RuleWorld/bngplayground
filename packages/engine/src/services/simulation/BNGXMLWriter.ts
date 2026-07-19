@@ -2,6 +2,7 @@ import type { BNGLModel } from '../../types';
 import { BNGLParser } from '../graph/core/BNGLParser';
 import type { SpeciesGraph } from '../graph/core/SpeciesGraph';
 import { escapeXml } from '../../utils/xmlUtils';
+import { isIdentifierChar } from '../../utils/stringUtils';
 
 export interface BNGXMLValidationIssue {
   message: string;
@@ -45,17 +46,6 @@ function parseObservableConstraint(pattern: string): { cleanPattern: string; rel
   return { cleanPattern: trimmed };
 }
 
-function isIdentifierChar(ch: string | undefined): boolean {
-  if (!ch) return false;
-  const code = ch.charCodeAt(0);
-  return (
-    (code >= 48 && code <= 57) ||
-    (code >= 65 && code <= 90) ||
-    (code >= 97 && code <= 122) ||
-    ch === '_' ||
-    ch === '$'
-  );
-}
 
 function replaceWholeWord(source: string, target: string, replacement: string): string {
   let result = '';

@@ -10,17 +10,6 @@ const DEFAULT_BNG2_PATH = bng2Paths.bng2pl ?? '';
 const DEFAULT_PERL5LIB = bng2Paths.perl5lib ?? '';
 const DEFAULT_PERL_CMD = process.env.PERL_CMD ?? 'perl';
 
-function runBNG2(modelPath: string, outdir: string): boolean {
-  const modelName = basename(modelPath);
-  const result = spawnSync(process.env.PERL_CMD ?? DEFAULT_PERL_CMD, [process.env.BNG2_PATH ?? DEFAULT_BNG2_PATH, modelName, '--outdir', outdir], {
-    cwd: outdir,
-    encoding: 'utf-8',
-    timeout: 120000,
-    env: { ...process.env, PERL5LIB: process.env.PERL5LIB ?? DEFAULT_PERL5LIB },
-  });
-  return result.status === 0 && true;
-}
-
 describe('BNG SBML -> BNGL converter (fallback)', () => {
   it('converts simple_system SBML produced by BNG2.pl into BNGL text', { timeout: 120000 }, async () => {
     const temp = mkdtempSync(join(tmpdir(), 'bng-verify-'));

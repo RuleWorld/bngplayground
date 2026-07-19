@@ -254,11 +254,11 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(result.structuredContent.convergenceAssessment).toBeDefined();
         expect(typeof result.structuredContent.convergenceAssessment.insightSaturated).toBe('boolean');
         expect(['continue_analysis', 'collect_more_data', 'done']).toContain(result.structuredContent.convergenceAssessment.recommendation);
-        expect(Array.isArray(result.structuredContent.mechanisticCausalTrace)).toBe(true);
+        expect(Array.isArray(result.structuredContent.ruleAttribution)).toBe(true);
         expect(result.structuredContent.parameterSelection).toBeDefined();
         expect(result.structuredContent.parameterSelection.analyzed).toBeLessThanOrEqual(2);
         expect(Array.isArray(result.structuredContent.surprises)).toBe(true);
-        const firstTrace = result.structuredContent.mechanisticCausalTrace[0];
+        const firstTrace = result.structuredContent.ruleAttribution[0];
         if (firstTrace) {
             expect(firstTrace.topologyPath || firstTrace.targetObservable).toBeDefined();
         }
@@ -322,13 +322,13 @@ describe('MCP Server Tools Functional Validation', () => {
         expect(weighted.structuredContent.profileLikelihood.baselineSSR).not.toBe(unweighted.structuredContent.profileLikelihood.baselineSSR);
     });
 
-    it('should include contact map path in causal trace', async () => {
+    it('should include contact map path in rule attribution', async () => {
         const result = await handleDiagnoseModel({
             code: simpleModel,
             t_end: 1, n_steps: 10,
             n_samples: 8, n_bootstrap: 10, max_parameters: 2,
         });
-        const trace = result.structuredContent.mechanisticCausalTrace;
+        const trace = result.structuredContent.ruleAttribution;
         expect(trace).toBeDefined();
         expect(trace.length).toBeGreaterThan(0);
         // At least one trace entry should have contactMapPath or narrative

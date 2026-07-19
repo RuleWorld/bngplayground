@@ -11,17 +11,7 @@ function generateExpressionPermutations() {
     ];
 }
 
-function generatePatternPermutations() {
-    return [
-        'A', 'A()', 'A(b)', 'A(b,c)', 'A(b~u)', 'A(b~u, c~p)',
-        'A(b!1).B(a!1)', 'A().B()', 'A(b!+)', 'A(b!?)',
-        'A(b!1).B(a!1).C(z!2).D(y!2)',
-        'EGFR(L!1,CR!2).EGF(r!1).EGFR(L!3,CR!2).EGF(r!3)' // Example
-    ];
-}
-
 describe('Parser Stress Tests', () => {
-
     const expressions = generateExpressionPermutations();
     // Add math permutations
     for(let i=0; i<500; i++) {

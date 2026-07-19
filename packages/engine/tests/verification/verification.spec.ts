@@ -9,9 +9,6 @@ import {
   checkRuleFires,
 } from '../../src/services/verification/BoundedVerifier';
 import {
-  parseMoleculeTokens,
-  extractBindingRequirements,
-  extractMoleculeNames,
   checkAbstractReachability,
   enumerateAbstractComplexes,
 } from '../../src/services/verification/ContactMapReachability';
@@ -20,7 +17,6 @@ import { parseQuery } from '../../src/services/verification/QueryParser';
 import {
   checkFiniteContactMap,
   fullReachabilityCheck,
-  countReachableSpecies,
   fullDeadlockCheck,
 } from '../../src/services/verification/SymmetryReducedVerifier';
 import type { BNGLModel, BNGLMoleculeType, ReactionRule, BNGLSpecies } from '../../src/types';

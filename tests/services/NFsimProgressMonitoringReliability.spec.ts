@@ -14,7 +14,6 @@ import {
   NFsimExecutionWrapper, 
   NFsimExecutionOptions, 
   ProgressUpdate,
-  ExecutionResult 
 } from '@bngplayground/engine';
 import { resetConcurrencyManager } from '@bngplayground/engine';
 

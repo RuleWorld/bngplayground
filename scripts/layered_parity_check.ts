@@ -275,13 +275,6 @@ function normalizeKey(raw: string): string {
     .replace(/[^a-z0-9]+/g, '');
 }
 
-function csvModelLabel(csvFile: string): string {
-  return csvFile
-    .replace(/\(\d+\)(?=\.[^.]+$)/, '')
-    .replace(/^results_/, '')
-    .replace(/\.csv$/i, '');
-}
-
 function relErr(a: number, b: number): number {
   const denom = Math.max(Math.abs(a), Math.abs(b), 1e-30);
   return Math.abs(a - b) / denom;

@@ -4,13 +4,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { buildRuleOverlays } from '../../services/visualization/buildRuleOverlays';
-import type { ReactionRule, BNGLMoleculeType } from '../../types';
-
-const molTypes: BNGLMoleculeType[] = [
-  { name: 'A', components: ['s~U~P', 'b'] },
-  { name: 'B', components: ['b'] },
-  { name: 'C', components: ['x~off~on'] },
-];
+import type { ReactionRule } from '../../types';
 
 describe('buildRuleOverlays', () => {
   it('returns an empty array when no rules are provided', () => {

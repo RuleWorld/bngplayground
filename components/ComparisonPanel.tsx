@@ -12,6 +12,7 @@ import { bnglService } from '../services/bnglService';
 import { CHART_COLORS } from '../src/utils/chartColors';
 import { TimeSeriesChart, TimeSeriesSeries } from './charts/TimeSeriesChart';
 import { BNGLParser, getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
+import { toggleSetMember } from '../services/collections';
 
 interface ComparisonPanelProps {
   model: BNGLModel | null;
@@ -203,12 +204,7 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
   }, [observablesToPlot, comparisonFactor]);
 
   const handleToggleObservable = (name: string) => {
-    setVisibleObservables((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+    setVisibleObservables((prev) => toggleSetMember(prev, name));
   };
 
   const handleIsolateObservable = (name: string) => {

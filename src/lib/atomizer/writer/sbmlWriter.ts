@@ -7,13 +7,12 @@ import { BNGLModel, BNGLReaction } from '../config/types';
 import { logger } from '../utils/helpers';
 import { getLibSBMLInstance } from '../parser/sbmlParser';
 import jsep from 'jsep';
+import { RATE_RULE_META_PREFIX, SYNTH_RATE_RULE_SPECIES_PREFIX } from './rateRuleConstants';
 
 const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
-const RATE_RULE_META_PREFIX = '__rate_rule__';
 const AVOGADRO_FALLBACK = 6.02214076e23;
 const DIRECT_DESCALE_MIN_CONCENTRATION = 1e-9;
 const DIRECT_DESCALE_MAX_CONCENTRATION = 1e12;
-const SYNTH_RATE_RULE_SPECIES_PREFIX = '__rate_rule_state__';
 const NA_LIKE_SEED_TOKEN_RE = /\b(?:Na|quantity_to_number_factor)\b/;
 const NUMERIC_LITERAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 

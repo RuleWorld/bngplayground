@@ -13,7 +13,8 @@ import type { MatchMap } from './core/Matcher';
 import { countEmbeddingDegeneracy } from './core/degeneracy';
 import { Component } from './core/Component';
 import { EnergyService } from './core/EnergyService';
-import type { BNGLEnergyPattern } from '../../types';
+import type { BNGLEnergyPattern, GeneratorProgress } from '../../types';
+export type { GeneratorProgress } from '../../types';
 import { Molecule } from './core/Molecule';
 import { BNGLParser } from './core/BNGLParser';
 
@@ -389,13 +390,6 @@ export interface GeneratorOptions {
   parameters?: Map<string, number>; // For evaluating Arrhenius expressions
 }
 
-export interface GeneratorProgress {
-  species: number;
-  reactions: number;
-  iteration: number;
-  memoryUsed: number;
-  timeElapsed: number;
-}
 
 export class NetworkGenerator {
   private options: GeneratorOptions;
@@ -406,6 +400,11 @@ export class NetworkGenerator {
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
   private compartmentMap: Map<string, CompartmentInfo> = new Map();
+  // Parsed observable-pattern graphs for local-function (%x::) rate evaluation.
+  // Keyed by pattern string: parseSpeciesGraph is pure, so a cached graph is
+  // identical to a fresh parse, and reusing the same graph object lets the
+  // GraphMatcher's identity-keyed result cache hit across reactant species.
+  private localFnPatternGraphCache: Map<string, SpeciesGraph> = new Map();
   // NEW: map Canonical Name -> Initial Concentration (from seed parameter evaluation)
   private seedConcentrationMap?: Map<string, number>;
 
@@ -496,7 +495,13 @@ export class NetworkGenerator {
         const obsName = obsEntry.name;
         const obsPat = obsEntry.pattern;
         // Parse the observable pattern and count how many times it embeds in the reactant species.
-        const patGraph = BNGLParser.parseSpeciesGraph(obsPat);
+        // Cache the parsed graph per pattern string (parse is pure); this also lets the
+        // GraphMatcher's pattern-identity result cache hit across reactant species.
+        let patGraph = this.localFnPatternGraphCache.get(obsPat);
+        if (patGraph === undefined) {
+          patGraph = BNGLParser.parseSpeciesGraph(obsPat);
+          this.localFnPatternGraphCache.set(obsPat, patGraph);
+        }
         const maps = GraphMatcher.findAllMaps(patGraph, reactantGraph, {
           allowExtraTargetBonds: false,
           symmetryBreaking: false,
@@ -4215,10 +4220,25 @@ export class NetworkGenerator {
             const mustStartUnbound =
               !rcForBondCheck ||
               (!rcForBondCheck.wildcard && rcForBondCheck.edges.size === 0);
-            const repeatedSiteName =
-              pMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
-              rpMol.components.filter((c: Component) => c.name === pc.name).length > 1 ||
-              targetMol.components.filter((c: Component) => c.name === pc.name).length > 1;
+
+            // ⚡ Bolt: Replaced chained .filter(...).length > 1 with early-exit loops
+            // to eliminate intermediate array allocations in this hot path.
+            let pCount = 0, rpCount = 0, tCount = 0;
+            let repeatedSiteName = false;
+            for (let i = 0; i < pMol.components.length; i++) {
+              if (pMol.components[i].name === pc.name && ++pCount > 1) { repeatedSiteName = true; break; }
+            }
+            if (!repeatedSiteName) {
+              for (let i = 0; i < rpMol.components.length; i++) {
+                if (rpMol.components[i].name === pc.name && ++rpCount > 1) { repeatedSiteName = true; break; }
+              }
+            }
+            if (!repeatedSiteName) {
+              for (let i = 0; i < targetMol.components.length; i++) {
+                if (targetMol.components[i].name === pc.name && ++tCount > 1) { repeatedSiteName = true; break; }
+              }
+            }
+
             if (mustStartUnbound && tc.edges.size !== 0 && !repeatedSiteName) {
               return -Infinity;
             }
@@ -4477,8 +4497,8 @@ export class NetworkGenerator {
           if (!bondPreserved) {
             // For repeated same-name components, occurrence-based matching can be ambiguous.
             // Re-check all same-name product components before concluding this bond is broken.
-            const sameNamePpComps = pMol.components.filter((comp) => comp.name === rpComp.name);
-            for (const ppComp of sameNamePpComps) {
+            for (const ppComp of pMol.components) {
+              if (ppComp.name !== rpComp.name) continue;
               if (ppComp.wildcard === '+' || ppComp.wildcard === '?') {
                 bondPreserved = true;
                 break;

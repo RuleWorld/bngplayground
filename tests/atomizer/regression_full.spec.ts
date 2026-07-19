@@ -11,7 +11,7 @@ import type { SimulationOptions } from '../../packages/engine/src/types';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '../../packages/engine/src/index';
 import { convertBNGXmlToBNGL } from '../../src/lib/atomizer/parser/bngXmlParser';
-import { BNG2_EXCLUDED_MODELS, NFSIM_MODELS } from '../../src/constants';
+import { NFSIM_MODELS } from '../../src/constants';
 import { generateExpandedNetwork } from '../../packages/engine/src/index';
 import { resolveRuleHubRoot } from '../helpers/rulehub';
 

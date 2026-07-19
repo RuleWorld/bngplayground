@@ -1,5 +1,4 @@
 import { readFileSync, existsSync } from 'node:fs';
-import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import { generateExpandedNetwork } from '../packages/engine/src/services/simulation/NetworkExpansion';

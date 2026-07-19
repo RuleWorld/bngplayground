@@ -176,37 +176,6 @@ function parseArrheniusArgs(rateStr: string): { phi: string, Eact: string, A?: s
   };
 }
 
-function rk4Integrate(
-  y: Float64Array,
-  t: number,
-  dt: number,
-  derivatives: (y: Float64Array, dydt: Float64Array) => void
-): Float64Array {
-  const n = y.length;
-  const k1 = new Float64Array(n);
-  const k2 = new Float64Array(n);
-  const k3 = new Float64Array(n);
-  const k4 = new Float64Array(n);
-  const yTemp = new Float64Array(n);
-
-  derivatives(y, k1);
-
-  for (let i = 0; i < n; i++) yTemp[i] = y[i] + 0.5 * dt * k1[i];
-  derivatives(yTemp, k2);
-
-  for (let i = 0; i < n; i++) yTemp[i] = y[i] + 0.5 * dt * k2[i];
-  derivatives(yTemp, k3);
-
-  for (let i = 0; i < n; i++) yTemp[i] = y[i] + dt * k3[i];
-  derivatives(yTemp, k4);
-
-  const nextY = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    nextY[i] = y[i] + (dt / 6.0) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
-  }
-  return nextY;
-}
-
 export async function _simulateModel(inputModel: BNGLModel, options: { t_end: number; n_steps: number; solver: string; atol?: number; rtol?: number; maxSteps?: number }): Promise<SimulationResults> {
   // Network generation
   const seedSpecies = inputModel.species.map(s => BNGLParser.parseSpeciesGraph(s.name));
@@ -1588,7 +1557,6 @@ describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG
             if (i <= 2) {
               console.warn(`Solver failed at phase ${phaseIdx}, t=${tTarget}; retrying with fallback solver`);
               const yReduced0 = yReduced.slice() as Float64Array;
-              const yCurrent0 = yCurrent.slice() as Float64Array;
               const t0 = t;
 
               const fallbackOrder = solverType === 'cvode_sparse'

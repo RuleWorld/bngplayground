@@ -149,7 +149,6 @@ describe('SparseLUSolver Service', () => {
              const csr = denseToCSR(dense, 2);
              const factors = ilu0Factorize(csr);
              
-             const xTarget = new Float64Array([1, 2]); // b = [6, 7]
              const b = new Float64Array([6, 7]);
              const x = new Float64Array(2);
              

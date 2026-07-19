@@ -10,8 +10,8 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fc from 'fast-check';
-import { BNGLModel, ReactionRule, MoleculeType } from '../../types';
-import { runNFsimSimulation, validateModelForNFsim } from '@bngplayground/engine';
+import { BNGLModel, ReactionRule } from '../../types';
+import { runNFsimSimulation } from '@bngplayground/engine';
 import { getComplexModelHandler, resetComplexModelHandler } from '@bngplayground/engine';
 import { BNGXMLWriter } from '@bngplayground/engine';
 
@@ -181,9 +181,6 @@ describe('NFsim Model Compatibility Robustness', () => {
             expect(model.reactionRules).toBeDefined();
             
             // Step 2: Verify cooperative binding characteristics
-            const hasCooperativeBinding = model.moleculeTypes.some(molType =>
-              hasMultipleBindingSites(molType)
-            );
             // Note: We're testing that models with multiple binding sites execute successfully
             // The complex model handler may or may not detect this as "cooperative binding"
             // depending on the XML structure, but that's okay - we're testing execution robustness
@@ -309,7 +306,7 @@ describe('NFsim Model Compatibility Robustness', () => {
       expect(xml).toBeDefined();
       
       const handler = getComplexModelHandler();
-      const analysis = handler.analyzeComplexModel(xml);
+      handler.analyzeComplexModel(xml);
       
       const result = await runNFsimSimulation(model, {
         t_end: 10,
@@ -523,13 +520,6 @@ function isAggregationRule(rule: ReactionRule): boolean {
     (reactionStr.includes('core') || reactionStr.includes('ligand')) ||
     (reactionStr.includes('s1') || reactionStr.includes('s2') || reactionStr.includes('s3'))
   );
-}
-
-/**
- * Check if a molecule type has multiple binding sites (cooperative binding)
- */
-function hasMultipleBindingSites(molType: MoleculeType): boolean {
-  return molType.components && molType.components.length >= 2;
 }
 
 // ============================================================================

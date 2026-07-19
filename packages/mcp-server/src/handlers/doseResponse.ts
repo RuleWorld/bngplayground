@@ -1,5 +1,4 @@
-import { computeDoseResponse, computeDoseResponseBySimulation, loadEvaluator, simulate } from '@bngplayground/engine';
-import type { SimulationOptions } from '@bngplayground/engine';
+import { computeDoseResponse, computeDoseResponseBySimulation, loadEvaluator } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { doseResponseArgsSchema } from '../schemas/index.js';
 import {
@@ -7,8 +6,6 @@ import {
     parseArgs,
     parseModelOrThrow,
     expandModel,
-    cloneExpandedModel,
-    updateMassActionRates,
 } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 

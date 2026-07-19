@@ -123,8 +123,6 @@ function startPreview() {
     const embedCode = await embedTextarea.inputValue();
     const embedMatch = embedCode.match(/src="([^"]+)"/);
     if (!embedMatch?.[1]) throw new Error('embed iframe src not found');
-    const embedSrc = embedMatch[1];
-
     console.log('[playwright] Generated share URL:', shareUrl.slice(0, 120));
 
     const newPage = await context.newPage();

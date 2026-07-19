@@ -1,6 +1,7 @@
 import type { Example } from '@bngplayground/engine';
 import { EXAMPLES, MODEL_CATEGORIES } from '../src/constants';
 import { getManifest, getManifestSync, type ManifestEntry, type ModelManifest } from './modelLoader';
+import { getEnvString } from './envUtils';
 
 export interface CatalogExample extends Example {
   path?: string;
@@ -26,15 +27,6 @@ export interface ModelCatalog {
 
 let catalogCache: ModelCatalog | null = null;
 let catalogPromise: Promise<ModelCatalog> | null = null;
-
-function getEnvString(name: string): string | null {
-  try {
-    const value = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.[name];
-    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-  } catch {
-    return null;
-  }
-}
 
 function normalizeLookupValue(value: string): string {
   return value.trim().toLowerCase().replace(/\.bngl$/i, '');

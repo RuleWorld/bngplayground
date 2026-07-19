@@ -1,17 +1,4 @@
-export function normalizeWhitespace(value: string): string {
-    return value.replace(/\s+/g, ' ').trim();
-}
-
-function uniquePush(target: string[], value: string): void {
-    if (!target.includes(value)) {
-        target.push(value);
-    }
-}
-
-function escapeRegExp(value: string): string {
-    return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
+import { normalizeWhitespace, escapeRegExp } from '@bngplayground/engine';
 export function ensureBlock(code: string, blockName: string): string {
     const begin = `begin ${blockName}`;
     const end = `end ${blockName}`;
@@ -157,3 +144,5 @@ export function setObservableLine(code: string, name: string, type: 'Molecules' 
 
     return insertIntoBlock(code, 'observables', line);
 }
+
+export { normalizeWhitespace };

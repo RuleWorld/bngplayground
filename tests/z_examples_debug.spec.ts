@@ -1,7 +1,6 @@
 // @ts-nocheck
 import { describe, it, expect } from 'vitest';
 import fs from 'fs';
-import path from 'path';
 import { EXAMPLES } from '../src/constants';
 import { parseBNGL } from '../services/parseBNGL';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';

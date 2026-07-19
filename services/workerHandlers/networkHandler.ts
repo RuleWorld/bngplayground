@@ -17,13 +17,10 @@ import {
   loadEvaluator,
 } from '@bngplayground/engine';
 import { analyseGraph } from '../igraphLoader';
+import type { JobState } from './types';
 
 // ---- Shared context contract ------------------------------------------------
 
-export interface JobState {
-  cancelled: boolean;
-  controller?: AbortController;
-}
 
 export interface WorkerContext {
   safePostMessage: (msg: any) => void;

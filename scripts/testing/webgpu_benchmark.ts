@@ -16,7 +16,7 @@
  */
 
 import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
-import { resolve, basename } from 'node:path';
+import { basename } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
 import {

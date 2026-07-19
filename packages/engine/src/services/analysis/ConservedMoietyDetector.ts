@@ -1,3 +1,4 @@
+import { buildStoichiometryMatrix as buildStoichiometry } from '../../utils/stoichiometry';
 /**
  * ConservedMoietyDetector.ts - Automatic conserved moiety detection and ODE system reduction
  *
@@ -67,21 +68,8 @@ function buildStoichiometryMatrix(
   reactions: ReactionEntry[],
   numSpecies: number,
 ): number[][] {
-  const S: number[][] = Array.from({ length: numSpecies }, () =>
-    new Array<number>(reactions.length).fill(0),
-  );
-
-  for (let r = 0; r < reactions.length; r++) {
-    const rxn = reactions[r];
-    for (let k = 0; k < rxn.reactants.length; k++) {
-      S[rxn.reactants[k]][r] -= 1;
-    }
-    for (let k = 0; k < rxn.products.length; k++) {
-      S[rxn.products[k]][r] += 1;
-    }
-  }
-
-  return S;
+  // Entries are already resolved species indices, so indexOf is identity.
+  return buildStoichiometry(reactions, numSpecies, (index) => index);
 }
 
 /**

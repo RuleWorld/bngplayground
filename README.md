@@ -2,7 +2,7 @@
 
 <img src="public/logo.png" alt="BioNetGen Logo" width="200">
 
-**BioNetGen Playground** is a state-of-the-art web-based modeling and simulation environment for BioNetGen (BNGL).
+**BioNetGen Playground** is a browser-native modeling and simulation environment for BioNetGen (BNGL): build, simulate, analyze, and reproducibly share rule-based models from a URL — no installation, no server.
  models: edit BNGL, parse, generate networks, run simulations, and analyze results through multiple visualization and analysis tabs.
 
 **Live demo:** <https://ruleworld.github.io/bngplayground>
@@ -18,7 +18,7 @@
 - **Multi-Compartment Support (cBNGL)**: Full support for compartmentalized models with molecule transport
 - **Visual Designer**: Construct models using a structured visual interface
 - **What-If Comparison Mode**: Run baseline vs modified-parameter simulations and compare trajectories in real-time
-- **Enhanced Example Gallery**: 337 categorized models with semantic search across 690 RuleHub models (powered by TensorFlow.js)
+- **Enhanced Example Gallery**: 482 curated RuleHub models with semantic search across 426 embedded models (powered by TensorFlow.js)
 - Interactive charts (series toggle / isolate, zoom, export)
 - **Analysis Modules**: Parameter scan, dose-response, perturbation screen, linear noise approximation, first passage time, NFsim post-processing, identifiability (FIM), steady state, parameter estimation, flux analysis, verification
 - **Bayesian Inference**: ABC-SMC parameter estimation with posterior predictive simulation and credible bands
@@ -30,7 +30,7 @@
 - **Publication Figure Pipeline**: Export figures with PLOS/Nature/Cell presets at 300 DPI
 - **CVODES Forward Sensitivity Analysis**: Compute parameter sensitivities alongside ODE solutions
 - **Dynamic Contact Map**: Interactive overlays with rule highlighting and animated simulations
-- **MCP Server**: 33 tool endpoints for programmatic model analysis (parse, simulate, calibration, sensitivity, inference, verification, and multiscale workflows)
+- **MCP Server**: 44 tool endpoints for programmatic model analysis (parse, simulate, calibration, sensitivity, inference, verification, and multiscale workflows)
 
 ## Quick Start
 
@@ -46,7 +46,7 @@ Installation instructions for MCP clients (Claude Desktop, Cursor, Copilot) are 
 
 ### MCP Capabilities Snapshot
 
-The MCP package (`packages/mcp-server`) currently exposes **33 tools** across:
+The MCP package (`packages/mcp-server`) currently exposes **44 tools** across:
 
 - Core model lifecycle (parse, validate, network generation, simulation, parameter scans)
 - Calibration workflows (parameter fitting, PEtab import, model reduction)

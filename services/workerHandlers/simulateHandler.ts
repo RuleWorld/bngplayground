@@ -28,13 +28,11 @@ import type { NFsimSimulationOptions } from '@bngplayground/engine';
 
 import { mergeSimulationOptionsWithModelActionDefaults } from '../bnglWorker';
 import { applyParameterOverrides } from './applyParameterOverrides';
+import { isRecord } from './guards';
+import type { JobState } from './types';
 
 // ---- Shared context contract ------------------------------------------------
 
-export interface JobState {
-  cancelled: boolean;
-  controller?: AbortController;
-}
 
 /** Mutable simulation-tracking state owned by the worker. */
 export interface SimulationState {
@@ -57,8 +55,6 @@ export interface WorkerContext {
 
 // ---- Type Guards (mirrored from bnglWorker.ts) ------------------------------
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  !!v && typeof v === 'object' && !Array.isArray(v);
 
 const isSimulateModelPayload = (
   p: unknown,

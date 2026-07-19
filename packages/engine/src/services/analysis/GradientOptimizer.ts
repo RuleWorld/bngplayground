@@ -1,3 +1,4 @@
+import { vecNorm, vecDot, vecScale, vecAdd, vecSub } from '../../utils/vectorMath';
 /**
  * GradientOptimizer.ts -- Gradient-based optimization algorithms.
  *
@@ -25,36 +26,6 @@ export interface OptimizationResult {
 }
 
 // ── Utility helpers ─────────────────────────────────────────────────
-
-function vecNorm(v: Float64Array): number {
-  let sum = 0;
-  for (let i = 0; i < v.length; i++) sum += v[i] * v[i];
-  return Math.sqrt(sum);
-}
-
-function vecDot(a: Float64Array, b: Float64Array): number {
-  let sum = 0;
-  for (let i = 0; i < a.length; i++) sum += a[i] * b[i];
-  return sum;
-}
-
-function vecScale(v: Float64Array, s: number): Float64Array {
-  const r = new Float64Array(v.length);
-  for (let i = 0; i < v.length; i++) r[i] = v[i] * s;
-  return r;
-}
-
-function vecAdd(a: Float64Array, b: Float64Array): Float64Array {
-  const r = new Float64Array(a.length);
-  for (let i = 0; i < a.length; i++) r[i] = a[i] + b[i];
-  return r;
-}
-
-function vecSub(a: Float64Array, b: Float64Array): Float64Array {
-  const r = new Float64Array(a.length);
-  for (let i = 0; i < a.length; i++) r[i] = a[i] - b[i];
-  return r;
-}
 
 function projectOnBounds(x: Float64Array, bounds?: Array<[number, number]>): Float64Array {
   if (!bounds) return x;

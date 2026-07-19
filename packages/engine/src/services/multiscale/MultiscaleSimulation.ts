@@ -15,6 +15,7 @@ import {
 } from './CellAgent';
 import { ExtracellularGrid, ExtracellularGridConfig } from './ExtracellularGrid';
 import { IntracellularEngine } from './IntracellularEngine';
+import { isSafeObjectKey, setSafeNumberField } from '../../utils/safeObjectKey';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -70,26 +71,11 @@ export interface MultiscaleResult {
   };
 }
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_@:.!~(),+\-][A-Za-z0-9_@:.!~(),+\-]*$/;
-
-function isSafeObjectKey(key: string): boolean {
-  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
-}
-
-function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
-  if (!isSafeObjectKey(key)) return;
-  target[key] = value;
-}
 
 function setSafeNumberArrayField(target: Record<string, number[]>, key: string, value: number[]): void {
-  if (!isSafeObjectKey(key)) return;
-  Object.defineProperty(target, key, {
-    value,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
+  if (isSafeObjectKey(key)) {
+    Reflect.set(target, key, value);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -146,16 +132,6 @@ export function rk4Step(
 export interface MassActionRates {
   production: Float64Array;
   degradation: Float64Array;
-}
-
-function massActionRHS(
-  rates: MassActionRates,
-): (t: number, y: Float64Array, dydt: Float64Array) => void {
-  return (_t: number, y: Float64Array, dydt: Float64Array) => {
-    for (let i = 0; i < y.length; i++) {
-      dydt[i] = rates.production[i] - rates.degradation[i] * y[i];
-    }
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -268,12 +244,7 @@ export async function multiscaleSimulation(
     for (const ct of config.cellTypes) {
       if (!isSafeObjectKey(ct.name)) continue;
       setSafeNumberField(popCounts, ct.name, 0);
-      Object.defineProperty(obsAccum, ct.name, {
-        value: Object.create(null) as Record<string, number>,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
+      Reflect.set(obsAccum, ct.name, Object.create(null) as Record<string, number>);
       setSafeNumberField(obsCounts, ct.name, 0);
     }
 
@@ -361,7 +332,12 @@ export async function multiscaleSimulation(
     for (const { cell, action } of actions) {
       switch (action.type) {
         case 'divide': {
-          if (cells.filter((c) => c.phase !== 'dead').length >= maxCells) break;
+          let activeCount = 0;
+          for (let i = 0; i < cells.length; i++) {
+            if (cells[i].phase !== 'dead') activeCount++;
+            if (activeCount >= maxCells) break;
+          }
+          if (activeCount >= maxCells) break;
           cell.phase = 'dividing';
           const daughter = divideCell(cell, nextCellId, rng);
           cell.phase = 'active';
@@ -404,7 +380,7 @@ export async function multiscaleSimulation(
         }
         case 'stop_secrete': {
           if (isSafeObjectKey(action.species)) {
-            delete cell.secretionRates[action.species];
+            setSafeNumberField(cell.secretionRates, action.species, 0);
           }
           break;
         }

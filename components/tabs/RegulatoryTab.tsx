@@ -2,6 +2,7 @@ import React, { useMemo } from 'react';
 import { BNGLModel } from '../../types';
 import { ARGraphViewer } from '../ARGraphViewer';
 import { buildAtomRuleGraph } from '../../services/visualization/arGraphBuilder';
+import { getRuleId, getRuleLabel } from '../../services/ruleIdentity';
 
 interface RegulatoryTabProps {
   model: BNGLModel | null;
@@ -13,8 +14,6 @@ interface RegulatoryTabProps {
   forceFitTrigger?: any;
 }
 
-const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;
-const getRuleLabel = (rule: { name?: string }, index: number): string => rule.name ?? `Rule ${index + 1}`;
 
 export const RegulatoryTab: React.FC<RegulatoryTabProps> = ({ model, selectedRuleId, onSelectRule, forceFitTrigger }) => {
   const arGraph = useMemo(() => {

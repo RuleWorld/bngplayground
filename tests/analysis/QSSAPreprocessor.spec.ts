@@ -1,6 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { analyzeQSSA, applyQSSAReduction } from '../../packages/engine/src/services/analysis/QSSAPreprocessor';
-import { BNGLParser } from '../../packages/engine/src/services/graph/core/BNGLParser';
+import { applyQSSAReduction } from '../../packages/engine/src/services/analysis/QSSAPreprocessor';
 import type { BNGLModel } from '../../packages/engine/src/types';
 
 describe('QSSAPreprocessor test with full parser', () => {

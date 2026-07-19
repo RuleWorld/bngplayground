@@ -17,7 +17,6 @@ let match;
 
 while ((match = failurePattern.exec(content)) !== null) {
   const model = match[1].trim();
-  const ref = match[2];
   const details = match[3];
 
   // Extract max relative error

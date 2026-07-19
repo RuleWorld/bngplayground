@@ -36,10 +36,10 @@ import { structureError } from '../services/errors.js';
  * Requires recordFirings=true on the SSA run, which is gated by the
  * simulateArgsSchema extension in this PR.
  *
- * This capability is the "mechanistic causal tracing" paper hook most
- * literally: the emergent causal graph from firing-event information flow,
- * compared against the structural rule graph, produces directly-auditable
- * claims about which mechanisms the model's dynamics actually instantiate.
+ * This compares an empirical information-flow graph (from firing events)
+ * against the structural rule graph, surfacing which directed couplings the
+ * dynamics actually exhibit and which are emergent rather than written into
+ * any single rule. It reports information flow, not proven causation.
  */
 export async function handleReactionInformationFlow(args: ToolArgs): Promise<ToolResult<any>> {
     try {

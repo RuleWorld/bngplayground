@@ -1,3 +1,4 @@
+import { normalizeWhitespace } from '../../utils/stringUtils';
 /**
  * HashComputer — content-addressed hashing for provenance.
  *
@@ -101,8 +102,4 @@ function formatNumber(n: number): string {
 
 function bufToHex(buf: Uint8Array): string {
   return Array.from(buf, (b) => b.toString(16).padStart(2, '0')).join('');
-}
-
-function normalizeWhitespace(value: string): string {
-  return value.replace(/\s+/g, ' ').trim();
 }

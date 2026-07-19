@@ -175,7 +175,6 @@ export class SpeciesGraph {
     if (this._maxDegree !== undefined) return this._maxDegree;
     let max = 0;
     for (let idx = 0; idx < this.molecules.length; idx++) {
-      const deg = 0;
       const molecule = this.molecules[idx];
       if (!molecule) continue;
       const seen = new Set<number>();

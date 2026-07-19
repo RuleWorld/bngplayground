@@ -1,13 +1,8 @@
 import type { BNGLModel } from '../../types';
 import { parseSpeciesGraphs, extractAtoms } from './speciesGraphUtils';
+import { getRuleId, getRuleLabel } from '../ruleIdentity';
 
-const getRuleId = (rule: BNGLModel['reactionRules'][number], index: number): string => {
-  return rule.name ?? `rule_${index + 1}`;
-};
 
-const getRuleLabel = (rule: BNGLModel['reactionRules'][number], index: number): string => {
-  return rule.name ?? `Rule ${index + 1}`;
-};
 
 export type AtomKind = 'state' | 'bond';
 

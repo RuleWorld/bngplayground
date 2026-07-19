@@ -1,3 +1,4 @@
+import { getEnvString } from './envUtils';
 /**
  * modelLoader.ts — Lazy model loading service
  *
@@ -49,15 +50,6 @@ const DEFAULT_RULEHUB_MANIFEST_URL = 'https://raw.githubusercontent.com/ruleworl
 const DEFAULT_RULEHUB_CDN_MANIFEST_URL = 'https://cdn.jsdelivr.net/gh/ruleworld/rulehub@master/manifest.json';
 
 // ── Base URL detection ─────────────────────────────────────────────
-
-function getEnvString(name: string): string | null {
-  try {
-    const value = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.[name];
-    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-  } catch {
-    return null;
-  }
-}
 
 function joinUrl(base: string, relative: string): string {
   return `${base.replace(/\/$/, '')}/${relative.replace(/^\//, '')}`;

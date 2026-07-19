@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
-import { resolve, dirname } from 'path';
+import { dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
 import { buildContactMap } from '../../services/visualization/contactMapBuilder';

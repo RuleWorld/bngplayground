@@ -11,6 +11,7 @@ import {
   type SymExpr,
 } from '@bngplayground/engine';
 import { BNGLModel } from '../types';
+import { escapeRegExp } from '@bngplayground/engine';
 
 function fmtNum(v: number): string {
   if (!Number.isFinite(v)) return '0';
@@ -72,10 +73,6 @@ const XPP_BUILTINS = new Set([
   'ceil', 'mod', 'max', 'min', 'pi', 'if', 'then', 'else', 'not', 'and', 'or',
   'besselj', 'bessely', 'erf', 'erfc', 'gamma', 'pow', 't',
 ]);
-
-function escapeRegExp(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
 
 /** Replace a whole-word identifier token throughout an expression. */
 function substituteToken(expr: string, oldName: string, newName: string): string {

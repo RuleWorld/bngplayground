@@ -142,11 +142,6 @@ function mergeParams(type: PKModelType, overrides?: Record<string, number>): Rec
   return { ...DEFAULT_PARAMS[type], ...overrides };
 }
 
-function indent(lines: string[], _level = 2): string {
-  const pad = ' '.repeat(_level);
-  return lines.map((l) => pad + l).join('\n');
-}
-
 function generateOneCompartmentIV(config: PKModelConfig): PKModelResult {
   const p = mergeParams('one_compartment_iv', config.parameters);
   const drug = config.drugName;

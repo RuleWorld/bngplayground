@@ -41,11 +41,6 @@ const bngAvailable = hasBNG2();
 
 // Model-specific tolerance overrides for complex models with inherent numerical drift
 // These models have larger tolerance due to solver differences (BNG2 uses CVODE, web uses similar but not identical)
-const MODEL_REL_TOL_OVERRIDES: Record<string, number> = {
-  'An_2009': 0.25,       // Complex NF-kB model with strict solver tolerances but notable cross-solver drift at long times
-};
-
-
 const TIMEOUT_MS = 30_000;
 const NETWORK_TIMEOUT_MS = 45_000;
 const PROGRESS_LOG_INTERVAL = 3000; // Log every 3s if stuck

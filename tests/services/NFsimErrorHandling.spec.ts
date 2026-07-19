@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import * as fc from 'fast-check';
 import { 
   getErrorHandler, 
@@ -320,17 +320,8 @@ describe('NFsim Error Handling Completeness', () => {
         'Unknown error'
       ];
 
-      const contexts = errorMessages.map((msg, index) => ({
-        timestamp: new Date(),
-        executionId: `test_${index}`,
-        modelName: `model_${index}`
-      }));
 
       // Generate errors
-      const errors = errorMessages.map((msg, index) => 
-        errorHandler.classifyError(msg, contexts[index])
-      );
-
       // **Property 4: Error Handling Completeness**
       // Error statistics should be comprehensive and accurate
 

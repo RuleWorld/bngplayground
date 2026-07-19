@@ -9,6 +9,7 @@
 import type { CandidateRule } from '../verification/RuleEnumerator';
 import type { BNGLMoleculeType } from '../../types';
 import { SeededRandom } from '../../utils/random';
+import { assembleModel, extractRateName } from './modelAssembly';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -65,64 +66,6 @@ export interface StructureSearchProgress {
 
 // ── Model assembly ───────────────────────────────────────────────────
 
-/**
- * Build a complete BNGL model from selected rules, parameters, and declarations.
- */
-export function assembleModel(
-  activeRules: CandidateRule[],
-  parameters: Record<string, number>,
-  moleculeTypes: BNGLMoleculeType[],
-  seedSpecies: Array<{ name: string; initialConcentration: number }>,
-  observables: Array<{ type: string; name: string; pattern: string }>,
-): string {
-  const lines: string[] = [];
-  lines.push('begin model');
-  lines.push('');
-
-  // Parameters section
-  lines.push('begin parameters');
-  for (const [name, value] of Object.entries(parameters)) {
-    lines.push(`  ${name} ${value}`);
-  }
-  lines.push('end parameters');
-  lines.push('');
-
-  // Molecule types
-  lines.push('begin molecule types');
-  for (const mol of moleculeTypes) {
-    const compStr = mol.components.length > 0 ? mol.components.join(',') : '';
-    lines.push(`  ${mol.name}(${compStr})`);
-  }
-  lines.push('end molecule types');
-  lines.push('');
-
-  // Seed species
-  lines.push('begin seed species');
-  for (const sp of seedSpecies) {
-    lines.push(`  ${sp.name} ${sp.initialConcentration}`);
-  }
-  lines.push('end seed species');
-  lines.push('');
-
-  // Observables
-  lines.push('begin observables');
-  for (const obs of observables) {
-    lines.push(`  ${obs.type} ${obs.name} ${obs.pattern}`);
-  }
-  lines.push('end observables');
-  lines.push('');
-
-  // Reaction rules
-  lines.push('begin reaction rules');
-  for (const rule of activeRules) {
-    lines.push(`  ${rule.rule}`);
-  }
-  lines.push('end reaction rules');
-  lines.push('');
-
-  lines.push('end model');
-  return lines.join('\n');
-}
 
 // ── ABC-SMC structure search ─────────────────────────────────────────
 
@@ -170,7 +113,13 @@ export async function structureSearch(
   });
 
   // Collect all unique rate parameter names across candidates
-  const rateNames = candidates.map((c) => extractRateName(c.rule));
+  const rateNames = candidates.map((c) => {
+    const n = extractRateName(c.rule);
+    if (n == null) {
+      throw new Error(`ABC-SMC: candidate rule has no rate parameter: ${c.rule}`);
+    }
+    return n;
+  });
 
   // Helper: sample a parameter value uniformly from bounds
   function sampleParam(rateName: string): number {
@@ -238,7 +187,7 @@ export async function structureSearch(
     const activeRules = candidates.filter((_, i) => active[i]);
     if (activeRules.length === 0) return Infinity;
 
-    const code = assembleModel(activeRules, params, moleculeTypes, seedSpecies, observables);
+    const code = assembleModel(activeRules, params, moleculeTypes, seedSpecies, observables, { missingRate: 'error' });
     try {
       const result = await simulator(code, { t_end: getMaxTime(), n_steps: 50 });
       return computeDistance(result.data);
@@ -425,6 +374,7 @@ export async function structureSearch(
     moleculeTypes,
     seedSpecies,
     observables,
+    { missingRate: 'error' },
   );
 
   // TopK structures by unique structure signature
@@ -474,10 +424,6 @@ export async function structureSearch(
 
 // ── Internal helpers ─────────────────────────────────────────────────
 
-function extractRateName(rule: string): string {
-  const tokens = rule.trim().split(/\s+/);
-  return tokens[tokens.length - 1];
-}
 
 /**
  * Systematic resampling: deterministic low-variance resampling.

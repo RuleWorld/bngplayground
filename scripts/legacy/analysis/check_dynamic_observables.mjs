@@ -53,7 +53,6 @@ for (const file of files) {
 
     // Check variance (skip column 0 which is Time)
     let isDynamic = false;
-    let dynamicObservables = [];
 
     // Start from index 1 (Time is usually index 0)
     for (let i = 1; i < numCols; i++) {

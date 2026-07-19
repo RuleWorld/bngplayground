@@ -8,6 +8,7 @@
 
 import type { CandidateRule } from './RuleEnumerator';
 import type { BNGLMoleculeType } from '../../types';
+import { assembleModel, extractRateName } from '../inference/modelAssembly';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -28,71 +29,6 @@ export type FitterFn = (
 
 // ── Model assembly ───────────────────────────────────────────────────
 
-/**
- * Assemble a complete BNGL model string from components.
- */
-export function assembleModelCode(
-  activeRules: CandidateRule[],
-  parameters: Record<string, number>,
-  moleculeTypes: BNGLMoleculeType[],
-  seedSpecies: Array<{ name: string; initialConcentration: number }>,
-  observables: Array<{ type: string; name: string; pattern: string }>,
-): string {
-  const lines: string[] = [];
-  lines.push('begin model');
-  lines.push('');
-
-  // Parameters
-  lines.push('begin parameters');
-  for (const [name, value] of Object.entries(parameters)) {
-    lines.push(`  ${name} ${value}`);
-  }
-  // Add rate parameters for active rules
-  for (const rule of activeRules) {
-    const rateName = extractRateName(rule.rule);
-    if (rateName && !parameters.hasOwnProperty(rateName)) {
-      lines.push(`  ${rateName} 1.0`);
-    }
-  }
-  lines.push('end parameters');
-  lines.push('');
-
-  // Molecule types
-  lines.push('begin molecule types');
-  for (const mol of moleculeTypes) {
-    const compStr = mol.components.length > 0 ? mol.components.join(',') : '';
-    lines.push(`  ${mol.name}(${compStr})`);
-  }
-  lines.push('end molecule types');
-  lines.push('');
-
-  // Seed species
-  lines.push('begin seed species');
-  for (const sp of seedSpecies) {
-    lines.push(`  ${sp.name} ${sp.initialConcentration}`);
-  }
-  lines.push('end seed species');
-  lines.push('');
-
-  // Observables
-  lines.push('begin observables');
-  for (const obs of observables) {
-    lines.push(`  ${obs.type} ${obs.name} ${obs.pattern}`);
-  }
-  lines.push('end observables');
-  lines.push('');
-
-  // Reaction rules
-  lines.push('begin reaction rules');
-  for (const rule of activeRules) {
-    lines.push(`  ${rule.rule}`);
-  }
-  lines.push('end reaction rules');
-  lines.push('');
-
-  lines.push('end model');
-  return lines.join('\n');
-}
 
 // ── Scoring ──────────────────────────────────────────────────────────
 
@@ -133,7 +69,7 @@ export async function scoreStructure(
   }
 
   // Assemble the model code
-  const code = assembleModelCode(activeRules, {}, moleculeTypes, seedSpecies, observables);
+  const code = assembleModel(activeRules, {}, moleculeTypes, seedSpecies, observables);
 
   // Fit the model
   const fitResult = await fitter(code, experimentalData, bounds);
@@ -166,12 +102,3 @@ export async function scoreStructure(
 
 // ── Helpers ──────────────────────────────────────────────────────────
 
-/**
- * Extract the rate constant name from a BNGL rule string.
- * The rate name is the last whitespace-separated token.
- */
-function extractRateName(rule: string): string | null {
-  const tokens = rule.trim().split(/\s+/);
-  if (tokens.length < 3) return null;
-  return tokens[tokens.length - 1];
-}

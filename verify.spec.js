@@ -1,4 +1,4 @@
-import { test, expect, chromium } from '@playwright/test';
+import { test, chromium } from '@playwright/test';
 test('hover tooltip', async () => {
   const browser = await chromium.launch();
   const context = await browser.newContext({ recordVideo: { dir: 'videos/' } });

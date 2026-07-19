@@ -1,5 +1,5 @@
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { generateExpandedNetwork } from '@bngplayground/engine';
 import { BNGLModel } from '../../types';
 

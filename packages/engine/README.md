@@ -11,7 +11,7 @@ Pure TypeScript BioNetGen Language (BNGL) simulation engine. Zero browser depend
 - Fisher Information Matrix
 - Profile likelihood identifiability
 - ABC-SMC Bayesian inference
-- Contact map generation and causal tracing
+- Contact map generation and rule-level attribution (which rules a parameter appears in)
 
 ## Installation
 

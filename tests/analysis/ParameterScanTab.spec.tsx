@@ -109,7 +109,6 @@ describe('ParameterScanTab component', () => {
 
         vi.mocked(bnglService.prepareModel).mockResolvedValue(99);
         vi.mocked(bnglService.simulateCached).mockImplementation(async (_id, overrides) => {
-            const pa0 = overrides && (overrides as any).A0;
             const ps = overrides && (overrides as any)['A(b)'];
             // ensure species override equals parameter value, tests use this to
             // drive the observable output

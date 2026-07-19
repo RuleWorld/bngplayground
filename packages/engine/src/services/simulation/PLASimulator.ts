@@ -24,6 +24,7 @@ import { countPatternMatches } from '../parity/PatternMatcher';
 import { SeededRandom } from '../../utils/random';
 import type { SimulationOptions, SimulationResults, BNGLModel } from '../../types';
 import { splitObservablePatterns } from '../../utils/observableUtils';
+import { setSafeNumberField } from '../../utils/safeObjectKey';
 
 // ────────────────────────────────────────────────────────────────────
 // Reaction classification constants (matches C++ RxnClassifier)
@@ -56,17 +57,6 @@ interface PLAReaction {
   propensity: number;
 }
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_@:.!~(),+\-][A-Za-z0-9_@:.!~(),+\-]*$/;
-
-function isSafeObjectKey(key: string): boolean {
-  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
-}
-
-function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
-  if (!isSafeObjectKey(key)) return;
-  target[key] = value;
-}
 
 /**
  * Configuration options governing the behavior of the Partitioned Leaping Algorithm (PLA).

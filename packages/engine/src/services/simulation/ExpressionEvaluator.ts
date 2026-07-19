@@ -8,6 +8,7 @@
 import { getFeatureFlags, registerCacheClearCallback } from '../../featureFlags';
 import { SafeExpressionEvaluator as SafeExpressionEvaluatorStatic } from '../../utils/safeExpressionEvaluator';
 import { compileExpressionToBytecode } from '../analysis/ExpressionBytecodeCompiler';
+import { OP_STOP } from './opcodeAliases';
 // console.log("ExpressionEvaluator module loaded");
 
 /**
@@ -337,17 +338,6 @@ function preExpandExpression(
   return expandedExpr;
 }
 
-function isIdentifierChar(ch: string | undefined): boolean {
-  if (!ch) return false;
-  const code = ch.charCodeAt(0);
-  return (
-    (code >= 48 && code <= 57) ||
-    (code >= 65 && code <= 90) ||
-    (code >= 97 && code <= 122) ||
-    ch === '_' ||
-    ch === '$'
-  );
-}
 
 export function getCompiledRateFunction(
   expandedExpr: string,
@@ -591,7 +581,6 @@ const BYTECODE_ALLOWED_FUNCTIONS = new Set<string>([
   'not',
 ]);
 
-const OP_STOP = 0xFF;
 
 interface BytecodeProgram {
   code: Uint8Array;

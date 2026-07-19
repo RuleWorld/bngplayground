@@ -5,10 +5,10 @@ import {
     BNGLParser,
     parseBNGLWithANTLR,
     generateExpandedNetwork,
-    clearAllEvaluatorCaches,
-    evaluateFunctionalRate,
     validateModelForNFsim,
     MassBalance,
+    extractMoleculeNames,
+    updateMassActionRates,
 } from '@bngplayground/engine';
 import { z } from 'zod';
 import {
@@ -120,6 +120,16 @@ export function buildSimulationOptions(args: any) {
     return simulationOptions;
 }
 
+/**
+ * Merges network generation limits from MCP tool arguments into the model's configuration.
+ * Adapts user-provided MCP arguments (e.g., max_agents) to internal engine configuration structures (e.g., maxSpecies).
+ * If no overrides are provided, it returns the exact same model instance.
+ * Otherwise, it returns a shallow clone with a newly created `networkOptions` object containing the merged limits.
+ *
+ * @param model - The parsed BNGLModel object.
+ * @param args - An object containing optional network generation override values (max_agents, max_reactions, max_iterations, max_agg).
+ * @returns The original model if no overrides exist, otherwise a cloned model with updated networkOptions.
+ */
 export function applyNetworkOptions<T extends { max_agents?: number; max_reactions?: number; max_iterations?: number; max_agg?: number }>(
     model: BNGLModel,
     args: T,
@@ -164,20 +174,10 @@ export async function expandModel(model: BNGLModel): Promise<BNGLModel> {
     );
 }
 
-export function extractMoleculeNames(pattern: string): string[] {
-    if (!pattern) {
-        return [];
-    }
-
-    return pattern
-        .split('.')
-        .map((segment) => segment.trim())
-        .filter((segment) => segment.length > 0)
-        .map((segment) => {
-            const match = segment.match(/^([A-Za-z0-9_]+)/);
-            return match ? match[1] : segment;
-        });
-}
+// Molecule-name extraction lives in the engine's canonical pattern parser
+// (`@bngplayground/engine`); re-exported here so existing importers of this
+// module keep working.
+export { extractMoleculeNames };
 
 function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
     const molecules = new Set<string>();
@@ -565,22 +565,6 @@ export function assertScannableParameter(model: BNGLModel, parameter: string): v
  *
  * @param model - The BNGLModel to update.
  */
-export function updateMassActionRates(model: BNGLModel): void {
-    const context = model.parameters ?? {};
-    for (const reaction of model.reactions ?? []) {
-        if (!reaction.isFunctionalRate && reaction.rate && typeof reaction.rate === 'string') {
-            try {
-                const updatedRate = evaluateFunctionalRate(reaction.rate, context, {}, model.functions);
-                if (Number.isFinite(updatedRate)) {
-                    reaction.rateConstant = updatedRate;
-                }
-            } catch {
-                // Keep the existing concrete rate when a symbolic update fails.
-            }
-        }
-    }
-    clearAllEvaluatorCaches();
-}
 
 /**
  * Creates a deep copy of a BNGLModel using structuredClone.
@@ -594,3 +578,5 @@ export function updateMassActionRates(model: BNGLModel): void {
 export function cloneExpandedModel(model: BNGLModel): BNGLModel {
     return structuredClone(model);
 }
+
+export { updateMassActionRates };

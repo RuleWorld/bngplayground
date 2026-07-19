@@ -47,7 +47,6 @@ const MODELS_DIRS = [
 
 // 1. Get all model files
 const modelFiles = MODELS_DIRS.flatMap((dir) => collectBnglFilesRecursive(dir));
-const files = modelFiles.map((filePath) => path.basename(filePath, '.bngl'));
 
 // 2. Get Validated models
 const valContent = fs.readFileSync(VALIDATION_FILE, 'utf8');

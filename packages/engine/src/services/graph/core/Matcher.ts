@@ -2,8 +2,6 @@ import { SpeciesGraph } from './SpeciesGraph.ts';
 import { Component } from './Component.ts';
 import { countEmbeddingDegeneracy } from './degeneracy.ts';
 
-const adjacencyKey = (molIdx: number, compIdx: number): string => `${molIdx}.${compIdx}`;
-
 const getNeighborMolecules = (graph: SpeciesGraph, molIdx: number): number[] => {
   return graph.neighborList[molIdx] ?? [];
 };
@@ -603,7 +601,7 @@ class VF2State {
   }
 
   private computePatternFrontier(): void {
-    const bits = this.frontierBits;
+    const bits = this.frontierBits; // Uint8Array — only accepts integer keys, immune to prototype pollution
     const core = this.corePattern;
     const n = this.pattern.molecules.length;
     bits.fill(0, 0, n);
@@ -621,7 +619,7 @@ class VF2State {
   }
 
   private computeTargetFrontier(): void {
-    const bits = this.frontierBits;
+    const bits = this.frontierBits; // Uint8Array — only accepts integer keys, immune to prototype pollution
     const core = this.coreTarget;
     const n = this.target.molecules.length;
     bits.fill(0, 0, n);
@@ -736,7 +734,6 @@ class VF2State {
     } else {
       this.computeUncoveredTargetNodes();
     }
-    const targetCandidateCount = this.frontierSize;
 
     // Iterate target candidates in order (bitset naturally gives ascending order)
     for (let tIdx = 0; tIdx < tCore.length; tIdx++) {
@@ -985,6 +982,7 @@ class VF2State {
   }
 
   addPair(p: number, t: number): void {
+    // this.corePattern/coreTarget are Int32Array — only accept integer keys, immune to prototype pollution
     this.corePattern[p] = t;
     this.coreTarget[t] = p;
     this.coreSize++;
@@ -1004,6 +1002,7 @@ class VF2State {
   }
 
   removePair(p: number, t: number): void {
+    // this.corePattern/coreTarget are Int32Array — only accept integer keys, immune to prototype pollution
     this.corePattern[p] = -1;
     this.coreTarget[t] = -1;
     this.coreSize--;
@@ -1595,7 +1594,6 @@ class VF2State {
 
   private matchComponentsLarge(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
     const patternMol = this.pattern.molecules[pMolIdx];
-    const targetMol = this.target.molecules[tMolIdx];
     const nComps = patternMol.components.length;
     if (nComps === 0) return new Map();
 

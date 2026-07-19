@@ -1,7 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { readFileSync, mkdirSync } from 'fs';
 import { execFileSync } from 'child_process';
-import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { resolveBNG2Paths } from '../tools/bng2-paths';
 import { findRuleHubModelPath } from './helpers/rulehub';
 
@@ -45,7 +44,6 @@ describe('Polymer Compartment Parity Tests', () => {
       expect(bnglContent).toContain('@c0:');
       
       // Parse the BNGL model
-      const parser = new BNGLParser();
       const lines = bnglContent.split('\n');
       
       let inCompartments = false;

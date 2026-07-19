@@ -3,13 +3,12 @@ import type { BNGLModel } from '../types';
 import { buildContactMap } from '../services/visualization/contactMapBuilder';
 import { buildAdjacencyMatrix, compareModels, ModelComparisonResult } from '../services/visualization/modelComparison';
 import { bnglService } from '../services/bnglService';
+import { getRuleId, getRuleLabel } from '../services/ruleIdentity';
 
 interface ModelComparisonPanelProps {
   currentModel: BNGLModel | null;
 }
 
-const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;
-const getRuleLabel = (rule: { name?: string }, index: number): string => rule.name ?? `Rule ${index + 1}`;
 
 export const ModelComparisonPanel: React.FC<ModelComparisonPanelProps> = ({ currentModel }) => {
   const [pastedBngl, setPastedBngl] = useState('');
@@ -51,10 +50,11 @@ export const ModelComparisonPanel: React.FC<ModelComparisonPanelProps> = ({ curr
   return (
     <div className="flex flex-col gap-4">
       <div className="bg-white dark:bg-slate-900 dark:bg-slate-900 p-4 rounded-lg border border-slate-200 dark:border-slate-700 dark:border-slate-700">
-        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+        <label htmlFor="comparison-bngl-input" className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
           Paste a second BNGL model to compare:
         </label>
         <textarea
+          id="comparison-bngl-input"
           className="w-full h-32 text-xs font-mono rounded border border-slate-300 dark:border-slate-600 dark:border-slate-600 bg-white dark:bg-slate-900 dark:bg-slate-800 text-slate-800 dark:text-slate-200 p-2"
           placeholder="Paste BNGL code here..."
           value={pastedBngl}

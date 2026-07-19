@@ -1,28 +1,5 @@
-function stripInlineComment(line: string): string {
-  const commentIdx = line.indexOf('#');
-  return (commentIdx === -1 ? line : line.slice(0, commentIdx)).trim();
-}
-
-function collapseWhitespace(text: string): string {
-  let result = '';
-  let pendingSpace = false;
-
-  for (let i = 0; i < text.length; i++) {
-    const ch = text[i];
-    const isWhitespace = ch === ' ' || ch === '\t' || ch === '\n' || ch === '\r' || ch === '\f' || ch === '\v';
-    if (isWhitespace) {
-      pendingSpace = result.length > 0;
-      continue;
-    }
-    if (pendingSpace) {
-      result += ' ';
-      pendingSpace = false;
-    }
-    result += ch;
-  }
-
-  return result;
-}
+import { collapseWhitespace } from './stringUtils';
+import { stripInlineComment } from './stringUtils';
 
 function unwrapOuterParens(expr: string): string {
   let start = 0;

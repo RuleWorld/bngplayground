@@ -11,8 +11,6 @@
 import type { BNGLModel } from '../../../types.ts';
 import { BNGLParser } from '../../../src/services/graph/core/BNGLParser.ts';
 
-const speciesPattern = /^[A-Za-z0-9_]+(?:\([^)]*\))?(?:\.[A-Za-z0-9_]+(?:\([^)]*\))?)*$/;
-
 const escapeRegex = (value: string) => {
   const ESCAPE_CODES: Record<number, true> = {
     92: true,

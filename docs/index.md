@@ -1,6 +1,6 @@
 # BioNetGen Playground Documentation
 
-Welcome to the official documentation for the **BioNetGen Playground**, a state-of-the-art web-based modeling and simulation environment for BioNetGen (BNGL).
+Welcome to the official documentation for the **BioNetGen Playground**, a browser-native modeling and simulation environment for BioNetGen (BNGL).
 
 ```{image} ../public/logo.png
 :alt: BioNetGen Logo

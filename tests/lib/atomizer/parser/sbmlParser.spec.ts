@@ -2,12 +2,10 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import {
   extractGOTerms,
   getAnnotationsByQualifier,
-  getLibSBMLInstance,
   SBML2JSON,
   setLibSBMLInstanceForTest,
 } from '../../../../src/lib/atomizer/parser/sbmlParser';
 import { BiologicalQualifier, ModelQualifier, type AnnotationInfo } from '../../../../src/lib/atomizer/config/types';
-import * as helpers from '../../../../src/lib/atomizer/utils/helpers';
 
 describe('sbmlParser', () => {
   describe('extractGOTerms', () => {

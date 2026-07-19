@@ -43,7 +43,7 @@ describe('ParameterScan Analysis Service', () => {
         it('should clamp lower bound to 0', () => {
             // Technically 10% logic keeps it positive if input positive.
             // If input close to 0? 1e-10 -> 0.9e-10, 1.1e-10.
-            const [l, u] = computeDefaultBounds(1e-10);
+            const [l] = computeDefaultBounds(1e-10);
             expect(l).toBeGreaterThan(0);
         });
         // Add more permutations

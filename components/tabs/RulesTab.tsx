@@ -6,6 +6,7 @@ import { buildRegulatoryInsights } from '../../services/visualization/regulatory
 import { classifyRuleChanges } from '../../services/ruleAnalysis/ruleChangeClassifier';
 import type { RuleChangeSummary } from '../../services/ruleAnalysis/ruleChangeTypes';
 import { RuleChangeBadges, renderHumanSummary } from '../RuleChangeBadges';
+import { getRuleId } from '../../services/ruleIdentity';
 
 interface RulesTabProps {
   model: BNGLModel | null;
@@ -15,7 +16,6 @@ interface RulesTabProps {
   simulationMethod?: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'nfsim';
 }
 
-const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;
 // For unnamed rules (or parser-generated names like _R1), show the 1-indexed number
 const getRuleLabel = (rule: { name?: string }, index: number): string => {
   const name = rule.name;

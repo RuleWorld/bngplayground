@@ -70,25 +70,6 @@ interface BNGResult {
   error?: string;
 }
 
-function normalizeBaseName(name: string): string {
-  return name.toLowerCase().replace(/[_\s-]+/g, '');
-}
-
-function hasGdatFile(baseName: string): boolean {
-  const normalized = normalizeBaseName(baseName);
-  const files = fs.readdirSync(BNG_OUTPUT_DIR);
-
-  for (const file of files) {
-    if (file.endsWith('.gdat')) {
-      const fileBase = path.basename(file, '.gdat');
-      if (normalizeBaseName(fileBase) === normalized) {
-        return true;
-      }
-    }
-  }
-  return false;
-}
-
 async function runBNG2(bnglPath: string, baseName: string): Promise<BNGResult> {
   return new Promise((resolve) => {
     console.log(`\n[${baseName}] Running BNG2.pl...`);

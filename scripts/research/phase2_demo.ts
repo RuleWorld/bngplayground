@@ -2,7 +2,7 @@
 // Demonstration of Phase 2 features: Parameter Estimation & Neural ODE Surrogates
 
 import { VariationalParameterEstimator, ParameterPrior, SimulationData } from '../packages/engine/src/services/ParameterEstimation';
-import { NeuralODESurrogate, SurrogateDatasetGenerator, TrainingDataset } from '../packages/engine/src/services/NeuralODESurrogate';
+import { NeuralODESurrogate, SurrogateDatasetGenerator } from '../packages/engine/src/services/NeuralODESurrogate';
 import type { BNGLModel } from '../types';
 
 /**

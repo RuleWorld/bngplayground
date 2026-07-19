@@ -216,7 +216,11 @@ export class Rosenbrock23Solver {
     }
 
     if (this.recentAcceptances.length >= this.adaptiveWindowSize) {
-      const acceptCount = this.recentAcceptances.filter(a => a).length;
+      // ⚡ Bolt: Use inline loop instead of .filter(a => a).length to avoid intermediate array allocation
+      let acceptCount = 0;
+      for (let i = 0; i < this.recentAcceptances.length; i++) {
+        if (this.recentAcceptances[i]) acceptCount++;
+      }
       const acceptRate = acceptCount / this.recentAcceptances.length;
 
       if (acceptRate >= this.highAcceptanceThreshold) {

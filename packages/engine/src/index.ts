@@ -199,7 +199,8 @@ export { enumerateRules, countCandidateRules } from './services/verification/Rul
 export type { CandidateRule, EnumerationConfig } from './services/verification/RuleEnumerator';
 export { filterCandidates } from './services/verification/CandidateFilter';
 export { scoreStructure } from './services/verification/StructureScorer';
-export { structureSearch, assembleModel } from './services/inference/StructureABCSMC';
+export { structureSearch } from './services/inference/StructureABCSMC';
+export { assembleModel } from './services/inference/modelAssembly';
 export type { StructureSearchConfig, StructureSearchResult, StructureParticle } from './services/inference/StructureABCSMC';
 
 // ── Bifurcation Analysis ────────────────────────────────────────────
@@ -217,6 +218,31 @@ export type { NullclineConfig, NullclineResult } from './services/analysis/Nullc
 
 // ── Temporal Information Theory ─────────────────────────────────────
 export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
+export {
+    extractMoleculeNames,
+    parseMoleculeTokens,
+    extractBindingRequirements,
+    type MoleculeToken,
+    type MoleculeTokenComponent,
+    type BindingRequirement,
+} from './services/patterns/patternTokens';
+export {
+    buildDirectedReactionGraph,
+    type ReactionLike,
+    type DirectedEdge,
+} from './services/patterns/reactionGraph';
+export { isSafeObjectKey, setSafeNumberField } from './utils/safeObjectKey';
+export { normalizeWhitespace, collapseWhitespace, escapeRegExp } from './utils/stringUtils';
+export {
+    sanitizeObservableName,
+    insertBeforeEndModel,
+    hasSimulateAction,
+    hasObservablesBlock,
+    hasGenerateNetworkAction,
+    ensureDefaultObservables,
+    ensureDefaultActions,
+} from './services/indra/indraModelPrep';
+export { updateMassActionRates } from './services/analysis/DoseResponse';
 export type { ReactionITConfig, ReactionITResult, MutualInformationResult, TransferEntropyResult, PhaseLockingResult } from './services/analysis/ReactionInformationTheory';
 
 export { analyzeResiduals } from './services/analysis/AnalyzeResiduals';

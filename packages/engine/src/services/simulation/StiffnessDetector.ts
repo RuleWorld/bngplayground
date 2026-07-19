@@ -14,6 +14,7 @@
  */
 
 import type { DerivativeFunction, SolverOptions, SolverResult } from '../../utils/solverUtils';
+import { vecNorm, vecScaleInto, vecAxpyInto } from '../../utils/vectorMath';
 
 // ---------------------------------------------------------------------------
 // Stiffness classification
@@ -35,20 +36,6 @@ export interface StiffnessProbe {
 // ---------------------------------------------------------------------------
 // Vector helpers
 // ---------------------------------------------------------------------------
-
-function vecNorm(v: Float64Array): number {
-  let s = 0;
-  for (let i = 0; i < v.length; i++) s += v[i] * v[i];
-  return Math.sqrt(s);
-}
-
-function vecScale(v: Float64Array, alpha: number, out: Float64Array): void {
-  for (let i = 0; i < v.length; i++) out[i] = v[i] * alpha;
-}
-
-function vecAxpy(alpha: number, x: Float64Array, y: Float64Array, out: Float64Array): void {
-  for (let i = 0; i < x.length; i++) out[i] = y[i] + alpha * x[i];
-}
 
 // ---------------------------------------------------------------------------
 // StiffnessDetector
@@ -133,7 +120,7 @@ export class StiffnessDetector {
     this.f(y, this.dydt);
 
     // Explicit Euler: y_exp = y + h * f(y)
-    vecAxpy(h, this.dydt, y, this.yExp);
+    vecAxpyInto(h, this.dydt, y, this.yExp);
 
     // Implicit Euler via one Newton step:
     //   (I - h*J) * dy = h * f(y)
@@ -148,7 +135,7 @@ export class StiffnessDetector {
     // approximation of the implicit solution:
     //   y_imp = y + h * f(y + h * f(y))   (semi-implicit predictor-corrector)
     this.f(this.yExp, this.tmp); // f(y_exp)
-    vecAxpy(h, this.tmp, y, this.yImp); // y_imp = y + h * f(y_exp)
+    vecAxpyInto(h, this.tmp, y, this.yImp); // y_imp = y + h * f(y_exp)
 
     // Divergence metric
     let diffSq = 0;
@@ -207,7 +194,7 @@ export class StiffnessDetector {
       const epsilon = SQRT_EPS * Math.max(yNorm, 1.0) / vNorm;
 
       // y_perturbed = y + epsilon * v
-      vecAxpy(epsilon, this.v, y, this.tmp);
+      vecAxpyInto(epsilon, this.v, y, this.tmp);
       this.f(this.tmp, this.f1);
 
       // Jv = (f1 - f0) / epsilon
@@ -225,7 +212,7 @@ export class StiffnessDetector {
       lambda = JvNorm;
 
       // Normalize: v = Jv / ||Jv||
-      vecScale(this.Jv, 1 / JvNorm, this.v);
+      vecScaleInto(this.Jv, 1 / JvNorm, this.v);
     }
 
     return lambda;
@@ -280,7 +267,11 @@ export class StiffnessDetector {
   /** Fraction of accepted steps in the current window. */
   get acceptanceRate(): number {
     if (this.acceptanceWindow.length === 0) return 1;
-    const acc = this.acceptanceWindow.filter(Boolean).length;
+    // ⚡ Bolt: Use inline loop instead of .filter(Boolean).length to avoid intermediate array allocation
+    let acc = 0;
+    for (let i = 0; i < this.acceptanceWindow.length; i++) {
+      if (this.acceptanceWindow[i]) acc++;
+    }
     return acc / this.acceptanceWindow.length;
   }
 

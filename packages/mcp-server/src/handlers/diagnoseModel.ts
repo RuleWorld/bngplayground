@@ -10,10 +10,11 @@ import { handleDiagnose } from './diagnose.js';
 import { structureError } from '../services/errors.js';
 
 const diagnoseModelUnifiedArgsSchema = diagnoseModelArgsSchema.extend({
-    mode: z.enum(['quick', 'deep']).default('deep').describe('Quick mode runs lightweight checks; deep mode runs full causal diagnostics.'),
+    mode: z.enum(['quick', 'deep']).default('deep').describe('Quick mode runs lightweight checks; deep mode runs the full diagnostic pipeline.'),
     include_fix_suggestions: z.boolean().default(false).describe('Include structured fix suggestions.'),
     include_residuals: z.boolean().default(false).describe('Include residual analysis when experimental_data is provided.'),
     include_maturity: z.boolean().default(false).describe('Include model maturity scoring.'),
+    validate_dynamics: z.boolean().default(false).describe('Cross-check each rule-attribution route against a stochastic (SSA) run: a step is marked supported if its rule fires, and the route is corroborated if every hand-off appears in the transfer-entropy graph. Runs an extra SSA, so it is off by default.'),
     residual_parameters: z.record(z.string(), z.number()).optional().describe('Optional parameter overrides for residual analysis.'),
     validation_history: z.array(z.object({
         dataset: z.string(),
@@ -45,6 +46,7 @@ export async function handleDiagnoseModel(args: ToolArgs): Promise<ToolResult<an
                 n_samples: parsedArgs.n_samples,
                 n_bootstrap: parsedArgs.n_bootstrap,
                 max_parameters: parsedArgs.max_parameters,
+                validate_dynamics: parsedArgs.validate_dynamics,
                 experimental_data: parsedArgs.experimental_data?.map((datum) => ({
                     time: datum.time as number,
                     observables: (datum.observables ?? {}) as Record<string, number>,

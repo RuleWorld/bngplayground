@@ -57,7 +57,7 @@ describe('FIM Math Services', () => {
     describe('jacobiEigenDecomposition', () => {
         it('should decompose identity matrix', () => {
             const I = [[1, 0], [0, 1]];
-            const { eigenvalues, eigenvectors } = jacobiEigenDecomposition(I);
+            const { eigenvalues } = jacobiEigenDecomposition(I);
             // Eigs should be 1, 1
             expect(eigenvalues[0]).toBeCloseTo(1);
             expect(eigenvalues[1]).toBeCloseTo(1);

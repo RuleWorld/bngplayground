@@ -16,8 +16,6 @@ const __dirname = path.dirname(__filename);
 
 const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
 const OUTPUT_DIR = path.join(__dirname, '../gdat_comparison_output');
-const PUBLISHED_DIR = path.join(__dirname, '../public/published-models');
-
 // Ensure output directory exists
 if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
