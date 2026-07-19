@@ -10,7 +10,7 @@
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fc from 'fast-check';
-import { BNGLModel, ReactionRule, MoleculeType } from '../../types';
+import { BNGLModel, ReactionRule } from '../../types';
 import { runNFsimSimulation } from '@bngplayground/engine';
 import { getComplexModelHandler, resetComplexModelHandler } from '@bngplayground/engine';
 import { BNGXMLWriter } from '@bngplayground/engine';

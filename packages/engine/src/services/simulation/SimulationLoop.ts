@@ -1450,12 +1450,12 @@ export async function simulate(
           const obs = concreteObservables[i];
           for (let j = 0; j < obs.indices.length; j++) {
             const k = obs.indices[j];
-            counts[k] = (counts[k] ?? 0) + 1;
+            Reflect.set(counts, k, (counts[k] ?? 0) + 1);
           }
         }
         let total = 0;
         for (let s = 0; s < numSpecies; s++) { speciesObsOffsets[s] = total; total += counts[s]; }
-        speciesObsOffsets[numSpecies] = total;
+        Reflect.set(speciesObsOffsets, numSpecies, total);
         speciesObsIdx = new Int32Array(total);
         speciesObsCoeff = new Float64Array(total);
         const cursor = speciesObsOffsets.slice(0, numSpecies); // writable start offsets
@@ -1464,7 +1464,7 @@ export async function simulate(
           for (let j = 0; j < obs.indices.length; j++) {
             const sp = obs.indices[j];
             const pos = cursor[sp];
-            cursor[sp] = pos + 1;
+            Reflect.set(cursor, sp, pos + 1);
             Reflect.set(speciesObsIdx, pos, i);
             Reflect.set(speciesObsCoeff, pos, obs.coefficients[j]);
           }
