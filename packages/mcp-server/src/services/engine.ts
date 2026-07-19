@@ -179,14 +179,46 @@ export function extractMoleculeNames(pattern: string): string[] {
         return [];
     }
 
-    return pattern
-        .split('.')
-        .map((segment) => segment.trim())
-        .filter((segment) => segment.length > 0)
-        .map((segment) => {
-            const match = segment.match(/^([A-Za-z0-9_]+)/);
-            return match ? match[1] : segment;
-        });
+    const results: string[] = [];
+    let start = 0;
+    const len = pattern.length;
+
+    while (start < len) {
+        let end = pattern.indexOf('.', start);
+        if (end === -1) {
+            end = len;
+        }
+
+        // Fast trim start
+        let s = start;
+        while (s < end && pattern.charCodeAt(s) <= 32) s++;
+
+        if (s < end) {
+            // Only extract the matched part (which we know doesn't have spaces at start)
+            let e = s;
+            while (e < end) {
+                const c = pattern.charCodeAt(e);
+                if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c === 95) {
+                    e++;
+                } else {
+                    break;
+                }
+            }
+            if (e > s) {
+                results.push(pattern.substring(s, e));
+            } else {
+                // Fallback for weird patterns without standard prefixes
+                const segment = pattern.substring(s, end).trimEnd();
+                if (segment.length > 0) {
+                     results.push(segment);
+                }
+            }
+        }
+
+        start = end + 1;
+    }
+
+    return results;
 }
 
 function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
