@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, existsSync } from 'fs';
+import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
 import { resolve, normalize } from 'path';
 
 const RULEHUB_BASE = process.argv.includes('--local')
@@ -184,8 +184,7 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
   if (!normalizedOutPath.startsWith(normalizedOutDir)) {
     throw new Error(`Path traversal detected: ${outPath} is not within ${outDir}`);
   }
-  const { writeFileSync: writeOut } = require('fs');
-  writeOut(outPath, output);
+  writeFileSync(outPath, JSON.parse(JSON.stringify(output)));
 
   console.log(`Generated: ${sanitizedSlim.length} models, ${sanitizedCategories.length} categories, ${Object.keys(sanitizedAssignments).length} assignments`);
 }
