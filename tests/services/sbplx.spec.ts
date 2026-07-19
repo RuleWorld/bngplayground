@@ -12,7 +12,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { sbplx, nelderMead } from '@bngplayground/engine';
+import { sbplx } from '@bngplayground/engine';
 
 // ---------------------------------------------------------------------------
 // Standard test functions

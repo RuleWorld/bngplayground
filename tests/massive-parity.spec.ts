@@ -18,15 +18,6 @@ const MASSIVE_PARITY_KNOWN_HEAVY_MODELS = new Set([
     'example1_fit',
 ]);
 
-function normalizeKey(raw: string): string {
-    return path.basename(raw)
-        .toLowerCase()
-        .replace(/\.(bngl|cdat|gdat|net|csv)$/i, '')
-        .replace(/^results_/, '')
-        .replace(/\s+/g, '')
-        .replace(/[^a-z0-9]+/g, '');
-}
-
 function stripLineComments(text: string): string {
     return text
         .split(/\r?\n/)

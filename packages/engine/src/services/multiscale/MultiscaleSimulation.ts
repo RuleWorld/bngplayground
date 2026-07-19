@@ -73,13 +73,9 @@ export interface MultiscaleResult {
 
 
 function setSafeNumberArrayField(target: Record<string, number[]>, key: string, value: number[]): void {
-  if (!isSafeObjectKey(key)) return;
-  Object.defineProperty(target, key, {
-    value,
-    writable: true,
-    enumerable: true,
-    configurable: true,
-  });
+  if (isSafeObjectKey(key)) {
+    Reflect.set(target, key, value);
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -136,16 +132,6 @@ export function rk4Step(
 export interface MassActionRates {
   production: Float64Array;
   degradation: Float64Array;
-}
-
-function massActionRHS(
-  rates: MassActionRates,
-): (t: number, y: Float64Array, dydt: Float64Array) => void {
-  return (_t: number, y: Float64Array, dydt: Float64Array) => {
-    for (let i = 0; i < y.length; i++) {
-      dydt[i] = rates.production[i] - rates.degradation[i] * y[i];
-    }
-  };
 }
 
 // ---------------------------------------------------------------------------
@@ -258,12 +244,7 @@ export async function multiscaleSimulation(
     for (const ct of config.cellTypes) {
       if (!isSafeObjectKey(ct.name)) continue;
       setSafeNumberField(popCounts, ct.name, 0);
-      Object.defineProperty(obsAccum, ct.name, {
-        value: Object.create(null) as Record<string, number>,
-        writable: true,
-        enumerable: true,
-        configurable: true,
-      });
+      Reflect.set(obsAccum, ct.name, Object.create(null) as Record<string, number>);
       setSafeNumberField(obsCounts, ct.name, 0);
     }
 
@@ -399,7 +380,7 @@ export async function multiscaleSimulation(
         }
         case 'stop_secrete': {
           if (isSafeObjectKey(action.species)) {
-            delete cell.secretionRates[action.species];
+            setSafeNumberField(cell.secretionRates, action.species, 0);
           }
           break;
         }

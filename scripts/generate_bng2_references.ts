@@ -133,7 +133,6 @@ for (const entry of needGdat) {
     // Find output files — BNG2 may produce suffixed files (e.g. model_ode.gdat)
     const files = fs.readdirSync(bnglDir);
     const gdatFiles = files.filter(f => f.endsWith('.gdat') && f.startsWith(baseName));
-    const cdatFiles = files.filter(f => f.endsWith('.cdat') && f.startsWith(baseName));
     const netFile = files.find(f => f === `${baseName}.net`);
 
     // Pick the first gdat (prefer unsuffixed, then suffixed)

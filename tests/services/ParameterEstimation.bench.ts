@@ -1,6 +1,5 @@
 import { bench, describe } from 'vitest';
 import { VariationalParameterEstimator, SimulationData, ParameterPrior } from '../../src/services/ParameterEstimation';
-import * as tf from '@tensorflow/tfjs';
 
 describe('VariationalParameterEstimator.fit', () => {
   const data: SimulationData = {

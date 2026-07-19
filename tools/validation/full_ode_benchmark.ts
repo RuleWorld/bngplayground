@@ -813,8 +813,6 @@ async function runFullSimulation(modelName: string, modelPath: string, bng2Speci
       }
     });
 
-    const rates = concreteReactions.map(r => r.rateConstant);
-
     if (hasBadRates) {
       return {
         parseTime,

@@ -55,8 +55,9 @@ interface ConcreteObservable {
 
 
 function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T[]): void {
-  if (!isSafeObjectKey(key)) return;
-  target[key] = value;
+  if (isSafeObjectKey(key)) {
+    Reflect.set(target, key, value);
+  }
 }
 
 function extractIfConditions(expression: string): string[] {
@@ -332,11 +333,6 @@ export async function simulate(
     postMessage: (msg: { type: string; payload?: unknown; time?: number; state?: Float64Array; speciesCount?: number; observablesCount?: number; progress?: number;[key: string]: unknown }) => void
   }
 ): Promise<SimulationResults> {
-  const formatCaughtError = (error: unknown): string => {
-    if (error instanceof Error) return error.message;
-    return String(error);
-  };
-
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
   const simulationStartTime = performance.now();
   // ... using simulationStartTime later ...
@@ -410,7 +406,7 @@ export async function simulate(
         if (model.parameters && model.parameters[change.parameter] !== newVal) {
           setSafeNumberField(model.parameters as Record<string, number>, change.parameter, newVal);
           paramMap.set(change.parameter, newVal);
-          if (model.paramExpressions) {
+          if (model.paramExpressions && isSafeObjectKey(change.parameter)) {
             delete model.paramExpressions[change.parameter];
           }
           parametersUpdated = true;
@@ -947,7 +943,7 @@ export async function simulate(
         safeObservableNames.push(name);
         safeObservableIndices.push(i);
         // Initialize the object with 0
-        observableValuesRecord[name] = 0;
+        setSafeNumberField(observableValuesRecord, name, 0);
       }
     }
 
@@ -1034,7 +1030,7 @@ export async function simulate(
       // ⚡ Bolt Optimization: Use pre-filtered safe observable names to directly assign values,
       // avoiding repeated regex validation via setSafeNumberField in the hot loop.
       for (let i = 0; i < safeObservableNames.length; i++) {
-        observableValuesRecord[safeObservableNames[i]] = buffer[safeObservableIndices[i]];
+        setSafeNumberField(observableValuesRecord, safeObservableNames[i], buffer[safeObservableIndices[i]]);
       }
       return observableValuesRecord;
     };
@@ -1162,7 +1158,7 @@ export async function simulate(
             // from its original expression (if it had one). 
             if (model.paramExpressions) {
               const oldExpr = model.paramExpressions[change.parameter];
-              if (oldExpr) {
+              if (oldExpr && isSafeObjectKey(change.parameter)) {
 
                 delete model.paramExpressions[change.parameter];
               }
@@ -1449,6 +1445,8 @@ export async function simulate(
       if (maintainObs) {
         speciesObsOffsets = new Int32Array(numSpecies + 1);
         const counts = new Int32Array(numSpecies);
+        // All bracket accesses below use TypedArrays (Int32Array/Uint8Array/Float64Array)
+        // which only accept integer keys and are immune to prototype pollution.
         for (let i = 0; i < numObservables; i++) {
           const obs = concreteObservables[i];
           for (let j = 0; j < obs.indices.length; j++) counts[obs.indices[j]]++;

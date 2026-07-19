@@ -1,5 +1,5 @@
 import { test } from '@playwright/test';
-import { chromium, Browser, BrowserContext, Page } from 'playwright';
+import { chromium, Browser, Page } from 'playwright';
 import fs from 'node:fs';
 import path from 'node:path';
 

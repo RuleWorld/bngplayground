@@ -7,7 +7,6 @@
  */
 import { describe, it } from 'vitest';
 import * as fs from 'fs';
-import * as path from 'path';
 import { findRuleHubModelPath } from './helpers/rulehub';
 
 // Mock browser environment - must be done before dynamic imports

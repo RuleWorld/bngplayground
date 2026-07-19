@@ -4,7 +4,6 @@ import {
     updateParameterInCode,
     perturbParameters,
     perturbParameterOverrides,
-    Parameter
 } from '../src/utils/bnglManipulation';
 
 describe('bnglManipulation', () => {

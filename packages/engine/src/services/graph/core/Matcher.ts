@@ -601,7 +601,7 @@ class VF2State {
   }
 
   private computePatternFrontier(): void {
-    const bits = this.frontierBits;
+    const bits = this.frontierBits; // Uint8Array — only accepts integer keys, immune to prototype pollution
     const core = this.corePattern;
     const n = this.pattern.molecules.length;
     bits.fill(0, 0, n);
@@ -619,7 +619,7 @@ class VF2State {
   }
 
   private computeTargetFrontier(): void {
-    const bits = this.frontierBits;
+    const bits = this.frontierBits; // Uint8Array — only accepts integer keys, immune to prototype pollution
     const core = this.coreTarget;
     const n = this.target.molecules.length;
     bits.fill(0, 0, n);
@@ -982,6 +982,7 @@ class VF2State {
   }
 
   addPair(p: number, t: number): void {
+    // this.corePattern/coreTarget are Int32Array — only accept integer keys, immune to prototype pollution
     this.corePattern[p] = t;
     this.coreTarget[t] = p;
     this.coreSize++;
@@ -1001,6 +1002,7 @@ class VF2State {
   }
 
   removePair(p: number, t: number): void {
+    // this.corePattern/coreTarget are Int32Array — only accept integer keys, immune to prototype pollution
     this.corePattern[p] = -1;
     this.coreTarget[t] = -1;
     this.coreSize--;

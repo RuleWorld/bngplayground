@@ -11,10 +11,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import * as fc from 'fast-check';
 import { 
   NFsimConcurrencyManager, 
-  getConcurrencyManager,
   resetConcurrencyManager 
 } from '@bngplayground/engine';
-import { NFsimExecutionOptions } from '@bngplayground/engine';
 
 // Mock WASM module for testing
 const createMockModule = (moduleId: string) => {

@@ -1,5 +1,4 @@
 import { readFileSync } from 'fs';
-import path from 'path';
 import { parseBNGL } from '../../services/parseBNGL';
 import { describe, it, expect } from 'vitest';
 import { BNGLParser } from '@bngplayground/engine';

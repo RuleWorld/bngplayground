@@ -1,7 +1,5 @@
 import { test, expect } from '@playwright/test';
 
-const URL = process.env.URL || 'http://127.0.0.1:3000/bngplayground/';
-
 test('Open-in-VSCode modal should open without hook errors', async ({ page }) => {
   const errors: string[] = [];
   page.on('console', (msg) => {

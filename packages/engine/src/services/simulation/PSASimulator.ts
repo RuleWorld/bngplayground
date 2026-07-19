@@ -526,7 +526,7 @@ export class PSASimulator {
         if (irxn === nReactions) break; // aTot = 0
 
         // Fire reaction (HAS update: changes by +/- scaling)
-        const forceUpdate = this.updateConcentrationsHas(irxn, reactions, state, fixedSpecies);
+        this.updateConcentrationsHas(irxn, reactions, state, fixedSpecies);
         nSteps++;
 
         // Update propensities (incremental delta, periodic full resync above)

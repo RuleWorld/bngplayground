@@ -1,5 +1,5 @@
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import * as tf from '@tensorflow/tfjs';
 import { 
     NeuralODESurrogate, 

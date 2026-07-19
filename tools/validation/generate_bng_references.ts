@@ -70,10 +70,6 @@ interface BNGResult {
   error?: string;
 }
 
-function normalizeBaseName(name: string): string {
-  return name.toLowerCase().replace(/[_\s-]+/g, '');
-}
-
 async function runBNG2(bnglPath: string, baseName: string): Promise<BNGResult> {
   return new Promise((resolve) => {
     console.log(`\n[${baseName}] Running BNG2.pl...`);

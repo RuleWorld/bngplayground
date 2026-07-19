@@ -79,7 +79,7 @@ describe('Example models validation (BNG->SBML->convert->parse)', () => {
       const originalBNGL = readFileSync(model, 'utf8');
       const origParsed = parseBNGL(originalBNGL);
 
-      const { bngl, parsed } = await convertAndParse(xml);
+      const { parsed } = await convertAndParse(xml);
 
       // Basic sanity checks: counts should be non-zero and comparable types
       expect(parsed.moleculeTypes.length).toBeGreaterThanOrEqual(1);

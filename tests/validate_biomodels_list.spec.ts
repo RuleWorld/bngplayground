@@ -60,7 +60,7 @@ test.describe('BioModels Validation Suite', () => {
 
             // Poll for content change from default or empty
             await expect(async () => {
-                const editorContent = await page.inputValue('textarea.inputarea');
+                await page.inputValue('textarea.inputarea');
                 // Note: Monaco's textarea might be hidden/used for input. 
                 // Better to check the visible lines if possible, or use a specific known string.
                 // Wait, previous test checked `page.evaluate(() => window.bnglState?.code)`. 

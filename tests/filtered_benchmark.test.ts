@@ -3,7 +3,7 @@
  * Benchmark: Test web simulator network generation on all example models
  * These are AI-generated models that should all work
  */
-import { describe, it, expect, beforeAll } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import * as fs from 'fs';
 import * as path from 'path';
 

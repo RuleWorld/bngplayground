@@ -5,7 +5,6 @@ import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParse
 import { EnergyService } from '../packages/engine/src/services/graph/core/EnergyService';
 import { RxnRule } from '../packages/engine/src/services/graph/core/RxnRule';
 import * as fs from 'fs';
-import * as path from 'path';
 import { describe, test, expect, beforeAll } from 'vitest';
 import { findRuleHubModelPath } from './helpers/rulehub';
 

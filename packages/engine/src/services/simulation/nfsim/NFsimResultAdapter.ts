@@ -1,6 +1,6 @@
 import type { BNGLModel, SimulationResults } from '../../../types';
 import { parseGdat, type GdatData } from '../GdatParser';
-import { isSafeObjectKey } from '../../../utils/safeObjectKey';
+import { isSafeObjectKey, setSafeNumberField } from '../../../utils/safeObjectKey';
 
 function toSafeKey(raw: string): string | null {
   return isSafeObjectKey(raw) ? raw : null;
@@ -28,12 +28,7 @@ export class NFsimResultAdapter {
         const safeHeader = toSafeKey(header);
         if (!safeHeader) continue;
         const value = row[safeHeader] ?? row[parsed.headers[headers.indexOf(header)]];
-        Object.defineProperty(mapped, safeHeader, {
-          value: typeof value === 'number' ? value : Number(value ?? 0),
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+        setSafeNumberField(mapped, safeHeader, typeof value === 'number' ? value : Number(value ?? 0));
       }
       return mapped;
     });
@@ -45,12 +40,7 @@ export class NFsimResultAdapter {
       for (const name of speciesHeaders) {
         const safeName = toSafeKey(name);
         if (!safeName) continue;
-        Object.defineProperty(sp, safeName, {
-          value: row[safeName] ?? 0,
-          writable: true,
-          enumerable: true,
-          configurable: true,
-        });
+        setSafeNumberField(sp, safeName, row[safeName] ?? 0);
       }
       return sp;
     });

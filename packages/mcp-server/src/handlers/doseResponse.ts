@@ -6,8 +6,6 @@ import {
     parseArgs,
     parseModelOrThrow,
     expandModel,
-    cloneExpandedModel,
-    updateMassActionRates,
 } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 

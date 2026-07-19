@@ -168,7 +168,6 @@ describe('MCP server tool handlers', () => {
     expect(result.structuredContent.data.length).toBe(11);
     // Verify decreasing trend for A() -> 0
     const data = result.structuredContent.data as any[];
-    const aIndex = result.structuredContent.headers.indexOf('A_total');
     expect(data[0]['A_total']).toBe(10);
     expect(data[10]['A_total']).toBeLessThan(10);
   });

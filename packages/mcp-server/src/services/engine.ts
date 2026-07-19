@@ -5,8 +5,6 @@ import {
     BNGLParser,
     parseBNGLWithANTLR,
     generateExpandedNetwork,
-    clearAllEvaluatorCaches,
-    evaluateFunctionalRate,
     validateModelForNFsim,
     MassBalance,
     extractMoleculeNames,

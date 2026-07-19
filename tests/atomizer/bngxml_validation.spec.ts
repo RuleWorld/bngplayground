@@ -71,7 +71,7 @@ describe.skipIf(!VALIDATE_DIR)('BNG XML validation (coverage expansion)', () => 
       const originalBNGL = readFileSync(model, 'utf8');
       const origParsed = parseBNGL(originalBNGL);
 
-      const { bngl, parsed } = await convertAndParse(xml);
+      const { parsed } = await convertAndParse(xml);
 
       // Compare counts
       expect(parsed.moleculeTypes.length).toBe(origParsed.moleculeTypes.length);

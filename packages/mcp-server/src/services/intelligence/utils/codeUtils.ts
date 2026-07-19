@@ -1,10 +1,4 @@
 import { normalizeWhitespace, escapeRegExp } from '@bngplayground/engine';
-function uniquePush(target: string[], value: string): void {
-    if (!target.includes(value)) {
-        target.push(value);
-    }
-}
-
 export function ensureBlock(code: string, blockName: string): string {
     const begin = `begin ${blockName}`;
     const end = `end ${blockName}`;

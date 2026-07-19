@@ -45,7 +45,6 @@ describe('Polymer Compartment Parity Tests', () => {
       expect(bnglContent).toContain('@c0:');
       
       // Parse the BNGL model
-      const parser = new BNGLParser();
       const lines = bnglContent.split('\n');
       
       let inCompartments = false;
