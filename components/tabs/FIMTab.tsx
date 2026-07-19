@@ -17,6 +17,7 @@ import {
 } from 'recharts';
 import { FIMHeatmap } from '../../components/FIMHeatmap';
 import { formatValue } from '../../src/utils/formatValue';
+import { toggleArrayMember } from '../../services/collections';
 
 interface FIMTabProps {
   model: BNGLModel | null;
@@ -108,7 +109,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
   }, [model]);
 
   const toggleParam = (p: string) => {
-    setSelected((prev) => (prev.includes(p) ? prev.filter((x) => x !== p) : [...prev, p]));
+    setSelected((prev) => toggleArrayMember(prev, p));
   };
 
   const handleCompute = useCallback(async (overrideConfig?: { method?: 'ode' | 'ssa'; t_end: number; n_steps: number }) => {
@@ -170,23 +171,6 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
   const handleCancel = useCallback(() => {
     if (controller) controller.abort();
   }, [controller]);
-
-  const runPreset = useCallback((preset: 'quick' | 'standard') => {
-    const config = preset === 'quick'
-      ? { method: 'ode' as const, t_end: 60, n_steps: 80 }
-      : { method: 'ode' as const, t_end: 200, n_steps: 150 };
-    void handleCompute(config);
-  }, [handleCompute]);
-
-  const activePreset = useMemo<'quick' | 'standard' | 'custom'>(() => {
-    if (analysisConfig.method === 'ode' && analysisConfig.t_end === 60 && analysisConfig.n_steps === 80) {
-      return 'quick';
-    }
-    if (analysisConfig.method === 'ode' && analysisConfig.t_end === 200 && analysisConfig.n_steps === 150) {
-      return 'standard';
-    }
-    return 'custom';
-  }, [analysisConfig]);
 
   const selectionSummary = useMemo(() => {
     const coverage = new Set<string>();

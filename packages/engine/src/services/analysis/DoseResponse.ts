@@ -102,24 +102,8 @@ function buildStoichiometryMatrix(
   species: BNGLSpecies[],
   reactions: BNGLReaction[],
 ): number[][] {
-  const n = species.length;
-  const m = reactions.length;
   const speciesIdx = buildSpeciesIndex(species);
-
-  const S: number[][] = Array.from({ length: n }, () => new Array(m).fill(0));
-
-  for (let r = 0; r < m; r++) {
-    const rxn = reactions[r];
-    for (const name of rxn.reactants) {
-      const idx = speciesIdx.get(name);
-      if (idx !== undefined) S[idx][r] -= 1;
-    }
-    for (const name of rxn.products) {
-      const idx = speciesIdx.get(name);
-      if (idx !== undefined) S[idx][r] += 1;
-    }
-  }
-  return S;
+  return buildStoichiometry(reactions, species.length, (name) => speciesIdx.get(name));
 }
 
 /**
@@ -398,12 +382,13 @@ function detectBifurcationPoints(
  */
 import { simulate } from "../simulation/SimulationLoop";
 import { evaluateFunctionalRate, clearAllEvaluatorCaches } from "../simulation/ExpressionEvaluator";
+import { buildStoichiometryMatrix as buildStoichiometry } from '../../utils/stoichiometry';
 
 function cloneExpandedModel(model: BNGLModel): BNGLModel {
     return structuredClone(model);
 }
 
-function updateMassActionRates(model: BNGLModel): void {
+export function updateMassActionRates(model: BNGLModel): void {
     const context = model.parameters ?? {};
     for (const reaction of model.reactions ?? []) {
         if (!reaction.isFunctionalRate && reaction.rate && typeof reaction.rate === 'string') {

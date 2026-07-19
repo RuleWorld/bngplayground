@@ -1,6 +1,5 @@
 
 const fs = require('fs');
-const path = require('path');
 
 const jsonPath = 'artifacts/SESSION_2026_01_05_web_output_parity/compare_results.after_refs.json';
 

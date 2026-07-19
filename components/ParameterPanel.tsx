@@ -1,52 +1,15 @@
 
 import React, { useMemo, useState, useEffect } from 'react';
+import { parseParameters, type Parameter } from '../src/utils/bnglManipulation';
 
 interface ParameterPanelProps {
   code: string;
   onCodeChange: (newCode: string) => void;
 }
 
-interface Parameter {
-  name: string;
-  value: number;
-  lineIndex: number; // 0-based line index in the code
-}
 
 // Helper to check if a line is inside parameter block
 // and extract parameter info
-function parseParameters(code: string): Parameter[] {
-  const lines = code.split(/\r?\n/);
-  const parameters: Parameter[] = [];
-  let inParamBlock = false;
-
-  for (let i = 0; i < lines.length; i++) {
-    const line = lines[i].trim();
-    if (line.startsWith('begin parameters')) {
-      inParamBlock = true;
-      continue;
-    }
-    if (line.startsWith('end parameters')) {
-      inParamBlock = false;
-      continue; // or break if we assume only one block
-    }
-
-    if (inParamBlock && line && !line.startsWith('#')) {
-      // Parse "name value" or "name expression"
-      // Regex: start with word, space, number
-      // Simple parser: split by whitespace
-      const parts = line.split(/\s+/);
-      if (parts.length >= 2) {
-        const name = parts[0];
-        const valStr = parts[1];
-        const val = parseFloat(valStr);
-        if (!isNaN(val)) {
-          parameters.push({ name, value: val, lineIndex: i });
-        }
-      }
-    }
-  }
-  return parameters;
-}
 
 
 

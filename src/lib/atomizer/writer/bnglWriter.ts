@@ -23,12 +23,11 @@ import {
 } from '../utils/helpers';
 import { SCTEntry, SpeciesCompositionTable } from '../config/types';
 import { SafeExpressionEvaluator } from '@bngplayground/engine';
+import { RATE_RULE_META_PREFIX, SYNTH_RATE_RULE_SPECIES_PREFIX } from './rateRuleConstants';
 
 const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
-const RATE_RULE_META_PREFIX = '__rate_rule__';
 const RATE_RULE_POS_PREFIX = '__rate_rule_pos__';
 const RATE_RULE_NEG_PREFIX = '__rate_rule_neg__';
-const SYNTH_RATE_RULE_SPECIES_PREFIX = '__rate_rule_state__';
 const ENABLE_SYNTHETIC_RATE_RULE_REACTIONS =
   ((typeof process !== 'undefined' && process.env?.BNGL_RATE_RULE_SYNTH_REACTIONS) || '1') !== '0';
 const TRANSPORT_LOG_LIMIT = Number(

@@ -7,6 +7,7 @@
  */
 
 import { Matrix, EigenvalueDecomposition } from 'ml-matrix';
+import { vecNorm } from '../../utils/vectorMath';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -284,12 +285,6 @@ function luDecompose(
 }
 
 // ── Utility ─────────────────────────────────────────────────────────
-
-function vecNorm(v: Float64Array): number {
-  let s = 0;
-  for (let i = 0; i < v.length; i++) s += v[i] * v[i];
-  return Math.sqrt(s);
-}
 
 /**
  * Solve A*x = b using dense LU with partial pivoting.

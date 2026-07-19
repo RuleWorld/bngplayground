@@ -28,6 +28,8 @@ import {
 import type { NFsimSimulationOptions } from '@bngplayground/engine';
 import { Atomizer } from '../src/lib/atomizer';
 import { analyseGraph } from './igraphLoader';
+import { isRecord } from './workerHandlers/guards';
+import type { JobState } from './workerHandlers/types';
 
 // Wire up the CVODE factory with a lazy dynamic import so:
 //   1. The worker doesn't crash at init time — a static import of the Emscripten CJS file
@@ -46,10 +48,6 @@ const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
   ? (self as unknown as DedicatedWorkerGlobalScope)
   : ({} as unknown as DedicatedWorkerGlobalScope);
 
-type JobState = {
-  cancelled: boolean;
-  controller?: AbortController;
-};
 
 const jobStates = new Map<number, JobState>();
 let activeSimulationJobId: number | null = null;
@@ -302,7 +300,6 @@ const serializeError = (error: unknown): SerializedWorkerError => {
 };
 
 // --- Type Guards for Worker Payloads ---
-const isRecord = (v: unknown): v is Record<string, unknown> => !!v && typeof v === 'object' && !Array.isArray(v);
 
 const isSimulateModelPayload = (p: unknown): p is { model: BNGLModel; options: SimulationOptions } => {
   if (!isRecord(p)) return false;

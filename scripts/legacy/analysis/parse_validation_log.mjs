@@ -1,6 +1,5 @@
 
 import fs from 'fs';
-import path from 'path';
 
 const logPath = 'published_csv_generation_v2_utf8.log';
 const content = fs.readFileSync(logPath, 'utf-8');
@@ -51,8 +50,6 @@ if (fs.existsSync(outputDir)) {
         // Try various case combinations or likely filenames
         const nameUpper = `results_${m}.csv`;
         const nameLower = `results_${m.toLowerCase()}.csv`;
-        const nameOriginal = `results_${m}.csv`; 
-        
         return !files.includes(nameUpper) && !files.includes(nameLower);
     });
     

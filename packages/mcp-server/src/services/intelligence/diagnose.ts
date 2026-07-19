@@ -1,5 +1,6 @@
 import {
     analyzeModelStiffness,
+    analyzeReactionInformation,
     computeFIM,
     profileLikelihood,
     simulate,
@@ -18,9 +19,15 @@ import {
 import { handleSimulate } from '../../handlers/simulate.js';
 import { handleGetContactMap } from '../../handlers/getContactMap.js';
 import {
-    buildMoleculeGraph,
-    findShortestPath,
+    buildReactionGraph,
+    findReactionRoute,
+    annotateRouteSupport,
+    matchesParameter,
     extractMoleculeNames,
+    buildReactionRuleMap,
+    activeRulesFromFiringLog,
+    projectEmpiricalToRuleFlow,
+    type ReactionRoute,
 } from './utils/graphUtils.js';
 import {
     reachedSteadyState,
@@ -37,7 +44,7 @@ import { generateThreeRegisters } from './utils/summaryUtils.js';
 import { checkPlausibility, detectCompilationSurprise } from './utils/plausibilityUtils.js';
 import { normalizeWhitespace } from './utils/codeUtils.js';
 import { queryPathwayCommons } from '../pathwayCommons/pathwayCommonsService.js';
-import type { StiffnessResult, DynamicsResult, ProfileLikelihoodResult } from './types.js';
+import type { StiffnessResult, DynamicsResult, ProfileLikelihoodResult, RuleAttributionEntry, ContactMapStep } from './types.js';
 
 export async function diagnoseModelDeep(args: {
     code?: string;
@@ -47,6 +54,7 @@ export async function diagnoseModelDeep(args: {
     n_samples?: number;
     n_bootstrap?: number;
     max_parameters?: number;
+    validate_dynamics?: boolean;
     experimental_data?: Array<{
         time: number;
         observables: Record<string, number>;
@@ -60,15 +68,7 @@ export async function diagnoseModelDeep(args: {
     conservation: { count: number; preview: string[] };
     sobol?: { observable: string; topFirstOrder: Array<{ name: string; value: number }>; topTotalOrder: Array<{ name: string; value: number }> };
     fim?: { conditionNumber: number; identifiableParams: string[]; unidentifiableParams: string[] };
-    mechanisticCausalTrace?: Array<{
-        parameter: string;
-        firstOrder: number;
-        implicatedRules: string[];
-        targetObservable?: string;
-        topologyPath?: string[];
-        contactMapPath?: Array<{ molecule: string; site?: string; interaction: string; rule: string }>;
-        narrative?: string;
-    }>;
+    ruleAttribution?: RuleAttributionEntry[];
     parameterSelection?: { strategy: string; candidates: number; analyzed: number; selectedParameters: string[] };
     profileLikelihood?: { profiles: Record<string, { identifiability: string; ci: { lower: number; upper: number } | null; flat: boolean }>; threshold: number; baselineSSR: number };
     summary: { technical: string; biological: string; strategic: string };
@@ -156,7 +156,7 @@ export async function diagnoseModelDeep(args: {
     let diminishingReturns: { detected: boolean; message: string } | undefined;
     let convergenceAssessment: { insightSaturated: boolean; recommendation: 'continue_analysis' | 'collect_more_data' | 'done'; message: string } | undefined;
     let fimSummary: { conditionNumber: number; identifiableParams: string[]; unidentifiableParams: string[] } | undefined;
-    let mechanisticCausalTrace: Array<{ parameter: string; firstOrder: number; implicatedRules: string[]; targetObservable?: string; topologyPath?: string[] }> | undefined;
+    let ruleAttribution: RuleAttributionEntry[] | undefined;
     let parameterSelection: { strategy: string; candidates: number; analyzed: number; selectedParameters: string[] } | undefined;
 
     const allParameterEntries = Object.entries(model.parameters)
@@ -181,13 +181,13 @@ export async function diagnoseModelDeep(args: {
         }));
         const parameterRuleCounts = ruleDescriptors.reduce<Record<string, number>>((acc, rule) => {
             for (const [name] of allParameterEntries) {
-                if (rule.rate.includes(name)) {
+                if (matchesParameter(rule.rate, name)) {
                     acc[name] = (acc[name] ?? 0) + 1;
                 }
             }
             return acc;
         }, {});
-        const moleculeGraph = buildMoleculeGraph(ruleDescriptors);
+        const reactionGraph = buildReactionGraph(ruleDescriptors);
         const observableTargets = model.observables.map((observable) => ({
             name: observable.name,
             molecules: new Set(extractMoleculeNames(observable.pattern)),
@@ -370,54 +370,134 @@ export async function diagnoseModelDeep(args: {
             }
             const contactMapEdges = contactMapResult.structuredContent?.edges || [];
 
-            mechanisticCausalTrace = topFirstOrder.map((entry) => {
-                const implicatedRuleDescriptors = ruleDescriptors.filter((rule) => rule.rate.includes(entry.name)).slice(0, 5);
+            ruleAttribution = topFirstOrder.map((entry) => {
+                // Token-aware attribution: a rule "uses" the parameter only if its rate
+                // references it as a whole identifier (so k1 does not match k10 / k1_deg).
+                const implicatedRuleDescriptors = ruleDescriptors.filter((rule) => matchesParameter(rule.rate, entry.name)).slice(0, 5);
                 const implicatedRules = implicatedRuleDescriptors.map((rule) => rule.name);
-                const sourceMolecules = Array.from(new Set(implicatedRuleDescriptors.flatMap((rule) => [...rule.reactants.flatMap(extractMoleculeNames), ...rule.products.flatMap(extractMoleculeNames)])));
 
-                let bestPath: string[] = [];
+                // Seed the downstream search at the reactant molecules of the parameter's own
+                // rule(s); fall back to products for synthesis rules with no reactants.
+                let seedMolecules = Array.from(new Set(implicatedRuleDescriptors.flatMap((rule) => rule.reactants.flatMap(extractMoleculeNames))));
+                if (seedMolecules.length === 0) {
+                    seedMolecules = Array.from(new Set(implicatedRuleDescriptors.flatMap((rule) => rule.products.flatMap(extractMoleculeNames))));
+                }
+
+                // Shortest DIRECTED, rule-labeled route from the parameter's rule to an
+                // observable species (a mechanistic hypothesis for how the influence propagates).
+                let route: ReactionRoute | null = null;
                 let targetObservable: string | undefined;
                 for (const observable of observableTargets) {
                     if (observable.molecules.size === 0) continue;
-                    const path = findShortestPath(moleculeGraph, sourceMolecules, observable.molecules, 8);
-                    if (path.length === 0) continue;
-                    if (bestPath.length === 0 || path.length < bestPath.length) {
-                        bestPath = path;
+                    const candidate = findReactionRoute(reactionGraph, seedMolecules, observable.molecules, 8);
+                    if (!candidate) continue;
+                    if (!route || candidate.edges.length < route.edges.length) {
+                        route = candidate;
                         targetObservable = observable.name;
                     }
                 }
 
-                const contactMapPath: Array<{ molecule: string; site?: string; interaction: string; rule: string }> = [];
+                // Falsifiability hook. The default (ODE) diagnosis has no empirical
+                // information-flow data, so the route is reported as an unchecked structural
+                // hypothesis. Supplying an empirical edge set here marks each step supported.
+                const { edges: routeEdges, status: support } = annotateRouteSupport(route?.edges ?? [], undefined);
+                const routeMolecules = route?.nodes ?? [];
+
+                // Concrete contact-map steps for the implicated rules (unchanged).
+                const contactMapPath: ContactMapStep[] = [];
                 if (contactMapEdges && Array.isArray(contactMapEdges)) {
                     for (const ruleDesc of implicatedRuleDescriptors.slice(0, 5)) {
                         const ruleEdges = contactMapEdges.filter((edge: any) => edge.ruleIds?.includes(ruleDesc.name) || edge.ruleLabels?.includes(ruleDesc.name));
                         for (const edge of ruleEdges.slice(0, 3)) {
                             const fromMatch = edge.from?.match(/^([A-Za-z][A-Za-z0-9_]*)/);
                             const molecule = fromMatch ? fromMatch[1] : 'unknown';
+                            const rawInteraction = edge.interactionType || 'binding';
+                            let interaction: 'binding' | 'state_change' | 'synthesis' | 'degradation' = 'binding';
+                            if (rawInteraction === 'state_change' || rawInteraction === 'synthesis' || rawInteraction === 'degradation') {
+                                interaction = rawInteraction;
+                            }
                             contactMapPath.push({
                                 molecule,
                                 site: edge.from?.includes('(') ? edge.from?.match(/\(([^)]+)\)/)?.[1] : undefined,
-                                interaction: edge.interactionType || 'binding',
+                                interaction,
                                 rule: ruleDesc.name,
                             });
                         }
                     }
                 }
 
+                const qualifierText =
+                    support === 'trivial' ? "the parameter's rule directly involves the observed species"
+                    : support === 'dynamically_supported' ? "corroborated by the model's information flow"
+                    : support === 'partially_supported' ? "partially corroborated by the model's information flow"
+                    : support === 'structural_only' ? "not corroborated by the model's information flow"
+                    : "a structural hypothesis, not yet checked against the model's dynamics";
+
+                const routeText = routeMolecules.length > 0
+                    ? (routeEdges.length > 0
+                        ? `${routeMolecules.join(' → ')} (via ${routeEdges.map((e) => e.rule).join(', ')})`
+                        : routeMolecules.join(' → '))
+                    : undefined;
+
+                const narrative = implicatedRules.length > 0
+                    ? `Global sensitivity establishes that ${entry.name} influences ${targetObservable ?? 'the target observable'} (S1=${entry.value.toFixed(3)}); it acts through ${implicatedRules[0]}` +
+                      (routeText ? `, and can propagate along ${routeText}` : '') +
+                      ` — ${qualifierText}.`
+                    : undefined;
+
                 return {
                     parameter: entry.name,
                     firstOrder: entry.value,
                     implicatedRules,
                     ...(targetObservable ? { targetObservable } : {}),
-                    ...(bestPath.length > 0 ? { topologyPath: bestPath } : {}),
+                    ...(routeMolecules.length > 0 ? { topologyPath: routeMolecules } : {}),
+                    ...(routeEdges.length > 0 ? { route: routeEdges } : {}),
+                    support,
                     ...(contactMapPath.length > 0 ? { contactMapPath } : {}),
-                    narrative: contactMapPath.length > 0
-                        ? `${entry.name} governs ${implicatedRules[0] ?? 'a rule'}: ${contactMapPath.map(step => `${step.molecule}${step.site ? `(${step.site})` : ''} [${step.interaction}]`).join(' → ')}${targetObservable ? ` → observed via ${targetObservable}` : ''}`
-                        : bestPath.length > 0
-                            ? `${entry.name} governs ${implicatedRules[0] ?? 'a rule'}: ${bestPath.join(' → ')}${targetObservable ? ` → observed via ${targetObservable}` : ''}`
-                            : undefined,
+                    ...(narrative ? { narrative } : {}),
                 };
             });
+
+            // Opt-in dynamical validation: check each route step against the model's own
+            // stochastic dynamics. A step is supported if its rule actually fires; the whole
+            // route is additionally corroborated if every hand-off appears in the empirical
+            // transfer-entropy graph. Guarded so a failure never breaks the diagnosis.
+            if (args.validate_dynamics && ruleAttribution && ruleAttribution.some((r) => r.route && r.route.length > 0)) {
+                try {
+                    const reactions = expandedModel.reactions ?? [];
+                    if (reactions.length > 0) {
+                        const runModel = cloneExpandedModel(expandedModel);
+                        updateMassActionRates(runModel);
+                        const simRes = await simulate(0, runModel, {
+                            method: 'ssa',
+                            t_end: args.t_end ?? 100,
+                            n_steps: args.n_steps ?? 100,
+                            seed: 42,
+                            recordFirings: true,
+                            maxFiringEvents: 100000,
+                        } as any, { checkCancelled: () => {}, postMessage: () => {} });
+                        const firingLog = simRes.firingLog ?? [];
+                        if (firingLog.length >= 50) {
+                            const analysis = analyzeReactionInformation({ firingLog, nReactions: reactions.length });
+                            const reactionRule = buildReactionRuleMap(firingLog);
+                            const activeRules = activeRulesFromFiringLog(firingLog);
+                            const ruleFlow = projectEmpiricalToRuleFlow(analysis.empiricalCausalGraph, reactionRule);
+                            ruleAttribution = ruleAttribution.map((entry) => {
+                                if (!entry.route || entry.route.length === 0) return entry;
+                                const { edges, status, informationFlowCorroborated } = annotateRouteSupport(entry.route, { activeRules, ruleFlow });
+                                return {
+                                    ...entry,
+                                    route: edges,
+                                    support: status,
+                                    ...(informationFlowCorroborated !== undefined ? { informationFlowCorroborated } : {}),
+                                };
+                            });
+                        }
+                    }
+                } catch (error) {
+                    console.warn('Dynamical route validation skipped:', error);
+                }
+            }
         }
 
         const fimResult = await computeFIM({
@@ -459,7 +539,7 @@ export async function diagnoseModelDeep(args: {
         stiffness: { category: stiffness.category, ratio: stiffness.rateRatio, features: stiffness.features },
         dynamics: { reaches_steady_state: reachedSteadyState(series), likely_oscillatory: detectOscillation(series) },
         structure: { species: model.species.length, reactionRules: reactionRules.length, observables: model.observables.length, parameters: Object.keys(model.parameters).length },
-        mechanisticCausalTrace,
+        ruleAttribution,
         unreachableAnalysis,
     });
 
@@ -502,7 +582,7 @@ export async function diagnoseModelDeep(args: {
         ...(crosstalkWarnings.length > 0 ? { crosstalkWarnings } : {}),
         ...(sobolSummary ? { sobol: sobolSummary } : {}),
         ...(fimSummary ? { fim: fimSummary } : {}),
-        ...(mechanisticCausalTrace ? { mechanisticCausalTrace } : {}),
+        ...(ruleAttribution ? { ruleAttribution } : {}),
         ...(parameterSelection ? { parameterSelection } : {}),
         ...(profileLikelihoodResult ? { profileLikelihood: profileLikelihoodResult } : {}),
         ...(pathwayCommons ? { pathwayCommons } : {}),

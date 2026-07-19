@@ -9,6 +9,11 @@
  */
 
 import type { BNGLMoleculeType } from '../../types';
+import {
+    parseMoleculeTokens,
+    extractMoleculeNames,
+    extractBindingRequirements,
+} from '../patterns/patternTokens';
 
 /* ---------- Contact-map types ---------- */
 
@@ -29,147 +34,6 @@ export interface ContactMap {
   edges: ContactEdge[];
 }
 
-/* ---------- Parsed binding requirement ---------- */
-
-interface BindingRequirement {
-  mol1: string;
-  comp1: string;
-  mol2: string;
-  comp2: string;
-}
-
-interface MoleculeToken {
-  name: string;
-  components: Array<{
-    name: string;
-    state?: string;
-    bondLabel?: string;
-  }>;
-}
-
-/* ---------- Pattern parsing ---------- */
-
-/**
- * Parse a BNGL pattern string (e.g., "A(b!1).B(a!1)") into molecule tokens.
- * Handles nested parentheses for components, states (~), and bonds (!).
- */
-function parseMoleculeTokens(pattern: string): MoleculeToken[] {
-  const molecules: MoleculeToken[] = [];
-  // Split on '.' that separates molecules — but only at top-level depth.
-  // A '.' inside component parentheses should not split.
-  const molStrings: string[] = [];
-  let depth = 0;
-  let current = '';
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i];
-    if (ch === '(') depth++;
-    else if (ch === ')') depth--;
-
-    if (ch === '.' && depth === 0) {
-      molStrings.push(current.trim());
-      current = '';
-    } else {
-      current += ch;
-    }
-  }
-  if (current.trim().length > 0) {
-    molStrings.push(current.trim());
-  }
-
-  for (const molStr of molStrings) {
-    const parenStart = molStr.indexOf('(');
-    if (parenStart === -1) {
-      // Molecule with no components listed
-      molecules.push({ name: molStr.trim(), components: [] });
-      continue;
-    }
-
-    const name = molStr.substring(0, parenStart).trim();
-    const parenEnd = molStr.lastIndexOf(')');
-    const compBody = molStr.substring(parenStart + 1, parenEnd === -1 ? molStr.length : parenEnd);
-
-    const components: MoleculeToken['components'] = [];
-
-    if (compBody.trim().length > 0) {
-      // Split components on ','
-      const compParts = compBody.split(',');
-      for (const part of compParts) {
-        const trimmedPart = part.trim();
-        if (trimmedPart.length === 0) continue;
-
-        let compName = trimmedPart;
-        let state: string | undefined;
-        let bondLabel: string | undefined;
-
-        // Extract bond label (!...)
-        const bangIdx = compName.indexOf('!');
-        if (bangIdx !== -1) {
-          bondLabel = compName.substring(bangIdx + 1);
-          compName = compName.substring(0, bangIdx);
-        }
-
-        // Extract state (~...)
-        const tildeIdx = compName.indexOf('~');
-        if (tildeIdx !== -1) {
-          state = compName.substring(tildeIdx + 1);
-          compName = compName.substring(0, tildeIdx);
-        }
-
-        components.push({ name: compName, state, bondLabel });
-      }
-    }
-
-    molecules.push({ name, components });
-  }
-
-  return molecules;
-}
-
-/**
- * Extract binding requirements from a pattern string.
- * A binding requirement exists when two components share the same numeric bond label.
- * E.g., "A(b!1).B(a!1)" has a binding requirement: A.b <-> B.a
- */
-function extractBindingRequirements(pattern: string): BindingRequirement[] {
-  const molecules = parseMoleculeTokens(pattern);
-
-  // Collect all (molecule, component, bondLabel) triples
-  const bondMap = new Map<string, Array<{ mol: string; comp: string }>>();
-  for (const mol of molecules) {
-    for (const comp of mol.components) {
-      if (comp.bondLabel && /^\d+$/.test(comp.bondLabel)) {
-        const label = comp.bondLabel;
-        if (!bondMap.has(label)) {
-          bondMap.set(label, []);
-        }
-        bondMap.get(label)!.push({ mol: mol.name, comp: comp.name });
-      }
-    }
-  }
-
-  const requirements: BindingRequirement[] = [];
-  for (const [, partners] of bondMap) {
-    if (partners.length === 2) {
-      requirements.push({
-        mol1: partners[0].mol,
-        comp1: partners[0].comp,
-        mol2: partners[1].mol,
-        comp2: partners[1].comp,
-      });
-    }
-    // More than 2 partners for same label would be invalid BNGL, but we skip gracefully.
-  }
-
-  return requirements;
-}
-
-/**
- * Extract molecule type names that appear in the pattern.
- */
-function extractMoleculeNames(pattern: string): string[] {
-  const tokens = parseMoleculeTokens(pattern);
-  return tokens.map(t => t.name);
-}
 
 /* ---------- Contact-map adjacency ---------- */
 

@@ -21,8 +21,8 @@ import type { BNGLModel, OdeSystemHandle } from '../../types';
 import { parseBNGLWithANTLR } from '../../parser/BNGLParserWrapper';
 import { buildOdeSystem } from '../simulation/SimulationLoop';
 import { CVODESolver } from '../simulation/solvers/CVODESolver';
+import { UNSAFE_OBJECT_KEYS } from '../../utils/safeObjectKey';
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
 
 export interface IntracellularEngineOptions {
   /** CVODE absolute tolerance (default 1e-8, matches the main simulator). */

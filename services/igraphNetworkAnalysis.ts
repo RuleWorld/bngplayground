@@ -19,50 +19,37 @@
  */
 
 import type { BNGLModel, NetworkAnalysisPayload } from '../types';
+import { extractMoleculeNames, buildDirectedReactionGraph, type DirectedEdge } from '@bngplayground/engine';
 
 // ---- helpers ---------------------------------------------------------------
 
 /**
- * Extract all molecule-type names from a BNGL pattern string.
- * e.g. "A(b!1).B(a!1,c~p)" → ["A", "B"]
+ * Map neutral (string-keyed) directed edges from the shared reaction-graph
+ * primitive to igraph index edges, dropping endpoints absent from the node
+ * index and any self-loops.
  */
-function extractMoleculeNames(pattern: string): string[] {
-  const names: string[] = [];
-  // Molecule names are C-identifier characters followed immediately by '('
-  const re = /(?:^|\.)([A-Za-z_][A-Za-z0-9_]*)\(/g;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(pattern)) !== null) {
-    names.push(m[1]);
+function toIndexedEdges(
+  edges: DirectedEdge[],
+  index: Map<string, number>,
+): Array<{ from: number; to: number }> {
+  const out: Array<{ from: number; to: number }> = [];
+  for (const e of edges) {
+    const from = index.get(e.from);
+    const to = index.get(e.to);
+    if (from === undefined || to === undefined || from === to) continue;
+    out.push({ from, to });
   }
-  return names;
+  return out;
 }
 
 // ---- Reaction graph (requires expanded model.reactions) --------------------
 
-export function buildReactionGraph(model: BNGLModel): NetworkAnalysisPayload {
+export function buildSpeciesReactionGraph(model: BNGLModel): NetworkAnalysisPayload {
+  // Species-level instance of the shared directed reactant->product primitive:
+  // nodes are species (identity mapping), edges are unlabelled.
   const speciesNames = model.species.map((s) => s.name);
-  const speciesIndex = new Map<string, number>();
-  speciesNames.forEach((name, idx) => speciesIndex.set(name, idx));
-
-  const edgeSet = new Set<string>();
-  const edges: Array<{ from: number; to: number }> = [];
-
-  for (const rxn of model.reactions) {
-    for (const reactant of rxn.reactants) {
-      const rIdx = speciesIndex.get(reactant);
-      if (rIdx === undefined) continue;
-      for (const product of rxn.products) {
-        const pIdx = speciesIndex.get(product);
-        if (pIdx === undefined) continue;
-        if (rIdx === pIdx) continue; // skip self-loops
-        const key = `${rIdx}->${pIdx}`;
-        if (!edgeSet.has(key)) {
-          edgeSet.add(key);
-          edges.push({ from: rIdx, to: pIdx });
-        }
-      }
-    }
-  }
+  const speciesIndex = new Map<string, number>(speciesNames.map((n, i) => [n, i]));
+  const edges = toIndexedEdges(buildDirectedReactionGraph(model.reactions), speciesIndex);
 
   return {
     edges,
@@ -126,41 +113,14 @@ export function buildMolecularGraph(model: BNGLModel): NetworkAnalysisPayload {
 // ---- Regulatory influence graph --------------------------------------------
 
 export function buildRegulatoryGraph(model: BNGLModel): NetworkAnalysisPayload {
+  // Molecule-level instance of the shared directed reactant->product primitive
+  // over rules: nodes are molecule types (extracted from patterns), unlabelled.
   const molNames = model.moleculeTypes.map((m) => m.name);
   const molIndex = new Map<string, number>(molNames.map((n, i) => [n, i]));
-
-  const edgeSet = new Set<string>();
-  const edges: Array<{ from: number; to: number }> = [];
-
-  for (const rule of model.reactionRules) {
-    // Molecule types exclusively in reactants (left-hand side only)
-    const lhsMols = new Set<number>();
-    for (const pat of rule.reactants) {
-      for (const name of extractMoleculeNames(pat)) {
-        const idx = molIndex.get(name);
-        if (idx !== undefined) lhsMols.add(idx);
-      }
-    }
-    const rhsMols = new Set<number>();
-    for (const pat of rule.products) {
-      for (const name of extractMoleculeNames(pat)) {
-        const idx = molIndex.get(name);
-        if (idx !== undefined) rhsMols.add(idx);
-      }
-    }
-
-    // Edge: LHS mol → RHS mol that is different (regulatory influence)
-    for (const lhs of lhsMols) {
-      for (const rhs of rhsMols) {
-        if (lhs === rhs) continue;
-        const key = `${lhs}->${rhs}`;
-        if (!edgeSet.has(key)) {
-          edgeSet.add(key);
-          edges.push({ from: lhs, to: rhs });
-        }
-      }
-    }
-  }
+  const edges = toIndexedEdges(
+    buildDirectedReactionGraph(model.reactionRules, { nodesOf: extractMoleculeNames }),
+    molIndex,
+  );
 
   return {
     edges,
@@ -188,7 +148,7 @@ export function buildGraphPayload(
             'No reactions found in the current model.',
         );
       }
-      return buildReactionGraph(model);
+      return buildSpeciesReactionGraph(model);
     case 'molecular':
       if (model.moleculeTypes.length === 0) {
         throw new Error('Molecular graph requires at least one molecule type.');

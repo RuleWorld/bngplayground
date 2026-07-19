@@ -1,30 +1,12 @@
 import { BNGLModel, ValidationWarning, EditorMarker } from '../types';
+import { getRuleId, getRuleLabel } from './ruleIdentity';
+import { extractMoleculeNames } from '@bngplayground/engine';
 
 const LARGE_PARAMETER_THRESHOLD = 1e6;
 const SMALL_PARAMETER_THRESHOLD = 1e-6;
 
-const getRuleId = (rule: BNGLModel['reactionRules'][number], index: number): string => {
-  return rule.name ?? `rule_${index + 1}`;
-};
 
-const getRuleLabel = (rule: BNGLModel['reactionRules'][number], index: number): string => {
-  return rule.name ?? `Rule ${index + 1}`;
-};
 
-const extractMoleculeNames = (pattern: string): string[] => {
-  if (!pattern) {
-    return [];
-  }
-
-  return pattern
-    .split('.')
-    .map((segment) => segment.trim())
-    .filter((segment) => segment.length > 0)
-    .map((segment) => {
-      const match = segment.match(/^([A-Za-z0-9_]+)/);
-      return match ? match[1] : segment;
-    });
-};
 
 const buildInitialMoleculeSet = (model: BNGLModel): Set<string> => {
   const molecules = new Set<string>();

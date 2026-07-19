@@ -17,7 +17,7 @@ describe('WorkerPool batch method', () => {
                 }
             });
             postMessage = vi.fn((req) => {
-                const { id, type, data } = req;
+                const { id, data } = req;
                 // Auto-respond for batch tasks
                 setTimeout(() => {
                     this.trigger({

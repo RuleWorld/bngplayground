@@ -3,6 +3,7 @@
 // ---------------------------------------------------------------------------
 
 import { OKABE_ITO } from '../../utils/chartColors';
+import { escapeXml } from '@bngplayground/engine';
 
 export interface FigurePanel {
   id: string;
@@ -495,11 +496,4 @@ function renderCaption(svgParts: string[], config: FigureConfig, maxY: number, g
 // Helpers
 // ---------------------------------------------------------------------------
 
-function escapeXml(s: string): string {
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+

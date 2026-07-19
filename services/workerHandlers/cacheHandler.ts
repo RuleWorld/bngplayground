@@ -5,13 +5,11 @@
  */
 
 import type { BNGLModel, WorkerResponse, SerializedWorkerError } from '../../types';
+import { isRecord } from './guards';
+import type { JobState } from './types';
 
 // ---- Shared context contract ------------------------------------------------
 
-export interface JobState {
-  cancelled: boolean;
-  controller?: AbortController;
-}
 
 /** Mutable cache state owned by the worker. */
 export interface CacheState {
@@ -30,8 +28,6 @@ export interface WorkerContext {
 
 // ---- Type guards (mirrored from bnglWorker.ts) ------------------------------
 
-const isRecord = (v: unknown): v is Record<string, unknown> =>
-  !!v && typeof v === 'object' && !Array.isArray(v);
 
 const isCacheModelPayload = (p: unknown): p is { model: BNGLModel } => {
   return isRecord(p) && 'model' in p;

@@ -9,6 +9,8 @@ import {
     evaluateFunctionalRate,
     validateModelForNFsim,
     MassBalance,
+    extractMoleculeNames,
+    updateMassActionRates,
 } from '@bngplayground/engine';
 import { z } from 'zod';
 import {
@@ -174,52 +176,10 @@ export async function expandModel(model: BNGLModel): Promise<BNGLModel> {
     );
 }
 
-export function extractMoleculeNames(pattern: string): string[] {
-    if (!pattern) {
-        return [];
-    }
-
-    const results: string[] = [];
-    let start = 0;
-    const len = pattern.length;
-
-    while (start < len) {
-        let end = pattern.indexOf('.', start);
-        if (end === -1) {
-            end = len;
-        }
-
-        // Fast trim start
-        let s = start;
-        while (s < end && pattern.charCodeAt(s) <= 32) s++;
-
-        if (s < end) {
-            // Only extract the matched part (which we know doesn't have spaces at start)
-            let e = s;
-            while (e < end) {
-                const c = pattern.charCodeAt(e);
-                if ((c >= 65 && c <= 90) || (c >= 97 && c <= 122) || (c >= 48 && c <= 57) || c === 95) {
-                    e++;
-                } else {
-                    break;
-                }
-            }
-            if (e > s) {
-                results.push(pattern.substring(s, e));
-            } else {
-                // Fallback for weird patterns without standard prefixes
-                const segment = pattern.substring(s, end).trimEnd();
-                if (segment.length > 0) {
-                     results.push(segment);
-                }
-            }
-        }
-
-        start = end + 1;
-    }
-
-    return results;
-}
+// Molecule-name extraction lives in the engine's canonical pattern parser
+// (`@bngplayground/engine`); re-exported here so existing importers of this
+// module keep working.
+export { extractMoleculeNames };
 
 function buildInitialMoleculeSet(model: BNGLModel): Set<string> {
     const molecules = new Set<string>();
@@ -607,22 +567,6 @@ export function assertScannableParameter(model: BNGLModel, parameter: string): v
  *
  * @param model - The BNGLModel to update.
  */
-export function updateMassActionRates(model: BNGLModel): void {
-    const context = model.parameters ?? {};
-    for (const reaction of model.reactions ?? []) {
-        if (!reaction.isFunctionalRate && reaction.rate && typeof reaction.rate === 'string') {
-            try {
-                const updatedRate = evaluateFunctionalRate(reaction.rate, context, {}, model.functions);
-                if (Number.isFinite(updatedRate)) {
-                    reaction.rateConstant = updatedRate;
-                }
-            } catch {
-                // Keep the existing concrete rate when a symbolic update fails.
-            }
-        }
-    }
-    clearAllEvaluatorCaches();
-}
 
 /**
  * Creates a deep copy of a BNGLModel using structuredClone.
@@ -636,3 +580,5 @@ export function updateMassActionRates(model: BNGLModel): void {
 export function cloneExpandedModel(model: BNGLModel): BNGLModel {
     return structuredClone(model);
 }
+
+export { updateMassActionRates };

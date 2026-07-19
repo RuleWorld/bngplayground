@@ -1,3 +1,4 @@
+import { getEnvString } from './envUtils';
 const BIOMODELS_PROXY_BASE = '/api/biomodels';
 const BIOMODELS_PUBLIC_BASE = 'https://www.biomodels.org';
 const ZIP_MAGIC_0 = 0x50;
@@ -23,15 +24,6 @@ const HTML_TAG_RE = /<!doctype\s+html|<\s*html(?:\s|>)/i;
 const BINARY_ENTRY_EXT_RE = /\.(mp4|mov|avi|mkv|png|jpe?g|gif|webp|bmp|pdf|zip|gz|tgz|tar|7z|bin|exe|dll|so|dylib|wav|mp3|ogg)$/i;
 
 type FetchLike = (input: RequestInfo | URL, init?: RequestInit) => Promise<Response>;
-
-function getEnvString(name: string): string | null {
-  try {
-    const value = (import.meta as ImportMeta & { env?: Record<string, unknown> }).env?.[name];
-    return typeof value === 'string' && value.trim().length > 0 ? value.trim() : null;
-  } catch {
-    return null;
-  }
-}
 
 function shouldUseBioModelsProxy(): boolean {
   const explicitBase = getEnvString('VITE_BIOMODELS_API_BASE');

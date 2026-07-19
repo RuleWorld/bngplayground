@@ -8,6 +8,7 @@ import { Button } from '../ui/Button';
 import { SettingsIcon } from '../icons/SettingsIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
 import { ExternalLegend, formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
+import { toggleSetMember } from '../../services/collections';
 
 interface RobustnessTabProps {
     model: BNGLModel | null;
@@ -42,12 +43,7 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
     }, [Array.from(visibleSpecies).sort().join('|')]);
 
     const handleToggleSpecies = (name: string) => {
-        setVisibleSpecies((prev) => {
-            const next = new Set(prev);
-            if (next.has(name)) next.delete(name);
-            else next.add(name);
-            return next;
-        });
+        setVisibleSpecies((prev) => toggleSetMember(prev, name));
     };
 
     const handleIsolateSpecies = (name: string) => {

@@ -14,7 +14,7 @@
  */
 
 import { readdirSync, readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
-import { join, resolve } from 'node:path';
+import { join } from 'node:path';
 
 import {
   parseBNGLWithANTLR,

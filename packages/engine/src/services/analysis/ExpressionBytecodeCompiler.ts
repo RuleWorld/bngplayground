@@ -8,43 +8,45 @@
 
 import { OpCode } from '../simulation/ExpressionCompiler';
 import jsep from 'jsep';
+import {
+    OP_STOP,
+    OP_PUSH_CONST,
+    OP_PUSH_SPEC,
+    OP_PUSH_OBS,
+    OP_ADD,
+    OP_SUB,
+    OP_MUL,
+    OP_DIV,
+    OP_POW,
+    OP_NEG,
+    OP_EXP,
+    OP_LOG,
+    OP_SQRT,
+    OP_ABS,
+    OP_SIN,
+    OP_COS,
+    OP_CEIL,
+    OP_FLOOR,
+    OP_ROUND,
+    OP_TAN,
+    OP_ASIN,
+    OP_ACOS,
+    OP_ATAN,
+    OP_MAX,
+    OP_MIN,
+    OP_IF_ELSE,
+    OP_LT,
+    OP_GT,
+    OP_LE,
+    OP_GE,
+    OP_EQ,
+    OP_NE,
+    OP_AND,
+    OP_OR,
+    OP_NOT,
+} from '../simulation/opcodeAliases';
 
-const OP_STOP = 0xFF;
-const OP_PUSH_CONST = OpCode.PUSH_CONST;
-const OP_PUSH_SPEC = OpCode.PUSH_SPEC;
-const OP_PUSH_OBS = OpCode.PUSH_OBS;
-const OP_ADD = OpCode.ADD;
-const OP_SUB = OpCode.SUB;
-const OP_MUL = OpCode.MUL;
-const OP_DIV = OpCode.DIV;
-const OP_POW = OpCode.POW;
-const OP_NEG = OpCode.NEG;
-const OP_EXP = OpCode.EXP;
-const OP_LOG = OpCode.LOG;
 const OP_LOG10 = OpCode.LOG10;
-const OP_SQRT = OpCode.SQRT;
-const OP_ABS = OpCode.ABS;
-const OP_SIN = OpCode.SIN;
-const OP_COS = OpCode.COS;
-const OP_CEIL = OpCode.CEIL;
-const OP_FLOOR = OpCode.FLOOR;
-const OP_ROUND = OpCode.ROUND;
-const OP_TAN = OpCode.TAN;
-const OP_ASIN = OpCode.ASIN;
-const OP_ACOS = OpCode.ACOS;
-const OP_ATAN = OpCode.ATAN;
-const OP_MAX = OpCode.MAX;
-const OP_MIN = OpCode.MIN;
-const OP_IF_ELSE = OpCode.IF_ELSE;
-const OP_LT = OpCode.LT;
-const OP_GT = OpCode.GT;
-const OP_LE = OpCode.LE;
-const OP_GE = OpCode.GE;
-const OP_EQ = OpCode.EQ;
-const OP_NE = OpCode.NE;
-const OP_AND = OpCode.AND;
-const OP_OR = OpCode.OR;
-const OP_NOT = OpCode.NOT;
 
 /**
  * Function definition used for zero-arg function expansion.

@@ -13,6 +13,7 @@ import {
   formatTooltipNumber,
   formatYAxisTick,
 } from '../charts/InteractiveLegend';
+import { toggleSetMember } from '../../services/collections';
 
 interface ExpressionEvaluatorTabProps {
   results: SimulationResults | null;
@@ -121,12 +122,7 @@ export const ExpressionEvaluatorTab: React.FC<ExpressionEvaluatorTabProps> = ({
   const useExternalLegend = expressions.length > LEGEND_THRESHOLD;
 
   const handleToggleExpression = (name: string) => {
-    setVisibleExpressions((prev) => {
-      const next = new Set(prev);
-      if (next.has(name)) next.delete(name);
-      else next.add(name);
-      return next;
-    });
+    setVisibleExpressions((prev) => toggleSetMember(prev, name));
   };
 
   const handleIsolateExpression = (name: string) => {

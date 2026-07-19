@@ -7,7 +7,6 @@ import {
     getGPUAdapter,
     isWebGPUReady,
     disposeWebGPU,
-    WebGPUContext
 } from './WebGPUContext';
 
 describe('WebGPUContext', () => {

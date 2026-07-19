@@ -138,7 +138,6 @@ for (const entry of needGdat) {
 
     // Pick the first gdat (prefer unsuffixed, then suffixed)
     const gdatFile = gdatFiles.find(f => f === `${baseName}.gdat`) || gdatFiles[0];
-    const cdatFile = cdatFiles.find(f => f === `${baseName}.cdat`) || cdatFiles[0];
 
     if (gdatFile) {
       fs.copyFileSync(path.join(bnglDir, gdatFile), path.join(GDAT_DIR, `${modelName}.gdat`));

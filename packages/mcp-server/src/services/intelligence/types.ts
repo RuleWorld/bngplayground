@@ -66,12 +66,21 @@ export type ContactMapStep = {
     rule: string;
 };
 
-export type CausalTraceEntry = {
+export type RuleAttributionEntry = {
     parameter: string;
+    /** first-order Sobol index: the ESTABLISHED influence of the parameter on the observable */
     firstOrder: number;
+    /** rules whose rate law references the parameter as a whole token */
     implicatedRules: string[];
     targetObservable?: string;
+    /** ordered molecule sequence of the directed route (for display / back-compat) */
     topologyPath?: string[];
+    /** directed, rule-labeled route: the mechanistic HYPOTHESIS for how the influence propagates */
+    route?: Array<{ from: string; to: string; rule: string; supported?: boolean }>;
+    /** per-step support: whether each route step's rule fires in the recorded dynamics */
+    support?: 'dynamically_supported' | 'partially_supported' | 'structural_only' | 'unchecked' | 'trivial';
+    /** whole-route: every hand-off appears in the empirical transfer-entropy graph */
+    informationFlowCorroborated?: boolean;
     contactMapPath?: ContactMapStep[];
     narrative?: string;
 };

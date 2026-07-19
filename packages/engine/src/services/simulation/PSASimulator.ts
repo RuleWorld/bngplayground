@@ -26,6 +26,7 @@ import { FenwickTree } from '../../utils/fenwickTree';
 import { splitObservablePatterns } from '../../utils/observableUtils';
 import { countPatternMatches } from '../parity/PatternMatcher';
 import type { BNGLModel, SimulationOptions, SimulationResults } from '../../types';
+import { setSafeNumberField } from '../../utils/safeObjectKey';
 
 // ────────────────────────────────────────────────────────────────────
 // Types
@@ -57,17 +58,6 @@ interface PSAReaction {
   ruleName?: string;
 }
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_@:.!~(),+\-][A-Za-z0-9_@:.!~(),+\-]*$/;
-
-function isSafeObjectKey(key: string): boolean {
-  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
-}
-
-function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
-  if (!isSafeObjectKey(key)) return;
-  target[key] = value;
-}
 
 // ────────────────────────────────────────────────────────────────────
 // PSASimulator

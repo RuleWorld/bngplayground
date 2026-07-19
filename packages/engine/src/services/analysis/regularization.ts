@@ -5,6 +5,8 @@
  * with automatic model reduction (rule pruning).
  */
 
+import { escapeRegExp } from '../../utils/stringUtils';
+
 export type RegularizationType = 'none' | 'l1' | 'l2' | 'elastic-net';
 
 export interface RegularizationConfig {
@@ -198,10 +200,8 @@ function ruleUsesParameterAsRate(ruleLine: string, paramName: string): boolean {
   if (!arrowMatch) return false;
 
   const afterArrow = afterName.substring(afterName.indexOf(arrowMatch[0]) + arrowMatch[0].length);
-  const regex = new RegExp(`\\b${escapeRegex(paramName)}\\b`);
+  const regex = new RegExp(`\\b${escapeRegExp(paramName)}\\b`);
   return regex.test(afterArrow);
 }
 
-function escapeRegex(s: string): string {
-  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+

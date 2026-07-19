@@ -11,6 +11,7 @@
  */
 
 import { qrEigenvalues, solveLU, type ComplexNumber } from './EigenSolver';
+import { vecDot } from '../../utils/vectorMath';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -511,10 +512,4 @@ function numericalDfDp(
   const inv2h = 1 / (2 * h);
   for (let i = 0; i < n; i++) result[i] = (fPlus[i] - fMinus[i]) * inv2h;
   return result;
-}
-
-function vecDot(a: Float64Array, b: Float64Array): number {
-  let s = 0;
-  for (let i = 0; i < a.length; i++) s += a[i] * b[i];
-  return s;
 }

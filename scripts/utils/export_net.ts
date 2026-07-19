@@ -40,67 +40,6 @@ function normalizeRuleSide(side: string): string {
   return s.length > 0 ? s : '0';
 }
 
-function normalizeReactionString(raw: string): string {
-  const arrow = raw.includes('<->') ? '<->' : '->';
-  const parts = raw.split(arrow);
-  if (parts.length !== 2) return raw;
-  return `${normalizeRuleSide(parts[0])} ${arrow} ${normalizeRuleSide(parts[1])}`;
-}
-
-function applySetParameterActions(model: BNGLModel, bnglCode: string): void {
-  // BNG2 semantics: the .net file reflects the LAST value of each parameter after
-  // ALL setParameter() calls have been processed. BNG2 updates the .net file parameter
-  // table whenever setParameter is called (or at the final generate_network).
-  // We replicate this by applying ALL setParameter() calls in order (last wins).
-  //
-  // We parse directly from the raw BNGL text because parseBNGL() does not populate
-  // model.actions with setParameter entries.
-  //
-  // IMPORTANT: Strip full-line comments (lines starting with optional whitespace + '#')
-  // before searching for setParameter calls, to avoid matching commented-out calls.
-  const uncommentedCode = bnglCode
-    .split('\n')
-    .map((line) => {
-      const commentIdx = line.indexOf('#');
-      return commentIdx >= 0 ? line.slice(0, commentIdx) : line;
-    })
-    .join('\n');
-
-  const evalMap = new Map<string, number>(
-    Object.entries(model.parameters).map(([k, v]) => [k, Number(v)])
-  );
-
-  // Match: setParameter("ParamName", value_or_expr)
-  const setParamRegex = /setParameter\s*\(\s*"([^"]+)"\s*,\s*([^)]+)\)/g;
-  let m: RegExpExecArray | null;
-  while ((m = setParamRegex.exec(uncommentedCode)) !== null) {
-    const paramName = m[1].trim();
-    const rawValue = m[2].trim();
-
-    let numValue: number = NaN;
-    // Try as a plain numeric literal (handles "0", "2.5", "1e-3", etc.)
-    const strictNum = Number(rawValue);
-    if (Number.isFinite(strictNum)) {
-      numValue = strictNum;
-    } else {
-      // Try to evaluate as an expression using current parameter values
-      try {
-        const evaluated = BNGLParser.evaluateExpression(rawValue, evalMap);
-        if (Number.isFinite(evaluated)) {
-          numValue = evaluated;
-        }
-      } catch {
-        // Ignore unresolvable expressions
-      }
-    }
-
-    if (!isNaN(numValue)) {
-      model.parameters[paramName] = numValue;
-      evalMap.set(paramName, numValue);
-    }
-  }
-}
-
 function pruneNetDisconnectedSpecies(
   species: Species[],
   reactions: Rxn[]

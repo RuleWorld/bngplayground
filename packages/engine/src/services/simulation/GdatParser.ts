@@ -93,7 +93,6 @@ export function parseGdat(gdat: string): GdatData {
 
     let end = line.length;
     while(end > start && line.charCodeAt(end - 1) <= 32) end--;
-    const trimmedLine = (start === 0 && end === line.length) ? line : line.substring(start, end);
 
     const row: Record<string, number> = {};
     let colIndex = 0;

@@ -13,7 +13,8 @@ import type { MatchMap } from './core/Matcher';
 import { countEmbeddingDegeneracy } from './core/degeneracy';
 import { Component } from './core/Component';
 import { EnergyService } from './core/EnergyService';
-import type { BNGLEnergyPattern } from '../../types';
+import type { BNGLEnergyPattern, GeneratorProgress } from '../../types';
+export type { GeneratorProgress } from '../../types';
 import { Molecule } from './core/Molecule';
 import { BNGLParser } from './core/BNGLParser';
 
@@ -389,13 +390,6 @@ export interface GeneratorOptions {
   parameters?: Map<string, number>; // For evaluating Arrhenius expressions
 }
 
-export interface GeneratorProgress {
-  species: number;
-  reactions: number;
-  iteration: number;
-  memoryUsed: number;
-  timeElapsed: number;
-}
 
 export class NetworkGenerator {
   private options: GeneratorOptions;
@@ -406,6 +400,11 @@ export class NetworkGenerator {
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
   private compartmentMap: Map<string, CompartmentInfo> = new Map();
+  // Parsed observable-pattern graphs for local-function (%x::) rate evaluation.
+  // Keyed by pattern string: parseSpeciesGraph is pure, so a cached graph is
+  // identical to a fresh parse, and reusing the same graph object lets the
+  // GraphMatcher's identity-keyed result cache hit across reactant species.
+  private localFnPatternGraphCache: Map<string, SpeciesGraph> = new Map();
   // NEW: map Canonical Name -> Initial Concentration (from seed parameter evaluation)
   private seedConcentrationMap?: Map<string, number>;
 
@@ -496,7 +495,13 @@ export class NetworkGenerator {
         const obsName = obsEntry.name;
         const obsPat = obsEntry.pattern;
         // Parse the observable pattern and count how many times it embeds in the reactant species.
-        const patGraph = BNGLParser.parseSpeciesGraph(obsPat);
+        // Cache the parsed graph per pattern string (parse is pure); this also lets the
+        // GraphMatcher's pattern-identity result cache hit across reactant species.
+        let patGraph = this.localFnPatternGraphCache.get(obsPat);
+        if (patGraph === undefined) {
+          patGraph = BNGLParser.parseSpeciesGraph(obsPat);
+          this.localFnPatternGraphCache.set(obsPat, patGraph);
+        }
         const maps = GraphMatcher.findAllMaps(patGraph, reactantGraph, {
           allowExtraTargetBonds: false,
           symmetryBreaking: false,
@@ -1437,33 +1442,25 @@ export class NetworkGenerator {
     // and produce "APC.bCat + AXIN". This is confirmed by reference .net file having such reactions.
     // The 32 extra reactions issue needs a different solution.
 
-    let matches: MatchMap[] = [];
+    let filteredMatches: MatchMap[];
     if (rule.isMatchOnce) {
       const firstMap = profiledFindFirstMap(pattern, reactantSpecies.graph, { symmetryBreaking: true });
       if (firstMap && this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, firstMap) &&
         this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, firstMap)) {
-        matches = [firstMap];
+        filteredMatches = [firstMap];
       } else {
-        const maps = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true });
-        for (let mIdx = 0; mIdx < maps.length; mIdx++) {
-          const match = maps[mIdx];
-          if (this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
-            this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)) {
-            matches = [match];
-            break;
-          }
-        }
+        filteredMatches = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true }).filter((match) =>
+          this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
+          this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
+        );
       }
     } else {
-      const maps = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true });
-      for (let mIdx = 0; mIdx < maps.length; mIdx++) {
-        const match = maps[mIdx];
-        if (this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
-          this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)) {
-          matches.push(match);
-        }
-      }
+      filteredMatches = profiledFindAllMaps(pattern, reactantSpecies.graph, { symmetryBreaking: true }).filter((match) =>
+        this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, match) &&
+        this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, match)
+      );
     }
+    const matches = rule.isMatchOnce ? filteredMatches.slice(0, 1) : filteredMatches;
 
     // Debug: log match count for any unimolecular rule
     if (shouldLogNetworkGenerator) {
@@ -2282,37 +2279,27 @@ export class NetworkGenerator {
       const isSubstrateAnchor = applyCarryThroughAnchorSkip && !carryThroughPatternIndices.has(i);
       const anchorSB = isSubstrateAnchor ? false : matchSymmetryBreaking;
 
-      let matches: MatchMap[] = [];
-      const limitOne = !!(rule.isMatchOnce || (!isSubstrateAnchor && carryThroughPatternIndices.has(i)));
+      let allMatches: MatchMap[];
       if (rule.isMatchOnce) {
         const firstMap = profiledFindFirstMap(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
         if (firstMap && this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, firstMap) &&
           this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, firstMap)) {
-          matches = [firstMap];
+          allMatches = [firstMap];
         } else {
-          const maps = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
-          for (let mIdx = 0; mIdx < maps.length; mIdx++) {
-            const match = maps[mIdx];
-            if (this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
-              this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)) {
-              matches = [match];
-              break;
-            }
-          }
+          allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB }).filter((match) =>
+            this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
+          );
         }
       } else {
-        const maps = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB });
-        for (let mIdx = 0; mIdx < maps.length; mIdx++) {
-          const match = maps[mIdx];
-          if (this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
-            this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)) {
-            matches.push(match);
-            if (limitOne) {
-              break;
-            }
-          }
-        }
+        allMatches = profiledFindAllMaps(patterns[i], currentSpecies.graph, { symmetryBreaking: anchorSB }).filter((match) =>
+          this.matchRespectsExplicitComponentBondCounts(patterns[i], currentSpecies.graph, match) &&
+          this.matchRespectsProductImpliedFreeConstraints(rule, patterns[i], currentSpecies.graph, match)
+        );
       }
+      // isMatchOnce and non-substrate carry-through anchors are restricted to 1 match.
+      // Substrate anchors in carry-through rules (SB=false) use all matches for full embedding count.
+      const matches = (rule.isMatchOnce || (!isSubstrateAnchor && carryThroughPatternIndices.has(i))) ? allMatches.slice(0, 1) : allMatches;
       if (matches.length === 0) continue;
 
       if (shouldLogNetworkGenerator) {
@@ -2455,33 +2442,26 @@ export class NetworkGenerator {
           if (!GraphMatcher.canPossiblyMatch(nextPattern, candidateSpecies.graph)) {
             continue;
           }
-          let candMaps: MatchMap[] = [];
+          let allCandMaps: MatchMap[];
           if (rule.isMatchOnce || isCarryThroughPattern) {
             const firstCandMap = profiledFindFirstMap(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
             if (firstCandMap && this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, firstCandMap) &&
               this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, firstCandMap)) {
-              candMaps = [firstCandMap];
+              allCandMaps = [firstCandMap];
             } else {
-              const maps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
-              for (let mIdx = 0; mIdx < maps.length; mIdx++) {
-                const candMatch = maps[mIdx];
-                if (this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
-                  this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)) {
-                  candMaps = [candMatch];
-                  break;
-                }
-              }
+              allCandMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((candMatch) =>
+                this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
+                this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
+              );
+              if (isCarryThroughPattern) allCandMaps = allCandMaps.slice(0, 1);
             }
           } else {
-            const maps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking });
-            for (let mIdx = 0; mIdx < maps.length; mIdx++) {
-              const candMatch = maps[mIdx];
-              if (this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
-                this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)) {
-                candMaps.push(candMatch);
-              }
-            }
+            allCandMaps = profiledFindAllMaps(nextPattern, candidateSpecies.graph, { symmetryBreaking: matchSymmetryBreaking }).filter((candMatch) =>
+              this.matchRespectsExplicitComponentBondCounts(nextPattern, candidateSpecies.graph, candMatch) &&
+              this.matchRespectsProductImpliedFreeConstraints(rule, nextPattern, candidateSpecies.graph, candMatch)
+            );
           }
+          const candMaps = (rule.isMatchOnce || isCarryThroughPattern) ? allCandMaps.slice(0, 1) : allCandMaps;
 
           for (const candMatch of candMaps) {
             const nextIndices = [...currentIndices];

@@ -1,5 +1,5 @@
 import { writeFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
-import { resolve } from 'path';
+import { resolve, normalize } from 'path';
 
 const RULEHUB_BASE = process.argv.includes('--local')
   ? `file://${process.argv[process.argv.indexOf('--local') + 1]}`
@@ -177,6 +177,13 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
   }
 
   const outPath = resolve(outDir, 'gallery-data.ts');
+  // Guard against path traversal: ensure resolved path stays within outDir
+  const resolvedOutDir = resolve(outDir);
+  const normalizedOutDir = normalize(resolvedOutDir + '/');
+  const normalizedOutPath = normalize(outPath);
+  if (!normalizedOutPath.startsWith(normalizedOutDir)) {
+    throw new Error(`Path traversal detected: ${outPath} is not within ${outDir}`);
+  }
   writeFileSync(outPath, output);
 
   console.log(`Generated: ${sanitizedSlim.length} models, ${sanitizedCategories.length} categories, ${Object.keys(sanitizedAssignments).length} assignments`);

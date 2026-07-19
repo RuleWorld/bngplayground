@@ -116,12 +116,6 @@ function maxRelErrForModel(r: LayeredReport): number {
   return Math.max(...allDiffs.map(d => d.maxRelErr));
 }
 
-function maxAbsErrForModel(r: LayeredReport): number {
-  const allDiffs = [...r.gdatDiffs, ...r.cdatDiffs];
-  if (allDiffs.length === 0) return 0;
-  return Math.max(...allDiffs.map(d => d.maxAbsErr));
-}
-
 const passingRelErrors = [...passingModels, ...thresholdOnly].map(maxRelErrForModel).filter(e => e > 0);
 const meanRelErr = passingRelErrors.length > 0
   ? passingRelErrors.reduce((a, b) => a + b, 0) / passingRelErrors.length

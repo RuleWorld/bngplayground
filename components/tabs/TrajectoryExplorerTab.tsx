@@ -22,6 +22,7 @@ import { CHART_COLORS } from '../../src/utils/chartColors';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
+import { toggleSetMember } from '../../services/collections';
 
 interface TrajectoryExplorerTabProps {
     model: BNGLModel | null;
@@ -183,13 +184,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
     }, [observables]);
 
     const toggleObservable = (name: string) => {
-        const next = new Set(visibleObservables);
-        if (next.has(name)) {
-            next.delete(name);
-        } else {
-            next.add(name);
-        }
-        setVisibleObservables(next);
+        setVisibleObservables(toggleSetMember(visibleObservables, name));
     };
 
     const isolateObservable = (name: string) => {

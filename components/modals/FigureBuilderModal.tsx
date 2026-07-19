@@ -2,6 +2,7 @@ import React, { useState, useCallback, useMemo } from 'react';
 import { Modal } from '../ui/Modal';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
+import { toggleArrayMember } from '../../services/collections';
 
 interface FigurePanelEntry {
   id: string;
@@ -50,11 +51,7 @@ export const FigureBuilderModal: React.FC<FigureBuilderModalProps> = ({
   }, [availablePanels]);
 
   const togglePanel = useCallback((panelId: string) => {
-    setSelectedPanels(prev =>
-      prev.includes(panelId)
-        ? prev.filter(id => id !== panelId)
-        : [...prev, panelId]
-    );
+    setSelectedPanels(prev => toggleArrayMember(prev, panelId));
   }, []);
 
   const movePanel = useCallback((panelId: string, direction: 'up' | 'down') => {

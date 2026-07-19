@@ -91,9 +91,6 @@ function main() {
 
         // Check for any simulate command
         const hasSimNf = content.match(/^\s*simulate_nf\s*\(/m);
-        const hasSimOde = content.match(/^\s*simulate_ode\s*\(/m) || content.match(/^\s*simulate\s*\(\s*\{/m);
-        const hasCommentedSim = content.match(/^\s*#.*simulate/m);
-
         // More precise check: look for uncommented simulate_ode
         if (hasActiveOdeSimulate(content)) {
             odeModels.push({ name: modelName, path: filePath });

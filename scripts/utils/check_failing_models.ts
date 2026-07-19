@@ -3,7 +3,6 @@
  * Searches for models by name in the local RuleHub checkout
  */
 import * as fs from 'fs';
-import * as path from 'path';
 import { parseBNGLWithANTLR } from '../../packages/engine/src/parser/BNGLParserWrapper';
 import { findRuleHubModelPath } from '../../tools/rulehubLocal';
 

@@ -19,6 +19,7 @@ import {
   formatNumber,
 } from '@bngplayground/engine';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
+import { toggleSetMember } from '../../services/collections';
 
 interface ParameterScanTabProps {
   model: BNGLModel | null;
@@ -1255,12 +1256,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
                 xAxisLabel={oneDResult.parameterName}
                 yAxisLabel="Observable Value"
                 visibleSeries={visibleObservables}
-                onSeriesToggle={(name) => {
-                  const next = new Set(visibleObservables);
-                  if (next.has(name)) next.delete(name);
-                  else next.add(name);
-                  setVisibleObservables(next);
-                }}
+                onSeriesToggle={(name) => setVisibleObservables(toggleSetMember(visibleObservables, name))}
                 onSeriesIsolate={(name) => {
                   if (visibleObservables.size === 1 && visibleObservables.has(name)) {
                     setVisibleObservables(new Set(observableNames));

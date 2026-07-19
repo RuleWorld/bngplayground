@@ -36,8 +36,6 @@ const runParityCheck = async () => {
 
   for (const modelFile of modelFiles.slice(0, 10)) { // Limit to first 10 for quick check
     try {
-      const modelPath = path.join(modelsDir, modelFile);
-
       // Parse model (simplified - would need actual parser)
       // For now, just check if contact map can be built
       console.log(`Checking ${modelFile}...`);

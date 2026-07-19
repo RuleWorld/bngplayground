@@ -814,10 +814,6 @@ async function runFullSimulation(modelName: string, modelPath: string, bng2Speci
     });
 
     const rates = concreteReactions.map(r => r.rateConstant);
-    const minRate = Math.min(...rates);
-    const maxRate = Math.max(...rates);
-    const zeroRates = rates.filter(r => r === 0).length;
-
 
     if (hasBadRates) {
       return {

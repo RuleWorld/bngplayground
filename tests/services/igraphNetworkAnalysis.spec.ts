@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { buildReactionGraph, buildMolecularGraph, buildRegulatoryGraph, buildGraphPayload } from '../../services/igraphNetworkAnalysis';
+import { buildSpeciesReactionGraph, buildMolecularGraph, buildRegulatoryGraph, buildGraphPayload } from '../../services/igraphNetworkAnalysis';
 import type { BNGLModel } from '../../types';
 
 describe('igraphNetworkAnalysis', () => {
@@ -14,7 +14,7 @@ describe('igraphNetworkAnalysis', () => {
     ...overrides
   });
 
-  describe('buildReactionGraph', () => {
+  describe('buildSpeciesReactionGraph', () => {
     it('should correctly build a reaction graph with simple A -> B', () => {
       const model = createMockModel({
         species: [
@@ -31,7 +31,7 @@ describe('igraphNetworkAnalysis', () => {
         ]
       });
 
-      const payload = buildReactionGraph(model);
+      const payload = buildSpeciesReactionGraph(model);
 
       expect(payload.graphType).toBe('reaction');
       expect(payload.directed).toBe(true);
@@ -56,7 +56,7 @@ describe('igraphNetworkAnalysis', () => {
         ]
       });
 
-      const payload = buildReactionGraph(model);
+      const payload = buildSpeciesReactionGraph(model);
       expect(payload.edges).toEqual([]);
     });
 
@@ -77,7 +77,7 @@ describe('igraphNetworkAnalysis', () => {
         ]
       });
 
-      const payload = buildReactionGraph(model);
+      const payload = buildSpeciesReactionGraph(model);
 
       expect(payload.nodeLabels).toEqual(['A', 'B', 'C']);
       // A (0) -> C (2) and B (1) -> C (2)
@@ -102,7 +102,7 @@ describe('igraphNetworkAnalysis', () => {
         ]
       });
 
-      const payload = buildReactionGraph(model);
+      const payload = buildSpeciesReactionGraph(model);
 
       expect(payload.nodeLabels).toEqual(['A', 'B']);
       expect(payload.edges).toEqual([{ from: 0, to: 1 }]);

@@ -17,6 +17,7 @@ import { fitParameters, FitAlgorithm } from '../../services/optimization/paramFi
 import { bnglService } from '../../services/bnglService';
 import { formatValue } from '../../src/utils/formatValue';
 import { parsePEtab, parsePEtabCombined } from '@bngplayground/engine';
+import { toggleSetMember } from '../../services/collections';
 
 type PetabFileKey = 'parameters' | 'measurements' | 'conditions' | 'observables' | 'problem';
 
@@ -1144,12 +1145,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
                     data={fitComparisonData}
                     series={fitComparisonSeries}
                     visibleSeries={visibleFitSeries}
-                    onSeriesToggle={(name) => {
-                      const next = new Set(visibleFitSeries);
-                      if (next.has(name)) next.delete(name);
-                      else next.add(name);
-                      setVisibleFitSeries(next);
-                    }}
+                    onSeriesToggle={(name) => setVisibleFitSeries(toggleSetMember(visibleFitSeries, name))}
                     onSeriesIsolate={(name) => {
                       if (visibleFitSeries.size === 1 && visibleFitSeries.has(name)) {
                         const allNames = new Set<string>(fitComparisonSeries.map(s => s.name));

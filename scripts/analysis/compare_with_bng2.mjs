@@ -112,19 +112,6 @@ function extractReactionInfo(line) {
   return null;
 }
 
-// Normalize a species string for comparison
-function normalizeSpecies(speciesStr) {
-  // Remove compartment prefixes like @PM:, @cytoplasm:, etc.
-  let normalized = speciesStr.replace(/@\w+:/g, '');
-  
-  // Sort molecules within a complex (split by ., sort, rejoin)
-  // This handles A.B vs B.A equivalence
-  const molecules = normalized.split('.');
-  molecules.sort();
-  
-  return molecules.join('.');
-}
-
 // Clean up test directory
 function cleanupTestDir() {
   if (fs.existsSync(TEST_DIR)) {

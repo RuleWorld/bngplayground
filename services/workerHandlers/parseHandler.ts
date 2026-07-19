@@ -13,13 +13,10 @@ import {
   requiresCompartmentResolution,
 } from '@bngplayground/engine';
 import { Atomizer } from '../../src/lib/atomizer';
+import type { JobState } from './types';
 
 // ---- Shared context contract ------------------------------------------------
 
-export interface JobState {
-  cancelled: boolean;
-  controller?: AbortController;
-}
 
 export interface WorkerContext {
   postMessage: (msg: any) => void;

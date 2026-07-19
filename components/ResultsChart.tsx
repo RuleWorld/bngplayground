@@ -190,6 +190,7 @@ const CustomLegend = (props: any) => {
 
 // Helper: Export chart data as CSV
 import { downloadCsv } from '../src/utils/download';
+import { toggleSetMember } from '../services/collections';
 
 function exportAsCSV(data: Record<string, any>[], headers: string[], suffixName?: string) {
   const sfx = !suffixName || suffixName === '__default__' || suffixName === MERGED_PHASE_SUFFIX ? '' : `_${suffixName}`;
@@ -487,15 +488,9 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   }
 
   const handleLegendClick = (data: any) => {
-    const newVisibleSpecies = new Set(visibleSpecies);
     // dataKey is for default legend, value is for custom legend payload
     const dataKey = data.dataKey || data.value;
-    if (newVisibleSpecies.has(dataKey)) {
-      newVisibleSpecies.delete(dataKey);
-    } else {
-      newVisibleSpecies.add(dataKey);
-    }
-    onVisibleSpeciesChange(newVisibleSpecies);
+    onVisibleSpeciesChange(toggleSetMember(visibleSpecies, dataKey));
   };
 
   const handleMouseDown = (e: any) => {
@@ -546,13 +541,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   const chartMarginBottom = 36;
 
   const handleToggleSeries = (name: string) => {
-    const newVisibleSpecies = new Set(visibleSpecies);
-    if (newVisibleSpecies.has(name)) {
-      newVisibleSpecies.delete(name);
-    } else {
-      newVisibleSpecies.add(name);
-    }
-    onVisibleSpeciesChange(newVisibleSpecies);
+    onVisibleSpeciesChange(toggleSetMember(visibleSpecies, name));
   };
 
   const handleLegendHighlight = (name: string) => {

@@ -3,13 +3,12 @@ import type { BNGLModel } from '../types';
 import { buildContactMap } from '../services/visualization/contactMapBuilder';
 import { buildAdjacencyMatrix, compareModels, ModelComparisonResult } from '../services/visualization/modelComparison';
 import { bnglService } from '../services/bnglService';
+import { getRuleId, getRuleLabel } from '../services/ruleIdentity';
 
 interface ModelComparisonPanelProps {
   currentModel: BNGLModel | null;
 }
 
-const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;
-const getRuleLabel = (rule: { name?: string }, index: number): string => rule.name ?? `Rule ${index + 1}`;
 
 export const ModelComparisonPanel: React.FC<ModelComparisonPanelProps> = ({ currentModel }) => {
   const [pastedBngl, setPastedBngl] = useState('');

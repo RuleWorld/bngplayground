@@ -19,7 +19,7 @@ const simulationOptions = {
 const observableKeys = ['obs_Product', 'obs_ES_Complex'];
 
 function ode(state, params) {
-  const [E, S, C, P] = state;
+  const [E, S, C] = state;
   const { k_on, k_off, k_cat } = params;
   const binding = k_on * E * S;
   const unbinding = k_off * C;
@@ -57,7 +57,7 @@ function simulateModel(params) {
 
   for (let i = 0; i <= steps; i++) {
     const time = i * dt;
-    const [E_free, S_free, C, P] = state;
+    const [, , C, P] = state;
     result.push({
       time,
       obs_Product: P,

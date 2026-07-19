@@ -15,6 +15,7 @@ import {
 } from './CellAgent';
 import { ExtracellularGrid, ExtracellularGridConfig } from './ExtracellularGrid';
 import { IntracellularEngine } from './IntracellularEngine';
+import { isSafeObjectKey, setSafeNumberField } from '../../utils/safeObjectKey';
 
 // ---------------------------------------------------------------------------
 // Public types
@@ -70,17 +71,6 @@ export interface MultiscaleResult {
   };
 }
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-const SAFE_OBJECT_KEY_PATTERN = /^[A-Za-z_@:.!~(),+\-][A-Za-z0-9_@:.!~(),+\-]*$/;
-
-function isSafeObjectKey(key: string): boolean {
-  return SAFE_OBJECT_KEY_PATTERN.test(key) && !UNSAFE_OBJECT_KEYS.has(key);
-}
-
-function setSafeNumberField(target: Record<string, number>, key: string, value: number): void {
-  if (!isSafeObjectKey(key)) return;
-  target[key] = value;
-}
 
 function setSafeNumberArrayField(target: Record<string, number[]>, key: string, value: number[]): void {
   if (!isSafeObjectKey(key)) return;

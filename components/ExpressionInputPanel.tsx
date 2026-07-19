@@ -4,6 +4,7 @@ import { Input } from './ui/Input';
 import { CHART_COLORS } from '../src/utils/chartColors';
 import { validateObservablePattern } from '@bngplayground/engine';
 import { BNGLParser } from '@bngplayground/engine';
+import { isSafeObjectKey } from '@bngplayground/engine';
 
 export interface CustomExpression {
   id: string;
@@ -22,11 +23,6 @@ interface ExpressionInputPanelProps {
   hasSpeciesData?: boolean;  // Whether species-level data is available for BNGL patterns
 }
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-function isSafeObjectKey(key: string): boolean {
-  return !UNSAFE_OBJECT_KEYS.has(key);
-}
 
 /**
  * Evaluate a mathematical expression with complex entity names (including BNGL patterns)

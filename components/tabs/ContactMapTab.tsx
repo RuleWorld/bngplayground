@@ -5,6 +5,7 @@ import { buildContactMap } from '../../services/visualization/contactMapBuilder'
 import { buildRuleOverlays } from '../../services/visualization/buildRuleOverlays';
 import type { RuleOverlay } from '../../services/visualization/ruleOverlay';
 import { buildContactMapSnapshots, ContactMapSnapshot } from '../../services/visualization/dynamicContactMap';
+import { getRuleId, getRuleLabel } from '../../services/ruleIdentity';
 
 interface ContactMapTabProps {
     model: BNGLModel | null;
@@ -12,8 +13,6 @@ interface ContactMapTabProps {
     onSelectRule?: (ruleId: string) => void;
 }
 
-const getRuleId = (rule: { name?: string }, index: number): string => rule.name ?? `rule_${index + 1}`;
-const getRuleLabel = (rule: { name?: string }, index: number): string => rule.name ?? `Rule ${index + 1}`;
 
 export const ContactMapTab: React.FC<ContactMapTabProps> = ({ model, results, onSelectRule }) => {
     const [selectedOverlayIndex, setSelectedOverlayIndex] = useState<number | null>(null);

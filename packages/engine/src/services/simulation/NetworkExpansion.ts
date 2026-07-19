@@ -19,12 +19,8 @@ import { GraphMatcher } from '../graph/core/Matcher';
 import { containsRateLawMacro, expandRateLawMacros } from './ExpressionEvaluator';
 import { formatSpeciesList } from '../parity/ParityService';
 import { isFunctionalRateExpr, countPatternMatches, isSpeciesMatch, removeCompartment, getCompartment } from '../parity/PatternMatcher';
+import { isSafeObjectKey } from '../../utils/safeObjectKey';
 
-const UNSAFE_OBJECT_KEYS = new Set(['__proto__', 'constructor', 'prototype']);
-
-function isSafeObjectKey(key: string): boolean {
-    return !UNSAFE_OBJECT_KEYS.has(key);
-}
 
 function stripWhitespace(s: string): string {
     let result = '';

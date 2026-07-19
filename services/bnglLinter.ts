@@ -11,7 +11,7 @@ import type {
   ValidationSeverity,
   EditorMarker,
 } from '../types.ts';
-import { BNGLParser } from '@bngplayground/engine';
+import { BNGLParser, extractMoleculeNames as extractMoleculeNamesRaw } from '@bngplayground/engine';
 
 // ============================================================================
 // Types
@@ -783,48 +783,20 @@ function checkRateExpressions(model: BNGLModel): LintDiagnostic[] {
   return diagnostics;
 }
 
+// Degradation products and the empty-set symbol are not molecule types; the
+// reachability analysis must not treat them as real molecules.
+const DEGRADATION_SINKS = new Set(['0', 'null', 'Trash', '∅']);
+
 /**
- * Extract the molecule-type names referenced by a reactant/product pattern.
- * Handles complexes (A(..).B(..)), compartment prefixes/suffixes, and ignores
- * everything inside the component list — including internally-completed wildcard
- * components such as `oh~?!?__SYN__` that the parser injects. Degradation
- * products (0 / null / Trash) yield no names.
+ * Molecule-type names referenced by a reactant/product pattern.
+ *
+ * Parsing (complex splitting, compartment stripping, ignoring the component
+ * list — including the synthetic `!?__SYN__` wildcards the parser injects) is
+ * delegated to the engine's canonical pattern parser; the linter then drops
+ * degradation sinks (0 / null / Trash / ∅) as a domain-specific policy.
  */
 function extractMoleculeNames(pattern: string): string[] {
-  if (!pattern) return [];
-  const names: string[] = [];
-
-  // Split a complex into its molecules on top-level '.' (dots outside parens).
-  const tokens: string[] = [];
-  let depth = 0;
-  let current = '';
-  for (const ch of pattern) {
-    if (ch === '(') depth++;
-    else if (ch === ')') depth = Math.max(0, depth - 1);
-    if (ch === '.' && depth === 0) {
-      tokens.push(current);
-      current = '';
-      continue;
-    }
-    current += ch;
-  }
-  if (current) tokens.push(current);
-
-  for (let token of tokens) {
-    token = token.trim();
-    if (!token) continue;
-    // Strip a leading compartment prefix like "@EC:".
-    token = token.replace(/^@[^:@()]+:/, '');
-    // Molecule name is everything before the component list '(' ...
-    const paren = token.indexOf('(');
-    let head = paren >= 0 ? token.slice(0, paren) : token;
-    // ... minus any trailing compartment suffix like "Mol@EC".
-    head = head.replace(/@[^@()]*$/, '').trim();
-    if (!head) continue;
-    if (head === '0' || head === 'null' || head === 'Trash' || head === '∅') continue;
-    names.push(head);
-  }
-  return names;
+  return extractMoleculeNamesRaw(pattern).filter((name) => !DEGRADATION_SINKS.has(name));
 }
 
 function checkReachability(model: BNGLModel): LintDiagnostic[] {

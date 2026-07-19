@@ -15,35 +15,6 @@ import { GraphMatcher } from '../graph/core/Matcher';
 import { countEmbeddingDegeneracy } from '../graph/core/degeneracy';
 import { registerCacheClearCallback } from '../../featureFlags';
 
-const factorial = (n: number): number => {
-    if (!Number.isFinite(n) || n <= 1) return 1;
-    let result = 1;
-    for (let i = 2; i <= n; i++) result *= i;
-    return result;
-};
-
-const getWildcardComponentSymmetryFactor = (pattern: ReturnType<typeof BNGLParser.parseSpeciesGraph>): number => {
-    let factor = 1;
-
-    for (const molecule of pattern.molecules) {
-        const counts = new Map<string, number>();
-        for (const component of molecule.components) {
-            // Handle parser-normalized observable patterns such as P(s!?,s!?,c~T)
-            // where equivalent repeated unconstrained wildcard sites should
-            // not contribute multiplicatively to Molecules observable counts.
-            if (component.wildcard !== '?' || component.edges.size !== 0) continue;
-            const signature = `${component.name}|${component.state ?? ''}|${component.wildcard}`;
-            counts.set(signature, (counts.get(signature) ?? 0) + 1);
-        }
-
-        for (const count of counts.values()) {
-            if (count > 1) factor *= factorial(count);
-        }
-    }
-
-    return factor;
-};
-
 const normalizeLegacySuffixCompartment = (s: string): string => {
     if (!s) return s;
     // Normalize legacy BNGL syntax like `B@EC()` to canonical `B()@EC`.

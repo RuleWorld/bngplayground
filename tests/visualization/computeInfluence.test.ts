@@ -5,12 +5,7 @@
 import { describe, it, expect } from 'vitest';
 import { buildRuleOverlays } from '../../services/visualization/buildRuleOverlays';
 import { computeInfluenceGraph } from '../../services/visualization/computeInfluence';
-import type { ReactionRule, BNGLMoleculeType } from '../../types';
-
-const molTypes: BNGLMoleculeType[] = [
-    { name: 'A', components: ['s~U~P', 'b'] },
-    { name: 'B', components: ['b'] },
-];
+import type { ReactionRule } from '../../types';
 
 describe('computeInfluenceGraph', () => {
     it('finds activation when rule1 creates a bond that rule2 requires', () => {

@@ -4,7 +4,7 @@ import type {
     ProfileLikelihoodResult,
     StiffnessResult,
     DynamicsResult,
-    CausalTraceEntry,
+    RuleAttributionEntry,
     DiagnosticSummary,
     UnreachableAnalysis,
 } from '../types.js';
@@ -16,7 +16,7 @@ export function generateThreeRegisters(args: {
     stiffness: StiffnessResult;
     dynamics: DynamicsResult;
     structure: { species: number; reactionRules: number; observables: number; parameters: number };
-    mechanisticCausalTrace?: CausalTraceEntry[];
+    ruleAttribution?: RuleAttributionEntry[];
     unreachableAnalysis?: UnreachableAnalysis;
 }): DiagnosticSummary {
     const parts = { technical: [] as string[], biological: [] as string[], strategic: [] as string[] };
@@ -36,9 +36,24 @@ export function generateThreeRegisters(args: {
         const topParam = args.sobol.topFirstOrder[0];
         if (topParam) {
             parts.technical.push(`Sobol S1(${topParam.name}) = ${topParam.value.toFixed(3)} on ${args.sobol.observable}.`);
-            const trace = args.mechanisticCausalTrace?.find(t => t.parameter === topParam.name);
-            const ruleMention = trace?.implicatedRules[0] ? ` via ${trace.implicatedRules[0]}` : '';
-            parts.biological.push(`${topParam.name}${ruleMention} dominates the response of ${args.sobol.observable} — get this parameter right first.`);
+            const trace = args.ruleAttribution?.find(t => t.parameter === topParam.name);
+            let mechanism = '';
+            if (trace?.implicatedRules?.[0]) {
+                mechanism = ` It acts through ${trace.implicatedRules[0]}`;
+                if (trace.route && trace.route.length > 0) {
+                    mechanism += `, and its influence can propagate to the observable via ${trace.route.map(e => e.rule).join(' \u2192 ')}`;
+                }
+                if (trace.support === 'dynamically_supported') {
+                    mechanism += trace.informationFlowCorroborated
+                        ? ' (every step fires and every hand-off shows transfer-entropy coupling)'
+                        : ' (every step fires in the SSA run)';
+                }
+                else if (trace.support === 'partially_supported') mechanism += ' (some steps fire; the route is only partially dynamical)';
+                else if (trace.support === 'structural_only') mechanism += ' (structural route; its rules do not fire in the SSA run)';
+                else if (trace.support === 'unchecked' || trace.support === undefined) mechanism += ' (structural hypothesis, not yet checked against the dynamics)';
+                mechanism += '.';
+            }
+            parts.biological.push(`${topParam.name} dominates the response of ${args.sobol.observable} — measure it first.${mechanism}`);
             parts.strategic.push(`Prioritize measuring ${topParam.name}. It accounts for ${(topParam.value * 100).toFixed(0)}% of output variance.`);
         }
     }

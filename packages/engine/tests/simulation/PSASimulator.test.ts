@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { simulatePSA, PSASimulator } from '../../src/services/simulation/PSASimulator';
+import { simulatePSA } from '../../src/services/simulation/PSASimulator';
 import type { BNGLModel } from '../../src/types';
 
 describe('PSASimulator', () => {

@@ -1,5 +1,4 @@
 import fs from 'fs';
-import path from 'path';
 
 const logPath = 'verify_all_output_v2.txt';
 
@@ -8,7 +7,7 @@ if (!fs.existsSync(logPath)) {
   process.exit(1);
 }
 
-const content = fs.readFileSync(logPath, 'utf8'); // TS-Node might read as utf8 even if it's utf16le? 
+// TS-Node might read as utf8 even if it's utf16le? 
 // If it's UTF-16LE, readFileSync 'utf8' will be garbage.
 // Let's try to detect or just read as buffer and decode.
 
@@ -34,7 +33,6 @@ try {
 
 let passed = 0;
 let failed = 0;
-const failures: { model: string, error: string }[] = [];
 
 for (let i = 0; i < lines.length; i++) {
   const line = lines[i].trim();

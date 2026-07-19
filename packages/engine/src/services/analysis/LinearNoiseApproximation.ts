@@ -19,6 +19,7 @@
 import { findSteadyState } from './SteadyStateFinder';
 import type { SteadyStateConfig } from './SteadyStateFinder';
 import type { BNGLModel, BNGLReaction, BNGLSpecies } from '../../types';
+import { buildStoichiometryMatrix as buildStoichiometry } from '../../utils/stoichiometry';
 
 // ── Public interfaces ──────────────────────────────────────────────
 
@@ -70,25 +71,9 @@ function buildStoichiometryMatrix(
   species: BNGLSpecies[],
   reactions: BNGLReaction[],
 ): number[][] {
-  const n = species.length;
-  const m = reactions.length;
   const speciesIndex = new Map<string, number>();
-  for (let i = 0; i < n; i++) speciesIndex.set(species[i].name, i);
-
-  const S: number[][] = Array.from({ length: n }, () => new Array(m).fill(0));
-
-  for (let r = 0; r < m; r++) {
-    const rxn = reactions[r];
-    for (const name of rxn.reactants) {
-      const idx = speciesIndex.get(name);
-      if (idx !== undefined) S[idx][r] -= 1;
-    }
-    for (const name of rxn.products) {
-      const idx = speciesIndex.get(name);
-      if (idx !== undefined) S[idx][r] += 1;
-    }
-  }
-  return S;
+  for (let i = 0; i < species.length; i++) speciesIndex.set(species[i].name, i);
+  return buildStoichiometry(reactions, species.length, (name) => speciesIndex.get(name));
 }
 
 // ── Helper: propensity vector precomputation ──────────────────────

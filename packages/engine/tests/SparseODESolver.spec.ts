@@ -156,8 +156,7 @@ describe('SparseODESolver', () => {
        { atol: 1e-8, rtol: 1e-6, useConservationLaws: false, useILUPreconditioner: true }
      );
 
-     const oldBuild = (solver as any).buildAndFactorizeMatrix;
-     (solver as any).buildAndFactorizeMatrix = function(gamma: number) {
+      (solver as any).buildAndFactorizeMatrix = function(gamma: number) {
        // mock sparsity
        (this as any).sparsity = { nnz: 1, rowPtr: new Int32Array([0, 1]), colIdx: new Int32Array([0]) };
        (this as any).jacobianData = new Float64Array([0]);
