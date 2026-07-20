@@ -14,6 +14,7 @@ export class SpeciesGraph {
   private _componentOffsets?: number[];
   private _componentCount?: number;
   private _fingerprint?: Map<string, number>;
+  private _wildcardFreeFingerprint?: Array<[string, number]>;
   private _typeBonds?: Map<string, number>;
   private _molTypeCounts?: Map<string, number>;
   private _bondCount?: number;
@@ -30,6 +31,7 @@ export class SpeciesGraph {
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._wildcardFreeFingerprint = undefined;
     this._typeBonds = undefined;
     this._molTypeCounts = undefined;
     this._bondCount = undefined;
@@ -109,6 +111,20 @@ export class SpeciesGraph {
     }
     this._fingerprint = fp;
     return this._fingerprint;
+  }
+
+  get wildcardFreeFingerprintList(): Array<[string, number]> {
+    if (this._wildcardFreeFingerprint !== undefined) return this._wildcardFreeFingerprint;
+    const list: Array<[string, number]> = [];
+    const fp = this.fingerprint;
+    for (const [key, count] of fp.entries()) {
+      if (key.startsWith('M:*') || key.startsWith('S:*:') || key.startsWith('B:*:')) {
+        continue;
+      }
+      list.push([key, count]);
+    }
+    this._wildcardFreeFingerprint = list;
+    return list;
   }
 
   get typeBonds(): Map<string, number> {
@@ -239,6 +255,7 @@ export class SpeciesGraph {
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._wildcardFreeFingerprint = undefined;
     this._typeBonds = undefined;
     this._molTypeCounts = undefined;
     this._bondCount = undefined;
@@ -359,6 +376,7 @@ export class SpeciesGraph {
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._wildcardFreeFingerprint = undefined;
     this._typeBonds = undefined;
     this._molTypeCounts = undefined;
     this._bondCount = undefined;
@@ -439,6 +457,7 @@ export class SpeciesGraph {
     this._componentOffsets = undefined;
     this._componentCount = undefined;
     this._fingerprint = undefined;
+    this._wildcardFreeFingerprint = undefined;
     this._typeBonds = undefined;
     this._molTypeCounts = undefined;
     this._bondCount = undefined;
