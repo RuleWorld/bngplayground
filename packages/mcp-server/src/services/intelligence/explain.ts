@@ -158,7 +158,7 @@ export async function explainModelNarrative(code: string, includeCrux: boolean =
                             const koValue = Number(koFinal[firstObs] ?? 0);
                             const effect = Math.abs(koValue - baselineValue) / (Math.abs(baselineValue) || 1);
                             ruleEffects.push({ rule: rule.name ?? 'unnamed', parameter: rateParam, effect });
-                        } catch (_e) {
+                            } catch {
                             // Ignored knockout simulation failure
                         }
                     }
@@ -175,7 +175,7 @@ export async function explainModelNarrative(code: string, includeCrux: boolean =
                     }
                 }
             }
-        } catch (_e) {
+        } catch {
             // Ignored outer baseline failure
         }
     }
