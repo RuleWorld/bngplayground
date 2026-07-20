@@ -130,8 +130,17 @@ export interface BNGLAction {
     args: Record<string, any>;
 }
 
+export interface ConcreteObservable {
+    name: string;
+    type: string;
+    indices: number[];
+    coefficients: number[];
+    volumes: number[];
+}
+
 export interface BNGLModel {
     name?: string;
+    concreteObservables?: ConcreteObservable[];
     parameters: Record<string, number>;
     moleculeTypes: BNGLMoleculeType[];
     species: BNGLSpecies[];
