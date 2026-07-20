@@ -1,55 +1,8 @@
 import { BNGLModel, ValidationWarning, EditorMarker } from '../types';
-import { getRuleId, getRuleLabel } from './ruleIdentity';
-import { extractMoleculeNames } from '@bngplayground/engine';
+import { extractMoleculeNames, findUnreachableRules } from '@bngplayground/engine';
 
 const LARGE_PARAMETER_THRESHOLD = 1e6;
 const SMALL_PARAMETER_THRESHOLD = 1e-6;
-
-
-
-
-const buildInitialMoleculeSet = (model: BNGLModel): Set<string> => {
-  const molecules = new Set<string>();
-
-  model.species.forEach((species) => {
-    extractMoleculeNames(species.name).forEach((name) => molecules.add(name));
-  });
-
-  return molecules;
-};
-
-const findUnreachableRules = (model: BNGLModel): string[] => {
-  const knownMolecules = buildInitialMoleculeSet(model);
-  const reachable = new Set<string>();
-
-  const ruleDescriptors = model.reactionRules.map((rule, index) => {
-    const reactants = rule.reactants.flatMap(extractMoleculeNames);
-    const products = rule.products.flatMap(extractMoleculeNames);
-    const id = getRuleId(rule, index);
-    const label = getRuleLabel(rule, index);
-    return { id, label, reactants, products };
-  });
-
-  let progress = true;
-  while (progress) {
-    progress = false;
-
-    ruleDescriptors.forEach((descriptor) => {
-      if (reachable.has(descriptor.id)) {
-        return;
-      }
-      if (descriptor.reactants.length === 0 || descriptor.reactants.every((mol) => knownMolecules.has(mol))) {
-        descriptor.products.forEach((mol) => knownMolecules.add(mol));
-        reachable.add(descriptor.id);
-        progress = true;
-      }
-    });
-  }
-
-  return ruleDescriptors
-    .filter((descriptor) => !reachable.has(descriptor.id))
-    .map((descriptor) => descriptor.label);
-};
 
 export const validateBNGLModel = (model: BNGLModel): ValidationWarning[] => {
   const warnings: ValidationWarning[] = [];
