@@ -300,17 +300,12 @@ export class GraphMatcher {
    */
   public static canPossiblyMatch(pattern: SpeciesGraph, target: SpeciesGraph): boolean {
     // 0. Fingerprint check
-    const patternFp = pattern.fingerprint;
+    const patternList = pattern.wildcardFreeFingerprintList;
     const targetFp = target.fingerprint;
-    for (const [key, patCount] of patternFp.entries()) {
-      // Wildcard molecules use literal "*" in the fingerprint, but that is only a
-      // placeholder for "any molecule name". Skip those entries so the VF2 matcher
-      // can evaluate the real structural constraints.
-      if (key.startsWith('M:*') || key.startsWith('S:*:') || key.startsWith('B:*:')) {
-        continue;
-      }
-      const tarCount = targetFp.get(key) ?? 0;
-      if (tarCount < patCount) {
+    for (let i = 0; i < patternList.length; i++) {
+      const entry = patternList[i];
+      const tarCount = targetFp.get(entry[0]) ?? 0;
+      if (tarCount < entry[1]) {
         return false;
       }
     }
