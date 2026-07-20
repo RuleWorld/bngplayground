@@ -87,7 +87,7 @@
     "antlr4ts": "^0.5.0-alpha.4",
     "antlr4ts-cli": "^0.5.0-alpha.4",
     "assert": "^2.1.0",
-    "autoprefixer": "^10.5.0",
+    "autoprefixer": "^10.5.4",
     "baseline-browser-mapping": "^2.10.43",
     "chai": "^6.2.2",
     "eslint": "^9.39.4",
