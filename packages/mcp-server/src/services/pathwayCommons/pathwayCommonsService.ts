@@ -70,7 +70,7 @@ async function pcFetch(url: string, timeout = DEFAULT_TIMEOUT_MS): Promise<strin
     return await response.text();
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
-      throw new Error(`Pathway Commons request timed out after ${timeout}ms`);
+      throw new Error(`Pathway Commons request timed out after ${timeout}ms`, { cause: error });
     }
     throw error;
   } finally {

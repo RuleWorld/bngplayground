@@ -38,9 +38,9 @@ async function indraFetch<T>(url: string, options: RequestInit & { timeout?: num
         return ({ model: text } as unknown) as T;
     } catch (error) {
         if (error instanceof DOMException && error.name === 'AbortError') {
-            throw new Error(`INDRA request timed out after ${timeout}ms`);
+            throw new Error(`INDRA request timed out after ${timeout}ms`, { cause: error });
         }
-        throw error instanceof Error ? error : new Error(String(error));
+        throw error instanceof Error ? error : new Error(String(error), { cause: error });
     } finally {
         clearTimeout(timer);
     }

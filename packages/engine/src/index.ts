@@ -100,6 +100,7 @@ export type { NetworkAnalysis } from './services/analysis/NetworkAnalysis';
 export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
+export { findUnreachableRules } from './services/analysis/UnreachableRules';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 export { parsePEtab, parsePEtabCombined } from './services/analysis/petabImport';
 export type { PEtabProblem, PEtabParameter, PEtabObservable } from './services/analysis/petabImport';

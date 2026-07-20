@@ -90,7 +90,7 @@ export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResul
                     identifiability = 'moderate';
                     rationale = 'Moderate conditioning - consider additional timepoints';
                 }
-            } catch (e) {
+            } catch {
                 // Keep default low identifiability
             }
             
