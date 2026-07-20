@@ -183,7 +183,8 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
         onClick={() => setIsExpanded(!isExpanded)}
         aria-expanded={isExpanded}
         aria-controls="custom-expressions-panel"
-        className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
+        aria-label="Toggle custom expressions panel"
+        className="flex items-center gap-2 text-sm text-slate-600 dark:text-slate-400 hover:text-primary transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 dark:focus-visible:ring-offset-slate-900 rounded"
       >
         <span className={`transform transition-transform ${isExpanded ? 'rotate-90' : ''}`}>▶</span>
         <span className="font-medium">Custom Expressions</span>
@@ -203,7 +204,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
               <button
                 onClick={() => setMode('math')}
                 aria-pressed={mode === 'math'}
-                className={`px-2.5 py-1 rounded-l-lg transition-colors ${mode === 'math'
+                className={`px-2.5 py-1 rounded-l-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:z-10 ${mode === 'math'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                   }`}
@@ -215,7 +216,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 disabled={!hasSpeciesData}
                 title={hasSpeciesData ? 'Define observable using BNGL pattern' : 'Requires species-level simulation data'}
                 aria-pressed={mode === 'bngl'}
-                className={`px-2.5 py-1 rounded-r-lg transition-colors ${mode === 'bngl'
+                className={`px-2.5 py-1 rounded-r-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:z-10 ${mode === 'bngl'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
                   } ${!hasSpeciesData ? 'opacity-50 cursor-not-allowed' : ''}`}
