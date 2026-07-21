@@ -1,5 +1,5 @@
 import { BNGLModel, ValidationWarning, EditorMarker } from '../types';
-import { extractMoleculeNames, findUnreachableRules } from '@bngplayground/engine';
+import { findUnreachableRules } from '@bngplayground/engine';
 
 const LARGE_PARAMETER_THRESHOLD = 1e6;
 const SMALL_PARAMETER_THRESHOLD = 1e-6;

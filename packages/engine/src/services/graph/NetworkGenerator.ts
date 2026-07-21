@@ -466,7 +466,7 @@ export class NetworkGenerator {
       try {
         return BNGLParser.evaluateExpression(expr, this.options.parameters);
       } catch (e) {
-        console.warn(`[NetworkGenerator] Failed to evaluate Arrhenius param expression: ${expr}`, e);
+        console.warn('[NetworkGenerator] Failed to evaluate Arrhenius param expression: %s', expr, e);
         return this.options.parameters.get(expr) ?? defaultValue;
       }
     }
