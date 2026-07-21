@@ -207,6 +207,7 @@ export const ExampleGalleryModal: React.FC<ExampleGalleryModalProps> = ({ isOpen
                     <button
                       onClick={() => setSemanticResults(null)}
                       className="text-xs text-primary hover:underline"
+                      aria-label="Clear semantic search results and browse categories"
                     >
                       Clear &amp; browse categories
                     </button>

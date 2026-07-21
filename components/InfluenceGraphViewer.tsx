@@ -402,6 +402,7 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
               <button
                 className="underline cursor-pointer hover:text-slate-700 dark:hover:text-slate-300"
                 onClick={() => setSelectedNode(null)}
+                aria-label="Clear node selection"
               >
                 Clear selection
               </button>

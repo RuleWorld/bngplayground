@@ -702,6 +702,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               className="mx-1 underline text-teal-600 dark:text-teal-400"
               onClick={() => { setActiveTab(1); setNetworkViewMode('analysis'); }}
+              aria-label="Go to Network Analysis tab"
             >
               Network → Analysis
             </button>
