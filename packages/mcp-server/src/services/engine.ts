@@ -101,6 +101,30 @@ export function parseModelOrThrow(code: string): BNGLModel {
     return result.model;
 }
 
+/**
+ * Constructs a standardized simulation options object from raw tool arguments.
+ *
+ * This utility parses and formats simulation parameter keys (such as `method`,
+ * `t_end`, `n_steps`, `solver`, `atol`, `rtol`, `max_steps`, `seed`, and `sparse`)
+ * to match internal engine configurations, providing sensible defaults where necessary.
+ *
+ * @param args - An object containing optional simulation settings:
+ *   - `method` (string): 'ode', 'ssa', or 'nfsim' (defaults to 'ode')
+ *   - `t_end` (number): The end time of the simulation (defaults to 10)
+ *   - `n_steps` (number): Number of reporting intervals (defaults to 100)
+ *   - `solver` (string): The mathematical solver name (e.g., 'auto', 'cvode')
+ *   - `atol` (number): Absolute tolerance limit
+ *   - `rtol` (number): Relative tolerance limit
+ *   - `max_steps` (number): Maximum integration steps
+ *   - `seed` (number): Random number generator seed
+ *   - `sparse` (boolean): Flag to enable sparse solver optimizations
+ * @returns A structured simulation options object configured for the execution loop.
+ *
+ * @remarks
+ * For ODE simulations, if the solver parameter is not explicitly defined, it defaults
+ * to 'auto'. This is a server service-layer mapping utility and does not execute or
+ * run the actual simulation.
+ */
 export function buildSimulationOptions(args: any) {
     const simulationOptions: any = {
         method: args.method ?? 'ode',
@@ -179,6 +203,32 @@ export async function expandModel(model: BNGLModel): Promise<BNGLModel> {
 // re-exported here so existing importers of this module keep working.
 export { extractMoleculeNames, findUnreachableRules };
 
+/**
+ * Performs a comprehensive validation check on a parsed BioNetGen model.
+ *
+ * This function aggregates error, warning, and informational feedback from multiple
+ * model verification engines:
+ *  1. **Observables Check**: Ensures the model has at least one observable pattern.
+ *  2. **Parameters Check**: Validates that all parameters are finite numbers and warns
+ *     about unusual parameter magnitudes (extremely large or small nonzero values).
+ *  3. **Reachable Rules**: Checks for reaction rules that may never fire due to reactant
+ *     unreachability from seed species (delegated to the shared engine `findUnreachableRules`).
+ *  4. **Observable Patterns**: Validates the syntax of all defined observables.
+ *  5. **NFsim Compatibility**: If requested, validates grammar and features for NFsim
+ *     compatibility (delegated to the engine's `validateModelForNFsim`).
+ *  6. **Mass Balance**: Verifies atom/mass conservation across reaction rules (delegated
+ *     to the engine's `MassBalance.checkMassBalance`).
+ *
+ * @param model - The parsed `BNGLModel` to validate.
+ * @param includeNFsim - A flag to enable or disable extra NFsim-specific validation checks.
+ * @returns A structured `ValidateModelResult` describing all issues (errors, warnings, info messages) found.
+ *
+ * @remarks
+ * To maintain proper architectural separation and comply with repository-level invariants,
+ * this validation helper strictly calls core engine capabilities (such as `findUnreachableRules`
+ * and `MassBalance` from `@bngplayground/engine`) instead of reimplementing any BNGL parsing
+ * or biological logic itself.
+ */
 export function validateModel(model: BNGLModel, includeNFsim: boolean): ValidateModelResult {
     const errors: ValidationMessage[] = [];
     const warnings: ValidationMessage[] = [];
