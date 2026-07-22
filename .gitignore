@@ -254,5 +254,7 @@ wasm-sundials_deps/
 # Local npm tarballs
 three-*.tgz
 
+slurm/
+
 # End of .gitignore
 coverage

@@ -1237,18 +1237,39 @@ export function getSeedSpecies(
 ): SeedSpeciesEntry[] {
   const seedSpecies: SeedSpeciesEntry[] = [];
 
+  // Species whose starting value is supplied by an <initialAssignment> rather than an attribute.
+  // Previously these were dropped, so the species seeded at 0.
+  const initialAssignmentBySymbol = new Map<string, string>();
+  for (const ia of model.initialAssignments || []) {
+    initialAssignmentBySymbol.set(ia.symbol, ia.math);
+  }
+
   for (const [speciesId, entry] of sct.entries) {
     const sbmlSpecies = model.species.get(speciesId)!;
 
+    const compId = standardizeName(sbmlSpecies.compartment);
+    const volParam = `__compartment_${compId}__`;
+    // Species value is an amount if hasOnlySubstanceUnits; otherwise it is a concentration and
+    // must be multiplied by Na*V to become a molecule count.
+    const asAmount = (expr: string) => sbmlSpecies.hasOnlySubstanceUnits
+      ? `(${expr})`
+      : `(${expr} * Na * ${volParam})`;
+
+    // Fall back to the old ">0" heuristic only when the set/unset flag is unavailable (e.g. the
+    // species was built without access to the raw SBML), so nothing regresses.
+    const amountSet = sbmlSpecies.initialAmountSet ?? (sbmlSpecies.initialAmount !== 0);
+    const concSet = sbmlSpecies.initialConcentrationSet ?? (sbmlSpecies.initialConcentration !== 0);
+    const ia = initialAssignmentBySymbol.get(speciesId);
+
     let amountExpr: string;
-    if (sbmlSpecies.initialAmount > 0) {
-      // BNG exports SBML with molecule counts in initialAmount
-      // We use the value directly regardless of hasOnlySubstanceUnits
+    if (ia !== undefined) {
+      // An initialAssignment overrides any initial-value attribute (SBML spec), and is evaluated
+      // in the species' units (amount vs concentration per hasOnlySubstanceUnits).
+      amountExpr = asAmount(ia);
+    } else if (amountSet) {
+      // initialAmount is already a substance amount (count in BNG-exported SBML); use directly.
       amountExpr = sbmlSpecies.initialAmount.toString();
-    } else if (sbmlSpecies.initialConcentration > 0) {
-      // Concentration based: scale by Na * Vol
-      const compId = standardizeName(sbmlSpecies.compartment);
-      const volParam = `__compartment_${compId}__`;
+    } else if (concSet) {
       amountExpr = `(${sbmlSpecies.initialConcentration} * Na * ${volParam})`;
     } else {
       amountExpr = '0';

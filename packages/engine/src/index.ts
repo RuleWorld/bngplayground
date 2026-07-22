@@ -173,6 +173,7 @@ export type { MIRIAMAnnotation, IdentifierResolver } from './services/export/MIR
 
 // ── Math Utils ──────────────────────────────────────────────────────
 export { normInv, chi2Quantile, jacobiEigenDecomposition, matMul, matTranspose, invertSymmetricMatrix } from './utils/mathUtils';
+export { infixToMathML, infixToContentMathML } from './utils/infixToMathML';
 
 // ── ZIP Utils ───────────────────────────────────────────────────────
 export { createZip } from './utils/miniZip';

@@ -153,7 +153,11 @@ export function writeBNGL(model: BNGLModel, options: BNGLWriterOptions = {}): st
       if (rule.deleteMolecules) modifiers.push('DeleteMolecules');
       if (rule.moveConnected) modifiers.push('MoveConnected');
       if (rule.matchOnce) modifiers.push('MatchOnce');
-      if (!rule.allowsIntramolecular) modifiers.push('exclude_intramolecular');
+      // `exclude_intramolecular` must be emitted ONLY when the rule explicitly disallows
+      // intramolecular reactions. The field is optional, so `!rule.allowsIntramolecular` is true for
+      // the common case where it is simply unset (undefined) — which would wrongly append the
+      // modifier to nearly every rule and silently change its semantics on export.
+      if (rule.allowsIntramolecular === false) modifiers.push('exclude_intramolecular');
 
       if (modifiers.length > 0) {
         line += ` ${modifiers.join(', ')}`;

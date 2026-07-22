@@ -1293,7 +1293,13 @@ function generateSBMLPureXml(model: BNGLModel): string {
       });
       lines.push('        </listOfProducts>');
 
-      let formula = r.rate || '0';
+      const rateStr = r.rate;
+      let formula: string;
+      if (rateStr !== undefined && rateStr !== null && String(rateStr).trim().length > 0) {
+        formula = String(rateStr).trim();
+      } else {
+        formula = String(r.rateConstant ?? 0);
+      }
       formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
       formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, null);
@@ -1726,16 +1732,21 @@ function addReactionsToSBML(
         ref.setConstant(true);
       });
 
-      // Kinetic Law
+      // Kinetic Law. The atomizer writer uses `r.rate` as the full rate expression
+      // (already containing the rate law). Fix falsy-zero: use explicit undefined/null
+      // check instead of `||` so a legitimate empty rate falls through correctly.
       const kl = rxn.createKineticLaw();
-      // Simple mass action formula for now
-      let formula = r.rate || '0';
+      const rateStr = r.rate;
+      let formula: string;
+      if (rateStr !== undefined && rateStr !== null && String(rateStr).trim().length > 0) {
+        formula = String(rateStr).trim();
+      } else {
+        formula = String(r.rateConstant ?? 0);
+      }
       formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
       formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, substrateId);
       formula = replaceSpeciesInFormula(formula);
-      // If the rate is a parameter name, it's fine. If it's a number, it's fine.
-      // For more complex expressions, we should use MathML, but libsbml.setFormula handles infix.
       kl.setFormula(formula);
     });
   }

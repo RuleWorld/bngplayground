@@ -19,8 +19,11 @@ import {
   AnnotationInfo,
   BiologicalQualifier,
   ModelQualifier,
+  SBMLImportWarning,
 } from '../config/types';
 import { standardizeName, logger, factorial, comb } from '../utils/helpers';
+import { applyUnitScaling } from '../validation/units';
+import { parseMultiPackage } from '../validation/multiPackage';
 // import { pathToFileURL } from 'node:url';
 // import { resolve } from 'node:path';
 
@@ -291,6 +294,7 @@ type SimpleXmlNode = {
   name: string;
   children: SimpleXmlNode[];
   text: string;
+  attributes?: string;
 };
 
 // =============================================================================
@@ -725,6 +729,148 @@ export class SBMLParser {
   private reactionKineticFormulaById: Map<string, string> = new Map();
   private ruleFormulaByKey: Map<string, string[]> = new Map();
   private ruleFormulaCursorByKey: Map<string, number> = new Map();
+  /** Structured diagnostics collected during a parse; attached to the returned model. */
+  private importWarnings: SBMLImportWarning[] = [];
+  /** Set true if the comp package was successfully flattened during this parse. */
+  private compFlattened: boolean = false;
+
+  /**
+   * Attempt to flatten SBML hierarchical composition (comp package) using libSBML's own
+   * CompFlatteningConverter, then re-serialize so the raw-XML fallbacks keep working. Runs only
+   * when the build exposes the full conversion + serialization API; otherwise returns false and a
+   * precise diagnostic is emitted by detectUnsupportedPackages. We do not re-implement flattening.
+   */
+  private tryFlattenComp(document: any): boolean {
+    if (!this.currentSbml || !/xmlns:[A-Za-z0-9_]+\s*=\s*["']http:\/\/www\.sbml\.org\/sbml\/level3\/version\d+\/comp\//i.test(this.currentSbml)) {
+      return false; // no comp package present
+    }
+    try {
+      const hasConv = typeof libsbml.ConversionProperties === 'function';
+      const hasOption = typeof libsbml.ConversionOption === 'function';
+      const canConvert = document && typeof document.convert === 'function';
+      const canSerialize = typeof libsbml.writeSBMLToString === 'function';
+      // A drivable ConversionProperties needs addOption/setValue to select "flatten comp".
+      const props = hasConv ? new libsbml.ConversionProperties() : null;
+      const canDrive = props && (typeof props.addOption === 'function' || (hasOption && typeof props.setValue === 'function'));
+      if (!canConvert || !canDrive || !canSerialize) {
+        this.recordWarning('package:comp',
+          'comp (hierarchical composition) present but this libSBML build cannot flatten it (conversion/serialization API not exported). Submodels are not expanded. Use a fuller libsbmljs build or pre-flatten the model.',
+          'dropped');
+        return false;
+      }
+      if (typeof props!.addOption === 'function') {
+        props!.addOption('flatten comp', true, 'flatten comp');
+      }
+      const status = document.convert(props);
+      if (status !== 0 && status !== undefined) {
+        this.recordWarning('package:comp', `comp flattening returned status ${status}; submodels may not be fully expanded.`, 'approximated');
+      }
+      const flat = libsbml.writeSBMLToString(document);
+      if (typeof flat === 'string' && flat.length > 0) {
+        this.currentSbml = flat; // keep raw-XML fallbacks consistent with the flattened model
+        this.reactionKineticFormulaById = this.buildReactionKineticFormulaFallbackMap(flat);
+        this.ruleFormulaByKey = this.buildRuleFormulaFallbackMap(flat);
+        this.recordWarning('package:comp', 'comp package flattened via libSBML CompFlatteningConverter.', 'info');
+        return true;
+      }
+      return false;
+    } catch (e) {
+      this.recordWarning('package:comp', `comp flattening attempt failed (${String(e)}); submodels not expanded.`, 'dropped');
+      return false;
+    }
+  }
+
+  /**
+   * Read the attribute string of the first element `<tag ... id="id" ...>` from the raw SBML.
+   * The bundled libsbmljs build omits many L3 getters (sboTerm, conversionFactor, isSet*, event
+   * trigger attributes), so we recover them from the source text. Returns '' if not found.
+   */
+  private rawElementAttrs(tag: string, id: string): string {
+    if (!this.currentSbml || !id) return '';
+    const eid = id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    // id may appear before or after other attributes; match either order.
+    const re = new RegExp(`<${tag}\\b([^>]*\\bid\\s*=\\s*["']${eid}["'][^>]*)>`, 'i');
+    const m = this.currentSbml.match(re);
+    return m ? m[1] : '';
+  }
+
+  /** True if `attr="..."` (or attr='...') is literally present in the given attribute string. */
+  private rawHasAttr(attrs: string, attr: string): boolean {
+    if (!attrs) return false;
+    return new RegExp(`\\b${attr}\\s*=\\s*["']`, 'i').test(attrs);
+  }
+
+  private recordWarning(category: string, message: string, severity: SBMLImportWarning['severity']): void {
+    const existing = this.importWarnings.find(w => w.category === category && w.message === message);
+    if (existing) {
+      existing.count += 1;
+    } else {
+      this.importWarnings.push({ category, message, count: 1, severity });
+    }
+  }
+
+  /**
+   * Detect SBML Level 3 packages by their namespace and count the elements each contributes.
+   * The bundled build has no getPlugin, and full support for comp/multi/fbc/qual is a separate
+   * subsystem — so rather than silently ignore these, we count what would be lost and say so.
+   */
+  private detectUnsupportedPackages(_model: SBMLModel): void {
+    const xml = this.currentSbml;
+    if (!xml) return;
+
+    // Packages whose content changes the mathematical model (dropping them corrupts results).
+    const dynamicPkgs: Record<string, string> = {
+      comp: 'hierarchical model composition (submodels/externalModelDefinitions are not flattened)',
+      multi: 'multistate/multicomponent species — the structure the atomizer otherwise reconstructs heuristically',
+      fbc: 'flux-balance constraints and objectives',
+      qual: 'qualitative (logical) model transitions',
+      spatial: 'spatial geometry and diffusion',
+      arrays: 'array-expanded objects',
+      distrib: 'distributions and uncertainty',
+      dyn: 'dynamic (agent) behaviour',
+    };
+    // Cosmetic / non-dynamic packages: safe to skip, noted for completeness only.
+    const benignPkgs: Record<string, string> = {
+      layout: 'diagram layout',
+      render: 'diagram rendering',
+      groups: 'element grouping',
+    };
+
+    const nsRe = /xmlns:([A-Za-z0-9_]+)\s*=\s*["']http:\/\/www\.sbml\.org\/sbml\/level3\/version\d+\/([a-z]+)\/version\d+["']/gi;
+    const prefixByPkg = new Map<string, string>();
+    let m: RegExpExecArray | null;
+    while ((m = nsRe.exec(xml)) !== null) {
+      prefixByPkg.set(m[2].toLowerCase(), m[1]);
+    }
+
+    const countPrefixed = (prefix: string): number =>
+      (xml.match(new RegExp(`<${prefix}:[A-Za-z]`, 'g'))?.length || 0);
+
+    // Some packages aren't merely unimplemented — they describe a different kind of model than the
+    // kinetic ODE/SSA network BNGL expresses. Spell that out so the diagnostic isn't mistaken for a
+    // missing feature that a rate law could paper over.
+    const pkgWhy: Record<string, string> = {
+      fbc: ' This is a constraint-based (flux-balance) model: a steady-state linear program over an objective and flux bounds, with no kinetics or time course. It has no faithful mass-action/ODE representation; use an FBA tool (e.g. COBRApy) instead of forcing kinetic rates.',
+      qual: ' This is a qualitative/logical model: discrete levels with logical transition functions, not continuous-time kinetics. Its asynchronous/synchronous logical update semantics do not correspond to reaction rates, so a rate-based translation would compute different dynamics; use a logical-modelling tool such as GINsim or bioLQM instead.',
+    };
+
+    for (const [pkg, desc] of Object.entries(dynamicPkgs)) {
+      if (pkg === 'comp') continue; // comp diagnostics are emitted by tryFlattenComp
+      const prefix = prefixByPkg.get(pkg);
+      if (!prefix) continue;
+      const n = countPrefixed(prefix);
+      this.recordWarning(`package:${pkg}`,
+        `SBML "${pkg}" package detected (${n} element(s)): ${desc}. This package is not imported; affected structure is missing from the atomized model.${pkgWhy[pkg] || ''}`,
+        'dropped');
+    }
+    for (const [pkg, desc] of Object.entries(benignPkgs)) {
+      const prefix = prefixByPkg.get(pkg);
+      if (!prefix) continue;
+      this.recordWarning(`package:${pkg}`,
+        `SBML "${pkg}" package detected (${desc}); not imported. This does not affect the mathematical model.`,
+        'info');
+    }
+  }
 
   /**
    * Initialize the parser by loading libsbmljs
@@ -916,6 +1062,7 @@ export class SBMLParser {
 
     debugSbml(`!!! [SBMLParser] _parseInternal: Length: ${sbmlString.length}`);
     this.currentSbml = sbmlString;
+    this.importWarnings = [];
     this.reactionKineticFormulaById = this.buildReactionKineticFormulaFallbackMap(sbmlString);
     this.ruleFormulaByKey = this.buildRuleFormulaFallbackMap(sbmlString);
     this.ruleFormulaCursorByKey = new Map();
@@ -971,6 +1118,11 @@ export class SBMLParser {
       }
 
       debugSbml('!!! [SBMLParser] Calling getModel()');
+      // Attempt hierarchical (comp) flattening before extraction. This bundled libsbmljs build does
+      // not export the pieces needed to drive/serialize the converter, so in practice it records a
+      // build-level diagnostic; the code runs the real converter automatically if a fuller build is
+      // ever used. Hand-rolling a flattener (submodels/ports/replacements) is deliberately avoided.
+      this.compFlattened = this.tryFlattenComp(document);
       const model = typeof document.getModel === 'function' ? document.getModel() : null;
       debugSbml(`!!! [SBMLParser] getModel result: ${model ? 'object' : 'null'}`);
       if (model && typeof model.ptr !== 'undefined') {
@@ -1023,6 +1175,20 @@ export class SBMLParser {
       initialAssignments: [],
       speciesByCompartment: new Map(),
       unitDefinitions: new Map(),
+      level: typeof model.getLevel === 'function' ? model.getLevel() : undefined,
+      version: typeof model.getVersion === 'function' ? model.getVersion() : undefined,
+      conversionFactor: (typeof model.getConversionFactor === 'function' ? model.getConversionFactor() : '')
+        || this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'conversionFactor')
+        || undefined,
+      substanceUnits: (typeof model.getSubstanceUnits === 'function' ? model.getSubstanceUnits() : '')
+        || this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'substanceUnits') || undefined,
+      timeUnits: this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'timeUnits') || undefined,
+      volumeUnits: this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'volumeUnits') || undefined,
+      areaUnits: this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'areaUnits') || undefined,
+      lengthUnits: this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'lengthUnits') || undefined,
+      extentUnits: this.getXmlAttribute(this.currentSbml.match(/<model\b[^>]*>/i)?.[0] || '', 'extentUnits') || undefined,
+      constraintCount: 0,
+      importWarnings: [],
     };
 
     // Reset per-model parameter alias cache used for math normalization.
@@ -1208,6 +1374,52 @@ export class SBMLParser {
     }
     const otherTime = performance.now() - t;
 
+    // Constraints: recorded but not simulated (they are validity assertions, not dynamics).
+    const numConstraints = typeof model.getNumConstraints === 'function'
+      ? model.getNumConstraints()
+      : (this.currentSbml.match(/<constraint\b/gi)?.length || 0);
+    result.constraintCount = numConstraints;
+    if (numConstraints > 0) {
+      this.recordWarning('constraint',
+        `${numConstraints} <constraint> element(s) present; not enforced during simulation.`,
+        'info');
+    }
+
+    // L3 package detection. The reduced build exposes no getPlugin, so detect by namespace in the
+    // source and count top-level objects so nothing is dropped without an explicit, counted notice.
+    this.detectUnsupportedPackages(result);
+
+    // Events are captured but the engine has no general event executor, so they change nothing
+    // during simulation unless the writer maps them (only simple time-triggered cases can be).
+    if (result.events.length > 0) {
+      this.recordWarning('event',
+        `${result.events.length} SBML event(s) parsed; discrete state changes are not executed by the simulation engine and are emitted as an annotated block for review.`,
+        'dropped');
+    }
+
+    // Algebraic rules cannot be represented in BNGL (implicit DAE constraints).
+    const numAlgebraic = result.rules.filter(r => r.type === 'algebraic').length;
+    if (numAlgebraic > 0) {
+      this.recordWarning('algebraicRule',
+        `${numAlgebraic} algebraic rule(s) present; these are implicit DAE constraints with no BNGL equivalent and are not applied.`,
+        'dropped');
+    }
+
+    // Recover BNGL molecule-type skeletons from the multi package, if present.
+    const multi = parseMultiPackage(this.currentSbml || '');
+    if (multi.present) {
+      for (const w of multi.warnings) this.importWarnings.push(w);
+      if (multi.bnglMoleculeTypes.length > 0) result.multiMoleculeTypes = multi.bnglMoleculeTypes;
+      if (multi.complexPatterns.length > 0) result.multiComplexPatterns = multi.complexPatterns.map(c => c.pattern);
+      if (multi.seedPatterns.length > 0) result.multiSeedPatterns = multi.seedPatterns.map(s => `${s.species}: ${s.pattern}`);
+    }
+
+    // Convert declared units to SI base so the downstream conc*Na*V step lands on real counts.
+    // No-op for undeclared/dimensionless units, so unit-less models (incl. BNG round-trips) are safe.
+    for (const w of applyUnitScaling(result)) this.importWarnings.push(w);
+
+    result.importWarnings = this.importWarnings.slice();
+
     debugSbml(`[SBMLParser] extractModel breakdown:
       Compartments: ${compTime.toFixed(2)}ms
       Species: ${speciesTime.toFixed(2)}ms
@@ -1218,6 +1430,10 @@ export class SBMLParser {
 
     logger.info('SBM004',
       `Parsed SBML model: ${result.species.size} species, ${result.reactions.size} reactions`);
+    for (const w of this.importWarnings) {
+      const code = w.severity === 'dropped' ? 'SBM020' : w.severity === 'approximated' ? 'SBM021' : 'SBM022';
+      logger.warning(code, `[${w.category}] ${w.message}${w.count > 1 ? ` (x${w.count})` : ''}`);
+    }
 
     return result;
   }
@@ -1239,14 +1455,21 @@ export class SBMLParser {
     const isSetO = typeof comp.isSetOutside === 'function' && comp.isSetOutside();
     const getAttrO = typeof comp.getAttributeValue === 'function' ? comp.getAttributeValue('outside') : undefined;
 
+    const compId = comp.getId();
+    const compAttrs = this.rawElementAttrs('compartment', compId);
+    const sizeSet = this.rawHasAttr(compAttrs, 'size') || this.rawHasAttr(compAttrs, 'volume');
+
     return {
-      id: comp.getId(),
-      name: comp.getName() || comp.getId(),
+      id: compId,
+      name: comp.getName() || compId,
       spatialDimensions: typeof comp.getSpatialDimensions === 'function' ? comp.getSpatialDimensions() : 3,
       size: typeof comp.getSize === 'function' ? comp.getSize() : 1,
       units: typeof comp.getUnits === 'function' ? comp.getUnits() : '',
       constant: typeof comp.getConstant === 'function' ? comp.getConstant() : true,
       outside: outside || (isSetO ? comp.getOutside() : (getAttrO || (typeof comp.getOutside === 'function' ? (comp.getOutside() || undefined) : undefined))),
+      compartmentType: (typeof comp.getCompartmentType === 'function' ? comp.getCompartmentType() : '')
+        || this.getXmlAttribute(compAttrs, 'compartmentType') || undefined,
+      sizeSet,
     };
   }
 
@@ -1256,24 +1479,44 @@ export class SBMLParser {
     const attrName = typeof sp.getAttributeValue === 'function' ? (sp.getAttributeValue('name') || '') : '';
     const finalName = name || attrName || sp.getId();
     
-    const hasInitialAmount = typeof sp.getInitialAmount === 'function' && (sp.getInitialAmount() || 0) > 0;
-    const hasInitialConcentration = typeof sp.getInitialConcentration === 'function' && (sp.getInitialConcentration() || 0) > 0;
-    
+    const speciesId = sp.getId();
+
+    // The reduced libsbmljs build has no isSetInitialAmount/isSetInitialConcentration, so we
+    // detect explicit presence from the raw SBML. This is what lets us tell a genuine 0 (or an
+    // unset value that an initialAssignment will supply) apart from a value the modeller meant.
+    const rawAttrs = this.rawElementAttrs('species', speciesId);
+    const amountSet = this.rawHasAttr(rawAttrs, 'initialAmount');
+    const concSet = this.rawHasAttr(rawAttrs, 'initialConcentration');
+
+    const rawAmount = typeof sp.getInitialAmount === 'function' ? (sp.getInitialAmount() || 0) : 0;
+    const rawConc = typeof sp.getInitialConcentration === 'function' ? (sp.getInitialConcentration() || 0) : 0;
+
     // Only use explicit hasOnlySubstanceUnits attribute from SBML.
     // Inferred logic based on non-zero initialAmount was incorrect for mixed-unit systems.
     const hasOnlySubstanceUnits = typeof sp.getHasOnlySubstanceUnits === 'function' ? sp.getHasOnlySubstanceUnits() : false;
-    
+
+    const sboAttr = this.getXmlAttribute(rawAttrs, 'sboTerm');
+    const convAttr = this.getXmlAttribute(rawAttrs, 'conversionFactor');
+
     return {
-      id: sp.getId(),
+      id: speciesId,
       name: finalName,
       compartment: sp.getCompartment(),
-      initialConcentration: hasInitialConcentration ? (sp.getInitialConcentration() || 0) : 0,
-      initialAmount: hasInitialAmount ? (sp.getInitialAmount() || 0) : 0,
+      // Keep the actual value when the attribute is set (including a literal 0). When neither is
+      // set, both stay 0 and the seed builder will look to an initialAssignment instead.
+      initialConcentration: concSet ? rawConc : 0,
+      initialAmount: amountSet ? rawAmount : 0,
       substanceUnits: typeof sp.getSubstanceUnits === 'function' ? (sp.getSubstanceUnits() || '') : '',
       hasOnlySubstanceUnits,
       boundaryCondition: typeof sp.getBoundaryCondition === 'function' ? sp.getBoundaryCondition() : false,
       constant: typeof sp.getConstant === 'function' ? sp.getConstant() : false,
       annotations: this.extractAnnotations(sp),
+      initialAmountSet: amountSet,
+      initialConcentrationSet: concSet,
+      sboTerm: sboAttr || undefined,
+      conversionFactor: convAttr || undefined,
+      charge: this.rawHasAttr(rawAttrs, 'charge') ? Number(this.getXmlAttribute(rawAttrs, 'charge')) : undefined,
+      speciesType: this.getXmlAttribute(rawAttrs, 'speciesType') || undefined,
     };
   }
 
@@ -1542,7 +1785,11 @@ export class SBMLParser {
         if (!openNameMatch) continue;
         const rawName = openNameMatch[1];
         const name = rawName.split(':').pop()?.toLowerCase() || rawName.toLowerCase();
-        const node: SimpleXmlNode = { name, children: [], text: '' };
+        const attributes = token
+          .replace(/^<\s*[^\s/>]+/, '')   // drop "<name"
+          .replace(/\/?\s*>$/, '')        // drop trailing ">" or "/>"
+          .trim();
+        const node: SimpleXmlNode = { name, children: [], text: '', attributes };
         const parent = stack[stack.length - 1];
         parent.children.push(node);
 
@@ -1583,10 +1830,17 @@ export class SBMLParser {
     if (node.name === '#text') return node.text.trim();
 
     const elementChildren = node.children.filter((child) => child.name !== '#text');
-    const childExprs = elementChildren
-      .map((child) => this.mathMlNodeToFormula(child))
-      .map((expr) => expr.trim())
-      .filter(Boolean);
+    // Compute the first non-empty child expression ON DEMAND. Doing this eagerly for every node
+    // (as a mapped childExprs array) double-recurses through operands in the `apply` branch below,
+    // which is O(2^depth) and hangs on deeply nested arithmetic (e.g. long left-associative
+    // subtraction chains). Only the passthrough cases and the default need it.
+    const firstChildExpr = (): string => {
+      for (const child of elementChildren) {
+        const e = this.mathMlNodeToFormula(child).trim();
+        if (e) return e;
+      }
+      return '';
+    };
 
     switch (node.name) {
       case 'math':
@@ -1595,14 +1849,38 @@ export class SBMLParser {
       case 'condition':
       case 'piece':
       case 'otherwise':
-        return childExprs[0] || '';
+        return firstChildExpr();
       case 'ci':
-      case 'cn':
       case 'csymbol':
         return this.simpleXmlText(node);
+      case 'cn': {
+        // <cn> may carry a type: rational (a<sep/>b => a/b) or e-notation (m<sep/>e => m*10^e).
+        const hasSep = node.children.some((c) => c.name === 'sep');
+        const textChunks = node.children.filter((c) => c.name === '#text').map((c) => c.text.trim()).filter(Boolean);
+        const type = (this.getXmlAttribute(node.attributes || '', 'type') || '').toLowerCase();
+        if (hasSep && textChunks.length >= 2) {
+          if (type === 'e-notation' || type === 'enotation') return `(${textChunks[0]} * 10^(${textChunks[1]}))`;
+          // rational (the default meaning of a <sep/> between two integers)
+          if (type !== 'rational') {
+            this.recordWarning('mathml', `<cn> with <sep/> and unspecified type treated as rational.`, 'approximated');
+          }
+          return `(${textChunks[0]} / ${textChunks[1]})`;
+        }
+        return this.simpleXmlText(node);
+      }
       case 'true':
         return '1';
       case 'false':
+        return '0';
+      case 'pi':
+        return '3.141592653589793';
+      case 'exponentiale':
+        return '2.718281828459045';
+      case 'infinity':
+        this.recordWarning('mathml', '<infinity> constant encountered in math; emitted as a large finite value.', 'approximated');
+        return '1e308';
+      case 'notanumber':
+        this.recordWarning('mathml', '<notanumber> constant encountered in math; cannot be represented.', 'approximated');
         return '0';
       case 'piecewise': {
         const args: string[] = [];
@@ -1629,31 +1907,78 @@ export class SBMLParser {
       case 'apply': {
         if (elementChildren.length === 0) return '';
         const opNode = elementChildren[0];
-        const opArgs = elementChildren
-          .slice(1)
-          .map((child) => this.mathMlNodeToFormula(child))
-          .map((expr) => expr.trim())
-          .filter(Boolean);
         const opName = opNode.name;
 
         if (opName === 'ci' || opName === 'csymbol') {
+          // Only a function-call apply needs its operands mapped here. Computing this eagerly for
+          // EVERY apply (as was done before) is a second O(2^depth) traversal on top of `a` below,
+          // and hangs on deeply nested arithmetic — so it must stay inside this branch.
+          const opArgs = elementChildren
+            .slice(1)
+            .map((child) => this.mathMlNodeToFormula(child))
+            .map((expr) => expr.trim())
+            .filter(Boolean);
           const fnName = this.simpleXmlText(opNode);
           return fnName ? `${fnName}(${opArgs.join(', ')})` : opArgs.join(', ');
         }
 
+        // <degree> (for root) and <logbase> (for log) are qualifiers, not arguments.
+        const degreeNode = elementChildren.slice(1).find((c) => c.name === 'degree') || null;
+        const logbaseNode = elementChildren.slice(1).find((c) => c.name === 'logbase') || null;
+        const a = elementChildren
+          .slice(1)
+          .filter((c) => c.name !== 'degree' && c.name !== 'logbase')
+          .map((c) => this.mathMlNodeToFormula(c))
+          .map((e) => e.trim())
+          .filter(Boolean);
+
+        // Functions supported directly by the engine's expression evaluator.
+        const direct: Record<string, string> = {
+          exp: 'exp', ln: 'ln', abs: 'abs', floor: 'floor',
+          sin: 'sin', cos: 'cos', tan: 'tan',
+          sinh: 'sinh', cosh: 'cosh', tanh: 'tanh',
+          asin: 'asin', acos: 'acos', atan: 'atan',
+          arcsin: 'asin', arccos: 'acos', arctan: 'atan',
+          arcsinh: 'asinh', arccosh: 'acosh', arctanh: 'atanh',
+          ceiling: 'ceil', min: 'min', max: 'max',
+        };
+
         switch (opName) {
           case 'plus':
-            return `(${opArgs.join(' + ')})`;
+            return a.length ? `(${a.join(' + ')})` : '0';
           case 'times':
-            return `(${opArgs.join(' * ')})`;
+            return a.length ? `(${a.join(' * ')})` : '1';
           case 'minus':
-            return opArgs.length === 1 ? `(-${opArgs[0]})` : `(${opArgs.join(' - ')})`;
+            return a.length === 1 ? `(-${a[0]})` : `(${a.join(' - ')})`;
           case 'divide':
-            return opArgs.length >= 2 ? `(${opArgs[0]} / ${opArgs[1]})` : `(${opArgs.join(' / ')})`;
+            return a.length >= 2 ? `(${a[0]} / ${a[1]})` : `(${a.join(' / ')})`;
           case 'power':
-            return opArgs.length >= 2 ? `pow(${opArgs[0]}, ${opArgs[1]})` : `pow(${opArgs.join(', ')})`;
-          case 'root':
-            return opArgs.length === 1 ? `sqrt(${opArgs[0]})` : `root(${opArgs.join(', ')})`;
+            return a.length >= 2 ? `pow(${a[0]}, ${a[1]})` : `pow(${a.join(', ')})`;
+          case 'root': {
+            // Default is square root; a <degree> gives the nth root => x^(1/n).
+            const deg = degreeNode ? this.mathMlNodeToFormula(degreeNode).trim() : '';
+            if (deg && deg !== '2') return `pow(${a[0]}, (1 / (${deg})))`;
+            return `sqrt(${a[0]})`;
+          }
+          case 'log': {
+            // Default base is 10; a <logbase> gives log_b(x) = ln(x)/ln(b).
+            const base = logbaseNode ? this.mathMlNodeToFormula(logbaseNode).trim() : '';
+            if (base && base !== '10') return `(ln(${a[0]}) / ln(${base}))`;
+            return `log10(${a[0]})`;
+          }
+          case 'quotient':
+            return a.length >= 2 ? `floor((${a[0]}) / (${a[1]}))` : a.join(', ');
+          case 'rem':
+            return a.length >= 2 ? `((${a[0]}) - (${a[1]}) * floor((${a[0]}) / (${a[1]})))` : a.join(', ');
+          case 'factorial':
+            this.recordWarning('mathml', '<factorial> used in math; emitted as factorial(x), which the engine may not support.', 'approximated');
+            return `factorial(${a.join(', ')})`;
+          case 'sec': return `(1 / cos(${a[0]}))`;
+          case 'csc': return `(1 / sin(${a[0]}))`;
+          case 'cot': return `(1 / tan(${a[0]}))`;
+          case 'sech': return `(1 / cosh(${a[0]}))`;
+          case 'csch': return `(1 / sinh(${a[0]}))`;
+          case 'coth': return `(1 / tanh(${a[0]}))`;
           case 'eq':
           case 'neq':
           case 'gt':
@@ -1662,31 +1987,60 @@ export class SBMLParser {
           case 'leq':
           case 'and':
           case 'or':
+          case 'xor':
           case 'not':
-            return `${opName}(${opArgs.join(', ')})`;
-          case 'exp':
-          case 'ln':
-          case 'log':
-          case 'abs':
-          case 'floor':
-          case 'ceiling':
-          case 'sin':
-          case 'cos':
-          case 'tan':
-          case 'asin':
-          case 'acos':
-          case 'atan':
+            return `${opName}(${a.join(', ')})`;
           case 'piecewise':
-            return `${opName}(${opArgs.join(', ')})`;
+            return `piecewise(${a.join(', ')})`;
           default: {
+            if (direct[opName]) return `${direct[opName]}(${a.join(', ')})`;
             const fallbackName = this.simpleXmlText(opNode) || opName;
-            return fallbackName ? `${fallbackName}(${opArgs.join(', ')})` : opArgs.join(', ');
+            if (opName === 'gcd' || opName === 'lcm') {
+              this.recordWarning('mathml', `<${opName}> used in math; the engine does not provide it. Emitted as ${opName}(...).`, 'approximated');
+            }
+            return fallbackName ? `${fallbackName}(${a.join(', ')})` : a.join(', ');
           }
         }
       }
       default:
-        return childExprs[0] || this.simpleXmlText(node);
+        return firstChildExpr() || this.simpleXmlText(node);
     }
+  }
+
+  /** Pull the raw <math>...</math> block for a reaction's kinetic law from the source SBML. */
+  private rawMathForKineticLaw(reactionId: string): string | null {
+    if (!this.currentSbml || !reactionId) return null;
+    const eid = reactionId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const rxnBlock = this.currentSbml.match(
+      new RegExp(`<reaction\\b[^>]*\\bid\\s*=\\s*["']${eid}["'][\\s\\S]*?</reaction>`, 'i'));
+    if (!rxnBlock) return null;
+    const kl = rxnBlock[0].match(/<kineticLaw\b[\s\S]*?<\/kineticLaw>/i);
+    const scope = kl ? kl[0] : rxnBlock[0];
+    const math = scope.match(/<math\b[\s\S]*?<\/math>/i);
+    return math ? math[0] : null;
+  }
+
+  /** Pull the raw <math>...</math> block for a rule (by variable, or first of its kind) from source. */
+  private rawMathForRule(type: SBMLRule['type'], variable?: string): string | null {
+    if (!this.currentSbml) return null;
+    const tag = type === 'assignment' ? 'assignmentRule' : type === 'rate' ? 'rateRule' : 'algebraicRule';
+    let block: RegExpMatchArray | null;
+    if (variable) {
+      const ev = variable.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      block = this.currentSbml.match(
+        new RegExp(`<${tag}\\b[^>]*\\bvariable\\s*=\\s*["']${ev}["'][\\s\\S]*?</${tag}>`, 'i'));
+    } else {
+      block = this.currentSbml.match(new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`, 'i'));
+    }
+    if (!block) return null;
+    const math = block[0].match(/<math\b[\s\S]*?<\/math>/i);
+    return math ? math[0] : null;
+  }
+
+  /** True if the MathML uses constructs the old L1 formula converter drops or mangles. */
+  private mathHasLossyConstructs(mathXml: string | null): boolean {
+    if (!mathXml) return false;
+    return /<piecewise\b|<(?:lt|gt|leq|geq|eq|neq|and|or|not|xor)\b|definitionURL\s*=\s*["'][^"']*(?:delay|rateOf|avogadro)/i.test(mathXml);
   }
 
   private safeFormulaToString(math: any): string {
@@ -1767,6 +2121,23 @@ export class SBMLParser {
     if (type === 306) return `(${children.join(' || ')})`; // AST_LOGICAL_OR
     if (type === 305) return `!(${children[0]})`;         // AST_LOGICAL_NOT
 
+    // Lambda: emit only the body (last child); earlier children are bound-variable declarations.
+    if (typeof node.isLambda === 'function' && node.isLambda()) {
+      return children.length ? children[children.length - 1] : '';
+    }
+
+    // Math constants and csymbols, matched by name so we don't depend on build-specific type ints.
+    const rawName = typeof node.getName === 'function' ? (node.getName() || '') : '';
+    const lowered = rawName.toLowerCase();
+    if (children.length === 0) {
+      if (lowered === 'pi') return 'PI';
+      if (lowered === 'exponentiale') return 'exp(1)';
+      if (lowered === 'true') return '1';
+      if (lowered === 'false') return '0';
+      if (lowered === 'avogadro') return 'Na';
+      if (typeof node.isConstant === 'function' && node.isConstant() && rawName) return rawName;
+    }
+
     // Fallback for names if type check failed or unknown (e.g. sometimes vars are just names)
     if (node.isName && node.isName()) return node.getName();
     if (node.isNumber && node.isNumber()) {
@@ -1774,33 +2145,77 @@ export class SBMLParser {
       return node.getReal().toString();
     }
 
+    // A node with children but no matched operator is almost certainly an unrecognized function
+    // (piecewise, delay, rateOf, factorial, ...). Emit name(args) rather than dropping it silently.
+    if (children.length > 0) {
+      if (rawName) return `${rawName}(${children.join(', ')})`;
+      this.recordWarning('mathml',
+        'AST fallback hit an unnamed function-like node; emitted arguments only. Verify the affected expression.',
+        'approximated');
+      return `(${children.join(', ')})`;
+    }
+
     // Last resort: name
-    const fallbackName = node.getName();
-    if (fallbackName) return fallbackName;
+    if (rawName) return rawName;
 
     return '';
   }
 
   private extractReaction(rxn: any): SBMLReaction {
     const reactionId = typeof rxn.getId === 'function' ? rxn.getId() : '';
+
+    const extractSpeciesRef = (ref: any): SBMLSpeciesReference => {
+      const refId = typeof ref.getId === 'function' ? (ref.getId() || '') : '';
+      // getStoichiometry() returns 1 for an unset attribute, so we cannot use `|| 1` (that would
+      // clobber a legitimate 0). Detect presence from the raw element and keep the exact value.
+      const rawStoich = typeof ref.getStoichiometry === 'function' ? ref.getStoichiometry() : NaN;
+      const refAttrs = refId ? this.rawElementAttrs('speciesReference', refId) : '';
+      const stoichSet = this.rawHasAttr(refAttrs, 'stoichiometry');
+      let stoichiometry = Number.isFinite(rawStoich) && (stoichSet || rawStoich !== 1) ? rawStoich : 1;
+
+      // L2v1 rational stoichiometry: stoichiometry / denominator.
+      const denomAttr = this.getXmlAttribute(refAttrs, 'denominator');
+      const denom = denomAttr !== null ? Number(denomAttr) : NaN;
+      if (Number.isFinite(denom) && denom !== 0 && denom !== 1) {
+        stoichiometry = stoichiometry / denom;
+      }
+
+      const isConstant = typeof ref.getConstant === 'function' ? ref.getConstant() : true;
+      // Non-constant stoichiometry, or an L2 <stoichiometryMath> child, means the coefficient can
+      // change over time. BNGL has no representation for that; record it so it is not silently lost.
+      const hasStoichMath = /<stoichiometryMath\b/i.test(refAttrs) ||
+        (refId ? new RegExp(`<speciesReference\\b[^>]*\\bid\\s*=\\s*["']${refId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][\\s\\S]*?<stoichiometryMath`, 'i').test(this.currentSbml) : false);
+      const variableStoichiometry = (isConstant === false) || hasStoichMath;
+      if (variableStoichiometry) {
+        this.recordWarning('stoichiometry',
+          `Reaction "${reactionId}" has variable/StoichiometryMath stoichiometry on species "${ref.getSpecies()}"; BNGL cannot represent this, treated as fixed value ${stoichiometry}.`,
+          'approximated');
+      }
+      const rounded = Math.round(stoichiometry);
+      if (Math.abs(rounded - stoichiometry) > 1e-9) {
+        this.recordWarning('stoichiometry',
+          `Reaction "${reactionId}" has non-integer stoichiometry ${stoichiometry} on species "${ref.getSpecies()}"; BNGL requires integers.`,
+          'approximated');
+      }
+
+      return {
+        species: ref.getSpecies(),
+        stoichiometry,
+        constant: isConstant,
+        id: refId || undefined,
+        stoichiometrySet: stoichSet,
+        variableStoichiometry: variableStoichiometry || undefined,
+      };
+    };
+
     const reactants: SBMLSpeciesReference[] = [];
     for (let i = 0; i < rxn.getNumReactants(); i++) {
-      const ref = rxn.getReactant(i);
-      reactants.push({
-        species: ref.getSpecies(),
-        stoichiometry: ref.getStoichiometry() || 1,
-        constant: typeof ref.getConstant === 'function' ? ref.getConstant() : true,
-      });
+      reactants.push(extractSpeciesRef(rxn.getReactant(i)));
     }
 
     const products: SBMLSpeciesReference[] = [];
     for (let i = 0; i < rxn.getNumProducts(); i++) {
-      const ref = rxn.getProduct(i);
-      products.push({
-        species: ref.getSpecies(),
-        stoichiometry: ref.getStoichiometry() || 1,
-        constant: typeof ref.getConstant === 'function' ? ref.getConstant() : true,
-      });
+      products.push(extractSpeciesRef(rxn.getProduct(i)));
     }
 
     const modifiers: SBMLModifierSpeciesReference[] = [];
@@ -1884,6 +2299,21 @@ export class SBMLParser {
           mathExpr = fallbackFormula;
         }
       }
+
+      // The bundled build only has the L1 formulaToString, which silently drops piecewise,
+      // relational, logical, and csymbol (delay/rateOf/avogadro) math. When the source MathML
+      // uses any of those, re-derive from the raw <math> via the full MathML reader instead.
+      const rawKlMath = this.rawMathForKineticLaw(reactionId);
+      if (this.mathHasLossyConstructs(rawKlMath)) {
+        const fromMathMl = this.mathMlToFormula(rawKlMath!);
+        if (fromMathMl && fromMathMl.trim()) {
+          mathExpr = fromMathMl;
+          this.recordWarning('mathml',
+            `Kinetic law for reaction "${reactionId}" uses piecewise/relational/logical/csymbol math; parsed from MathML directly because the L1 converter is lossy for these.`,
+            'info');
+        }
+      }
+
       mathExpr = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(mathExpr, localAliases));
 
       if (math && typeof (math as any).toMathML === 'function') {
@@ -1912,16 +2342,32 @@ export class SBMLParser {
       }
     }
 
+    const fast = rxn.getFast?.() || false;
+    if (fast) {
+      this.recordWarning('fastReaction',
+        `Reaction "${reactionId}" is marked fast (fast="true"); BNGL/BNG has no fast-equilibrium solve, so it is treated as an ordinary reaction.`,
+        'approximated');
+    }
+
+    const rxnAttrs = this.rawElementAttrs('reaction', reactionId);
+    const convFactor = this.getXmlAttribute(rxnAttrs, 'conversionFactor') || undefined;
+    if (convFactor) {
+      this.recordWarning('conversionFactor',
+        `Reaction "${reactionId}" declares conversionFactor="${convFactor}"; captured but not yet applied to the rate law.`,
+        'approximated');
+    }
+
     return {
       id: reactionId,
       name: rxn.getName() || reactionId,
       reversible: rxn.getReversible(),
-      fast: rxn.getFast?.() || false,
+      fast,
       reactants,
       products,
       modifiers,
       kineticLaw,
       compartment: typeof rxn.getCompartment === 'function' ? rxn.getCompartment() : undefined,
+      conversionFactor: convFactor,
     };
   }
 
@@ -1968,6 +2414,19 @@ export class SBMLParser {
         formula = fallbackFormula;
       }
     }
+
+    // Same lossy-math guard as kinetic laws (see extractReaction).
+    const rawRuleMath = this.rawMathForRule(ruleType, variable);
+    if (this.mathHasLossyConstructs(rawRuleMath)) {
+      const fromMathMl = this.mathMlToFormula(rawRuleMath!);
+      if (fromMathMl && fromMathMl.trim()) {
+        formula = fromMathMl;
+        this.recordWarning('mathml',
+          `${ruleType} rule${variable ? ` for "${variable}"` : ''} uses piecewise/relational/logical/csymbol math; parsed from MathML directly.`,
+          'info');
+      }
+    }
+
     formula = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(formula));
 
     if (ruleType === 'algebraic') {
@@ -2071,13 +2530,27 @@ export class SBMLParser {
       });
     }
 
+    // L3 trigger attributes (initialValue, persistent) and event priority are absent from the
+    // reduced build's API, so read them from the raw <trigger>/<priority> tags.
+    const eventId = event.getId();
+    const eventBlock = eventId
+      ? (this.currentSbml.match(new RegExp(`<event\\b[^>]*\\bid\\s*=\\s*["']${eventId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][\\s\\S]*?</event>`, 'i'))?.[0] || '')
+      : '';
+    const triggerTag = eventBlock.match(/<trigger\b[^>]*>/i)?.[0] || '';
+    const initValAttr = this.getXmlAttribute(triggerTag, 'initialValue');
+    const persistAttr = this.getXmlAttribute(triggerTag, 'persistent');
+    const priorityMath = eventBlock.match(/<priority\b[\s\S]*?<math\b[\s\S]*?<\/math>[\s\S]*?<\/priority>/i)?.[0] || '';
+
     return {
-      id: event.getId(),
-      name: event.getName() || event.getId(),
+      id: eventId,
+      name: event.getName() || eventId,
       trigger: triggerMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(triggerMath)) : '',
       delay: delayMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(delayMath)) : undefined,
       useValuesFromTriggerTime: event.getUseValuesFromTriggerTime?.() || true,
       assignments,
+      triggerInitialValue: initValAttr === null ? undefined : /true|1/i.test(initValAttr),
+      triggerPersistent: persistAttr === null ? undefined : /true|1/i.test(persistAttr),
+      priority: priorityMath ? this.mathMlToFormula(priorityMath) : undefined,
     };
   }
 

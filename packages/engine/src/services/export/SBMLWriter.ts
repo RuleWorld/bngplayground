@@ -3,6 +3,7 @@ import type { ExpandedNetwork } from '../../interfaces/SimulationEngine';
 import { inferReactionSBO, SBO } from './SBOAnnotations';
 import { generateMIRIAMBlock, suggestMIRIAMAnnotations } from './MIRIAMAnnotation';
 import { escapeXml } from '../../utils/xmlUtils';
+import { infixToContentMathML } from '../../utils/infixToMathML';
 
 /**
  * Configuration options dictating SBML file generation behavior.
@@ -40,7 +41,7 @@ export class SBMLWriter {
     const sboAttr = (term: string) => options.includeSBO ? ` sboTerm="${term}"` : '';
 
     const compartmentsXml = (model.compartments || [])
-      .map(c => `      <compartment id="${escapeXml(c.name)}" size="${c.size || 1}" constant="true"${sboAttr('SBO:0000290')}/>`)
+      .map(c => `      <compartment id="${escapeXml(c.name)}" size="${c.size !== undefined && c.size !== null ? c.size : 1}" constant="true"${sboAttr('SBO:0000290')}/>`)
       .join('\n');
 
     const speciesList = network ? network.species : model.species || [];
@@ -89,14 +90,39 @@ ${reactionsXml}
         return network.reactions.map((r, i) => {
             const id = `R${i + 1}`;
             const sbo = SBO.MASS_ACTION; // Network level reactions are mass action
-            
+
             const reactants = r.reactants.map(name => `          <speciesReference species="${this.toSBMLId(name)}" stoichiometry="1" constant="true"/>`).join('\n');
             const products = r.products.map(name => `          <speciesReference species="${this.toSBMLId(name)}" stoichiometry="1" constant="true"/>`).join('\n');
-            
-            // Kinetic law: rate * [R1] * [R2] ...
-            const rateStr = String(r.rateConstant || r.rate);
+
+            // Kinetic law. A functional rate expression (Hill, saturable, TotalRate, …) is the FULL
+            // propensity and must be emitted verbatim — NOT re-multiplied by reactant concentrations,
+            // and NOT collapsed to mass-action (which silently changes the dynamics). For plain
+            // mass-action, the SBML law is rate * [R1] * [R2] … . Prefer the string rate token
+            // (usually a parameter name, preserving the reference) over the resolved constant; fall
+            // back to the numeric constant only when no token is present. Note `|| ` on rateConstant
+            // is unsafe because a legitimate 0 is falsy, so it is handled explicitly.
+            // Kinetic law = (rate law) * [R1] * [R2] … . The engine's ODE RHS multiplies the rate
+            // law (constant OR functional expression) by reactant concentrations for EVERY reaction
+            // — TotalRate is folded upstream, not by skipping this product — so the SBML law, which
+            // must be the full flux, does the same. The rate law is parenthesized so an expression
+            // like `a - b` or `V/(K+S)` composes correctly with the reactant factors, and the whole
+            // formula goes through the infix→MathML converter (the old split-on-'*' path produced an
+            // invalid single <ci> for any operator-bearing functional rate). `rateConstant || rate`
+            // is avoided because a legitimate 0 constant is falsy.
+            // Functional rate: the rateExpression is the full functional form (e.g. Hill, Michaelis-Menten).
+            // For functional rates, the expression IS the rate token; for mass-action, prefer the string
+            // rate token (preserving a parameter-name reference like `k1`) over the numeric constant.
+            const functional = r.isFunctionalRate === true
+                && typeof r.rateExpression === 'string' && r.rateExpression.trim().length > 0;
+            const rateToken = functional
+                ? r.rateExpression!.trim()
+                : (r.rate !== undefined && r.rate !== null && String(r.rate).trim().length > 0)
+                    ? String(r.rate).trim()
+                    : String(r.rateConstant ?? 0);
             const rNames = r.reactants.map(name => this.toSBMLId(name));
-            const formula = [rateStr, ...rNames].join(' * ');
+            const fullFlux = [`(${rateToken})`, ...rNames].join(' * ');
+            let mathBody = this.exprToMathML(fullFlux);
+            if (mathBody === null) mathBody = `<cn>${String(r.rateConstant ?? 0)}</cn>`; // last resort: valid MathML
 
             return `      <reaction id="${id}" reversible="false" fast="false"${sboAttr(sbo)}>
         <listOfReactants>
@@ -107,10 +133,7 @@ ${products}
         </listOfProducts>
         <kineticLaw>
           <math xmlns="http://www.w3.org/1998/Math/MathML">
-            <apply>
-              <times/>
-              ${formula.split(' * ').map(p => this.isNumber(p) ? `<cn>${p}</cn>` : `<ci>${p}</ci>`).join('\n              ')}
-            </apply>
+            ${mathBody}
           </math>
         </kineticLaw>
       </reaction>`;
@@ -129,8 +152,13 @@ ${products}
     return name.replace(/[^A-Za-z0-9_]/g, '_').replace(/^([0-9])/, '_$1');
   }
 
-
-  private static isNumber(s: string): boolean {
-    return !isNaN(parseFloat(s)) && isFinite(Number(s));
+  /** Content-MathML for an infix rate expression, or null if it cannot be parsed (never throws). */
+  private static exprToMathML(expr: string): string | null {
+    try {
+      const body = infixToContentMathML(expr);
+      return body && body.length > 0 ? body : null;
+    } catch {
+      return null;
+    }
   }
 }
