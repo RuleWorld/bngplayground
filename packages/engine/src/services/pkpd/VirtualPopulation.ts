@@ -405,3 +405,22 @@ function percentile(sorted: number[], p: number): number {
   const frac = idx - lo;
   return sorted[lo] * (1 - frac) + sorted[hi] * frac;
 }
+
+/**
+ * Summarizes virtual patient population parameters by calculating the mean and CV (coefficient of variation).
+ */
+export function summarizePopulationParameters(population: VirtualPatient[]): Record<string, { mean: number; cv: number }> {
+  if (population.length === 0) return {};
+  const firstPatientParams = population[0].parameters || {};
+  const names = Object.keys(firstPatientParams);
+
+  const summary: Record<string, { mean: number; cv: number }> = {};
+  for (const name of names) {
+    const values = population.map((p) => p.parameters[name]);
+    const mean = values.reduce((a, b) => a + b, 0) / values.length;
+    const variance = values.reduce((s, v) => s + (v - mean) ** 2, 0) / values.length;
+    const cv = mean !== 0 ? Math.sqrt(variance) / mean : 0;
+    summary[name] = { mean, cv };
+  }
+  return summary;
+}

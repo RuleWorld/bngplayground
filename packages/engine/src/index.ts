@@ -307,5 +307,5 @@ export { generateDosingSchedule, dosingToSimulationPhases } from './services/pkp
 export type { DosingEvent, DosingRegimen, StandardDosingConfig } from './services/pkpd/DosingSchedule';
 export { computePKMetrics, trapezoidalAUC, estimateTerminalHalfLife, nonCompartmentalAnalysis } from './services/pkpd/PKMetrics';
 export type { PKMetricsResult } from './services/pkpd/PKMetrics';
-export { generatePopulation, populationSimulation } from './services/pkpd/VirtualPopulation';
+export { generatePopulation, populationSimulation, summarizePopulationParameters } from './services/pkpd/VirtualPopulation';
 export type { PopulationParameter, VirtualPopulationConfig, VirtualPatient, PopulationSimulationResult } from './services/pkpd/VirtualPopulation';
