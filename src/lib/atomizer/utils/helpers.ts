@@ -379,15 +379,40 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
   '\\': '_',
 };
 
-const BNGL_RESERVED_IDENTIFIERS = new Set([
-  'species',
-  'molecules',
-  'functions',
-  'if',
-  'time',
-  'true',
-  'false',
+// Full BNGL lexer keyword set (from packages/engine/src/parser/generated/BNGLexer.ts).
+// Any emitted identifier that exactly matches one of these tokens (case-sensitive, as the
+// lexer is) must be renamed, or the strict ANTLR reparse tokenizes it as a keyword and fails.
+export const BNGL_LEXER_KEYWORDS = new Set<string>([
+  '_e', '_pi', 'abs', 'acos', 'acosh', 'actions', 'addConcentration', 'argfile', 'Arrhenius',
+  'asin', 'asinh', 'atan', 'atanh', 'atol', 'atomize', 'avg', 'background', 'bdf', 'begin',
+  'bifurcate', 'binary_output', 'blocks', 'check_iso', 'collapse', 'compartments', 'complex',
+  'continue', 'cos', 'cosh', 'Counter', 'DeleteMolecules', 'end', 'energy', 'equil',
+  'evaluate_expressions', 'exclude_products', 'exclude_reactants', 'execute', 'exp', 'false',
+  'file', 'format', 'FunctionProduct', 'functions', 'generate_hybrid_model',
+  'generate_network', 'get_final_state', 'gml', 'groups', 'Hill', 'if', 'include_model',
+  'include_network', 'include_products', 'include_reactants', 'ln', 'log_scale', 'log10',
+  'log2', 'maps', 'MatchOnce', 'max', 'max_agg', 'max_conv_fails', 'max_err_test_fails',
+  'max_iter', 'max_num_steps', 'max_sim_steps', 'max_step', 'max_stoich', 'maxOrder', 'method',
+  'min', 'MM', 'model', 'molecular', 'molecule_types', 'molecules', 'MoveConnected', 'mratio',
+  'n_output_steps', 'n_scan_pts', 'n_steps', 'netfile', 'nf', 'nocslf', 'notf', 'observables',
+  'ode', 'opts', 'output_step_interval', 'overwrite', 'par_max', 'par_min', 'param',
+  'parameter', 'parameter_scan', 'parameters', 'patterns', 'pla', 'pla_config', 'pla_output',
+  'population', 'prefix', 'pretty_formatting', 'print_CDAT', 'print_end', 'print_functions',
+  'print_iter', 'print_net', 'print_on_stop', 'priority', 'quit', 'reaction', 'reaction_rules',
+  'readFile', 'reset_conc', 'resetConcentrations', 'resetParameters', 'rint', 'rtol', 'rules',
+  'safe', 'sample_times', 'Sat', 'save_progress', 'saveConcentrations', 'saveParameters',
+  'seed', 'setConcentration', 'setModelName', 'setOption', 'setParameter', 'setVolume',
+  'simulate', 'simulate_nf', 'simulate_ode', 'simulate_pla', 'simulate_psa', 'simulate_rm',
+  'simulate_ssa', 'sin', 'sinh', 'skip_actions', 'sparse', 'species', 'sqrt', 'ssa', 'stats',
+  'steady_state', 'stiff', 'stop_if', 'substanceUnits', 'suffix', 'sum', 't_end', 't_start',
+  'tan', 'tanh', 'TextReaction', 'TextSpecies', 'TFUN', 'time', 'TotalRate', 'true', 'type',
+  'types', 'utl', 'verbose', 'version', 'visualize', 'writeFile', 'writeLatex', 'writeMDL',
+  'writeMexfile', 'writeMfile', 'writeModel', 'writeNetwork', 'writeSBML', 'writeSSC',
+  'writeSSCcfg', 'writeXML',
 ]);
+
+// Kept as an alias for existing call sites.
+const BNGL_RESERVED_IDENTIFIERS = BNGL_LEXER_KEYWORDS;
 
 /**
  * Standardize a species name for BNGL compatibility
@@ -413,7 +438,7 @@ export function standardizeName(name: string): string {
   }
 
   // Avoid strict-parser keyword collisions for generated identifiers.
-  if (BNGL_RESERVED_IDENTIFIERS.has(result.toLowerCase())) {
+  if (BNGL_RESERVED_IDENTIFIERS.has(result)) {
     result = `${result}_id`;
   }
 

@@ -916,6 +916,28 @@ export class SBMLParser {
             reject(new Error('libsbmljs initialization timed out (30s)'));
           }, 30000);
 
+          // libsbml.wasm imports its memory (env.memory), so we can supply a growable one.
+          // The old fixed 128 MB caused dense models (deeply nested MathML / many piecewise)
+          // to abort on read — a catchable bad_alloc in some cases, an uncatchable Emscripten
+          // "cannot enlarge memory" abort in others (which kills the process). We start at a
+          // modest 256 MB and allow growth to 2 GB on demand, so normal models pay almost
+          // nothing while pathological ones can complete. All the size knobs are set because
+          // different Emscripten glue versions read different ones.
+          const WASM_PAGE = 64 * 1024;
+          const INITIAL_WASM_BYTES = 256 * 1024 * 1024;   // 256 MB
+          const MAXIMUM_WASM_BYTES = 2048 * 1024 * 1024;  // 2 GB ceiling (wasm32-safe)
+          let providedWasmMemory: WebAssembly.Memory | undefined;
+          try {
+            providedWasmMemory = new WebAssembly.Memory({
+              initial: Math.floor(INITIAL_WASM_BYTES / WASM_PAGE),
+              maximum: Math.floor(MAXIMUM_WASM_BYTES / WASM_PAGE),
+            });
+          } catch {
+            // Environment can't build a growable memory of this size — fall back to letting
+            // the glue size its own memory from the numeric options below.
+            providedWasmMemory = undefined;
+          }
+
           const config = {
             locateFile: (file: string) => {
               debugSbml(`[SBMLParser] locateFile: ${file}`);
@@ -935,7 +957,14 @@ export class SBMLParser {
               }
               return file;
             },
-            TOTAL_MEMORY: 128 * 1024 * 1024,
+            // Memory sizing (see note above). TOTAL_MEMORY is the legacy alias; INITIAL_MEMORY
+            // / MAXIMUM_MEMORY / ALLOW_MEMORY_GROWTH are the modern ones; wasmMemory forces a
+            // growable memory when the build imports it (this one does).
+            TOTAL_MEMORY: INITIAL_WASM_BYTES,
+            INITIAL_MEMORY: INITIAL_WASM_BYTES,
+            MAXIMUM_MEMORY: MAXIMUM_WASM_BYTES,
+            ALLOW_MEMORY_GROWTH: 1,
+            ...(providedWasmMemory ? { wasmMemory: providedWasmMemory } : {}),
             print: (text: string) => debugSbml(`[libsbml] ${text}`),
             printErr: (text: string) => debugSbml(`[libsbml-err] ${text}`),
             onRuntimeInitialized: () => {
@@ -1088,8 +1117,59 @@ export class SBMLParser {
         }
       }
     } catch (e) {
-      console.error('!!! [SBMLParser] readSBMLFromString threw error:', e);
-      throw e;
+      // Fallback: heavy <annotation> metadata (celldesigner / render / layout — none of
+      // which carries kinetics) can exhaust the WASM heap during read and make libsbml
+      // throw. If the first read threw, retry once with annotation blocks stripped. This
+      // path is only reached when the model failed to read at all, so it cannot affect any
+      // model that already parses; SBML annotations are not nested, so the non-greedy strip
+      // is safe.
+      if (typeof e === 'number') {
+        try {
+          const stripped = sbmlString.replace(/<annotation\b[\s\S]*?<\/annotation>/g, '');
+          if (stripped.length < sbmlString.length) {
+            reader = new libsbml.SBMLReader();
+            document = reader.readSBMLFromString(stripped);
+            if (document) {
+              logger.warning(
+                'SBM023',
+                'Model read only after stripping annotation metadata; visualization/layout annotations were dropped (kinetics unaffected).'
+              );
+            }
+          }
+        } catch {
+          // retry also failed — fall through to decode + throw below
+        }
+      }
+
+      if (!document) {
+        // libsbml runs as Emscripten WASM: a thrown C++ exception surfaces in JS as a bare
+        // number (a pointer into the WASM heap), e.g. "6875904", which is useless on its own.
+        // Decode it to a real message when the build exposes a decoder; otherwise annotate it.
+        let decoded: unknown = e;
+        if (typeof e === 'number' && libsbml) {
+          try {
+            const mod = libsbml as any;
+            if (typeof mod.getExceptionMessage === 'function') {
+              const info = mod.getExceptionMessage(e); // usually [type, message]
+              decoded = new Error(
+                `libsbml WASM exception: ${Array.isArray(info) ? info.filter(Boolean).join(': ') : info}`
+              );
+            } else if (typeof mod.what === 'function') {
+              decoded = new Error(`libsbml WASM exception: ${mod.what(e)}`);
+            } else {
+              decoded = new Error(
+                `libsbml WASM threw a C++ exception (pointer ${e}) with no decoder available. ` +
+                `This usually means an out-of-memory during read of a very large model, or an ` +
+                `SBML Level-3 package (comp/fbc/multi/arrays/distrib) not compiled into this build.`
+              );
+            }
+          } catch {
+            decoded = new Error(`libsbml WASM threw a C++ exception (pointer ${e}); message decode failed.`);
+          }
+        }
+        console.error('!!! [SBMLParser] readSBMLFromString threw error:', decoded);
+        throw decoded;
+      }
     }
 
     if (!document) {

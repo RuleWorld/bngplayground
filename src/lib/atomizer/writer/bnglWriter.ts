@@ -20,11 +20,16 @@ import {
   standardizeName,
   cleanParameterValue,
   logger,
+  BNGL_LEXER_KEYWORDS,
 } from '../utils/helpers';
 import { SCTEntry, SpeciesCompositionTable } from '../config/types';
 import { SafeExpressionEvaluator } from '@bngplayground/engine';
 import { RATE_RULE_META_PREFIX, SYNTH_RATE_RULE_SPECIES_PREFIX } from './rateRuleConstants';
 import { synthesizeEventActions, type EventTranslationContext } from './eventActions';
+
+// Bare identifiers that are legitimate operands in a BNGL expression and must NOT be
+// renamed when referenced: the built-in constants and the simulation-time variable.
+const PROTECTED_BUILTIN_OPERANDS = new Set<string>(['time', '_pi', '_e', 'true', 'false']);
 
 const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
 const RATE_RULE_POS_PREFIX = '__rate_rule_pos__';
@@ -220,24 +225,37 @@ export function bnglFunction(
 
   // Replace IDs based on sbmlToBnglId map
   // We extract all alphanumeric tokens and check if they map to a consolidated species ID
-  result = result.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (match) => {
-    // Skip math functions to avoid replacing them if an SBML ID happens to match
-    if (/^(Sat|MM|Hill|pow|sqrt|exp|abs|log|ln|log10|piecewise|if|gt|lt|geq|leq|eq|neq|and|or|not)$/i.test(match)) return match;
+  result = result.replace(/\b([A-Za-z_][A-Za-z0-9_]*)\b/g, (match, _p1: string, offset: number, str: string) => {
+    // A token immediately followed by '(' is a function call — a math built-in (max, MM,
+    // Hill, pow, sqrt, ...) or a user function. Leave calls untouched; this also means a
+    // parameter that merely *shares a name* with a math function is only renamed when used
+    // as a bare operand, never when the same token is a genuine call.
+    const isCall = /^\s*\(/.test(str.slice(offset + match.length));
+    if (isCall) return match;
 
     const mappedId = sbmlToBnglId.get(match);
-    if (!mappedId) return match;
-
-    const bnglName = mappedId;
-
-    if (isSaturationRate && speciesWithConcFunctions.has(bnglName)) {
-      return `${bnglName}_amt`;
-    } else if (speciesWithConcFunctions.has(bnglName)) {
-      return `_c_${bnglName}()`;
-    } else {
-      // In functions block, species names should generally refer to their amounts (S1_amt)
-      // because S1 itself is a pattern and cannot be used in expressions
-      return `${bnglName}_amt`;
+    if (mappedId) {
+      const bnglName = mappedId;
+      if (isSaturationRate && speciesWithConcFunctions.has(bnglName)) {
+        return `${bnglName}_amt`;
+      } else if (speciesWithConcFunctions.has(bnglName)) {
+        return `_c_${bnglName}()`;
+      } else {
+        // In functions block, species names should generally refer to their amounts (S1_amt)
+        // because S1 itself is a pattern and cannot be used in expressions
+        return `${bnglName}_amt`;
+      }
     }
+
+    // Not a species. A bare identifier whose name collides with a reserved BNGL keyword is a
+    // parameter/observable reference; apply the same rename used at its definition (via
+    // standardizeName) so the reference stays consistent (e.g. `max` -> `max_id`). Built-in
+    // operands (`time`, `_pi`, ...) are left as-is. Any non-keyword token is returned verbatim,
+    // so output is byte-identical to the previous behavior for every non-colliding name.
+    if (!PROTECTED_BUILTIN_OPERANDS.has(match) && BNGL_LEXER_KEYWORDS.has(match)) {
+      return standardizeName(match);
+    }
+    return match;
   });
 
   // Convert comparison operators
@@ -818,17 +836,15 @@ export function writeObservables(
   const speciesAmts = new Set<string>();
   const assignmentRuleCompartments = new Map<string, string>();
 
-  // Issue 7 helper
-  const needsStandardization = (name: string): boolean => {
-    return !/^[A-Za-z_][A-Za-z0-9_]*$/.test(name);
-  };
-
   // First pass: Define direct observables for each species
   // These are used for concentration scaling functions (_c_S1) and rates (S1_amt)
   for (const [id, _sp] of sbmlSpecies) {
     const entry = sct.entries.get(id);
     if (entry && entry.structure) {
-      const name = needsStandardization(id) ? standardizeName(id) : id;
+      // Always run standardizeName: it is the identity on clean, non-keyword ids, but it
+      // also renames ids that collide with a BNGL keyword (e.g. `time`). The old shortcut
+      // that skipped it for "syntactically valid" ids let keyword names leak through raw.
+      const name = standardizeName(id);
       const bnglId = sbmlToBnglId.get(id);
 
       if (bnglId) {
@@ -1297,12 +1313,15 @@ export function writeReactionRulesFlat(
       // We strip this because we're using molecule-based rates (not concentration-based)
       if (useCompartments) {
         for (const compId of compartments.keys()) {
-          const compPattern = new RegExp(`\\s*\\*\\s*__compartment_${compId}__\\s*`, 'g');
+          // Word-boundary + escape so a short compartment id can't clip a longer
+          // token that shares its prefix (see the matching fix in processReactionRate).
+          const esc = escapeRegExp(compId);
+          const compPattern = new RegExp(`\\s*\\*\\s*__compartment_${esc}__\\s*`, 'g');
           rate = rate.replace(compPattern, '');
-          const compPattern2 = new RegExp(`\\s*\\*\\s*${compId}\\s*`, 'g');
+          const compPattern2 = new RegExp(`\\s*\\*\\s*${esc}\\b\\s*`, 'g');
           rate = rate.replace(compPattern2, '');
           // Handle division by volume which appears in 2nd order SBML rates
-          const divCompPattern = new RegExp(`\\s*\\/\\s*__compartment_${compId}__\\s*`, 'g');
+          const divCompPattern = new RegExp(`\\s*\\/\\s*__compartment_${esc}__\\s*`, 'g');
           rate = rate.replace(divCompPattern, ''); // Remove the division
         }
       }
@@ -2303,18 +2322,20 @@ export function generateBNGL(
     }
 
     if (actions) {
-      // Ensure mxstep is set for simulate if method is ode
-      if (actions.includes('simulate') && actions.includes('"ode"') && !actions.includes('mxstep')) {
-        actions = actions.replace(/simulate\s*\(\s*\{/g, 'simulate({mxstep=>1e8,');
+      // Ensure the CVODE max-step cap is set for an ode simulate. `max_num_steps` is the
+      // valid BNGL simulate argument; the old `mxstep` alias is not a grammar token and
+      // fails the strict reparse.
+      if (actions.includes('simulate') && actions.includes('"ode"') && !actions.includes('max_num_steps')) {
+        actions = actions.replace(/simulate\s*\(\s*\{/g, 'simulate({max_num_steps=>1e8,');
         if (!actions.includes('{')) {
-          actions = actions.replace(/simulate\s*\(\s*\)/g, 'simulate({mxstep=>1e8})');
+          actions = actions.replace(/simulate\s*\(\s*\)/g, 'simulate({max_num_steps=>1e8})');
         }
       }
       actionLines.push('    ' + actions);
     } else {
       const tEnd = options.tEnd ?? 10;
       const nSteps = options.nSteps ?? 100;
-      actionLines.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},mxstep=>1e8})`);
+      actionLines.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},max_num_steps=>1e8})`);
     }
     actionLines.push('end actions');
     sections.push(actionLines.join('\n'));
@@ -2323,7 +2344,7 @@ export function generateBNGL(
     sections.push('    generate_network({overwrite=>1})');
     const tEnd = options.tEnd ?? 10;
     const nSteps = options.nSteps ?? 100;
-    sections.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},mxstep=>1e8})`);
+    sections.push(`    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},max_num_steps=>1e8})`);
     sections.push('end actions');
   }
 
@@ -2843,12 +2864,16 @@ export function processReactionRate(
   const useCompartments = compartments.size > 0;
   if (useCompartments) {
     for (const compId of compartments.keys()) {
-      // Strip "* compartment" and "/ compartment" patterns
+      // Strip "* compartment" and "/ compartment" volume factors from the rate.
+      // The bare-id patterns MUST end on a word boundary: without it, a short
+      // compartment id (e.g. `er`) matches the prefix of a longer one (`erMembrane`)
+      // and clips it mid-token, leaving a dangling `Membrane` that breaks the reparse.
+      const esc = escapeRegExp(compId);
       const patterns = [
-        new RegExp(`\\s*\\*\\s*__compartment_${compId}__\\s*`, 'g'),
-        new RegExp(`\\s*\\*\\s*${compId}\\s*`, 'g'),
-        new RegExp(`\\s*\\/\\s*__compartment_${compId}__\\s*`, 'g'),
-        new RegExp(`\\s*\\/\\s*${compId}\\s*`, 'g'),
+        new RegExp(`\\s*\\*\\s*__compartment_${esc}__\\s*`, 'g'),
+        new RegExp(`\\s*\\*\\s*${esc}\\b\\s*`, 'g'),
+        new RegExp(`\\s*\\/\\s*__compartment_${esc}__\\s*`, 'g'),
+        new RegExp(`\\s*\\/\\s*${esc}\\b\\s*`, 'g'),
       ];
       for (const pat of patterns) {
         rate = rate.replace(pat, ' ');
@@ -3042,12 +3067,27 @@ function processOneDirection(
 
   // Clean up: remove residual "* 1" and "1 *" factors
   modifiedRate = modifiedRate
-    // Only strip standalone "1" factors, not decimal literals like "1.4".
-    .replace(/\b1\b(?!\.\d)\s*\*\s*/g, '')
+    // Only strip a standalone integer "1", never a digit that belongs to a decimal
+    // and never a digit inside an identifier. The leading `(^|[^\w.])` guard stops
+    // the fractional "1" of literals like "0.1"/"2.1" (predecessor ".") and the "1"
+    // inside names like "k1" (predecessor a word char); the trailing `(?!\.\d)` stops
+    // "1.5". The preceding boundary char is preserved via the $1 backreference.
+    .replace(/(^|[^\w.])1\b(?!\.\d)\s*\*\s*/g, '$1')
     .replace(/\s*\*\s*\b1\b(?!\.\d)/g, '')
     .trim();
 
   if (!modifiedRate || modifiedRate === '') modifiedRate = '1';
+
+  // Guard against a malformed neutralization result. If the cleaned rate ends with a
+  // dangling binary operator (e.g. "__compartment_x__ *") or starts with one, it is not a
+  // usable expression and would emit "(vol *)" — which fails the reparse. Fall back to the
+  // split_rxn path so the caller keeps the full, valid rate on an irreversible rule.
+  if (/[+\-*/^]\s*$/.test(modifiedRate) || /^\s*[*/^]/.test(modifiedRate)) {
+    const fullRate = (vScaleName !== '1')
+      ? `(${rateExpr}) * ${vScaleName}`
+      : rateExpr;
+    return { rateString: fullRate, isSplitRxn: true };
+  }
 
   // ── Check for singularity (FIX 3) ──
   // If after neutralization the rate still contains species references in a
