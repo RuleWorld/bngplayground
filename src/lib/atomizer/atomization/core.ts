@@ -727,7 +727,18 @@ function createElementalSpecies(
   // Try to parse the pattern using readFromString
   try {
     const parsedSpecies = readFromString(nameWithoutCompartment);
-    if (parsedSpecies.molecules.length > 0) {
+    // Only trust a name-derived structure when it carries REAL structure (components) —
+    // that's how RuleHub / BNG2-exported patterns like "L(r!1)" are preserved. A plain
+    // label such as "Mos" or "Mos-P" parses to a bare, component-less molecule whose name
+    // ("Mos") is shared by every phospho-form of the same protein, collapsing distinct SBML
+    // species onto ONE stateless molecule. That makes conversion reactions (MKKK -> MKKK_P)
+    // emit as no-ops (M_Mos -> M_Mos), so generate_network finds no reactions and BNG2
+    // aborts. For those, fall through to an id-based molecule below (ids are unique), which
+    // keeps the species distinct and the reactions real.
+    const isStructured =
+      parsedSpecies.molecules.length > 0 &&
+      parsedSpecies.molecules.some((m: Molecule) => m.components && m.components.length > 0);
+    if (isStructured) {
       sanitizeSpeciesStructureNames(parsedSpecies);
       // Update molecule IDs to use SBML species ID
       for (const mol of parsedSpecies.molecules) {
@@ -738,10 +749,11 @@ function createElementalSpecies(
   } catch (e) {
     // Fall back to simple molecule creation
   }
-  
-  // Fallback: create simple molecule without components
+
+  // Fallback: create a simple molecule. Use the SBML species id (guaranteed unique) as the
+  // molecule name so plain-label species never collapse onto a shared stateless molecule.
   const species = new Species();
-  const name = useId ? sbmlSpecies.id : standardizeName(nameWithoutCompartment);
+  const name = standardizeName(sbmlSpecies.id);
   const molecule = new Molecule(name, sbmlSpecies.id);
   species.addMolecule(molecule);
 

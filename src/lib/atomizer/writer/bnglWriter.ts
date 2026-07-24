@@ -236,14 +236,18 @@ export function bnglFunction(
     const mappedId = sbmlToBnglId.get(match);
     if (mappedId) {
       const bnglName = mappedId;
+      // The observables and concentration functions are DEFINED under the SBML-id-based
+      // name (standardizeName(match) -> e.g. `B_amt`, `_c_B()`), not the consolidated S#
+      // id. Reference them by that same name so the emitted BNGL actually binds when a
+      // real engine (BNG2) resolves symbols. The `speciesWithConcFunctions` decision stays
+      // keyed on the consolidated id; only the emitted label changes.
+      const obsName = standardizeName(match);
       if (isSaturationRate && speciesWithConcFunctions.has(bnglName)) {
-        return `${bnglName}_amt`;
+        return `${obsName}_amt`;
       } else if (speciesWithConcFunctions.has(bnglName)) {
-        return `_c_${bnglName}()`;
+        return `_c_${obsName}()`;
       } else {
-        // In functions block, species names should generally refer to their amounts (S1_amt)
-        // because S1 itself is a pattern and cannot be used in expressions
-        return `${bnglName}_amt`;
+        return `${obsName}_amt`;
       }
     }
 
@@ -457,6 +461,22 @@ function convertMathFunctions(expr: string): string {
   // Log base 10: log10(x) -> (ln(x)/ln(10))
   result = replaceNestedFunc(result, 'log10', (args) => `(ln(${args[0]})/2.302585093)`);
 
+  // nth root: libsbml emits root(degree, radicand); root(x) is a square root.
+  result = replaceNestedFunc(result, 'root', (args) =>
+    args.length >= 2 ? `((${args[1]})^(1/(${args[0]})))` : `((${args[0]})^(1/2))`);
+
+  // floor / ceil: BNGL has no floor/ceil, but they're exact using rint (round-half-to-even)
+  // plus a correction, and both rint and if are stock BNG2 primitives. Verified correct at
+  // integer and half-integer boundaries (where a naive rint(x-0.5) fails).
+  //   floor(x) = rint(x) - (rint(x) > x ? 1 : 0)
+  //   ceil(x)  = rint(x) + (rint(x) < x ? 1 : 0)
+  result = replaceNestedFunc(result, 'floor', (args) =>
+    `(rint(${args[0]}) - if(rint(${args[0]}) > (${args[0]}), 1, 0))`);
+  result = replaceNestedFunc(result, 'ceiling', (args) =>
+    `(rint(${args[0]}) + if(rint(${args[0]}) < (${args[0]}), 1, 0))`);
+  result = replaceNestedFunc(result, 'ceil', (args) =>
+    `(rint(${args[0]}) + if(rint(${args[0]}) < (${args[0]}), 1, 0))`);
+
   // Sat and MM: handle 3rd argument (rate constant) if present
   result = replaceNestedFunc(result, 'Sat', (args) => {
     if (args.length === 3) return `((${args[0]}) * Sat(${args[2]}, ${args[1]}))`;
@@ -480,6 +500,8 @@ function convertMathFunctions(expr: string): string {
   result = result.replace(/\bexponentiale\b/gi, '2.71828182845905');
   result = result.replace(/\btrue\b/gi, '1');
   result = result.replace(/\bfalse\b/gi, '0');
+  // SBML time csymbol emits bare `time`; BNG2/run_network requires the function form time().
+  result = result.replace(/\btime\b(?!\s*\()/g, 'time()');
 
   // Normalize double negatives (e.g. --ln(x) -> +ln(x))
   result = result.replace(/--/g, '+');
@@ -646,6 +668,7 @@ export function writeParameters(
   assignmentRuleVariables: Set<string> = new Set()
 ): string {
   const lines: string[] = [];
+  const emittedNames = new Set<string>();
 
   // Add compartment sizes as parameters
   for (const [id, comp] of compartments) {
@@ -667,7 +690,17 @@ export function writeParameters(
       let value = String(param.value);
       value = cleanParameterValue(value);
       lines.push(`${name} ${value}`);
+      emittedNames.add(name);
     }
+  }
+
+  // The seed-species writer converts initial concentration -> amount as (conc * Na * V),
+  // where `Na` is the atomizer's Avogadro token. It is used but was never defined, so BNG2
+  // treated it as undefined and collapsed every seed to 0. Amounts are kept in the SBML's
+  // substance units (matching the SBML writer's round-trip convention), so Na = 1. Only
+  // emit it if the model doesn't already define a real parameter of that name.
+  if (!emittedNames.has('Na')) {
+    lines.unshift('Na 1');
   }
 
   return sectionTemplate('parameters', lines);
@@ -690,12 +723,26 @@ export function writeCompartments(
     const dim = comp.spatialDimensions;
     const size = comp.size;
 
+    // BNGL requires an enclosing ("outside") compartment to be exactly one spatial
+    // dimension higher than the compartment it contains (3D volume <- 2D membrane <-
+    // 3D volume). SBML imposes no such rule and frequently nests two 3D compartments
+    // directly (e.g. cytosol outside=extracellular), which makes BNG2 abort with
+    // "Outside has same dimension as compartment". When the declared parent violates
+    // the rule, omit the outside link and emit the compartment as top-level. For the
+    // well-mixed ODE simulation we compare against, only the volumes matter — the
+    // nesting topology does not affect the dynamics — so parity is preserved.
     if (comp.outside) {
-      const outside = standardizeName(comp.outside);
-      lines.push(`${name} ${dim} ${size} ${outside}`);
-    } else {
-      lines.push(`${name} ${dim} ${size}`);
+      const outsideComp = compartments.get(comp.outside);
+      const outsideDim = outsideComp?.spatialDimensions;
+      if (outsideDim !== undefined && dim !== undefined && outsideDim === dim + 1) {
+        lines.push(`${name} ${dim} ${size} ${standardizeName(comp.outside)}`);
+      } else {
+        lines.push(`${name} ${dim} ${size}`);
+      }
+      continue;
     }
+
+    lines.push(`${name} ${dim} ${size}`);
   }
 
   return sectionTemplate('compartments', lines);
@@ -928,7 +975,26 @@ export function writeObservables(
           finalPatterns.push(pattern);
         }
       }
-      lines.push(`Molecules ${name} ${finalPatterns.join(' ')}`);
+      const patternStr = finalPatterns.join(' ');
+      // If the species pass already emitted observables under this same name — i.e. this
+      // SBML id is BOTH a species and an assignment-rule variable (e.g. a boundary "total"
+      // species defined by a sum rule) — the two collide and BNG2 aborts with
+      // "Observable name X matches previously defined Observable". The assignment rule is the
+      // authoritative definition, so drop the redundant Species observables for this name.
+      if (speciesAmts.has(name)) {
+        for (let li = lines.length - 1; li >= 0; li--) {
+          if (
+            lines[li].startsWith(`Species ${name} `) ||
+            lines[li].startsWith(`Species ${name}_amt `)
+          ) {
+            lines.splice(li, 1);
+          }
+        }
+      }
+      lines.push(`Molecules ${name} ${patternStr}`);
+      // Alias so rate/concentration references of the form `${name}_amt` still resolve now
+      // that the Species ${name}_amt observable is gone.
+      lines.push(`Molecules ${name}_amt ${patternStr}`);
       writtenRules.add(rule.variable);
       speciesAmts.add(name);
       if (ruleCompartment) assignmentRuleCompartments.set(name, ruleCompartment);
@@ -953,13 +1019,31 @@ export function writeFunctions(
   sbmlToBnglId: Map<string, string> = new Map(),
   rateRules: Array<{ variable: string; math: string }> = [],
   rateRuleFluxTargets: Set<string> = new Set(),
-  forceRuleOnlyFastPath: boolean = false
+  forceRuleOnlyFastPath: boolean = false,
+  compartmentIds: Set<string> = new Set()
 ): string {
   const lines: string[] = [];
   const functionNameMap = new Map<string, string>();
   for (const [id] of functions) {
     functionNameMap.set(id, sanitizeFunctionIdentifier(id));
   }
+
+  // Map bare compartment references (e.g. a rate/rule that multiplies by "cytosol") to the
+  // emitted volume parameter "__compartment_cytosol__". bnglFunction does this for reaction
+  // rates, but function-definition and rule bodies here go through convertMathFunctions,
+  // which does NOT — so without this a compartment id in a function body stays bare and BNG2
+  // aborts with "Parameter 'cytosol' referenced but not defined". The \b guards prevent
+  // rewriting inside an already-expanded "__compartment_..." token.
+  const mapCompartments = (expr: string): string => {
+    let out = expr;
+    for (const comp of compartmentIds) {
+      out = out.replace(
+        new RegExp(`\\b${escapeRegExp(comp)}\\b`, 'g'),
+        `__compartment_${standardizeName(comp)}__`
+      );
+    }
+    return out;
+  };
 
   // Avoid O(n^2) lookups for large species sets (genome-scale reconstructions).
   const standardizedSpeciesInfo = new Map<string, { compId: string; isAmountOnly: boolean }>();
@@ -993,10 +1077,18 @@ export function writeFunctions(
 
   // Write Function Definitions
   for (const [id, func] of functions) {
+    // SBML functionDefinitions with formal arguments are inlined at every use site
+    // (inlineSBMLFunctions runs on reaction rates and on assignment/rate-rule math). BNG2's
+    // run_network cannot consume a function that takes arguments — it aborts with "Functions
+    // cannot contain arguments" — so the parameterized standalone definition must NOT be
+    // emitted. The inlined call sites already carry the expanded body. Zero-argument
+    // functionDefinitions are fine and still emitted below.
+    if (func.arguments && func.arguments.length > 0) continue;
     const name = functionNameMap.get(id) || sanitizeFunctionIdentifier(id);
     const argumentMap = new Map<string, string>();
     const args = (func.arguments || []).map((arg, idx) => {
-      const safe = sanitizeFunctionIdentifier(arg || `arg${idx + 1}`);
+      const base = sanitizeFunctionIdentifier(arg || `arg${idx + 1}`);
+      const safe = `_farg${idx}_${base}`;
       argumentMap.set(arg, safe);
       return safe;
     });
@@ -1016,6 +1108,7 @@ export function writeFunctions(
     body = convertMathFunctions(body);
     body = convertComparisonOperators(body);
     body = convertPiecewise(body);
+    body = mapCompartments(body);
 
     lines.push(`${name}(${args.join(', ')}) = ${body}`);
   }
@@ -1042,6 +1135,13 @@ export function writeFunctions(
       if (dynamicTargets.length > 0) {
         body = rewriteRateRuleTargets(body);
       }
+      // Translate non-BNGL math builtins (pow/power/root/sqrt/log/… and piecewise) to the
+      // BNGL-supported set. These are cheap regex rewrites — not the heavy bnglFunction
+      // transforms this fast path exists to avoid — and without them rule-derived functions
+      // emit e.g. pow(n,4), which BNG2 rejects as an undefined parameter.
+      body = convertMathFunctions(body);
+      body = convertPiecewise(body);
+      body = mapCompartments(body);
       return body;
     };
 
@@ -1991,7 +2091,8 @@ export function generateBNGL(
       sbmlToBnglId,
       rateRules,
       rateRuleFluxTargets,
-      forceRuleOnlyFastPath
+      forceRuleOnlyFastPath,
+      new Set(model.compartments.keys())
     )
   );
   mark('writeFunctions', t);
@@ -2714,7 +2815,27 @@ export interface ReversibleRateSplit {
 }
 
 export function splitReversibleRate(rateExpr: string): ReversibleRateSplit {
-  const terms = extractTopLevelAdditiveTerms(rateExpr.trim());
+  // A rate like "(kf*A - kr*B)" is a single top-level term to the additive splitter because
+  // the +/- is nested inside the enclosing parens. Strip any fully-enclosing paren pair(s)
+  // first so the forward/reverse terms become visible.
+  const stripEnclosingParens = (s: string): string => {
+    let e = s.trim();
+    while (e.startsWith('(') && e.endsWith(')')) {
+      let depth = 0, enclosesAll = true;
+      for (let i = 0; i < e.length; i++) {
+        if (e[i] === '(') depth++;
+        else if (e[i] === ')') {
+          depth--;
+          if (depth === 0 && i < e.length - 1) { enclosesAll = false; break; }
+        }
+      }
+      if (enclosesAll) e = e.slice(1, -1).trim();
+      else break;
+    }
+    return e;
+  };
+
+  const terms = extractTopLevelAdditiveTerms(stripEnclosingParens(rateExpr.trim()));
 
   if (terms.length < 2) {
     return { success: false, forwardRate: rateExpr, reverseRate: '0' };
@@ -2878,6 +2999,14 @@ export function processReactionRate(
       for (const pat of patterns) {
         rate = rate.replace(pat, ' ');
       }
+      // Strip a LEADING whole-rate compartment volume factor ("comp * ..."). SBML often
+      // writes the rate as `compartment * kineticLaw`; the volume is reapplied separately
+      // via vScaleName, so leaving it here double-counts the compartment AND hides the
+      // top-level +/- from the reversible splitter. Anchored to the start of the whole rate
+      // so it can only remove a factor multiplying the entire expression, never a sub-term.
+      rate = rate
+        .replace(new RegExp(`^\\s*__compartment_${esc}__\\s*\\*\\s*`), '')
+        .replace(new RegExp(`^\\s*${esc}\\b\\s*\\*\\s*`), '');
     }
     rate = rate.trim();
     if (!rate) rate = '1';

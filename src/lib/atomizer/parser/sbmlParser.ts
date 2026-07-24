@@ -870,6 +870,24 @@ export class SBMLParser {
         `SBML "${pkg}" package detected (${desc}); not imported. This does not affect the mathematical model.`,
         'info');
     }
+
+    // A purely qualitative (logical) model — qual transitions with no kinetic reactions — is
+    // a different mathematical object than a BNGL rule-based network: discrete logical updates,
+    // not continuous rates. Proceeding produces nonsensical output (undefined/NaN rate terms),
+    // so fail cleanly with a clear reason. Guarded on zero reactions so a kinetic model that
+    // merely carries a qual annotation is never affected.
+    const qualPrefix = prefixByPkg.get('qual');
+    if (qualPrefix) {
+      const qualCount = countPrefixed(qualPrefix);
+      const reactionCount = xml.match(/<reaction[\s/>]/g)?.length || 0;
+      if (qualCount > 0 && reactionCount === 0) {
+        throw new Error(
+          `Unsupported model class: SBML "qual" qualitative/logical model ` +
+          `(${qualCount} qual elements, no kinetic reactions) cannot be represented as a ` +
+          `BNGL rule-based network.${pkgWhy['qual'] || ''}`
+        );
+      }
+    }
   }
 
   /**
@@ -1931,8 +1949,16 @@ export class SBMLParser {
       case 'otherwise':
         return firstChildExpr();
       case 'ci':
-      case 'csymbol':
+      case 'csymbol': {
+        // A csymbol's meaning is its definitionURL, not its text content — the SBML time
+        // symbol is written with varying text across models ("time", "Time", "t"). Emit the
+        // canonical `time` (convertMathFunctions turns it into time()); otherwise fall back
+        // to the literal text. (delay/rateOf remain unsupported and surface as-is.)
+        const csymUrl = (this.getXmlAttribute(node.attributes || '', 'definitionURL') || '').toLowerCase();
+        if (csymUrl.includes('symbols/time')) return 'time';
+        if (csymUrl.includes('symbols/avogadro')) return 'Na';
         return this.simpleXmlText(node);
+      }
       case 'cn': {
         // <cn> may carry a type: rational (a<sep/>b => a/b) or e-notation (m<sep/>e => m*10^e).
         const hasSep = node.children.some((c) => c.name === 'sep');
@@ -2033,11 +2059,15 @@ export class SBMLParser {
           case 'divide':
             return a.length >= 2 ? `(${a[0]} / ${a[1]})` : `(${a.join(' / ')})`;
           case 'power':
-            return a.length >= 2 ? `pow(${a[0]}, ${a[1]})` : `pow(${a.join(', ')})`;
+            // Emit the BNGL power operator directly rather than pow(): pow() is not a BNGL
+            // function, and it leaks through expression paths (function defs, assignment
+            // rules) that bypass the writer's pow->^ conversion, aborting BNG2 with
+            // "Parameter 'pow' referenced but not defined".
+            return a.length >= 2 ? `((${a[0]})^(${a[1]}))` : `(${a[0] ?? '0'})`;
           case 'root': {
             // Default is square root; a <degree> gives the nth root => x^(1/n).
             const deg = degreeNode ? this.mathMlNodeToFormula(degreeNode).trim() : '';
-            if (deg && deg !== '2') return `pow(${a[0]}, (1 / (${deg})))`;
+            if (deg && deg !== '2') return `((${a[0]})^(1 / (${deg})))`;
             return `sqrt(${a[0]})`;
           }
           case 'log': {
@@ -2320,15 +2350,25 @@ export class SBMLParser {
       localAliases = new Map<string, string>();
 
       let numParams: number;
+      let useLocalGetter = true;
       try {
-        numParams = kl.getNumLocalParameters?.() ?? kl.getNumParameters?.() ?? 0;
+        // NOTE: use `||` semantics, not `??`. For SBML Level 2 the L3-style
+        // getNumLocalParameters() returns 0 (not null), so `0 ?? getNumParameters()`
+        // would short-circuit to 0 and silently drop every kineticLaw-local parameter
+        // (vi, kd, vd, …). Take whichever getter reports parameters.
+        const nLocal = kl.getNumLocalParameters?.() ?? 0;
+        const nParam = kl.getNumParameters?.() ?? 0;
+        useLocalGetter = nLocal > 0;
+        numParams = useLocalGetter ? nLocal : nParam;
       } catch {
         numParams = 0;
       }
       for (let i = 0; i < numParams; i++) {
         let param: any;
         try {
-          param = kl.getLocalParameter?.(i) ?? kl.getParameter?.(i);
+          param = useLocalGetter
+            ? (kl.getLocalParameter?.(i) ?? kl.getParameter?.(i))
+            : (kl.getParameter?.(i) ?? kl.getLocalParameter?.(i));
         } catch {
           param = null;
         }

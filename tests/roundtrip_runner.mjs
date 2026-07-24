@@ -24,7 +24,10 @@ const modelPath = process.argv[2];
 const resultPath = process.argv[3];
 const FULL_LOOP = process.argv.includes('--full-loop');
 const USE_BNG2 = process.env.USE_BNG2_SIM === '1';
-const BNG2_CMD = process.env.BNG2_CMD || 'bionetgen';
+// Prefer an explicit BNG2_CMD; otherwise use BNG2.pl at the repo root if it's there
+// (that's where it was placed), else fall back to the pyBioNetGen CLI on PATH.
+const BNG2_CMD = process.env.BNG2_CMD
+  || (REPO && fs.existsSync(path.join(REPO, 'BNG2.pl')) ? path.join(REPO, 'BNG2.pl') : 'bionetgen');
 
 const TMPDIR = process.env.SLURM_TMPDIR || '/tmp';
 
@@ -117,9 +120,24 @@ function runBng2Simulation(bnglContent, modelName) {
   const bnglFile = path.join(tmpDir, `${modelName}.bngl`);
   try {
     fs.writeFileSync(bnglFile, bnglContent, 'utf8');
-    const r = spawnSync(BNG2_CMD, ['simulate', bnglFile], {
+    // BNG2.pl is a Perl script driven by the model's own `begin actions` block, so it is
+    // run as `perl BNG2.pl <model.bngl>` (no subcommand). It needs BNGPATH pointing at a
+    // full BioNetGen install (Perl2/ modules + bin/run_network) — settable via the BNGPATH
+    // env var, otherwise defaulted to the script's own directory. If BNG2_CMD is instead the
+    // pyBioNetGen CLI, use its `run` subcommand. Outputs land under tmpDir either way.
+    let cmd, args;
+    const runEnv = { ...process.env, HOME: process.env.HOME };
+    if (/\.pl$/i.test(BNG2_CMD)) {
+      cmd = 'perl';
+      args = [BNG2_CMD, bnglFile];
+      if (!runEnv.BNGPATH) runEnv.BNGPATH = path.dirname(BNG2_CMD);
+    } else {
+      cmd = BNG2_CMD;
+      args = ['run', '-i', bnglFile, '-o', tmpDir];
+    }
+    const r = spawnSync(cmd, args, {
       cwd: tmpDir, timeout: 120_000, maxBuffer: 50 * 1024 * 1024,
-      env: { ...process.env, HOME: process.env.HOME },
+      env: runEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
     const stdout = r.stdout?.toString() || '';
@@ -130,19 +148,26 @@ function runBng2Simulation(bnglContent, modelName) {
     if (r.signal) {
       return { ok: false, error: `BNG2.pl killed by signal ${r.signal}` };
     }
-    // Look for .gdat files
-    const dirFiles = fs.readdirSync(tmpDir);
-    const gdatFiles = dirFiles.filter(f => f.endsWith('.gdat'));
+    // Look for .gdat files (recurse: BNG2.pl writes to cwd, the pyBNG CLI to a subdir)
+    const gdatFiles = [];
+    const walk = (d) => {
+      for (const e of fs.readdirSync(d, { withFileTypes: true })) {
+        const p = path.join(d, e.name);
+        if (e.isDirectory()) walk(p);
+        else if (e.name.endsWith('.gdat')) gdatFiles.push(p);
+      }
+    };
+    walk(tmpDir);
     if (gdatFiles.length === 0) {
       return { ok: false, error: 'no .gdat files produced', stdout: stdout.slice(0, 300) };
     }
     // Read and validate the largest .gdat
     let bestGdat = null, bestSize = 0;
     for (const gf of gdatFiles) {
-      const st = fs.statSync(path.join(tmpDir, gf));
+      const st = fs.statSync(gf);
       if (st.size > bestSize) { bestSize = st.size; bestGdat = gf; }
     }
-    const gdatContent = fs.readFileSync(path.join(tmpDir, bestGdat), 'utf8');
+    const gdatContent = fs.readFileSync(bestGdat, 'utf8');
     const lines = gdatContent.trim().split('\n');
     if (lines.length < 2) {
       return { ok: false, error: `GDAT has only ${lines.length} lines` };
@@ -166,7 +191,7 @@ function runBng2Simulation(bnglContent, modelName) {
       gdatColumns: header.length,
       gdatRows: dataRows.length,
       nanCount, negCount,
-      gdatFile: bestGdat,
+      gdatFile: path.basename(bestGdat),
       gdatSize: bestSize,
     };
   } catch (e) {
@@ -214,6 +239,11 @@ async function main() {
       atom = await sbmlToBngl(sbml, {});
       result.stages.parse = !!(atom && atom.success && atom.bngl && atom.bngl.length > 0);
       if (!result.stages.parse) result.error = (atom && atom.error) || 'atomizer produced no BNGL';
+      // Persist the emitted BNGL next to the result JSON so a downstream parity check
+      // (libRoadRunner vs BNG2) can reuse it instead of re-atomizing.
+      if (result.stages.parse) {
+        try { fs.writeFileSync(resultPath.replace(/\.json$/, '.bngl'), atom.bngl); } catch { /* non-fatal */ }
+      }
     } catch (e) {
       result.stages.parse = false;
       const msg = e?.message || String(e);
