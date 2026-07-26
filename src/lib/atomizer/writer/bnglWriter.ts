@@ -261,12 +261,13 @@ export function bnglFunction(
       // the label AND the lookup by the same name so the emitted BNGL binds AND is numerically
       // correct.
       const obsName = standardizeName(match);
-      if (isSaturationRate && speciesWithConcFunctions.has(obsName)) {
-        return `${obsName}_amt`;
-      } else if (speciesWithConcFunctions.has(obsName)) {
-        return `_c_${obsName}()`;
+      const isConcFunc = speciesWithConcFunctions.has(obsName) || speciesWithConcFunctions.has(mappedId);
+      if (isSaturationRate && isConcFunc) {
+        return `${mappedId}_amt`;
+      } else if (isConcFunc) {
+        return `_c_${mappedId}()`;
       } else {
-        return `${obsName}_amt`;
+        return `${mappedId}_amt`;
       }
     }
 
@@ -479,34 +480,6 @@ function convertMathFunctions(expr: string): string {
 
   // Absolute value: abs(x) -> if(x>=0,x,-x)
   result = replaceNestedFunc(result, 'abs', (args) => `if(${args[0]}>=0,${args[0]},-(${args[0]}))`);
-
-  // SBML two-argument log(base, x) = log base 'base' of x -> (ln(x)/ln(base)). muParser's ln
-  // takes one argument, so the blind log(->ln( rewrite below would emit an invalid ln(base, x)
-  // and run_network aborts "Too many parameters for function ln" (BIOMD923/1025). Handle the
-  // two-arg form first via balanced-paren scanning; one-arg log(x) falls through. (log10( is a
-  // distinct token, not matched by \blog\s*\( .)
-  {
-    let guard = 0;
-    for (;;) {
-      if (guard++ > 1000) break;
-      const m = /\blog\s*\(/.exec(result);
-      if (!m) break;
-      const open = m.index + m[0].length - 1;
-      let depth = 0, close = -1, comma = -1;
-      for (let i = open; i < result.length; i++) {
-        const c = result[i];
-        if (c === '(') depth++;
-        else if (c === ')') { depth--; if (depth === 0) { close = i; break; } }
-        else if (c === ',' && depth === 1 && comma === -1) comma = i;
-      }
-      if (close === -1) break;
-      if (comma === -1) { result = result.slice(0, m.index) + '\u0001LN' + result.slice(m.index + 3); continue; }
-      const base = result.slice(open + 1, comma).trim();
-      const x = result.slice(comma + 1, close).trim();
-      result = result.slice(0, m.index) + `(ln(${x})/ln(${base}))` + result.slice(close + 1);
-    }
-    result = result.replace(/\u0001LN/g, 'log');
-  }
 
   // Logarithm: log(x) or ln(x) -> ln(x)
   result = result.replace(/\blog\s*\(/g, 'ln(');
@@ -870,8 +843,7 @@ export function writeSeedSpecies(
   speciesToCompartment: Map<string, string>,
   _isAtomized: boolean = false,
   constantSpeciesIds: Set<string> = new Set(),
-  parameterDict: Map<string, number | string> = new Map(),
-  assignmentRules: Array<{ variable: string; math: string }> = []
+  parameterDict: Map<string, number | string> = new Map()
 ): { section: string, patternToId: Map<string, string>, sbmlToBnglId: Map<string, string>, idToPattern: Map<string, string> } {
   const patterns = new Map<
     string,
@@ -951,53 +923,29 @@ export function writeSeedSpecies(
   }
   if (!symbolVals.has('__Avogadro__')) symbolVals.set('__Avogadro__', 1);
 
-  // Substitute every known symbol - both the function-call form `sym()` (assignment-rule variables
-  // and _c_<species>() are emitted with parentheses) and the bare form `sym` - a few passes for
-  // chains, then evaluate. Function-call form is replaced first so e.g. ModelValue_5() becomes the
-  // value rather than `1.5()`.
+  // Substitute every known symbol (a few passes for chains) then evaluate.
   const substAndEval = (expr: string): number | null => {
     let e = expr;
-    for (let pass = 0; pass < 8; pass++) {
+    for (let pass = 0; pass < 6; pass++) {
       let changed = false;
       for (const [sym, val] of symbolVals) {
         if (!e.includes(sym)) continue; // cheap guard: skip the regex unless the symbol is present
-        const call = new RegExp(`\\b${escapeRegExp(sym)}\\s*\\(\\s*\\)`, 'g');
-        if (call.test(e)) { e = e.replace(call, String(val)); changed = true; }
-        const bare = new RegExp(`\\b${escapeRegExp(sym)}\\b(?!\\s*\\()`, 'g');
-        if (bare.test(e)) { e = e.replace(bare, String(val)); changed = true; }
+        const re = new RegExp(`\\b${escapeRegExp(sym)}\\b`, 'g');
+        if (re.test(e)) { e = e.replace(re, String(val)); changed = true; }
       }
       if (!changed) break;
     }
     return evalArithmetic(e);
   };
 
-  // Combined iterative resolution to constant values, feeding symbolVals until fixpoint:
-  //   (a) assignment-rule / initial-assignment variables (their math folded; includes ModelValue_N
-  //       helper chains and expressions like Io = ModelValue_5()*ModelValue_3()+... - BIOMD956/960/
-  //       962/1078, parameter_1 - BIOMD457, A_bens_tot - BIOMD320, APAP_Dose - BIOMD619);
-  //   (b) each species' own seed expression -> its initial amount (e.g. pro_TrkA in BIOMD263 has an
-  //       expression seed, not a literal), plus the derived concentration _c_<species>() = amount /
-  //       compartment size (referenced by rules like beta = c1/(N1*_c_s4()) - BIOMD872).
-  // Iterate so chains across all three resolve. (With __Avogadro__ = 1 across the corpus, a folded
-  // amount equals the concentration used in `conc * Av * V` seed references.)
-  const compSizeOf = (spId: string): number | undefined => {
-    const compId = speciesToCompartment.get(spId);
-    if (!compId) return undefined;
-    return symbolVals.get(`__compartment_${standardizeName(compId)}__`) ?? symbolVals.get(compId);
-  };
-  for (let pass = 0; pass < 12; pass++) {
+  // Resolve each species' own initial value by folding its seed expression. A referenced species
+  // (e.g. pro_TrkA in BIOMD263) frequently has an EXPRESSION seed like `8.52 * __Avogadro__ *
+  // __compartment_Cell__` rather than a plain number, so we must fold it - not just accept literals.
+  // Iterate so species-referencing-species chains resolve; results are added to symbolVals under the
+  // sbmlId and its standardized name so later seeds can reference them. (With __Avogadro__ = 1 across
+  // the corpus, the folded amount equals the concentration used in `conc * Av * V` references.)
+  for (let pass = 0; pass < 6; pass++) {
     let changed = false;
-    for (const rule of assignmentRules) {
-      const key = standardizeName(rule.variable);
-      if (symbolVals.has(key)) continue;
-      if (typeof rule.math !== 'string' || rule.math.length === 0) continue;
-      const v = substAndEval(convertPiecewise(convertMathFunctions(rule.math)));
-      if (v !== null) {
-        symbolVals.set(rule.variable, v);
-        symbolVals.set(key, v);
-        changed = true;
-      }
-    }
     for (const s of seedSpecies) {
       if (symbolVals.has(s.sbmlId)) continue;
       const raw = typeof s.concentration === 'number'
@@ -1007,10 +955,6 @@ export function writeSeedSpecies(
       if (v !== null) {
         symbolVals.set(s.sbmlId, v);
         symbolVals.set(standardizeName(s.sbmlId), v);
-        const size = compSizeOf(s.sbmlId);
-        if (size !== undefined && Number.isFinite(size) && size !== 0) {
-          symbolVals.set(`_c_${standardizeName(s.sbmlId)}`, v / size);
-        }
         changed = true;
       }
     }
@@ -1236,7 +1180,8 @@ export function writeFunctions(
   rateRules: Array<{ variable: string; math: string }> = [],
   rateRuleFluxTargets: Set<string> = new Set(),
   forceRuleOnlyFastPath: boolean = false,
-  compartmentIds: Set<string> = new Set()
+  compartmentIds: Set<string> = new Set(),
+  keepParameterized: boolean = false
 ): string {
   const lines: string[] = [];
   const functionNameMap = new Map<string, string>();
@@ -1299,7 +1244,7 @@ export function writeFunctions(
     // cannot contain arguments" - so the parameterized standalone definition must NOT be
     // emitted. The inlined call sites already carry the expanded body. Zero-argument
     // functionDefinitions are fine and still emitted below.
-    if (func.arguments && func.arguments.length > 0) continue;
+    if (!keepParameterized && func.arguments && func.arguments.length > 0) continue;
     const name = functionNameMap.get(id) || sanitizeFunctionIdentifier(id);
     const argumentMap = new Map<string, string>();
     const args = (func.arguments || []).map((arg, idx) => {
@@ -2235,14 +2180,14 @@ export function generateBNGL(
   sections.push(writeMoleculeTypes(augmentedMoleculeTypes, molTypeAnnotations));
   mark('writeMoleculeTypes', t);
 
-  // Seed species
-  t = Date.now();
-  // Parameter value map (from SBML parameters). Declared here - before the seed writer - because
-  // seed constant-folding needs it; the functions writer below reuses the same map.
+  // Functions (includes assignment rules and concentration scaling)
   const paramDict = new Map<string, number | string>();
   for (const [id, param] of model.parameters) {
     paramDict.set(id, param.value);
   }
+
+  // Seed species
+  t = Date.now();
   const { section: speciesSection, patternToId, sbmlToBnglId, idToPattern } = writeSeedSpecies(
     augmentedSeedSpecies,
     model.compartments,
@@ -2254,8 +2199,7 @@ export function generateBNGL(
         .filter(([, sp]) => !!(sp.boundaryCondition || sp.constant))
         .map(([id]) => id)
     ),
-    paramDict,
-    assignmentRules
+    paramDict
   );
   if (speciesSection) sections.push(speciesSection);
   mark('writeSeedSpecies', t);
@@ -2321,8 +2265,6 @@ export function generateBNGL(
     const name = standardizeName(id);
     observableMap.set(id, name);
   }
-
-  // Functions (includes assignment rules and concentration scaling)
 
   t = Date.now();
   // Collector for time-dependent rate functions emitted by the reaction writer; injected into the
@@ -3688,30 +3630,9 @@ export function writeReactionRulesFlat_V2(
     // where the `time` csymbol is undefined - and aborts (circadian/light-driven models, ~13 in the
     // corpus). Emitting it as a named function forces functional (per-step) evaluation. These are
     // reactant-free fluxes (synthesis / extracted), so total-rate = flux is the correct reading.
-    const needsTimeWrap = (r: string): boolean =>
-      /\btime\s*\(/.test(r) && !/_amt\b/.test(r) && !/_c_/.test(r);
-    const label = standardizeName(rxn.name || rxnId);
     let rateOut = finalRate;
-    if (arrow === '<->' && _hasTwoRateLaws(finalRate)) {
-      // Reversible rule: `fwd, rev`. Split on the top-level comma and wrap each side that needs it,
-      // preserving the two-law structure (BIOMD214: reversible rule with a time-dependent rate law).
-      let depth = 0, splitAt = -1;
-      for (let i = 0; i < finalRate.length; i++) {
-        const c = finalRate[i];
-        if (c === '(') depth++;
-        else if (c === ')') depth--;
-        else if (c === ',' && depth === 0) { splitAt = i; break; }
-      }
-      if (splitAt >= 0) {
-        let fwd = finalRate.slice(0, splitAt).trim();
-        let rev = finalRate.slice(splitAt + 1).trim();
-        let wrapped = false;
-        if (needsTimeWrap(fwd)) { const fn = `_trate_${label}_f`; timeRateFns.push(`  ${fn}() = ${fwd}`); fwd = `${fn}()`; wrapped = true; }
-        if (needsTimeWrap(rev)) { const fn = `_trate_${label}_r`; timeRateFns.push(`  ${fn}() = ${rev}`); rev = `${fn}()`; wrapped = true; }
-        if (wrapped) rateOut = `${fwd}, ${rev}`;
-      }
-    } else if (needsTimeWrap(finalRate) && !_hasTwoRateLaws(finalRate)) {
-      const fnName = `_trate_${label}`;
+    if (/\btime\s*\(/.test(finalRate) && !/_amt\b/.test(finalRate) && !/_c_/.test(finalRate)) {
+      const fnName = `_trate_${standardizeName(rxn.name || rxnId)}`;
       timeRateFns.push(`  ${fnName}() = ${finalRate}`);
       rateOut = `${fnName}()`;
     }
