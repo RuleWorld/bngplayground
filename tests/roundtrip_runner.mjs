@@ -1,5 +1,5 @@
 /**
- * roundtrip_runner.mjs â€” per-model SBML round-trip verification for BNG Playground.
+ * roundtrip_runner.mjs — per-model SBML round-trip verification for BNG Playground.
  *
  * Run one SBML file through the pipeline and emit a single-line JSON result.
  * Designed to be called once per model by the SLURM array job; it NEVER throws
@@ -115,14 +115,58 @@ function numericEquiv(a, b){ const ids=[...new Set([...idsOf(a),...idsOf(b)])]; 
 // ----------------------------------------------------------------------------
 // BNG2.pl simulation stage: run BNG2.pl on atomizer BNGL and check GDAT output
 // ----------------------------------------------------------------------------
+
+// Relaxed-tolerance ladder for stiff models. BNG2's run_network defaults to atol=rtol=1e-8,
+// which fails the CVODE corrector on genuinely stiff systems (e.g. the Poolman Calvin cycle,
+// BIOMD13: step size collapses to ~1e-62 at t~0.75) even though the translated BNGL is correct
+// and libRoadRunner integrates the same model at its own looser defaults. When a run fails with
+// the CVODE stiffness signature we retry at these tolerances; a success is recorded with
+// `relaxedTolerance` set so downstream parity can footnote that BNG2 used a looser tolerance
+// than the 1e-8 default. Override via BNG2_RELAX env (comma-separated atol:rtol pairs).
+const BNG2_RELAX_LADDER = (process.env.BNG2_RELAX || '1e-6:1e-6,1e-4:1e-4')
+  .split(',').map(s => s.trim()).filter(Boolean)
+  .map(pair => pair.split(':').map(v => v.trim()));
+
+// A CVODE convergence/step-size failure, as opposed to a translation defect (undefined
+// parameter, malformed rule, etc.). Only these are eligible for a relaxed-tolerance retry.
+function isStiffnessFailure(text) {
+  return /corrector convergence|CVODE ERROR|error code -4|mxstep steps taken|did not run successfully/i.test(text || '');
+}
+
+// Insert atol/rtol into every simulate() action that does not already set them. BNG2 accepts
+// these keys anywhere in the simulate arg hash.
+function injectRelaxedTolerance(bnglContent, atol, rtol) {
+  return bnglContent.replace(/simulate\(\{(?![^}]*atol=>)/g, `simulate({atol=>${atol},rtol=>${rtol},`);
+}
+
 function runBng2Simulation(bnglContent, modelName) {
+  const first = runBng2Once(bnglContent, modelName);
+  if (first.ok || !isStiffnessFailure(first._raw)) {
+    delete first._raw;
+    return first;
+  }
+  // Stiff failure at the default tolerance: retry up the relaxed ladder.
+  for (const [atol, rtol] of BNG2_RELAX_LADDER) {
+    const relaxed = runBng2Once(injectRelaxedTolerance(bnglContent, atol, rtol), modelName);
+    if (relaxed.ok) {
+      delete relaxed._raw;
+      return { ...relaxed, relaxedTolerance: `atol=${atol},rtol=${rtol}` };
+    }
+  }
+  delete first._raw;
+  return first; // report the original default-tolerance failure
+}
+
+// A single BNG2.pl invocation on the given BNGL. Returns the same shape as before plus a
+// non-enumerable-ish `_raw` field (combined stdout+stderr) the retry wrapper inspects and strips.
+function runBng2Once(bnglContent, modelName) {
   const tmpDir = fs.mkdtempSync(path.join(TMPDIR, 'bng2-'));
   const bnglFile = path.join(tmpDir, `${modelName}.bngl`);
   try {
     fs.writeFileSync(bnglFile, bnglContent, 'utf8');
     // BNG2.pl is a Perl script driven by the model's own `begin actions` block, so it is
     // run as `perl BNG2.pl <model.bngl>` (no subcommand). It needs BNGPATH pointing at a
-    // full BioNetGen install (Perl2/ modules + bin/run_network) â€” settable via the BNGPATH
+    // full BioNetGen install (Perl2/ modules + bin/run_network) — settable via the BNGPATH
     // env var, otherwise defaulted to the script's own directory. If BNG2_CMD is instead the
     // pyBioNetGen CLI, use its `run` subcommand. Outputs land under tmpDir either way.
     let cmd, args;
@@ -135,18 +179,53 @@ function runBng2Simulation(bnglContent, modelName) {
       cmd = BNG2_CMD;
       args = ['run', '-i', bnglFile, '-o', tmpDir];
     }
-    const r = spawnSync(cmd, args, {
-      cwd: tmpDir, timeout: 120_000, maxBuffer: 50 * 1024 * 1024,
-      env: runEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const stdout = r.stdout?.toString() || '';
-    const stderr = r.stderr?.toString() || '';
+    // Redirect BNG2 output to files rather than capturing through a pipe. Genome-scale FBA
+    // models emit enormous network-generation output; with a pipe, Node closes the read end
+    // once maxBuffer fills and BNG2.pl dies with SIGPIPE (~33 models) no matter how high the
+    // cap. File descriptors have no pipe backpressure, so no SIGPIPE. We read the files back
+    // with a head+tail cap for error classification (CVODE/stiffness text is at the end).
+    const outFile = path.join(tmpDir, '_bng2_stdout.log');
+    const errFile = path.join(tmpDir, '_bng2_stderr.log');
+    const outFd = fs.openSync(outFile, 'w');
+    const errFd = fs.openSync(errFile, 'w');
+    let r;
+    try {
+      r = spawnSync(cmd, args, {
+        cwd: tmpDir, timeout: 300_000,
+        env: runEnv,
+        stdio: ['ignore', outFd, errFd],
+      });
+    } finally {
+      try { fs.closeSync(outFd); } catch { /* already closed */ }
+      try { fs.closeSync(errFd); } catch { /* already closed */ }
+    }
+    const readCapped = (f) => {
+      try {
+        const size = fs.statSync(f).size;
+        const cap = 4 * 1024 * 1024; // 4MB head + 4MB tail is ample for error text
+        const fd = fs.openSync(f, 'r');
+        try {
+          if (size <= cap * 2) {
+            const b = Buffer.alloc(size);
+            fs.readSync(fd, b, 0, size, 0);
+            return b.toString('utf8');
+          }
+          const head = Buffer.alloc(cap);
+          const tail = Buffer.alloc(cap);
+          fs.readSync(fd, head, 0, cap, 0);
+          fs.readSync(fd, tail, 0, cap, size - cap);
+          return head.toString('utf8') + '\n...[truncated]...\n' + tail.toString('utf8');
+        } finally { fs.closeSync(fd); }
+      } catch { return ''; }
+    };
+    const stdout = readCapped(outFile);
+    const stderr = readCapped(errFile);
+    const raw = stdout + '\n' + stderr;
     if (r.status !== 0 && r.status !== null) {
-      return { ok: false, error: `BNG2.pl exit ${r.status}: ${stderr.slice(0, 200)}` };
+      return { ok: false, error: `BNG2.pl exit ${r.status}: ${stderr.slice(0, 200)}`, _raw: raw };
     }
     if (r.signal) {
-      return { ok: false, error: `BNG2.pl killed by signal ${r.signal}` };
+      return { ok: false, error: `BNG2.pl killed by signal ${r.signal}`, _raw: raw };
     }
     // Look for .gdat files (recurse: BNG2.pl writes to cwd, the pyBNG CLI to a subdir)
     const gdatFiles = [];
@@ -159,7 +238,7 @@ function runBng2Simulation(bnglContent, modelName) {
     };
     walk(tmpDir);
     if (gdatFiles.length === 0) {
-      return { ok: false, error: 'no .gdat files produced', stdout: stdout.slice(0, 300) };
+      return { ok: false, error: 'no .gdat files produced', stdout: stdout.slice(0, 300), _raw: raw };
     }
     // Read and validate the largest .gdat
     let bestGdat = null, bestSize = 0;
@@ -170,11 +249,11 @@ function runBng2Simulation(bnglContent, modelName) {
     const gdatContent = fs.readFileSync(bestGdat, 'utf8');
     const lines = gdatContent.trim().split('\n');
     if (lines.length < 2) {
-      return { ok: false, error: `GDAT has only ${lines.length} lines` };
+      return { ok: false, error: `GDAT has only ${lines.length} lines`, _raw: raw };
     }
     const header = lines[0].trim().split(/\s+/);
     if (header.length < 2) {
-      return { ok: false, error: `GDAT header has <2 columns: ${header.length}` };
+      return { ok: false, error: `GDAT header has <2 columns: ${header.length}`, _raw: raw };
     }
     const dataRows = lines.slice(1);
     let nanCount = 0, negCount = 0;
@@ -193,9 +272,10 @@ function runBng2Simulation(bnglContent, modelName) {
       nanCount, negCount,
       gdatFile: path.basename(bestGdat),
       gdatSize: bestSize,
+      _raw: raw,
     };
   } catch (e) {
-    return { ok: false, error: e?.message || String(e) };
+    return { ok: false, error: e?.message || String(e), _raw: '' };
   } finally {
     // Clean up
     try {
@@ -247,7 +327,7 @@ async function main() {
     } catch (e) {
       result.stages.parse = false;
       const msg = e?.message || String(e);
-      // Detect WASM memory failures â€” skip atomizer stages but continue
+      // Detect WASM memory failures — skip atomizer stages but continue
       if (/could not allocate memory|Initialize.*SBML|abort/i.test(msg)) {
         result.wasm_available = false;
       }
@@ -275,7 +355,7 @@ async function main() {
   }
 
   // ---- Stage: ratelaw_equiv (MathML round-trip on the ORIGINAL kinetic laws) ----
-  // SELF-CONTAINED â€” runs regardless of WASM/atomizer
+  // SELF-CONTAINED — runs regardless of WASM/atomizer
   t0 = Date.now();
   try {
     result.ratelaw_tested = 0; result.ratelaw_passed = 0; result.ratelaw_skipped = 0;
