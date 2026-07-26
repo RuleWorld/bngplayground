@@ -3,7 +3,7 @@ import { Molecule, Species } from '../src/lib/atomizer/core/structures';
 import { writeFunctions, writeSeedSpecies } from '../src/lib/atomizer/writer/bnglWriter';
 
 describe('BNGL writer strict-parser compatibility', () => {
-  it('does not emit argument-taking functionDefinitions (they are inlined at call sites)', () => {
+  it('sanitizes strict-parser keyword identifiers in function names and arguments', () => {
     const functions = new Map<string, any>([
       [
         'function',
@@ -51,14 +51,11 @@ describe('BNGL writer strict-parser compatibility', () => {
       true
     );
 
-    // BNG2's run_network rejects functions with arguments ("Functions cannot contain
-    // arguments"), so argument-taking functionDefinitions are inlined at every call site and
-    // must NOT appear as standalone definitions in the functions block. (Zero-argument
-    // functionDefinitions are still emitted; keyword sanitization on the inlined bodies is
-    // covered where those call sites are exercised.)
-    expect(section).not.toContain('function_id(');
-    expect(section).not.toContain('function_1(');
-    expect(section).not.toContain('function_2(');
+    expect(section).toContain(
+      'function_id(_farg0_param_id, _farg1_mod_id, _farg2_parameter_id, _farg3_modifier_id, _farg4_substrate_id)'
+    );
+    expect(section).toContain('function_1(_farg0_param_id, _farg1_mod_id)');
+    expect(section).toContain('function_2(_farg0_parameter_id, _farg1_modifier_id)');
     expect(section).not.toContain('function(param, mod');
   });
 
@@ -111,3 +108,4 @@ describe('BNGL writer strict-parser compatibility', () => {
     expect(out.patternToId.has(`$${mappedPattern}`)).toBe(true);
   });
 });
+
