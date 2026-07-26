@@ -18,6 +18,7 @@ import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
 import { isJITSafe } from '../simulation/ExpressionEvaluator.ts';
+import { createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import {
     OP_STOP,
     OP_PUSH_CONST,
@@ -182,13 +183,9 @@ export class JITCompiler {
         return (hash >>> 0).toString(16);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     private createFn(args: string[], body: string): Function {
-        for (const a of args) {
-            if (a !== '__proto__' && a !== 'constructor' && a !== 'prototype' && !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(a)) {
-                throw new Error(`Invalid function argument name: ${a}`);
-            }
-        }
-        return new Function(...args, JSON.parse(JSON.stringify(body)));
+        return createCompiledFunction(args, body);
     }
 
     private buildReactionSignature(
@@ -302,7 +299,7 @@ export class JITCompiler {
             SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
-            throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`);
+            throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`, { cause: error });
         }
     }
 
