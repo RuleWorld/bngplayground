@@ -180,7 +180,9 @@ function runBng2Once(bnglContent, modelName) {
       args = ['run', '-i', bnglFile, '-o', tmpDir];
     }
     const r = spawnSync(cmd, args, {
-      cwd: tmpDir, timeout: 120_000, maxBuffer: 50 * 1024 * 1024,
+      // Genome-scale FBA models emit very large network-generation output; a 50MB cap let Node
+      // close the pipe mid-run, killing BNG2.pl with SIGPIPE (~34 models). 512MB covers them.
+      cwd: tmpDir, timeout: 300_000, maxBuffer: 512 * 1024 * 1024,
       env: runEnv,
       stdio: ['ignore', 'pipe', 'pipe'],
     });

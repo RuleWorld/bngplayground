@@ -44,10 +44,10 @@ function fetchUrl(url) {
 
 async function ensureFixture(name, url) {
   const dest = path.join(MULTI_DIR, name);
-  try {
-    const content = fs.readFileSync(dest, 'utf8');
-    if (content.length > 1000) return content;
-  } catch {}
+  if (fs.existsSync(dest)) {
+    const stat = fs.statSync(dest);
+    if (stat.size > 1000) return fs.readFileSync(dest, 'utf8');
+  }
   fs.mkdirSync(MULTI_DIR, { recursive: true });
   console.error(`  Downloading ${name} from libSBML repo...`);
   const content = await fetchUrl(url);

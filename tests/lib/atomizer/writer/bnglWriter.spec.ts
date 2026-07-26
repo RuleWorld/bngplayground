@@ -117,8 +117,13 @@ describe('bnglFunction', () => {
 
   it('should map sbml to bngl IDs', () => {
     const sbmlToBnglId = new Map([['complex_S1_S2', 'S3']]);
-    expect(bnglFunction('Sat(k1, Km, complex_S1_S2)', 'rxn', [], [], new Map(), new Map(), new Set(), new Set(), new Map(), new Set(), new Set(['S3']), sbmlToBnglId))
-      .toBe('((k1) * Sat(S3_amt, Km))');
+    // writeObservables emits the amount observable under the SBML-id-based name
+    // (standardizeName(id) -> `complex_S1_S2_amt`) and registers that same name in speciesAmts,
+    // NOT the consolidated S# id. The sbmlToBnglId entry only marks the token as a species; a
+    // functional (saturation) rate must reference `complex_S1_S2_amt` to bind to the emitted
+    // observable (`S3_amt` would dangle). See the BIOMD13 rationale in bnglFunction.
+    expect(bnglFunction('Sat(k1, Km, complex_S1_S2)', 'rxn', [], [], new Map(), new Map(), new Set(), new Set(), new Map(), new Set(), new Set(['complex_S1_S2']), sbmlToBnglId))
+      .toBe('((k1) * Sat(complex_S1_S2_amt, Km))');
   });
 
   it('should correctly normalize double negatives', () => {

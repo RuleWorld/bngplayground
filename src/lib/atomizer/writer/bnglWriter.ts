@@ -480,6 +480,34 @@ function convertMathFunctions(expr: string): string {
   // Absolute value: abs(x) -> if(x>=0,x,-x)
   result = replaceNestedFunc(result, 'abs', (args) => `if(${args[0]}>=0,${args[0]},-(${args[0]}))`);
 
+  // SBML two-argument log(base, x) = log base 'base' of x -> (ln(x)/ln(base)). muParser's ln
+  // takes one argument, so the blind log(->ln( rewrite below would emit an invalid ln(base, x)
+  // and run_network aborts "Too many parameters for function ln" (BIOMD923/1025). Handle the
+  // two-arg form first via balanced-paren scanning; one-arg log(x) falls through. (log10( is a
+  // distinct token, not matched by \blog\s*\( .)
+  {
+    let guard = 0;
+    for (;;) {
+      if (guard++ > 1000) break;
+      const m = /\blog\s*\(/.exec(result);
+      if (!m) break;
+      const open = m.index + m[0].length - 1;
+      let depth = 0, close = -1, comma = -1;
+      for (let i = open; i < result.length; i++) {
+        const c = result[i];
+        if (c === '(') depth++;
+        else if (c === ')') { depth--; if (depth === 0) { close = i; break; } }
+        else if (c === ',' && depth === 1 && comma === -1) comma = i;
+      }
+      if (close === -1) break;
+      if (comma === -1) { result = result.slice(0, m.index) + '\u0001LN' + result.slice(m.index + 3); continue; }
+      const base = result.slice(open + 1, comma).trim();
+      const x = result.slice(comma + 1, close).trim();
+      result = result.slice(0, m.index) + `(ln(${x})/ln(${base}))` + result.slice(close + 1);
+    }
+    result = result.replace(/\u0001LN/g, 'log');
+  }
+
   // Logarithm: log(x) or ln(x) -> ln(x)
   result = result.replace(/\blog\s*\(/g, 'ln(');
   result = result.replace(/\bln\s*\(/g, 'ln(');
