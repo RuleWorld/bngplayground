@@ -57,7 +57,7 @@ jobs:
       # BioNetGen runs as a stock x86-64 ELF on the ubuntu runner; Perl is preinstalled.
       - name: Cache BioNetGen
         id: cache-bng
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ runner.temp }}/BioNetGen-${{ env.BNG_VERSION }}
           key: bionetgen-${{ env.BNG_VERSION }}
