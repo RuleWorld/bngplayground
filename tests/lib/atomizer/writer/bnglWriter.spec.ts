@@ -118,7 +118,7 @@ describe('bnglFunction', () => {
   it('should map sbml to bngl IDs', () => {
     const sbmlToBnglId = new Map([['complex_S1_S2', 'S3']]);
     expect(bnglFunction('Sat(k1, Km, complex_S1_S2)', 'rxn', [], [], new Map(), new Map(), new Set(), new Set(), new Map(), new Set(), new Set(['S3']), sbmlToBnglId))
-      .toBe('((k1) * Sat(complex_S1_S2_amt, Km))');
+      .toBe('((k1) * Sat(S3_amt, Km))');
   });
 
   it('should correctly normalize double negatives', () => {
