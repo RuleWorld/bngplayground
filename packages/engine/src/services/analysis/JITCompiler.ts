@@ -901,9 +901,9 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            const source0 = source + "return aTotal;\n";
-            const safeSource0 = this.sanitizeSource(source0);
-            return this.createFn(["state", "propensities"], safeSource0) as (state: Float64Array, propensities: Float64Array) => number;
+            const safeSource0 = this.sanitizeSource(source);
+            const source0 = safeSource0 + "return aTotal;\n";
+            return this.createFn(["state", "propensities"], source0) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
             return null;
@@ -1013,9 +1013,9 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            const source1 = source + "return aTotal;\n";
-            const safeSource1 = this.sanitizeSource(source1);
-            return this.createFn(["state", "propensities"], safeSource1) as (state: Float64Array, propensities: Float64Array) => number;
+            const safeSource1 = this.sanitizeSource(source);
+            const source1 = safeSource1 + "return aTotal;\n";
+            return this.createFn(["state", "propensities"], source1) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities with functional rates:', e);
             return null;
@@ -1121,10 +1121,10 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            const source2 = source + '}\nreturn totalDelta;\n';
+            const safeSource2 = this.sanitizeSource(source);
+            const source2 = safeSource2 + '}\nreturn totalDelta;\n';
 
-            const safeSource2 = this.sanitizeSource(source2);
-            return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], safeSource2) as
+            return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source2) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
         } catch (e) {
@@ -1272,10 +1272,10 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            const source3 = source + '}\nreturn totalDelta;\n';
+            const safeSource3 = this.sanitizeSource(source);
+            const source3 = safeSource3 + '}\nreturn totalDelta;\n';
 
-            const safeSource3 = this.sanitizeSource(source3);
-            const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], safeSource3) as
+            const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source3) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
 
