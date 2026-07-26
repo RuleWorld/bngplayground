@@ -1237,7 +1237,8 @@ export function writeFunctions(
   rateRuleFluxTargets: Set<string> = new Set(),
   forceRuleOnlyFastPath: boolean = false,
   compartmentIds: Set<string> = new Set(),
-  reactionKineticLaws: Map<string, string> = new Map()
+  reactionKineticLaws: Map<string, string> = new Map(),
+  keepParameterized: boolean = false
 ): string {
   const lines: string[] = [];
   const functionNameMap = new Map<string, string>();
@@ -1422,7 +1423,7 @@ export function writeFunctions(
     // cannot contain arguments" - so the parameterized standalone definition must NOT be
     // emitted. The inlined call sites already carry the expanded body. Zero-argument
     // functionDefinitions are fine and still emitted below.
-    if (func.arguments && func.arguments.length > 0) continue;
+    if (!keepParameterized && func.arguments && func.arguments.length > 0) continue;
     const name = functionNameMap.get(id) || sanitizeFunctionIdentifier(id);
     const argumentMap = new Map<string, string>();
     const args = (func.arguments || []).map((arg, idx) => {
