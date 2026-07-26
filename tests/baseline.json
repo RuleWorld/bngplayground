@@ -1,0 +1,31 @@
+{
+  "_meta": {
+    "note": "TEMPLATE — regenerate authoritatively with `node tests/ci_smoke.mjs --update` against a known-good build, then commit. Values here reflect expected intent from transform-level validation; parse+bng2_sim are pre-filled, reparse+ratelaw_equiv are intentionally omitted until --update fills them (the comparison only gates on fields present here, so it will not false-alarm on omitted stages). CI fails only on regressions of tracked booleans.",
+    "tracked": ["parse", "reparse", "ratelaw_equiv", "bng2_sim"]
+  },
+  "BIOMD0000000001": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000005": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000009": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000010": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000012": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000013": { "parse": true, "bng2_sim": true, "relaxedTolerance": true },
+  "BIOMD0000000055": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000081": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000118": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000214": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000262": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000263": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000320": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000619": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000624": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000637": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000669": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000723": { "parse": true, "bng2_sim": false },
+  "BIOMD0000000844": { "parse": true, "bng2_sim": false },
+  "BIOMD0000000872": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000923": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000956": { "parse": true, "bng2_sim": true },
+  "BIOMD0000000989": { "parse": true, "bng2_sim": true },
+  "BIOMD0000001025": { "parse": true, "bng2_sim": true },
+  "BIOMD0000001046": { "parse": true, "bng2_sim": true }
+}
