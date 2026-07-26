@@ -566,7 +566,16 @@ class VF2State {
     this.coreSize = 0;
     this.componentMatches = new Map();
     this.bondPartnerLookup = this.buildBondPartnerLookup();
-    this.nodeOrdering = nodeOrdering.length ? nodeOrdering : pattern.molecules.map((_, idx) => idx);
+    if (nodeOrdering.length) {
+      this.nodeOrdering = nodeOrdering;
+    } else {
+      const pLen = pattern.molecules.length;
+      const order = new Array<number>(pLen);
+      for (let i = 0; i < pLen; i++) {
+        order[i] = i;
+      }
+      this.nodeOrdering = order;
+    }
     this.symmetryBreaking = symmetryBreaking;
     this.allowExtraTargetBonds = allowExtraTargetBonds;
     this.componentCandidateCache = new Map();
@@ -578,10 +587,14 @@ class VF2State {
     this.componentOrders = new Array(pattern.molecules.length);
     for (let m = 0; m < pattern.molecules.length; m++) {
       const mol = pattern.molecules[m];
-      this.componentOrders[m] = mol.components
-        .map((_, idx) => idx)
-        .sort((a, b) => this.componentPriority(mol.components[b]) - this.componentPriority(mol.components[a]));
-      if (mol.components.length > maxComps) maxComps = mol.components.length;
+      const compCount = mol.components.length;
+      const compOrder = new Array<number>(compCount);
+      for (let i = 0; i < compCount; i++) {
+        compOrder[i] = i;
+      }
+      compOrder.sort((a, b) => this.componentPriority(mol.components[b]) - this.componentPriority(mol.components[a]));
+      this.componentOrders[m] = compOrder;
+      if (compCount > maxComps) maxComps = compCount;
     }
     this.scratchAssignment = new Int32Array(maxComps);
     this.scratchIterationCount = { value: 0 };

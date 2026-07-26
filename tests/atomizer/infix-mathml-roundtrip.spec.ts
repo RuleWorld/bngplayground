@@ -6,7 +6,7 @@
  * Original harness: infix_mathml_synthetic.mjs (standalone).
  */
 import { describe, it, expect } from 'vitest';
-import { infixToMathML } from '@bngplayground/engine/utils/infixToMathML';
+import { infixToMathML, infixToContentMathML } from '@bngplayground/engine/utils/infixToMathML';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Self-contained MathML→infix reader (matches the parser's mathMlNodeToFormula).
