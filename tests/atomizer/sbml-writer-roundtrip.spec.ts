@@ -223,7 +223,7 @@ function parseAst(toks: Array<{ t: string; v: string }>): unknown {
   const e = parseExpr(0); if (p !== toks.length) throw new Error('trailing tokens'); return e;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
+ 
 function evalInfix(s: string, env: Record<string, number>): number {
   const fns: Record<string, (...args: number[]) => number> = { pow: Math.pow, sqrt: Math.sqrt, exp: Math.exp, ln: Math.log, log10: Math.log10, abs: Math.abs, floor: Math.floor, ceil: Math.ceil, sin: Math.sin, cos: Math.cos, tan: Math.tan, sinh: Math.sinh, cosh: Math.cosh, tanh: Math.tanh, asin: Math.asin, acos: Math.acos, atan: Math.atan, asinh: Math.asinh, acosh: Math.acosh, atanh: Math.atanh, min: Math.min, max: Math.max };
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
