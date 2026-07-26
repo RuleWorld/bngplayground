@@ -46,7 +46,9 @@ describe('BNGL writer strict-parser compatibility', () => {
       new Map(),
       [],
       new Set(),
-      false
+      false,
+      new Set(),
+      true
     );
 
     // BNG2's run_network rejects functions with arguments ("Functions cannot contain

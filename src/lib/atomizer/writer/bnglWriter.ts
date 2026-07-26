@@ -261,10 +261,10 @@ export function bnglFunction(
       // the label AND the lookup by the same name so the emitted BNGL binds AND is numerically
       // correct.
       const obsName = standardizeName(match);
-      if (isSaturationRate && speciesWithConcFunctions.has(obsName)) {
-        return `${obsName}_amt`;
-      } else if (speciesWithConcFunctions.has(obsName)) {
-        return `_c_${obsName}()`;
+      if (speciesWithConcFunctions.has(obsName)) {
+        return isSaturationRate ? `${obsName}_amt` : `_c_${obsName}()`;
+      } else if (speciesWithConcFunctions.has(mappedId)) {
+        return isSaturationRate ? `${mappedId}_amt` : `_c_${mappedId}()`;
       } else {
         return `${obsName}_amt`;
       }
@@ -1236,7 +1236,8 @@ export function writeFunctions(
   rateRules: Array<{ variable: string; math: string }> = [],
   rateRuleFluxTargets: Set<string> = new Set(),
   forceRuleOnlyFastPath: boolean = false,
-  compartmentIds: Set<string> = new Set()
+  compartmentIds: Set<string> = new Set(),
+  keepParameterized: boolean = false
 ): string {
   const lines: string[] = [];
   const functionNameMap = new Map<string, string>();
@@ -1299,7 +1300,7 @@ export function writeFunctions(
     // cannot contain arguments" - so the parameterized standalone definition must NOT be
     // emitted. The inlined call sites already carry the expanded body. Zero-argument
     // functionDefinitions are fine and still emitted below.
-    if (func.arguments && func.arguments.length > 0) continue;
+    if (!keepParameterized && func.arguments && func.arguments.length > 0) continue;
     const name = functionNameMap.get(id) || sanitizeFunctionIdentifier(id);
     const argumentMap = new Map<string, string>();
     const args = (func.arguments || []).map((arg, idx) => {
