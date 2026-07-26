@@ -204,6 +204,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
               <button
                 onClick={() => setMode('math')}
                 aria-pressed={mode === 'math'}
+                aria-label="Math mode"
                 className={`px-2.5 py-1 rounded-l-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:z-10 ${mode === 'math'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
@@ -216,6 +217,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 disabled={!hasSpeciesData}
                 title={hasSpeciesData ? 'Define observable using BNGL pattern' : 'Requires species-level simulation data'}
                 aria-pressed={mode === 'bngl'}
+                aria-label="BNGL Pattern mode"
                 className={`px-2.5 py-1 rounded-r-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:z-10 ${mode === 'bngl'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'
@@ -268,6 +270,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                     <button
                       key={i}
                       onClick={() => applySuggestion(s.name)}
+                      aria-label={`Apply suggestion ${s.name}`}
                       className="w-full text-left px-3 py-1.5 text-xs hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 flex items-center justify-between border-b border-slate-50 dark:border-slate-700 last:border-0"
                     >
                       <span className="font-mono truncate mr-2">{s.name}</span>
