@@ -503,6 +503,40 @@ export function convertMathFunction(mathStr: string): string {
   // Exponential: exp(x) -> e^(x)
   result = result.replace(/exp\s*\(\s*([^)]+)\s*\)/g, '(2.71828182845905^($1))');
 
+  // SBML two-argument log(base, x) = log base 'base' of x  ->  (ln(x)/ln(base)). muParser's ln
+  // takes a single argument, so the blind log(->ln( rewrite below would emit an invalid
+  // ln(base, x) and run_network aborts "Too many parameters for function ln" (BIOMD923/1025).
+  // Handle the two-arg form first via balanced-paren scanning; one-arg log(x) falls through to
+  // the natural-log rewrite. (log10( is a distinct token and is not matched by \blog\s*\( .)
+  {
+    const rewriteTwoArgLog = (s: string): string => {
+      let out = s;
+      for (let guard = 0; guard < 1000; guard++) {
+        const m = /\blog\s*\(/.exec(out);
+        if (!m) break;
+        const open = m.index + m[0].length - 1; // index of '('
+        let depth = 0, close = -1, comma = -1;
+        for (let i = open; i < out.length; i++) {
+          const c = out[i];
+          if (c === '(') depth++;
+          else if (c === ')') { depth--; if (depth === 0) { close = i; break; } }
+          else if (c === ',' && depth === 1 && comma === -1) comma = i;
+        }
+        if (close === -1) break;
+        if (comma === -1) {
+          // one-arg log: temporarily mask so the loop advances; restored to `log` afterwards
+          out = out.slice(0, m.index) + '\u0001LN' + out.slice(m.index + 3);
+          continue;
+        }
+        const base = out.slice(open + 1, comma).trim();
+        const x = out.slice(comma + 1, close).trim();
+        out = out.slice(0, m.index) + `(ln(${x})/ln(${base}))` + out.slice(close + 1);
+      }
+      return out.replace(/\u0001LN/g, 'log');
+    };
+    result = rewriteTwoArgLog(result);
+  }
+
   // Natural log: log(x) -> ln(x) in BNGL
   result = result.replace(/\blog\s*\(/g, 'ln(');
 
