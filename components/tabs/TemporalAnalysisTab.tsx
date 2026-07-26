@@ -275,6 +275,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
                 </div>
                 {zoom && (
                   <button onClick={() => setZoom(null)}
+                    aria-label="Reset zoom"
                     className="self-start mt-1 px-2 py-0.5 rounded border border-slate-300 dark:border-slate-600 hover:bg-slate-100 dark:hover:bg-slate-700">
                     Reset zoom
                   </button>
