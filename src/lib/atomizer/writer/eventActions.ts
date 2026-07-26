@@ -17,15 +17,15 @@
 import type { SBMLEvent } from '../config/types';
 import { standardizeName } from '../utils/helpers';
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Minimal, safe numeric constant-folder
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * Evaluate a scalar arithmetic expression to a number, resolving identifiers via `resolve`.
  * Supports + - * / ^, parentheses, unary +/-, and numeric literals. Returns null when the
  * expression references something non-constant (a species, `time`, an unknown id, or a function
- * call) — i.e. exactly when it is not safe to bake into a scheduled action. Uses no eval/Function.
+ * call) - i.e. exactly when it is not safe to bake into a scheduled action. Uses no eval/Function.
  */
 export function foldNumeric(expr: string, resolve: (id: string) => number | undefined): number | null {
   if (!expr || !expr.trim()) return null;
@@ -121,32 +121,32 @@ function tokenize(expr: string): string[] | null {
     consumed = re.lastIndex;
   }
   // If anything other than whitespace was left unconsumed, the expression has an unsupported
-  // construct (relational/logical operator, comma, etc.) — treat as non-foldable.
+  // construct (relational/logical operator, comma, etc.) - treat as non-foldable.
   if (expr.slice(consumed).trim() !== '') return null;
   return out;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 // Trigger parsing
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
 
 /**
  * If the trigger is a simple time threshold, return the threshold expression (as a string), else
- * null. Handles both the function form emitted by the MathML reader (geq(time, T), lt(T, time), …)
+ * null. Handles both the function form emitted by the MathML reader (geq(time, T), lt(T, time), -)
  * and the infix form from the AST walker ((time >= T)).
  */
 export function parseTimeThreshold(trigger: string): string | null {
   if (!trigger) return null;
   const t = trigger.trim();
 
-  // Function form: geq(time, T) | gt(time, T)  → time >= T
+  // Function form: geq(time, T) | gt(time, T)  ? time >= T
   let m = t.match(/^(?:geq|gt)\s*\(\s*time\s*,\s*(.+)\)\s*$/i);
   if (m) return balancedInner(m[1]);
-  // Function form with time on the right: leq(T, time) | lt(T, time)  → time >= T
+  // Function form with time on the right: leq(T, time) | lt(T, time)  ? time >= T
   m = t.match(/^(?:leq|lt)\s*\(\s*(.+?)\s*,\s*time\s*\)\s*$/i);
   if (m) return m[1].trim();
 
-  // Infix form: (time >= T) / time > T / (T <= time) …
+  // Infix form: (time >= T) / time > T / (T <= time) -
   m = t.match(/^\(?\s*time\s*(?:>=|>)\s*(.+?)\s*\)?$/i);
   if (m) return stripOuterParens(m[1]);
   m = t.match(/^\(?\s*(.+?)\s*(?:<=|<)\s*time\s*\)?$/i);
@@ -171,9 +171,9 @@ function stripOuterParens(s: string): string {
   return t;
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Event → phases
-// ─────────────────────────────────────────────────────────────────────────────
+// -----------------------------------------------------------------------------
+// Event ? phases
+// -----------------------------------------------------------------------------
 
 export interface EventSet {
   kind: 'conc' | 'param';
@@ -183,7 +183,7 @@ export interface EventSet {
 }
 
 export interface EventTranslationContext {
-  /** SBML species id → BNGL species pattern string (for setConcentration), or null if not a species. */
+  /** SBML species id ? BNGL species pattern string (for setConcentration), or null if not a species. */
   resolveSpeciesPattern: (sbmlId: string) => string | null;
   /** Resolve a parameter/compartment id to its numeric value, else undefined. */
   resolveParam: (id: string) => number | undefined;
@@ -286,7 +286,7 @@ export function synthesizeEventActions(
   const tFinal = ctx.baseTEnd > lastFire ? ctx.baseTEnd : lastFire * 1.5 + 1;
   const method = ctx.method || 'ode';
 
-  // Distribute steps across phases by duration; the phase boundaries are 0, t1, t2, …, tFinal.
+  // Distribute steps across phases by duration; the phase boundaries are 0, t1, t2, -, tFinal.
   const boundaries = [0, ...merged.map(m => m.time).filter(t => t > 0), tFinal]
     .filter((v, i, arr) => i === 0 || v > arr[i - 1]);
   const totalDur = tFinal - boundaries[0];
@@ -321,9 +321,16 @@ export function synthesizeEventActions(
     }
     phaseStart = to;
   }
-  // Final continuation to tFinal if the last event was before tFinal.
+  // Final continuation to tFinal if the last event was before tFinal. If the phase loop above
+  // never ran (e.g. every event fires at t<=0, so there are no interior boundaries), `first` is
+  // still true and this is the ONLY simulate in the block - it must carry method=>, not
+  // continue=>1, or BNG2 aborts with "simulate() requires 'method' parameter" (BIOMD0000000081).
   if (Math.abs(phaseStart - tFinal) > 1e-12) {
-    lines.push(`simulate({continue=>1, t_end=>${fmt(tFinal)}, n_steps=>${stepsFor(phaseStart, tFinal)}})`);
+    if (first) {
+      lines.push(`simulate({method=>"${method}", t_start=>0, t_end=>${fmt(tFinal)}, n_steps=>${stepsFor(phaseStart, tFinal)}})`);
+    } else {
+      lines.push(`simulate({continue=>1, t_end=>${fmt(tFinal)}, n_steps=>${stepsFor(phaseStart, tFinal)}})`);
+    }
   }
 
   return { actionsBlock: lines.join('\n'), converted: scheduled.length, untranslated };

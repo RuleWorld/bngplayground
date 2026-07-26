@@ -349,12 +349,12 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
   ' ': '_',
   '#': 'sh',
   ':': '_',
-  'α': 'a', 'β': 'b', 'γ': 'g', 'δ': 'd', 'ε': 'e',
-  'ζ': 'z', 'η': 'h', 'θ': 'th', 'ι': 'i', 'κ': 'k',
-  'λ': 'l', 'μ': 'u', 'ν': 'n', 'ξ': 'x', 'ο': 'o',
-  'π': 'pi', 'ρ': 'r', 'σ': 's', 'τ': 't', 'υ': 'u',
-  'φ': 'ph', 'χ': 'ch', 'ψ': 'ps', 'ω': 'o',
-  'Α': 'A', 'Β': 'B', 'Γ': 'G', 'Δ': 'D', 'Ε': 'E',
+  'a': 'a', '-': 'b', '?': 'g', 'd': 'd', 'e': 'e',
+  '?': 'z', '?': 'h', '?': 'th', '?': 'i', '?': 'k',
+  '?': 'l', '-': 'u', '?': 'n', '?': 'x', '?': 'o',
+  'p': 'pi', '?': 'r', 's': 's', 't': 't', '?': 'u',
+  'f': 'ph', '?': 'ch', '?': 'ps', '?': 'o',
+  '?': 'A', '?': 'B', 'G': 'G', '?': 'D', '?': 'E',
   '+': 'pl',
   '/': '_',
   '-': '_',
@@ -545,9 +545,12 @@ export function convertMathFunction(mathStr: string): string {
 export function cleanParameterValue(value: string): string {
   let result = value;
 
-  while (/\binf\b/i.test(result)) {
-    result = result.replace(/\binf\b/gi, '1e20');
-  }
+  // Non-finite literals are not valid BNGL numbers; BNG2 otherwise reads the token (e.g.
+  // "Infinity", "NaN") as an undefined parameter name and aborts. JS stringifies these as
+  // "Infinity"/"-Infinity"/"NaN", so the old \binf\b pattern missed them. Map infinities to a
+  // large finite value and NaN to 0.
+  result = result.replace(/\b(?:infinity|inf)\b/gi, '1e20');
+  result = result.replace(/\bnan\b/gi, '0');
 
   // Standardize scientific notation
   result = result.replace(/(\d+)[eE]([+-]?\d+)/g, '$1e$2');
