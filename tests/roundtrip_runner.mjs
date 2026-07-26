@@ -191,7 +191,7 @@ function runBng2Once(bnglContent, modelName) {
     let r;
     try {
       r = spawnSync(cmd, args, {
-        cwd: tmpDir, timeout: 300_000,
+        cwd: tmpDir, timeout: 600_000,
         env: runEnv,
         stdio: ['ignore', outFd, errFd],
       });

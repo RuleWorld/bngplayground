@@ -261,10 +261,10 @@ export function bnglFunction(
       // the label AND the lookup by the same name so the emitted BNGL binds AND is numerically
       // correct.
       const obsName = standardizeName(match);
-      if (speciesWithConcFunctions.has(obsName)) {
-        return isSaturationRate ? `${obsName}_amt` : `_c_${obsName}()`;
-      } else if (speciesWithConcFunctions.has(mappedId)) {
-        return isSaturationRate ? `${mappedId}_amt` : `_c_${mappedId}()`;
+      if (isSaturationRate && speciesWithConcFunctions.has(obsName)) {
+        return `${obsName}_amt`;
+      } else if (speciesWithConcFunctions.has(obsName)) {
+        return `_c_${obsName}()`;
       } else {
         return `${obsName}_amt`;
       }
@@ -1237,7 +1237,7 @@ export function writeFunctions(
   rateRuleFluxTargets: Set<string> = new Set(),
   forceRuleOnlyFastPath: boolean = false,
   compartmentIds: Set<string> = new Set(),
-  keepParameterized: boolean = false
+  reactionKineticLaws: Map<string, string> = new Map()
 ): string {
   const lines: string[] = [];
   const functionNameMap = new Map<string, string>();
@@ -1260,6 +1260,128 @@ export function writeFunctions(
       );
     }
     return out;
+  };
+
+  // Inline reaction-flux-by-id references. SBML permits an assignment rule / observable to
+  // reference a reaction's FLUX by that reaction's id (the rateOf family, e.g. `qO2 = ... 0.178*r1
+  // + 0.908*r2 ...`, `Summary = Vin - Vout`). BNGL has no symbol for a reaction flux, so the
+  // reference is undefined and BNG2 aborts "Parameter 'r1' referenced but not defined". We inline
+  // the reaction's kinetic law (converted with the SAME bnglFunction + mapCompartments path used
+  // for rule bodies, so species become _amt/_c_() consistently). SBML kinetic laws are already the
+  // total flux (they include reactant terms for mass-action), so this is the correct expression.
+  // SAFETY: fires only for a token that (a) is a reaction id we were given a law for, and (b) is
+  // not otherwise defined (parameter, species, or rule variable) - a strict no-op otherwise.
+  const _fluxAssignVars = new Set(assignmentRules.map((r) => standardizeName(r.variable)));
+  const _fluxNumericParams = new Map(Array.from(parameterDict.entries()).map(([k, v]) => [k, Number(v)]));
+  const _fluxMemo = new Map<string, string | null>();
+  const computeReactionFlux = (rid: string): string | null => {
+    if (_fluxMemo.has(rid)) return _fluxMemo.get(rid) as string | null;
+    const klaw = reactionKineticLaws.get(rid);
+    let expr: string | null = null;
+    if (klaw !== undefined) {
+      try {
+        expr = mapCompartments(bnglFunction(
+          inlineSBMLFunctions(klaw, functions), rid, [], [],
+          _fluxNumericParams, new Map(), _fluxAssignVars,
+          new Set(speciesToCompartment.keys()), speciesToHasOnlySubstanceUnits,
+          skipRules, speciesAmts, sbmlToBnglId,
+        ));
+      } catch { expr = null; }
+    }
+    _fluxMemo.set(rid, expr);
+    return expr;
+  };
+  const substituteReactionFluxes = (body: string): string => {
+    if (reactionKineticLaws.size === 0) return body;
+    let out = body;
+    for (let pass = 0; pass < 4; pass++) {
+      let changed = false;
+      for (const rid of reactionKineticLaws.keys()) {
+        const std = standardizeName(rid);
+        if (!out.includes(std)) continue; // cheap guard
+        if (parameterDict.has(rid) || parameterDict.has(std) || speciesToCompartment.has(rid) || _fluxAssignVars.has(std) || functions.has(rid)) continue;
+        const re = new RegExp(`\\b${escapeRegExp(std)}\\b`, 'g');
+        if (!re.test(out)) continue;
+        const fx = computeReactionFlux(rid);
+        if (fx == null) continue;
+        out = out.replace(re, `(${fx})`);
+        changed = true;
+      }
+      if (!changed) break;
+    }
+    return out;
+  };
+
+  // Work around a BNG2 .net-writer quirk: it reorders the functions block and can place a
+  // time-dependent function AHEAD of the constant functions it references, so run_network aborts
+  // "Could not find variable ModelValue_5" even though the .bngl order was correct. We inline
+  // constant-valued functions (those built only from parameters, numbers, math builtins, and other
+  // constant functions - no species/observable/time dependence) at their call sites and make each
+  // constant function self-contained, so no function references another and BNG2 cannot break the
+  // order. Identity-preserving numerically; STRICT detection (every bare identifier must be a
+  // defined parameter, every remaining call a math builtin) means a species/observable-referencing
+  // function is never treated as constant, so simulating models are unaffected.
+  const inlineConstantFunctionsInLines = (fnLines: string[]): string[] => {
+    const META = ['__rate_rule_pos__', '__rate_rule_neg__', '__rate_rule__', '__assign_rule__'];
+    const stripMeta = (nm: string): { canonical: string; isRate: boolean } => {
+      for (const p of META) if (nm.startsWith(p)) return { canonical: nm.slice(p.length), isRate: p.indexOf('rate_rule') >= 0 };
+      return { canonical: nm, isRate: false };
+    };
+    const MATH = new Set(['exp', 'ln', 'log', 'log10', 'sin', 'cos', 'tan', 'asin', 'acos', 'atan', 'sinh', 'cosh', 'tanh', 'sqrt', 'abs', 'if', 'pow', 'power', 'floor', 'ceil', 'min', 'max', 'rint', 'piecewise', 'and', 'or', 'not', 'time']);
+    const reDef = /^(\s*)([A-Za-z_]\w*)\(\)\s*=\s*(.+?)\s*$/;
+    const defs = new Map<string, string>();
+    for (const line of fnLines) {
+      const m = line.match(reDef);
+      if (!m) continue;
+      const { canonical, isRate } = stripMeta(m[2]);
+      if (isRate) continue; // rate-rule / pos / neg functions are not eligible constants
+      if (!defs.has(canonical)) defs.set(canonical, m[3]);
+    }
+    if (defs.size === 0) return fnLines;
+    const constVal = new Map<string, string>();
+    const inlineKnown = (b: string): string => {
+      let out = b;
+      for (let p = 0; p < 8; p++) {
+        let ch = false;
+        for (const [cn, cv] of constVal) {
+          const re = new RegExp(`\\b${escapeRegExp(cn)}\\(\\)`, 'g');
+          if (re.test(out)) { out = out.replace(re, `(${cv})`); ch = true; }
+        }
+        if (!ch) break;
+      }
+      return out;
+    };
+    const isConst = (body: string): string | null => {
+      if (/_c_|_amt|\btime\s*\(/.test(body)) return null;
+      const b = inlineKnown(body);
+      for (const mm of b.matchAll(/\b([A-Za-z_]\w*)\s*\(\s*\)/g)) {
+        if (!MATH.has(mm[1])) return null; // unresolved user-function call -> not constant
+      }
+      for (const mm of b.matchAll(/\b([A-Za-z_]\w*)\b(?!\s*\()/g)) {
+        const id = mm[1];
+        if (MATH.has(id)) continue;
+        if (parameterDict.has(id)) continue;
+        return null; // a species/observable/unknown bare identifier -> not constant
+      }
+      return b;
+    };
+    for (let pass = 0; pass < 8; pass++) {
+      let ch = false;
+      for (const [n, body] of defs) {
+        if (constVal.has(n)) continue;
+        const c = isConst(body);
+        if (c !== null) { constVal.set(n, c); ch = true; }
+      }
+      if (!ch) break;
+    }
+    if (constVal.size === 0) return fnLines;
+    return fnLines.map((line) => {
+      const m = line.match(reDef);
+      if (!m) return line;
+      const { canonical } = stripMeta(m[2]);
+      const body = constVal.has(canonical) ? (constVal.get(canonical) as string) : inlineKnown(m[3]);
+      return `${m[1]}${m[2]}() = ${body}`;
+    });
   };
 
   // Avoid O(n^2) lookups for large species sets (genome-scale reconstructions).
@@ -1300,7 +1422,7 @@ export function writeFunctions(
     // cannot contain arguments" - so the parameterized standalone definition must NOT be
     // emitted. The inlined call sites already carry the expanded body. Zero-argument
     // functionDefinitions are fine and still emitted below.
-    if (!keepParameterized && func.arguments && func.arguments.length > 0) continue;
+    if (func.arguments && func.arguments.length > 0) continue;
     const name = functionNameMap.get(id) || sanitizeFunctionIdentifier(id);
     const argumentMap = new Map<string, string>();
     const args = (func.arguments || []).map((arg, idx) => {
@@ -1371,7 +1493,7 @@ export function writeFunctions(
     for (const rule of assignmentRules) {
       if (!rule.variable || skipRules.has(rule.variable)) continue;
       const name = standardizeName(rule.variable);
-      const body = normalizeRuleMath(rule.math);
+      const body = substituteReactionFluxes(normalizeRuleMath(rule.math));
       lines.push(`${name}() = ${body}`);
       lines.push(`${ASSIGN_RULE_META_PREFIX}${name}() = ${body}`);
     }
@@ -1383,7 +1505,7 @@ export function writeFunctions(
     for (const rule of rateRules) {
       if (!rule.variable) continue;
       const name = standardizeName(rule.variable);
-      const body = normalizeRuleMath(rule.math);
+      const body = substituteReactionFluxes(normalizeRuleMath(rule.math));
       lines.push(`${RATE_RULE_META_PREFIX}${name}() = ${body}`);
       if (rateRuleFluxTargets.has(name)) {
         lines.push(
@@ -1395,7 +1517,7 @@ export function writeFunctions(
       }
     }
 
-    return sectionTemplate('functions', lines);
+    return sectionTemplate('functions', inlineConstantFunctionsInLines(lines));
   }
 
 
@@ -1465,7 +1587,7 @@ export function writeFunctions(
     // reaction rates), so a compartment volume used in an assignment rule (common in PBPK
     // models: cell, cytosol, Duodenum, Urine, ...) would leak and BNG2 aborts "Parameter
     // '<comp>' referenced but not defined". The \b guards leave already-expanded tokens alone.
-    const mappedBody = mapCompartments(body);
+    const mappedBody = substituteReactionFluxes(mapCompartments(body));
     lines.push(`${name}() = ${mappedBody}`);
     // Emit explicit metadata functions so downstream SBML export can reconstruct listOfRules.
     lines.push(`${ASSIGN_RULE_META_PREFIX}${name}() = ${mappedBody}`);
@@ -1498,7 +1620,7 @@ export function writeFunctions(
     );
 
     // Keep rate-rule metadata isolated to avoid affecting BNGL simulation semantics.
-    const mappedBody = mapCompartments(body);
+    const mappedBody = substituteReactionFluxes(mapCompartments(body));
     lines.push(`${RATE_RULE_META_PREFIX}${name}() = ${mappedBody}`);
     if (rateRuleFluxTargets.has(name)) {
       lines.push(
@@ -1510,7 +1632,7 @@ export function writeFunctions(
     }
   }
 
-  return sectionTemplate('functions', lines);
+  return sectionTemplate('functions', inlineConstantFunctionsInLines(lines));
 }
 
 function areCompartmentsAdjacent(
@@ -2330,6 +2452,19 @@ export function generateBNGL(
   // functions section (recorded by index) after the reaction rules are written.
   const timeRateFns: string[] = [];
   const funcSectionIdx = sections.length;
+  // Reaction id -> kinetic-law math (local parameters substituted exactly as the rate path does).
+  // Lets writeFunctions inline a reaction's flux where an assignment rule / observable references
+  // the reaction by id (the rateOf family) - which BNGL otherwise leaves undefined.
+  const reactionKineticLaws = new Map<string, string>();
+  for (const [rxnId, rxn] of model.reactions) {
+    if (!rxn.kineticLaw || !rxn.kineticLaw.math) continue;
+    let m = rxn.kineticLaw.math;
+    for (const lp of (rxn.kineticLaw.localParameters || [])) {
+      const re = new RegExp(`\\b${escapeRegExp(lp.id)}\\b`, 'g');
+      m = options.replaceLocParams ? m.replace(re, String(lp.value)) : m.replace(re, standardizeName(`${rxnId}_${lp.id}`));
+    }
+    reactionKineticLaws.set(rxnId, m);
+  }
   sections.push(
     writeFunctions(
       model.functionDefinitions,
@@ -2344,7 +2479,8 @@ export function generateBNGL(
       rateRules,
       rateRuleFluxTargets,
       forceRuleOnlyFastPath,
-      new Set(model.compartments.keys())
+      new Set(model.compartments.keys()),
+      reactionKineticLaws
     )
   );
   mark('writeFunctions', t);
