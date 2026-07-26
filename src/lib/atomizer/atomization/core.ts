@@ -1243,6 +1243,49 @@ function updateMoleculeType(existing: Molecule, mol: Molecule): void {
 /**
  * Get seed species from the SCT
  */
+/**
+ * Disambiguate distinct SBML species that atomization collapsed onto one identical BNGL pattern
+ * (localized isoforms sharing a base name, e.g. cytosolic ppERKc vs nuclear ppERKn -> both
+ * M_ppERK(cytosol,nucleus)). Adds a discriminator component `__sp` whose state is the species id.
+ * GUARD: only groups with >1 distinct species id AND identical (pattern + compartment) are touched,
+ * so models without a real collision are a strict no-op. Numerically identity-preserving: it only
+ * SPLITS an over-merged pair; it never merges or alters a correctly-distinct species.
+ */
+export function disambiguateCollidingSpecies(
+  sct: SpeciesCompositionTable,
+  model: SBMLModel
+): number {
+  const groups = new Map<string, string[]>();
+  for (const [speciesId, entry] of sct.entries) {
+    if (!entry.structure || entry.structure.molecules.length === 0) continue;
+    const pattern = entry.structure.molecules
+      .map((m: Molecule) => m.toString(true))
+      .sort()
+      .join('.');
+    const comp = model.species.get(speciesId)?.compartment ?? '';
+    const key = `${comp}::${pattern}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(speciesId);
+    else groups.set(key, [speciesId]);
+  }
+
+  let disambiguated = 0;
+  for (const ids of groups.values()) {
+    const distinct = Array.from(new Set(ids));
+    if (distinct.length < 2) continue;
+    for (const speciesId of distinct) {
+      const entry = sct.entries.get(speciesId);
+      if (!entry || !entry.structure || entry.structure.molecules.length === 0) continue;
+      const state = standardizeName(speciesId);
+      const disc = new Component('__sp', '', [], [state]);
+      disc.activeState = state;
+      entry.structure.molecules[0].addComponent(disc);
+      disambiguated += 1;
+    }
+  }
+  return disambiguated;
+}
+
 export function getSeedSpecies(
   sct: SpeciesCompositionTable,
   model: SBMLModel
