@@ -17,8 +17,9 @@ import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
+
+import { SAFE_BODY_CHARS, createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import { isJITSafe } from '../simulation/ExpressionEvaluator.ts';
-import { createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import {
     OP_STOP,
     OP_PUSH_CONST,
@@ -186,6 +187,21 @@ export class JITCompiler {
     // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     private createFn(args: string[], body: string): Function {
         return createCompiledFunction(args, body);
+    }
+
+    /**
+     * Validate a string intended for JIT-compiled function body.
+     * Only alphanumerics, math/bitwise operators, brackets, and basic
+     * punctuation are permitted — anything else (backtick, template
+     * expressions, unescaped quotes, etc.) is rejected.
+     *
+     * CodeQL's `js/unsafe-code-construction` tracks this gate to
+     * confirm that untrusted model input cannot reach `new Function`.
+     */
+    private validateJitExpr(s: string): void {
+        if (!SAFE_BODY_CHARS.test(s)) {
+            throw new Error(`Unsafe JIT expression: ${JSON.stringify(s)}`);
+        }
     }
 
     private buildReactionSignature(
@@ -1000,6 +1016,7 @@ export class JITCompiler {
             }
 
             source += "return aTotal;\n";
+            this.validateJitExpr(source);
             return this.createFn(["state", "propensities"], source) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities with functional rates:', e);
@@ -1108,6 +1125,7 @@ export class JITCompiler {
 
             source += '}\nreturn totalDelta;\n';
 
+            this.validateJitExpr(source);
             return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
@@ -1258,6 +1276,7 @@ export class JITCompiler {
 
             source += '}\nreturn totalDelta;\n';
 
+            this.validateJitExpr(source);
             const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;

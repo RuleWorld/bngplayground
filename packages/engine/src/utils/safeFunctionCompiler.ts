@@ -34,7 +34,7 @@ export function sanitizeIntegerLiteral(v: unknown): string {
  * This is intended to help static analysis tools (CodeQL) verify that
  * dynamic code generation is only used with pre-sanitised inputs.
  */
-const SAFE_BODY_CHARS = /^[\s\w$+\-*/%&|^~<>=!?:;.,()\[\]{}'"]+$/;
+export const SAFE_BODY_CHARS = /^[\s\w$+\-*/%&|^~<>=!?:;.,()\[\]{}'"]+$/;
 
 export function createCompiledFunction(
   args: string[],

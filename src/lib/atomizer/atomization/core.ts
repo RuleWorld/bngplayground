@@ -727,7 +727,7 @@ function createElementalSpecies(
   // Try to parse the pattern using readFromString
   try {
     const parsedSpecies = readFromString(nameWithoutCompartment);
-    // Only trust a name-derived structure when it carries REAL structure (components) —
+    // Only trust a name-derived structure when it carries REAL structure (components) â€”
     // that's how RuleHub / BNG2-exported patterns like "L(r!1)" are preserved. A plain
     // label such as "Mos" or "Mos-P" parses to a bare, component-less molecule whose name
     // ("Mos") is shared by every phospho-form of the same protein, collapsing distinct SBML
