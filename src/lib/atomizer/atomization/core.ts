@@ -381,7 +381,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
   const numReactants = reactantIds.length;
   const numProducts = productIds.length;
 
-  // Synthesis: 0 → A
+  // Synthesis: 0 ? A
   if (numReactants === 0 && numProducts >= 1) {
     return {
       type: 'synthesis',
@@ -391,7 +391,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Degradation: A → 0
+  // Degradation: A ? 0
   if (numReactants >= 1 && numProducts === 0) {
     return {
       type: 'degradation',
@@ -427,7 +427,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     }
   }
 
-  // Binding: A + B → C
+  // Binding: A + B ? C
   if (numReactants === 2 && numProducts === 1) {
     return {
       type: 'binding',
@@ -437,7 +437,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Complex binding: A + B + C → D
+  // Complex binding: A + B + C ? D
   if (numReactants > 2 && numProducts === 1) {
     return {
       type: 'binding',
@@ -462,7 +462,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     }
   }
 
-  // Unbinding: C → A + B
+  // Unbinding: C ? A + B
   if (numReactants === 1 && numProducts === 2) {
     return {
       type: 'unbinding',
@@ -472,7 +472,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Complex unbinding: D → A + B + C
+  // Complex unbinding: D ? A + B + C
   if (numReactants === 1 && numProducts > 2) {
     return {
       type: 'unbinding',
@@ -482,7 +482,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Modification: A → A'
+  // Modification: A ? A'
   if (numReactants === 1 && numProducts === 1) {
     return {
       type: 'modification',
@@ -492,7 +492,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Catalysis: A + E → A' + E (enzyme unchanged)
+  // Catalysis: A + E ? A' + E (enzyme unchanged)
   if (numReactants === 2 && numProducts === 2) {
     // Check if one species is unchanged (catalyst)
     if (commonSpecies.length === 1) {
@@ -727,7 +727,7 @@ function createElementalSpecies(
   // Try to parse the pattern using readFromString
   try {
     const parsedSpecies = readFromString(nameWithoutCompartment);
-    // Only trust a name-derived structure when it carries REAL structure (components) —
+    // Only trust a name-derived structure when it carries REAL structure (components) �
     // that's how RuleHub / BNG2-exported patterns like "L(r!1)" are preserved. A plain
     // label such as "Mos" or "Mos-P" parses to a bare, component-less molecule whose name
     // ("Mos") is shared by every phospho-form of the same protein, collapsing distinct SBML
@@ -1075,6 +1075,29 @@ export function buildSpeciesCompositionTable(
 
     // Parse and apply compartment info from species name
     parseAndApplyCompartments(speciesName, structure);
+
+    // Reconcile name-derived compartments against the declared set. BNG2/COPASI-exported SBML can
+    // carry a BNGL compartment label in the species NAME (e.g. "@cyto::C2E(...)") that differs from
+    // the authoritative SBML `compartment` attribute (e.g. "cell") and is NOT in the compartment
+    // list, so BNG2 aborts "Undefined compartment cyto" (BIOMD568). The SBML compartment attribute
+    // is authoritative (SBML L3); when a molecule's name-derived compartment is undeclared, fall
+    // back to it. GUARD: only fires for an undeclared compartment where the SBML attribute IS
+    // declared, so models with consistent/declared compartments are untouched (no regression path;
+    // an undeclared compartment already aborts BNG2 today).
+    {
+      const declaredStd = new Set(
+        Array.from(model.compartments.keys()).map((c) => standardizeName(c))
+      );
+      const sbmlComp = sbmlSpecies.compartment;
+      const sbmlCompStd = sbmlComp ? standardizeName(sbmlComp) : '';
+      if (sbmlComp && declaredStd.has(sbmlCompStd)) {
+        for (const mol of structure.molecules) {
+          if (mol.compartment && !declaredStd.has(standardizeName(mol.compartment))) {
+            mol.setCompartment(sbmlComp);
+          }
+        }
+      }
+    }
 
     const entry: SCTEntry = {
       structure,
