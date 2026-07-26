@@ -73,6 +73,7 @@ gdat_comparison_output/
 *.net
 *.m
 *.xml
+!tests/fixtures/sbml/*.xml
 
 # Debug and trace output files (txt)
 *.txt
