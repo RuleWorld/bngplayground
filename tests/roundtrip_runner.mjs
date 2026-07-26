@@ -179,15 +179,47 @@ function runBng2Once(bnglContent, modelName) {
       cmd = BNG2_CMD;
       args = ['run', '-i', bnglFile, '-o', tmpDir];
     }
-    const r = spawnSync(cmd, args, {
-      // Genome-scale FBA models emit very large network-generation output; a 50MB cap let Node
-      // close the pipe mid-run, killing BNG2.pl with SIGPIPE (~34 models). 512MB covers them.
-      cwd: tmpDir, timeout: 300_000, maxBuffer: 512 * 1024 * 1024,
-      env: runEnv,
-      stdio: ['ignore', 'pipe', 'pipe'],
-    });
-    const stdout = r.stdout?.toString() || '';
-    const stderr = r.stderr?.toString() || '';
+    // Redirect BNG2 output to files rather than capturing through a pipe. Genome-scale FBA
+    // models emit enormous network-generation output; with a pipe, Node closes the read end
+    // once maxBuffer fills and BNG2.pl dies with SIGPIPE (~33 models) no matter how high the
+    // cap. File descriptors have no pipe backpressure, so no SIGPIPE. We read the files back
+    // with a head+tail cap for error classification (CVODE/stiffness text is at the end).
+    const outFile = path.join(tmpDir, '_bng2_stdout.log');
+    const errFile = path.join(tmpDir, '_bng2_stderr.log');
+    const outFd = fs.openSync(outFile, 'w');
+    const errFd = fs.openSync(errFile, 'w');
+    let r;
+    try {
+      r = spawnSync(cmd, args, {
+        cwd: tmpDir, timeout: 300_000,
+        env: runEnv,
+        stdio: ['ignore', outFd, errFd],
+      });
+    } finally {
+      try { fs.closeSync(outFd); } catch { /* already closed */ }
+      try { fs.closeSync(errFd); } catch { /* already closed */ }
+    }
+    const readCapped = (f) => {
+      try {
+        const size = fs.statSync(f).size;
+        const cap = 4 * 1024 * 1024; // 4MB head + 4MB tail is ample for error text
+        const fd = fs.openSync(f, 'r');
+        try {
+          if (size <= cap * 2) {
+            const b = Buffer.alloc(size);
+            fs.readSync(fd, b, 0, size, 0);
+            return b.toString('utf8');
+          }
+          const head = Buffer.alloc(cap);
+          const tail = Buffer.alloc(cap);
+          fs.readSync(fd, head, 0, cap, 0);
+          fs.readSync(fd, tail, 0, cap, size - cap);
+          return head.toString('utf8') + '\n...[truncated]...\n' + tail.toString('utf8');
+        } finally { fs.closeSync(fd); }
+      } catch { return ''; }
+    };
+    const stdout = readCapped(outFile);
+    const stderr = readCapped(errFile);
     const raw = stdout + '\n' + stderr;
     if (r.status !== 0 && r.status !== null) {
       return { ok: false, error: `BNG2.pl exit ${r.status}: ${stderr.slice(0, 200)}`, _raw: raw };
