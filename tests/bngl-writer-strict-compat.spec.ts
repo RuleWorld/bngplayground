@@ -48,7 +48,8 @@ describe('BNGL writer strict-parser compatibility', () => {
       new Set(),
       false,
       new Set(),
-      true
+      new Map(),      // reactionKineticLaws
+      true            // keepParameterized
     );
 
     expect(section).toContain(
