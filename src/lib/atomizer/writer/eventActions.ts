@@ -312,7 +312,7 @@ export function synthesizeEventActions(
       lines.push(`simulate({method=>"${method}", t_start=>0, t_end=>${fmt(to)}, n_steps=>${nSteps}})`);
       first = false;
     } else {
-      lines.push(`simulate({continue=>1, t_end=>${fmt(to)}, n_steps=>${nSteps}})`);
+      lines.push(`simulate({continue=>1, method=>"${method}", t_end=>${fmt(to)}, n_steps=>${nSteps}})`);
     }
     // Apply the sets scheduled exactly at this boundary (if it corresponds to an event time).
     const atBoundary = merged.find(m => Math.abs(m.time - to) < 1e-12 && m.time > 0);
@@ -321,15 +321,15 @@ export function synthesizeEventActions(
     }
     phaseStart = to;
   }
-  // Final continuation to tFinal if the last event was before tFinal. If the phase loop above
-  // never ran (e.g. every event fires at t<=0, so there are no interior boundaries), `first` is
-  // still true and this is the ONLY simulate in the block - it must carry method=>, not
-  // continue=>1, or BNG2 aborts with "simulate() requires 'method' parameter" (BIOMD0000000081).
+  // Final continuation to tFinal if the last event was before tFinal. BNG2 requires `method` on
+  // EVERY simulate() call, including continue=>1 ones - omitting it aborts with
+  // "simulate() requires 'method' parameter" (BIOMD0000000081 and 20 others). The degenerate
+  // case (every event at t<=0, so `first` is still true) additionally needs t_start=>0.
   if (Math.abs(phaseStart - tFinal) > 1e-12) {
     if (first) {
       lines.push(`simulate({method=>"${method}", t_start=>0, t_end=>${fmt(tFinal)}, n_steps=>${stepsFor(phaseStart, tFinal)}})`);
     } else {
-      lines.push(`simulate({continue=>1, t_end=>${fmt(tFinal)}, n_steps=>${stepsFor(phaseStart, tFinal)}})`);
+      lines.push(`simulate({continue=>1, method=>"${method}", t_end=>${fmt(tFinal)}, n_steps=>${stepsFor(phaseStart, tFinal)}})`);
     }
   }
 

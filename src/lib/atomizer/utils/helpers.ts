@@ -349,12 +349,17 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
   ' ': '_',
   '#': 'sh',
   ':': '_',
-  'a': 'a', '-': 'b', '?': 'g', 'd': 'd', 'e': 'e',
-  '?': 'z', '?': 'h', '?': 'th', '?': 'i', '?': 'k',
-  '?': 'l', '-': 'u', '?': 'n', '?': 'x', '?': 'o',
-  'p': 'pi', '?': 'r', 's': 's', 't': 't', '?': 'u',
-  'f': 'ph', '?': 'ch', '?': 'ps', '?': 'o',
-  '?': 'A', '?': 'B', 'G': 'G', '?': 'D', '?': 'E',
+  // Greek-letter transliteration. Keys MUST stay as \u escapes (pure ASCII source):
+  // a previous edit round-tripped this literal through a UTF-16LE/mojibake path, which
+  // collapsed the Greek unicode keys to '?' and, fatally, to ASCII 'p' and 'f' -- turning
+  // 'p'->'pi' and 'f'->'ph' into global substring rewrites that mangled every identifier
+  // containing p or f (phos->pihos, alpha->alpiha, influx->inphlux, ...).
+  '\u03B1': 'a', '\u03B2': 'b', '\u03B3': 'g', '\u03B4': 'd', '\u03B5': 'e',
+  '\u03B6': 'z', '\u03B7': 'h', '\u03B8': 'th', '\u03B9': 'i', '\u03BA': 'k',
+  '\u03BB': 'l', '\u03BC': 'u', '\u03BD': 'n', '\u03BE': 'x', '\u03BF': 'o',
+  '\u03C0': 'pi', '\u03C1': 'r', '\u03C3': 's', '\u03C2': 's', '\u03C4': 't', '\u03C5': 'u',
+  '\u03C6': 'ph', '\u03C7': 'ch', '\u03C8': 'ps', '\u03C9': 'o',
+  '\u0391': 'A', '\u0392': 'B', '\u0393': 'G', '\u0394': 'D', '\u0395': 'E',
   '+': 'pl',
   '/': '_',
   '-': '_',
@@ -552,8 +557,12 @@ export function cleanParameterValue(value: string): string {
   result = result.replace(/\b(?:infinity|inf)\b/gi, '1e20');
   result = result.replace(/\bnan\b/gi, '0');
 
-  // Standardize scientific notation
-  result = result.replace(/(\d+)[eE]([+-]?\d+)/g, '$1e$2');
+  // Standardize scientific notation, but ONLY for standalone numeric literals. The digit-E-digit
+  // pattern also occurs inside identifiers (e.g. Vmax_2E1_APAP, the CYP2E1 enzyme), and lowercasing
+  // the E there desynchronizes the rate-law reference from the parameter definition, which keeps its
+  // original case -> BNG2 aborts "Parameter 'Vmax_2e1_APAP' referenced but not defined" (BIOMD624).
+  // The lookbehind/lookahead reject an adjacent identifier char so only genuine numbers are touched.
+  result = result.replace(/(?<![A-Za-z_])(\d+)[eE]([+-]?\d+)(?![A-Za-z_])/g, '$1e$2');
 
   return result;
 }
