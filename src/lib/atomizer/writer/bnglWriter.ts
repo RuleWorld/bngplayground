@@ -261,10 +261,10 @@ export function bnglFunction(
       // the label AND the lookup by the same name so the emitted BNGL binds AND is numerically
       // correct.
       const obsName = standardizeName(match);
-      if (isSaturationRate && speciesWithConcFunctions.has(obsName)) {
-        return `${obsName}_amt`;
-      } else if (speciesWithConcFunctions.has(obsName)) {
-        return `_c_${obsName}()`;
+      if (speciesWithConcFunctions.has(obsName)) {
+        return isSaturationRate ? `${obsName}_amt` : `_c_${obsName}()`;
+      } else if (speciesWithConcFunctions.has(mappedId)) {
+        return isSaturationRate ? `${mappedId}_amt` : `_c_${mappedId}()`;
       } else {
         return `${obsName}_amt`;
       }
