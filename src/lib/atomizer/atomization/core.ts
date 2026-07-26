@@ -1265,7 +1265,7 @@ export function getSeedSpecies(
     // must be multiplied by Na*V to become a molecule count.
     const asAmount = (expr: string) => sbmlSpecies.hasOnlySubstanceUnits
       ? `(${expr})`
-      : `(${expr} * Na * ${volParam})`;
+      : `(${expr} * __Avogadro__ * ${volParam})`;
 
     // Fall back to the old ">0" heuristic only when the set/unset flag is unavailable (e.g. the
     // species was built without access to the raw SBML), so nothing regresses.
@@ -1282,7 +1282,7 @@ export function getSeedSpecies(
       // initialAmount is already a substance amount (count in BNG-exported SBML); use directly.
       amountExpr = sbmlSpecies.initialAmount.toString();
     } else if (concSet) {
-      amountExpr = `(${sbmlSpecies.initialConcentration} * Na * ${volParam})`;
+      amountExpr = `(${sbmlSpecies.initialConcentration} * __Avogadro__ * ${volParam})`;
     } else {
       amountExpr = '0';
     }

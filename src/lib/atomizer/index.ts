@@ -305,7 +305,7 @@ export class Atomizer {
     const concentration = Number(sp.initialConcentration);
     if (Number.isFinite(concentration) && concentration > 0) {
       const compId = standardizeName(sp.compartment || 'Compartment');
-      return `(${concentration} * Na * __compartment_${compId}__)`;
+      return `(${concentration} * __Avogadro__ * __compartment_${compId}__)`;
     }
 
     return '0';
