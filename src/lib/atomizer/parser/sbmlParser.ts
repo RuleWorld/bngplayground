@@ -504,7 +504,7 @@ export class SBML2JSON {
       const leftFormula = libsbml.formulaToString(math.getLeftChild());
       const rightFormula = libsbml.formulaToString(math.getRightChild());
 
-      // ? Bolt: Replaced double traversal (includes + indexOf) with single indexOf call
+      // ⚡ Bolt: Replaced double traversal (includes + indexOf) with single indexOf call
       const leftIdx = remainderPatterns.indexOf(leftFormula);
       if (leftIdx !== -1) {
         remainderPatterns.splice(leftIdx, 1);
@@ -812,7 +812,7 @@ export class SBMLParser {
   /**
    * Detect SBML Level 3 packages by their namespace and count the elements each contributes.
    * The bundled build has no getPlugin, and full support for comp/multi/fbc/qual is a separate
-   * subsystem - so rather than silently ignore these, we count what would be lost and say so.
+   * subsystem — so rather than silently ignore these, we count what would be lost and say so.
    */
   private detectUnsupportedPackages(_model: SBMLModel): void {
     const xml = this.currentSbml;
@@ -821,7 +821,7 @@ export class SBMLParser {
     // Packages whose content changes the mathematical model (dropping them corrupts results).
     const dynamicPkgs: Record<string, string> = {
       comp: 'hierarchical model composition (submodels/externalModelDefinitions are not flattened)',
-      multi: 'multistate/multicomponent species - the structure the atomizer otherwise reconstructs heuristically',
+      multi: 'multistate/multicomponent species — the structure the atomizer otherwise reconstructs heuristically',
       fbc: 'flux-balance constraints and objectives',
       qual: 'qualitative (logical) model transitions',
       spatial: 'spatial geometry and diffusion',
@@ -846,7 +846,7 @@ export class SBMLParser {
     const countPrefixed = (prefix: string): number =>
       (xml.match(new RegExp(`<${prefix}:[A-Za-z]`, 'g'))?.length || 0);
 
-    // Some packages aren't merely unimplemented - they describe a different kind of model than the
+    // Some packages aren't merely unimplemented — they describe a different kind of model than the
     // kinetic ODE/SSA network BNGL expresses. Spell that out so the diagnostic isn't mistaken for a
     // missing feature that a rate law could paper over.
     const pkgWhy: Record<string, string> = {
@@ -871,7 +871,7 @@ export class SBMLParser {
         'info');
     }
 
-    // A purely qualitative (logical) model - qual transitions with no kinetic reactions - is
+    // A purely qualitative (logical) model — qual transitions with no kinetic reactions — is
     // a different mathematical object than a BNGL rule-based network: discrete logical updates,
     // not continuous rates. Proceeding produces nonsensical output (undefined/NaN rate terms),
     // so fail cleanly with a clear reason. Guarded on zero reactions so a kinetic model that
@@ -936,7 +936,7 @@ export class SBMLParser {
 
           // libsbml.wasm imports its memory (env.memory), so we can supply a growable one.
           // The old fixed 128 MB caused dense models (deeply nested MathML / many piecewise)
-          // to abort on read - a catchable bad_alloc in some cases, an uncatchable Emscripten
+          // to abort on read — a catchable bad_alloc in some cases, an uncatchable Emscripten
           // "cannot enlarge memory" abort in others (which kills the process). We start at a
           // modest 256 MB and allow growth to 2 GB on demand, so normal models pay almost
           // nothing while pathological ones can complete. All the size knobs are set because
@@ -951,7 +951,7 @@ export class SBMLParser {
               maximum: Math.floor(MAXIMUM_WASM_BYTES / WASM_PAGE),
             });
           } catch {
-            // Environment can't build a growable memory of this size - fall back to letting
+            // Environment can't build a growable memory of this size — fall back to letting
             // the glue size its own memory from the numeric options below.
             providedWasmMemory = undefined;
           }
@@ -1135,7 +1135,7 @@ export class SBMLParser {
         }
       }
     } catch (e) {
-      // Fallback: heavy <annotation> metadata (celldesigner / render / layout - none of
+      // Fallback: heavy <annotation> metadata (celldesigner / render / layout — none of
       // which carries kinetics) can exhaust the WASM heap during read and make libsbml
       // throw. If the first read threw, retry once with annotation blocks stripped. This
       // path is only reached when the model failed to read at all, so it cannot affect any
@@ -1155,7 +1155,7 @@ export class SBMLParser {
             }
           }
         } catch {
-          // retry also failed - fall through to decode + throw below
+          // retry also failed — fall through to decode + throw below
         }
       }
 
@@ -1950,13 +1950,13 @@ export class SBMLParser {
         return firstChildExpr();
       case 'ci':
       case 'csymbol': {
-        // A csymbol's meaning is its definitionURL, not its text content - the SBML time
+        // A csymbol's meaning is its definitionURL, not its text content — the SBML time
         // symbol is written with varying text across models ("time", "Time", "t"). Emit the
         // canonical `time` (convertMathFunctions turns it into time()); otherwise fall back
         // to the literal text. (delay/rateOf remain unsupported and surface as-is.)
         const csymUrl = (this.getXmlAttribute(node.attributes || '', 'definitionURL') || '').toLowerCase();
         if (csymUrl.includes('symbols/time')) return 'time';
-        if (csymUrl.includes('symbols/avogadro')) return '__Avogadro__';
+        if (csymUrl.includes('symbols/avogadro')) return 'Na';
         return this.simpleXmlText(node);
       }
       case 'cn': {
@@ -2018,7 +2018,7 @@ export class SBMLParser {
         if (opName === 'ci' || opName === 'csymbol') {
           // Only a function-call apply needs its operands mapped here. Computing this eagerly for
           // EVERY apply (as was done before) is a second O(2^depth) traversal on top of `a` below,
-          // and hangs on deeply nested arithmetic - so it must stay inside this branch.
+          // and hangs on deeply nested arithmetic — so it must stay inside this branch.
           const opArgs = elementChildren
             .slice(1)
             .map((child) => this.mathMlNodeToFormula(child))
@@ -2150,12 +2150,7 @@ export class SBMLParser {
   /** True if the MathML uses constructs the old L1 formula converter drops or mangles. */
   private mathHasLossyConstructs(mathXml: string | null): boolean {
     if (!mathXml) return false;
-    // `time` is included so a time csymbol routes through mathMlNodeToFormula, which emits the
-    // canonical lowercase `time` by definitionURL. The L1 converter instead emits the csymbol's
-    // literal text (models write it as "Time", "t", " Time ", ...); the writer only rewrites a
-    // lowercase `\btime\b` into `time()`, so "Time"/"t" leaked and BNG2 aborted with
-    // "Parameter 'Time' referenced but not defined".
-    return /<piecewise\b|<(?:lt|gt|leq|geq|eq|neq|and|or|not|xor)\b|definitionURL\s*=\s*["'][^"']*(?:delay|rateOf|avogadro|time)/i.test(mathXml);
+    return /<piecewise\b|<(?:lt|gt|leq|geq|eq|neq|and|or|not|xor)\b|definitionURL\s*=\s*["'][^"']*(?:delay|rateOf|avogadro)/i.test(mathXml);
   }
 
   private safeFormulaToString(math: any): string {
@@ -2245,14 +2240,11 @@ export class SBMLParser {
     const rawName = typeof node.getName === 'function' ? (node.getName() || '') : '';
     const lowered = rawName.toLowerCase();
     if (children.length === 0) {
-      // Emit the numeric value, matching mathMlNodeToFormula above. Returning the literal token
-      // 'PI' made BNG2 abort with "Parameter 'PI' referenced but not defined" on any model that
-      // fell to this WASM-abort fallback path (e.g. BIOMD0000000350).
-      if (lowered === 'pi') return '3.141592653589793';
-      if (lowered === 'exponentiale') return '2.718281828459045';
+      if (lowered === 'pi') return 'PI';
+      if (lowered === 'exponentiale') return 'exp(1)';
       if (lowered === 'true') return '1';
       if (lowered === 'false') return '0';
-      if (lowered === 'avogadro') return '__Avogadro__';
+      if (lowered === 'avogadro') return 'Na';
       if (typeof node.isConstant === 'function' && node.isConstant() && rawName) return rawName;
     }
 
@@ -2363,7 +2355,7 @@ export class SBMLParser {
         // NOTE: use `||` semantics, not `??`. For SBML Level 2 the L3-style
         // getNumLocalParameters() returns 0 (not null), so `0 ?? getNumParameters()`
         // would short-circuit to 0 and silently drop every kineticLaw-local parameter
-        // (vi, kd, vd, -). Take whichever getter reports parameters.
+        // (vi, kd, vd, …). Take whichever getter reports parameters.
         const nLocal = kl.getNumLocalParameters?.() ?? 0;
         const nParam = kl.getNumParameters?.() ?? 0;
         useLocalGetter = nLocal > 0;

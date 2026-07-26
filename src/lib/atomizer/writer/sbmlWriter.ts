@@ -13,7 +13,7 @@ const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
 const AVOGADRO_FALLBACK = 6.02214076e23;
 const DIRECT_DESCALE_MIN_CONCENTRATION = 1e-9;
 const DIRECT_DESCALE_MAX_CONCENTRATION = 1e12;
-const NA_LIKE_SEED_TOKEN_RE = /\b(?:__Avogadro__|Na|quantity_to_number_factor)\b/;
+const NA_LIKE_SEED_TOKEN_RE = /\b(?:Na|quantity_to_number_factor)\b/;
 const NUMERIC_LITERAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 // LibSBML type declarations for the writer
@@ -449,7 +449,6 @@ function buildInitialExpressionSymbolMap(
 
   // Seed expressions are interpreted as concentrations for SBML export.
   // Neutralize number-conversion symbols to avoid amount double-scaling.
-  symbols.set('__Avogadro__', 1);
   symbols.set('Na', 1);
   if (symbols.has('quantity_to_number_factor')) {
     symbols.set('quantity_to_number_factor', 1);
@@ -511,7 +510,7 @@ function resolveSpeciesInitialConcentration(
 
   const direct = toFiniteNumber(species.initialConcentration);
   if (direct !== null) {
-    const naLike = (rawParameters && (toFiniteNumber(rawParameters.get('__Avogadro__')) ?? toFiniteNumber(rawParameters.get('Na')))) ?? AVOGADRO_FALLBACK;
+    const naLike = (rawParameters && toFiniteNumber(rawParameters.get('Na'))) ?? AVOGADRO_FALLBACK;
 
     // Expanded-network models may drop initialExpression and leave amount-scaled
     // numeric caches. Detect obvious amount-scale magnitudes and convert back
@@ -552,9 +551,8 @@ function resolveSpeciesInitialAmount(
     typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
   if (expression) {
     const evalSymbols = new Map<string, number>(symbols);
-    const rawNa = rawParameters ? (toFiniteNumber(rawParameters.get('__Avogadro__')) ?? toFiniteNumber(rawParameters.get('Na'))) : null;
+    const rawNa = rawParameters ? toFiniteNumber(rawParameters.get('Na')) : null;
     if (rawNa !== null) {
-      evalSymbols.set('__Avogadro__', rawNa);
       evalSymbols.set('Na', rawNa);
     }
     const rawQtnf = rawParameters ? toFiniteNumber(rawParameters.get('quantity_to_number_factor')) : null;

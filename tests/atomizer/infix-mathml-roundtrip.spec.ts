@@ -6,7 +6,7 @@
  * Original harness: infix_mathml_synthetic.mjs (standalone).
  */
 import { describe, it, expect } from 'vitest';
-import { infixToMathML } from '@bngplayground/engine/utils/infixToMathML';
+import { infixToMathML, infixToContentMathML } from '@bngplayground/engine/utils/infixToMathML';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Self-contained MathML→infix reader (matches the parser's mathMlNodeToFormula).
@@ -288,7 +288,7 @@ function parseAst(toks: Array<{ t: string; v: string }>): unknown {
   return e;
 }
 
- 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function evalInfix(s: string, env: Record<string, number>): number {
   const fns: Record<string, (...args: number[]) => number> = {
     pow: Math.pow, sqrt: Math.sqrt, exp: Math.exp, ln: Math.log, log10: Math.log10,
