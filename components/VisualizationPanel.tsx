@@ -261,6 +261,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               onClick={() => setNetworkViewMode('regulatory')}
               aria-pressed={networkViewMode === 'regulatory'}
+              aria-label="Switch to Regulatory view"
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'regulatory'
                   ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -271,6 +272,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               onClick={() => setNetworkViewMode('contact')}
               aria-pressed={networkViewMode === 'contact'}
+              aria-label="Switch to Contact Map view"
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'contact'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -282,6 +284,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               onClick={() => setNetworkViewMode('rules')}
               aria-pressed={networkViewMode === 'rules'}
+              aria-label="Switch to Rules view"
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'rules'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -293,6 +296,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               onClick={() => setNetworkViewMode('influence')}
               aria-pressed={networkViewMode === 'influence'}
+              aria-label="Switch to Influence view"
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'influence'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'
@@ -303,6 +307,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             <button
               onClick={() => setNetworkViewMode('analysis')}
               aria-pressed={networkViewMode === 'analysis'}
+              aria-label="Switch to Analysis view"
               className={`px-2 py-0.5 text-xs font-medium rounded whitespace-nowrap shrink-0 ${networkViewMode === 'analysis'
                 ? 'bg-slate-100 dark:bg-slate-800/50 text-slate-900 dark:text-slate-100 shadow-sm'
                 : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:hover:text-slate-100'

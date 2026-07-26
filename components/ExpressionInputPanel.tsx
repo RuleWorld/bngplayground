@@ -218,6 +218,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 title={hasSpeciesData ? 'Define observable using BNGL pattern' : 'Requires species-level simulation data'}
                 aria-label="Set mode to BNGL pattern"
                 aria-pressed={mode === 'bngl'}
+                aria-label="BNGL Pattern mode"
                 className={`px-2.5 py-1 rounded-r-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:z-10 ${mode === 'bngl'
                     ? 'bg-primary text-white'
                     : 'bg-white dark:bg-slate-900 dark:bg-slate-800 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700'

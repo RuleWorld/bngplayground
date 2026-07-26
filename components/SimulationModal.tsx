@@ -31,8 +31,6 @@ export function SimulationModal({
   hideNetworkStats = false,
   model
 }: SimulationModalProps) {
-  if (!isGenerating) return null;
-
   // Determine if we're in simulation phase (have simulation progress) or generation phase
   const isSimulating = phase === 'simulating' || (simulationProgress !== undefined && simulationProgress > 0);
 
@@ -44,6 +42,8 @@ export function SimulationModal({
     // During generation, we don't know the final size - return null for indeterminate
     return null;
   }, [isSimulating, simulationProgress]);
+
+  if (!isGenerating) return null;
 
   // Color for simulation progress
   const progressColor = 'from-teal-400 to-teal-500';
