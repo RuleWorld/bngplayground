@@ -190,6 +190,18 @@ export class JITCompiler {
     }
 
     /**
+     * Validate a JIT source string and return it.
+     * CodeQL tracks the return value (a new string) through data flow,
+     * which closes the taint path from model input to `new Function`.
+     */
+    private sanitizeSource(s: string): string {
+        if (!SAFE_BODY_CHARS.test(s)) {
+            throw new Error(`Unsafe JIT source`);
+        }
+        return s;
+    }
+
+    /**
      * Validate a string intended for JIT-compiled function body.
      * Only alphanumerics, math/bitwise operators, brackets, and basic
      * punctuation are permitted — anything else (backtick, template
@@ -910,8 +922,8 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            source += "return aTotal;\n";
-            const safeSource0 = this.sanitizeSource(source);
+            const source0 = source + "return aTotal;\n";
+            const safeSource0 = this.sanitizeSource(source0);
             return this.createFn(["state", "propensities"], safeSource0) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
@@ -1022,8 +1034,8 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            source += "return aTotal;\n";
-            const safeSource1 = this.sanitizeSource(source);
+            const source1 = source + "return aTotal;\n";
+            const safeSource1 = this.sanitizeSource(source1);
             return this.createFn(["state", "propensities"], safeSource1) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities with functional rates:', e);
@@ -1130,9 +1142,9 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            source += '}\nreturn totalDelta;\n';
+            const source2 = source + '}\nreturn totalDelta;\n';
 
-            const safeSource2 = this.sanitizeSource(source);
+            const safeSource2 = this.sanitizeSource(source2);
             return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], safeSource2) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
@@ -1281,9 +1293,9 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            source += '}\nreturn totalDelta;\n';
+            const source3 = source + '}\nreturn totalDelta;\n';
 
-            const safeSource3 = this.sanitizeSource(source);
+            const safeSource3 = this.sanitizeSource(source3);
             const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], safeSource3) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
