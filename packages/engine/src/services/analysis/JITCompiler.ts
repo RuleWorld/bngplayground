@@ -201,27 +201,6 @@ export class JITCompiler {
         return s;
     }
 
-    /**
-     * Validate a string intended for JIT-compiled function body.
-     * Only alphanumerics, math/bitwise operators, brackets, and basic
-     * punctuation are permitted — anything else (backtick, template
-     * expressions, unescaped quotes, etc.) is rejected.
-     *
-     * CodeQL's `js/unsafe-code-construction` tracks this gate to
-     * confirm that untrusted model input cannot reach `new Function`.
-     */
-    /**
-     * Validate a JIT source string and return it.
-     * CodeQL tracks the return value (a new string) through data flow,
-     * which closes the taint path from model input to `new Function`.
-     */
-    private sanitizeSource(s: string): string {
-        if (!SAFE_BODY_CHARS.test(s)) {
-            throw new Error(`Unsafe JIT source`);
-        }
-        return s;
-    }
-
     private buildReactionSignature(
         reactions: Array<{
             reactantIndices: Array<number | string>;
