@@ -1,0 +1,24 @@
+allowBuilds:
+  core-js: true
+  esbuild: true
+  protobufjs: true
+  sharp: true
+
+overrides:
+  dompurify: ^3.4.12
+  undici: ^7.28.0
+  hono: ^4.12.27
+  "@hono/node-server": ^2.0.5
+  jose: ^6.2.2
+  esbuild: ^0.28.1
+  flatted: ^3.4.0
+  protobufjs: 7.6.5
+  css-tree: ^3.2.1
+  "@csstools/css-syntax-patches-for-csstree": ^1.1.0
+  picomatch: 4.0.4
+  lodash: ">=4.18.1"
+  brace-expansion: ^5.0.8
+  fast-uri: ^4.1.1
+  js-yaml: ^4.3.0
+  body-parser: ^2.3.0
+  sharp: ^0.35.3

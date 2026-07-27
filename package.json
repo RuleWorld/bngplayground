@@ -119,7 +119,6 @@
     "jose": "^6.2.2",
     "esbuild": "^0.28.1",
     "flatted": "^3.4.0",
-    "protobufjs": "^7.5.5",
     "css-tree": "^3.2.1",
     "@csstools/css-syntax-patches-for-csstree": "^1.1.0",
     "picomatch": "4.0.4",
@@ -128,9 +127,8 @@
     "fast-uri": "^4.1.1",
     "js-yaml": "^4.3.0",
     "body-parser": "^2.3.0",
-    "@xenova/transformers": {
-      "sharp": "^0.35.3"
-    },
+    "sharp": "^0.35.3",
+    "protobufjs": "7.6.5",
     "eslint-plugin-react": {
       "eslint": "^10.0.0"
     }
