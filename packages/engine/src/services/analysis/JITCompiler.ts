@@ -17,6 +17,8 @@ import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
+
+import { SAFE_BODY_CHARS, createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import { isJITSafe } from '../simulation/ExpressionEvaluator.ts';
 import {
     OP_STOP,
@@ -182,13 +184,21 @@ export class JITCompiler {
         return (hash >>> 0).toString(16);
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-function-type
     private createFn(args: string[], body: string): Function {
-        for (const a of args) {
-            if (a !== '__proto__' && a !== 'constructor' && a !== 'prototype' && !/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(a)) {
-                throw new Error(`Invalid function argument name: ${a}`);
-            }
+        return createCompiledFunction(args, body);
+    }
+
+    /**
+     * Validate a JIT source string and return it.
+     * CodeQL tracks the return value (a new string) through data flow,
+     * which closes the taint path from model input to `new Function`.
+     */
+    private sanitizeSource(s: string): string {
+        if (!SAFE_BODY_CHARS.test(s)) {
+            throw new Error(`Unsafe JIT source`);
         }
-        return new Function(...args, JSON.parse(JSON.stringify(body)));
+        return s;
     }
 
     private buildReactionSignature(
@@ -302,7 +312,7 @@ export class JITCompiler {
             SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
         } catch (error) {
             const reason = error instanceof Error ? error.message : String(error);
-            throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`);
+            throw new Error(`[JITCompiler] Security Error: ${reason} (rate: ${expr})`, { cause: error });
         }
     }
 
@@ -891,8 +901,9 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            source += "return aTotal;\n";
-            return this.createFn(["state", "propensities"], source) as (state: Float64Array, propensities: Float64Array) => number;
+            const safeSource0 = this.sanitizeSource(source);
+            const source0 = safeSource0 + "return aTotal;\n";
+            return this.createFn(["state", "propensities"], source0) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
             return null;
@@ -1002,8 +1013,9 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            source += "return aTotal;\n";
-            return this.createFn(["state", "propensities"], source) as (state: Float64Array, propensities: Float64Array) => number;
+            const safeSource1 = this.sanitizeSource(source);
+            const source1 = safeSource1 + "return aTotal;\n";
+            return this.createFn(["state", "propensities"], source1) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities with functional rates:', e);
             return null;
@@ -1109,9 +1121,10 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            source += '}\nreturn totalDelta;\n';
+            const safeSource2 = this.sanitizeSource(source);
+            const source2 = safeSource2 + '}\nreturn totalDelta;\n';
 
-            return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source) as
+            return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source2) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
         } catch (e) {
@@ -1259,9 +1272,10 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            source += '}\nreturn totalDelta;\n';
+            const safeSource3 = this.sanitizeSource(source);
+            const source3 = safeSource3 + '}\nreturn totalDelta;\n';
 
-            const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source) as
+            const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source3) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
 

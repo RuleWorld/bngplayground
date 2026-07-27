@@ -794,6 +794,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
             <div className="flex gap-2 mb-2">
               <button
                 type="button"
+                aria-label="Set import mode to CSV"
                 className={`text-xs px-2 py-1 rounded ${importMode === 'csv' ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
                 onClick={() => setImportMode('csv')}
               >
@@ -801,6 +802,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
               </button>
               <button
                 type="button"
+                aria-label="Set import mode to PEtab"
                 className={`text-xs px-2 py-1 rounded ${importMode === 'petab' ? 'bg-indigo-600 text-white' : 'bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-300'}`}
                 onClick={() => setImportMode('petab')}
               >

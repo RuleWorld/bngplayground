@@ -349,12 +349,17 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
   ' ': '_',
   '#': 'sh',
   ':': '_',
-  'α': 'a', 'β': 'b', 'γ': 'g', 'δ': 'd', 'ε': 'e',
-  'ζ': 'z', 'η': 'h', 'θ': 'th', 'ι': 'i', 'κ': 'k',
-  'λ': 'l', 'μ': 'u', 'ν': 'n', 'ξ': 'x', 'ο': 'o',
-  'π': 'pi', 'ρ': 'r', 'σ': 's', 'τ': 't', 'υ': 'u',
-  'φ': 'ph', 'χ': 'ch', 'ψ': 'ps', 'ω': 'o',
-  'Α': 'A', 'Β': 'B', 'Γ': 'G', 'Δ': 'D', 'Ε': 'E',
+  // Greek-letter transliteration. Keys MUST stay as \u escapes (pure ASCII source):
+  // a previous edit round-tripped this literal through a UTF-16LE/mojibake path, which
+  // collapsed the Greek unicode keys to '?' and, fatally, to ASCII 'p' and 'f' -- turning
+  // 'p'->'pi' and 'f'->'ph' into global substring rewrites that mangled every identifier
+  // containing p or f (phos->pihos, alpha->alpiha, influx->inphlux, ...).
+  '\u03B1': 'a', '\u03B2': 'b', '\u03B3': 'g', '\u03B4': 'd', '\u03B5': 'e',
+  '\u03B6': 'z', '\u03B7': 'h', '\u03B8': 'th', '\u03B9': 'i', '\u03BA': 'k',
+  '\u03BB': 'l', '\u03BC': 'u', '\u03BD': 'n', '\u03BE': 'x', '\u03BF': 'o',
+  '\u03C0': 'pi', '\u03C1': 'r', '\u03C3': 's', '\u03C2': 's', '\u03C4': 't', '\u03C5': 'u',
+  '\u03C6': 'ph', '\u03C7': 'ch', '\u03C8': 'ps', '\u03C9': 'o',
+  '\u0391': 'A', '\u0392': 'B', '\u0393': 'G', '\u0394': 'D', '\u0395': 'E',
   '+': 'pl',
   '/': '_',
   '-': '_',
@@ -379,15 +384,40 @@ const SBML_TO_BNGL_TRANSLATION: Record<string, string> = {
   '\\': '_',
 };
 
-const BNGL_RESERVED_IDENTIFIERS = new Set([
-  'species',
-  'molecules',
-  'functions',
-  'if',
-  'time',
-  'true',
-  'false',
+// Full BNGL lexer keyword set (from packages/engine/src/parser/generated/BNGLexer.ts).
+// Any emitted identifier that exactly matches one of these tokens (case-sensitive, as the
+// lexer is) must be renamed, or the strict ANTLR reparse tokenizes it as a keyword and fails.
+export const BNGL_LEXER_KEYWORDS = new Set<string>([
+  '_e', '_pi', 'abs', 'acos', 'acosh', 'actions', 'addConcentration', 'argfile', 'Arrhenius',
+  'asin', 'asinh', 'atan', 'atanh', 'atol', 'atomize', 'avg', 'background', 'bdf', 'begin',
+  'bifurcate', 'binary_output', 'blocks', 'check_iso', 'collapse', 'compartments', 'complex',
+  'continue', 'cos', 'cosh', 'Counter', 'DeleteMolecules', 'end', 'energy', 'equil',
+  'evaluate_expressions', 'exclude_products', 'exclude_reactants', 'execute', 'exp', 'false',
+  'file', 'format', 'FunctionProduct', 'functions', 'generate_hybrid_model',
+  'generate_network', 'get_final_state', 'gml', 'groups', 'Hill', 'if', 'include_model',
+  'include_network', 'include_products', 'include_reactants', 'ln', 'log_scale', 'log10',
+  'log2', 'maps', 'MatchOnce', 'max', 'max_agg', 'max_conv_fails', 'max_err_test_fails',
+  'max_iter', 'max_num_steps', 'max_sim_steps', 'max_step', 'max_stoich', 'maxOrder', 'method',
+  'min', 'MM', 'model', 'molecular', 'molecule_types', 'molecules', 'MoveConnected', 'mratio',
+  'n_output_steps', 'n_scan_pts', 'n_steps', 'netfile', 'nf', 'nocslf', 'notf', 'observables',
+  'ode', 'opts', 'output_step_interval', 'overwrite', 'par_max', 'par_min', 'param',
+  'parameter', 'parameter_scan', 'parameters', 'patterns', 'pla', 'pla_config', 'pla_output',
+  'population', 'prefix', 'pretty_formatting', 'print_CDAT', 'print_end', 'print_functions',
+  'print_iter', 'print_net', 'print_on_stop', 'priority', 'quit', 'reaction', 'reaction_rules',
+  'readFile', 'reset_conc', 'resetConcentrations', 'resetParameters', 'rint', 'rtol', 'rules',
+  'safe', 'sample_times', 'Sat', 'save_progress', 'saveConcentrations', 'saveParameters',
+  'seed', 'setConcentration', 'setModelName', 'setOption', 'setParameter', 'setVolume',
+  'simulate', 'simulate_nf', 'simulate_ode', 'simulate_pla', 'simulate_psa', 'simulate_rm',
+  'simulate_ssa', 'sin', 'sinh', 'skip_actions', 'sparse', 'species', 'sqrt', 'ssa', 'stats',
+  'steady_state', 'stiff', 'stop_if', 'substanceUnits', 'suffix', 'sum', 't_end', 't_start',
+  'tan', 'tanh', 'TextReaction', 'TextSpecies', 'TFUN', 'time', 'TotalRate', 'true', 'type',
+  'types', 'utl', 'verbose', 'version', 'visualize', 'writeFile', 'writeLatex', 'writeMDL',
+  'writeMexfile', 'writeMfile', 'writeModel', 'writeNetwork', 'writeSBML', 'writeSSC',
+  'writeSSCcfg', 'writeXML',
 ]);
+
+// Kept as an alias for existing call sites.
+const BNGL_RESERVED_IDENTIFIERS = BNGL_LEXER_KEYWORDS;
 
 /**
  * Standardize a species name for BNGL compatibility
@@ -413,7 +443,7 @@ export function standardizeName(name: string): string {
   }
 
   // Avoid strict-parser keyword collisions for generated identifiers.
-  if (BNGL_RESERVED_IDENTIFIERS.has(result.toLowerCase())) {
+  if (BNGL_RESERVED_IDENTIFIERS.has(result)) {
     result = `${result}_id`;
   }
 
@@ -473,6 +503,40 @@ export function convertMathFunction(mathStr: string): string {
   // Exponential: exp(x) -> e^(x)
   result = result.replace(/exp\s*\(\s*([^)]+)\s*\)/g, '(2.71828182845905^($1))');
 
+  // SBML two-argument log(base, x) = log base 'base' of x  ->  (ln(x)/ln(base)). muParser's ln
+  // takes a single argument, so the blind log(->ln( rewrite below would emit an invalid
+  // ln(base, x) and run_network aborts "Too many parameters for function ln" (BIOMD923/1025).
+  // Handle the two-arg form first via balanced-paren scanning; one-arg log(x) falls through to
+  // the natural-log rewrite. (log10( is a distinct token and is not matched by \blog\s*\( .)
+  {
+    const rewriteTwoArgLog = (s: string): string => {
+      let out = s;
+      for (let guard = 0; guard < 1000; guard++) {
+        const m = /\blog\s*\(/.exec(out);
+        if (!m) break;
+        const open = m.index + m[0].length - 1; // index of '('
+        let depth = 0, close = -1, comma = -1;
+        for (let i = open; i < out.length; i++) {
+          const c = out[i];
+          if (c === '(') depth++;
+          else if (c === ')') { depth--; if (depth === 0) { close = i; break; } }
+          else if (c === ',' && depth === 1 && comma === -1) comma = i;
+        }
+        if (close === -1) break;
+        if (comma === -1) {
+          // one-arg log: temporarily mask so the loop advances; restored to `log` afterwards
+          out = out.slice(0, m.index) + '\u0001LN' + out.slice(m.index + 3);
+          continue;
+        }
+        const base = out.slice(open + 1, comma).trim();
+        const x = out.slice(comma + 1, close).trim();
+        out = out.slice(0, m.index) + `(ln(${x})/ln(${base}))` + out.slice(close + 1);
+      }
+      return out.replace(/\u0001LN/g, 'log');
+    };
+    result = rewriteTwoArgLog(result);
+  }
+
   // Natural log: log(x) -> ln(x) in BNGL
   result = result.replace(/\blog\s*\(/g, 'ln(');
 
@@ -520,12 +584,19 @@ export function convertMathFunction(mathStr: string): string {
 export function cleanParameterValue(value: string): string {
   let result = value;
 
-  while (/\binf\b/i.test(result)) {
-    result = result.replace(/\binf\b/gi, '1e20');
-  }
+  // Non-finite literals are not valid BNGL numbers; BNG2 otherwise reads the token (e.g.
+  // "Infinity", "NaN") as an undefined parameter name and aborts. JS stringifies these as
+  // "Infinity"/"-Infinity"/"NaN", so the old \binf\b pattern missed them. Map infinities to a
+  // large finite value and NaN to 0.
+  result = result.replace(/\b(?:infinity|inf)\b/gi, '1e20');
+  result = result.replace(/\bnan\b/gi, '0');
 
-  // Standardize scientific notation
-  result = result.replace(/(\d+)[eE]([+-]?\d+)/g, '$1e$2');
+  // Standardize scientific notation, but ONLY for standalone numeric literals. The digit-E-digit
+  // pattern also occurs inside identifiers (e.g. Vmax_2E1_APAP, the CYP2E1 enzyme), and lowercasing
+  // the E there desynchronizes the rate-law reference from the parameter definition, which keeps its
+  // original case -> BNG2 aborts "Parameter 'Vmax_2e1_APAP' referenced but not defined" (BIOMD624).
+  // The lookbehind/lookahead reject an adjacent identifier char so only genuine numbers are touched.
+  result = result.replace(/(?<![A-Za-z_])(\d+)[eE]([+-]?\d+)(?![A-Za-z_])/g, '$1e$2');
 
   return result;
 }

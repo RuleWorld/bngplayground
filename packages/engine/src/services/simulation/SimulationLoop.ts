@@ -2602,7 +2602,7 @@ export async function simulate(
     // relative trajectory diff ~1e-8) at ~50-60x the speed on a 2048-species model.
     // (The old "KLU needs a WASM rebuild" note was stale; _init_solver_sparse is live.)
     const AUTO_JAC_SPECIES_THRESHOLD = 50;   // >= this (mass-action) => at least dense analytical
-    const SPARSE_MIN_SPECIES = 200;          // >= this + sparse Jacobian => KLU sparse
+    const SPARSE_MIN_SPECIES = 100;          // >= this + sparse Jacobian => KLU sparse
     const JAC_DENSE_FRACTION_MAX = 0.25;     // (over-estimated) fill below this => treat as sparse
     const autoJacEligible =
       numSpecies >= AUTO_JAC_SPECIES_THRESHOLD &&

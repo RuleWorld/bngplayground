@@ -13,7 +13,7 @@ const ASSIGN_RULE_META_PREFIX = '__assign_rule__';
 const AVOGADRO_FALLBACK = 6.02214076e23;
 const DIRECT_DESCALE_MIN_CONCENTRATION = 1e-9;
 const DIRECT_DESCALE_MAX_CONCENTRATION = 1e12;
-const NA_LIKE_SEED_TOKEN_RE = /\b(?:Na|quantity_to_number_factor)\b/;
+const NA_LIKE_SEED_TOKEN_RE = /\b(?:__Avogadro__|Na|quantity_to_number_factor)\b/;
 const NUMERIC_LITERAL_RE = /^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/;
 
 // LibSBML type declarations for the writer
@@ -449,6 +449,7 @@ function buildInitialExpressionSymbolMap(
 
   // Seed expressions are interpreted as concentrations for SBML export.
   // Neutralize number-conversion symbols to avoid amount double-scaling.
+  symbols.set('__Avogadro__', 1);
   symbols.set('Na', 1);
   if (symbols.has('quantity_to_number_factor')) {
     symbols.set('quantity_to_number_factor', 1);
@@ -510,7 +511,7 @@ function resolveSpeciesInitialConcentration(
 
   const direct = toFiniteNumber(species.initialConcentration);
   if (direct !== null) {
-    const naLike = (rawParameters && toFiniteNumber(rawParameters.get('Na'))) ?? AVOGADRO_FALLBACK;
+    const naLike = (rawParameters && (toFiniteNumber(rawParameters.get('__Avogadro__')) ?? toFiniteNumber(rawParameters.get('Na')))) ?? AVOGADRO_FALLBACK;
 
     // Expanded-network models may drop initialExpression and leave amount-scaled
     // numeric caches. Detect obvious amount-scale magnitudes and convert back
@@ -551,8 +552,9 @@ function resolveSpeciesInitialAmount(
     typeof species.initialExpression === 'string' ? species.initialExpression.trim() : '';
   if (expression) {
     const evalSymbols = new Map<string, number>(symbols);
-    const rawNa = rawParameters ? toFiniteNumber(rawParameters.get('Na')) : null;
+    const rawNa = rawParameters ? (toFiniteNumber(rawParameters.get('__Avogadro__')) ?? toFiniteNumber(rawParameters.get('Na'))) : null;
     if (rawNa !== null) {
+      evalSymbols.set('__Avogadro__', rawNa);
       evalSymbols.set('Na', rawNa);
     }
     const rawQtnf = rawParameters ? toFiniteNumber(rawParameters.get('quantity_to_number_factor')) : null;
@@ -1293,7 +1295,13 @@ function generateSBMLPureXml(model: BNGLModel): string {
       });
       lines.push('        </listOfProducts>');
 
-      let formula = r.rate || '0';
+      const rateStr = r.rate;
+      let formula: string;
+      if (rateStr !== undefined && rateStr !== null && String(rateStr).trim().length > 0) {
+        formula = String(rateStr).trim();
+      } else {
+        formula = String(r.rateConstant ?? 0);
+      }
       formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
       formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, null);
@@ -1726,16 +1734,21 @@ function addReactionsToSBML(
         ref.setConstant(true);
       });
 
-      // Kinetic Law
+      // Kinetic Law. The atomizer writer uses `r.rate` as the full rate expression
+      // (already containing the rate law). Fix falsy-zero: use explicit undefined/null
+      // check instead of `||` so a legitimate empty rate falls through correctly.
       const kl = rxn.createKineticLaw();
-      // Simple mass action formula for now
-      let formula = r.rate || '0';
+      const rateStr = r.rate;
+      let formula: string;
+      if (rateStr !== undefined && rateStr !== null && String(rateStr).trim().length > 0) {
+        formula = String(rateStr).trim();
+      } else {
+        formula = String(r.rateConstant ?? 0);
+      }
       formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
       formula = replaceSpeciesInFormula(formula);
       formula = expandRateMacroForSBML(formula, substrateId);
       formula = replaceSpeciesInFormula(formula);
-      // If the rate is a parameter name, it's fine. If it's a number, it's fine.
-      // For more complex expressions, we should use MathML, but libsbml.setFormula handles infix.
       kl.setFormula(formula);
     });
   }

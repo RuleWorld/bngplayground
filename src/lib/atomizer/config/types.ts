@@ -486,6 +486,10 @@ export interface SBMLCompartment {
   units: string;
   constant: boolean;
   outside?: string;
+  /** L2v2-v4 compartmentType reference, captured for completeness. */
+  compartmentType?: string;
+  /** Whether the size attribute was explicitly present (distinguishes unset from a literal size). */
+  sizeSet?: boolean;
 }
 
 export interface SBMLParameter {
@@ -508,12 +512,31 @@ export interface SBMLSpecies {
   boundaryCondition: boolean;
   constant: boolean;
   annotations: AnnotationInfo[];
+  /** Whether the initialAmount attribute was explicitly present in the source SBML.
+   *  Distinguishes an unset value (resolved later, e.g. by an initialAssignment) from a literal 0. */
+  initialAmountSet?: boolean;
+  /** Whether the initialConcentration attribute was explicitly present in the source SBML. */
+  initialConcentrationSet?: boolean;
+  /** SBO term id (e.g. "SBO:0000247"), parsed from the sboTerm attribute when present. */
+  sboTerm?: string;
+  /** Per-species conversionFactor parameter id (L3); overrides the model-level factor. */
+  conversionFactor?: string;
+  /** L2v1 charge attribute (deprecated), captured for completeness. */
+  charge?: number;
+  /** L2v2-v4 speciesType reference, captured for completeness. */
+  speciesType?: string;
 }
 
 export interface SBMLSpeciesReference {
   species: string;
   stoichiometry: number;
   constant: boolean;
+  /** SpeciesReference id (L3). Needed for rules/initialAssignments that target a variable stoichiometry. */
+  id?: string;
+  /** Whether the stoichiometry attribute was explicitly present (so 0 is preserved, not defaulted to 1). */
+  stoichiometrySet?: boolean;
+  /** True when stoichiometry is non-constant or driven by StoichiometryMath / a rule — BNGL cannot represent this. */
+  variableStoichiometry?: boolean;
 }
 
 export interface SBMLModifierSpeciesReference {
@@ -536,6 +559,8 @@ export interface SBMLReaction {
   modifiers: SBMLModifierSpeciesReference[];
   kineticLaw: SBMLKineticLaw | null;
   compartment?: string;
+  /** Per-reaction conversionFactor parameter id (L3). */
+  conversionFactor?: string;
 }
 
 export interface SBMLFunctionDefinition {
@@ -558,6 +583,12 @@ export interface SBMLEvent {
   delay?: string;
   useValuesFromTriggerTime: boolean;
   assignments: Array<{ variable: string; math: string }>;
+  /** L3 trigger attribute: whether the trigger holds at t=0. Defaults to true per spec. */
+  triggerInitialValue?: boolean;
+  /** L3 trigger attribute: whether the trigger must persist to fire. Defaults to true per spec. */
+  triggerPersistent?: boolean;
+  /** L3 event priority math (used to order simultaneous events). */
+  priority?: string;
 }
 
 export interface SBMLInitialAssignment {
@@ -585,6 +616,37 @@ export interface SBMLModel {
   initialAssignments: SBMLInitialAssignment[];
   speciesByCompartment: Map<string, string[]>;
   unitDefinitions: Map<string, any>;
+  /** SBML level/version, for downstream decisions. */
+  level?: number;
+  version?: number;
+  /** Model-level default unit ids (L3): used when a species/parameter/compartment omits its own. */
+  substanceUnits?: string;
+  timeUnits?: string;
+  volumeUnits?: string;
+  areaUnits?: string;
+  lengthUnits?: string;
+  extentUnits?: string;
+  /** Model-level conversionFactor parameter id (L3). */
+  conversionFactor?: string;
+  /** Number of <constraint> elements found (not simulated; recorded for completeness). */
+  constraintCount?: number;
+  /** BNGL molecule-type skeletons recovered from the SBML multi package, if present. */
+  multiMoleculeTypes?: string[];
+  /** Reconstructed BNGL complex patterns (bonded) from the multi package. */
+  multiComplexPatterns?: string[];
+  /** Concrete seed-species patterns recovered from multi per-species feature values. */
+  multiSeedPatterns?: string[];
+  /** Structured import diagnostics: things dropped or approximated, with a category + count. */
+  importWarnings?: SBMLImportWarning[];
+}
+
+export interface SBMLImportWarning {
+  /** e.g. 'event', 'algebraicRule', 'package:multi', 'stoichiometry', 'conversionFactor'. */
+  category: string;
+  message: string;
+  count: number;
+  /** 'dropped' = feature not represented; 'approximated' = represented lossily; 'info' = benign. */
+  severity: 'dropped' | 'approximated' | 'info';
 }
 
 // =============================================================================

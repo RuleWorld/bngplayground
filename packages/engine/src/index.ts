@@ -100,6 +100,7 @@ export type { NetworkAnalysis } from './services/analysis/NetworkAnalysis';
 export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
+export { findUnreachableRules } from './services/analysis/UnreachableRules';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 export { parsePEtab, parsePEtabCombined } from './services/analysis/petabImport';
 export type { PEtabProblem, PEtabParameter, PEtabObservable } from './services/analysis/petabImport';
@@ -172,6 +173,7 @@ export type { MIRIAMAnnotation, IdentifierResolver } from './services/export/MIR
 
 // ── Math Utils ──────────────────────────────────────────────────────
 export { normInv, chi2Quantile, jacobiEigenDecomposition, matMul, matTranspose, invertSymmetricMatrix } from './utils/mathUtils';
+export { infixToMathML, infixToContentMathML } from './utils/infixToMathML';
 
 // ── ZIP Utils ───────────────────────────────────────────────────────
 export { createZip } from './utils/miniZip';
@@ -305,5 +307,5 @@ export { generateDosingSchedule, dosingToSimulationPhases } from './services/pkp
 export type { DosingEvent, DosingRegimen, StandardDosingConfig } from './services/pkpd/DosingSchedule';
 export { computePKMetrics, trapezoidalAUC, estimateTerminalHalfLife, nonCompartmentalAnalysis } from './services/pkpd/PKMetrics';
 export type { PKMetricsResult } from './services/pkpd/PKMetrics';
-export { generatePopulation, populationSimulation } from './services/pkpd/VirtualPopulation';
+export { generatePopulation, populationSimulation, summarizePopulationParameters } from './services/pkpd/VirtualPopulation';
 export type { PopulationParameter, VirtualPopulationConfig, VirtualPatient, PopulationSimulationResult } from './services/pkpd/VirtualPopulation';

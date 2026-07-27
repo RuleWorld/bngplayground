@@ -1,0 +1,163 @@
+{
+  "_meta": {
+    "generated": "2026-07-26T16:32:10.415Z",
+    "note": "Regenerate with `node tests/ci_smoke.mjs --update` against a known-good build. CI gates on regressions of the tracked booleans only.",
+    "tracked": [
+      "parse",
+      "reparse",
+      "ratelaw_equiv",
+      "bng2_sim"
+    ]
+  },
+  "BIOMD0000000001": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000005": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000009": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000010": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000012": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000013": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true,
+    "relaxedTolerance": true
+  },
+  "BIOMD0000000055": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000081": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000118": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000214": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000262": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000263": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000320": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000619": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000624": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000637": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000669": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000723": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": false
+  },
+  "BIOMD0000000844": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": false
+  },
+  "BIOMD0000000872": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000923": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000956": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000000989": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000001025": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  },
+  "BIOMD0000001046": {
+    "parse": true,
+    "reparse": true,
+    "ratelaw_equiv": true,
+    "bng2_sim": true
+  }
+}

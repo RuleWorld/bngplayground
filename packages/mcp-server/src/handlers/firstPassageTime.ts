@@ -78,7 +78,7 @@ export async function handleFirstPassageTime(args: ToolArgs): Promise<ToolResult
                     values[obsName] = simResult.data.map((d) => Number(d[obsName] ?? NaN));
                 }
                 trajectories.push({ times, values });
-            } catch (e) {
+            } catch {
                 nFailed++;
             }
         }

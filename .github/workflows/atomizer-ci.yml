@@ -1,0 +1,81 @@
+name: atomizer-ci
+
+# Tier 1 (typecheck) and Tier 2 (round-trip smoke) run on every PR and push to main.
+# The full corpus is NOT here — it's a separate nightly/dispatch job (Tier 3).
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+concurrency:
+  group: atomizer-ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  # Pin the exact BioNetGen version. A silent BNG upgrade would move parity numbers and
+  # look like a code regression. Defaults to the RuleWorld release; override via the
+  # BNG_TARBALL_URL repo variable if you mirror it elsewhere.
+  BNG_VERSION: "2.9.3"
+  BNG_TARBALL_URL: ${{ vars.BNG_TARBALL_URL || 'https://github.com/RuleWorld/bionetgen/releases/download/BioNetGen-2.9.3/BioNetGen-2.9.3-linux.tar.gz' }}
+
+jobs:
+  # ---- Tier 1: type check (seconds). Catches the class of bug — e.g. a const used
+  # before its declaration — that esbuild/tsx silently transpiles past into a wasted run.
+  typecheck:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+      # The atomizer (src/lib/atomizer/**) lives under the repo-root src/ and is covered by the
+      # ROOT tsconfig, NOT the package tsconfigs. The root check is the one that catches atomizer
+      # bugs like a const used before its declaration (TS2448) — exactly the class that a tsx/esbuild
+      # run transpiles straight past. Run it first.
+      - name: tsc --noEmit (root — covers src/ and the atomizer)
+        run: npx tsc --noEmit -p tsconfig.json
+      - name: tsc --noEmit (engine)
+        run: npx tsc --noEmit -p packages/engine/tsconfig.json
+      - name: tsc --noEmit (mcp-server)
+        run: npx tsc --noEmit -p packages/mcp-server/tsconfig.json
+
+  # ---- Tier 2: atomizer round-trip smoke test on the vendored fixtures.
+  smoke:
+    runs-on: ubuntu-latest
+    needs: typecheck
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: "20"
+          cache: npm
+      - run: npm ci
+
+      # BioNetGen runs as a stock x86-64 ELF on the ubuntu runner; Perl is preinstalled.
+      - name: Cache BioNetGen
+        id: cache-bng
+        uses: actions/cache@v6
+        with:
+          path: ${{ runner.temp }}/BioNetGen-${{ env.BNG_VERSION }}
+          key: bionetgen-${{ env.BNG_VERSION }}
+      - name: Download BioNetGen (cache miss)
+        if: steps.cache-bng.outputs.cache-hit != 'true'
+        run: |
+          curl -fsSL "${BNG_TARBALL_URL}" -o bng.tgz
+          tar xzf bng.tgz -C "${{ runner.temp }}"
+      - name: Expose BioNetGen
+        run: |
+          BNGDIR="${{ runner.temp }}/BioNetGen-${{ env.BNG_VERSION }}"
+          echo "BNGPATH=${BNGDIR}" >> "$GITHUB_ENV"
+          echo "BNG2_CMD=${BNGDIR}/BNG2.pl" >> "$GITHUB_ENV"
+      - name: Smoke-check the binary
+        run: perl "${BNG2_CMD}" --version || perl "${BNG2_CMD}" 2>/dev/null | head -1 || true
+
+      - name: Atomizer round-trip smoke test
+        env:
+          REPO_ROOT: ${{ github.workspace }}
+          USE_BNG2_SIM: "1"
+        run: node tests/ci_smoke.mjs
