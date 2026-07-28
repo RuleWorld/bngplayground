@@ -19,4 +19,5 @@ jobs:
             - Reduce duplication, improve naming.
             - Never import browser APIs into packages/engine.
             Run `node scripts/run_full_tests.mjs` before opening a PR. Keep diff focused.
+            Never ask questions — make your best autonomous judgment; open a PR with your best shot.
           jules_api_key: ${{ secrets.JULES_API_KEY }}

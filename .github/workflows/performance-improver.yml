@@ -10,10 +10,27 @@ jobs:
       - uses: google-labs-code/jules-action@v1.0.0
         with:
           prompt: |
-            Performance agent. Hunt bottlenecks in the engine + WASM simulation path.
-            Likely targets: NetworkGenerator, Matcher, SimulationLoop, ODESolver.
-            1. Profile a representative model (20-rule/43-species range).
-            2. Implement an optimization (no public API/contract changes).
-            3. Verify via `node scripts/run_full_tests.mjs`.
-            Only open a PR on measurable gains.
+            Performance and memory agent for the BNG Playground engine.
+            Standing objective: improve simulation throughput and reduce memory
+            pressure in the engine + WASM pathway.
+
+            1. Check out ruleworld/rulehub for representative models, or use
+               the vendored fixtures in `bionetgen_repo/`. Establish a baseline:
+               run `node benchmarks/perf_benchmark.mjs` (or the closest
+               equivalent) 5 times, record median wall-clock time and RSS
+               (peak memory) for the model suite.
+            2. Pick the single biggest bottleneck in NetworkGenerator, Matcher,
+               SimulationLoop, ODESolver, or WASM glue layer.
+            3. Profile using Node's built-in `--cpu-prof` / `--heap-prof` or
+               Chrome DevTools CPU/memory profiles — no guesswork.
+            4. Implement an optimization (no public API/contract changes).
+            5. Re-measure the same benchmark 5 times. Open a PR only if
+               wall-clock improves by ≥5% OR peak memory drops by ≥10%.
+            6. Validate with `node scripts/run_full_tests.mjs`.
+
+            Rules:
+            - Do NOT optimize without profiling first.
+            - Never sacrifice correctness — all tests must pass.
+            - Never import browser APIs into packages/engine.
+            Never ask questions — make your best autonomous judgment; open a PR with your best shot.
           jules_api_key: ${{ secrets.JULES_API_KEY }}

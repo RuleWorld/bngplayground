@@ -17,6 +17,7 @@ jobs:
             Note: Vitest forks pool hangs after pass when WASM sets noExitRuntime;
             tests run via scripts/run_full_tests.mjs (child-process idle detector).
             Don't "fix" that by disabling the harness.
+            Never ask questions — make your best autonomous judgment; fix the root cause and open a PR.
           starting_branch: ${{ github.event.workflow_run.head_branch }}
           include_last_commit: true
           jules_api_key: ${{ secrets.JULES_API_KEY }}
