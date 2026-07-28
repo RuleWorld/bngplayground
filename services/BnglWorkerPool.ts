@@ -219,6 +219,12 @@ export class BnglWorkerPool {
 
             const handler = (event: MessageEvent<WorkerResponse>) => {
                 const { id, type, payload } = event.data;
+                if (type === 'worker_internal_error') {
+                    worker.removeEventListener('message', handler);
+                    const errorMsg = (payload as any)?.message || 'Worker internal error';
+                    reject(new Error(`Worker internal error: ${errorMsg}`));
+                    return;
+                }
                 if (id !== messageId) return;
 
                 if (type === 'simulate_success') {
@@ -333,6 +339,12 @@ export class BnglWorkerPool {
             const messageId = generateSecureMessageId();
             const handler = (event: MessageEvent<WorkerResponse>) => {
                 const { id, type, payload } = event.data;
+                if (type === 'worker_internal_error') {
+                    worker.removeEventListener('message', handler);
+                    const errorMsg = (payload as any)?.message || 'Worker internal error';
+                    reject(new Error(`Worker internal error: ${errorMsg}`));
+                    return;
+                }
                 if (id !== messageId) return;
 
                 if (type === 'cache_model_success') {
@@ -366,6 +378,12 @@ export class BnglWorkerPool {
             const messageId = generateSecureMessageId();
             const handler = (event: MessageEvent<WorkerResponse>) => {
                 const { id, type, payload } = event.data;
+                if (type === 'worker_internal_error') {
+                    worker.removeEventListener('message', handler);
+                    const errorMsg = (payload as any)?.message || 'Worker internal error';
+                    reject(new Error(`Worker internal error: ${errorMsg}`));
+                    return;
+                }
                 if (id !== messageId) return;
 
                 if (type === 'simulate_success') {
@@ -404,6 +422,12 @@ export class BnglWorkerPool {
             const messageId = generateSecureMessageId();
             const handler = (event: MessageEvent<WorkerResponse>) => {
                 const { id, type, payload } = event.data;
+                if (type === 'worker_internal_error') {
+                    worker.removeEventListener('message', handler);
+                    const errorMsg = (payload as any)?.message || 'Worker internal error';
+                    reject(new Error(`Worker internal error: ${errorMsg}`));
+                    return;
+                }
                 if (id !== messageId) return;
 
                 if (type === 'simulate_shared_success') {

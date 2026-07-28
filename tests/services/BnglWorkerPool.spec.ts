@@ -165,6 +165,24 @@ describe('BnglWorkerPool class', () => {
         expect(error.message).toBe('Worker crashed');
     });
 
+    it('rejects when worker_internal_error is reported during simulation', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let error: any;
+        const simulatePromise = pool.simulate({} as any, {} as any).catch(err => error = err);
+
+        const worker = mockWorkerInsts[0];
+
+        await new Promise(r => setTimeout(r, 0));
+
+        worker.trigger({ id: -1, type: 'worker_internal_error', payload: { message: 'Fatal out of memory' } });
+
+        await simulatePromise;
+        expect(error).toBeDefined();
+        expect(error.message).toContain('Worker internal error: Fatal out of memory');
+    });
+
     it('runs an ensemble simulation automatically responding', async () => {
         // Redefine the mock to auto-respond
         class AutoResponderWorker {
