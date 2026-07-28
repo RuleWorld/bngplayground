@@ -9,7 +9,7 @@ export async function handleGetContactMap(args: ToolArgs): Promise<ToolResult<Co
         const model = parseModelOrThrow(parsedArgs.code);
         return createToolResult(buildContactMap(model.reactionRules ?? [], model.moleculeTypes ?? []));
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

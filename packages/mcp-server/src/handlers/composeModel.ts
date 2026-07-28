@@ -14,7 +14,7 @@ export async function handleComposeModel(args: ToolArgs): Promise<ToolResult<any
         const composed = await composeModel(parsedArgs as ComposeModelArgs);
         return createToolResult(composed);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

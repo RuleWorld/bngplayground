@@ -65,7 +65,7 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
 
         return createToolResult(results);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

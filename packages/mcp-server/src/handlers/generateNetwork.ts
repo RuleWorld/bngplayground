@@ -21,7 +21,7 @@ export async function handleGenerateNetwork(args: ToolArgs): Promise<ToolResult<
                 last_rule: error.lastRule,
             });
         }
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

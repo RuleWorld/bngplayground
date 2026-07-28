@@ -131,6 +131,6 @@ export async function handleReactionInformationFlow(args: ToolArgs): Promise<Too
             } : {}),
         });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

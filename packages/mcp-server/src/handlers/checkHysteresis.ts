@@ -154,7 +154,7 @@ export async function handleCheckHysteresis(args: ToolArgs): Promise<ToolResult<
                 : 'No significant hysteresis detected - system behaves reversibly in parameter range.',
         });
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

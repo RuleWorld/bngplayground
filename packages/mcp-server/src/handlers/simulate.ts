@@ -76,7 +76,7 @@ export async function handleSimulate(args: ToolArgs): Promise<ToolResult<any>> {
                 last_rule: error.lastRule,
             });
         }
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

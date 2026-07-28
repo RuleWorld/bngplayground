@@ -61,6 +61,6 @@ export async function handleSearchStructure(args: ToolArgs): Promise<ToolResult<
       strategic: 'Structure search identifies which rules best explain the experimental data — answering "which mechanisms are active?" rather than just "what are the rates?"',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

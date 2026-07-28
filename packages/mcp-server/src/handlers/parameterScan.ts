@@ -108,7 +108,7 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<Pa
       observables,
     });
   } catch (error) {
-    const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+    const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
     return createToolResult(structured);
   }
 }
