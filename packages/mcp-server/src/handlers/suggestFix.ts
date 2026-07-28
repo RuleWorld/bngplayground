@@ -10,7 +10,7 @@ export async function handleSuggestFix(args: ToolArgs): Promise<ToolResult<any>>
         const suggestions = suggestModelFixes(parsedArgs.code, parsedArgs.include_auto_corrected_code ?? false);
         return createToolResult(suggestions);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

@@ -66,6 +66,6 @@ export async function handleExportModel(args: ToolArgs): Promise<ToolResult<any>
 
         return createToolResult({ error: `Unsupported export format: ${parsedArgs.format}` });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

@@ -116,6 +116,6 @@ export async function handleFirstPassageTime(args: ToolArgs): Promise<ToolResult
             })),
         });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

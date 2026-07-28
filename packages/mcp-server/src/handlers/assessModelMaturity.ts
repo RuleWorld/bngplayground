@@ -192,7 +192,7 @@ export async function handleAssessModelMaturity(args: ToolArgs): Promise<ToolRes
             summary: `Model maturity: ${maturityLevel} (${maturityScore}/${maxScore}). ${validationHistory.length > 0 ? `Validated against ${validationHistory.length} dataset(s). ` : ''}${recommendations.length > 0 ? recommendations.join('. ') : 'No critical issues.'}`,
         });
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

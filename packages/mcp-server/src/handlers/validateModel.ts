@@ -33,7 +33,7 @@ export async function handleValidateModel(args: ToolArgs): Promise<ToolResult<an
 
         return createToolResult(validateModel(parseResult.model, parsedArgs.include_nfsim ?? true));
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

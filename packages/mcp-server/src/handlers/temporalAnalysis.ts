@@ -70,6 +70,6 @@ export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult
       strategic: 'Transfer entropy reveals which reactions drive others \u2014 emergent couplings not in any single rule are particularly interesting.',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

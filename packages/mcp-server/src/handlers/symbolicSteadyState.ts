@@ -63,6 +63,6 @@ export async function handleSymbolicSteadyState(args: ToolArgs): Promise<ToolRes
       strategic: 'Symbolic steady states enable instant parameter sweeps (O(1) per point), exact sensitivity analysis, and analytical bifurcation conditions.',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

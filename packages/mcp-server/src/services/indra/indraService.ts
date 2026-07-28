@@ -84,7 +84,7 @@ export class INDRAService {
                 });
                 return normalizeStatements(payload);
             } catch (error) {
-                lastError = error instanceof Error ? error : new Error(String(error));
+                lastError = error instanceof Error ? error : new Error(String(error), { cause: error });
                 if (!(error instanceof Error) || !error.message.includes('(404)')) {
                     throw error;
                 }

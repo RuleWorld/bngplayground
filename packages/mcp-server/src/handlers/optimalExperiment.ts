@@ -108,7 +108,7 @@ export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResul
             note: 'Results are approximate - actual identifiability depends on experimental noise',
         });
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

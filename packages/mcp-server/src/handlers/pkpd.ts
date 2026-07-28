@@ -103,6 +103,6 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
         throw new Error(`Unknown action: ${parsedArgs.action}`);
     }
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

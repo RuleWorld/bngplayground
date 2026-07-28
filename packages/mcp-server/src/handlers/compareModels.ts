@@ -50,6 +50,6 @@ export async function handleCompareModels(args: ToolArgs): Promise<ToolResult<an
       strategic: 'Multi-model comparison identifies which specific rules cause behavioral differences between competing hypotheses.',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }
