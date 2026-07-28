@@ -388,6 +388,31 @@ function cloneExpandedModel(model: BNGLModel): BNGLModel {
     return structuredClone(model);
 }
 
+/**
+ * Re-evaluates and updates concrete rate constants for mass-action reactions in-place.
+ *
+ * This function iterates over all reactions in the model and identifies those that do not
+ * represent a functional rate law (`!reaction.isFunctionalRate`) but have symbolic string
+ * rate expressions. For each matching reaction, it evaluates the rate expression using the
+ * model's current parameter and function definitions. If the evaluation succeeds and yields
+ * a finite numeric value, the reaction's concrete `rateConstant` is updated in-place.
+ *
+ * If evaluation of a rate fails for any reason, the function handles the error silently
+ * and preserves the reaction's existing `rateConstant`.
+ *
+ * At the end of execution, all evaluator caches are cleared to ensure subsequent simulations
+ * and analyses do not use outdated rate-constant values.
+ *
+ * @param model - The parsed `BNGLModel` whose reaction rates should be updated.
+ * @returns `void` (The model is mutated in-place).
+ *
+ * @remarks
+ * - Invariant: This is a core engine function and must remain entirely free of browser-specific APIs
+ *   (e.g., DOM, window, or framework-specific objects).
+ * - Invariant: To prevent duplicate logic, all Model Context Protocol (MCP) tool handlers in
+ *   `packages/mcp-server` that re-evaluate parameters must call this engine function instead
+ *   of implementing parameter evaluation inline.
+ */
 export function updateMassActionRates(model: BNGLModel): void {
     const context = model.parameters ?? {};
     for (const reaction of model.reactions ?? []) {
