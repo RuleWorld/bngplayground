@@ -1185,6 +1185,24 @@ end reaction rules`;
       const result = await handlePKPD({ action: 'population_simulation', n_patients: 5 });
       assertStructuredResponse(result);
     });
+
+    it('should fail with structured error for negative dose', async () => {
+      const result = await handlePKPD({ action: 'generate_model', dose: -50 });
+      assertStructuredResponse(result);
+      expect(result.structuredContent.error).toBeDefined();
+    });
+
+    it('should fail with structured error for excessive patients (boundary check)', async () => {
+      const result = await handlePKPD({ action: 'population_simulation', n_patients: 2000, code: WORKING_MODEL });
+      assertStructuredResponse(result);
+      expect(result.structuredContent.error).toBeDefined();
+    });
+
+    it('should fail with structured error for negative dosing interval', async () => {
+      const result = await handlePKPD({ action: 'simulate_dosing', code: WORKING_MODEL, dosing_interval: -10 });
+      assertStructuredResponse(result);
+      expect(result.structuredContent.error).toBeDefined();
+    });
   });
 
   // =========================================================================

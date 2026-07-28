@@ -45,4 +45,5 @@ export {
     diagnoseArgsSchema,
     importPetabArgsSchema,
     reduceModelArgsSchema,
+    pkpdArgsSchema,
 } from './advanced.js';
