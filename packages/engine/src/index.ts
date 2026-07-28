@@ -116,7 +116,7 @@ export { SeededRandom } from './utils/random';
 export { resolveAutoMethod, getSimulationOptionsFromParsedModel } from './utils/simulationOptions';
 export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './utils/multiPhaseSimulation';
 export { formatBNGL } from './utils/formatBNGL';
-export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
+export { parseParametersFromCode, isNumericLiteral, stripParametersBlock, reevaluateSeedSpecies } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
 export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
