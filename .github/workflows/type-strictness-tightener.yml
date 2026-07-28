@@ -12,7 +12,7 @@ jobs:
   tighten:
     runs-on: ubuntu-latest
     steps:
-      - uses: google-labs-code/jules-action@v1.0.0
+      - uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566
         with:
           prompt: |
             You are a TypeScript strictness agent for this TS/WASM monorepo.

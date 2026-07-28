@@ -61,13 +61,10 @@ jobs:
               the parser, so REPLICATED wall-clock only. Parse time is small and
               noisy; be conservative about calling a win.
     steps:
-      # Starts at v1.0.0 to match the repo's other Jules workflows so it runs
-      # immediately. To hard-pin to a SHA (recommended for an autonomous agent
-      # holding a repo-write key):
-      #   git ls-remote https://github.com/google-labs-code/jules-action v1.0.0
-      # replace @v1.0.0 with that SHA; Dependabot (github-actions ecosystem,
-      # already configured) then maintains it via CI-gated bump PRs.
-      - uses: google-labs-code/jules-action@v1.0.0
+      # Pinned to SHA of v1.0.0. Dependabot (github-actions ecosystem, already
+      # configured) maintains the pin via CI-gated bump PRs; review the diff
+      # before merging for this autonomous repo-write action.
+      - uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566
         with:
           prompt: |
             You are ONE start in a multistart performance fan-out for the BNG
@@ -84,10 +81,11 @@ jobs:
             already times parse/networkgen/SSA, captures the engine's
             deterministic PROFILE_DATA op-counts (enableProfiling/PROFILE_DATA in
             NetworkGenerator), builds a 2^N combinatorial stressor, and writes a
-            JSON report. Run it hang-safe (it loads WASM in beforeAll):
+            JSON report.             Run it hang-safe via its dedicated config (it is excluded from the
+            shared vitest configs so it doesn't slow down normal test gates):
 
               ${{ matrix.profile_env }} PROFILE_OUT=artifacts/perf/${{ matrix.subsystem }}-baseline.md \
-                node scripts/run_full_tests.mjs tests/profile-everything.spec.ts
+                node scripts/run_full_tests.mjs --config vitest.profile.config.ts
 
             That writes artifacts/perf/${{ matrix.subsystem }}-baseline.json (an
             array of { model, parseMs, genMs, simMs, species, reactions,

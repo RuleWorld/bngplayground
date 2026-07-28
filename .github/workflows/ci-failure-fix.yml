@@ -13,7 +13,7 @@ jobs:
       github.event.workflow_run.head_repository.full_name == github.repository
     runs-on: ubuntu-latest
     steps:
-      - uses: google-labs-code/jules-action@v1.0.0
+      - uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566
         with:
           prompt: |
             The CI run on branch ${{ github.event.workflow_run.head_branch }} failed.
