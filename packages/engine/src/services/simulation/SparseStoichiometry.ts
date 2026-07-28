@@ -65,11 +65,15 @@ export function buildCSRStoichiometry(
 ): CSRStoichiometryMatrix {
   const numReactions = reactions.length;
 
-  // Phase 1: Build dense-per-row intermediate using a Map for each species row.
-  // Map<reactionIndex, netStoichiometry>
-  const rowMaps: Map<number, number>[] = new Array(numSpecies);
+  // Phase 1: Build dense-per-row intermediate using parallel arrays for each species row.
+  // ⚡ Bolt Optimization: Replace O(N) Maps and O(N log N) sorting with linear array aggregation.
+  // Because j naturally increases linearly, column indices within each species row
+  // are appended in non-decreasing order automatically.
+  const rowColIdx: number[][] = new Array(numSpecies);
+  const rowVals: number[][] = new Array(numSpecies);
   for (let i = 0; i < numSpecies; i++) {
-    rowMaps[i] = new Map();
+    rowColIdx[i] = [];
+    rowVals[i] = [];
   }
 
   for (let j = 0; j < numReactions; j++) {
@@ -79,8 +83,8 @@ export function buildCSRStoichiometry(
     for (let k = 0; k < rxn.reactants.length; k++) {
       const specIdx = rxn.reactants[k];
       if (constantMask && constantMask[specIdx]) continue;
-      const current = rowMaps[specIdx].get(j) ?? 0;
-      rowMaps[specIdx].set(j, current - 1);
+      rowColIdx[specIdx].push(j);
+      rowVals[specIdx].push(-1);
     }
 
     // Products: each occurrence adds stoichiometry (default 1)
@@ -88,53 +92,65 @@ export function buildCSRStoichiometry(
       const specIdx = rxn.products[k];
       if (constantMask && constantMask[specIdx]) continue;
       const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[k] : 1;
-      const current = rowMaps[specIdx].get(j) ?? 0;
-      rowMaps[specIdx].set(j, current + stoich);
+      rowColIdx[specIdx].push(j);
+      rowVals[specIdx].push(stoich);
     }
   }
 
-  // Phase 2: Count non-zeros (exclude entries that cancel to zero)
-  let nnz = 0;
-  for (let i = 0; i < numSpecies; i++) {
-    for (const val of rowMaps[i].values()) {
-      if (val !== 0) nnz++;
-    }
-  }
-
-  // Phase 3: Allocate and fill CSR arrays
+  // Phase 2 & 3: Run-length encode adjacent identical column indices to find net stoichiometry,
+  // pushing non-zero aggregates to flat arrays.
   const rowPtr = new Int32Array(numSpecies + 1);
-  const colIdx = new Int32Array(nnz);
-  const values = new Float64Array(nnz);
-
+  const allCols: number[] = [];
+  const allVals: number[] = [];
   let pos = 0;
+
   for (let i = 0; i < numSpecies; i++) {
     rowPtr[i] = pos;
-    // Collect and sort column indices for deterministic ordering
-    const entries: [number, number][] = [];
-    for (const [col, val] of rowMaps[i].entries()) {
-      if (val !== 0) {
-        entries.push([col, val]);
+    const cols = rowColIdx[i];
+    const vals = rowVals[i];
+    const len = cols.length;
+
+    if (len === 0) continue;
+
+    let currentCol = cols[0];
+    let currentVal = vals[0];
+
+    for (let k = 1; k < len; k++) {
+      if (cols[k] === currentCol) {
+        currentVal += vals[k];
+      } else {
+        if (currentVal !== 0) {
+          if (currentCol < 0 || currentCol >= numReactions) {
+            throw new Error(`[SparseStoichiometry] Column index out of bounds: ${currentCol}`);
+          }
+          allCols.push(currentCol);
+          allVals.push(currentVal);
+          pos++;
+        }
+        currentCol = cols[k];
+        currentVal = vals[k];
       }
     }
-    entries.sort((a, b) => a[0] - b[0]);
-    for (const [col, val] of entries) {
-      if (pos >= nnz) {
-        throw new Error('[SparseStoichiometry] CSR position overflow while building matrix');
+    // Push the final aggregated entry
+    if (currentVal !== 0) {
+      if (currentCol < 0 || currentCol >= numReactions) {
+        throw new Error(`[SparseStoichiometry] Column index out of bounds: ${currentCol}`);
       }
-      if (col < 0 || col >= numReactions) {
-        throw new Error(`[SparseStoichiometry] Column index out of bounds: ${col}`);
-      }
-      colIdx[pos] = col;
-      values[pos] = val;
+      allCols.push(currentCol);
+      allVals.push(currentVal);
       pos++;
     }
   }
+
   if (numSpecies >= rowPtr.length) {
     throw new Error('[SparseStoichiometry] Invalid rowPtr terminal index');
   }
   rowPtr.set([pos], numSpecies);
 
-  const matrix = { rowPtr, colIdx, values, nnz, numSpecies, numReactions };
+  const colIdx = new Int32Array(allCols);
+  const values = new Float64Array(allVals);
+
+  const matrix = { rowPtr, colIdx, values, nnz: pos, numSpecies, numReactions };
   validateCSR(matrix, numReactions);
   return matrix;
 }
