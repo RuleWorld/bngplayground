@@ -6,7 +6,10 @@ import { simulate } from '../packages/engine/src/services/simulation/SimulationL
 import { computeFIM } from '../packages/engine/src/services/analysis/FisherInformationMatrix';
 import { analyzeReactionInformation } from '../packages/engine/src/services/analysis/ReactionInformationTheory';
 
-const modelPath = 'C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\RuleHub\\Published\\vilar2002\\vilar_2002.bngl';
+const rulehubRoot = process.env.RULEHUB_ROOT || '';
+const modelPath = rulehubRoot
+  ? `${rulehubRoot}/Published/vilar2002/vilar_2002.bngl`
+  : '';
 const maybeIt = existsSync(modelPath) ? it : it.skip;
 
 describe('Circadian Oscillator Vilar 2002 Analysis', () => {

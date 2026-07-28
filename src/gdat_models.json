@@ -1,7 +1,7 @@
 [
   {
     "modelName": "akt-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\akt-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\akt-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_RTK",
@@ -13,7 +13,7 @@
   },
   {
     "modelName": "allosteric-activation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\allosteric-activation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\allosteric-activation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_enzyme",
@@ -25,7 +25,7 @@
   },
   {
     "modelName": "apoptosis-cascade",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\apoptosis-cascade_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\apoptosis-cascade_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_initiator",
@@ -36,7 +36,7 @@
   },
   {
     "modelName": "auto-activation-loop",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\auto-activation-loop_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\auto-activation-loop_bng2.gdat",
     "bng2Headers": [
       "time",
       "Promoter_on",
@@ -48,7 +48,7 @@
   },
   {
     "modelName": "beta-adrenergic-response",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\beta-adrenergic-response.gdat",
+    "bng2GdatPath": "beta-adrenergic-response.gdat",
     "bng2Headers": [
       "time",
       "Active_BetaR",
@@ -60,7 +60,7 @@
   },
   {
     "modelName": "bistable-toggle-switch",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\bistable-toggle-switch_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\bistable-toggle-switch_bng2.gdat",
     "bng2Headers": [
       "time",
       "Protein_L",
@@ -73,7 +73,7 @@
   },
   {
     "modelName": "blood-coagulation-thrombin",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\blood-coagulation-thrombin_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\blood-coagulation-thrombin_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_FactorXa",
@@ -85,7 +85,7 @@
   },
   {
     "modelName": "brusselator-oscillator",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\brusselator-oscillator_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\brusselator-oscillator_bng2.gdat",
     "bng2Headers": [
       "time",
       "Species_X",
@@ -96,7 +96,7 @@
   },
   {
     "modelName": "calcium-spike-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\calcium-spike-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\calcium-spike-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cytosolic",
@@ -108,7 +108,7 @@
   },
   {
     "modelName": "cell-cycle-checkpoint",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cell-cycle-checkpoint_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cell-cycle-checkpoint_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cyclin_High",
@@ -120,7 +120,7 @@
   },
   {
     "modelName": "chemotaxis-signal-transduction",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\chemotaxis-signal-transduction_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\chemotaxis-signal-transduction_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_MCP",
@@ -132,7 +132,7 @@
   },
   {
     "modelName": "circadian-oscillator",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\circadian-oscillator_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\circadian-oscillator_bng2.gdat",
     "bng2Headers": [
       "time",
       "Transcript",
@@ -143,7 +143,7 @@
   },
   {
     "modelName": "competitive-enzyme-inhibition",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\competitive-enzyme-inhibition_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\competitive-enzyme-inhibition_bng2.gdat",
     "bng2Headers": [
       "time",
       "Free_enzyme",
@@ -156,7 +156,7 @@
   },
   {
     "modelName": "complement-activation-cascade",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\complement-activation-cascade_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\complement-activation-cascade_bng2.gdat",
     "bng2Headers": [
       "time",
       "C3_active",
@@ -168,7 +168,7 @@
   },
   {
     "modelName": "cooperative-binding",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cooperative-binding_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cooperative-binding_bng2.gdat",
     "bng2Headers": [
       "time",
       "Unbound",
@@ -181,7 +181,7 @@
   },
   {
     "modelName": "dna-damage-repair",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dna-damage-repair_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\dna-damage-repair_bng2.gdat",
     "bng2Headers": [
       "time",
       "Damaged_DNA",
@@ -194,7 +194,7 @@
   },
   {
     "modelName": "dual-site-phosphorylation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dual-site-phosphorylation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\dual-site-phosphorylation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Unphosphorylated",
@@ -207,7 +207,7 @@
   },
   {
     "modelName": "egfr-signaling-pathway",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\egfr-signaling-pathway_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\egfr-signaling-pathway_bng2.gdat",
     "bng2Headers": [
       "time",
       "EGF_free",
@@ -220,7 +220,7 @@
   },
   {
     "modelName": "er-stress-response",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\er-stress-response_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\er-stress-response_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_PERK",
@@ -232,7 +232,7 @@
   },
   {
     "modelName": "gene-expression-toggle",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gene-expression-toggle_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\gene-expression-toggle_bng2.gdat",
     "bng2Headers": [
       "time",
       "Promoter_on",
@@ -245,7 +245,7 @@
   },
   {
     "modelName": "glycolysis-branch-point",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\glycolysis-branch-point_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\glycolysis-branch-point_bng2.gdat",
     "bng2Headers": [
       "time",
       "Glucose_pool",
@@ -257,7 +257,7 @@
   },
   {
     "modelName": "hematopoietic-growth-factor",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hematopoietic-growth-factor_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\hematopoietic-growth-factor_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_EPOR",
@@ -269,7 +269,7 @@
   },
   {
     "modelName": "hypoxia-response-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hypoxia-response-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\hypoxia-response-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Hypoxic_sensor",
@@ -281,7 +281,7 @@
   },
   {
     "modelName": "immune-synapse-formation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\immune-synapse-formation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\immune-synapse-formation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Bound_TCR",
@@ -293,7 +293,7 @@
   },
   {
     "modelName": "inflammasome-activation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\inflammasome-activation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\inflammasome-activation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Primed_Sensor",
@@ -305,7 +305,7 @@
   },
   {
     "modelName": "insulin-glucose-homeostasis",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\insulin-glucose-homeostasis_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\insulin-glucose-homeostasis_bng2.gdat",
     "bng2Headers": [
       "time",
       "Blood_glucose",
@@ -318,7 +318,7 @@
   },
   {
     "modelName": "interferon-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\interferon-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\interferon-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_IFNAR",
@@ -330,7 +330,7 @@
   },
   {
     "modelName": "jak-stat-cytokine-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\jak-stat-cytokine-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\jak-stat-cytokine-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cytokine_pool",
@@ -342,7 +342,7 @@
   },
   {
     "modelName": "lac-operon-regulation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\lac-operon-regulation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\lac-operon-regulation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Promoter_active",
@@ -355,7 +355,7 @@
   },
   {
     "modelName": "lipid-mediated-pip3-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\lipid-mediated-pip3-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\lipid-mediated-pip3-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_PI3K",
@@ -367,7 +367,7 @@
   },
   {
     "modelName": "mapk-signaling-cascade",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mapk-signaling-cascade_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mapk-signaling-cascade_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Receptor",
@@ -380,7 +380,7 @@
   },
   {
     "modelName": "michaelis-menten-kinetics",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\michaelis-menten-kinetics_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\michaelis-menten-kinetics_bng2.gdat",
     "bng2Headers": [
       "time",
       "obs_Product",
@@ -391,7 +391,7 @@
   },
   {
     "modelName": "mtor-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mtor-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mtor-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Rheb",
@@ -404,7 +404,7 @@
   },
   {
     "modelName": "myogenic-differentiation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\myogenic-differentiation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\myogenic-differentiation_bng2.gdat",
     "bng2Headers": [
       "time",
       "High_MYOD",
@@ -416,7 +416,7 @@
   },
   {
     "modelName": "negative-feedback-loop",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\negative-feedback-loop_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\negative-feedback-loop_bng2.gdat",
     "bng2Headers": [
       "time",
       "Free_gene",
@@ -429,7 +429,7 @@
   },
   {
     "modelName": "neurotransmitter-release",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\neurotransmitter-release_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\neurotransmitter-release_bng2.gdat",
     "bng2Headers": [
       "time",
       "High_Calcium",
@@ -442,7 +442,7 @@
   },
   {
     "modelName": "nfkb-feedback",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfkb-feedback_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nfkb-feedback_bng2.gdat",
     "bng2Headers": [
       "time",
       "Nuclear",
@@ -453,7 +453,7 @@
   },
   {
     "modelName": "notch-delta-lateral-inhibition",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\notch-delta-lateral-inhibition_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\notch-delta-lateral-inhibition_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_notch",
@@ -464,7 +464,7 @@
   },
   {
     "modelName": "oxidative-stress-response",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\oxidative-stress-response_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\oxidative-stress-response_bng2.gdat",
     "bng2Headers": [
       "time",
       "Elevated_ROS",
@@ -477,7 +477,7 @@
   },
   {
     "modelName": "p53-mdm2-oscillator",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\p53-mdm2-oscillator_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\p53-mdm2-oscillator_bng2.gdat",
     "bng2Headers": [
       "time",
       "p53_total",
@@ -488,7 +488,7 @@
   },
   {
     "modelName": "phosphorelay-chain",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\phosphorelay-chain_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\phosphorelay-chain_bng2.gdat",
     "bng2Headers": [
       "time",
       "Sensor_P",
@@ -500,7 +500,7 @@
   },
   {
     "modelName": "platelet-activation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\platelet-activation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\platelet-activation_bng2.gdat",
     "bng2Headers": [
       "time",
       "High_ADP",
@@ -513,7 +513,7 @@
   },
   {
     "modelName": "predator-prey-dynamics",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\predator-prey-dynamics_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\predator-prey-dynamics_bng2.gdat",
     "bng2Headers": [
       "time",
       "Prey_count",
@@ -524,7 +524,7 @@
   },
   {
     "modelName": "quorum-sensing-circuit",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\quorum-sensing-circuit_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\quorum-sensing-circuit_bng2.gdat",
     "bng2Headers": [
       "time",
       "Autoinducer_pool",
@@ -537,7 +537,7 @@
   },
   {
     "modelName": "rab-gtpase-cycle",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\rab-gtpase-cycle_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\rab-gtpase-cycle_bng2.gdat",
     "bng2Headers": [
       "time",
       "RAB_GTP",
@@ -550,7 +550,7 @@
   },
   {
     "modelName": "repressilator-oscillator",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\repressilator-oscillator_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\repressilator-oscillator_bng2.gdat",
     "bng2Headers": [
       "time",
       "Protein_A",
@@ -563,7 +563,7 @@
   },
   {
     "modelName": "retinoic-acid-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\retinoic-acid-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\retinoic-acid-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_RARRXR",
@@ -575,7 +575,7 @@
   },
   {
     "modelName": "signal-amplification-cascade",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\signal-amplification-cascade_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\signal-amplification-cascade_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_receptor",
@@ -587,7 +587,7 @@
   },
   {
     "modelName": "simple-dimerization",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\simple-dimerization_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\simple-dimerization_bng2.gdat",
     "bng2Headers": [
       "time",
       "A_free",
@@ -599,7 +599,7 @@
   },
   {
     "modelName": "sir-epidemic-model",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sir-epidemic-model_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\sir-epidemic-model_bng2.gdat",
     "bng2Headers": [
       "time",
       "Susceptible",
@@ -611,7 +611,7 @@
   },
   {
     "modelName": "smad-tgf-beta-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\smad-tgf-beta-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\smad-tgf-beta-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_TGFBR",
@@ -623,7 +623,7 @@
   },
   {
     "modelName": "stress-response-adaptation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\stress-response-adaptation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\stress-response-adaptation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_sensor",
@@ -635,7 +635,7 @@
   },
   {
     "modelName": "synaptic-plasticity-ltp",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synaptic-plasticity-ltp_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\synaptic-plasticity-ltp_bng2.gdat",
     "bng2Headers": [
       "time",
       "Open_NMDA",
@@ -648,7 +648,7 @@
   },
   {
     "modelName": "t-cell-activation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\t-cell-activation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\t-cell-activation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_tcr",
@@ -659,7 +659,7 @@
   },
   {
     "modelName": "tnf-induced-apoptosis",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\tnf-induced-apoptosis_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\tnf-induced-apoptosis_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_TNFR",
@@ -672,7 +672,7 @@
   },
   {
     "modelName": "two-component-system",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\two-component-system_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\two-component-system_bng2.gdat",
     "bng2Headers": [
       "time",
       "Kinase_P",
@@ -684,7 +684,7 @@
   },
   {
     "modelName": "vegf-angiogenesis",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\vegf-angiogenesis_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\vegf-angiogenesis_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_VEGFR",
@@ -696,7 +696,7 @@
   },
   {
     "modelName": "viral-sensing-innate-immunity",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\viral-sensing-innate-immunity_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\viral-sensing-innate-immunity_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_RIGI",
@@ -709,7 +709,7 @@
   },
   {
     "modelName": "wnt-beta-catenin-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wnt-beta-catenin-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wnt-beta-catenin-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_wnt",
@@ -721,7 +721,7 @@
   },
   {
     "modelName": "wound-healing-pdgf-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wound-healing-pdgf-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wound-healing-pdgf-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_PDGFR",
@@ -733,7 +733,7 @@
   },
   {
     "modelName": "energy_allostery_mwc",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\fixtures\\gdat\\energy_allostery_mwc.gdat",
+    "bng2GdatPath": "tests\\fixtures\\gdat\\energy_allostery_mwc.gdat",
     "bng2Headers": [
       "time",
       "P_Total",
@@ -747,7 +747,7 @@
   },
   {
     "modelName": "energy_catalysis_mm",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\fixtures\\gdat\\energy_catalysis_mm.gdat",
+    "bng2GdatPath": "tests\\fixtures\\gdat\\energy_catalysis_mm.gdat",
     "bng2Headers": [
       "time",
       "Product",
@@ -760,7 +760,7 @@
   },
   {
     "modelName": "energy_cooperativity_adh",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\fixtures\\gdat\\energy_cooperativity_adh.gdat",
+    "bng2GdatPath": "tests\\fixtures\\gdat\\energy_cooperativity_adh.gdat",
     "bng2Headers": [
       "time",
       "Bound_0",
@@ -773,7 +773,7 @@
   },
   {
     "modelName": "energy_linear_chain",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\fixtures\\gdat\\energy_linear_chain.gdat",
+    "bng2GdatPath": "tests\\fixtures\\gdat\\energy_linear_chain.gdat",
     "bng2Headers": [
       "time",
       "A",
@@ -785,7 +785,7 @@
   },
   {
     "modelName": "energy_transport_pump",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\fixtures\\gdat\\energy_transport_pump.gdat",
+    "bng2GdatPath": "tests\\fixtures\\gdat\\energy_transport_pump.gdat",
     "bng2Headers": [
       "time",
       "A_in",
@@ -797,7 +797,7 @@
   },
   {
     "modelName": "genetic_bistability_energy",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\tests\\fixtures\\gdat\\genetic_bistability_energy.gdat",
+    "bng2GdatPath": "tests\\fixtures\\gdat\\genetic_bistability_energy.gdat",
     "bng2Headers": [
       "time",
       "A",
@@ -810,7 +810,7 @@
   },
   {
     "modelName": "autophagy-regulation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\autophagy-regulation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\autophagy-regulation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Autophagy_Drive",
@@ -824,7 +824,7 @@
   },
   {
     "modelName": "calcineurin-nfat-pathway",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\calcineurin-nfat-pathway_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\calcineurin-nfat-pathway_bng2.gdat",
     "bng2Headers": [
       "time",
       "Nuclear_Factor",
@@ -839,7 +839,7 @@
   },
   {
     "modelName": "contact-inhibition-hippo-yap",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\contact-inhibition-hippo-yap_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\contact-inhibition-hippo-yap_bng2.gdat",
     "bng2Headers": [
       "time",
       "Transcript_Active",
@@ -854,7 +854,7 @@
   },
   {
     "modelName": "e2f-rb-cell-cycle-switch",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\e2f-rb-cell-cycle-switch_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\e2f-rb-cell-cycle-switch_bng2.gdat",
     "bng2Headers": [
       "time",
       "S_Phase_Drive",
@@ -870,7 +870,7 @@
   },
   {
     "modelName": "eif2a-stress-response",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\eif2a-stress-response_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\eif2a-stress-response_bng2.gdat",
     "bng2Headers": [
       "time",
       "Transl_Sequest",
@@ -884,7 +884,7 @@
   },
   {
     "modelName": "gas6-axl-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gas6-axl-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\gas6-axl-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Survival_Relay",
@@ -898,7 +898,7 @@
   },
   {
     "modelName": "glioblastoma-egfrviii-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\glioblastoma-egfrviii-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\glioblastoma-egfrviii-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Survival_Burst",
@@ -913,7 +913,7 @@
   },
   {
     "modelName": "hif1a_degradation_loop",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hif1a_degradation_loop_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\hif1a_degradation_loop_bng2.gdat",
     "bng2Headers": [
       "time",
       "Hypoxia_Factor",
@@ -928,7 +928,7 @@
   },
   {
     "modelName": "inositol-phosphate-metabolism",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\inositol-phosphate-metabolism_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\inositol-phosphate-metabolism_bng2.gdat",
     "bng2Headers": [
       "time",
       "Calcium_Signal",
@@ -945,7 +945,7 @@
   },
   {
     "modelName": "ire1a-xbp1-er-stress",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ire1a-xbp1-er-stress_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ire1a-xbp1-er-stress_bng2.gdat",
     "bng2Headers": [
       "time",
       "ProSurvival_XBP1",
@@ -960,7 +960,7 @@
   },
   {
     "modelName": "kir-channel-regulation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\kir-channel-regulation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\kir-channel-regulation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Conducting_Pool",
@@ -976,7 +976,7 @@
   },
   {
     "modelName": "l-type-calcium-channel-dynamics",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\l-type-calcium-channel-dynamics_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\l-type-calcium-channel-dynamics_bng2.gdat",
     "bng2Headers": [
       "time",
       "Calcium_Inflow",
@@ -993,7 +993,7 @@
   },
   {
     "modelName": "mtorc2-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mtorc2-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mtorc2-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_mTORC2",
@@ -1007,7 +1007,7 @@
   },
   {
     "modelName": "no-cgmp-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\no-cgmp-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\no-cgmp-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Vasodilator_Sig",
@@ -1022,7 +1022,7 @@
   },
   {
     "modelName": "p38-mapk-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\p38-mapk-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\p38-mapk-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_p38",
@@ -1036,7 +1036,7 @@
   },
   {
     "modelName": "parp1-mediated-dna-repair",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\parp1-mediated-dna-repair_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\parp1-mediated-dna-repair_bng2.gdat",
     "bng2Headers": [
       "time",
       "Damaged_Sites",
@@ -1050,7 +1050,7 @@
   },
   {
     "modelName": "rankl-rank-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\rankl-rank-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\rankl-rank-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_NFAT",
@@ -1064,7 +1064,7 @@
   },
   {
     "modelName": "ras-gef-gap-cycle",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ras-gef-gap-cycle_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ras-gef-gap-cycle_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Ras",
@@ -1078,7 +1078,7 @@
   },
   {
     "modelName": "rho-gtpase-actin-cytoskeleton",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\rho-gtpase-actin-cytoskeleton_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\rho-gtpase-actin-cytoskeleton_bng2.gdat",
     "bng2Headers": [
       "time",
       "F_Actin_Mass",
@@ -1092,7 +1092,7 @@
   },
   {
     "modelName": "sonic-hedgehog-gradient",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sonic-hedgehog-gradient_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\sonic-hedgehog-gradient_bng2.gdat",
     "bng2Headers": [
       "time",
       "Morphogen_Peak",
@@ -1106,7 +1106,7 @@
   },
   {
     "modelName": "stat3-mediated-transcription",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\stat3-mediated-transcription_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\stat3-mediated-transcription_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Output",
@@ -1120,7 +1120,7 @@
   },
   {
     "modelName": "tlr3-dsrna-sensing",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\tlr3-dsrna-sensing_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\tlr3-dsrna-sensing_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_TLR3",
@@ -1134,7 +1134,7 @@
   },
   {
     "modelName": "ampk-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ampk-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ampk-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Energy_Sensor",
@@ -1150,7 +1150,7 @@
   },
   {
     "modelName": "bcr-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\bcr-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\bcr-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Calcium_Signal",
@@ -1165,7 +1165,7 @@
   },
   {
     "modelName": "bmp-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\bmp-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\bmp-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "SMAD_Output",
@@ -1180,7 +1180,7 @@
   },
   {
     "modelName": "caspase-activation-loop",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\caspase-activation-loop_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\caspase-activation-loop_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Caspase8",
@@ -1193,7 +1193,7 @@
   },
   {
     "modelName": "cd40-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cd40-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cd40-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Canonical_NFB",
@@ -1207,7 +1207,7 @@
   },
   {
     "modelName": "checkpoint-kinase-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\checkpoint-kinase-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\checkpoint-kinase-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Checkpt",
@@ -1221,7 +1221,7 @@
   },
   {
     "modelName": "clock-bmal1-gene-circuit",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\clock-bmal1-gene-circuit_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\clock-bmal1-gene-circuit_bng2.gdat",
     "bng2Headers": [
       "time",
       "Activator_Comp",
@@ -1236,7 +1236,7 @@
   },
   {
     "modelName": "compartment_endocytosis",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\compartment_endocytosis_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\compartment_endocytosis_bng2.gdat",
     "bng2Headers": [
       "time",
       "Surface_R",
@@ -1249,7 +1249,7 @@
   },
   {
     "modelName": "compartment_membrane_bound",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\compartment_membrane_bound_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\compartment_membrane_bound_bng2.gdat",
     "bng2Headers": [
       "time",
       "Free_Protein",
@@ -1261,7 +1261,7 @@
   },
   {
     "modelName": "compartment_nested_transport",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\compartment_nested_transport_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\compartment_nested_transport_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cyto",
@@ -1273,7 +1273,7 @@
   },
   {
     "modelName": "compartment_nuclear_transport",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\compartment_nuclear_transport_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\compartment_nuclear_transport_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cytoplasmic_TF",
@@ -1284,7 +1284,7 @@
   },
   {
     "modelName": "compartment_organelle_exchange",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\compartment_organelle_exchange_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\compartment_organelle_exchange_bng2.gdat",
     "bng2Headers": [
       "time",
       "ER_Pool",
@@ -1296,7 +1296,7 @@
   },
   {
     "modelName": "cs_diffie_hellman",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_diffie_hellman_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_diffie_hellman_bng2.gdat",
     "bng2Headers": [
       "time",
       "Alice_Secret",
@@ -1311,7 +1311,7 @@
   },
   {
     "modelName": "cs_hash_function",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_hash_function_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_hash_function_bng2.gdat",
     "bng2Headers": [
       "time",
       "Input0",
@@ -1329,7 +1329,7 @@
   },
   {
     "modelName": "cs_huffman",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_huffman_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_huffman_bng2.gdat",
     "bng2Headers": [
       "time",
       "A0",
@@ -1344,7 +1344,7 @@
   },
   {
     "modelName": "cs_monte_carlo_pi",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_monte_carlo_pi_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_monte_carlo_pi_bng2.gdat",
     "bng2Headers": [
       "time",
       "Total",
@@ -1355,7 +1355,7 @@
   },
   {
     "modelName": "cs_pagerank",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_pagerank_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_pagerank_bng2.gdat",
     "bng2Headers": [
       "time",
       "Rank_A",
@@ -1368,7 +1368,7 @@
   },
   {
     "modelName": "cs_pid_controller",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_pid_controller_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_pid_controller_bng2.gdat",
     "bng2Headers": [
       "time",
       "PV",
@@ -1381,7 +1381,7 @@
   },
   {
     "modelName": "cs_regex_nfa",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\cs_regex_nfa_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\cs_regex_nfa_bng2.gdat",
     "bng2Headers": [
       "time",
       "Match",
@@ -1392,7 +1392,7 @@
   },
   {
     "modelName": "dna-methylation-dynamics",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dna-methylation-dynamics_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\dna-methylation-dynamics_bng2.gdat",
     "bng2Headers": [
       "time",
       "Silenced_Marks",
@@ -1409,7 +1409,7 @@
   },
   {
     "modelName": "dr5-apoptosis-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\dr5-apoptosis-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\dr5-apoptosis-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Apoptotic_Drive",
@@ -1423,7 +1423,7 @@
   },
   {
     "modelName": "eco_coevolution_host_parasite",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\eco_coevolution_host_parasite_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\eco_coevolution_host_parasite_bng2.gdat",
     "bng2Headers": [
       "time",
       "H_Lo",
@@ -1436,7 +1436,7 @@
   },
   {
     "modelName": "eco_food_web_chaos_3sp",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\eco_food_web_chaos_3sp_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\eco_food_web_chaos_3sp_bng2.gdat",
     "bng2Headers": [
       "time",
       "Res",
@@ -1448,7 +1448,7 @@
   },
   {
     "modelName": "eco_lotka_volterra_grid",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\eco_lotka_volterra_grid_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\eco_lotka_volterra_grid_bng2.gdat",
     "bng2Headers": [
       "time",
       "Prey1",
@@ -1461,7 +1461,7 @@
   },
   {
     "modelName": "eco_mutualism_obligate",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\eco_mutualism_obligate_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\eco_mutualism_obligate_bng2.gdat",
     "bng2Headers": [
       "time",
       "Pop_A",
@@ -1472,7 +1472,7 @@
   },
   {
     "modelName": "eco_rock_paper_scissors_spatial",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\eco_rock_paper_scissors_spatial_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\eco_rock_paper_scissors_spatial_bng2.gdat",
     "bng2Headers": [
       "time",
       "Rock",
@@ -1484,7 +1484,7 @@
   },
   {
     "modelName": "endosomal-sorting-rab",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\endosomal-sorting-rab_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\endosomal-sorting-rab_bng2.gdat",
     "bng2Headers": [
       "time",
       "Early_Endosome",
@@ -1500,7 +1500,7 @@
   },
   {
     "modelName": "erk-nuclear-translocation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\erk-nuclear-translocation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\erk-nuclear-translocation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Functional_ELK",
@@ -1515,7 +1515,7 @@
   },
   {
     "modelName": "feature_functional_rates_volume",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\feature_functional_rates_volume_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\feature_functional_rates_volume_bng2.gdat",
     "bng2Headers": [
       "time",
       "Product"
@@ -1525,7 +1525,7 @@
   },
   {
     "modelName": "feature_global_functions_scan",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\feature_global_functions_scan_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\feature_global_functions_scan_bng2.gdat",
     "bng2Headers": [
       "time",
       "Input",
@@ -1536,7 +1536,7 @@
   },
   {
     "modelName": "feature_local_functions_explicit",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\feature_local_functions_explicit_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\feature_local_functions_explicit_bng2.gdat",
     "bng2Headers": [
       "time",
       "S_conc",
@@ -1547,7 +1547,7 @@
   },
   {
     "modelName": "feature_symmetry_factors_cyclic",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\feature_symmetry_factors_cyclic_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\feature_symmetry_factors_cyclic_bng2.gdat",
     "bng2Headers": [
       "time",
       "A",
@@ -1559,7 +1559,7 @@
   },
   {
     "modelName": "feature_synthesis_degradation_ss",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\feature_synthesis_degradation_ss_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\feature_synthesis_degradation_ss_bng2.gdat",
     "bng2Headers": [
       "time",
       "Total_M"
@@ -1569,7 +1569,7 @@
   },
   {
     "modelName": "fgf-signaling-pathway",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\fgf-signaling-pathway_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\fgf-signaling-pathway_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Dimer",
@@ -1583,7 +1583,7 @@
   },
   {
     "modelName": "genetic_dna_replication_stochastic",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\genetic_dna_replication_stochastic_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\genetic_dna_replication_stochastic_bng2.gdat",
     "bng2Headers": [
       "time",
       "Free_Nuc",
@@ -1596,7 +1596,7 @@
   },
   {
     "modelName": "genetic_goodwin_oscillator",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\genetic_goodwin_oscillator_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\genetic_goodwin_oscillator_bng2.gdat",
     "bng2Headers": [
       "time",
       "RNA",
@@ -1608,7 +1608,7 @@
   },
   {
     "modelName": "genetic_translation_kinetics",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\genetic_translation_kinetics_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\genetic_translation_kinetics_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Ribosomes",
@@ -1620,7 +1620,7 @@
   },
   {
     "modelName": "genetic_turing_pattern_1d",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\genetic_turing_pattern_1d_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\genetic_turing_pattern_1d_bng2.gdat",
     "bng2Headers": [
       "time",
       "A1",
@@ -1634,7 +1634,7 @@
   },
   {
     "modelName": "gm_game_of_life",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gm_game_of_life_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\gm_game_of_life_bng2.gdat",
     "bng2Headers": [
       "time",
       "Alive_Count",
@@ -1653,7 +1653,7 @@
   },
   {
     "modelName": "gm_ray_marcher",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gm_ray_marcher_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\gm_ray_marcher_bng2.gdat",
     "bng2Headers": [
       "time",
       "R0",
@@ -1674,7 +1674,7 @@
   },
   {
     "modelName": "gpcr-desensitization-arrestin",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\gpcr-desensitization-arrestin_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\gpcr-desensitization-arrestin_bng2.gdat",
     "bng2Headers": [
       "time",
       "G_Signal_Act",
@@ -1689,7 +1689,7 @@
   },
   {
     "modelName": "hedgehog-signaling-pathway",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\hedgehog-signaling-pathway_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\hedgehog-signaling-pathway_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Output",
@@ -1704,7 +1704,7 @@
   },
   {
     "modelName": "il1b-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\il1b-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\il1b-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "ProInflam_NFkB",
@@ -1719,7 +1719,7 @@
   },
   {
     "modelName": "il6-jak-stat-pathway",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\il6-jak-stat-pathway_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\il6-jak-stat-pathway_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_TF",
@@ -1734,7 +1734,7 @@
   },
   {
     "modelName": "jnk-mapk-signaling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\jnk-mapk-signaling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\jnk-mapk-signaling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_JNK",
@@ -1748,7 +1748,7 @@
   },
   {
     "modelName": "meta_formal_game_theory",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\meta_formal_game_theory_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\meta_formal_game_theory_bng2.gdat",
     "bng2Headers": [
       "time",
       "H",
@@ -1759,7 +1759,7 @@
   },
   {
     "modelName": "meta_formal_molecular_clock",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\meta_formal_molecular_clock_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\meta_formal_molecular_clock_bng2.gdat",
     "bng2Headers": [
       "time",
       "Fast_Pool",
@@ -1770,7 +1770,7 @@
   },
   {
     "modelName": "meta_formal_petri_net",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\meta_formal_petri_net_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\meta_formal_petri_net_bng2.gdat",
     "bng2Headers": [
       "time",
       "Tokens_P1",
@@ -1783,7 +1783,7 @@
   },
   {
     "modelName": "ml_gradient_descent",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ml_gradient_descent_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ml_gradient_descent_bng2.gdat",
     "bng2Headers": [
       "time",
       "X_shifted",
@@ -1797,7 +1797,7 @@
   },
   {
     "modelName": "ml_hopfield",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ml_hopfield_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ml_hopfield_bng2.gdat",
     "bng2Headers": [
       "time",
       "S1",
@@ -1809,7 +1809,7 @@
   },
   {
     "modelName": "ml_q_learning",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ml_q_learning_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ml_q_learning_bng2.gdat",
     "bng2Headers": [
       "time",
       "Position",
@@ -1823,7 +1823,7 @@
   },
   {
     "modelName": "mt_arithmetic_compiler",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mt_arithmetic_compiler_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mt_arithmetic_compiler_bng2.gdat",
     "bng2Headers": [
       "time",
       "Val_L1",
@@ -1837,7 +1837,7 @@
   },
   {
     "modelName": "mt_bngl_interpreter",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mt_bngl_interpreter_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mt_bngl_interpreter_bng2.gdat",
     "bng2Headers": [
       "time",
       "S1",
@@ -1849,7 +1849,7 @@
   },
   {
     "modelName": "mt_music_sequencer",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mt_music_sequencer_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mt_music_sequencer_bng2.gdat",
     "bng2Headers": [
       "time",
       "Voice1",
@@ -1865,7 +1865,7 @@
   },
   {
     "modelName": "mt_pascal_triangle",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mt_pascal_triangle_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mt_pascal_triangle_bng2.gdat",
     "bng2Headers": [
       "time",
       "R4_0",
@@ -1879,7 +1879,7 @@
   },
   {
     "modelName": "mt_quine",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\mt_quine_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\mt_quine_bng2.gdat",
     "bng2Headers": [
       "time",
       "S1",
@@ -1890,7 +1890,7 @@
   },
   {
     "modelName": "nfsim_aggregation_gelation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfsim_aggregation_gelation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nfsim_aggregation_gelation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Monomers",
@@ -1902,7 +1902,7 @@
   },
   {
     "modelName": "nfsim_coarse_graining",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfsim_coarse_graining_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nfsim_coarse_graining_bng2.gdat",
     "bng2Headers": [
       "time",
       "Size_1",
@@ -1914,7 +1914,7 @@
   },
   {
     "modelName": "nfsim_dynamic_compartments",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfsim_dynamic_compartments_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nfsim_dynamic_compartments_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cells",
@@ -1925,7 +1925,7 @@
   },
   {
     "modelName": "nfsim_hybrid_particle_field",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfsim_hybrid_particle_field_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nfsim_hybrid_particle_field_bng2.gdat",
     "bng2Headers": [
       "time",
       "P_at_0",
@@ -1936,7 +1936,7 @@
   },
   {
     "modelName": "nfsim_ring_closure_polymer",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nfsim_ring_closure_polymer_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nfsim_ring_closure_polymer_bng2.gdat",
     "bng2Headers": [
       "time",
       "Monomers",
@@ -1948,7 +1948,7 @@
   },
   {
     "modelName": "nn_xor",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\nn_xor_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\nn_xor_bng2.gdat",
     "bng2Headers": [
       "time",
       "In1",
@@ -1976,7 +1976,7 @@
   },
   {
     "modelName": "ph_lorenz_attractor",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ph_lorenz_attractor_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ph_lorenz_attractor_bng2.gdat",
     "bng2Headers": [
       "time",
       "X_raw",
@@ -1988,7 +1988,7 @@
   },
   {
     "modelName": "ph_nbody_gravity",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ph_nbody_gravity_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ph_nbody_gravity_bng2.gdat",
     "bng2Headers": [
       "time",
       "Ex",
@@ -2001,7 +2001,7 @@
   },
   {
     "modelName": "ph_schrodinger",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ph_schrodinger_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ph_schrodinger_bng2.gdat",
     "bng2Headers": [
       "time",
       "r1",
@@ -2020,7 +2020,7 @@
   },
   {
     "modelName": "ph_wave_equation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ph_wave_equation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ph_wave_equation_bng2.gdat",
     "bng2Headers": [
       "time",
       "P1",
@@ -2039,7 +2039,7 @@
   },
   {
     "modelName": "process_actin_treadmilling",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\process_actin_treadmilling_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\process_actin_treadmilling_bng2.gdat",
     "bng2Headers": [
       "time",
       "Free_Monomers",
@@ -2050,7 +2050,7 @@
   },
   {
     "modelName": "process_autophagy_flux",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\process_autophagy_flux_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\process_autophagy_flux_bng2.gdat",
     "bng2Headers": [
       "time",
       "Phagophores",
@@ -2064,7 +2064,7 @@
   },
   {
     "modelName": "process_cell_adhesion_strength",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\process_cell_adhesion_strength_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\process_cell_adhesion_strength_bng2.gdat",
     "bng2Headers": [
       "time",
       "Adhesions",
@@ -2076,7 +2076,7 @@
   },
   {
     "modelName": "process_kinetic_proofreading_tcr",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\process_kinetic_proofreading_tcr_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\process_kinetic_proofreading_tcr_bng2.gdat",
     "bng2Headers": [
       "time",
       "Bound_TCR",
@@ -2087,7 +2087,7 @@
   },
   {
     "modelName": "process_quorum_sensing_switch",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\process_quorum_sensing_switch_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\process_quorum_sensing_switch_bng2.gdat",
     "bng2Headers": [
       "time",
       "Light_Gene_On",
@@ -2099,7 +2099,7 @@
   },
   {
     "modelName": "shp2-phosphatase-regulation",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\shp2-phosphatase-regulation_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\shp2-phosphatase-regulation_bng2.gdat",
     "bng2Headers": [
       "time",
       "Active_Enzyme",
@@ -2114,7 +2114,7 @@
   },
   {
     "modelName": "sp_fourier_synthesizer",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sp_fourier_synthesizer_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\sp_fourier_synthesizer_bng2.gdat",
     "bng2Headers": [
       "time",
       "Sin1",
@@ -2130,7 +2130,7 @@
   },
   {
     "modelName": "sp_image_convolution",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sp_image_convolution_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\sp_image_convolution_bng2.gdat",
     "bng2Headers": [
       "time",
       "In_r3c1",
@@ -2153,7 +2153,7 @@
   },
   {
     "modelName": "sp_kalman_filter",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\sp_kalman_filter_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\sp_kalman_filter_bng2.gdat",
     "bng2Headers": [
       "time",
       "True_Pos",
@@ -2168,7 +2168,7 @@
   },
   {
     "modelName": "synbio_band_pass_filter",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synbio_band_pass_filter_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\synbio_band_pass_filter_bng2.gdat",
     "bng2Headers": [
       "time",
       "Input_Level",
@@ -2179,7 +2179,7 @@
   },
   {
     "modelName": "synbio_counter_molecular",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synbio_counter_molecular_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\synbio_counter_molecular_bng2.gdat",
     "bng2Headers": [
       "time",
       "S0",
@@ -2193,7 +2193,7 @@
   },
   {
     "modelName": "synbio_edge_detector",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synbio_edge_detector_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\synbio_edge_detector_bng2.gdat",
     "bng2Headers": [
       "time",
       "Input",
@@ -2205,7 +2205,7 @@
   },
   {
     "modelName": "synbio_logic_gates_enzymatic",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synbio_logic_gates_enzymatic_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\synbio_logic_gates_enzymatic_bng2.gdat",
     "bng2Headers": [
       "time",
       "Input1",
@@ -2218,7 +2218,7 @@
   },
   {
     "modelName": "synbio_oscillator_synchronization",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\synbio_oscillator_synchronization_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\synbio_oscillator_synchronization_bng2.gdat",
     "bng2Headers": [
       "time",
       "O1_A",
@@ -2230,7 +2230,7 @@
   },
   {
     "modelName": "wacky_alchemy_stone",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wacky_alchemy_stone_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wacky_alchemy_stone_bng2.gdat",
     "bng2Headers": [
       "time",
       "Base_Metal",
@@ -2242,7 +2242,7 @@
   },
   {
     "modelName": "wacky_black_hole",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wacky_black_hole_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wacky_black_hole_bng2.gdat",
     "bng2Headers": [
       "time",
       "Universe_Mass",
@@ -2254,7 +2254,7 @@
   },
   {
     "modelName": "wacky_bouncing_ball",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wacky_bouncing_ball_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wacky_bouncing_ball_bng2.gdat",
     "bng2Headers": [
       "time",
       "H",
@@ -2267,7 +2267,7 @@
   },
   {
     "modelName": "wacky_traffic_jam_asep",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wacky_traffic_jam_asep_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wacky_traffic_jam_asep_bng2.gdat",
     "bng2Headers": [
       "time",
       "Cars",
@@ -2278,7 +2278,7 @@
   },
   {
     "modelName": "wacky_zombie_infection",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\wacky_zombie_infection_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\wacky_zombie_infection_bng2.gdat",
     "bng2Headers": [
       "time",
       "Humans",
@@ -2290,14 +2290,14 @@
   },
   {
     "modelName": "ml_kmeans",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ml_kmeans_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ml_kmeans_bng2.gdat",
     "bng2Headers": [],
     "bng2DataPoints": 0,
     "status": "ready_for_comparison"
   },
   {
     "modelName": "ml_svm",
-    "bng2GdatPath": "C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\bionetgen-web-simulator\\gdat_comparison_output\\ml_svm_bng2.gdat",
+    "bng2GdatPath": "gdat_comparison_output\\ml_svm_bng2.gdat",
     "bng2Headers": [],
     "bng2DataPoints": 0,
     "status": "ready_for_comparison"

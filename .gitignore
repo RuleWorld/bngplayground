@@ -257,5 +257,8 @@ three-*.tgz
 
 slurm/
 
+# Local build config
+run_build.bat
+
 # End of .gitignore
 coverage
