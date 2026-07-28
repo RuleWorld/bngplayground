@@ -129,16 +129,51 @@ export const getSharedEnsembleFeatureVector = (
     return Array.from(shared.values.subarray(start, start + runStride));
 };
 
+interface PendingPoolRequest {
+    messageId: number;
+    resolve: (val: any) => void;
+    reject: (err: Error) => void;
+    handler: (event: MessageEvent<WorkerResponse>) => void;
+}
+
 export class BnglWorkerPool {
     private workers: Worker[] = [];
     private poolSize: number;
     private nextWorkerIdx = 0;
     private isInitialized = false;
+    private pendingWorkerRequests = new Map<Worker, Set<PendingPoolRequest>>();
 
     constructor(poolSize?: number) {
         // Default to hardware concurrency - 1 (leave one for UI)
         const hardwareConcurrency = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4;
         this.poolSize = poolSize ?? Math.max(1, hardwareConcurrency - 1);
+    }
+
+    private registerPendingRequest(worker: Worker, req: PendingPoolRequest) {
+        let set = this.pendingWorkerRequests.get(worker);
+        if (!set) {
+            set = new Set();
+            this.pendingWorkerRequests.set(worker, set);
+        }
+        set.add(req);
+    }
+
+    private removePendingRequest(worker: Worker, req: PendingPoolRequest) {
+        const set = this.pendingWorkerRequests.get(worker);
+        if (set) {
+            set.delete(req);
+        }
+    }
+
+    private rejectAllPendingOnWorker(worker: Worker, error: Error) {
+        const set = this.pendingWorkerRequests.get(worker);
+        if (set) {
+            for (const req of set) {
+                worker.removeEventListener('message', req.handler);
+                req.reject(error);
+            }
+            set.clear();
+        }
     }
 
     async initialize(): Promise<void> {
@@ -151,12 +186,17 @@ export class BnglWorkerPool {
             // Add global error handler to catch worker crashes
             worker.addEventListener('error', (err) => {
                 console.error(`[Pool] Worker ${i} global error:`, err);
+                const errorMsg = err instanceof Error ? err.message : (err && typeof err === 'object' && 'message' in err ? (err as any).message : String(err));
+                this.rejectAllPendingOnWorker(worker, new Error(`Worker global error: ${errorMsg}`));
             });
             
             // Listen for internal error messages from our own error trapping in the worker
             worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
                 if (event.data.type === 'worker_internal_error') {
-                   console.error(`[Pool] Worker ${i} internal error reported:`, event.data.payload);
+                   const payload = event.data.payload;
+                   const errorMsg = payload?.message || 'Worker internal error';
+                   console.error(`[Pool] Worker ${i} internal error reported:`, payload);
+                   this.rejectAllPendingOnWorker(worker, new Error(`Worker internal error: ${errorMsg}`));
                 }
             });
 
@@ -183,15 +223,25 @@ export class BnglWorkerPool {
 
                 if (type === 'simulate_success') {
                     worker.removeEventListener('message', handler);
+                    this.removePendingRequest(worker, req);
                     resolve(payload as SimulationResults);
                 } else if (type === 'simulate_error') {
                     worker.removeEventListener('message', handler);
-                    const errorMsg = (payload as any)?.message || 'Simulation failed';
+                    this.removePendingRequest(worker, req);
+                    const errorMsg = (payload as { message?: string })?.message || 'Simulation failed';
                     console.error(`[Pool] Worker simulate_error: ${errorMsg}`, payload);
                     reject(new Error(errorMsg));
                 }
                 // Ignore other types like 'progress'
             };
+
+            const req: PendingPoolRequest = {
+                messageId,
+                resolve,
+                reject,
+                handler
+            };
+            this.registerPendingRequest(worker, req);
 
             worker.addEventListener('message', handler);
 
@@ -287,14 +337,25 @@ export class BnglWorkerPool {
 
                 if (type === 'cache_model_success') {
                     worker.removeEventListener('message', handler);
-                    resolve((payload as any).modelId);
+                    this.removePendingRequest(worker, req);
+                    resolve((payload as { modelId: number }).modelId);
                 } else if (type === 'cache_model_error') {
                     worker.removeEventListener('message', handler);
-                    const errorMsg = (payload as any)?.message || 'Failed to cache model';
+                    this.removePendingRequest(worker, req);
+                    const errorMsg = (payload as { message?: string })?.message || 'Failed to cache model';
                     console.error(`[Pool] Worker cache_model_error: ${errorMsg}`, payload);
                     reject(new Error(errorMsg));
                 }
             };
+
+            const req: PendingPoolRequest = {
+                messageId,
+                resolve,
+                reject,
+                handler
+            };
+            this.registerPendingRequest(worker, req);
+
             worker.addEventListener('message', handler);
             worker.postMessage({ id: messageId, type: 'cache_model', payload: { model } });
         });
@@ -309,14 +370,25 @@ export class BnglWorkerPool {
 
                 if (type === 'simulate_success') {
                     worker.removeEventListener('message', handler);
+                    this.removePendingRequest(worker, req);
                     resolve(payload as SimulationResults);
                 } else if (type === 'simulate_error') {
                     worker.removeEventListener('message', handler);
-                    const errorMsg = (payload as any)?.message || 'Simulation failed';
+                    this.removePendingRequest(worker, req);
+                    const errorMsg = (payload as { message?: string })?.message || 'Simulation failed';
                     console.error(`[Pool] Worker simulate_error: ${errorMsg}`, payload);
                     reject(new Error(errorMsg));
                 }
             };
+
+            const req: PendingPoolRequest = {
+                messageId,
+                resolve,
+                reject,
+                handler
+            };
+            this.registerPendingRequest(worker, req);
+
             worker.addEventListener('message', handler);
             worker.postMessage({ id: messageId, type: 'simulate', payload: { modelId, options } });
         });
@@ -336,13 +408,23 @@ export class BnglWorkerPool {
 
                 if (type === 'simulate_shared_success') {
                     worker.removeEventListener('message', handler);
+                    this.removePendingRequest(worker, req);
                     resolve();
                 } else if (type === 'simulate_error') {
                     worker.removeEventListener('message', handler);
-                    const errorMsg = (payload as any)?.message || 'Simulation failed';
+                    this.removePendingRequest(worker, req);
+                    const errorMsg = (payload as { message?: string })?.message || 'Simulation failed';
                     reject(new Error(errorMsg));
                 }
             };
+
+            const req: PendingPoolRequest = {
+                messageId,
+                resolve,
+                reject,
+                handler
+            };
+            this.registerPendingRequest(worker, req);
 
             worker.addEventListener('message', handler);
             worker.postMessage({
@@ -354,22 +436,36 @@ export class BnglWorkerPool {
     }
 
     private releaseModelOnWorker(worker: Worker, modelId: number): Promise<void> {
-        return new Promise((resolve) => {
+        return new Promise((resolve, reject) => {
             const messageId = generateSecureMessageId();
             const handler = (event: MessageEvent<WorkerResponse>) => {
                 if (event.data.id !== messageId) return;
                 worker.removeEventListener('message', handler);
+                this.removePendingRequest(worker, req);
                 resolve();
             };
+
+            const req: PendingPoolRequest = {
+                messageId,
+                resolve,
+                reject,
+                handler
+            };
+            this.registerPendingRequest(worker, req);
+
             worker.addEventListener('message', handler);
             worker.postMessage({ id: messageId, type: 'release_model', payload: { modelId } });
         });
     }
 
     terminate(): void {
-        this.workers.forEach(w => w.terminate());
+        this.workers.forEach(w => {
+            w.terminate();
+            this.rejectAllPendingOnWorker(w, new Error('Worker was terminated'));
+        });
         this.workers = [];
         this.isInitialized = false;
+        this.pendingWorkerRequests.clear();
     }
 }
 
