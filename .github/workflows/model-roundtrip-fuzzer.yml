@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 17 * * 1-5'
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   fuzz:
     runs-on: ubuntu-latest
@@ -25,7 +30,11 @@ jobs:
             4. For each failure (crash, hang >60s, silent empty output),
                minimize the model to the smallest reproducing input and
                file an issue with the minimized model and stack trace.
-            5. If all 50 pass, report that in the PR body and surface no PR.
+            5. If all 50 pass, open a PR committing the 50 generated models as regression fixtures plus per-model timings.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
 
             Rules:
             - Do NOT exhaust the model space — 50 is the cap per run.

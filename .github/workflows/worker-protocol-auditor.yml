@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 6 * * 1-5'
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -25,8 +30,13 @@ jobs:
                receiver doesn't handle.
             4. Fix it — align the shapes, add the missing handler, or propagate
                the dropped error.
-            5. Validate with `node scripts/run_full_tests.mjs`.
+            5. Validate with `npm run test:full:safe`.
             6. One fix per PR. Note the before/after of handled message types.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
+            Always open a PR. If you found a fix, PR it. If you found nothing, PR a short artifact (the ranked list of what you considered and why each was skipped) so the dead end is on record. Never rename variables or reword comments just to produce a diff.
 
             Rules:
             - If a worker pair uses a shared TypeScript type, move it to a

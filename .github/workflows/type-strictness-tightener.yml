@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 9 * * 1-5'
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   tighten:
     runs-on: ubuntu-latest
@@ -21,7 +26,7 @@ jobs:
                narrowing, type guards. Do NOT silence by widening to `unknown`
                and casting back, and do NOT just move the suppression around.
             3. Validate with `npm run type-check` (tsc --noEmit),
-               `npm run lint` (eslint .), and `npm run test:full`.
+               `npm run lint` (eslint .), and `npm run test:fast`.
             4. One file per PR. Note the before/after count of suppressions.
 
             Rules:

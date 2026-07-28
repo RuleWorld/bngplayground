@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 10 * * 1-5'
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   prune:
     runs-on: ubuntu-latest
@@ -19,8 +24,7 @@ jobs:
                (e.g. via ts-prune / depcheck reasoning, or by tracing imports).
             2. Remove it.
             3. Validate with `npm run type-check`, `npm run lint`, and
-               `npm run test:full` (wraps the forks-pool hang via
-               scripts/run_full_tests.mjs — never disable that harness).
+               `npm run test:full:safe` (test:full:safe is the hang-safe full suite via scripts/run_full_tests.mjs — never disable the harness).
             4. Open a PR for the single removal.
 
             CRITICAL — do NOT delete these known-unwired MCP handlers; they are
@@ -28,6 +32,11 @@ jobs:
             analyzeResiduals, assessModelMaturity, checkHysteresis,
             checkPhaseHandoff, computeFim, diagnose, exportOmex, exportSbml,
             exportSedml, suggestAnnotations, suggestFix.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
+            Always open a PR. If you found a fix, PR it. If you found nothing, PR a short artifact (the ranked list of what you considered and why each was skipped) so the dead end is on record. Never rename variables or reword comments just to produce a diff.
 
             Rules:
             - If unsure whether something is truly dead, skip it. False

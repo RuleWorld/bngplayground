@@ -224,6 +224,19 @@ The following are gitignored and should be considered temporary/debug:
 - `*_benchmark_results.json`, `*_comparison*.json` (benchmark outputs)
 - `*_report.json`, `*_comparison_results.json` (comparison outputs)
 
+### Running tests without the hang
+
+Vitest on `pool: 'forks'` hangs on shutdown after WASM (CVODE) children finish.
+`scripts/run_full_tests.mjs` wraps vitest with an idle-kill + pass/fail detector
+and guarantees a clean exit. Use these, not raw vitest:
+
+- `npm run test:fast`       — hang-safe, NARROW scope (fast unit gate; excludes
+  parity/CVODE/simulation specs). Use for structural changes (types, docstrings).
+- `npm run test:full:safe`  — hang-safe, FULL scientific scope (parity vs BNG2,
+  CVODE, simulation). Use for any change that can affect numbers.
+
+Do NOT use raw `npm run test:full` — it is full scope but hangs.
+
 **Important**: Some directories containing .net/.gdat/.cdat files are **reference fixtures** for regression testing:
 - `bng_test_output/`, `bng_compare_output/`, `gdat_comparison_output/` - Reference outputs from BioNetGen for parser/solver validation
 - `species_comparison_output/`, `temp_bench/`, `temp_bng_output/` - Comparison analysis outputs

@@ -3,6 +3,11 @@ on:
   schedule:
     - cron: '0 5 * * 1-5'
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   audit:
     runs-on: ubuntu-latest
@@ -22,8 +27,13 @@ jobs:
                error propagation.
             3. For the worst violation found, add proper error handling that
                surfaces the failure instead of swallowing it.
-            4. Validate with `node scripts/run_full_tests.mjs`.
+            4. Validate with `npm run test:full:safe`.
             5. One fix per PR. Describe the failure scenario in the PR.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
+            Always open a PR. If you found a fix, PR it. If you found nothing, PR a short artifact (the ranked list of what you considered and why each was skipped) so the dead end is on record. Never rename variables or reword comments just to produce a diff.
 
             Rules:
             - Never change public API signatures.
