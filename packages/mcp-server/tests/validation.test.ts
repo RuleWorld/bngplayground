@@ -121,7 +121,7 @@ describe('MCP Server Tools Functional Validation', () => {
             t_end: 1,
             n_steps: 2
         });
-        expect(result.structuredContent.mode).toBe('1d');
+        expect((result.structuredContent as any).mode).toBe('1d');
         expect(result.structuredContent.xValues.length).toBe(3);
         expect(result.structuredContent.observables.Complex).toBeDefined();
         expect(result.structuredContent.observables.Complex.length).toBe(3);
@@ -138,7 +138,7 @@ describe('MCP Server Tools Functional Validation', () => {
             n_steps: 1,
         });
 
-        expect(result.structuredContent.mode).toBe('1d');
+        expect((result.structuredContent as any).mode).toBe('1d');
         expect(result.structuredContent.observables.A_obs.length).toBe(3);
         expect(result.structuredContent.observables.A_obs[0]).toBeCloseTo(10, 6);
         expect(result.structuredContent.observables.A_obs[2]).toBeCloseTo(30, 6);
@@ -158,7 +158,7 @@ describe('MCP Server Tools Functional Validation', () => {
             t_end: 1,
             n_steps: 2
         });
-        expect(result.structuredContent.mode).toBe('2d');
+        expect((result.structuredContent as any).mode).toBe('2d');
         expect(result.structuredContent.xValues.length).toBe(2);
         expect(result.structuredContent.yValues.length).toBe(2);
         expect(result.structuredContent.observables.Complex).toBeDefined();
@@ -168,7 +168,7 @@ describe('MCP Server Tools Functional Validation', () => {
 
     it('should validate model (validate_model)', async () => {
         const result = await handleValidateModel({ code: simpleModel });
-        expect(result.structuredContent.valid).toBe(true);
+        expect((result.structuredContent as any).valid).toBe(true);
         expect(result.structuredContent.summary.errors).toBe(0);
     });
 
@@ -343,7 +343,7 @@ describe('MCP Server Tools Functional Validation', () => {
             t_end: 1, n_steps: 10,
             n_samples: 8, n_bootstrap: 10, max_parameters: 2,
         });
-        expect(result.structuredContent.summary).toBeDefined();
+        expect((result.structuredContent as any).summary).toBeDefined();
         expect(typeof result.structuredContent.summary.technical).toBe('string');
         expect(typeof result.structuredContent.summary.biological).toBe('string');
         expect(typeof result.structuredContent.summary.strategic).toBe('string');
@@ -352,7 +352,7 @@ describe('MCP Server Tools Functional Validation', () => {
 
     it('should explain model in narrative form (explain_model)', async () => {
         const result = await handleExplainModel({ code: simpleModel });
-        expect(result.structuredContent.summary).toContain('Model contains');
+        expect((result.structuredContent as any).summary).toContain('Model contains');
         expect(Array.isArray(result.structuredContent.sections)).toBe(true);
         expect(result.structuredContent.sections.length).toBeGreaterThan(0);
     });

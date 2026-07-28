@@ -1,10 +1,10 @@
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
-import { ToolArgs, ToolResult, ValidateModelResult } from '../types/index.js';
+import { ToolArgs, ToolResult, ValidateModelResult, MCPErrorResult } from '../types/index.js';
 import { validateModelArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, validateModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-export async function handleValidateModel(args: ToolArgs): Promise<ToolResult<any>> {
+export async function handleValidateModel(args: ToolArgs): Promise<ToolResult<ValidateModelResult | MCPErrorResult>> {
     try {
         const parsedArgs = parseArgs('validate_model', validateModelArgsSchema, args);
         const parseResult = parseBNGLWithANTLR(parsedArgs.code);
