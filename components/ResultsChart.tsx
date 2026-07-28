@@ -664,7 +664,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             <button
               key={sfx}
               onClick={() => { setSelectedSuffix(sfx); setZoomHistory([]); setSelection(null); }}
-              className={`px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors ${
+              className={`px-3 py-1.5 text-xs font-semibold rounded-md border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${
                 selectedSuffix === sfx
                   ? 'bg-white dark:bg-slate-900 border-blue-200 text-blue-700 shadow-sm dark:bg-blue-900/40 dark:border-blue-700 dark:text-blue-300'
                   : 'bg-transparent border-transparent text-slate-600 dark:text-slate-400 hover:bg-slate-200/50 dark:text-slate-400 dark:hover:bg-slate-800/50'
@@ -817,14 +817,14 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
         <div className="flex items-center gap-2">
           <div className="inline-flex gap-1 p-0.5 bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 rounded-md">
             <button
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'all' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${filterMode === 'all' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
               onClick={() => setFilterMode('all')}
               aria-pressed={filterMode === 'all'}
             >
               All
             </button>
             <button
-              className={`px-3 py-1 text-xs font-medium rounded transition-colors ${filterMode === 'search' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
+              className={`px-3 py-1 text-xs font-medium rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${filterMode === 'search' ? 'bg-white dark:bg-slate-900 dark:bg-slate-700 shadow-sm text-slate-700 dark:text-slate-100' : 'text-slate-500 dark:text-slate-300 hover:text-slate-700 dark:text-slate-100'}`}
               onClick={() => setFilterMode('search')}
               aria-pressed={filterMode === 'search'}
             >
@@ -847,7 +847,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             <button
               onClick={handleXScaleChange}
               aria-pressed={xAxisScale === 'log'}
-              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${xAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${xAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               title="Toggle X-axis scale (resets zoom)"
             >
               X: {xAxisScale === 'log' ? 'Log' : 'Linear'}
@@ -855,7 +855,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             <button
               onClick={handleYScaleChange}
               aria-pressed={yAxisScale === 'log'}
-              className={`px-2 py-1 text-xs font-medium rounded transition-colors ${yAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
+              className={`px-2 py-1 text-xs font-medium rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400 ${yAxisScale === 'log' ? 'bg-blue-100 dark:bg-blue-900/50 text-blue-700 dark:text-blue-300' : 'bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'}`}
               title="Toggle Y-axis scale (resets zoom)"
             >
               Y: {yAxisScale === 'log' ? 'Log' : 'Linear'}
@@ -867,7 +867,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
           {/* Reset View Button */}
           <button
             onClick={() => { setZoomHistory([]); setSelection(null); onVisibleSpeciesChange(new Set(speciesToPlot)); }}
-            className="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 transition-colors"
+            className="px-3 py-1.5 rounded-md text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:bg-slate-800/50 dark:hover:bg-slate-800 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400"
           >
             Reset View
           </button>
