@@ -220,7 +220,7 @@ const balOK = s => {
   }
   return d === 0;
 };
-const leakExamples = [], emptyExamples = [], unbalExamples = [];
+const emptyExamples = [], unbalExamples = [];
 
 const started = Date.now();
 for (const f of mine) {

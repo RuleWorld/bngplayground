@@ -1,6 +1,6 @@
 import { SBMLWriter } from '/home/claude/build/engine/src/services/export/SBMLWriter.ts';
 // @ts-ignore
-import { mathMlToFormula, evalInfix, idsOf } from '/tmp/exprlib.mjs';
+import { mathMlToFormula, evalInfix } from '/tmp/exprlib.mjs';
 const model: any = { name:'m', parameters:{k1:0.5,k:2,kd:0.3,ksyn:0.7,Vmax:4,Km:1.5}, compartments:[{name:'cell',size:1}] };
 const N=(sp:string[],rx:any[])=>({species:sp.map(n=>({name:n,initialConcentration:1})),reactions:rx,observableExpressions:new Map(),parameterValues:new Map()});
 function equiv(a:string,b:string,ids:string[]){for(let t=0;t<12;t++){const e:any={};for(const id of ids)e[id]=0.2+Math.random()*2.5;let x:number,y:number;try{x=evalInfix(a,e);y=evalInfix(b,e);}catch{return false;}if(!isFinite(x)||!isFinite(y))continue;if(Math.abs(x-y)>1e-7*(1+Math.abs(x)))return false;}return true;}
