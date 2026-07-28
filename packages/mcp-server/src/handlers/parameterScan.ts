@@ -1,10 +1,10 @@
 import { generateRange, simulate, loadEvaluator, reevaluateSeedSpecies } from '@bngplayground/engine';
-import { ToolArgs, ToolResult } from '../types/index.js';
+import { ToolArgs, ToolResult, ParameterScanResult, MCPErrorResult } from '../types/index.js';
 import { parameterScanArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, buildSimulationOptions, expandModel, assertScannableParameter, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<any>> {
+export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<ParameterScanResult | MCPErrorResult>> {
   try {
     const parsedArgs = parseArgs('parameter_scan', parameterScanArgsSchema, args);
     if (parsedArgs.parameter2 !== undefined) {
