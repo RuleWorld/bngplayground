@@ -1,0 +1,34 @@
+name: Model Round-Trip Fuzzer
+on:
+  schedule:
+    - cron: '0 17 * * 1-5'
+  workflow_dispatch:
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-action@v1.0.0
+        with:
+          prompt: |
+            Fuzzing agent for the BNG Playground monorepo.
+            Standing objective: catch edge-case crashes, hangs, and silent
+            failures by generating random valid BNGL models.
+
+            1. Reference the ANTLR grammar in `packages/engine/src/parser/`
+               and the BioNetGen auth spec documentation to understand
+               valid BNGL constructs.
+            2. Generate 50 random syntactically-correct BNGL models
+               exercising different feature combinations (reaction rules,
+               compartments, observables, parameter expressions, etc.).
+            3. Run each through the full pipeline:
+               parse → network generate → ODE solve → SSA solve → NFsim solve.
+            4. For each failure (crash, hang >60s, silent empty output),
+               minimize the model to the smallest reproducing input and
+               file an issue with the minimized model and stack trace.
+            5. If all 50 pass, report that in the PR body and surface no PR.
+
+            Rules:
+            - Do NOT exhaust the model space — 50 is the cap per run.
+            - Never import browser APIs into packages/engine.
+            Never ask questions — make your best autonomous judgment; open a PR with your best shot.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}
