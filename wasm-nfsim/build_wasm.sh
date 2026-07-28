@@ -36,6 +36,21 @@ $EMCMAKE cmake "$NFSIM_SRC" \
 
 $EMMAKE make -j4
 
+WASM_OPT="wasm-opt"
+if [ -f "/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt" ]; then
+  WASM_OPT="/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt"
+fi
+
+optimize_wasm() {
+  local wasm_file="$1"
+  if command -v "$WASM_OPT" &> /dev/null; then
+    echo "Optimizing $wasm_file with wasm-opt..."
+    "$WASM_OPT" -Oz --enable-exception-handling --enable-sign-ext "$wasm_file" -o "$wasm_file"
+  else
+    echo "wasm-opt not found, skipping optimization for $wasm_file."
+  fi
+}
+
 if [ -f "NFsim.js" ]; then
   cp "NFsim.js" "$SCRIPT_DIR/../public/nfsim.js"
   printf "\nexport default createNFsimModule;\n" >> "$SCRIPT_DIR/../public/nfsim.js"
@@ -45,9 +60,11 @@ elif [ -f "nfsim.js" ]; then
 fi
 
 if [ -f "NFsim.wasm" ]; then
+  optimize_wasm "NFsim.wasm"
   cp "NFsim.wasm" "$SCRIPT_DIR/../public/nfsim.wasm"
   cp "NFsim.wasm" "$SCRIPT_DIR/../public/NFsim.wasm"
 elif [ -f "nfsim.wasm" ]; then
+  optimize_wasm "nfsim.wasm"
   cp "nfsim.wasm" "$SCRIPT_DIR/../public/nfsim.wasm"
   cp "nfsim.wasm" "$SCRIPT_DIR/../public/NFsim.wasm"
 fi
