@@ -250,7 +250,8 @@ export class HybridModelGenerator {
       // Add population matches to observable pattern
       const addedPatterns: string[] = [];
       for (const pm of popMaps) {
-        const simpleBase = pm.pattern.split('(')[0];
+        const parenIdx = pm.pattern.indexOf('(');
+        const simpleBase = parenIdx !== -1 ? pm.pattern.substring(0, parenIdx) : pm.pattern;
         // Fast rejection with includes before running full pattern match
         if (obs.pattern.includes(simpleBase) || isSimplePatternMatch(pm.pattern, obs.pattern)) {
           addedPatterns.push(pm.populationName + '()');
@@ -428,16 +429,23 @@ export class HybridModelGenerator {
           }
           return out;
         })();
-        const moleculeNames = strippedPattern.split('.')
-          .map(part => {
-            const colonIndex = part.indexOf(':');
-            return colonIndex !== -1 ? part.substring(colonIndex + 1) : part;
-          })
-          .filter(name => {
-            if (name.length === 0) return false;
+        const moleculeNames: string[] = [];
+        let pStart = 0;
+        while (pStart < strippedPattern.length) {
+          let pEnd = strippedPattern.indexOf('.', pStart);
+          if (pEnd === -1) pEnd = strippedPattern.length;
+          const part = strippedPattern.substring(pStart, pEnd);
+          const colonIndex = part.indexOf(':');
+          const name = colonIndex !== -1 ? part.substring(colonIndex + 1) : part;
+
+          if (name.length > 0) {
             const first = name.charCodeAt(0);
-            return first >= 65 && first <= 90;
-          }); // Molecules must start with uppercase
+            if (first >= 65 && first <= 90) { // Uppercase
+              moleculeNames.push(name);
+            }
+          }
+          pStart = pEnd + 1;
+        }
 
         for (const molName of moleculeNames) {
           if (populationMolecules.has(molName)) {

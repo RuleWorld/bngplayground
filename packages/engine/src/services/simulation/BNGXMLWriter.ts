@@ -259,10 +259,13 @@ export class BNGXMLWriter {
             .map((compRaw) => {
               // Optimized string parsing: single loop is ~1.5x faster than .map().filter()
               const parts: string[] = [];
-              const splitRaw = compRaw.split('~');
-              for (let j = 0; j < splitRaw.length; j++) {
-                const s = splitRaw[j].trim();
+              let start = 0;
+              while (start < compRaw.length) {
+                let end = compRaw.indexOf('~', start);
+                if (end === -1) end = compRaw.length;
+                const s = compRaw.substring(start, end).trim();
                 if (s) parts.push(s);
+                start = end + 1;
               }
               const compName = parts[0];
               const states = new Set<string>(parts.slice(1));
@@ -581,10 +584,13 @@ export class BNGXMLWriter {
     const addStatesFromComponentString = (molName: string, comp: string) => {
       // Optimized string parsing: single loop is ~1.5x faster than .map().filter()
       const parts: string[] = [];
-      const splitComp = comp.split('~');
-      for (let j = 0; j < splitComp.length; j++) {
-        const s = splitComp[j].trim();
+      let start = 0;
+      while (start < comp.length) {
+        let end = comp.indexOf('~', start);
+        if (end === -1) end = comp.length;
+        const s = comp.substring(start, end).trim();
         if (s) parts.push(s);
+        start = end + 1;
       }
       if (parts.length === 0) return;
       const compName = parts[0];
