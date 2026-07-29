@@ -1001,11 +1001,17 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     const parts = content.split(',');
     for (const part of parts) {
-      const [key, valStr] = part.split('=>');
-      if (key && valStr) {
-        const val = parseFloat(valStr.trim());
-        if (!isNaN(val)) {
-          map[key.trim()] = val;
+      // ⚡ Bolt Optimization: Use zero-allocation index scanning instead of .split('=>')
+      // Reduces intermediate array allocations inside hot map-parsing loops
+      const arrowIdx = part.indexOf('=>');
+      if (arrowIdx !== -1) {
+        const key = part.substring(0, arrowIdx);
+        const valStr = part.substring(arrowIdx + 2);
+        if (key && valStr) {
+          const val = parseFloat(valStr.trim());
+          if (!isNaN(val)) {
+            map[key.trim()] = val;
+          }
         }
       }
     }
