@@ -101,6 +101,8 @@ export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, 
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
 export { findUnreachableRules } from './services/analysis/UnreachableRules';
+export { assessModelMaturity } from './services/analysis/ModelMaturity';
+export type { ModelMaturityInput, ModelMaturityResult, ModelMaturityHistoryEntry, ModelMaturityParameterSource } from './services/analysis/ModelMaturity';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 export { parsePEtab, parsePEtabCombined } from './services/analysis/petabImport';
 export type { PEtabProblem, PEtabParameter, PEtabObservable } from './services/analysis/petabImport';
