@@ -24,7 +24,29 @@ export interface ParseResult {
 }
 
 /**
- * Parse a BNGL file using ANTLR4 grammar
+ * Parses raw BioNetGen Language (BNGL) model text using ANTLR4 grammar into a structured model.
+ *
+ * This function performs comprehensive preprocessing/normalization steps on the input to handle legacy
+ * cBNGL syntax and BNG2.pl compatibility quirks prior to executing the ANTLR lexer and parser:
+ * - Strips UTF-8 Byte Order Marks (BOM).
+ * - Normalizes legacy blocks like 'begin/end molecules' to 'begin/end molecule types' (ignoring comments).
+ * - Strips and normalizes legacy local function context syntax (%x::Pattern -> Pattern) for rule-level matching.
+ * - Restructures legacy compartment-before-parentheses molecules: Mol@Comp(...) -> Mol(...)@Comp.
+ * - Folds line continuations ('\') to resolve rules spread across multiple lines.
+ * - Expands state-inheritance labels ('%') in rules to generate concrete combinatorial rules based on declared molecule types.
+ * - Cascades unmatched '%' labels to wildcard state '~?' to ensure parser compatibility when type info is missing.
+ * - Folds standalone parameter or compartment include/exclude modifier lines onto their preceding rules.
+ * - Disables/comments out top-level pre-amble directives (e.g., version(), setOption()) located before 'begin model' blocks.
+ *
+ * Once parsing of the normalized text completes (either successfully or through best-effort recovery),
+ * it validates the model's semantic properties (e.g. valid molecule type definitions, missing components in seed species
+ * or created reaction rules) and returns the aggregated errors and the parsed model representation.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) as a core package utility in @bngplayground/engine.
+ *
+ * @param input - The raw BNGL source string to parse.
+ * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
+ *          and list of accumulated syntactic/semantic parsing errors.
  */
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
