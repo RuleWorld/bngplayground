@@ -24,6 +24,22 @@ export type SpatialWorkerResponse =
   | { type: 'complete'; result: SpatialSimulationResult }
   | { type: 'error'; message: string };
 
+if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+  self.addEventListener('error', (event) => {
+    const errMsg = event.error?.message ?? event.message ?? 'Unknown worker error';
+    const response: SpatialWorkerResponse = { type: 'error', message: `SpatialWorker error: ${errMsg}` };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+
+  self.addEventListener('unhandledrejection', (event) => {
+    const errMsg = event.reason?.message ?? String(event.reason ?? 'Unhandled rejection in worker');
+    const response: SpatialWorkerResponse = { type: 'error', message: `SpatialWorker unhandled rejection: ${errMsg}` };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+}
+
 let simulation: SpatialSimulation | null = null;
 let cancelled = false;
 
