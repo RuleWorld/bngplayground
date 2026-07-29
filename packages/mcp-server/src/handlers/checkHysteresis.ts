@@ -19,19 +19,36 @@ type CheckHysteresisArgs = z.infer<typeof checkHysteresisArgsSchema>;
 export async function handleCheckHysteresis(args: ToolArgs): Promise<ToolResult<any>> {
     try {
         const parsedArgs = parseArgs('check_hysteresis', checkHysteresisArgsSchema, args) as CheckHysteresisArgs;
+
+        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+            throw new Error('Model code cannot be empty.');
+        }
+
         const model = parseModelOrThrow(parsedArgs.code);
         const expandedModel = await expandModel(model);
         
         if (!(parsedArgs.parameter in model.parameters)) {
             throw new Error(`Unknown parameter '${parsedArgs.parameter}'. Available parameters: ${Object.keys(model.parameters).join(', ') || '(none)'}`);
         }
+
         if (parsedArgs.observable && !model.observables.some((o) => o.name === parsedArgs.observable)) {
             throw new Error(`Unknown observable '${parsedArgs.observable}'. Available observables: ${model.observables.map((o) => o.name).join(', ') || '(none)'}`);
         }
 
         const [minVal, maxVal] = parsedArgs.sweep_range;
+        if (minVal >= maxVal) {
+            throw new Error(`Invalid sweep range: min value (${minVal}) must be strictly less than max value (${maxVal}).`);
+        }
+
         const steps = parsedArgs.steps ?? 20;
+        if (steps <= 1) {
+            throw new Error('Steps must be greater than or equal to 2.');
+        }
+
         const tEnd = parsedArgs.t_end ?? 50;
+        if (tEnd <= 0) {
+            throw new Error('t_end must be a positive number.');
+        }
         
         const forwardValues: number[] = [];
         const backwardValues: number[] = [];
@@ -42,6 +59,9 @@ export async function handleCheckHysteresis(args: ToolArgs): Promise<ToolResult<
         await loadEvaluator();
         
         const obsName = parsedArgs.observable ?? model.observables[0]?.name ?? '';
+        if (!obsName) {
+            throw new Error('No observables available in the model to analyze.');
+        }
         
         // Forward sweep - carry state between parameter changes
         let currentState: Record<string, number> | null = null;
