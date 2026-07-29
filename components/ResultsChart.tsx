@@ -876,7 +876,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
           <Dropdown
             direction="up"
             trigger={
-              <button aria-label="Export options" className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md shadow-sm text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-colors">
+              <button aria-label="Export options" className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md shadow-sm text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400">
                 <span>📥 Export</span>
                 <ChevronDownIcon className="w-3 h-3 text-slate-400" />
               </button>
