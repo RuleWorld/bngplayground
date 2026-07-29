@@ -1,0 +1,30 @@
+begin model
+begin parameters
+  k_bind 0.296
+  k_unbind 0.027
+  k_mod 0.055
+  A0 121
+  B0 66
+end parameters
+
+begin molecule types
+  A(a)
+  B(a~0~1,b~0~1)
+  C(a,b~0~1)
+end molecule types
+
+begin seed species
+  A(a) A0
+  B(a~0,b~0) B0
+  C(a,b~0) 10
+end seed species
+
+begin observables
+  Molecules Total_A A()
+  Molecules Bound_AB A(a!1).B(a!1)
+end observables
+
+begin reaction rules
+  A(a) + B(a) <-> A(a!1).B(a!1) k_bind, k_unbind
+end reaction rules
+end model

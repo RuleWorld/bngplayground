@@ -1,0 +1,34 @@
+begin model
+begin parameters
+  k_bind 0.352
+  k_unbind 0.090
+  k_mod 0.083
+  A0 130
+  B0 50
+end parameters
+
+begin molecule types
+  A(a~0~1)
+  B(a)
+end molecule types
+
+begin seed species
+  A(a~0) A0
+  B(a) B0
+end seed species
+
+begin observables
+  Molecules Total_A A()
+  Molecules Active_A A(a~1)
+  Molecules Bound_AB A(a!1).B(a!1)
+end observables
+
+begin functions
+  f_rate() = k_mod * 0.5
+end functions
+
+begin reaction rules
+  A(a) + B(a) <-> A(a!1).B(a!1) k_bind, k_unbind
+  A(a~0) -> A(a~1) f_rate()
+end reaction rules
+end model

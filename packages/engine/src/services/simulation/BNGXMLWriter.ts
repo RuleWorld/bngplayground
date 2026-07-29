@@ -113,7 +113,7 @@ function expandUserDefinedFunctions(
     // Match function calls: fname(arg1, arg2, ...)
     // Use a regex that handles nested parentheses via counting (simplified: one level)
     for (const [fnName, fn] of fnMap) {
-      const searchFrom = 0;
+      let searchFrom = 0;
 
       while (true) {
         const startIdx = findFunctionCallStart(expanded, fnName, searchFrom);
@@ -137,12 +137,18 @@ function expandUserDefinedFunctions(
           i++;
         }
 
-        if (depth !== 0) break; // unmatched parens — skip this malformed call
+        if (depth !== 0) {
+          searchFrom = startIdx + 1;
+          break; // unmatched parens — skip this malformed call
+        }
 
         const argsStr = argChars.join('');
-        const args = argsStr.split(',').map(a => a.trim());
+        const args = argsStr.trim() === '' ? [] : argsStr.split(',').map(a => a.trim());
 
-        if (args.length !== fn.args.length) continue; // arg count mismatch — skip
+        if (args.length !== fn.args.length) {
+          searchFrom = startIdx + 1;
+          continue; // arg count mismatch — skip
+        }
 
         // Substitute parameters with arguments in the function body
         let bodyExpanded = fn.expression;
