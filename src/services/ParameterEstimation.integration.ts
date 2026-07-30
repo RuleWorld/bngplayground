@@ -3,8 +3,8 @@
 // Integration layer between ParameterEstimation and existing ODESolver
 
 import type { SimulationData } from './ParameterEstimation';
-import { simulate } from '@bngplayground/engine';
-import type { SimulationOptions, BNGLModel } from '@bngplayground/engine';
+import type { SimulationOptions, BNGLModel, SimulationResults } from '@bngplayground/engine';
+import { bnglService } from '../../services/bnglService';
 
 /**
  * Integration helper to connect ParameterEstimation with existing ODESolver
@@ -63,15 +63,7 @@ export class ODESolverAdapter {
       rtol: 1e-6
     };
 
-    const simulationResult = await simulate(
-      0, // jobId
-      modifiedModel,
-      options,
-      {
-        checkCancelled: () => {},
-        postMessage: () => {}
-      }
-    );
+    const simulationResult = await bnglService.simulate(modifiedModel, options);
 
     // Extract observables at specified time points
     const result = new Map<string, number[]>();
