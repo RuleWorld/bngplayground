@@ -7,8 +7,16 @@
  */
 
 /**
- * Inverse standard normal CDF approximation (Acklam's method).
- * Returns z such that Φ(z) = p.
+ * Approximates the inverse standard normal cumulative distribution function (CDF)
+ * using Acklam's algorithm.
+ *
+ * This is a pure mathematical function. It does not access any browser-specific APIs
+ * and must remain browser-API-free to allow execution in environments like Node.js,
+ * Web Workers, or server-side setups.
+ *
+ * @param p - The probability value, must be strictly between 0 and 1 (non-inclusive).
+ * @returns The z-score corresponding to the given cumulative probability `p`.
+ * @throws {Error} If `p` is less than or equal to 0, or greater than or equal to 1.
  */
 export function normInv(p: number): number {
   if (p <= 0 || p >= 1) throw new Error('p must be in (0,1)');
@@ -64,10 +72,20 @@ export function normInv(p: number): number {
 }
 
 /**
- * Chi-squared quantile approximation.
+ * Approximates the quantile of the Chi-squared distribution.
  *
- * For df=1, uses the exact relation chi2(1) = Z² where Z ~ N(0,1).
- * For general df, uses Wilson-Hilferty transform.
+ * For 1 degree of freedom (df = 1), it uses the exact relationship with the
+ * inverse standard normal distribution: chi2(1) = Z^2, where Z ~ N(0, 1).
+ * For degrees of freedom greater than 1, it computes the Wilson-Hilferty
+ * approximation.
+ *
+ * This is a pure mathematical function. It does not access any browser-specific APIs
+ * and must remain browser-API-free.
+ *
+ * @param p - The cumulative probability value, must be strictly between 0 and 1 (non-inclusive).
+ * @param df - The degrees of freedom (defaults to 1). Must be an integer greater than or equal to 1.
+ * @returns The approximated chi-squared quantile value.
+ * @throws {Error} If `p` is outside the (0, 1) range, or if `df` is less than 1.
  */
 export function chi2Quantile(p: number, df = 1): number {
   if (p <= 0 || p >= 1) throw new Error('p must be in (0,1)');
@@ -86,9 +104,21 @@ export function chi2Quantile(p: number, df = 1): number {
 }
 
 /**
- * Jacobi eigenvalue algorithm for real symmetric matrices.
+ * Computes the eigenvalues and eigenvectors of a real symmetric matrix using the Jacobi eigenvalue algorithm.
  *
- * Returns eigenvalues and eigenvectors (columns of the eigenvector matrix).
+ * This iterative algorithm performs a sequence of Jacobi rotations (orthogonal similarity transformations)
+ * to zero out off-diagonal elements, yielding the eigenvalues on the diagonal of the final matrix
+ * and the eigenvectors as the columns of the accumulated transformation matrix.
+ *
+ * This is a pure mathematical function. It does not access any browser-specific APIs
+ * and must remain browser-API-free.
+ *
+ * @param A - A real symmetric matrix represented as a 2D array of size N x N.
+ * @param maxIter - The maximum number of rotation iterations to perform (defaults to 100).
+ * @param tol - The tolerance threshold below which off-diagonal elements are considered zero (defaults to 1e-12).
+ * @returns An object containing:
+ *   - `eigenvalues`: An array of length N containing the computed eigenvalues.
+ *   - `eigenvectors`: A 2D array of size N x N where each column represents an eigenvector.
  */
 export function jacobiEigenDecomposition(
   A: number[][],
@@ -158,7 +188,16 @@ export function jacobiEigenDecomposition(
 }
 
 /**
- * Matrix multiplication: C = A × B (both n×n).
+ * Performs matrix multiplication of two 2D matrices (A x B).
+ *
+ * Supports multiplication of matrices with dimensions (n x k) and (k x m) to produce an (n x m) matrix.
+ *
+ * This is a pure mathematical function. It does not access any browser-specific APIs
+ * and must remain browser-API-free.
+ *
+ * @param A - The left-hand 2D matrix of dimensions n x k.
+ * @param B - The right-hand 2D matrix of dimensions k x m.
+ * @returns A new 2D matrix of dimensions n x m representing the product of A and B.
  */
 export function matMul(A: number[][], B: number[][]): number[][] {
   const n = A.length;
@@ -178,7 +217,15 @@ export function matMul(A: number[][], B: number[][]): number[][] {
 }
 
 /**
- * Matrix transpose.
+ * Transposes a 2D matrix.
+ *
+ * Swaps rows with columns, turning an n x m matrix into an m x n matrix.
+ *
+ * This is a pure mathematical function. It does not access any browser-specific APIs
+ * and must remain browser-API-free.
+ *
+ * @param A - The 2D matrix to be transposed, of dimensions n x m.
+ * @returns A new 2D matrix of dimensions m x n representing the transpose of A.
  */
 export function matTranspose(A: number[][]): number[][] {
   const n = A.length;
@@ -193,8 +240,17 @@ export function matTranspose(A: number[][]): number[][] {
 }
 
 /**
- * Invert a symmetric positive-definite matrix via Cholesky.
- * Returns null if the matrix is singular or not PD.
+ * Inverts a symmetric positive-definite matrix using Cholesky decomposition.
+ *
+ * First factors the matrix A into L L^T (where L is lower triangular),
+ * then inverts the lower triangular matrix L, and finally computes the inverse matrix
+ * as (L^-1)^T L^-1.
+ *
+ * This is a pure mathematical function. It does not access any browser-specific APIs
+ * and must remain browser-API-free.
+ *
+ * @param A - A symmetric positive-definite 2D matrix of size N x N.
+ * @returns The inverted 2D matrix of size N x N, or `null` if the matrix is singular or not positive-definite.
  */
 export function invertSymmetricMatrix(A: number[][]): number[][] | null {
   const n = A.length;
