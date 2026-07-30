@@ -29,6 +29,6 @@ export async function handleMultiscaleSimulation(args: ToolArgs): Promise<ToolRe
       strategic: 'Multi-scale models bridge intracellular BNGL models with cell-population dynamics — essential for tumor growth, immune response, and tissue-level phenomena.',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

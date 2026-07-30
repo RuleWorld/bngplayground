@@ -69,6 +69,7 @@ export interface SolverOptions {
   useAnalyticalJacobian?: boolean;
   /** Reaction data for analytical Jacobian auto-generation (set by SimulationLoop). */
   reactions?: unknown[];
+  disableNativeBytecode?: boolean;
 }
 
 export interface SolverResult {

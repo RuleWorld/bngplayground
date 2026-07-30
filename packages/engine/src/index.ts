@@ -101,6 +101,8 @@ export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, 
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
 export { findUnreachableRules } from './services/analysis/UnreachableRules';
+export { assessModelMaturity } from './services/analysis/ModelMaturity';
+export type { ModelMaturityInput, ModelMaturityResult, ModelMaturityHistoryEntry, ModelMaturityParameterSource } from './services/analysis/ModelMaturity';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 export { parsePEtab, parsePEtabCombined } from './services/analysis/petabImport';
 export type { PEtabProblem, PEtabParameter, PEtabObservable } from './services/analysis/petabImport';
@@ -116,7 +118,7 @@ export { SeededRandom } from './utils/random';
 export { resolveAutoMethod, getSimulationOptionsFromParsedModel } from './utils/simulationOptions';
 export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './utils/multiPhaseSimulation';
 export { formatBNGL } from './utils/formatBNGL';
-export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
+export { parseParametersFromCode, isNumericLiteral, stripParametersBlock, reevaluateSeedSpecies } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
 export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
@@ -219,7 +221,8 @@ export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 
 // ── Temporal Information Theory ─────────────────────────────────────
-export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
+export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges, summarizeTemporalAnalysis } from './services/analysis/ReactionInformationTheory';
+export type { TemporalAnalysisSummary } from './services/analysis/ReactionInformationTheory';
 export {
     extractMoleculeNames,
     parseMoleculeTokens,

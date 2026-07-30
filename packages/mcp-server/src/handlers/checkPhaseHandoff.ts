@@ -196,7 +196,7 @@ export async function handleCheckPhaseHandoff(args: ToolArgs): Promise<ToolResul
             severity: hasViolations ? 'high' : hasOvershoot ? 'medium' : 'none',
         });
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

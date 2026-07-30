@@ -90,6 +90,6 @@ export async function handleVerifyModel(args: ToolArgs): Promise<ToolResult<any>
       strategic: 'Use verification queries to check reachability of complexes, rule firing, and deadlock conditions without simulation.',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

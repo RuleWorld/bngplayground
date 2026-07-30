@@ -565,7 +565,7 @@ class VF2State {
     this.coreTarget.fill(-1);
     this.coreSize = 0;
     this.componentMatches = new Map();
-    this.bondPartnerLookup = this.buildBondPartnerLookup();
+    this.bondPartnerLookup = pattern.bondPartnerLookup;
     if (nodeOrdering.length) {
       this.nodeOrdering = nodeOrdering;
     } else {
@@ -583,19 +583,8 @@ class VF2State {
     this.frontierBits = new Uint8Array(Math.max(pLen, tLen));
     this.frontierSize = 0;
 
-    let maxComps = 0;
-    this.componentOrders = new Array(pattern.molecules.length);
-    for (let m = 0; m < pattern.molecules.length; m++) {
-      const mol = pattern.molecules[m];
-      const compCount = mol.components.length;
-      const compOrder = new Array<number>(compCount);
-      for (let i = 0; i < compCount; i++) {
-        compOrder[i] = i;
-      }
-      compOrder.sort((a, b) => this.componentPriority(mol.components[b]) - this.componentPriority(mol.components[a]));
-      this.componentOrders[m] = compOrder;
-      if (compCount > maxComps) maxComps = compCount;
-    }
+    this.componentOrders = pattern.componentOrders;
+    const maxComps = pattern.maxComps;
     this.scratchAssignment = new Int32Array(maxComps);
     this.scratchIterationCount = { value: 0 };
     this.mcvCandidateCache = new Map();

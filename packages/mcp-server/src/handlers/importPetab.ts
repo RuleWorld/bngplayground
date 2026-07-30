@@ -48,6 +48,6 @@ export async function handleImportPetab(args: ToolArgs): Promise<ToolResult<any>
             n_measurements: petab.measurements.length,
         });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

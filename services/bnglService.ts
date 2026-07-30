@@ -157,6 +157,7 @@ class BnglService {
         } else {
           console.error(`[Worker] ${detail} (${location})`);
         }
+        this.rejectAllPending(`Worker internal error: ${detail} (${location})`);
         return;
       }
 

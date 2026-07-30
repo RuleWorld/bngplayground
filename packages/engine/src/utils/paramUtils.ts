@@ -1,5 +1,27 @@
 import { collapseWhitespace } from './stringUtils';
 import { stripInlineComment } from './stringUtils';
+import { BNGLParser } from '../services/graph/core/BNGLParser';
+
+export function reevaluateSeedSpecies(model: any, seedExpressions: Map<string, string>): void {
+  const paramMap = new Map<string, number>(Object.entries(model.parameters ?? {}));
+  const functionMap = new Map<string, { args: string[]; expr: string }>(
+    (model.functions ?? []).map((fn: any) => [fn.name, { args: fn.args ?? [], expr: fn.expression ?? '' }]),
+  );
+
+  for (const species of model.species ?? []) {
+    const fallbackExpression = seedExpressions.get(species.name);
+    const expr = typeof species.initialExpression === 'string'
+      ? species.initialExpression.trim()
+      : typeof fallbackExpression === 'string'
+        ? fallbackExpression.trim()
+        : '';
+    if (!expr) continue;
+    const evaluated = BNGLParser.evaluateExpression(expr, paramMap, undefined, functionMap);
+    if (Number.isFinite(evaluated)) {
+      species.initialConcentration = evaluated;
+    }
+  }
+}
 
 function unwrapOuterParens(expr: string): string {
   let start = 0;

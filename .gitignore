@@ -257,5 +257,11 @@ three-*.tgz
 
 slurm/
 
+# Local build config
+run_build.bat
+
+# Fuzzer ephemeral output — regenerated each run, never committed
+tests/fixtures/fuzzer/
+
 # End of .gitignore
 coverage

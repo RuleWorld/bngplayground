@@ -22,6 +22,7 @@ export {
     lnaAnalysisArgsSchema,
     reactionInformationFlowArgsSchema,
     qssaReductionArgsSchema,
+    temporalAnalysisArgsSchema,
 } from './analysis.js';
 
 export {
@@ -45,4 +46,5 @@ export {
     diagnoseArgsSchema,
     importPetabArgsSchema,
     reduceModelArgsSchema,
+    pkpdArgsSchema,
 } from './advanced.js';

@@ -1,31 +1,10 @@
-import { generateRange, simulate, loadEvaluator, BNGLParser } from '@bngplayground/engine';
-import { ToolArgs, ToolResult } from '../types/index.js';
+import { generateRange, simulate, loadEvaluator, reevaluateSeedSpecies } from '@bngplayground/engine';
+import { ToolArgs, ToolResult, ParameterScanResult, MCPErrorResult } from '../types/index.js';
 import { parameterScanArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, buildSimulationOptions, expandModel, assertScannableParameter, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-function reevaluateSeedSpecies(model: any, seedExpressions: Map<string, string>): void {
-  const paramMap = new Map<string, number>(Object.entries(model.parameters ?? {}));
-  const functionMap = new Map<string, { args: string[]; expr: string }>(
-    (model.functions ?? []).map((fn: any) => [fn.name, { args: fn.args ?? [], expr: fn.expression ?? '' }]),
-  );
-
-  for (const species of model.species ?? []) {
-    const fallbackExpression = seedExpressions.get(species.name);
-    const expr = typeof species.initialExpression === 'string'
-      ? species.initialExpression.trim()
-      : typeof fallbackExpression === 'string'
-        ? fallbackExpression.trim()
-        : '';
-    if (!expr) continue;
-    const evaluated = BNGLParser.evaluateExpression(expr, paramMap, undefined, functionMap);
-    if (Number.isFinite(evaluated)) {
-      species.initialConcentration = evaluated;
-    }
-  }
-}
-
-export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<any>> {
+export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<ParameterScanResult | MCPErrorResult>> {
   try {
     const parsedArgs = parseArgs('parameter_scan', parameterScanArgsSchema, args);
     if (parsedArgs.parameter2 !== undefined) {
@@ -129,7 +108,7 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<an
       observables,
     });
   } catch (error) {
-    const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+    const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
     return createToolResult(structured);
   }
 }

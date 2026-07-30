@@ -113,7 +113,7 @@ function expandUserDefinedFunctions(
     // Match function calls: fname(arg1, arg2, ...)
     // Use a regex that handles nested parentheses via counting (simplified: one level)
     for (const [fnName, fn] of fnMap) {
-      const searchFrom = 0;
+      let searchFrom = 0;
 
       while (true) {
         const startIdx = findFunctionCallStart(expanded, fnName, searchFrom);
@@ -137,12 +137,17 @@ function expandUserDefinedFunctions(
           i++;
         }
 
-        if (depth !== 0) break; // unmatched parens — skip this malformed call
+        if (depth !== 0) {
+          break; // unmatched parens — skip this malformed call
+        }
 
         const argsStr = argChars.join('');
-        const args = argsStr.split(',').map(a => a.trim());
+        const args = argsStr.trim() === '' ? [] : argsStr.split(',').map(a => a.trim());
 
-        if (args.length !== fn.args.length) continue; // arg count mismatch — skip
+        if (args.length !== fn.args.length) {
+          searchFrom = startIdx + 1;
+          continue; // arg count mismatch — skip
+        }
 
         // Substitute parameters with arguments in the function body
         let bodyExpanded = fn.expression;
@@ -253,10 +258,13 @@ export class BNGXMLWriter {
             .map((compRaw) => {
               // Optimized string parsing: single loop is ~1.5x faster than .map().filter()
               const parts: string[] = [];
-              const splitRaw = compRaw.split('~');
-              for (let j = 0; j < splitRaw.length; j++) {
-                const s = splitRaw[j].trim();
+              let start = 0;
+              while (start < compRaw.length) {
+                let end = compRaw.indexOf('~', start);
+                if (end === -1) end = compRaw.length;
+                const s = compRaw.substring(start, end).trim();
                 if (s) parts.push(s);
+                start = end + 1;
               }
               const compName = parts[0];
               const states = new Set<string>(parts.slice(1));
@@ -575,10 +583,13 @@ export class BNGXMLWriter {
     const addStatesFromComponentString = (molName: string, comp: string) => {
       // Optimized string parsing: single loop is ~1.5x faster than .map().filter()
       const parts: string[] = [];
-      const splitComp = comp.split('~');
-      for (let j = 0; j < splitComp.length; j++) {
-        const s = splitComp[j].trim();
+      let start = 0;
+      while (start < comp.length) {
+        let end = comp.indexOf('~', start);
+        if (end === -1) end = comp.length;
+        const s = comp.substring(start, end).trim();
         if (s) parts.push(s);
+        start = end + 1;
       }
       if (parts.length === 0) return;
       const compName = parts[0];

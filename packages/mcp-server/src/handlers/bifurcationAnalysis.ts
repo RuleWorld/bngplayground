@@ -183,6 +183,6 @@ export async function handleBifurcationAnalysis(args: ToolArgs): Promise<ToolRes
       strategic: 'Bifurcation analysis reveals parameter thresholds where the system changes qualitative behavior (oscillation onset, bistability, etc.).',
     });
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

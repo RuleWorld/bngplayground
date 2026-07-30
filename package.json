@@ -20,6 +20,7 @@
     "test:fast": "node scripts/run_full_tests.mjs --config vitest.config.ts",
     "test:watch": "vitest",
     "test:full": "vitest --run --config vitest.full.config.ts",
+    "test:full:safe": "node scripts/run_full_tests.mjs --config vitest.full.config.ts",
     "test:reference": "tsx tools/validation/compare_outputs.ts",
     "test:native-parity": "vitest --run --config vitest.reference.config.ts",
     "test:deterministic:parity": "node scripts/run_deterministic_parity_ci.mjs",

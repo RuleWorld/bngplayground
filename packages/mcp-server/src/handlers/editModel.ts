@@ -10,7 +10,7 @@ export async function handleEditModel(args: ToolArgs): Promise<ToolResult<any>> 
         const result = applyModelEdits(parsedArgs.code, parsedArgs.operations as unknown as Array<Record<string, unknown>>);
         return createToolResult(result);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

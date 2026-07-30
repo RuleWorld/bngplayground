@@ -1,0 +1,46 @@
+name: Worker Protocol Auditor
+on:
+  schedule:
+    - cron: '0 6 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566
+        with:
+          prompt: |
+            Worker protocol auditor for the BNG Playground monorepo.
+            Standing objective: ensure every Web Worker message exchange
+            is correctly typed, errors propagate, and no message is silently
+            dropped.
+
+            1. Enumerate all Web Worker files (search for `new Worker(`, `onmessage =`,
+               `postMessage(`) across `services/` and `src/`.
+            2. For each worker, build a map of every message shape sent and
+               received. Compare sender vs receiver shapes for field mismatches,
+               missing required fields, and unhandled message types.
+            3. Identify the single worst mismatch: a worker that drops an error
+               field, ignores a message type entirely, or sends a shape the
+               receiver doesn't handle.
+            4. Fix it — align the shapes, add the missing handler, or propagate
+               the dropped error.
+            5. Validate with `npm run test:full:safe`.
+            6. One fix per PR. Note the before/after of handled message types.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
+            Always open a PR. If you found a fix, PR it. If you found nothing, PR a short artifact (the ranked list of what you considered and why each was skipped) so the dead end is on record. Never rename variables or reword comments just to produce a diff.
+
+            Rules:
+            - If a worker pair uses a shared TypeScript type, move it to a
+              shared file instead of duplicating.
+            - Never import browser APIs into packages/engine.
+            Never ask questions — make your best autonomous judgment; open a PR with your best shot.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

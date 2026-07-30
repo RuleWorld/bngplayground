@@ -1278,28 +1278,67 @@ export async function simulate(
       const numReactions = concreteReactions.length;
 
       // Pre-compute: which reactions depend on which species? (for sparse influence tracking)
-      const speciesDependents: number[][] = new Array(numSpecies);
-      for (let i = 0; i < numSpecies; i++) speciesDependents[i] = [];
+      const speciesDepCounts = new Int32Array(numSpecies);
       for (let i = 0; i < numReactions; i++) {
-        for (let j = 0; j < concreteReactions[i].reactants.length; j++) {
-          speciesDependents[concreteReactions[i].reactants[j]].push(i);
+        const reactants = concreteReactions[i].reactants;
+        for (let j = 0; j < reactants.length; j++) {
+          speciesDepCounts[reactants[j]]++;
         }
       }
+      const speciesDependents = new Array<Int32Array>(numSpecies);
+      for (let i = 0; i < numSpecies; i++) {
+        speciesDependents[i] = new Int32Array(speciesDepCounts[i]);
+      }
+      const speciesDepCursors = new Int32Array(numSpecies);
+      for (let i = 0; i < numReactions; i++) {
+        const reactants = concreteReactions[i].reactants;
+        for (let j = 0; j < reactants.length; j++) {
+          const sIdx = reactants[j];
+          speciesDependents[sIdx][speciesDepCursors[sIdx]++] = i;
+        }
+      }
+
       // Precompute rxnUpdateRxn for SSA incremental propensity updates
       // This is a reaction dependency graph: for each reaction, which other reactions are affected?
       const rxnUpdateRxn: Int32Array[] = new Array(numReactions);
+      const visitedRxns = new Uint8Array(numReactions);
+      const tempDeps = new Int32Array(numReactions);
+
       for (let r = 0; r < numReactions; r++) {
         const rxn = concreteReactions[r];
-        const deps = new Set<number>();
-        for (const idx of rxn.reactants) {
+        let depCount = 0;
+
+        // Helper to add a reaction index if not visited
+        const addDep = (depIdx: number) => {
+          if (visitedRxns[depIdx] === 0) {
+            visitedRxns[depIdx] = 1;
+            tempDeps[depCount++] = depIdx;
+          }
+        };
+
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          const idx = rxn.reactants[j];
           const dependentRxns = speciesDependents[idx];
-          for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          for (let i = 0; i < dependentRxns.length; i++) {
+            addDep(dependentRxns[i]);
+          }
         }
-        for (const idx of rxn.products) {
+        for (let j = 0; j < rxn.products.length; j++) {
+          const idx = rxn.products[j];
           const dependentRxns = speciesDependents[idx];
-          for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          for (let i = 0; i < dependentRxns.length; i++) {
+            addDep(dependentRxns[i]);
+          }
         }
-        rxnUpdateRxn[r] = new Int32Array(Array.from(deps));
+
+        // Copy from tempDeps to a precisely sized Int32Array
+        const depsArray = new Int32Array(depCount);
+        for (let i = 0; i < depCount; i++) {
+          depsArray[i] = tempDeps[i];
+          // Reset visitedRxns for the next iteration
+          visitedRxns[tempDeps[i]] = 0;
+        }
+        rxnUpdateRxn[r] = depsArray;
       }
 
 
@@ -1563,12 +1602,94 @@ export async function simulate(
         }
       }
 
+      // Flatten reaction reactants for ultra-fast, zero-overhead mass-action calculations
+      const rxnReactantCount = new Int32Array(numReactions);
+      const rxnReactant0 = new Int32Array(numReactions).fill(-1);
+      const rxnReactant1 = new Int32Array(numReactions).fill(-1);
+      const rxnReactant2 = new Int32Array(numReactions).fill(-1);
+      const rxnReactantsRemaining = new Array<Int32Array | null>(numReactions).fill(null);
+
+      for (let i = 0; i < numReactions; i++) {
+        const reactants = concreteReactions[i].reactants;
+        const len = reactants.length;
+        rxnReactantCount[i] = len;
+        if (len > 0) rxnReactant0[i] = reactants[0];
+        if (len > 1) rxnReactant1[i] = reactants[1];
+        if (len > 2) rxnReactant2[i] = reactants[2];
+        if (len > 3) {
+          rxnReactantsRemaining[i] = reactants.subarray(3);
+        }
+      }
+
+      // Pre-compute coalesced net state changes per reaction for ultra-fast, zero-overhead state updates
+      const changeCount = new Int32Array(numReactions);
+      const changeSpecies0 = new Int32Array(numReactions).fill(-1);
+      const changeDelta0 = new Int32Array(numReactions);
+      const changeSpecies1 = new Int32Array(numReactions).fill(-1);
+      const changeDelta1 = new Int32Array(numReactions);
+      const changeSpecies2 = new Int32Array(numReactions).fill(-1);
+      const changeDelta2 = new Int32Array(numReactions);
+      const changeSpecies3 = new Int32Array(numReactions).fill(-1);
+      const changeDelta3 = new Int32Array(numReactions);
+      const changeSpeciesRemaining = new Array<Int32Array | null>(numReactions).fill(null);
+      const changeDeltaRemaining = new Array<Int32Array | null>(numReactions).fill(null);
+
+      for (let i = 0; i < numReactions; i++) {
+        const rxn = concreteReactions[i];
+        const netDelta = new Map<number, number>();
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          const idx = rxn.reactants[j];
+          netDelta.set(idx, (netDelta.get(idx) ?? 0) - 1);
+        }
+        for (let j = 0; j < rxn.products.length; j++) {
+          const idx = rxn.products[j];
+          const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+          netDelta.set(idx, (netDelta.get(idx) ?? 0) + stoich);
+        }
+        // Remove species with zero net change (e.g. catalysts)
+        for (const [idx, d] of netDelta.entries()) {
+          if (d === 0) {
+            netDelta.delete(idx);
+          }
+        }
+
+        const entries = Array.from(netDelta.entries());
+        const len = entries.length;
+        changeCount[i] = len;
+        if (len > 0) {
+          changeSpecies0[i] = entries[0][0];
+          changeDelta0[i] = entries[0][1];
+        }
+        if (len > 1) {
+          changeSpecies1[i] = entries[1][0];
+          changeDelta1[i] = entries[1][1];
+        }
+        if (len > 2) {
+          changeSpecies2[i] = entries[2][0];
+          changeDelta2[i] = entries[2][1];
+        }
+        if (len > 3) {
+          changeSpecies3[i] = entries[3][0];
+          changeDelta3[i] = entries[3][1];
+        }
+        if (len > 4) {
+          const remSp = new Int32Array(len - 4);
+          const remDl = new Int32Array(len - 4);
+          for (let j = 4; j < len; j++) {
+            remSp[j - 4] = entries[j][0];
+            remDl[j - 4] = entries[j][1];
+          }
+          changeSpeciesRemaining[i] = remSp;
+          changeDeltaRemaining[i] = remDl;
+        }
+      }
+
       // Helper: calculate propensity for a single reaction
       // OPT 5: Uses ssaObsRecord (live incremental buffer) instead of evaluateObservablesFast
       const calcPropensity = (rxnIdx: number): number => {
-        const rxn = concreteReactions[rxnIdx];
         if (isFunctionalRxn[rxnIdx]) {
           try {
+            const rxn = concreteReactions[rxnIdx];
             const currentObs = buildSsaObsRecord();
             const rate = evaluateFunctionalRate(
               rxn.rateExpression!,
@@ -1580,7 +1701,7 @@ export async function simulate(
             );
             let a = rate * rxn.propensityFactor;
             const volume = reactionReactingVolumes[rxnIdx];
-            const n = rxn.reactants.length;
+            const n = rxnReactantCount[rxnIdx];
             if (n === 0) {
               a *= volume;
             } else if (n === 2) {
@@ -1590,22 +1711,46 @@ export async function simulate(
             } else if (n > 3) {
               a /= Math.pow(volume, n - 1);
             }
-            for (let j = 0; j < rxn.reactants.length; j++) {
-              a *= state[rxn.reactants[j]];
+            if (n === 1) {
+              return a * state[rxnReactant0[rxnIdx]];
+            } else if (n === 2) {
+              return a * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]];
+            } else if (n === 0) {
+              return a;
+            } else if (n === 3) {
+              return a * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+            } else {
+              a *= state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+              const rem = rxnReactantsRemaining[rxnIdx]!;
+              for (let j = 0; j < rem.length; j++) {
+                a *= state[rem[j]];
+              }
+              return a;
             }
-            return a;
           } catch (e: unknown) {
             console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e instanceof Error ? e.message : String(e));
             return 0;
           }
         }
 
-        // Mass-action: use precomputed effective rate constant
-        let a = kEff[rxnIdx];
-        for (let j = 0; j < rxn.reactants.length; j++) {
-          a *= state[rxn.reactants[j]];
+        // Mass-action: use precomputed effective rate constant and flat reactant arrays
+        const count = rxnReactantCount[rxnIdx];
+        if (count === 1) {
+          return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]];
+        } else if (count === 2) {
+          return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]];
+        } else if (count === 0) {
+          return kEff[rxnIdx];
+        } else if (count === 3) {
+          return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+        } else {
+          let a = kEff[rxnIdx] * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+          const rem = rxnReactantsRemaining[rxnIdx]!;
+          for (let j = 0; j < rem.length; j++) {
+            a *= state[rem[j]];
+          }
+          return a;
         }
-        return a;
       };
 
       let globalTime = 0;
@@ -1861,28 +2006,68 @@ export async function simulate(
             eventDelta = compiledSSAEventUpdater(reactionIndex, state, propensities, fenwickAdd);
           } else {
             // Interpreted fallback (functional rates, or JIT unavailable).
-            // Apply state changes; maintain ssaObsValues only when it is actually
-            // read (functional rates) using the flat CSR contribution arrays (OPT 4).
-            for (let j = 0; j < firedRxn.reactants.length; j++) {
-              const spIdx = firedRxn.reactants[j];
-              state[spIdx]--;
+            // Apply net state changes flatly and quickly, maintaining ssaObsValues as required.
+            const cc = changeCount[reactionIndex];
+            if (cc >= 1) {
+              const sp0 = changeSpecies0[reactionIndex];
+              const d0 = changeDelta0[reactionIndex];
+              state[sp0] += d0;
               if (maintainObs) {
-                const end = speciesObsOffsets[spIdx + 1];
-                for (let k = speciesObsOffsets[spIdx]; k < end; k++) {
-                  ssaObsValues[speciesObsIdx[k]] -= speciesObsCoeff[k];
+                const end = speciesObsOffsets[sp0 + 1];
+                for (let k = speciesObsOffsets[sp0]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d0;
                 }
               }
             }
-            for (let j = 0; j < firedRxn.products.length; j++) {
-              const spIdx = firedRxn.products[j];
-              state[spIdx]++;
+            if (cc >= 2) {
+              const sp1 = changeSpecies1[reactionIndex];
+              const d1 = changeDelta1[reactionIndex];
+              state[sp1] += d1;
               if (maintainObs) {
-                const end = speciesObsOffsets[spIdx + 1];
-                for (let k = speciesObsOffsets[spIdx]; k < end; k++) {
-                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k];
+                const end = speciesObsOffsets[sp1 + 1];
+                for (let k = speciesObsOffsets[sp1]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d1;
                 }
               }
             }
+            if (cc >= 3) {
+              const sp2 = changeSpecies2[reactionIndex];
+              const d2 = changeDelta2[reactionIndex];
+              state[sp2] += d2;
+              if (maintainObs) {
+                const end = speciesObsOffsets[sp2 + 1];
+                for (let k = speciesObsOffsets[sp2]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d2;
+                }
+              }
+            }
+            if (cc >= 4) {
+              const sp3 = changeSpecies3[reactionIndex];
+              const d3 = changeDelta3[reactionIndex];
+              state[sp3] += d3;
+              if (maintainObs) {
+                const end = speciesObsOffsets[sp3 + 1];
+                for (let k = speciesObsOffsets[sp3]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d3;
+                }
+              }
+            }
+            if (cc > 4) {
+              const remSp = changeSpeciesRemaining[reactionIndex]!;
+              const remDl = changeDeltaRemaining[reactionIndex]!;
+              for (let j = 0; j < remSp.length; j++) {
+                const sp = remSp[j];
+                const d = remDl[j];
+                state[sp] += d;
+                if (maintainObs) {
+                  const end = speciesObsOffsets[sp + 1];
+                  for (let k = speciesObsOffsets[sp]; k < end; k++) {
+                    ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d;
+                  }
+                }
+              }
+            }
+
             eventDelta = 0;
             const deps = rxnUpdateRxn[reactionIndex];
             for (let d = 0; d < deps.length; d++) {

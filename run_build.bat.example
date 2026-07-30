@@ -1,0 +1,16 @@
+@echo off
+:: Local environment configuration
+:: Copy this file to run_build.bat and customize paths for your machine.
+:: run_build.bat is gitignored.
+
+:: Emscripten SDK path
+set EMSDK=C:\Users\YourUser\emsdk
+set EMSDK_QUIET=1
+call "%EMSDK%\emsdk_env.bat"
+
+:: Strawberry Perl path (for BioNetGen)
+set "PATH=%PATH%;C:\Strawberry\c\bin"
+
+:: WASM build directory
+cd /d "C:\path\to\your\repo\src\wasm\nfsim"
+call build_wasm.bat
