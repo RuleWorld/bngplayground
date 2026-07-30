@@ -3,8 +3,9 @@ import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../
 import { temporalAnalysisArgsSchema } from '../schemas/index.js';
 import { structureError } from '../services/errors.js';
 import { simulate, loadEvaluator, analyzeReactionInformation, summarizeTemporalAnalysis } from '@bngplayground/engine';
+import type { TemporalAnalysisSummary } from '@bngplayground/engine';
 
-export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult<Record<string, unknown> | MCPErrorResult>> {
+export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult<TemporalAnalysisSummary | MCPErrorResult>> {
   try {
     const parsedArgs = parseArgs('temporal_analysis', temporalAnalysisArgsSchema, args);
     const model = parseModelOrThrow(parsedArgs.code);
