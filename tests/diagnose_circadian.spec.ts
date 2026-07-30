@@ -10,7 +10,7 @@ const rulehubRoot = process.env.RULEHUB_ROOT || '';
 const modelPath = rulehubRoot
   ? `${rulehubRoot}/Published/vilar2002/vilar_2002.bngl`
   : '';
-const maybeIt = existsSync(modelPath) ? it : it.skip;
+const maybeIt = modelPath && existsSync(modelPath) ? it : it.skip;
 
 describe('Circadian Oscillator Vilar 2002 Analysis', () => {
   maybeIt('should successfully execute the full diagnostic workflow', async () => {
