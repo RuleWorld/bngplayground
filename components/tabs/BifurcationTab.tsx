@@ -184,7 +184,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
           jitErr instanceof Error ? jitErr.message : String(jitErr),
         );
         try {
-          odeHandle = await engine.buildOdeSystem(model, { solver: 'cvode' });
+          odeHandle = await engine.buildOdeSystem(model, { solver: 'rosenbrock23' });
         } catch (buildErr) {
           const msg = buildErr instanceof Error ? buildErr.message : String(buildErr);
           setError(`Could not compile model RHS for continuation: ${msg}`);
