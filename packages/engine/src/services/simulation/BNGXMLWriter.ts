@@ -138,7 +138,6 @@ function expandUserDefinedFunctions(
         }
 
         if (depth !== 0) {
-          searchFrom = startIdx + 1;
           break; // unmatched parens — skip this malformed call
         }
 
