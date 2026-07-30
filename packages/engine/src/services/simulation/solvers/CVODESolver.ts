@@ -68,13 +68,15 @@ export interface CVodeModule {
   _malloc(size: number): number;
   _free(ptr: number): void;
   HEAPF64: Float64Array;
-  ccall: any;
-  cwrap: any;
+  ccall?: (ident: string, returnType: string | null, argTypes: string[], args: unknown[], opts?: { async?: boolean }) => unknown;
+  cwrap?: (ident: string, returnType: string | null, argTypes: string[]) => (...args: unknown[]) => unknown;
   derivativeCallback: (t: number, y: number, ydot: number) => void;
   jacobianCallback?: (t: number, y: number, fy: number, J: number, neq: number) => void;
   rootCallback?: (t: number, y: number, gout: number) => void;
   _init_solver_jac?: (neq: number, t0: number, y0: number, rtol: number, atol: number, maxSteps: number) => number;
   // Additional CVODE options (exposed in WASM wrapper)
+  _set_init_step?: (mem: number, hinit: number) => number;
+  _set_max_step?: (mem: number, hmax: number) => number;
   _set_min_step?: (mem: number, hmin: number) => number;
   _set_max_ord?: (mem: number, maxord: number) => number;
   _set_stab_lim_det?: (mem: number, onoff: number) => number;
@@ -364,6 +366,7 @@ export class CVODESolver {
             if (path.endsWith('.wasm')) {
               if (isNode) {
                 try {
+                  // eslint-disable-next-line @typescript-eslint/no-require-imports
                   const nodePath = typeof require === 'function' ? require('path') : null;
                   if (nodePath && typeof process !== 'undefined' && typeof process.cwd === 'function') {
                     return nodePath.resolve(process.cwd(), 'public', 'cvode.wasm');
@@ -458,15 +461,16 @@ export class CVODESolver {
     const speciesVolsPtr = m._malloc(bc.nSpecies * 8);
 
     // Optional Jacobian Bytecode
-    const hasJac = bc.jacRowPtr && bc.jacColIdx && bc.jacContribOffsets && bc.jacContribRxnIdx && bc.jacContribCoeffs;
+    const { jacRowPtr, jacColIdx, jacContribOffsets, jacContribRxnIdx, jacContribCoeffs } = bc;
+    const hasJac = !!(jacRowPtr && jacColIdx && jacContribOffsets && jacContribRxnIdx && jacContribCoeffs);
     let jacRowPtrPtr = 0, jacColIdxPtr = 0, jacContribOffsetsPtr = 0, jacContribRxnIdxPtr = 0, jacContribCoeffsPtr = 0;
 
-    if (hasJac) {
+    if (jacRowPtr && jacColIdx && jacContribOffsets && jacContribRxnIdx && jacContribCoeffs) {
       jacRowPtrPtr = m._malloc((bc.nSpecies + 1) * 4);
-      jacColIdxPtr = m._malloc(bc.jacColIdx!.length * 4);
-      jacContribOffsetsPtr = m._malloc(bc.jacContribOffsets!.length * 4);
-      jacContribRxnIdxPtr = m._malloc(bc.jacContribRxnIdx!.length * 4);
-      jacContribCoeffsPtr = m._malloc(bc.jacContribCoeffs!.length * 8);
+      jacColIdxPtr = m._malloc(jacColIdx.length * 4);
+      jacContribOffsetsPtr = m._malloc(jacContribOffsets.length * 4);
+      jacContribRxnIdxPtr = m._malloc(jacContribRxnIdx.length * 4);
+      jacContribCoeffsPtr = m._malloc(jacContribCoeffs.length * 8);
     }
 
     // Functional Rate Bytecode & Observables
@@ -500,12 +504,12 @@ export class CVODESolver {
     m.HEAPF64.set(bc.speciesStoich, speciesStoichPtr >> 3);
     m.HEAPF64.set(bc.speciesVolumes, speciesVolsPtr >> 3);
 
-    if (hasJac) {
-      new Int32Array(m.HEAPF64.buffer, jacRowPtrPtr, bc.nSpecies + 1).set(bc.jacRowPtr!);
-      new Int32Array(m.HEAPF64.buffer, jacColIdxPtr, bc.jacColIdx!.length).set(bc.jacColIdx!);
-      new Int32Array(m.HEAPF64.buffer, jacContribOffsetsPtr, bc.jacContribOffsets!.length).set(bc.jacContribOffsets!);
-      new Int32Array(m.HEAPF64.buffer, jacContribRxnIdxPtr, bc.jacContribRxnIdx!.length).set(bc.jacContribRxnIdx!);
-      m.HEAPF64.set(bc.jacContribCoeffs!, jacContribCoeffsPtr >> 3);
+    if (jacRowPtr && jacColIdx && jacContribOffsets && jacContribRxnIdx && jacContribCoeffs) {
+      new Int32Array(m.HEAPF64.buffer, jacRowPtrPtr, bc.nSpecies + 1).set(jacRowPtr);
+      new Int32Array(m.HEAPF64.buffer, jacColIdxPtr, jacColIdx.length).set(jacColIdx);
+      new Int32Array(m.HEAPF64.buffer, jacContribOffsetsPtr, jacContribOffsets.length).set(jacContribOffsets);
+      new Int32Array(m.HEAPF64.buffer, jacContribRxnIdxPtr, jacContribRxnIdx.length).set(jacContribRxnIdx);
+      m.HEAPF64.set(jacContribCoeffs, jacContribCoeffsPtr >> 3);
     }
 
     new Int32Array(m.HEAPF64.buffer, obsOffsetsPtr, bc.nObservables + 1).set(bc.obsOffsets);
@@ -598,7 +602,7 @@ export class CVODESolver {
 
     // Try bytecode path first if available
     let bcLoaded = false;
-    const disableBytecode = (this.options as any).disableNativeBytecode === true;
+    const disableBytecode = this.options.disableNativeBytecode === true;
     if (this.networkByteCode && !disableBytecode && (m._cvode_load_network || m._load_network)) {
       bcLoaded = this.uploadNetworkByteCode(this.networkByteCode);
     }
@@ -623,7 +627,8 @@ export class CVODESolver {
       console.log('[CVODESolver] Using native WASM bytecode RHS (no JS callback crossings)');
     }
 
-    if (this.options.rootFunction && this.options.numRoots) {
+    const rootFunction = this.options.rootFunction;
+    if (rootFunction && this.options.numRoots) {
       const nroots = this.options.numRoots;
       m.rootCallback = (t: number, yPtr: number, goutPtr: number) => {
         const buf = m.HEAPF64.buffer;
@@ -634,7 +639,7 @@ export class CVODESolver {
           this.gYView = new Float64Array(buf, yPtr, neq);
           this.gOutView = new Float64Array(buf, goutPtr, nroots);
         }
-        this.options.rootFunction!(t, this.gYView, this.gOutView);
+        rootFunction(t, this.gYView, this.gOutView);
       };
     }
 
@@ -666,7 +671,8 @@ export class CVODESolver {
       this.networkByteCode?.jacContribRxnIdx &&
       this.networkByteCode?.jacContribCoeffs
     );
-    if (this.jacobian && m._init_solver_jac) {
+    const jacobian = this.jacobian;
+    if (jacobian && m._init_solver_jac) {
       m.jacobianCallback = (_t: number, yPtr: number, _fyPtr: number, JPtr: number, neqVal: number) => {
         const buf = m.HEAPF64.buffer;
         if (!this.jacYView || !this.jacJView || this.cachedJacBuffer !== buf || this.cachedJacYPtr !== yPtr || this.cachedJPtr !== JPtr) {
@@ -676,7 +682,7 @@ export class CVODESolver {
           this.jacYView = new Float64Array(buf, yPtr, neqVal);
           this.jacJView = new Float64Array(buf, JPtr, neqVal * neqVal);
         }
-        this.jacobian!(this.jacYView, this.jacJView);
+        jacobian(this.jacYView, this.jacJView);
       };
       solverMem = m._init_solver_jac(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
     } else if (this.useAdams && m._init_solver_adams) {
@@ -716,70 +722,38 @@ export class CVODESolver {
     this.currentT = t0;
 
     // Optional: initial/max step configuration (bindings may not exist)
-    if (this.options.initialStep && this.options.initialStep > 0) {
-      // @ts-ignore
-      if (typeof (m as any)._set_init_step === 'function') {
-        // @ts-ignore
-        (m as any)._set_init_step(this.solverMem, this.options.initialStep);
-        console.log(`[CVODESolver] Set initial step size to ${this.options.initialStep}`);
-      }
+    if (this.options.initialStep && this.options.initialStep > 0 && m._set_init_step) {
+      m._set_init_step(this.solverMem, this.options.initialStep);
+      console.log(`[CVODESolver] Set initial step size to ${this.options.initialStep}`);
     }
 
-    if (this.options.maxStep > 0 && this.options.maxStep < Infinity) {
-      // @ts-ignore
-      if (typeof (m as any)._set_max_step === 'function') {
-        // @ts-ignore
-        (m as any)._set_max_step(this.solverMem, this.options.maxStep);
-      }
+    if (this.options.maxStep > 0 && this.options.maxStep < Infinity && m._set_max_step) {
+      m._set_max_step(this.solverMem, this.options.maxStep);
     }
 
     // Advanced Stiff Solver Options
-    if (this.options.stabLimDet !== undefined) {
-      // @ts-ignore
-      if (typeof (m as any)._set_stab_lim_det === 'function') {
-        // @ts-ignore
-        (m as any)._set_stab_lim_det(this.solverMem, this.options.stabLimDet ? 1 : 0);
-      }
+    if (this.options.stabLimDet !== undefined && m._set_stab_lim_det) {
+      m._set_stab_lim_det(this.solverMem, this.options.stabLimDet ? 1 : 0);
     }
 
-    if (this.options.maxOrd !== undefined) {
-      // @ts-ignore
-      if (typeof (m as any)._set_max_ord === 'function') {
-        // @ts-ignore
-        (m as any)._set_max_ord(this.solverMem, this.options.maxOrd);
-      }
+    if (this.options.maxOrd !== undefined && m._set_max_ord) {
+      m._set_max_ord(this.solverMem, this.options.maxOrd);
     }
 
-    if (this.options.maxNonlinIters !== undefined) {
-      // @ts-ignore
-      if (typeof (m as any)._set_max_nonlin_iters === 'function') {
-        // @ts-ignore
-        (m as any)._set_max_nonlin_iters(this.solverMem, this.options.maxNonlinIters);
-      }
+    if (this.options.maxNonlinIters !== undefined && m._set_max_nonlin_iters) {
+      m._set_max_nonlin_iters(this.solverMem, this.options.maxNonlinIters);
     }
 
-    if (this.options.nonlinConvCoef !== undefined) {
-      // @ts-ignore
-      if (typeof (m as any)._set_nonlin_conv_coef === 'function') {
-        // @ts-ignore
-        (m as any)._set_nonlin_conv_coef(this.solverMem, this.options.nonlinConvCoef);
-      }
+    if (this.options.nonlinConvCoef !== undefined && m._set_nonlin_conv_coef) {
+      m._set_nonlin_conv_coef(this.solverMem, this.options.nonlinConvCoef);
     }
 
-    if (this.options.maxErrTestFails !== undefined) {
-      // @ts-ignore
-      if (typeof (m as any)._set_max_err_test_fails === 'function') {
-        // @ts-ignore
-        (m as any)._set_max_err_test_fails(this.solverMem, this.options.maxErrTestFails);
-      }
+    if (this.options.maxErrTestFails !== undefined && m._set_max_err_test_fails) {
+      m._set_max_err_test_fails(this.solverMem, this.options.maxErrTestFails);
     }
 
-    if (this.options.maxConvFails !== undefined) {
-      // @ts-ignore
-      if (typeof (m as any)._set_max_conv_fails === 'function') {
-        // @ts-ignore
-        (m as any)._set_max_conv_fails(this.solverMem, this.options.maxConvFails);
-      }
+    if (this.options.maxConvFails !== undefined && m._set_max_conv_fails) {
+      m._set_max_conv_fails(this.solverMem, this.options.maxConvFails);
     }
 
     return { success: true as const };
@@ -813,7 +787,10 @@ export class CVODESolver {
     let stuckCount = 0;
     let lastT = t;
 
-    const solverMem = this.solverMem!;
+    const solverMem = this.solverMem;
+    if (!solverMem) {
+      return { success: false, t: t0, y: y0, steps: 0, errorMessage: "CVODE memory not initialized" };
+    }
     const yPtr = this.yPtr;
     const tretPtr = this.tretPtr;
 
