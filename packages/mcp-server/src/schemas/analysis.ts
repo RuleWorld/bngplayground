@@ -205,3 +205,10 @@ export const qssaReductionArgsSchema = z.object({
         path: ['species_to_eliminate'],
     },
 );
+
+export const temporalAnalysisArgsSchema = z.object({
+    code: z.string().describe('BNGL model code'),
+    t_end: finiteNumber.positive().optional().describe('SSA simulation end time (default: 100)'),
+    n_steps: positiveInt.optional().describe('Output timepoints (default: 200)'),
+    bin_width: finiteNumber.positive().optional().describe('Discretization bin width'),
+}).strict();

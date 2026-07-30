@@ -22,6 +22,7 @@ export {
     lnaAnalysisArgsSchema,
     reactionInformationFlowArgsSchema,
     qssaReductionArgsSchema,
+    temporalAnalysisArgsSchema,
 } from './analysis.js';
 
 export {
