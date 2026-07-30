@@ -221,7 +221,8 @@ export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 
 // ── Temporal Information Theory ─────────────────────────────────────
-export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
+export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges, summarizeTemporalAnalysis } from './services/analysis/ReactionInformationTheory';
+export type { TemporalAnalysisSummary } from './services/analysis/ReactionInformationTheory';
 export {
     extractMoleculeNames,
     parseMoleculeTokens,
