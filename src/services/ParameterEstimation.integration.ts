@@ -3,8 +3,8 @@
 // Integration layer between ParameterEstimation and existing ODESolver
 
 import type { SimulationData } from './ParameterEstimation';
-import type { SimulationOptions, BNGLModel, SimulationResults } from '@bngplayground/engine';
-import { bnglService } from '../../services/bnglService';
+import { simulate } from '@bngplayground/engine';
+import type { SimulationOptions, BNGLModel } from '@bngplayground/engine';
 
 /**
  * Integration helper to connect ParameterEstimation with existing ODESolver
@@ -63,7 +63,20 @@ export class ODESolverAdapter {
       rtol: 1e-6
     };
 
-    const simulationResult = await bnglService.simulate(modifiedModel, options);
+    // WARNING: engine.simulate on the browser main thread with method:'ode' and
+    // default solver (cvode) would crash because CVODESolver.cvodeModuleFactory
+    // is only injected in workers. This is safe in Node (cvode_node.ts fallback)
+    // and when called from a worker context. If this adapter is ever wired to a
+    // browser UI, route through bnglService.simulate (lazy-imported) instead.
+    const simulationResult = await simulate(
+      0, // jobId
+      modifiedModel,
+      options,
+      {
+        checkCancelled: () => {},
+        postMessage: () => {}
+      }
+    );
 
     // Extract observables at specified time points
     const result = new Map<string, number[]>();
