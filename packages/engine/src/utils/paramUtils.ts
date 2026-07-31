@@ -2,6 +2,20 @@ import { collapseWhitespace } from './stringUtils';
 import { stripInlineComment } from './stringUtils';
 import { BNGLParser } from '../services/graph/core/BNGLParser';
 
+/**
+ * Re-evaluates seed species' initial concentrations based on their initial expressions
+ * and the model's updated parameter values and custom functions.
+ *
+ * This function is widely used in high-frequency param scan flows where parameters are altered
+ * and initial concentrations need to be recomputed before starting new simulations.
+ * It resolves initial expressions against the parsed parameter maps and custom functions
+ * using the safe engine parser and evaluator.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free).
+ *
+ * @param model - The parsed model object containing parameters, species, and functions.
+ * @param seedExpressions - A Map containing original string expressions for each species.
+ */
 export function reevaluateSeedSpecies(model: any, seedExpressions: Map<string, string>): void {
   const paramMap = new Map<string, number>(Object.entries(model.parameters ?? {}));
   const functionMap = new Map<string, { args: string[]; expr: string }>(
@@ -69,6 +83,19 @@ function isNumericLiteralBody(expr: string): boolean {
   return sawDigit && (!sawExponent || sawExponentDigit);
 }
 
+/**
+ * Parses parameter declarations from raw BNGL code and maps parameter names
+ * to their corresponding string expressions.
+ *
+ * It scans the code line by line, identifies the `begin parameters` and `end parameters`
+ * blocks (case-insensitive), strips inline comments, collapses duplicate whitespace,
+ * and extracts name-expression pairs.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free).
+ *
+ * @param src - The raw BNGL source code string.
+ * @returns A Map mapping parameter names to their declared expression/value strings.
+ */
 export function parseParametersFromCode(src: string): Map<string,string> {
   const paramMap = new Map<string,string>();
   const lines = src.split('\n');
@@ -93,12 +120,37 @@ export function parseParametersFromCode(src: string): Map<string,string> {
   return paramMap;
 }
 
+/**
+ * Checks if a given string expression represents a valid numeric literal.
+ *
+ * This function unwraps outer parentheses and matches scientific, decimal,
+ * and integer notation formats (with optional positive/negative signs).
+ * Examples of valid numeric literals: "1.0", "+3.2", "-0.5e2", "(1.0)".
+ * Examples of invalid numeric literals: "k_total", "1+2".
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free).
+ *
+ * @param expr - The string expression to evaluate.
+ * @returns True if the expression is a numeric literal, false otherwise.
+ */
 export function isNumericLiteral(expr: string): boolean {
   if (!expr) return false;
   const trimmed = unwrapOuterParens(expr.trim());
   return isNumericLiteralBody(trimmed);
 }
 
+/**
+ * Strips out the `begin parameters` and `end parameters` block from the given BNGL source.
+ *
+ * It filters out any lines between `begin parameters` and `end parameters` (inclusive),
+ * keeping all other lines (such as species, reaction rules, observables, and actions).
+ * It skips empty lines and carriage returns.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free).
+ *
+ * @param src - The raw BNGL source code string.
+ * @returns The BNGL source code without the parameters block.
+ */
 export function stripParametersBlock(src: string): string {
   const lines = src.split('\n');
   const out: string[] = [];
