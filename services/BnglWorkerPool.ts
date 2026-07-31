@@ -469,11 +469,25 @@ export class BnglWorkerPool {
         return new Promise((resolve, reject) => {
             const messageId = generateSecureMessageId();
             const handler = (event: MessageEvent<WorkerResponse>) => {
-                const { id } = event.data ?? {};
+                const { id, type, payload } = event.data ?? {};
+                if (type === 'worker_internal_error') {
+                    worker.removeEventListener('message', handler);
+                    const errorMsg = (payload as any)?.message || 'Worker internal error';
+                    reject(new Error(`Worker internal error: ${errorMsg}`));
+                    return;
+                }
                 if (id !== messageId) return;
-                worker.removeEventListener('message', handler);
-                this.removePendingRequest(worker, req);
-                resolve();
+
+                if (type === 'release_model_success') {
+                    worker.removeEventListener('message', handler);
+                    this.removePendingRequest(worker, req);
+                    resolve();
+                } else if (type === 'release_model_error') {
+                    worker.removeEventListener('message', handler);
+                    this.removePendingRequest(worker, req);
+                    const errorMsg = (payload as { message?: string })?.message || 'Failed to release model';
+                    reject(new Error(errorMsg));
+                }
             };
 
             const req: PendingPoolRequest = {
