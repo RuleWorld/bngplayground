@@ -110,6 +110,8 @@ export { computeRegularizationPenalty, pruneModel } from './services/analysis/re
 export type { RegularizationType, RegularizationConfig, RegularizationPenalty, ModelReductionResult } from './services/analysis/regularization';
 export { parseBPSL, evaluateBPSL } from './services/analysis/bpsl';
 export type { BPSLConstraint, BPSLResult, BPSLConstraintResult, ConstraintType } from './services/analysis/bpsl';
+export { analyzeHysteresis } from './services/analysis/Hysteresis';
+export type { HysteresisConfig, HysteresisResult } from './services/analysis/Hysteresis';
 
 // ── Utils ───────────────────────────────────────────────────────────
 export { SafeExpressionEvaluator } from './utils/safeExpressionEvaluator';
