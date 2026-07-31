@@ -464,6 +464,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     let model: BNGLModel | undefined;
     try {
       const visitor = new BNGLVisitor();
+      visitor.hasCompartments = sanitizedInput.includes('@');
       model = visitor.visit(tree);
     } catch (visitorError) {
       const message = visitorError instanceof Error ? visitorError.message : String(visitorError);
