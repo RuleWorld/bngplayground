@@ -7,7 +7,7 @@ export interface HysteresisConfig {
     parameter: string;
     sweepRange: [number, number];
     steps: number;
-    observable: string;
+    observable: string | undefined;
     method: 'ode' | 'ssa';
     tEnd: number;
     cloneExpandedModel: (m: BNGLModel) => BNGLModel;
@@ -45,7 +45,7 @@ export async function analyzeHysteresis(config: HysteresisConfig): Promise<Hyste
     const paramValues: number[] = [];
 
     const stepSize = (maxVal - minVal) / (steps - 1);
-    const obsName = observable || model.observables[0]?.name || '';
+    const obsName = observable ?? model.observables[0]?.name ?? '';
     if (!obsName) {
         throw new Error('No observables available in the model to analyze.');
     }

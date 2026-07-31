@@ -58,7 +58,7 @@ export async function handleCheckHysteresis(args: ToolArgs): Promise<ToolResult<
             parameter: parsedArgs.parameter,
             sweepRange: parsedArgs.sweep_range as [number, number],
             steps,
-            observable: parsedArgs.observable ?? '',
+            observable: parsedArgs.observable,
             method: parsedArgs.method ?? 'ode',
             tEnd,
             cloneExpandedModel,
