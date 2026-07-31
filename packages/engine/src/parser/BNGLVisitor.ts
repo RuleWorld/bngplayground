@@ -33,6 +33,19 @@ const visitorDebugLog = (...args: unknown[]): void => {
 };
 
 export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements BNGParserVisitor<unknown> {
+  public hasCompartments: boolean = true;
+  private moleculeTypesMap: Map<string, BNGLMoleculeType> | null = null;
+
+  private getMoleculeType(name: string): BNGLMoleculeType | undefined {
+    if (!this.moleculeTypesMap) {
+      this.moleculeTypesMap = new Map();
+      for (const mt of this.moleculeTypes) {
+        this.moleculeTypesMap.set(mt.name, mt);
+      }
+    }
+    return this.moleculeTypesMap.get(name);
+  }
+
   private parameters: Record<string, number> = {};
   private moleculeTypes: BNGLMoleculeType[] = [];
   private species: BNGLSpecies[] = [];
@@ -423,7 +436,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
     }
 
-    this.moleculeTypes.push({ name, components });
+    const mt = { name, components };
+    this.moleculeTypes.push(mt);
+    if (this.moleculeTypesMap) {
+      this.moleculeTypesMap.set(name, mt);
+    }
   }
 
   // Seed species block
@@ -1457,11 +1474,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       const nameNode = mp.STRING() || ("keyword_as_mol_name" in mp && typeof (mp as unknown as Record<string, unknown>).keyword_as_mol_name === "function" ? (mp as unknown as {keyword_as_mol_name: () => import("antlr4ts").ParserRuleContext}).keyword_as_mol_name() : undefined);
       if (!nameNode) return '';
       const name = nameNode.text;
-      const rawPatternText = mp.text?.replace(/\s+/g, '') ?? '';
       const compListCtx = mp.component_pattern_list();
 
       const shouldComplete = options.completeMissingComponents === true;
-      const molType = this.moleculeTypes.find((m) => m.name === name);
+      const molType = this.getMoleculeType(name);
 
       const buildWildcardComponent = (compDef: string): string => {
         const parts = compDef.split('~');
@@ -1573,8 +1589,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
       if (entry.compartment) {
         molStr += `@${entry.compartment}`;
-      } else {
-        // Legacy compartment-before-parentheses syntax support, e.g. "B@EC()".
+      } else if (this.hasCompartments) {
+        // Only run legacy check if we actually have compartments in the file
+        const rawPatternText = mp.text?.replace(/\s+/g, '') ?? '';
         const legacyCompBeforeParen = rawPatternText.match(/^([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)$/);
         if (legacyCompBeforeParen && legacyCompBeforeParen[1] === name && !/@[A-Za-z0-9_]+$/.test(molStr)) {
           const comp = legacyCompBeforeParen[2];
@@ -1585,12 +1602,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       return molStr;
     }).filter(m => m); // Filter out empty molecules
 
-    const rawSpeciesText = ctx.text?.replace(/\s+/g, '') ?? '';
     let res = prefix + molecules.join('.');
 
     // Handle species-level suffix compartment (AT STRING at end) - e.g., A.B@PM
     // This is distinct from molecule_compartment contexts (e.g., A@EC.B@PM).
-    if (!prefix && ctx.children && ctx.children.length >= 2) {
+    if (this.hasCompartments && !prefix && ctx.children && ctx.children.length >= 2) {
       const last = ctx.children[ctx.children.length - 1];
       const prev = ctx.children[ctx.children.length - 2];
       const suffixComp = last?.text ?? '';
@@ -1602,19 +1618,22 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Fallback: recover compartment-before-parentheses syntax when parse-tree
     // compartment nodes are missing in some observable contexts.
     // Example: `B@EC()` should normalize to `B()@EC`.
-    if (!prefix && !res.includes('@') && rawSpeciesText.includes('@')) {
-      const normalizedRaw = rawSpeciesText.replace(
-        /([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g,
-        (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
-      );
-      if (normalizedRaw.includes('@')) {
-        res = normalizedRaw;
+    if (this.hasCompartments && !prefix && !res.includes('@')) {
+      const rawSpeciesText = ctx.text?.replace(/\s+/g, '') ?? '';
+      if (rawSpeciesText.includes('@')) {
+        const normalizedRaw = rawSpeciesText.replace(
+          /([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g,
+          (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
+        );
+        if (normalizedRaw.includes('@')) {
+          res = normalizedRaw;
+        }
       }
     }
 
     // Workaround for Issue where prefix is sometimes duplicated as suffix in complex patterns
     // e.g. E2F(...)@cell:E2F(...)
-    if (res.includes('@') && res.includes(':')) {
+    if (this.hasCompartments && res.includes('@') && res.includes(':')) {
       const match = res.match(/^(.+)@([a-zA-Z0-9_]+):(.+)$/);
       if (match) {
         const [_, name1, comp, name2] = match;
