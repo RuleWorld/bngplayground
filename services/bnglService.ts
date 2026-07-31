@@ -42,7 +42,7 @@ const extractErrorMessage = (payload: SerializedWorkerError | unknown): string =
   }
 };
 
-const toError = (type: 'parse' | 'simulate', payload: SerializedWorkerError | unknown): Error => {
+const toError = (type: string, payload: SerializedWorkerError | unknown): Error => {
   const message = extractErrorMessage(payload) || `${type} failed`;
   if (payload && typeof payload === 'object') {
     const p = payload as Record<string, unknown>;
@@ -190,8 +190,14 @@ class BnglService {
       }
 
       if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'generate_network_error' || type === 'atomize_error' || type === 'analyse_network_error') {
-        const errType = type === 'parse_error' ? 'parse' : type === 'simulate_error' ? 'simulate' : type === 'atomize_error' ? 'atomize' : 'cache_model';
-        const err = toError(errType === 'parse' ? 'parse' : 'simulate', payload);
+        const errType = type === 'parse_error' ? 'parse'
+          : type === 'simulate_error' ? 'simulate'
+          : type === 'atomize_error' ? 'atomize'
+          : type === 'generate_network_error' ? 'generate_network'
+          : type === 'analyse_network_error' ? 'analyse_network'
+          : type === 'release_model_error' ? 'release_model'
+          : 'cache_model';
+        const err = toError(errType, payload);
         pending.reject(err);
         return;
       }
