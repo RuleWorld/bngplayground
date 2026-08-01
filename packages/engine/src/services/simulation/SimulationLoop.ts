@@ -335,6 +335,7 @@ export async function simulate(
 ): Promise<SimulationResults> {
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
   const simulationStartTime = performance.now();
+  const strictFunctionalRates = !!options.strictFunctionalRates;
   // ... using simulationStartTime later ...
   callbacks.checkCancelled();
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
@@ -1045,9 +1046,10 @@ export async function simulate(
           setSafeNumberField(
             results,
             f.name,
-            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions)
+            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions, undefined, undefined, strictFunctionalRates)
           );
-        } catch {
+        } catch (e) {
+          if (strictFunctionalRates) throw e;
           setSafeNumberField(results, f.name, 0);
         }
       }
@@ -1145,8 +1147,9 @@ export async function simulate(
           if (typeof change.value === 'number') newVal = change.value;
           else {
             try {
-              newVal = evaluateFunctionalRate(change.value, model.parameters, currentObsValues, model.functions);
-            } catch {
+              newVal = evaluateFunctionalRate(change.value, model.parameters, currentObsValues, model.functions, undefined, undefined, strictFunctionalRates);
+            } catch (e) {
+              if (strictFunctionalRates) throw e;
               newVal = parseFloat(String(change.value)) || 0;
             }
           }
@@ -1181,13 +1184,14 @@ export async function simulate(
               }
               const expr = model.paramExpressions[name]; // safe: isSafeObjectKey(name) on line above
               try {
-                const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
+                const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions, undefined, undefined, strictFunctionalRates);
                 if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) { // safe: isSafeObjectKey(name) above
 
                   setSafeNumberField(model.parameters as Record<string, number>, name, val);
                   anyChanged = true;
                 }
               } catch (e: unknown) {
+                if (strictFunctionalRates) throw e;
                 /* ignore */
               }
             }
@@ -1206,12 +1210,13 @@ export async function simulate(
           if (!rxn.isFunctionalRate && rxn.rate && typeof rxn.rate === 'string' && rxn.rate !== 'undefined') {
             try {
               const oldK = rxn.rateConstant;
-              const newK = evaluateFunctionalRate(rxn.rate as string, context, {}, model.functions);
+              const newK = evaluateFunctionalRate(rxn.rate as string, context, {}, model.functions, undefined, undefined, strictFunctionalRates);
               if (!isNaN(newK) && isFinite(newK) && Math.abs(newK - oldK) > 1e-15) {
 
                 rxn.rateConstant = newK;
               }
             } catch (e: unknown) {
+              if (strictFunctionalRates) throw e;
               /* ignore */
             }
           }
@@ -1697,7 +1702,8 @@ export async function simulate(
               currentObs,
               model.functions,
               undefined,
-              undefined
+              undefined,
+              strictFunctionalRates
             );
             let a = rate * rxn.propensityFactor;
             const volume = reactionReactingVolumes[rxnIdx];
@@ -1728,6 +1734,7 @@ export async function simulate(
               return a;
             }
           } catch (e: unknown) {
+            if (strictFunctionalRates) throw e;
             console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e instanceof Error ? e.message : String(e));
             return 0;
           }
@@ -2389,14 +2396,26 @@ export async function simulate(
                     model.parameters,
                     obsValues,
                     model.functions,
-                    rateContext
+                    rateContext,
+                    undefined,
+                    strictFunctionalRates
                   );
                 }
                 if (isNaN(rate) || !isFinite(rate)) {
+                  if (strictFunctionalRates) {
+                    throw new Error(
+                      `[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate} (strict mode).`
+                    );
+                  }
                   console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}.`);
                   rate = 0;
                 }
               } catch (e: unknown) {
+                if (strictFunctionalRates) {
+                  throw new Error(
+                    `[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed: ${e instanceof Error ? e.message : String(e)}`
+                  );
+                }
                 console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed:`, e instanceof Error ? e.message : String(e));
                 rate = 0;
               }
@@ -2456,7 +2475,7 @@ export async function simulate(
       if (allowJit) {
         try {
           const constantSpeciesMask = model.species.map((s) => !!s.isConstant);
-          compiledMassActionJit = jitCompiler.compile(buildMassActionJitReactions(), numSpecies, model.parameters, constantSpeciesMask);
+          compiledMassActionJit = jitCompiler.compile(buildMassActionJitReactions(), numSpecies, model.parameters, constantSpeciesMask, undefined, model.functions);
 
           // Return the JIT-compiled function but wrapped to handle speciesVolumes
           console.log(`[Worker] JIT compiler active for ${concreteReactions.length} reactions.`);
@@ -2946,8 +2965,9 @@ export async function simulate(
           const context = { ...model.parameters, ...obsValues, t };
           for (let i = 0; i < rootExprs.length; i++) {
             try {
-              gout[i] = evaluateFunctionalRate(rootExprs[i], model.parameters, obsValues, model.functions, context);
-            } catch {
+              gout[i] = evaluateFunctionalRate(rootExprs[i], model.parameters, obsValues, model.functions, context, undefined, strictFunctionalRates);
+            } catch (e: unknown) {
+              if (strictFunctionalRates) throw e;
               gout[i] = 0;
             }
           }
@@ -3348,8 +3368,9 @@ export async function simulate(
         if (typeof change.value === 'number') resolvedValue = change.value;
         else {
           try {
-            resolvedValue = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions);
-          } catch {
+            resolvedValue = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions, undefined, undefined, strictFunctionalRates);
+          } catch (e) {
+            if (strictFunctionalRates) throw e;
             resolvedValue = parseFloat(String(change.value)) || 0;
           }
         }
@@ -3660,9 +3681,13 @@ export async function simulate(
                     rateTranscribeFn.expression,
                     model.parameters || {},
                     obsValues,
-                    model.functions
+                    model.functions,
+                    undefined,
+                    undefined,
+                    strictFunctionalRates
                   );
-                } catch {
+                } catch (e: unknown) {
+                  if (strictFunctionalRates) throw e;
                   rateTranscribeVal = Number.NaN;
                 }
               }
@@ -3707,7 +3732,10 @@ export async function simulate(
                 phase.stop_if,
                 model.parameters || {},
                 { ...currentObsValues, time: t },
-                model.functions
+                model.functions,
+                undefined,
+                undefined,
+                strictFunctionalRates
               );
               if (stopResult !== 0) {
                 console.log(`[Worker] Phase ${phaseIdx + 1}: stop_if condition met at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}: ${phase.stop_if}`);
@@ -3715,6 +3743,7 @@ export async function simulate(
                 break;
               }
             } catch (err: unknown) {
+              if (strictFunctionalRates) throw err;
               console.warn(`[Worker] Phase ${phaseIdx + 1}: stop_if evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
             }
           }

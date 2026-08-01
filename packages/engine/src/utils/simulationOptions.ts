@@ -117,6 +117,7 @@ export function getSimulationOptionsFromParsedModel(
     ...(overrides?.steadyState ? { steadyState: overrides.steadyState } : {}),
     ...(overrides?.steadyStateTolerance ? { steadyStateTolerance: overrides.steadyStateTolerance } : {}),
     ...(overrides?.steadyStateWindow ? { steadyStateWindow: overrides.steadyStateWindow } : {}),
+    ...(overrides?.strictFunctionalRates !== undefined ? { strictFunctionalRates: overrides.strictFunctionalRates } : {}),
   };
 
   return options;

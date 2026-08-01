@@ -434,6 +434,7 @@ export function getCompiledRateFunction(
  * @param functions - Optional custom function definitions to pre-expand before compilation.
  * @param prebuiltContext - An optional pre-merged object of parameters and observables to avoid reallocation in tight loops.
  * @param evaluatorOverride - An optional SafeExpressionEvaluator instance to override the default global evaluator.
+ * @param strict - When true, unresolved variables / non-numeric (NaN) results throw instead of silently returning 0.
  * @returns The numeric result of the evaluated expression. Returns 0 if evaluation yields a non-numeric result.
  */
 export function evaluateFunctionalRate(
@@ -442,7 +443,8 @@ export function evaluateFunctionalRate(
   observableValues: Record<string, number>,
   functions?: { name: string; args: string[]; expression: string }[],
   prebuiltContext?: Record<string, number>,
-  evaluatorOverride?: ExpressionEvaluator
+  evaluatorOverride?: ExpressionEvaluator,
+  strict?: boolean
 ): number {
   if (!getFeatureFlags().functionalRatesEnabled) {
     throw new Error('Functional rates temporarily disabled pending security review');
@@ -451,6 +453,16 @@ export function evaluateFunctionalRate(
   const context: Record<string, number> = prebuiltContext || { ...parameters, ...observableValues };
   const expandedExpr = preExpandExpression(expression, functions);
   const varNames = Object.keys(context);
+
+  if (strict) {
+    const missingVars = getMissingReferencedVariables(expandedExpr, context, evaluatorOverride);
+    if (missingVars.length > 0) {
+      throw new Error(
+        `[evaluateFunctionalRate] Expression '${expression}' references undefined variable(s): ${missingVars.join(', ')}`
+      );
+    }
+  }
+
   const fn = getCompiledRateFunction(expandedExpr, varNames, evaluatorOverride);
 
   try {
@@ -460,13 +472,46 @@ export function evaluateFunctionalRate(
       console.warn(`[SafeExpressionEvaluator] Expression evaluated to non-finite: ${expression} => ${result}`);
     }
     if (typeof result !== 'number' || isNaN(result)) {
+      if (strict) {
+        throw new Error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
+      }
       console.error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
       return 0;
     }
     return result;
   } catch (e: any) {
+    if (strict) {
+      throw new Error(
+        `[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`,
+        { cause: e }
+      );
+    }
     console.error(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`);
     return 0;
+  }
+}
+
+/**
+ * Extract the free variables referenced by an expression and return any that
+ * are absent from the provided evaluation context.
+ */
+function getMissingReferencedVariables(
+  expandedExpr: string,
+  context: Record<string, number>,
+  evaluatorOverride?: ExpressionEvaluator
+): string[] {
+  try {
+    const evaluator = getEvaluator(evaluatorOverride);
+    if (!evaluator || typeof evaluator.getReferencedVariables !== 'function') {
+      return [];
+    }
+    const referenced = evaluator.getReferencedVariables(expandedExpr);
+    return referenced.filter((v) => !Object.prototype.hasOwnProperty.call(context, v));
+  } catch (e: any) {
+    console.warn(
+      `[evaluateFunctionalRate] Could not verify referenced variables for '${expandedExpr}': ${e?.message ?? String(e)}`
+    );
+    return [];
   }
 }
 

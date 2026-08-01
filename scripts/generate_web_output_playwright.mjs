@@ -148,6 +148,7 @@ function resolveModelList(requested, entries) {
 const BASE_PATH = normalizeBasePath(readViteBasePath());
 const BASE_URL = `http://localhost:${PORT}${BASE_PATH}?batch=true`;
 const WEB_OUTPUT_SEED = Number(process.env.WEB_OUTPUT_SEED || '12345');
+const WEB_OUTPUT_STRICT = String(process.env.WEB_OUTPUT_STRICT || '0') === '1';
 
 function ensureDir(dirPath) {
   fs.mkdirSync(dirPath, { recursive: true });
@@ -227,11 +228,20 @@ async function applyBatchSeed(page) {
   }, WEB_OUTPUT_SEED);
 }
 
+async function applyBatchStrictMode(page) {
+  if (!WEB_OUTPUT_STRICT) return;
+  await page.evaluate(() => {
+    window.__batchStrictFunctionalRates = true;
+    console.log('[BatchRunner] Strict functional-rate mode enabled (unresolved symbols / NaN throw loudly).');
+  });
+}
+
 async function initializeBatchPage(page) {
   console.log('[generate:web-output] Opening app...');
   await page.goto(BASE_URL, { timeout: 300000 });
   await waitForPageToSettleAfterNavigation(page);
   await applyBatchSeed(page);
+  await applyBatchStrictMode(page);
 }
 
 function startViteDevServer() {
@@ -447,7 +457,7 @@ async function main() {
         } else if (errMessage === 'MODEL_FAILED') {
           console.log(`[generate:web-output] ?? Model run failed for ${modelId}. Writing skipped marker.`);
           const skippedFile = path.join(WEB_OUTPUT_DIR, `results_${safeModelName(modelId)}.csv`);
-          fs.writeFileSync(skippedFile, 'Time,Observable\n# SKIPPED (ModelFailed)\n0,0');
+          fs.writeFileSync(skippedFile, 'Time,Observable\n# FAILED (ModelFailed)\n0,0');
         }
 
         console.log('[generate:web-output] Reloading page to recover...');

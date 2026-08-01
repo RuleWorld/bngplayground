@@ -213,9 +213,12 @@ export class JITCompiler {
         }>,
         nSpecies: number,
         parameterNames: string[],
-        constantSpeciesMask?: boolean[]
+        constantSpeciesMask?: boolean[],
+        functions?: JITFunctionDefinition[]
     ): string {
         const parts: string[] = [`n=${nSpecies}`, `p=${parameterNames.join(',')}`];
+        const fnSig = this.functionSignature(functions);
+        if (fnSig) parts.push(`f=${fnSig}`);
         if (constantSpeciesMask && constantSpeciesMask.length > 0) {
             parts.push(`c=${constantSpeciesMask.map((value) => (value ? '1' : '0')).join('')}`);
         }
@@ -231,6 +234,18 @@ export class JITCompiler {
             ].join('|'));
         }
         return this.hashString(parts.join(';'));
+    }
+
+    /**
+     * Serialize zero-arg function definitions into a stable signature fragment.
+     * Used to invalidate the JIT/bytecode caches when function bodies change.
+     */
+    private functionSignature(functions?: JITFunctionDefinition[]): string {
+        if (!functions || functions.length === 0) return '';
+        return functions
+            .map((f) => `${f.name}(${f.args.join(',')})=${f.expression}`)
+            .sort()
+            .join('||');
     }
 
     private getBytecodeSignature(
@@ -250,9 +265,12 @@ export class JITCompiler {
             name: string;
             indices: Int32Array | number[];
             coefficients: Float64Array | number[];
-        }>
+        }>,
+        functions?: JITFunctionDefinition[]
     ): string {
         const parts = [`n=${nSpecies}`];
+        const fnSig = this.functionSignature(functions);
+        if (fnSig) parts.push(`f=${fnSig}`);
         if (constantSpeciesMask && constantSpeciesMask.length > 0) {
             parts.push(`c=${constantSpeciesMask.map((value) => (value ? '1' : '0')).join('')}`);
         }
@@ -511,10 +529,11 @@ export class JITCompiler {
         nSpecies: number,
         parameters?: Record<string, number>,
         constantSpeciesMask?: boolean[],
-        debugContext?: JITCompileDebugContext
+        debugContext?: JITCompileDebugContext,
+        functions?: JITFunctionDefinition[]
     ): JITCompiledFunction {
         const parameterNames = this.extractParameterNames(parameters);
-        const configSignature = this.buildReactionSignature(reactions, nSpecies, parameterNames, constantSpeciesMask);
+        const configSignature = this.buildReactionSignature(reactions, nSpecies, parameterNames, constantSpeciesMask, functions);
 
         const cached = this.cache.get(configSignature);
         if (cached) {
@@ -562,11 +581,15 @@ export class JITCompiler {
                 rateEvaluators[i] = () => rxn.rateConstant as number;
             } else {
                 const rxnStr = rxn.rateConstant.toString();
+                // Inline zero-arg global functions (e.g. `phiM()`, `Stimulus()`) BEFORE
+                // the security validation so legitimately-defined functions are not
+                // rejected as unknown.
+                const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
                 // Security check before translating and interpolating
-                this.assertSafeRateExpression(rxnStr, parameterNames);
-                const normalizedExpr = this.normalizeExpressionForValidation(rxnStr);
+                this.assertSafeRateExpression(inlinedExpr, expressionVariableNames);
+                const normalizedExpr = this.normalizeExpressionForValidation(inlinedExpr);
                 rateEvaluators[i] = SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
-                rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
+                rateExpr = `(${ExpressionTranslator.translate(inlinedExpr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
             // NOTE: TotalRate is handled upstream during network expansion (NetworkGenerator
@@ -784,7 +807,8 @@ export class JITCompiler {
         nSpecies: number,
         speciesIndexMap: Map<string, number>,
         parameters?: Record<string, number>,
-        debugContext?: JITCompileDebugContext
+        debugContext?: JITCompileDebugContext,
+        functions?: JITFunctionDefinition[]
     ): JITCompiledFunction {
         const resolveSpeciesIndex = (rawIndex: number | string): number => {
             if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
@@ -840,7 +864,7 @@ export class JITCompiler {
             };
         });
 
-        return this.compile(simpleReactions, nSpecies, parameters, undefined, debugContext);
+        return this.compile(simpleReactions, nSpecies, parameters, undefined, debugContext, functions);
     }
 
     /**
@@ -1380,7 +1404,7 @@ export class JITCompiler {
                 );
             }
 
-            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables);
+            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables, functions);
             const cached = this.bytecodeCache.get(signature);
 
             if (cached) {
@@ -1397,10 +1421,16 @@ export class JITCompiler {
                             k = 0;
                         } else {
                             const rxnStr = rxn.rateConstant.toString();
-                            this.assertSafeRateExpression(rxnStr, paramKeys);
-                            const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
+                            const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                            const allowedNames = [
+                                ...paramKeys,
+                                ...(observables || []).map(o => o.name),
+                                '__t__'
+                            ];
+                            this.assertSafeRateExpression(inlinedExpr, allowedNames);
+                            const normalizedExpr = inlinedExpr.replace(/\bMath\./g, '');
                             try {
-                                const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
+                                const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, allowedNames);
                                 k = evaluator(safeParameters);
                                 if (Number.isNaN(k) || !Number.isFinite(k)) return null;
                             } catch {
@@ -1473,11 +1503,17 @@ export class JITCompiler {
                     } else {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
-                        this.assertSafeRateExpression(rxnStr, paramKeys);
-                        const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
+                        const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                        const allowedNames = [
+                            ...paramKeys,
+                            ...(observables || []).map(o => o.name),
+                            '__t__'
+                        ];
+                        this.assertSafeRateExpression(inlinedExpr, allowedNames);
+                        const normalizedExpr = inlinedExpr.replace(/\bMath\./g, '');
 
                         try {
-                            const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
+                            const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, allowedNames);
                             k = evaluator(safeParameters);
                             if (Number.isNaN(k) || !Number.isFinite(k)) return null;
                         } catch {

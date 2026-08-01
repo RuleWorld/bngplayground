@@ -134,11 +134,14 @@ export async function runModels(modelNames?: string[]) {
         console.log(`[Batch] Using deterministic seed: ${batchSeed}`);
     }
 
+    const strictFunctionalRates = globalAny?.__batchStrictFunctionalRates === true;
+
     const options = {
         simulator: appSimulator,
         reporter: appReporter,
         verbose: VERBOSE_BATCH_RUNNER,
-        nfSimModels: NFSIM_MODELS
+        nfSimModels: NFSIM_MODELS,
+        ...(strictFunctionalRates ? { strictFunctionalRates: true } : {})
     };
 
     for (const modelDef of modelsToProcess) {
@@ -192,7 +195,8 @@ if (typeof window !== 'undefined') {
             simulator: appSimulator,
             reporter: appReporter,
             verbose: VERBOSE_BATCH_RUNNER,
-            nfSimModels: NFSIM_MODELS
+            nfSimModels: NFSIM_MODELS,
+            ...(globalAny?.__batchStrictFunctionalRates === true ? { strictFunctionalRates: true } : {})
         };
 
         return runSingleBatchItem(options, { name, code, id: name }, batchSeed);

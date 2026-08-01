@@ -44,6 +44,12 @@ export interface BatchRunnerOptions {
     reporter: BatchReporter;
     verbose?: boolean;
     nfSimModels?: Set<string>;
+    /**
+     * Enable strict functional-rate evaluation so unresolved variables or NaN
+     * results throw loudly instead of silently returning 0. Intended for
+     * reference-output / CI generation.
+     */
+    strictFunctionalRates?: boolean;
 }
 
 export function normalizeFilterNames(names?: string[]) {
@@ -134,12 +140,14 @@ function ensureBatchSimulationPhases(model: BNGLModel, method: 'ode' | 'ssa'): v
 export async function executeMultiPhaseSimulation(
     simulator: BatchSimulator,
     model: BNGLModel,
-    seed?: number
+    seed?: number,
+    strictFunctionalRates?: boolean
 ): Promise<SimulationResults> {
     const options = getSimulationOptionsFromParsedModel(model, 'default', {
         solver: 'cvode',
         includeSpeciesData: false,
-        ...(seed !== undefined ? { seed } : {})
+        ...(seed !== undefined ? { seed } : {}),
+        ...(strictFunctionalRates !== undefined ? { strictFunctionalRates } : {})
     });
     const phaseCount = model.simulationPhases?.length ?? 0;
     const label = phaseCount > 1 ? `Multi-Phase (${phaseCount})` : 'Single Phase';
@@ -151,7 +159,7 @@ export async function runSingleBatchItem(
     modelDef: BatchModelDef,
     batchSeed?: number
 ): Promise<boolean> {
-    const { simulator, reporter, verbose, nfSimModels } = options;
+    const { simulator, reporter, verbose, nfSimModels, strictFunctionalRates } = options;
     reporter.group(`Processing: ${modelDef.name}`);
     try {
         // Resolve code
@@ -214,7 +222,7 @@ export async function runSingleBatchItem(
         // 2. Simulate
         if (verbose) reporter.time('Simulate');
         model.simulationPhases = model.simulationPhases ?? [];
-        const results: SimulationResults = await executeMultiPhaseSimulation(simulator, model, batchSeed);
+        const results: SimulationResults = await executeMultiPhaseSimulation(simulator, model, batchSeed, strictFunctionalRates);
         if (verbose) reporter.timeEnd('Simulate');
 
         // 3. Export (via reporter callback)
