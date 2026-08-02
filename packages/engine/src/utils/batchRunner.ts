@@ -154,11 +154,20 @@ export async function executeMultiPhaseSimulation(
     return await simulator.simulate(model, options, { description: label });
 }
 
+/**
+ * Result of running a single batch item:
+ * - `'success'`: parsed, simulated, and exported cleanly.
+ * - `'skipped'`: intentionally not run (e.g. NFsim model, which the batch
+ *   runner does not support). This is NOT a failure.
+ * - `'failed'`: an actual error occurred while parsing/simulating/exporting.
+ */
+export type BatchItemStatus = 'success' | 'skipped' | 'failed';
+
 export async function runSingleBatchItem(
     options: BatchRunnerOptions,
     modelDef: BatchModelDef,
     batchSeed?: number
-): Promise<boolean> {
+): Promise<BatchItemStatus> {
     const { simulator, reporter, verbose, nfSimModels, strictFunctionalRates } = options;
     reporter.group(`Processing: ${modelDef.name}`);
     try {
@@ -183,7 +192,10 @@ export async function runSingleBatchItem(
             const modelLabel = modelDef.id || modelDef.name;
             reporter.warn(`[Batch] Skipping ${modelLabel}: NFsim models are not supported by the batch runner (detected: ${detectedMethod}).`);
             reporter.groupEnd();
-            return false;
+            // Intentional skip — NOT a failure. If another unsupported method
+            // (e.g. spatial) is added here, return 'skipped' for it too rather
+            // than exempting the model in EXPECTED_MISMATCHES.
+            return 'skipped';
         }
 
         ensureBatchSimulationPhases(model, batchMethod);
@@ -230,7 +242,7 @@ export async function runSingleBatchItem(
 
         reporter.log('✅ Exported results');
         reporter.groupEnd();
-        return true;
+        return 'success';
     } catch (e: any) {
         reporter.error('❌ Failed:', e);
         if (simulator.restart && (e.message?.includes('terminated') || e.message?.includes('Worker'))) {
@@ -238,6 +250,6 @@ export async function runSingleBatchItem(
             simulator.restart();
         }
         reporter.groupEnd();
-        return false;
+        return 'failed';
     }
 }

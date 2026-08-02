@@ -127,6 +127,7 @@ export async function runModels(modelNames?: string[]) {
 
     let successCount = 0;
     let failCount = 0;
+    let skippedCount = 0;
 
     const globalAny = (typeof window !== 'undefined' ? (window as any) : undefined);
     const batchSeed = typeof globalAny?.__batchSeed === 'number' ? globalAny.__batchSeed : undefined;
@@ -145,17 +146,18 @@ export async function runModels(modelNames?: string[]) {
     };
 
     for (const modelDef of modelsToProcess) {
-        const success = await runSingleBatchItem(options, modelDef, batchSeed);
-        if (success) successCount++;
+        const status = await runSingleBatchItem(options, modelDef, batchSeed);
+        if (status === 'success') successCount++;
+        else if (status === 'skipped') skippedCount++;
         else failCount++;
 
         // Slight delay to allow browser to breathe/download
         await new Promise(r => setTimeout(r, 500));
     }
 
-    console.log(`Batch Run Complete. Success: ${successCount}, Failed: ${failCount}`);
+    console.log(`Batch Run Complete. Success: ${successCount}, Failed: ${failCount}, Skipped: ${skippedCount}`);
     console.groupEnd();
-    return { success: successCount, failed: failCount };
+    return { success: successCount, failed: failCount, skipped: skippedCount };
 }
 
 export function getModelEntries() {

@@ -125,7 +125,7 @@ export { parseObservablePattern, computeObservableValue, computeDynamicObservabl
 export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
 export { normalizeFilterNames, safeModelName, executeMultiPhaseSimulation, runSingleBatchItem } from './utils/batchRunner';
-export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions } from './utils/batchRunner';
+export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions, BatchItemStatus } from './utils/batchRunner';
 
 // ── Optimization ────────────────────────────────────────────────────────
 export { nelderMead } from './services/optimization/nelderMead';

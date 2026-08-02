@@ -429,6 +429,14 @@ async function main() {
           throw new Error('MODEL_FAILED');
         }
 
+        if (runResult && typeof runResult === 'object' && Number(runResult.skipped) > 0) {
+          console.log(`[generate:web-output] Skipped (unsupported method) for ${modelId}. Writing skip marker.`);
+          const skippedFile = path.join(WEB_OUTPUT_DIR, `results_${safeModelName(modelId)}.csv`);
+          fs.writeFileSync(skippedFile, 'Time,Observable\n# SKIPPED (UnsupportedMethod)\n0,0');
+          successCount++;
+          continue;
+        }
+
         // Wait for download to start and finish (fast models may complete before polling tick)
         const downloadStartWait = Number(process.env.WEB_OUTPUT_DOWNLOAD_START_WAIT_MS || 300);
         const downloadWaitStart = Date.now();
