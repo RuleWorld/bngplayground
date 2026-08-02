@@ -190,7 +190,7 @@ export * from './services/spatial';
 export { symConst, symVar, symAdd, symMul, symDiv, symPow, symNeg, simplify, evaluate, differentiate, exprToString, exprToLatex, expand, collectTerms, factor, isPolynomial, degree, freeVariables, substitute } from './services/symbolic/SymbolicExpr';
 export type { SymExpr } from './services/symbolic/SymbolicExpr';
 export { buildSymbolicODESystem, solveSymbolicSteadyState, symbolicSensitivity, symbolicBifurcationConditions } from './services/symbolic/SymbolicODE';
-export type { SymbolicODESystem, SymbolicSteadyState } from './services/symbolic/SymbolicODE';
+export type { SymbolicODESystem, SymbolicSteadyState, SymbolicSensitivityResult } from './services/symbolic/SymbolicODE';
 export { resultant, solvePolynomialSystem, symbolicGaussianElimination, symbolicDeterminant } from './services/symbolic/PolynomialSolver';
 
 // ── Verification ────────────────────────────────────────────────────

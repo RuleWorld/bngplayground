@@ -23,6 +23,7 @@ export {
     reactionInformationFlowArgsSchema,
     qssaReductionArgsSchema,
     temporalAnalysisArgsSchema,
+    symbolicSteadyStateArgsSchema,
 } from './analysis.js';
 
 export {

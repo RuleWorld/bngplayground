@@ -76,3 +76,13 @@ export interface MCPErrorResult {
     severity: 'fatal' | 'recoverable' | 'warning';
     relatedTools?: string[];
 }
+
+export interface SymbolicSteadyStateResult {
+    solutions: Record<string, string>;
+    latex: Record<string, string>;
+    sensitivities: Record<string, Record<string, string>>;
+    exact: boolean;
+    technical: string;
+    biological: string;
+    strategic: string;
+}

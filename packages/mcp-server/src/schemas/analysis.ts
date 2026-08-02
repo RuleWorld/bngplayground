@@ -212,3 +212,7 @@ export const temporalAnalysisArgsSchema = z.object({
     n_steps: positiveInt.optional().describe('Output timepoints (default: 200)'),
     bin_width: finiteNumber.positive().optional().describe('Discretization bin width'),
 }).strict();
+
+export const symbolicSteadyStateArgsSchema = z.object({
+    code: z.string().describe('BNGL model code'),
+}).strict();
