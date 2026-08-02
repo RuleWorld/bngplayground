@@ -99,7 +99,7 @@
     "fast-check": "^4.9.0",
     "jsdom": "^29.0.1",
     "playwright": "^1.61.1",
-    "postcss": "^8.4.47",
+    "postcss": "^8.5.25",
     "react-is": "^19.2.4",
     "tailwindcss": "^4.2.0",
     "ts-node": "^10.9.2",
