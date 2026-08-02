@@ -42,6 +42,12 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
     self.postMessage(response);
     event.preventDefault();
   });
+
+  self.addEventListener('messageerror', (event) => {
+    const response: MultiscaleWorkerResponse = { type: 'error', message: 'MultiscaleWorker failed to deserialize incoming message' };
+    self.postMessage(response);
+    event.preventDefault();
+  });
 }
 
 let cancelled = false;
@@ -54,6 +60,11 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
   }
 
   const msg = event.data;
+  if (!msg || typeof msg !== 'object') {
+    const response: MultiscaleWorkerResponse = { type: 'error', message: 'MultiscaleWorker received null, undefined, or non-object message' };
+    self.postMessage(response);
+    return;
+  }
 
   try {
     switch (msg.type) {

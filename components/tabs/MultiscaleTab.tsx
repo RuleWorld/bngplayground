@@ -109,7 +109,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
       workerRef.current = worker;
 
       worker.onmessage = (event: MessageEvent<MultiscaleWorkerResponse>) => {
-        const msg = event.data;
+        const msg = event.data ?? { type: 'error', message: 'Empty or undefined worker response' };
 
         switch (msg.type) {
           case 'progress':
@@ -145,6 +145,12 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
 
       worker.onerror = (err) => {
         setError(err.message || 'Worker error');
+        setIsRunning(false);
+      };
+
+      worker.onmessageerror = (event) => {
+        console.error('[MultiscaleTab] Worker failed to deserialize message:', event.data);
+        setError('Multiscale worker failed to deserialize message');
         setIsRunning(false);
       };
 

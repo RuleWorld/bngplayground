@@ -410,6 +410,14 @@ if (typeof ctx.addEventListener === 'function') {
   });
 }
 
+if (typeof ctx.addEventListener === 'function') {
+  ctx.addEventListener('messageerror', (event) => {
+    const payload: SerializedWorkerError = { message: 'Worker failed to deserialize incoming message' };
+    safePostMessage({ id: -1, type: 'worker_internal_error', payload });
+    event.preventDefault();
+  });
+}
+
 // Re-export getCacheSizes or proxy it
 export function getCacheSizes() {
   return getEvaluatorCacheSizes();
