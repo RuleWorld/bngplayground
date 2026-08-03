@@ -225,6 +225,10 @@ export type { NullclineConfig, NullclineResult } from './services/analysis/Nullc
 // ── Temporal Information Theory ─────────────────────────────────────
 export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges, summarizeTemporalAnalysis } from './services/analysis/ReactionInformationTheory';
 export type { TemporalAnalysisSummary } from './services/analysis/ReactionInformationTheory';
+
+// ── Phase Handoff ───────────────────────────────────────────────────
+export { analyzePhaseHandoff } from './services/analysis/PhaseHandoff';
+export type { PhaseHandoffConfig, PhaseHandoffResult } from './services/analysis/PhaseHandoff';
 export {
     extractMoleculeNames,
     parseMoleculeTokens,
