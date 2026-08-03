@@ -263,7 +263,13 @@ export class BnglWorkerPool {
                 payload: { model, options }
             };
 
-            worker.postMessage(request);
+            try {
+                worker.postMessage(request);
+            } catch (error) {
+                worker.removeEventListener('message', handler);
+                this.removePendingRequest(worker, req);
+                reject(error instanceof Error ? error : new Error(String(error)));
+            }
         });
     }
 
@@ -278,8 +284,26 @@ export class BnglWorkerPool {
     ): Promise<SimulationResults[] | SharedEnsembleResultsHandle> {
         if (!this.isInitialized) await this.initialize();
 
-        // Prepare model on ALL workers for cached simulation
-        const modelIds = await Promise.all(this.workers.map(w => this.prepareModelOnWorker(w, model)));
+        // Prepare model on ALL workers for cached simulation using Promise.allSettled to avoid leaking on partial failures
+        const preparationResults = await Promise.allSettled(
+            this.workers.map(w => this.prepareModelOnWorker(w, model))
+        );
+
+        const failures = preparationResults.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
+        if (failures.length > 0) {
+            // Release the successfully prepared models to prevent memory leaks in the workers
+            await Promise.all(
+                preparationResults.map((res, i) => {
+                    if (res.status === 'fulfilled') {
+                        return this.releaseModelOnWorker(this.workers[i], res.value).catch(() => {});
+                    }
+                    return Promise.resolve();
+                })
+            );
+            throw failures[0].reason;
+        }
+
+        const modelIds = preparationResults.map((r) => (r as PromiseFulfilledResult<number>).value);
         try {
             const firstWorker = this.workers[0];
             const firstModelId = modelIds[0];
@@ -375,7 +399,13 @@ export class BnglWorkerPool {
             this.registerPendingRequest(worker, req);
 
             worker.addEventListener('message', handler);
-            worker.postMessage({ id: messageId, type: 'cache_model', payload: { model } });
+            try {
+                worker.postMessage({ id: messageId, type: 'cache_model', payload: { model } });
+            } catch (error) {
+                worker.removeEventListener('message', handler);
+                this.removePendingRequest(worker, req);
+                reject(error instanceof Error ? error : new Error(String(error)));
+            }
         });
     }
 
@@ -414,7 +444,13 @@ export class BnglWorkerPool {
             this.registerPendingRequest(worker, req);
 
             worker.addEventListener('message', handler);
-            worker.postMessage({ id: messageId, type: 'simulate', payload: { modelId, options } });
+            try {
+                worker.postMessage({ id: messageId, type: 'simulate', payload: { modelId, options } });
+            } catch (error) {
+                worker.removeEventListener('message', handler);
+                this.removePendingRequest(worker, req);
+                reject(error instanceof Error ? error : new Error(String(error)));
+            }
         });
     }
 
@@ -457,11 +493,17 @@ export class BnglWorkerPool {
             this.registerPendingRequest(worker, req);
 
             worker.addEventListener('message', handler);
-            worker.postMessage({
-                id: messageId,
-                type: 'simulate',
-                payload: { modelId, options, sharedOutput }
-            } satisfies WorkerRequest);
+            try {
+                worker.postMessage({
+                    id: messageId,
+                    type: 'simulate',
+                    payload: { modelId, options, sharedOutput }
+                } satisfies WorkerRequest);
+            } catch (error) {
+                worker.removeEventListener('message', handler);
+                this.removePendingRequest(worker, req);
+                reject(error instanceof Error ? error : new Error(String(error)));
+            }
         });
     }
 
@@ -499,7 +541,13 @@ export class BnglWorkerPool {
             this.registerPendingRequest(worker, req);
 
             worker.addEventListener('message', handler);
-            worker.postMessage({ id: messageId, type: 'release_model', payload: { modelId } });
+            try {
+                worker.postMessage({ id: messageId, type: 'release_model', payload: { modelId } });
+            } catch (error) {
+                worker.removeEventListener('message', handler);
+                this.removePendingRequest(worker, req);
+                reject(error instanceof Error ? error : new Error(String(error)));
+            }
         });
     }
 
