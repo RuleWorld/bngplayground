@@ -3321,8 +3321,8 @@ export class NetworkGenerator {
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[]
   ): SpeciesGraph[] | null {
-    const getMolKeyFromMol = (mol: any): number => {
-      if (mol._sourceR !== undefined) {
+    const getMolKeyFromMol = (mol: Molecule): number => {
+      if (mol._sourceR !== undefined && mol._sourceM !== undefined) {
         return (mol._sourceR << 16) | mol._sourceM;
       }
       const key = mol._sourceKey;
@@ -3386,11 +3386,11 @@ export class NetworkGenerator {
           for (const [key1, partners] of fullProductGraph.adjacency) {
             if (invalidInterComplexBond) break;
             const mol1Idx = parseInt(key1, 10);
-            const mol1: any = fullProductGraph.molecules[mol1Idx];
+            const mol1: Molecule = fullProductGraph.molecules[mol1Idx];
             if (!mol1) continue;
             getMolKeyFromMol(mol1); // Ensures _sourceR and _sourceM are initialized
-            const r1 = (mol1 as any)._sourceR;
-            const rMol1 = (mol1 as any)._sourceM;
+            const r1 = mol1._sourceR;
+            const rMol1 = mol1._sourceM;
             if (r1 === undefined || rMol1 === undefined) continue;
 
             for (const key2 of partners) {
@@ -3398,12 +3398,12 @@ export class NetworkGenerator {
               if (seenBondIds.has(bondId)) continue;
               seenBondIds.add(bondId);
               const mol2Idx = parseInt(key2, 10);
-              const mol2: any = fullProductGraph.molecules[mol2Idx];
+              const mol2: Molecule = fullProductGraph.molecules[mol2Idx];
               if (!mol2) continue;
               getMolKeyFromMol(mol2); // Ensures _sourceR and _sourceM are initialized
-              const r2 = (mol2 as any)._sourceR;
+              const r2 = mol2._sourceR;
               if (r1 === r2) continue; // Intra-complex bond — always OK
-              const rMol2 = (mol2 as any)._sourceM;
+              const rMol2 = mol2._sourceM;
               if (r2 === undefined || rMol2 === undefined) continue;
 
               // Use ORIGINAL reactant compartments (before product-pattern compartment override)
@@ -3433,12 +3433,11 @@ export class NetworkGenerator {
         for (const mol of fullProductGraph.molecules) {
           const mKey = getMolKeyFromMol(mol);
           if (mKey === -1) continue;
-          const molAny = mol as any;
-          if (molAny._explicitUnboundComponents && molAny._explicitUnboundComponents.size > 0) {
-            explicitUnboundBySource.set(mKey, new Set(molAny._explicitUnboundComponents));
+          if (mol._explicitUnboundComponents && mol._explicitUnboundComponents.size > 0) {
+            explicitUnboundBySource.set(mKey, new Set(mol._explicitUnboundComponents));
           }
-          if (molAny._explicitBondedComponents && molAny._explicitBondedComponents.size > 0) {
-            explicitBondedBySource.set(mKey, new Set(molAny._explicitBondedComponents));
+          if (mol._explicitBondedComponents && mol._explicitBondedComponents.size > 0) {
+            explicitBondedBySource.set(mKey, new Set(mol._explicitBondedComponents));
           }
         }
 
@@ -3450,11 +3449,11 @@ export class NetworkGenerator {
             if (mKey === -1) continue;
             const explicitUnbound = explicitUnboundBySource.get(mKey);
             if (explicitUnbound && explicitUnbound.size > 0) {
-              (mol as any)._explicitUnboundComponents = explicitUnbound;
+              mol._explicitUnboundComponents = explicitUnbound;
             }
             const explicitBonded = explicitBondedBySource.get(mKey);
             if (explicitBonded && explicitBonded.size > 0) {
-              (mol as any)._explicitBondedComponents = explicitBonded;
+              mol._explicitBondedComponents = explicitBonded;
             }
           }
         }
@@ -3514,9 +3513,11 @@ export class NetworkGenerator {
               const mKey = getMolKeyFromMol(mol);
               if (mKey !== -1) {
                 usedReactantMolsInReaction.add(mKey);
-                const rIdx = (mol as any)._sourceR;
-                const mIdx = (mol as any)._sourceM;
-                survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
+                const rIdx = mol._sourceR;
+                const mIdx = mol._sourceM;
+                if (rIdx !== undefined && mIdx !== undefined) {
+                  survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
+                }
               }
             }
           } else if (shouldLogNetworkGenerator) {
@@ -3765,8 +3766,8 @@ export class NetworkGenerator {
                 }
               }
               newMol._sourceKey = `${r}:${oldIdx}`;
-              (newMol as any)._sourceR = r;
-              (newMol as any)._sourceM = oldIdx;
+              newMol._sourceR = r;
+              newMol._sourceM = oldIdx;
               if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
               const newIdx = targetGraph.molecules.length;
               targetGraph.molecules.push(newMol);
@@ -3890,8 +3891,8 @@ export class NetworkGenerator {
                 const oldMol = rg.molecules[oldIdx];
                 const newMol = this.cloneMoleculeStructure(oldMol);
                 newMol._sourceKey = `${r}:${oldIdx}`;
-                (newMol as any)._sourceR = r;
-                (newMol as any)._sourceM = oldIdx;
+                newMol._sourceR = r;
+                newMol._sourceM = oldIdx;
                 if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
 
                 const newIdx = newGraph.molecules.length;
@@ -3969,8 +3970,8 @@ export class NetworkGenerator {
 
           for (let anchorIdx = 0; anchorIdx < graph.molecules.length; anchorIdx++) {
             const anchorMol = graph.molecules[anchorIdx];
-            const reactantIdx = (anchorMol as any)._sourceR;
-            const reactantMolIdx = (anchorMol as any)._sourceM;
+            const reactantIdx = anchorMol._sourceR;
+            const reactantMolIdx = anchorMol._sourceM;
             if (reactantIdx === undefined || reactantMolIdx === undefined) continue;
             if (reactantIdx < 0 || reactantIdx >= reactantGraphs.length) continue;
 
@@ -4779,8 +4780,8 @@ export class NetworkGenerator {
       const sourceMol = reactantGraphs[r].molecules[molIdx];
       const clone = this.cloneMoleculeStructure(sourceMol);
       clone._sourceKey = key; // Preserve source mapping (reactantIdx:molIdx)
-      (clone as any)._sourceR = r;
-      (clone as any)._sourceM = molIdx;
+      clone._sourceR = r;
+      clone._sourceM = molIdx;
 
       // CRITICAL FIX: If molecule doesn't have its own compartment, inherit from its reactant graph
       // This ensures that when L@EC.R@PM unbinds, L gets EC and R gets PM (not both PM)

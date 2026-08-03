@@ -10,6 +10,10 @@ export class Molecule {
   _sourceKey?: string; // Internal property for tracking reactant source
   hasExplicitEmptyComponentList: boolean;
   private _componentCounts?: Map<string, number>;
+  _sourceR?: number;
+  _sourceM?: number;
+  _explicitUnboundComponents?: Set<number>;
+  _explicitBondedComponents?: Set<number>;
 
   constructor(
     name: string,
@@ -87,6 +91,14 @@ export class Molecule {
     cloned.label = this.label;
     cloned.wildcard = this.wildcard;
     cloned._sourceKey = this._sourceKey;
+    cloned._sourceR = this._sourceR;
+    cloned._sourceM = this._sourceM;
+    if (this._explicitUnboundComponents) {
+      cloned._explicitUnboundComponents = new Set(this._explicitUnboundComponents);
+    }
+    if (this._explicitBondedComponents) {
+      cloned._explicitBondedComponents = new Set(this._explicitBondedComponents);
+    }
     return cloned;
   }
 }
