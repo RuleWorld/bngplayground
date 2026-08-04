@@ -5,6 +5,41 @@ import { BNGLParser as CoreBNGLParser } from '../services/graph/core/BNGLParser.
  * Converts ANTLR4 parse tree to BNGLModel type.
  */
 import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
+
+const getRuleIndex = (node: unknown): number | undefined => {
+  if (!node || typeof node !== 'object') return undefined;
+  const maybeRuleIndex = (node as { ruleIndex?: unknown }).ruleIndex;
+  return typeof maybeRuleIndex === 'number' ? maybeRuleIndex : undefined;
+};
+
+const getBaseComponentName = (comp: string): string => {
+  let len = comp.length;
+  const tildeIdx = comp.indexOf('~');
+  if (tildeIdx !== -1) {
+    len = tildeIdx;
+  }
+  const bangIdx = comp.indexOf('!');
+  if (bangIdx !== -1 && bangIdx < len) {
+    len = bangIdx;
+  }
+  return comp.substring(0, len).trim();
+};
+
+const getBaseCompDef = (compDef: string): string => {
+  const tildeIdx = compDef.indexOf('~');
+  if (tildeIdx !== -1) {
+    return compDef.substring(0, tildeIdx);
+  }
+  return compDef;
+};
+
+const buildWildcardComponent = (compDef: string): string => {
+  const tildeIdx = compDef.indexOf('~');
+  if (tildeIdx !== -1) {
+    return compDef.substring(0, tildeIdx) + '~?!?__SYN__';
+  }
+  return compDef + '!?__SYN__';
+};
 import type { BNGParserVisitor } from './generated/BNGParserVisitor.ts';
 import * as Parser from './generated/BNGParser.ts';
 import type {
@@ -1443,11 +1478,6 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
 
     const moleculeEntries: Array<{ pattern: Parser.Molecule_patternContext; compartment?: string }> = [];
-    const getRuleIndex = (node: unknown): number | undefined => {
-      if (!node || typeof node !== 'object') return undefined;
-      const maybeRuleIndex = (node as { ruleIndex?: unknown }).ruleIndex;
-      return typeof maybeRuleIndex === 'number' ? maybeRuleIndex : undefined;
-    };
     if (ctx.children) {
       for (const child of ctx.children) {
         const ruleIndex = getRuleIndex(child);
@@ -1478,21 +1508,6 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
       const shouldComplete = options.completeMissingComponents === true;
       const molType = this.getMoleculeType(name);
-
-      const buildWildcardComponent = (compDef: string): string => {
-        const parts = compDef.split('~');
-        const base = parts[0];
-        let comp = base;
-        if (parts.length > 1) {
-          comp += '~?';
-        }
-        // Use !?__SYN__ to mark this as a synthetically-added wildcard (absent in user rule).
-        // BNGLParser.parseComponent recognises __SYN__ and sets syntheticWildcard=true so that
-        // matchRespectsProductImpliedFreeConstraints can treat this component as absent rather than
-        // as an explicit !? carry-through (e.g. CD40(l!?) which must NOT be treated as synthetic).
-        comp += '!?__SYN__';
-        return comp;
-      };
 
       let molStr = `${name}()`;
 
@@ -1548,14 +1563,14 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
           if (shouldComplete && molType && molType.components.length > 0) {
             const byName = new Map<string, string[]>();
             for (const comp of components) {
-              const base = comp.split('~')[0].split('!')[0].trim();
+              const base = getBaseComponentName(comp);
               if (!byName.has(base)) byName.set(base, []);
-              byName.get(base)?.push(comp);
+              byName.get(base)!.push(comp);
             }
 
             const ordered: string[] = [];
             for (const compDef of molType.components) {
-              const base = compDef.split('~')[0];
+              const base = getBaseCompDef(compDef);
               const queue = byName.get(base);
               if (queue && queue.length > 0) {
                 ordered.push(queue.shift()!);
