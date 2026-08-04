@@ -82,6 +82,32 @@ export function resolveAutoMethod(model: BNGLModel, method: SimulationOptions['m
   return 'ode';
 }
 
+/**
+ * Resolves and constructs the complete simulation configuration options for a parsed BNGL model.
+ *
+ * This function extracts, aggregates, and prioritizes simulation settings across several potential
+ * sources in the following strict order of precedence (highest to lowest):
+ * 1. Explicit properties passed in the `overrides` argument.
+ * 2. Authored configurations from the appropriate `SimulationPhase` within the model (e.g. `t_end`, `n_steps`, tolerances).
+ * 3. Fallback options defined globally under the model's top-level `simulationOptions`.
+ * 4. Hardcoded system defaults (e.g., `t_end = 100`, `n_steps = 100`).
+ *
+ * Special Behaviors:
+ * - When `method` is set to `'ode'`, it aggregates all ODE simulation phases present in the model's
+ *   `simulationPhases` to compute a cumulative end-time (`t_end`), summed steps (`n_steps`), and compiles the
+ *   tightest tolerances (`atol` and `rtol`) across those phases.
+ * - For stochastic and network-free simulation methods (e.g. `'ssa'`, `'pla'`, `'nf'`, `'nfsim'`), it identifies and extracts
+ *   the exact authored phase corresponding to that method, falling back to the first available phase if not found.
+ * - Integrates support for advanced parameters including random seeds (`seed`), ODE solvers (`solver`), and steady-state
+ *   options (`steadyState`, `steadyStateTolerance`, `steadyStateWindow`), along with `strictFunctionalRates` checks.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) to allow clean server-side execution.
+ *
+ * @param model - The fully parsed BNGL model representation of type `BNGLModel`.
+ * @param method - The target simulation method (e.g. `'ode'`, `'ssa'`, `'nfsim'`, `'default'`).
+ * @param overrides - Optional dictionary containing partial overrides to enforce on the final options.
+ * @returns A fully populated `SimulationOptions` configuration object ready for solver initialization.
+ */
 export function getSimulationOptionsFromParsedModel(
   model: BNGLModel,
   method: SimulationOptions['method'],
