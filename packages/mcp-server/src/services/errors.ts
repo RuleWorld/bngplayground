@@ -15,6 +15,14 @@ import { MCPErrorResult } from '../types/index.js';
  */
 export function structureError(error: Error): MCPErrorResult {
     const msg = error.message;
+    if (msg.includes('Invalid arguments for')) {
+        return {
+            error: msg,
+            diagnosis: 'The arguments passed to the MCP tool did not match the expected schema.',
+            recovery: 'Check the tool schema definition and ensure all required fields are provided with correct types and formats.',
+            severity: 'recoverable',
+        };
+    }
     if (msg.includes('diverged') || msg.includes('step size')) {
         return {
             error: msg,
