@@ -381,6 +381,40 @@ end reaction rules`;
       const result = await handleGetContactMap({ code: GARBAGE_CODE });
       assertStructuredResponse(result);
     });
+
+    it('should fail with structured error on invalid argument type', async () => {
+      const result = await handleGetContactMap({ code: 12345 as any });
+      assertStructuredResponse(result);
+      const errorObj = result.structuredContent as any;
+      expect(errorObj.error).toContain('expected string, received number');
+      expect(errorObj.diagnosis).toContain('expected schema');
+      expect(errorObj.recovery).toContain('Check the tool schema');
+    });
+
+    it('should fail with structured error on missing code field', async () => {
+      const result = await handleGetContactMap(undefined);
+      assertStructuredResponse(result);
+      const errorObj = result.structuredContent as any;
+      expect(errorObj.error).toContain('expected string, received undefined');
+      expect(errorObj.diagnosis).toContain('expected schema');
+    });
+
+    it('should handle boundary conditions such as whitespace code or models with missing components gracefully', async () => {
+      // Whitespace code
+      const whitespaceResult = await handleGetContactMap({ code: '   ' });
+      assertStructuredResponse(whitespaceResult);
+
+      // Model with missing components or rules
+      const incompleteModel = `begin molecule types
+  A()
+end molecule types
+begin reaction rules
+  A() -> 0 1.0
+end reaction rules`;
+      const contactMapResult = await handleGetContactMap({ code: incompleteModel });
+      assertStructuredResponse(contactMapResult);
+      expect((contactMapResult.structuredContent as any).nodes).toBeDefined();
+    });
   });
 
   // =========================================================================
