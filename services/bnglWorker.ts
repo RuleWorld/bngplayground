@@ -645,7 +645,7 @@ if (typeof ctx.addEventListener === 'function') {
               );
             } catch (genError) {
               console.error('[Worker] Network auto-generation failed:', genError);
-              throw new Error(`Network generation failed: ${genError instanceof Error ? genError.message : String(genError)}`);
+              throw new Error(`Network generation failed: ${genError instanceof Error ? genError.message : String(genError)}`, { cause: genError });
             }
           }
 
@@ -714,7 +714,7 @@ if (typeof ctx.addEventListener === 'function') {
               if (!model || !options) throw new Error('Model or options missing during simulate');
               return await simulate(id, model, options, {
                 checkCancelled: () => ensureNotCancelled(id),
-                postMessage: (msg) => safePostMessage(msg)
+                postMessage: (msg) => forwardWorkerNotification(id, msg as Record<string, unknown>)
               });
             }
           })();
@@ -841,7 +841,8 @@ if (typeof ctx.addEventListener === 'function') {
           }
 
           const p = payload as { model: BNGLModel; options?: NetworkGeneratorOptions };
-          let { model, options } = p;
+          const model = p.model;
+          let options = p.options;
 
           if (!model) {
             throw new Error('Model missing in generate_network payload');
