@@ -48,6 +48,24 @@ export interface ParseResult {
  * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
  *          and list of accumulated syntactic/semantic parsing errors.
  */
+function getFirstActiveLine(src: string): string | null {
+  let start = 0;
+  const len = src.length;
+  while (start < len) {
+    let end = src.indexOf('\n', start);
+    if (end === -1) {
+      end = len;
+    }
+    const line = src.substring(start, end);
+    const trimmed = line.trim();
+    if (trimmed !== '' && !trimmed.startsWith('#')) {
+      return trimmed;
+    }
+    start = end + 1;
+  }
+  return null;
+}
+
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
@@ -391,8 +409,8 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // Some published legacy files place version()/setOption() before begin model.
       // Our grammar only parses model blocks and actions, so preserve line count by
       // replacing those directive lines with comments.
-      const firstActiveLineMatch = next.match(/^\s*(?!#)\s*(.+)$/m);
-      const skipPreambleNormalize = firstActiveLineMatch && /^begin\s+/i.test(firstActiveLineMatch[1]);
+      const firstActiveLine = getFirstActiveLine(next);
+      const skipPreambleNormalize = firstActiveLine && firstActiveLine.toLowerCase().startsWith('begin');
       if (!skipPreambleNormalize) {
         const lines = next.split(/\r\n|\n/);
         let seenBeginModel = false;
