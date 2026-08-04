@@ -947,7 +947,7 @@ export class NetworkGenerator {
         // Process all species in the current batch
         for (let batchIdx = 0; batchIdx < batchSize; batchIdx++) {
           const currentSpecies = queue[batchIdx];
-          const currentCanonical = profiledCanonicalize(currentSpecies);
+          const currentCanonical = currentSpecies.cachedCanonical || profiledCanonicalize(currentSpecies);
           const currentSpeciesObj = speciesMap.get(currentCanonical)!;
 
 
@@ -1232,6 +1232,10 @@ export class NetworkGenerator {
   ): Promise<void> {
     const pattern = rule.reactants[0];
 
+    if (!GraphMatcher.canPossiblyMatch(pattern, reactantSpecies.graph)) {
+      return;
+    }
+
     const debugUnimolecularSignature =
       typeof process !== 'undefined' &&
       process.env?.DEBUG_UNIMOLEC_SIGNATURE === '1';
@@ -1510,6 +1514,12 @@ export class NetworkGenerator {
     const collapsedRuleStatFactor = matchCount === 1 ? this.computeCollapsedRuleStatFactor(rule) : 1;
 
     const signatureMultiplicityByOutcome = new Map<string, number>();
+    const matchOutcomes: Array<{
+      match: MatchMap;
+      products: SpeciesGraph[] | null;
+      signature: string | null;
+    }> = [];
+
     for (const candidateMatch of matches) {
       const candidateProducts = this.applyRuleTransformation(
         rule,
@@ -1518,21 +1528,30 @@ export class NetworkGenerator {
         [candidateMatch]
       );
       if (candidateProducts === null || !this.validateProducts(candidateProducts)) {
+        matchOutcomes.push({ match: candidateMatch, products: null, signature: null });
         continue;
       }
       const expectedProductCount = rule.products.length;
       if (candidateProducts.length < expectedProductCount) {
+        matchOutcomes.push({ match: candidateMatch, products: null, signature: null });
         continue;
       }
       const sig =
         buildUnimolecularEventSignatureFromRuleOps(candidateMatch) ??
         buildUnimolecularEventSignatureFromProducts(candidateProducts);
+
+      matchOutcomes.push({ match: candidateMatch, products: candidateProducts, signature: sig });
+
       if (!sig) continue;
       signatureMultiplicityByOutcome.set(sig, (signatureMultiplicityByOutcome.get(sig) ?? 0) + 1);
     }
 
 
-    for (const match of matches) {
+    for (const outcome of matchOutcomes) {
+      const { match, products, signature } = outcome;
+      if (products === null) {
+        continue;
+      }
 
       if (signal?.aborted) {
         throw new DOMException('Network generation cancelled', 'AbortError');
@@ -1540,21 +1559,13 @@ export class NetworkGenerator {
 
       const degeneracy = countEmbeddingDegeneracy(pattern, reactantSpecies.graph, match);
 
-      // 3. Apply Transformation
-      const products = this.applyRuleTransformation(
-        rule,
-        [rule.reactants[0]],
-        [reactantSpecies.graph],
-        [match]
-      );
-
       if (shouldLogNetworkGenerator) {
         debugNetworkLog(`[applyUnimolecularRule] Transformation result: ${products ? products.map(p => p.toString()).join(', ') : 'null'}`);
       }
 
       // products === null means transformation failed (e.g., no match)
       // products === [] (empty array) is valid for degradation rules
-      if (products === null || !this.validateProducts(products)) {
+      if (!this.validateProducts(products)) {
         continue;
       }
 
@@ -1571,12 +1582,6 @@ export class NetworkGenerator {
         }
         continue;
       }
-
-      // Now that we have a concrete outcome, build a stable event signature and deduplicate.
-      // Prefer explicit RxnRule ops when present; otherwise derive from the product split.
-      const signature =
-        buildUnimolecularEventSignatureFromRuleOps(match) ??
-        buildUnimolecularEventSignatureFromProducts(products);
       const signatureMultiplicity = signature ? (signatureMultiplicityByOutcome.get(signature) ?? 1) : 1;
       const hasTopologyChangingSignature = !!signature && !signature.startsWith('addMol:');
 
@@ -2271,6 +2276,9 @@ export class NetworkGenerator {
 
     // Try matching currentSpecies against EVERY pattern position i
     for (let i = 0; i < n; i++) {
+      if (!GraphMatcher.canPossiblyMatch(patterns[i], currentSpecies.graph)) {
+        continue;
+      }
       // For carry-through rules (catalyst + substrate pattern), substrate anchors need
       // SB=false to enumerate ALL substrate embeddings. This enables sigMult to capture
       // the correct rate multiplier (e.g., STAT3(U).STAT3(U) has 2 s~U sites → sigMult=2 → rate=2k).
@@ -3071,7 +3079,7 @@ export class NetworkGenerator {
             }
           }
         }
-      } catch (err) {
+      } catch {
         // If enumeration fails or is too large, keep previously computed `multiplicity`.
       }
     }
