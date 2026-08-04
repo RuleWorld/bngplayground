@@ -16,10 +16,6 @@ import {
   checkDeadlock as boundedCheckDeadlock,
   type BoundedVerificationConfig,
 } from './BoundedVerifier';
-import { BNGLParser } from '../graph/core/BNGLParser';
-import { GraphCanonicalizer } from '../graph/core/Canonical';
-import { GraphMatcher } from '../graph/core/Matcher';
-import { SpeciesGraph } from '../graph/core/SpeciesGraph';
 import {
   type ContactMap,
   checkAbstractReachability,
@@ -199,125 +195,6 @@ export function fullReachabilityCheck(
     speciesExplored: result.speciesExplored,
     reactionsGenerated: result.reactionsGenerated,
     finiteness,
-  };
-}
-
-/**
- * Full exploration to count all reachable species matching a molecule type.
- *
- * @param model - BNGLModel
- * @param moleculeType - Molecule type pattern to count (e.g., "A()")
- * @param contactMap - Optional contact map for finiteness check
- */
-export function countReachableSpecies(
-  model: BNGLModel,
-  moleculeType: string,
-  contactMap?: ContactMap
-): {
-  count: number;
-  confidence: 'exact' | 'bounded';
-  explorationComplete: boolean;
-  speciesExplored: number;
-  matchingSpecies: string[];
-} {
-  const targetGraph = BNGLParser.parseSpeciesGraph(moleculeType, true);
-
-  // Determine limits
-  let finiteness: { isFinite: boolean } | undefined;
-  if (contactMap) {
-    finiteness = checkFiniteContactMap(contactMap);
-  }
-  const isFinite = finiteness?.isFinite ?? false;
-  const config: Required<BoundedVerificationConfig> = isFinite
-    ? { maxSpecies: 1_000_000, maxIterations: 10_000, maxReactions: 10_000_000 }
-    : { maxSpecies: 50_000, maxIterations: 500, maxReactions: 500_000 };
-
-  // Run full expansion and collect matches
-  const rules = (model.reactionRules || []).map(rule => ({
-    name: rule.name || '(unnamed)',
-    reactantPatterns: rule.reactants.map(r => BNGLParser.parseSpeciesGraph(r, true)),
-    productPatterns: rule.products.map(p => BNGLParser.parseSpeciesGraph(p, true)),
-    isBidirectional: rule.isBidirectional,
-  }));
-
-  const allRules: typeof rules = [];
-  for (const rule of rules) {
-    allRules.push(rule);
-    if (rule.isBidirectional) {
-      allRules.push({
-        name: `${rule.name}_rev`,
-        reactantPatterns: rule.productPatterns,
-        productPatterns: rule.reactantPatterns,
-        isBidirectional: false,
-      });
-    }
-  }
-
-  const speciesMap = new Map<string, SpeciesGraph>();
-  const matchingSpecies: string[] = [];
-  let speciesCount = 0;
-  let reactionsGenerated = 0;
-
-  // Initialize with seeds
-  for (const seed of model.species) {
-    const graph = BNGLParser.parseSpeciesGraph(seed.name, true);
-    const canonical = GraphCanonicalizer.canonicalize(graph);
-    if (!speciesMap.has(canonical)) {
-      speciesMap.set(canonical, graph);
-      speciesCount++;
-      if (GraphMatcher.matchesPattern(targetGraph, graph)) {
-        matchingSpecies.push(canonical);
-      }
-    }
-  }
-
-  let frontier = [...speciesMap.entries()].map(([c, m]) => ({ canonical: c, graph: m }));
-  let iteration = 0;
-
-  while (frontier.length > 0 && iteration < config.maxIterations) {
-    iteration++;
-    const nextFrontier: Array<{ canonical: string; graph: SpeciesGraph }> = [];
-
-    for (const species of frontier) {
-      if (speciesCount >= config.maxSpecies || reactionsGenerated >= config.maxReactions) {
-        return {
-          count: matchingSpecies.length,
-          confidence: 'bounded',
-          explorationComplete: false,
-          speciesExplored: speciesCount,
-          matchingSpecies,
-        };
-      }
-
-      for (const rule of allRules) {
-        if (rule.reactantPatterns.length === 1) {
-          if (GraphMatcher.matchesPattern(rule.reactantPatterns[0], species.graph)) {
-            reactionsGenerated++;
-            for (const prodGraph of rule.productPatterns) {
-              const canonical = GraphCanonicalizer.canonicalize(prodGraph);
-              if (!speciesMap.has(canonical)) {
-                speciesMap.set(canonical, prodGraph);
-                speciesCount++;
-                nextFrontier.push({ canonical, graph: prodGraph });
-                if (GraphMatcher.matchesPattern(targetGraph, prodGraph)) {
-                  matchingSpecies.push(canonical);
-                }
-              }
-            }
-          }
-        }
-      }
-    }
-
-    frontier = nextFrontier;
-  }
-
-  return {
-    count: matchingSpecies.length,
-    confidence: frontier.length === 0 ? 'exact' : 'bounded',
-    explorationComplete: frontier.length === 0,
-    speciesExplored: speciesCount,
-    matchingSpecies,
   };
 }
 

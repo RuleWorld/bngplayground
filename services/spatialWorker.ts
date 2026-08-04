@@ -38,6 +38,12 @@ if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') 
     self.postMessage(response);
     event.preventDefault();
   });
+
+  self.addEventListener('messageerror', (event) => {
+    const response: SpatialWorkerResponse = { type: 'error', message: 'SpatialWorker failed to deserialize incoming message' };
+    self.postMessage(response);
+    event.preventDefault();
+  });
 }
 
 let simulation: SpatialSimulation | null = null;
@@ -51,6 +57,11 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
   }
 
   const msg = event.data;
+  if (!msg || typeof msg !== 'object') {
+    const response: SpatialWorkerResponse = { type: 'error', message: 'SpatialWorker received null, undefined, or non-object message' };
+    self.postMessage(response);
+    return;
+  }
 
   try {
     switch (msg.type) {

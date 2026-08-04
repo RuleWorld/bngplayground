@@ -9,6 +9,11 @@ export class Molecule {
   wildcard?: string; // Molecule-level bond wildcard (!+, !?, !-)
   _sourceKey?: string; // Internal property for tracking reactant source
   hasExplicitEmptyComponentList: boolean;
+  private _componentCounts?: Map<string, number>;
+  _sourceR?: number;
+  _sourceM?: number;
+  _explicitUnboundComponents?: Set<number>;
+  _explicitBondedComponents?: Set<number>;
 
   constructor(
     name: string,
@@ -20,6 +25,17 @@ export class Molecule {
     this.components = components;
     this.compartment = compartment;
     this.hasExplicitEmptyComponentList = hasExplicitEmptyComponentList;
+  }
+
+  get componentCounts(): Map<string, number> {
+    if (this._componentCounts !== undefined) return this._componentCounts;
+    const counts = new Map<string, number>();
+    for (let i = 0; i < this.components.length; i++) {
+      const compName = this.components[i].name;
+      counts.set(compName, (counts.get(compName) ?? 0) + 1);
+    }
+    this._componentCounts = counts;
+    return counts;
   }
 
   /**
@@ -75,6 +91,14 @@ export class Molecule {
     cloned.label = this.label;
     cloned.wildcard = this.wildcard;
     cloned._sourceKey = this._sourceKey;
+    cloned._sourceR = this._sourceR;
+    cloned._sourceM = this._sourceM;
+    if (this._explicitUnboundComponents) {
+      cloned._explicitUnboundComponents = new Set(this._explicitUnboundComponents);
+    }
+    if (this._explicitBondedComponents) {
+      cloned._explicitBondedComponents = new Set(this._explicitBondedComponents);
+    }
     return cloned;
   }
 }

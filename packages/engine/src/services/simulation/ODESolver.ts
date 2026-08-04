@@ -25,4 +25,4 @@ export { buildJacobianFunction, isPurelyMassAction, computeJacobian, computeFini
 export type { JacobianReaction } from '../simulation/AnalyticalJacobian';
 
 // ── Auto-switching wrappers & factory ───────────────────────────────
-export { AutoSolver, SmartAutoSolver, CVODEAutoSolver, createSolver } from './solvers/AutoSolvers';
+export { AutoSolver, createSolver } from './solvers/AutoSolvers';

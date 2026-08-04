@@ -947,7 +947,7 @@ export class NetworkGenerator {
         // Process all species in the current batch
         for (let batchIdx = 0; batchIdx < batchSize; batchIdx++) {
           const currentSpecies = queue[batchIdx];
-          const currentCanonical = profiledCanonicalize(currentSpecies);
+          const currentCanonical = currentSpecies.cachedCanonical || profiledCanonicalize(currentSpecies);
           const currentSpeciesObj = speciesMap.get(currentCanonical)!;
 
 
@@ -1232,6 +1232,10 @@ export class NetworkGenerator {
   ): Promise<void> {
     const pattern = rule.reactants[0];
 
+    if (!GraphMatcher.canPossiblyMatch(pattern, reactantSpecies.graph)) {
+      return;
+    }
+
     const debugUnimolecularSignature =
       typeof process !== 'undefined' &&
       process.env?.DEBUG_UNIMOLEC_SIGNATURE === '1';
@@ -1510,6 +1514,12 @@ export class NetworkGenerator {
     const collapsedRuleStatFactor = matchCount === 1 ? this.computeCollapsedRuleStatFactor(rule) : 1;
 
     const signatureMultiplicityByOutcome = new Map<string, number>();
+    const matchOutcomes: Array<{
+      match: MatchMap;
+      products: SpeciesGraph[] | null;
+      signature: string | null;
+    }> = [];
+
     for (const candidateMatch of matches) {
       const candidateProducts = this.applyRuleTransformation(
         rule,
@@ -1518,21 +1528,30 @@ export class NetworkGenerator {
         [candidateMatch]
       );
       if (candidateProducts === null || !this.validateProducts(candidateProducts)) {
+        matchOutcomes.push({ match: candidateMatch, products: null, signature: null });
         continue;
       }
       const expectedProductCount = rule.products.length;
       if (candidateProducts.length < expectedProductCount) {
+        matchOutcomes.push({ match: candidateMatch, products: null, signature: null });
         continue;
       }
       const sig =
         buildUnimolecularEventSignatureFromRuleOps(candidateMatch) ??
         buildUnimolecularEventSignatureFromProducts(candidateProducts);
+
+      matchOutcomes.push({ match: candidateMatch, products: candidateProducts, signature: sig });
+
       if (!sig) continue;
       signatureMultiplicityByOutcome.set(sig, (signatureMultiplicityByOutcome.get(sig) ?? 0) + 1);
     }
 
 
-    for (const match of matches) {
+    for (const outcome of matchOutcomes) {
+      const { match, products, signature } = outcome;
+      if (products === null) {
+        continue;
+      }
 
       if (signal?.aborted) {
         throw new DOMException('Network generation cancelled', 'AbortError');
@@ -1540,21 +1559,13 @@ export class NetworkGenerator {
 
       const degeneracy = countEmbeddingDegeneracy(pattern, reactantSpecies.graph, match);
 
-      // 3. Apply Transformation
-      const products = this.applyRuleTransformation(
-        rule,
-        [rule.reactants[0]],
-        [reactantSpecies.graph],
-        [match]
-      );
-
       if (shouldLogNetworkGenerator) {
         debugNetworkLog(`[applyUnimolecularRule] Transformation result: ${products ? products.map(p => p.toString()).join(', ') : 'null'}`);
       }
 
       // products === null means transformation failed (e.g., no match)
       // products === [] (empty array) is valid for degradation rules
-      if (products === null || !this.validateProducts(products)) {
+      if (!this.validateProducts(products)) {
         continue;
       }
 
@@ -1571,12 +1582,6 @@ export class NetworkGenerator {
         }
         continue;
       }
-
-      // Now that we have a concrete outcome, build a stable event signature and deduplicate.
-      // Prefer explicit RxnRule ops when present; otherwise derive from the product split.
-      const signature =
-        buildUnimolecularEventSignatureFromRuleOps(match) ??
-        buildUnimolecularEventSignatureFromProducts(products);
       const signatureMultiplicity = signature ? (signatureMultiplicityByOutcome.get(signature) ?? 1) : 1;
       const hasTopologyChangingSignature = !!signature && !signature.startsWith('addMol:');
 
@@ -2271,6 +2276,9 @@ export class NetworkGenerator {
 
     // Try matching currentSpecies against EVERY pattern position i
     for (let i = 0; i < n; i++) {
+      if (!GraphMatcher.canPossiblyMatch(patterns[i], currentSpecies.graph)) {
+        continue;
+      }
       // For carry-through rules (catalyst + substrate pattern), substrate anchors need
       // SB=false to enumerate ALL substrate embeddings. This enables sigMult to capture
       // the correct rate multiplier (e.g., STAT3(U).STAT3(U) has 2 s~U sites → sigMult=2 → rate=2k).
@@ -3071,7 +3079,7 @@ export class NetworkGenerator {
             }
           }
         }
-      } catch (err) {
+      } catch {
         // If enumeration fails or is too large, keep previously computed `multiplicity`.
       }
     }
@@ -3321,6 +3329,20 @@ export class NetworkGenerator {
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[]
   ): SpeciesGraph[] | null {
+    const getMolKeyFromMol = (mol: Molecule): number => {
+      if (mol._sourceR !== undefined && mol._sourceM !== undefined) {
+        return (mol._sourceR << 16) | mol._sourceM;
+      }
+      const key = mol._sourceKey;
+      if (!key) return -1;
+      const idx = key.indexOf(':');
+      const r = parseInt(key.slice(0, idx), 10);
+      const m = parseInt(key.slice(idx + 1), 10);
+      mol._sourceR = r;
+      mol._sourceM = m;
+      return (r << 16) | m;
+    };
+
     const _profStart = profilingEnabled ? performance.now() : 0;
     try {
       if (shouldLogNetworkGenerator) {
@@ -3330,16 +3352,16 @@ export class NetworkGenerator {
       }
 
       const productGraphs: SpeciesGraph[] = [];
-      const usedReactantMolsInReaction = new Set<string>(); // Tracks reactant graph molecules surviving in products
+      const usedReactantMolsInReaction = new Set<number>(); // Tracks reactant graph molecules surviving in products
       const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
       const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // NOTE: Track where survivors ended up
 
       // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
-      const matchedReactantKeys = new Set<string>();
+      const matchedReactantKeys = new Set<number>();
       for (let i = 0; i < matches.length; i++) {
         const map = matches[i];
         for (const [_patMolIdx, tgtMolIdx] of map.moleculeMap.entries()) {
-          matchedReactantKeys.add(`${i}:${tgtMolIdx}`);
+          matchedReactantKeys.add((i << 16) | tgtMolIdx);
         }
       }
 
@@ -3371,25 +3393,27 @@ export class NetworkGenerator {
           let invalidInterComplexBond = false;
           for (const [key1, partners] of fullProductGraph.adjacency) {
             if (invalidInterComplexBond) break;
-            // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
             const mol1Idx = parseInt(key1, 10);
-            const mol1 = fullProductGraph.molecules[mol1Idx] as Molecule & { _sourceKey?: string };
-            if (!mol1?._sourceKey) continue;
-            const _cIdx5 = mol1._sourceKey.indexOf(':');
-            const r1 = parseInt(mol1._sourceKey.slice(0, _cIdx5), 10);
-            const rMol1 = parseInt(mol1._sourceKey.slice(_cIdx5 + 1), 10);
+            const mol1: Molecule = fullProductGraph.molecules[mol1Idx];
+            if (!mol1) continue;
+            getMolKeyFromMol(mol1); // Ensures _sourceR and _sourceM are initialized
+            const r1 = mol1._sourceR;
+            const rMol1 = mol1._sourceM;
+            if (r1 === undefined || rMol1 === undefined) continue;
+
             for (const key2 of partners) {
               const bondId = key1 < key2 ? `${key1}||${key2}` : `${key2}||${key1}`;
               if (seenBondIds.has(bondId)) continue;
               seenBondIds.add(bondId);
-              // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
               const mol2Idx = parseInt(key2, 10);
-              const mol2 = fullProductGraph.molecules[mol2Idx] as Molecule & { _sourceKey?: string };
-              if (!mol2?._sourceKey) continue;
-              const _cIdx6 = mol2._sourceKey.indexOf(':');
-              const r2 = parseInt(mol2._sourceKey.slice(0, _cIdx6), 10);
+              const mol2: Molecule = fullProductGraph.molecules[mol2Idx];
+              if (!mol2) continue;
+              getMolKeyFromMol(mol2); // Ensures _sourceR and _sourceM are initialized
+              const r2 = mol2._sourceR;
               if (r1 === r2) continue; // Intra-complex bond — always OK
-              const rMol2 = parseInt(mol2._sourceKey.slice(_cIdx6 + 1), 10);
+              const rMol2 = mol2._sourceM;
+              if (r2 === undefined || rMol2 === undefined) continue;
+
               // Use ORIGINAL reactant compartments (before product-pattern compartment override)
               const gr1 = reactantGraphs[r1];
               const gr2 = reactantGraphs[r2];
@@ -3412,28 +3436,30 @@ export class NetworkGenerator {
         // BIO-NETGEN PARITY: Split the product graph into connected components.
         // Often a single product pattern like A.B produces one connected component,
         // but if bonds are broken explicitly or implicitly, it might split.
-        const explicitUnboundBySource = new Map<string, Set<number>>();
-        const explicitBondedBySource = new Map<string, Set<number>>();
-        for (const mol of fullProductGraph.molecules as Array<Molecule & { _sourceKey?: string; _explicitUnboundComponents?: Set<number>; _explicitBondedComponents?: Set<number> }>) {
-          if (!mol._sourceKey) continue;
+        const explicitUnboundBySource = new Map<number, Set<number>>();
+        const explicitBondedBySource = new Map<number, Set<number>>();
+        for (const mol of fullProductGraph.molecules) {
+          const mKey = getMolKeyFromMol(mol);
+          if (mKey === -1) continue;
           if (mol._explicitUnboundComponents && mol._explicitUnboundComponents.size > 0) {
-            explicitUnboundBySource.set(mol._sourceKey, new Set(mol._explicitUnboundComponents));
+            explicitUnboundBySource.set(mKey, new Set(mol._explicitUnboundComponents));
           }
           if (mol._explicitBondedComponents && mol._explicitBondedComponents.size > 0) {
-            explicitBondedBySource.set(mol._sourceKey, new Set(mol._explicitBondedComponents));
+            explicitBondedBySource.set(mKey, new Set(mol._explicitBondedComponents));
           }
         }
 
         const splitProducts = fullProductGraph.split(); // Use fullProductGraph.split()
 
         for (const subgraph of splitProducts as Array<SpeciesGraph>) {
-          for (const mol of subgraph.molecules as Array<Molecule & { _sourceKey?: string; _explicitUnboundComponents?: Set<number>; _explicitBondedComponents?: Set<number> }>) {
-            if (!mol._sourceKey) continue;
-            const explicitUnbound = explicitUnboundBySource.get(mol._sourceKey);
+          for (const mol of subgraph.molecules) {
+            const mKey = getMolKeyFromMol(mol);
+            if (mKey === -1) continue;
+            const explicitUnbound = explicitUnboundBySource.get(mKey);
             if (explicitUnbound && explicitUnbound.size > 0) {
               mol._explicitUnboundComponents = explicitUnbound;
             }
-            const explicitBonded = explicitBondedBySource.get(mol._sourceKey);
+            const explicitBonded = explicitBondedBySource.get(mKey);
             if (explicitBonded && explicitBonded.size > 0) {
               mol._explicitBondedComponents = explicitBonded;
             }
@@ -3449,7 +3475,10 @@ export class NetworkGenerator {
         let productsToKeep = splitProducts;
         if (splitProducts.length > 1) {
           const anchored = splitProducts.filter((subgraph) =>
-            subgraph.molecules.some((mol) => mol._sourceKey && matchedReactantKeys.has(mol._sourceKey))
+            subgraph.molecules.some((mol) => {
+              const mKey = getMolKeyFromMol(mol);
+              return mKey !== -1 && matchedReactantKeys.has(mKey);
+            })
           );
           const productPatternMolNames = new Set(productPattern.molecules.map((mol) => mol.name));
           const anchoredMatchingPattern = anchored.filter((subgraph) =>
@@ -3475,7 +3504,8 @@ export class NetworkGenerator {
           // DEDUPLICATION
           let isAlreadyIncluded = false;
           for (const mol of subgraph.molecules) {
-            if (mol._sourceKey && usedReactantMolsInReaction.has(mol._sourceKey)) {
+            const mKey = getMolKeyFromMol(mol);
+            if (mKey !== -1 && usedReactantMolsInReaction.has(mKey)) {
               isAlreadyIncluded = true;
               break;
             }
@@ -3488,12 +3518,14 @@ export class NetworkGenerator {
             // NOTE: Track survivor locations
             for (let i = 0; i < subgraph.molecules.length; i++) {
               const mol = subgraph.molecules[i];
-              if (mol._sourceKey) {
-                usedReactantMolsInReaction.add(mol._sourceKey);
-                const _cIdx2 = mol._sourceKey.indexOf(':');
-                const rIdx = parseInt(mol._sourceKey.slice(0, _cIdx2), 10);
-                const mIdx = parseInt(mol._sourceKey.slice(_cIdx2 + 1), 10);
-                survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
+              const mKey = getMolKeyFromMol(mol);
+              if (mKey !== -1) {
+                usedReactantMolsInReaction.add(mKey);
+                const rIdx = mol._sourceR;
+                const mIdx = mol._sourceM;
+                if (rIdx !== undefined && mIdx !== undefined) {
+                  survivorLocations[rIdx].set(mIdx, { graphIdx, molIdx: i });
+                }
               }
             }
           } else if (shouldLogNetworkGenerator) {
@@ -3508,7 +3540,7 @@ export class NetworkGenerator {
 
       // NOTE: Pre-calculate component state changes for MoveConnected rules
       // This allows us to propagate state changes (like 'loc') to bystanders in the connected component.
-      const survivorDeltas = new Map<string, { comp: string, state: string }[]>();
+      const survivorDeltas = new Map<number, { comp: string, state: string }[]>();
       if ((rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected) {
         for (let ri = 0; ri < reactantGraphs.length; ri++) {
           const rg = reactantGraphs[ri];
@@ -3518,7 +3550,7 @@ export class NetworkGenerator {
           for (const [mIdx, loc] of survivorLocations[ri].entries()) {
             const oldMol = rg.molecules[mIdx];
             const newMol = productGraphs[loc.graphIdx].molecules[loc.molIdx];
-            const sourceKey = `${ri}:${mIdx}`;
+            const sourceKeyNum = (ri << 16) | mIdx;
 
             const changes: { comp: string, state: string }[] = [];
 
@@ -3535,9 +3567,9 @@ export class NetworkGenerator {
               }
             }
             if (changes.length > 0) {
-              survivorDeltas.set(sourceKey, changes);
+              survivorDeltas.set(sourceKeyNum, changes);
               if (shouldLogNetworkGenerator) {
-                debugNetworkLog(`[applyTransformation] Recorded MoveConnected delta for ${sourceKey}: ${JSON.stringify(changes)}`);
+                debugNetworkLog(`[applyTransformation] Recorded MoveConnected delta for ${sourceKeyNum}: ${JSON.stringify(changes)}`);
               }
             }
           }
@@ -3564,7 +3596,7 @@ export class NetworkGenerator {
           const targetMolIdx = match.moleculeMap.get(pMolIdx);
           if (targetMolIdx === undefined) continue;
           mappedCount++;
-          if (!usedReactantMolsInReaction.has(`${r}:${targetMolIdx}`)) {
+          if (!usedReactantMolsInReaction.has((r << 16) | targetMolIdx)) {
             deletedCount++;
           }
         }
@@ -3589,7 +3621,7 @@ export class NetworkGenerator {
         const visitedInOrphanCheck = new Set<number>();
 
         for (let m = 0; m < rg.molecules.length; m++) {
-          const key = `${r}:${m}`;
+          const key = (r << 16) | m;
           if (usedReactantMolsInReaction.has(key) || visitedInOrphanCheck.has(m)) continue;
 
           // Found unvisited orphan seed. Traverse its connected component in the Reactant Graph.
@@ -3601,46 +3633,36 @@ export class NetworkGenerator {
           let anchorGraphIdx = -1; // -1 means no anchor found yet
           let isAnchoredToSurvivor = false;
           let touchesMatchedBoundary = false;
-          const anchors = new Map<string, { graphIdx: number, molIdx: number }>();
+          const anchors = new Map<number, { graphIdx: number, molIdx: number }>();
 
           let head = 0;
           while (head < queue.length) {
             const currM = queue[head++];
 
-            // Check neighbors
-            const mol = rg.molecules[currM];
-            for (let c = 0; c < mol.components.length; c++) {
-              const adjKey = `${currM}.${c}`;
-              const neighbors = rg.adjacency.get(adjKey);
-              if (neighbors) {
-                for (const neighbor of neighbors) {
-                  const _dIdx2 = neighbor.indexOf('.');
-                  const nMStr = neighbor.slice(0, _dIdx2);
-                  const nM = Number(nMStr);
-                  const nKey = `${r}:${nM}`;
+            // Check neighbors (optimized via precomputed neighborList to completely avoid string keys and map lookups)
+            for (const nM of rg.neighborList[currM]) {
+              const nKeyNum = (r << 16) | nM;
 
-                  if (usedReactantMolsInReaction.has(nKey)) {
-                    // Connected to a survivor!
-                    isAnchoredToSurvivor = true;
-                    const loc = survivorLocations[r].get(nM);
-                    if (loc) {
-                      anchors.set(nKey, loc);
-                      if (anchorGraphIdx === -1) {
-                        anchorGraphIdx = loc.graphIdx;
-                      }
-                    }
-                  } else if (matchedReactantKeys.has(nKey)) {
-                    // Connected to a molecule that is being deleted/transformed.
-                    // Treat as boundary. Whether this orphan survives is decided below based
-                    // on BNG2 deletion mode for this reactant (whole-species vs molecule-level).
-                    touchesMatchedBoundary = true;
-                    continue;
-                  } else if (!visitedInOrphanCheck.has(nM)) {
-                    visitedInOrphanCheck.add(nM);
-                    clusterIndices.add(nM);
-                    queue.push(nM);
+              if (usedReactantMolsInReaction.has(nKeyNum)) {
+                // Connected to a survivor!
+                isAnchoredToSurvivor = true;
+                const loc = survivorLocations[r].get(nM);
+                if (loc) {
+                  anchors.set(nKeyNum, loc);
+                  if (anchorGraphIdx === -1) {
+                    anchorGraphIdx = loc.graphIdx;
                   }
                 }
+              } else if (matchedReactantKeys.has(nKeyNum)) {
+                // Connected to a molecule that is being deleted/transformed.
+                // Treat as boundary. Whether this orphan survives is decided below based
+                // on BNG2 deletion mode for this reactant (whole-species vs molecule-level).
+                touchesMatchedBoundary = true;
+                continue;
+              } else if (!visitedInOrphanCheck.has(nM)) {
+                visitedInOrphanCheck.add(nM);
+                clusterIndices.add(nM);
+                queue.push(nM);
               }
             }
           }
@@ -3656,7 +3678,7 @@ export class NetworkGenerator {
             const oldToNewIdx = new Map<number, number>();
             const survivingInCluster = new Set<number>();
             for (const idx of clusterIndices) {
-              if (!matchedReactantKeys.has(`${r}:${idx}`)) {
+              if (!matchedReactantKeys.has((r << 16) | idx)) {
                 survivingInCluster.add(idx);
               }
             }
@@ -3676,7 +3698,7 @@ export class NetworkGenerator {
                   const nCStr = neighbor.slice(_dIdx3 + 1);
                   const nM = Number(nMStr);
                   const nC = Number(nCStr);
-                  const nKey = `${r}:${nM}`;
+                  const nKey = (r << 16) | nM;
                   const anchorLoc = anchors.get(nKey);
                   if (!anchorLoc || anchorLoc.graphIdx !== anchorGraphIdx) continue;
 
@@ -3712,7 +3734,7 @@ export class NetworkGenerator {
             }
 
             if (survivingInCluster.size === 0) {
-              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add((r << 16) | oldIdx);
               continue;
             }
 
@@ -3725,7 +3747,7 @@ export class NetworkGenerator {
               if ((rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected && anchors.size > 0) {
                 // Use the first available anchor to determine the delta
                 const anchorKey = anchors.keys().next().value;
-                if (anchorKey) {
+                if (anchorKey !== undefined) {
                   const deltas = survivorDeltas.get(anchorKey);
                   if (deltas) {
                     for (const delta of deltas) {
@@ -3752,6 +3774,8 @@ export class NetworkGenerator {
                 }
               }
               newMol._sourceKey = `${r}:${oldIdx}`;
+              newMol._sourceR = r;
+              newMol._sourceM = oldIdx;
               if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
               const newIdx = targetGraph.molecules.length;
               targetGraph.molecules.push(newMol);
@@ -3800,7 +3824,7 @@ export class NetworkGenerator {
                     const nCStr = neighbor.slice(_dIdx3 + 1);
                     const nM = Number(nMStr);
                     const nC = Number(nCStr);
-                    const nKey = `${r}:${nM}`;
+                    const nKey = (r << 16) | nM;
                     const anchorLoc = anchors.get(nKey);
                     if (anchorLoc && anchorLoc.graphIdx === anchorGraphIdx) {
                       const bondLabel = oldMol.components[c].edges.keys().next().value;
@@ -3833,7 +3857,7 @@ export class NetworkGenerator {
               }
             }
 
-            for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+            for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add((r << 16) | oldIdx);
 
           } else {
             // PARTIAL PRESERVATION: The cluster is not anchored to a survivor.
@@ -3845,7 +3869,7 @@ export class NetworkGenerator {
               if (shouldLogNetworkGenerator) {
                 debugNetworkLog(`[applyTransformation] Whole-species deletion: Dropping orphan cluster from reactant ${r} (Rule ${rule.name})`);
               }
-              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add((r << 16) | oldIdx);
               continue;
             }
 
@@ -3854,7 +3878,7 @@ export class NetworkGenerator {
 
             const survivingOrphans = new Set<number>();
             for (const idx of clusterIndices) {
-              if (!matchedReactantKeys.has(`${r}:${idx}`)) {
+              if (!matchedReactantKeys.has((r << 16) | idx)) {
                 survivingOrphans.add(idx);
               }
             }
@@ -3875,6 +3899,8 @@ export class NetworkGenerator {
                 const oldMol = rg.molecules[oldIdx];
                 const newMol = this.cloneMoleculeStructure(oldMol);
                 newMol._sourceKey = `${r}:${oldIdx}`;
+                newMol._sourceR = r;
+                newMol._sourceM = oldIdx;
                 if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
 
                 const newIdx = newGraph.molecules.length;
@@ -3917,14 +3943,14 @@ export class NetworkGenerator {
               }
 
               // Track used (even if effectively deleted, we handled them)
-              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add((r << 16) | oldIdx);
 
             } else {
               if (shouldLogNetworkGenerator) {
                 debugNetworkLog(`[applyTransformation] Discarding fully deleted orphan cluster: [${Array.from(clusterIndices).join(',')}]`);
               }
               // Mark all as used/handled
-              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add(`${r}:${oldIdx}`);
+              for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add((r << 16) | oldIdx);
             }
           }
         }
@@ -3944,22 +3970,17 @@ export class NetworkGenerator {
       // excluding other molecules explicitly named in the same reactant pattern.
       if (rule.isMoveConnected) {
         for (const graph of productGraphs) {
-          const sourceToGraphIndex = new Map<string, number>();
+          const sourceToGraphIndex = new Map<number, number>();
           for (let idx = 0; idx < graph.molecules.length; idx++) {
-            const sourceKey = graph.molecules[idx]._sourceKey;
-            if (sourceKey) sourceToGraphIndex.set(sourceKey, idx);
+            const mKey = getMolKeyFromMol(graph.molecules[idx]);
+            if (mKey !== -1) sourceToGraphIndex.set(mKey, idx);
           }
 
           for (let anchorIdx = 0; anchorIdx < graph.molecules.length; anchorIdx++) {
             const anchorMol = graph.molecules[anchorIdx];
-            if (!anchorMol._sourceKey) continue;
-
-            const _cIdx3 = anchorMol._sourceKey.indexOf(':');
-            const rStr = anchorMol._sourceKey.slice(0, _cIdx3);
-            const mStr = anchorMol._sourceKey.slice(_cIdx3 + 1);
-            const reactantIdx = Number(rStr);
-            const reactantMolIdx = Number(mStr);
-            if (!Number.isFinite(reactantIdx) || !Number.isFinite(reactantMolIdx)) continue;
+            const reactantIdx = anchorMol._sourceR;
+            const reactantMolIdx = anchorMol._sourceM;
+            if (reactantIdx === undefined || reactantMolIdx === undefined) continue;
             if (reactantIdx < 0 || reactantIdx >= reactantGraphs.length) continue;
 
             const sourceMol = reactantGraphs[reactantIdx].molecules[reactantMolIdx];
@@ -3974,8 +3995,8 @@ export class NetworkGenerator {
             if (reactantMatch) {
               for (const mappedReactantMolIdx of reactantMatch.moleculeMap.values()) {
                 if (mappedReactantMolIdx === reactantMolIdx) continue;
-                const mappedKey = `${reactantIdx}:${mappedReactantMolIdx}`;
-                const mappedGraphIdx = sourceToGraphIndex.get(mappedKey);
+                const mappedKeyNum = (reactantIdx << 16) | mappedReactantMolIdx;
+                const mappedGraphIdx = sourceToGraphIndex.get(mappedKeyNum);
                 if (mappedGraphIdx !== undefined) {
                   excluded.add(mappedGraphIdx);
                 }
@@ -4767,6 +4788,8 @@ export class NetworkGenerator {
       const sourceMol = reactantGraphs[r].molecules[molIdx];
       const clone = this.cloneMoleculeStructure(sourceMol);
       clone._sourceKey = key; // Preserve source mapping (reactantIdx:molIdx)
+      clone._sourceR = r;
+      clone._sourceM = molIdx;
 
       // CRITICAL FIX: If molecule doesn't have its own compartment, inherit from its reactant graph
       // This ensures that when L@EC.R@PM unbinds, L gets EC and R gets PM (not both PM)

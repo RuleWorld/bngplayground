@@ -47,12 +47,19 @@ class SpatialService {
     );
 
     this.worker.onmessage = (event: MessageEvent<SpatialWorkerResponse>) => {
-      this.handleWorkerMessage(event.data);
+      const data = event.data ?? { type: 'error', message: 'Empty or undefined worker response' };
+      this.handleWorkerMessage(data);
     };
 
     this.worker.onerror = (error) => {
       this.setState('error');
       this.callbacks.onError?.(error.message);
+    };
+
+    this.worker.onmessageerror = (event) => {
+      console.error('[SpatialService] Worker failed to deserialize message:', event.data);
+      this.setState('error');
+      this.callbacks.onError?.('SpatialService worker failed to deserialize message');
     };
 
     // Send init message

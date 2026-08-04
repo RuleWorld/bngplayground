@@ -335,6 +335,13 @@ export interface SimulationOptions {
     captureOdeSystem?: (handle: OdeSystemHandle) => void;
     /** Enable Hermite dense output (continuous interpolation between steps). Default: false. */
     denseOutput?: boolean;
+    /**
+     * Strict functional-rate evaluation: when true, unresolved variables or
+     * non-numeric (NaN) results in rate expressions throw instead of silently
+     * returning 0. Intended for reference-output / CI generation so correctness
+     * bugs surface loudly. Default: false.
+     */
+    strictFunctionalRates?: boolean;
 }
 
 export interface SerializedWorkerError {

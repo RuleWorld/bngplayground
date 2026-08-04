@@ -48,6 +48,24 @@ export interface ParseResult {
  * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
  *          and list of accumulated syntactic/semantic parsing errors.
  */
+function getFirstActiveLine(src: string): string | null {
+  let start = 0;
+  const len = src.length;
+  while (start < len) {
+    let end = src.indexOf('\n', start);
+    if (end === -1) {
+      end = len;
+    }
+    const line = src.substring(start, end);
+    const trimmed = line.trim();
+    if (trimmed !== '' && !trimmed.startsWith('#')) {
+      return trimmed;
+    }
+    start = end + 1;
+  }
+  return null;
+}
+
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
@@ -86,6 +104,9 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     // We do this as a pre-parse normalization to preserve repository files
     // but remain compatible with BNG2.pl. We skip lines that are comments.
     function normalizeLegacyBlocks(src: string): { normalized: string; warned: boolean } {
+      if (!/molecules/i.test(src)) {
+        return { normalized: src, warned: false };
+      }
       const lines = src.split(/\r\n|\n/);
       let warned = false;
       const out = lines.map(line => {
@@ -117,32 +138,38 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // The local function bodies and calls are preserved so NetworkExpansion.ts can
       // detect which rules use local functions and compute per-species rates at
       // network-generation time.
-      const localContextMatches = Array.from(next.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)::/g));
-      if (localContextMatches.length > 0) {
-        // Only strip the %x:: prefix from pattern positions; leave function defs/calls intact.
-        next = next.replace(/%[A-Za-z_][A-Za-z0-9_]*::/g, '');
+      if (next.includes('::')) {
+        const localContextMatches = Array.from(next.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)::/g));
+        if (localContextMatches.length > 0) {
+          // Only strip the %x:: prefix from pattern positions; leave function defs/calls intact.
+          next = next.replace(/%[A-Za-z_][A-Za-z0-9_]*::/g, '');
 
-        warnings.push('Detected local-function context syntax (%x::); local function calls preserved for per-species rate evaluation.');
+          warnings.push('Detected local-function context syntax (%x::); local function calls preserved for per-species rate evaluation.');
+        }
       }
 
       // Normalize legacy compartment-before-parentheses molecule syntax used in
       // some cBNGL models: Mol@Comp(...) -> Mol(...)@Comp.
       // This keeps semantics while matching the ANTLR grammar's expected order.
-      const legacyCompBeforeParen = next.replace(
-        /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-z0-9_]*)\(([^(){}]*)\)/g,
-        (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
-      );
-      if (legacyCompBeforeParen !== next) {
-        warnings.push('Normalized legacy compartment-before-parentheses syntax (Mol@Comp(...) -> Mol(...)@Comp).');
-        next = legacyCompBeforeParen;
+      if (next.includes('@')) {
+        const legacyCompBeforeParen = next.replace(
+          /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-z0-9_]*)\(([^(){}]*)\)/g,
+          (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
+        );
+        if (legacyCompBeforeParen !== next) {
+          warnings.push('Normalized legacy compartment-before-parentheses syntax (Mol@Comp(...) -> Mol(...)@Comp).');
+          next = legacyCompBeforeParen;
+        }
       }
 
       // Normalize explicit line continuations used in legacy reaction rules by
       // folding continued lines into a single logical rule line.
-      const joined = next.replace(/\\\s*\r?\n\s*/g, ' ');
-      if (joined !== next) {
-        warnings.push('Joined legacy line continuations (\\) for parser compatibility.');
-        next = joined;
+      if (next.includes('\\')) {
+        const joined = next.replace(/\\\s*\r?\n\s*/g, ' ');
+        if (joined !== next) {
+          warnings.push('Joined legacy line continuations (\\) for parser compatibility.');
+          next = joined;
+        }
       }
 
       // Legacy state-inheritance labels in component patterns use "%" (e.g., c1%1).
@@ -311,66 +338,70 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         });
       }
 
-      // ── apply expansion to reaction rules block ────────────────────────────
-      const molCompStates = extractMolCompStates(next);
-      if (/%[A-Za-z0-9_]+/.test(next) && molCompStates.size > 0) {
-        const ruleBlock = findNamedBlock(next, 'reaction rules', 'reaction rules');
-        let expandedSrc = next;
-        if (ruleBlock) {
-          const body = next.slice(ruleBlock.bodyStart, ruleBlock.bodyEnd);
-          const lines = body.split(/\r?\n/);
-          const outLines: string[] = [];
-          for (const line of lines) {
-            const t = line.trim();
-            if (!t || t.startsWith('#') || !/%[A-Za-z0-9_]+/.test(t)) {
-              outLines.push(line);
-              continue;
+      if (next.includes('%')) {
+        // ── apply expansion to reaction rules block ────────────────────────────
+        const molCompStates = extractMolCompStates(next);
+        if (/%[A-Za-z0-9_]+/.test(next) && molCompStates.size > 0) {
+          const ruleBlock = findNamedBlock(next, 'reaction rules', 'reaction rules');
+          let expandedSrc = next;
+          if (ruleBlock) {
+            const body = next.slice(ruleBlock.bodyStart, ruleBlock.bodyEnd);
+            const lines = body.split(/\r?\n/);
+            const outLines: string[] = [];
+            for (const line of lines) {
+              const t = line.trim();
+              if (!t || t.startsWith('#') || !/%[A-Za-z0-9_]+/.test(t)) {
+                outLines.push(line);
+                continue;
+              }
+              const expanded = expandRuleLine(t, molCompStates);
+              if (expanded) {
+                outLines.push(...expanded);
+              } else {
+                outLines.push(line);
+              }
             }
-            const expanded = expandRuleLine(t, molCompStates);
-            if (expanded) {
-              outLines.push(...expanded);
-            } else {
-              outLines.push(line);
-            }
+            expandedSrc = `${next.slice(0, ruleBlock.bodyStart)}${outLines.join('\n')}${next.slice(ruleBlock.bodyEnd)}`;
           }
-          expandedSrc = `${next.slice(0, ruleBlock.bodyStart)}${outLines.join('\n')}${next.slice(ruleBlock.bodyEnd)}`;
+          if (expandedSrc !== next) {
+            warnings.push('Expanded state-inheritance "%" labels into concrete rules (BNG2 style).');
+            next = expandedSrc;
+          }
         }
-        if (expandedSrc !== next) {
-          warnings.push('Expanded state-inheritance "%" labels into concrete rules (BNG2 style).');
-          next = expandedSrc;
-        }
-      }
 
-      // Fallback: if any %n patterns remain (molecule type info unavailable or
-      // expansion did not apply), strip to wildcard ~? to keep rules applicable.
-      // Keep molecule labels like ")%1" unchanged by anchoring to component starts.
-      const percentInheritanceNormalized = next.replace(/([,(]\s*[A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_+-]+)/g, '$1~?');
-      if (percentInheritanceNormalized !== next) {
-        warnings.push('Normalized legacy component inheritance "%" labels to wildcard state "~?" (fallback: no molecule type info available).');
-        next = percentInheritanceNormalized;
+        // Fallback: if any %n patterns remain (molecule type info unavailable or
+        // expansion did not apply), strip to wildcard ~? to keep rules applicable.
+        // Keep molecule labels like ")%1" unchanged by anchoring to component starts.
+        const percentInheritanceNormalized = next.replace(/([,(]\s*[A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_+-]+)/g, '$1~?');
+        if (percentInheritanceNormalized !== next) {
+          warnings.push('Normalized legacy component inheritance "%" labels to wildcard state "~?" (fallback: no molecule type info available).');
+          next = percentInheritanceNormalized;
+        }
       }
 
       // Fold standalone include/exclude_* modifier-only lines onto the previous
       // non-empty rule line instead of dropping them (semantics-preserving).
-      const modifierOnlyLinePattern = /^\s*(?:(?:include|exclude)_(?:reactants|products)\([^)]*\)\s*)+$/i;
-      const foldedLines = next.split(/\r\n|\n/);
-      let foldedStandaloneModifierLines = false;
-      for (let i = 0; i < foldedLines.length; i++) {
-        const line = foldedLines[i];
-        if (!modifierOnlyLinePattern.test(line)) continue;
+      if (/include_|exclude_/i.test(next)) {
+        const modifierOnlyLinePattern = /^\s*(?:(?:include|exclude)_(?:reactants|products)\([^)]*\)\s*)+$/i;
+        const foldedLines = next.split(/\r\n|\n/);
+        let foldedStandaloneModifierLines = false;
+        for (let i = 0; i < foldedLines.length; i++) {
+          const line = foldedLines[i];
+          if (!modifierOnlyLinePattern.test(line)) continue;
 
-        let prev = i - 1;
-        while (prev >= 0 && foldedLines[prev].trim() === '') prev--;
-        if (prev >= 0 && !/^\s*#/.test(foldedLines[prev])) {
-          foldedLines[prev] = `${foldedLines[prev].trimEnd()} ${line.trim()}`;
-          foldedLines[i] = '';
-          foldedStandaloneModifierLines = true;
+          let prev = i - 1;
+          while (prev >= 0 && foldedLines[prev].trim() === '') prev--;
+          if (prev >= 0 && !/^\s*#/.test(foldedLines[prev])) {
+            foldedLines[prev] = `${foldedLines[prev].trimEnd()} ${line.trim()}`;
+            foldedLines[i] = '';
+            foldedStandaloneModifierLines = true;
+          }
         }
+        if (foldedStandaloneModifierLines) {
+          warnings.push('Folded standalone legacy include/exclude_* modifier lines onto preceding rules.');
+        }
+        next = foldedLines.join('\n');
       }
-      if (foldedStandaloneModifierLines) {
-        warnings.push('Folded standalone legacy include/exclude_* modifier lines onto preceding rules.');
-      }
-      next = foldedLines.join('\n');
 
       // Additional unsupported constructs are handled by worker-level best-effort
       // parsing when recoverable.
@@ -378,48 +409,53 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // Some published legacy files place version()/setOption() before begin model.
       // Our grammar only parses model blocks and actions, so preserve line count by
       // replacing those directive lines with comments.
-      const lines = next.split(/\r\n|\n/);
-      let seenBeginModel = false;
-      let _insideAnyBlock = false;
-      let seenAnyBlock = false;
-      let rewroteTopLevelDirectives = false;
-      const rewritten = lines.map(line => {
-        const trimmed = line.trim();
-        if (/^begin\s+model\b/i.test(trimmed)) {
-          seenBeginModel = true;
-          _insideAnyBlock = true;
-          seenAnyBlock = true;
-          return line;
-        }
-        if (/^begin\b/i.test(trimmed)) {
-          _insideAnyBlock = true;
-          seenAnyBlock = true;
-          return line;
-        }
-        if (/^end\b/i.test(trimmed)) {
-          _insideAnyBlock = false;
-          return line;
-        }
+      const firstActiveLine = getFirstActiveLine(next);
+      const skipPreambleNormalize = firstActiveLine && firstActiveLine.toLowerCase().startsWith('begin');
+      if (!skipPreambleNormalize) {
+        const lines = next.split(/\r\n|\n/);
+        let seenBeginModel = false;
+        let _insideAnyBlock = false;
+        let seenAnyBlock = false;
+        let rewroteTopLevelDirectives = false;
+        const rewritten = lines.map(line => {
+          const trimmed = line.trim();
+          if (/^begin\s+model\b/i.test(trimmed)) {
+            seenBeginModel = true;
+            _insideAnyBlock = true;
+            seenAnyBlock = true;
+            return line;
+          }
+          if (/^begin\b/i.test(trimmed)) {
+            _insideAnyBlock = true;
+            seenAnyBlock = true;
+            return line;
+          }
+          if (/^end\b/i.test(trimmed)) {
+            _insideAnyBlock = false;
+            return line;
+          }
 
-        // Only rewrite truly top-level preamble text (before any begin/end block).
-        // This preserves bare-block BNGL files that intentionally omit begin/end model.
-        if (!seenBeginModel && !seenAnyBlock && trimmed !== '') {
-          if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
-            rewroteTopLevelDirectives = true;
-            return `# [parser-normalized] ${line}`;
+          // Only rewrite truly top-level preamble text (before any begin/end block).
+          // This preserves bare-block BNGL files that intentionally omit begin/end model.
+          if (!seenBeginModel && !seenAnyBlock && trimmed !== '') {
+            if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
+              rewroteTopLevelDirectives = true;
+              return `# [parser-normalized] ${line}`;
+            }
+            if (!/^#/.test(trimmed)) {
+              rewroteTopLevelDirectives = true;
+              return `# [parser-normalized] ${line}`;
+            }
           }
-          if (!/^#/.test(trimmed)) {
-            rewroteTopLevelDirectives = true;
-            return `# [parser-normalized] ${line}`;
-          }
+          return line;
+        });
+        if (rewroteTopLevelDirectives) {
+          warnings.push('Commented top-level legacy directives or non-BNGL content before begin model.');
         }
-        return line;
-      });
-      if (rewroteTopLevelDirectives) {
-        warnings.push('Commented top-level legacy directives or non-BNGL content before begin model.');
+        next = rewritten.join('\n');
       }
 
-      return { normalized: rewritten.join('\n'), warnings };
+      return { normalized: next, warnings };
     }
 
     const { normalized: legacyBlockNormalized, warned } = normalizeLegacyBlocks(sanitizedInput);
@@ -464,6 +500,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     let model: BNGLModel | undefined;
     try {
       const visitor = new BNGLVisitor();
+      visitor.hasCompartments = sanitizedInput.includes('@');
       model = visitor.visit(tree);
     } catch (visitorError) {
       const message = visitorError instanceof Error ? visitorError.message : String(visitorError);
@@ -521,7 +558,8 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
   for (const mt of model.moleculeTypes) {
     const componentNames = new Set<string>();
     for (const comp of mt.components) {
-      const baseName = comp.split('~')[0].trim();
+      const tildeIdx = comp.indexOf('~');
+      const baseName = tildeIdx !== -1 ? comp.substring(0, tildeIdx).trim() : comp.trim();
       componentNames.add(baseName);
     }
     declaredMoleculeTypes.set(mt.name, componentNames);

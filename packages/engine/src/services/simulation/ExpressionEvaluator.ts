@@ -418,23 +418,29 @@ export function getCompiledRateFunction(
 /**
  * Evaluates a mathematical expression representing a functional reaction rate or rule rate.
  *
- * This function compiles the mathematical expression into an executable JavaScript function (with caching),
- * substitutes custom functions via pre-expansion, and evaluates it using the provided parameters and
- * observable values as the context.
+ * Deriving its behavior directly from its implementation, this function performs the following steps:
+ * 1. Checks that the `functionalRatesEnabled` feature flag is active; throws an error if functional rates are disabled.
+ * 2. Pre-merges model parameters and observable values into a combined evaluation context, unless a `prebuiltContext` is supplied.
+ * 3. Pre-expands user-defined functions or macros within the rate expression recursively (supporting up to 10 passes for nested calls) via `preExpandExpression`.
+ * 4. Extracts the list of variable names from the evaluation context and checks if there are any referenced variables missing from the context.
+ * 5. Compiles the expanded expression string to an executable JavaScript function (utilizing safe AST-walk caching via `getCompiledRateFunction` and falling back safely to a simple parameter/numeric lookup when the safe evaluator is not loaded).
+ * 6. Executes the compiled function inside a safe wrapper to evaluate the expression.
  *
- * Invariants/Behaviors:
- * - If the evaluation throws or returns a non-numeric value (like NaN or string), it logs an error and returns 0.
- * - If the evaluation returns a non-finite number (like Infinity), it logs a warning but still returns the value.
- * - Compilation is cached using an LRU-like bounded cache based on the expression string to optimize repeated evaluations.
- * - Fails and throws if the `functionalRatesEnabled` feature flag is false.
+ * Invariants & Key Behaviors:
+ * - **Browser-API-Free**: To support server-side execution and clean separation of concerns, this utility remains strictly browser-API-free.
+ * - **Error Resilience**: If an evaluation error occurs, or if the result is non-numeric/NaN, it logs an error and returns `0` unless `strict` mode is enabled.
+ * - **Strict Mode**: When `strict` is set to `true`, any missing variables, unresolved references, or non-numeric (NaN) evaluation results immediately throw a hard error instead of falling back to a silent default `0`.
+ * - **Finite Warning**: If the result is non-finite (e.g., Infinity or -Infinity), it logs a warning but returns the non-finite value.
  *
- * @param expression - The mathematical string expression to evaluate (e.g., "k1 * A * B").
+ * @param expression - The mathematical string expression representing a functional reaction rate (e.g., "k1 * A * B").
  * @param parameters - A record mapping parameter names to their current numeric values.
  * @param observableValues - A record mapping observable names to their current numeric values.
- * @param functions - Optional custom function definitions to pre-expand before compilation.
- * @param prebuiltContext - An optional pre-merged object of parameters and observables to avoid reallocation in tight loops.
- * @param evaluatorOverride - An optional SafeExpressionEvaluator instance to override the default global evaluator.
- * @returns The numeric result of the evaluated expression. Returns 0 if evaluation yields a non-numeric result.
+ * @param functions - Optional custom function definitions to pre-expand (inline) before compiling.
+ * @param prebuiltContext - An optional pre-merged object containing both parameters and observables to bypass context object allocation overhead in hot loops.
+ * @param evaluatorOverride - An optional `ExpressionEvaluator` instance to override the default global AST evaluator.
+ * @param strict - When true, forces hard errors (throws) on unresolved variables or non-numeric results instead of returning `0`.
+ * @returns The resulting numeric value from the evaluated expression. Returns `0` on failures/NaNs if `strict` is false.
+ * @throws An error if functional rates are disabled in feature flags, or if `strict` is true and a validation/evaluation failure is encountered.
  */
 export function evaluateFunctionalRate(
   expression: string,
@@ -442,7 +448,8 @@ export function evaluateFunctionalRate(
   observableValues: Record<string, number>,
   functions?: { name: string; args: string[]; expression: string }[],
   prebuiltContext?: Record<string, number>,
-  evaluatorOverride?: ExpressionEvaluator
+  evaluatorOverride?: ExpressionEvaluator,
+  strict?: boolean
 ): number {
   if (!getFeatureFlags().functionalRatesEnabled) {
     throw new Error('Functional rates temporarily disabled pending security review');
@@ -451,6 +458,16 @@ export function evaluateFunctionalRate(
   const context: Record<string, number> = prebuiltContext || { ...parameters, ...observableValues };
   const expandedExpr = preExpandExpression(expression, functions);
   const varNames = Object.keys(context);
+
+  if (strict) {
+    const missingVars = getMissingReferencedVariables(expandedExpr, context, evaluatorOverride);
+    if (missingVars.length > 0) {
+      throw new Error(
+        `[evaluateFunctionalRate] Expression '${expression}' references undefined variable(s): ${missingVars.join(', ')}`
+      );
+    }
+  }
+
   const fn = getCompiledRateFunction(expandedExpr, varNames, evaluatorOverride);
 
   try {
@@ -460,13 +477,46 @@ export function evaluateFunctionalRate(
       console.warn(`[SafeExpressionEvaluator] Expression evaluated to non-finite: ${expression} => ${result}`);
     }
     if (typeof result !== 'number' || isNaN(result)) {
+      if (strict) {
+        throw new Error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
+      }
       console.error(`[evaluateFunctionalRate] Expression '${expression}' evaluated to non-numeric: ${result}`);
       return 0;
     }
     return result;
   } catch (e: any) {
+    if (strict) {
+      throw new Error(
+        `[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`,
+        { cause: e }
+      );
+    }
     console.error(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`);
     return 0;
+  }
+}
+
+/**
+ * Extract the free variables referenced by an expression and return any that
+ * are absent from the provided evaluation context.
+ */
+function getMissingReferencedVariables(
+  expandedExpr: string,
+  context: Record<string, number>,
+  evaluatorOverride?: ExpressionEvaluator
+): string[] {
+  try {
+    const evaluator = getEvaluator(evaluatorOverride);
+    if (!evaluator || typeof evaluator.getReferencedVariables !== 'function') {
+      return [];
+    }
+    const referenced = evaluator.getReferencedVariables(expandedExpr);
+    return referenced.filter((v) => !Object.prototype.hasOwnProperty.call(context, v));
+  } catch (e: any) {
+    console.warn(
+      `[evaluateFunctionalRate] Could not verify referenced variables for '${expandedExpr}': ${e?.message ?? String(e)}`
+    );
+    return [];
   }
 }
 
