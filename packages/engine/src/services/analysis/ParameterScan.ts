@@ -111,15 +111,11 @@ export const validateScanSettings = (
     return true;
 };
 
-// Helper to clone an expanded model to prevent shared mutation.
-// Duplicated from engine.ts's cloneExpandedModel to keep ParameterScan.ts inPackages/engine browser-API-free and self-contained.
+// Helper to clone an expanded model to prevent shared mutation between scan iterations.
+// Uses structuredClone for deep copy so that reevaluateSeedSpecies and
+// updateMassActionRates mutations on nested species/reaction objects don't leak.
 function cloneModel(model: BNGLModel): BNGLModel {
-  return {
-    ...model,
-    parameters: { ...model.parameters },
-    species: (model.species ?? []).map((s) => ({ ...s })),
-    reactions: (model.reactions ?? []).map((r) => ({ ...r })),
-  };
+  return structuredClone(model);
 }
 
 /**
