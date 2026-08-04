@@ -1,3 +1,35 @@
+import { simulate } from '../simulation/SimulationLoop';
+import { loadEvaluator } from '../simulation/ExpressionEvaluator';
+import { reevaluateSeedSpecies } from '../../utils/paramUtils';
+import { updateMassActionRates } from './DoseResponse';
+import { BNGLModel, SimulationOptions } from '../../types';
+
+export interface ParameterScanOptions {
+  code: string;
+  parameter: string;
+  start: number;
+  end: number;
+  steps: number;
+  logarithmic?: boolean;
+  parameter2?: string;
+  start2?: number;
+  end2?: number;
+  steps2?: number;
+  // standard simulation options passed through
+  method?: 'default' | 'ode' | 'ssa' | 'nf' | 'nfsim' | 'pla' | 'psa';
+  solver?: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'webgpu_rk4';
+  t_end?: number;
+  n_steps?: number;
+}
+
+export interface RunParameterScanResult {
+  mode: '1d' | '2d';
+  parameter: string;
+  parameter2?: string;
+  xValues: number[];
+  yValues?: number[];
+  observables: Record<string, number[] | number[][]>;
+}
 
 /**
  * Pure logic for Parameter Scan functionality.
@@ -78,3 +110,110 @@ export const validateScanSettings = (
     if (isLog && (s <= 0 || e <= 0)) return false;
     return true;
 };
+
+// Helper to clone an expanded model to prevent shared mutation.
+// Duplicated from engine.ts's cloneExpandedModel to keep ParameterScan.ts inPackages/engine browser-API-free and self-contained.
+function cloneModel(model: BNGLModel): BNGLModel {
+  return {
+    ...model,
+    parameters: { ...model.parameters },
+    species: (model.species ?? []).map((s) => ({ ...s })),
+    reactions: (model.reactions ?? []).map((r) => ({ ...r })),
+  };
+}
+
+/**
+ * Runs a 1D or 2D parameter scan on the given expanded model and simulation options.
+ */
+export async function runParameterScan(
+  expandedModel: BNGLModel,
+  options: {
+    parameter: string;
+    start: number;
+    end: number;
+    steps: number;
+    logarithmic?: boolean;
+    parameter2?: string;
+    start2?: number;
+    end2?: number;
+    steps2?: number;
+  },
+  simulationOptions: SimulationOptions,
+  seedExpressions: Map<string, string>
+): Promise<RunParameterScanResult> {
+  const xValues = generateRange(options.start, options.end, options.steps, options.logarithmic ?? false);
+  const yValues = options.parameter2 !== undefined
+    ? generateRange(options.start2!, options.end2!, options.steps2!, options.logarithmic ?? false)
+    : [];
+
+  if (xValues.length * Math.max(1, yValues.length || 1) > 400) {
+    throw new Error('parameter_scan supports at most 400 simulation combinations per request.');
+  }
+
+  await loadEvaluator();
+
+  if (options.parameter2 === undefined) {
+    const observables: Record<string, number[]> = {};
+    expandedModel.observables.forEach((observable) => {
+      observables[observable.name] = [];
+    });
+
+    for (const value of xValues) {
+      const runModel = cloneModel(expandedModel);
+      runModel.parameters[options.parameter] = value;
+      reevaluateSeedSpecies(runModel, seedExpressions);
+      updateMassActionRates(runModel);
+      const result = await simulate(0, runModel, simulationOptions, {
+        checkCancelled: () => { },
+        postMessage: () => { },
+      });
+      const lastPoint = result.data.at(-1) ?? {};
+      Object.keys(observables).forEach((observableName) => {
+        const rawValue = lastPoint[observableName as keyof typeof lastPoint];
+        const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? 0);
+        observables[observableName].push(Number.isFinite(numericValue) ? numericValue : 0);
+      });
+    }
+
+    return {
+      mode: '1d',
+      parameter: options.parameter,
+      xValues,
+      observables,
+    };
+  }
+
+  const observables: Record<string, number[][]> = {};
+  expandedModel.observables.forEach((observable) => {
+    observables[observable.name] = yValues.map(() => new Array(xValues.length).fill(0));
+  });
+
+  for (let yIndex = 0; yIndex < yValues.length; yIndex += 1) {
+    for (let xIndex = 0; xIndex < xValues.length; xIndex += 1) {
+      const runModel = cloneModel(expandedModel);
+      runModel.parameters[options.parameter] = xValues[xIndex];
+      runModel.parameters[options.parameter2] = yValues[yIndex];
+      reevaluateSeedSpecies(runModel, seedExpressions);
+      updateMassActionRates(runModel);
+      const result = await simulate(0, runModel, simulationOptions, {
+        checkCancelled: () => { },
+        postMessage: () => { },
+      });
+      const lastPoint = result.data.at(-1) ?? {};
+      Object.keys(observables).forEach((observableName) => {
+        const rawValue = lastPoint[observableName as keyof typeof lastPoint];
+        const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? 0);
+        observables[observableName][yIndex][xIndex] = Number.isFinite(numericValue) ? numericValue : 0;
+      });
+    }
+  }
+
+  return {
+    mode: '2d',
+    parameter: options.parameter,
+    parameter2: options.parameter2,
+    xValues,
+    yValues,
+    observables,
+  };
+}
