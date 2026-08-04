@@ -1,4 +1,4 @@
-import type { BNGLModel } from '../../../types';
+import type { BNGLModel, SimulationOptions } from '../../../types';
 
 import { getExpressionDependencies } from '../../../parser/ExpressionDependencies';
 
@@ -19,7 +19,7 @@ export interface ValidationRecommendation {
   type: string;
   message: string;
   priority: 'high' | 'medium' | 'low';
-  parameters?: Record<string, any>;
+  parameters?: Record<string, unknown>;
 }
 
 export interface ValidationResult {
@@ -27,6 +27,32 @@ export interface ValidationResult {
   errors: ValidationIssue[];
   warnings: ValidationIssue[];
   recommendations: ValidationRecommendation[];
+}
+
+export interface ParameterValidationError {
+  type: string;
+  message: string;
+  severity?: 'error' | 'warning' | 'info';
+}
+
+export interface ParameterValidationResult {
+  isValid: boolean;
+  errors: ParameterValidationError[];
+  warnings: ParameterValidationError[];
+  suggestions: string[];
+}
+
+export interface XMLValidationError {
+  type: string;
+  message: string;
+  severity?: 'error' | 'warning' | 'info';
+}
+
+export interface XMLValidationResult {
+  isValid: boolean;
+  errors: XMLValidationError[];
+  warnings: XMLValidationError[];
+  suggestions: string[];
 }
 
 export class NFsimValidator {
@@ -117,10 +143,10 @@ export class NFsimValidator {
     return { valid: errors.length === 0, errors, warnings, recommendations };
   }
 
-  validateParameters(options: any): { isValid: boolean; errors: any[]; warnings: any[]; suggestions: any[] } {
-    const errors: any[] = [];
-    const warnings: any[] = [];
-    const suggestions: any[] = [];
+  validateParameters(options: Partial<SimulationOptions>): ParameterValidationResult {
+    const errors: ParameterValidationError[] = [];
+    const warnings: ParameterValidationError[] = [];
+    const suggestions: string[] = [];
 
     if (options.t_end !== undefined && options.t_end !== null && options.t_end <= 0) {
       errors.push({ type: 'parameter', message: 'Invalid end time', severity: 'error' });
@@ -139,7 +165,7 @@ export class NFsimValidator {
     }
 
     // Add performance warning if n_steps is very large or t_end is long
-    if (options.n_steps > 10000 || options.t_end > 1000) {
+    if ((options.n_steps !== undefined && options.n_steps > 10000) || (options.t_end !== undefined && options.t_end > 1000)) {
       warnings.push({ type: 'performance', message: 'Large number of steps or long duration may affect performance' });
     }
 
@@ -151,10 +177,10 @@ export class NFsimValidator {
     return { isValid: errors.length === 0, errors, warnings, suggestions };
   }
 
-  validateXML(xml: string): any {
-    const errors: any[] = [];
-    const warnings: any[] = [];
-    const suggestions: any[] = [];
+  validateXML(xml: string): XMLValidationResult {
+    const errors: XMLValidationError[] = [];
+    const warnings: XMLValidationError[] = [];
+    const suggestions: string[] = [];
 
     if (!xml || xml.trim().length === 0) {
       errors.push({ type: 'structure', message: 'Empty XML', severity: 'error' });
@@ -176,8 +202,8 @@ export class NFsimValidator {
     };
   }
 
-  sanitizeParameters(options: any): any {
-    const sanitized: any = { ...options };
+  sanitizeParameters(options: Partial<SimulationOptions> & { timeoutMs?: number, gml?: number }): Partial<SimulationOptions> & { timeoutMs?: number, gml?: number } {
+    const sanitized: Partial<SimulationOptions> & { timeoutMs?: number, gml?: number } = { ...options };
     
     if (sanitized.t_end === undefined || sanitized.t_end === null || sanitized.t_end < 0.001) {
       sanitized.t_end = 0.001;
