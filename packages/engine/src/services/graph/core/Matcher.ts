@@ -34,11 +34,24 @@ let matchCacheStrictSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMa
 let matchCacheRelaxedNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
 let matchCacheRelaxedSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
 
+let firstMapCacheStrictNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+let firstMapCacheStrictSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+let firstMapCacheRelaxedNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+let firstMapCacheRelaxedSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+
 function getSelectedCache(allowExtra: boolean, sb: boolean) {
   if (allowExtra) {
     return sb ? matchCacheRelaxedSB : matchCacheRelaxedNoSB;
   } else {
     return sb ? matchCacheStrictSB : matchCacheStrictNoSB;
+  }
+}
+
+function getFirstMapSelectedCache(allowExtra: boolean, sb: boolean) {
+  if (allowExtra) {
+    return sb ? firstMapCacheRelaxedSB : firstMapCacheRelaxedNoSB;
+  } else {
+    return sb ? firstMapCacheStrictSB : firstMapCacheStrictNoSB;
   }
 }
 
@@ -50,6 +63,10 @@ export function clearMatchCache() {
   matchCacheStrictSB = new WeakMap();
   matchCacheRelaxedNoSB = new WeakMap();
   matchCacheRelaxedSB = new WeakMap();
+  firstMapCacheStrictNoSB = new WeakMap();
+  firstMapCacheStrictSB = new WeakMap();
+  firstMapCacheRelaxedNoSB = new WeakMap();
+  firstMapCacheRelaxedSB = new WeakMap();
 }
 
 /**
@@ -260,6 +277,12 @@ export class GraphMatcher {
       if (shouldLogGraphMatcher && pattern.toString().includes('C3(s~b)')) {
         console.log(`[GM_DEBUG] canPossiblyMatch failed for ${pattern.toString()} in ${target.toString()}`);
       }
+      let tMap = selectedCache.get(pattern);
+      if (tMap === undefined) {
+        tMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+        selectedCache.set(pattern, tMap);
+      }
+      tMap.set(target, []);
       return [];
     }
 
@@ -382,7 +405,46 @@ export class GraphMatcher {
    * This is a performance-friendly alternative to `findAllMaps` for boolean checks.
    */
   static findFirstMap(pattern: SpeciesGraph, target: SpeciesGraph, options: GraphMatchOptions = {}): MatchMap | null {
+    // 1. Check if there's already a full findAllMaps cached result
+    const selectedCache = getSelectedCache(options.allowExtraTargetBonds ?? false, options.symmetryBreaking ?? false);
+    const targetMap = selectedCache.get(pattern);
+    if (targetMap !== undefined) {
+      const cached = targetMap.get(target);
+      if (cached !== undefined) {
+        return cached[0] ?? null;
+      }
+    }
+
+    // 2. Check dedicated firstMapCache
+    const firstMapCache = getFirstMapSelectedCache(options.allowExtraTargetBonds ?? false, options.symmetryBreaking ?? false);
+    let targetFirstMap = firstMapCache.get(pattern);
+    if (targetFirstMap !== undefined) {
+      const cached = targetFirstMap.get(target);
+      if (cached !== undefined) {
+        return cached;
+      }
+    }
+
+    // 3. Fast pre-filter
     if (!this.canPossiblyMatch(pattern, target)) {
+      // If it can't possibly match, then BOTH findFirstMap and findAllMaps are guaranteed to be empty/null!
+      // So we can cache both!
+      if (targetMap === undefined) {
+        const newTargetMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+        selectedCache.set(pattern, newTargetMap);
+        newTargetMap.set(target, []);
+      } else {
+        targetMap.set(target, []);
+      }
+
+      if (targetFirstMap === undefined) {
+        const newTargetFirstMap = new WeakMap<SpeciesGraph, MatchMap | null>();
+        firstMapCache.set(pattern, newTargetFirstMap);
+        newTargetFirstMap.set(target, null);
+      } else {
+        targetFirstMap.set(target, null);
+      }
+
       return null;
     }
 
@@ -395,7 +457,26 @@ export class GraphMatcher {
       options.allowExtraTargetBonds ?? false
     );
     const iterationCount = { value: 0 };
-    return this.vf2BacktrackFirst(state, iterationCount);
+    const result = this.vf2BacktrackFirst(state, iterationCount);
+
+    // Cache the result in firstMapCache
+    if (targetFirstMap === undefined) {
+      targetFirstMap = new WeakMap<SpeciesGraph, MatchMap | null>();
+      firstMapCache.set(pattern, targetFirstMap);
+    }
+    targetFirstMap.set(target, result);
+
+    // If result is null, we can also cache it in the full findAllMaps cache as []!
+    if (result === null) {
+      let tMap = selectedCache.get(pattern);
+      if (tMap === undefined) {
+        tMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+        selectedCache.set(pattern, tMap);
+      }
+      tMap.set(target, []);
+    }
+
+    return result;
   }
 
   /**
