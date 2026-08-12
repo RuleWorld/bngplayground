@@ -5,8 +5,8 @@ import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, ex
 import { structureError } from '../services/errors.js';
 
 export async function handleGenerateNetwork(args: ToolArgs): Promise<ToolResult<any>> {
-    const parsedArgs = parseArgs('generate_network', generateNetworkArgsSchema, args);
     try {
+        const parsedArgs = parseArgs('generate_network', generateNetworkArgsSchema, args);
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
         return createToolResult(expandedModel);
