@@ -8,6 +8,13 @@ import type { TemporalAnalysisSummary } from '@bngplayground/engine';
 export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult<TemporalAnalysisSummary | MCPErrorResult>> {
   try {
     const parsedArgs = parseArgs('temporal_analysis', temporalAnalysisArgsSchema, args);
+
+    if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+      return createToolResult(structureError(
+        new Error('Model code must be a non-empty string.'),
+      ));
+    }
+
     const model = parseModelOrThrow(parsedArgs.code);
     const expandedModel = await expandModel(model);
 
