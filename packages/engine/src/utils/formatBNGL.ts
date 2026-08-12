@@ -1,3 +1,28 @@
+/**
+ * Formats a BioNetGen Language (BNGL) source code string by normalising whitespaces,
+ * indenting elements within sections, collapsing multiple consecutive blank lines,
+ * and reordering top-level blocks into a canonical sequence.
+ *
+ * The canonical order used for reordering blocks is:
+ * 1. begin model
+ * 2. molecule types / begin molecule types
+ * 3. parameters
+ * 4. seed species
+ * 5. observables
+ * 6. reaction rules / begin reaction rules
+ * 7. actions
+ * 8. end model
+ *
+ * Any remaining or unrecognized blocks are preserved and appended outside of this
+ * canonical order (with un-nested root statements prepended).
+ *
+ * @param code - The raw BNGL source code string to format.
+ * @returns The formatted, canonically ordered BNGL source code string with a single trailing newline.
+ *
+ * @invariant This utility is completely self-contained and free of any browser-specific or
+ * framework-specific APIs (such as DOM, Web Worker, or window APIs), making it perfectly
+ * safe to execute in server-side, headless Node.js, and MCP environments.
+ */
 export function formatBNGL(code: string): string {
   if (!code) return '';
   // Normalize newlines and trim whitespace
@@ -56,6 +81,7 @@ export function formatBNGL(code: string): string {
   const blocks: Record<string, string[]> = {};
   let currentKey = '__root__';
   blocks[currentKey] = [];
+  // eslint-disable-next-line no-useless-assignment
   let inBeginName: string | null = null;
   for (const ln of cleaned) {
     const m = ln.match(/^begin\s+(.*)$/i);
@@ -69,6 +95,7 @@ export function formatBNGL(code: string): string {
     }
     if (me) {
       blocks[currentKey].push(ln);
+      // eslint-disable-next-line no-useless-assignment
       inBeginName = null;
       currentKey = '__root__';
       continue;
