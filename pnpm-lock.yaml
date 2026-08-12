@@ -54,9 +54,6 @@ importers:
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0
-      fast-xml-parser:
-        specifier: ^5.10.1
-        version: 5.10.1
       jsep:
         specifier: ^1.4.0
         version: 1.4.0
@@ -2013,10 +2010,6 @@ packages:
 
   fast-xml-builder@1.3.0:
     resolution: {integrity: sha512-F74cZEdCvuw9P41GAC3rod4X04jjWGM1JPEv/GWSqFTWLsdyMSBMBMlm9Hk3GLBgLBbdBNY8yee0pQh2RBVESQ==}
-
-  fast-xml-parser@5.10.1:
-    resolution: {integrity: sha512-IEMIf7298kXuZSRFoGfMYrl7is8LpavODgbNz1cwIudv7KwVFnuU+UsMporfq6PD6aXSlawZlARiA3UywCTfMw==}
-    hasBin: true
 
   fdir@6.5.0:
     resolution: {integrity: sha512-tIbYtZbucOs0BRGqPJkshJUYdL+SDH7dVM8gjy+ERp3WAUjLEFJE+02kanyHtwjWOnwrKYBiwAmM0p4kLJAnXg==}
@@ -5616,15 +5609,6 @@ snapshots:
   fast-xml-builder@1.3.0:
     dependencies:
       path-expression-matcher: 1.6.2
-      xml-naming: 0.3.0
-
-  fast-xml-parser@5.10.1:
-    dependencies:
-      '@nodable/entities': 3.0.0
-      fast-xml-builder: 1.3.0
-      is-unsafe: 2.0.0
-      path-expression-matcher: 1.6.2
-      strnum: 2.4.1
       xml-naming: 0.3.0
 
   fdir@6.5.0(picomatch@4.0.4):
