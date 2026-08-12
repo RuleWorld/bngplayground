@@ -95,15 +95,22 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
         cancelled = false;
 
         try {
-          const result = await simulation.run((snapshot: SpatialSnapshot) => {
-            if (cancelled) return;
-            if (!snapshot.positions) return;
+          const result = await simulation.run(
+            (snapshot: SpatialSnapshot) => {
+              if (cancelled) return;
+              if (!snapshot.positions) return;
 
-            // Transfer the positions buffer for zero-copy
-            const transferable = snapshot.positions.buffer;
-            const response: SpatialWorkerResponse = { type: 'snapshot', snapshot };
-            self.postMessage(response, [transferable]);
-          });
+              // Transfer the positions buffer for zero-copy
+              const transferable = snapshot.positions.buffer;
+              const response: SpatialWorkerResponse = { type: 'snapshot', snapshot };
+              self.postMessage(response, [transferable]);
+            },
+            (step: number, totalSteps: number, time: number) => {
+              if (cancelled) return;
+              const response: SpatialWorkerResponse = { type: 'progress', step, totalSteps, time };
+              self.postMessage(response);
+            }
+          );
 
           if (!cancelled) {
             const response: SpatialWorkerResponse = { type: 'complete', result };
