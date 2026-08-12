@@ -104,6 +104,8 @@ export { MassBalance } from './services/analysis/MassBalance';
 export { findUnreachableRules } from './services/analysis/UnreachableRules';
 export { assessModelMaturity } from './services/analysis/ModelMaturity';
 export type { ModelMaturityInput, ModelMaturityResult, ModelMaturityHistoryEntry, ModelMaturityParameterSource } from './services/analysis/ModelMaturity';
+export { diagnoseModel } from './services/analysis/ModelDiagnostics';
+export type { ModelDiagnostics } from './services/analysis/ModelDiagnostics';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 export { parsePEtab, parsePEtabCombined } from './services/analysis/petabImport';
 export type { PEtabProblem, PEtabParameter, PEtabObservable } from './services/analysis/petabImport';
