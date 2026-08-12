@@ -90,6 +90,9 @@ class BnglService {
   private ignoredResponseIds = new Set<number>();
   private terminated = false;
   private lastCachedModelId?: number;
+  private lastCachedModel?: BNGLModel;
+  private lastCachedModelSignature?: string;
+  private lastCachedModelPromise?: Promise<number>;
   private progressListeners = new Set<(payload: any) => void>();
   private warningListeners = new Set<(payload: any) => void>();
 
@@ -104,6 +107,7 @@ class BnglService {
     this.messageId = 0;
     this.promises = new Map();
     this.ignoredResponseIds = new Set();
+    this.clearModelCache();
 
     this.worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
       const { id, type, payload } = event.data ?? {};
@@ -358,6 +362,7 @@ class BnglService {
     } catch (error) {
       console.warn('[BnglService] Error terminating worker', error);
     }
+    this.clearModelCache();
     this.rejectAllPending(reason ?? 'Worker terminated');
   }
 
@@ -377,10 +382,9 @@ class BnglService {
   }
 
   public simulate(model: BNGLModel, options: SimulationOptions, requestOptions?: RequestOptions): Promise<SimulationResults> {
-    return this.postMessage<SimulationResults>('simulate', { model, options }, {
-      ...requestOptions,
-      description: requestOptions?.description ?? `Simulation (${options.method})`,
-    });
+    return this.prepareModel(model, requestOptions).then((modelId) =>
+      this.simulateCached(modelId, undefined, options, requestOptions)
+    );
   }
 
   public atomize(sbmlCode: string, requestOptions?: RequestOptions): Promise<import('../types').AtomizerResult> {
@@ -409,6 +413,15 @@ class BnglService {
    * for each simulation run. Returns a numeric modelId that can be used with simulateCached.
    */
   public prepareModel(model: BNGLModel, requestOptions?: RequestOptions): Promise<number> {
+    const signature = this.getModelCacheSignature(model);
+    if (
+      this.lastCachedModel === model
+      && this.lastCachedModelSignature === signature
+      && this.lastCachedModelPromise
+    ) {
+      return this.lastCachedModelPromise;
+    }
+
     // If we previously cached a model, try to release it to keep worker memory bounded.
     const prev = this.lastCachedModelId;
     if (typeof prev === 'number') {
@@ -418,11 +431,22 @@ class BnglService {
       });
     }
 
-    return this.postMessage<{ modelId: number }>('cache_model', { model }, { ...requestOptions, description: 'Cache model' }).then((res) => {
+    this.lastCachedModel = model;
+    this.lastCachedModelSignature = signature;
+    const cachePromise = this.postMessage<{ modelId: number }>('cache_model', { model }, { ...requestOptions, description: 'Cache model' }).then((res) => {
       const modelId = (res as { modelId: number }).modelId;
-      this.lastCachedModelId = modelId;
+      if (this.lastCachedModelPromise === cachePromise) {
+        this.lastCachedModelId = modelId;
+      }
       return modelId;
+    }).catch((error) => {
+      if (this.lastCachedModelPromise === cachePromise) {
+        this.clearModelCache();
+      }
+      throw error;
     });
+    this.lastCachedModelPromise = cachePromise;
+    return cachePromise;
   }
 
   /**
@@ -440,7 +464,28 @@ class BnglService {
    * Release a previously cached model in the worker to free memory.
    */
   public releaseModel(modelId: number, requestOptions?: RequestOptions): Promise<{ modelId: number } | void> {
+    if (this.lastCachedModelId === modelId) {
+      this.clearModelCache();
+    }
     return this.postMessage<{ modelId: number }>('release_model', { modelId }, { ...requestOptions, description: 'Release cached model' });
+  }
+
+  private clearModelCache() {
+    this.lastCachedModelId = undefined;
+    this.lastCachedModel = undefined;
+    this.lastCachedModelSignature = undefined;
+    this.lastCachedModelPromise = undefined;
+  }
+
+  private getModelCacheSignature(model: BNGLModel): string {
+    const parameters = Object.entries(model.parameters ?? {})
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([name, value]) => `${name}:${value}`)
+      .join('|');
+    const seeds = model.species
+      .map((species) => `${species.name}:${species.initialConcentration}:${species.isConstant ? 1 : 0}`)
+      .join('|');
+    return `${model.reactionRules?.length ?? 0};${model.reactions?.length ?? 0};${parameters};${seeds}`;
   }
 
   /**
