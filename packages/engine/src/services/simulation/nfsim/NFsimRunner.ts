@@ -104,8 +104,10 @@ export async function runNFsimSimulation(
            if (VERBOSE_NFSIM_DEBUG) console.log(`[NF Progress] t=${payload.simulationTime.toFixed(4)}`);
         }
 
-        (self as any).postMessage({ id: jobId ?? -1, type: 'progress', payload });
-      } catch (e) {
+        if (typeof self !== 'undefined' && typeof (self as any).postMessage === 'function') {
+          (self as any).postMessage({ id: jobId ?? -1, type: 'progress', payload });
+        }
+      } catch {
         // swallow
       }
     };
@@ -114,7 +116,9 @@ export async function runNFsimSimulation(
     if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] gdat output (first 800 chars):\n', gdat.slice(0, 800));
 
     // Ensure final progress update shows completed time
-    (globalThis as any).postMessage({ id: jobId ?? -1, type: 'progress', payload: { message: 'Simulation complete', simulationProgress: 100, simulationTime: runOptions.t_end } });
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).postMessage === 'function') {
+      (globalThis as any).postMessage({ id: jobId ?? -1, type: 'progress', payload: { message: 'Simulation complete', simulationProgress: 100, simulationTime: runOptions.t_end } });
+    }
 
     return NFsimResultAdapter.adaptGdatToSimulationResults(gdat, inputModel);
   } catch (error) {
@@ -123,7 +127,8 @@ export async function runNFsimSimulation(
       throw new Error(
         `NFsim simulation failed: ${formatted}. ` +
         'This may be caused by invalid XML output from the model, or an issue in the NFsim WASM runtime. ' +
-        'Try simplifying the model or switching to simulate({method=>"ssa"}).'
+        'Try simplifying the model or switching to simulate({method=>"ssa"}).',
+        { cause: error }
       );
     }
     console.warn('[NFsimRunner] NFsim runtime unavailable, falling back to SSA.', formatted);
