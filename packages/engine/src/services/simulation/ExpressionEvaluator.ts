@@ -172,10 +172,29 @@ registerCacheClearCallback(() => {
   console.warn('[ExpressionEvaluator] Functional rates disabled via featureFlags — caches cleared');
 });
 
+interface SafeRequire {
+  (id: 'url'): { fileURLToPath?: (url: string | URL) => string };
+  (id: string): {
+    SafeExpressionEvaluator?: ExpressionEvaluator;
+    default?: { SafeExpressionEvaluator?: ExpressionEvaluator };
+  };
+}
+
+interface NodeGlobalWithRequire {
+  require?: SafeRequire;
+}
+
+function getErrorMessage(e: unknown): string {
+  if (e && typeof e === 'object' && 'message' in e) {
+    return String((e as { message: unknown }).message);
+  }
+  return String(e);
+}
+
 /**
  * Test helper: inject evaluator reference.
  */
-export function _setEvaluatorRefForTests(ref: any): void {
+export function _setEvaluatorRefForTests(ref: ExpressionEvaluator | undefined): void {
   SafeExpressionEvaluatorRef = ref;
 }
 
@@ -193,16 +212,19 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
   // Fallback for Node environment (used in tests / NodeJS runtime).
   // We attempt an absolute path resolution to avoid relative require issues
   // when code is executed from different directories or packaged outputs.
-  if (typeof (globalThis as any).require === 'function') {
+  const nodeGlobal = globalThis as unknown as NodeGlobalWithRequire;
+  const req = nodeGlobal.require;
+  if (typeof req === 'function') {
     try {
       const candidateModulePaths = ['../../utils/safeExpressionEvaluator'];
       try {
         // Prefer absolute file path candidates in Node ESM/CJS interop contexts.
-        let fileURLToPath;
+        let fileURLToPath: ((url: string | URL) => string) | undefined = undefined;
         try {
-            fileURLToPath = (globalThis as any).require('url')?.fileURLToPath;
+            const urlModule = req('url');
+            fileURLToPath = 'fileURLToPath' in urlModule ? urlModule.fileURLToPath : undefined;
         } catch {
-            fileURLToPath = null;
+            fileURLToPath = undefined;
         }
         if (typeof fileURLToPath === 'function') {
            const resolvedNoExt = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url));
@@ -223,11 +245,12 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
           let resolvedBase: string | null = null;
 
           try {
-            let fileURLToPath;
+            let fileURLToPath: ((url: string | URL) => string) | undefined = undefined;
             try {
-               fileURLToPath = (globalThis as any).require('url')?.fileURLToPath;
+               const urlModule = req('url');
+               fileURLToPath = 'fileURLToPath' in urlModule ? urlModule.fileURLToPath : undefined;
             } catch {
-               fileURLToPath = null;
+               fileURLToPath = undefined;
             }
             if (typeof fileURLToPath === 'function') {
               resolvedBase = fileURLToPath(new URL('../../utils/safeExpressionEvaluator', import.meta.url)).replace(/\\/g, '/');
@@ -256,11 +279,11 @@ function getEvaluator(override?: ExpressionEvaluator): ExpressionEvaluator | nul
         }
 
         try {
-          const mod = (globalThis as any).require(modulePath);
-          const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || mod;
+          const mod = req(modulePath);
+          const SafeEvaluator = mod.SafeExpressionEvaluator || mod.default?.SafeExpressionEvaluator || (mod as unknown as ExpressionEvaluator);
           if (SafeEvaluator) {
             SafeExpressionEvaluatorRef = SafeEvaluator;
-            return SafeEvaluator as unknown as ExpressionEvaluator;
+            return SafeEvaluator;
           }
         } catch {
           // Try next candidate path.
@@ -288,11 +311,12 @@ export async function loadEvaluator(): Promise<void> {
       // Dynamic import remains as an extra fallback for runtime/module-boundary cases.
       const mod = await import('../../utils/safeExpressionEvaluator');
       SafeExpressionEvaluatorRef = mod.SafeExpressionEvaluator;
-    } catch (e: any) {
+    } catch (e) {
       throw new Error(
-        `Failed to load the SafeExpressionEvaluator module: ${e?.message ?? String(e)}. ` +
+        `Failed to load the SafeExpressionEvaluator module: ${getErrorMessage(e)}. ` +
         'This module is required for evaluating functional rate expressions (e.g., Michaelis-Menten, Hill). ' +
-        'If you do not need functional rates, ensure all rate constants are numeric literals.'
+        'If you do not need functional rates, ensure all rate constants are numeric literals.',
+        { cause: e }
       );
     }
   }
@@ -381,11 +405,11 @@ export function getCompiledRateFunction(
     return fallbackFn;
   }
 
-  let referenced: string[] = [];
+  let referenced: string[];
   try {
     referenced = evaluator.getReferencedVariables(expandedExpr);
-  } catch (e: any) {
-    console.warn(`[getCompiledRateFunction] Could not extract variables for '${expandedExpr}': ${e?.message ?? String(e)}`);
+  } catch (e) {
+    console.warn(`[getCompiledRateFunction] Could not extract variables for '${expandedExpr}': ${getErrorMessage(e)}`);
     referenced = [];
   }
 
@@ -398,7 +422,7 @@ export function getCompiledRateFunction(
     const fn = evaluator.compile(expandedExpr, usedVars);
     setBoundedCache(compiledRateFunctions, cacheKey, fn, MAX_COMPILED_RATE_FUNCTIONS);
     return fn;
-  } catch (e: any) {
+  } catch (e) {
     const providedVars = new Set(varNames);
     const missingVars = referenced.filter(v => !providedVars.has(v));
 
@@ -407,7 +431,7 @@ export function getCompiledRateFunction(
       console.error(`  - Missing variables: ${missingVars.join(', ')}`);
       console.error(`  - Provided variables: ${varNames.slice(0, 20).join(', ')}${varNames.length > 20 ? '...' : ''}`);
     }
-    console.error(`  - Error: ${e?.message ?? String(e)}`);
+    console.error(`  - Error: ${getErrorMessage(e)}`);
 
     const zeroFn = () => 0;
     setBoundedCache(compiledRateFunctions, cacheKey, zeroFn, MAX_COMPILED_RATE_FUNCTIONS);
@@ -484,14 +508,14 @@ export function evaluateFunctionalRate(
       return 0;
     }
     return result;
-  } catch (e: any) {
+  } catch (e) {
     if (strict) {
       throw new Error(
-        `[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`,
+        `[evaluateFunctionalRate] Failed to evaluate '${expression}': ${getErrorMessage(e)}`,
         { cause: e }
       );
     }
-    console.error(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${e?.message ?? String(e)}`);
+    console.error(`[evaluateFunctionalRate] Failed to evaluate '${expression}': ${getErrorMessage(e)}`);
     return 0;
   }
 }
@@ -512,9 +536,9 @@ function getMissingReferencedVariables(
     }
     const referenced = evaluator.getReferencedVariables(expandedExpr);
     return referenced.filter((v) => !Object.prototype.hasOwnProperty.call(context, v));
-  } catch (e: any) {
+  } catch (e) {
     console.warn(
-      `[evaluateFunctionalRate] Could not verify referenced variables for '${expandedExpr}': ${e?.message ?? String(e)}`
+      `[evaluateFunctionalRate] Could not verify referenced variables for '${expandedExpr}': ${getErrorMessage(e)}`
     );
     return [];
   }
@@ -530,8 +554,8 @@ export function evaluateExpressionOrParse(expr: string): number {
     if (evaluator && typeof evaluator.evaluateConstant === 'function') {
       return evaluator.evaluateConstant(expr);
     }
-  } catch (e: any) {
-    console.warn('[ExpressionEvaluator] evaluateExpressionOrParse: evaluator failed:', e?.message ?? String(e));
+  } catch (e) {
+    console.warn('[ExpressionEvaluator] evaluateExpressionOrParse: evaluator failed:', getErrorMessage(e));
   }
   const n = parseFloat(String(expr));
   return Number.isNaN(n) ? 0 : n;
