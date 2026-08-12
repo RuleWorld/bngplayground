@@ -104,17 +104,37 @@ function reachableMoleculeTypes(
 /* ---------- Public API ---------- */
 
 /**
- * Check if a pattern is abstractly reachable via the contact map.
+ * Checks if a BNGL pattern is abstractly reachable using Layer 1 contact-map analysis.
  *
- * This is an over-approximate check: it verifies that every binding requirement
- * in the pattern corresponds to an existing edge in the contact map, and that
- * all molecule types in the pattern can be connected via BFS.
+ * This function performs a fast, static, over-approximate reachability check on the model's
+ * contact map to determine if the target pattern is topologically and structurally possible.
  *
- * @param contactMap - The contact map derived from model rules
- * @param pattern - A BNGL pattern string (e.g., "A(b!1).B(a!1)")
- * @param moleculeTypes - Array of declared molecule types in the model
- * @returns Object with `reachable` boolean, `path` of molecule types if reachable,
- *          and `missingEdges` if not reachable.
+ * Specifically, it executes the following sequence of validations:
+ * 1. Checks that every molecule type referenced in the query pattern exists among the model's
+ *    declared molecule types. If any type is undeclared, it immediately returns `reachable: false`
+ *    and specifies the undeclared type in `missingEdges`.
+ * 2. Parses and extracts all binding requirements (bonds) from the query pattern. If no bonds are
+ *    specified, the pattern represents disconnected or single molecules, which are considered abstractly
+ *    reachable (so long as their molecule types are declared).
+ * 3. Compares each binding requirement against the contact map edges. It verifies whether an edge
+ *    (in either forward or reverse direction) exists in the contact map connecting the specified
+ *    molecule type component pairs. Any missing edges are accumulated and returned.
+ * 4. Checks connectivity of the molecules within the pattern. If there are multiple molecule types,
+ *    it performs a Breadth-First Search (BFS) starting from the first molecule type to ensure that
+ *    every other molecule type in the pattern can be reached via contact-map connections.
+ *
+ * **Non-obvious Invariant**:
+ * This is a pure mathematical and topological analysis function. It operates entirely on in-memory data
+ * structures and must remain browser-API-free to ensure perfect portability across headless environments
+ * (Node.js), Web Workers, and standard web preview clients.
+ *
+ * @param contactMap - The static contact map of nodes and edges derived from the model's reaction rules.
+ * @param pattern - The target BNGL pattern string to evaluate (e.g., `"A(b!1).B(a!1)"`).
+ * @param moleculeTypes - The array of declared molecule types in the BNGL model structure.
+ * @returns An object indicating topological reachability:
+ *  - `reachable`: A boolean indicating if the target pattern is structurally reachable.
+ *  - `path`: (Optional) An array of molecule type names ordered by BFS discovery sequence when reachable.
+ *  - `missingEdges`: (Optional) An array of missing component-to-component connections if unreachable.
  */
 export function checkAbstractReachability(
   contactMap: ContactMap,
