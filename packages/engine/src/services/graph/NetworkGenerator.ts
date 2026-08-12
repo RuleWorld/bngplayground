@@ -828,7 +828,44 @@ export class NetworkGenerator {
     return this.areCompartmentsAdjacent(comp1Name, comp2Name);
   }
 
-
+  /**
+   * Generates a complete or bounded reaction network from seed species and reaction rules.
+   *
+   * Replicating the core network expansion algorithm of BioNetGen (equivalent to BNG2's generate_network action),
+   * this method executes the following steps:
+   * 1. **Initialization & Cache Reset**: Resets generation start times, clears inverted species lookup maps,
+   *    structural hash maps, and global match caches.
+   * 2. **Seed Injection**: Canonicalizes and registers seed species, adding them to the reactive processing queue.
+   * 3. **Zero-Order Synthesis**: Processes rules with zero reactants to immediately produce initial species and
+   *    synthesis reactions.
+   * 4. **Iterative Expansion Queue**: Iterates until the queue is empty or limits are hit. In each iteration:
+   *    - Pulls a batch of species from the queue and computes their canonical keys.
+   *    - Applies unimolecular and N-ary reaction rules to discover new reactions and species.
+   *    - Emits periodic progress callbacks with current network statistics.
+   * 5. **Unimolecular Rule Application**: Matches unimolecular rule patterns against targets, checks exclude/include
+   *    constraints, resolves product-implied free site constraints, and handles symmetry-equivalent embeddings via
+   *    stable event-signature deduplication. Translates collapsed symmetries into exact statistical rate factors.
+   * 6. **N-ary (Bimolecular/Multimer) Application**: Recursively searches for reactant partners. Employs a canonical
+   *    anchor-species check to prevent double counting, applies spectator-corrected combinatorial multipliers for
+   *    selective equivalent site bonding, and maps products.
+   * 7. **Rule Transformation**: Clones molecules, resolves bonds, and executes state or compartment changes. Supports
+   *    `DeleteMolecules` and whole-species deletion, selective orphan/bystander harvesting to preserve unmapped fragments,
+   *    and propagates `MoveConnected` transitions across connected complexes.
+   * 8. **Compartment Adjacency Validation**: Verifies that newly formed bonds only span identical or adjacent compartments,
+   *    rejecting invalid trans-compartmental product topologies.
+   * 9. **Resource Constraint Monitoring**: Safeguards the execution context by throwing error limits or gracefully
+   *    returning partial networks if max species, max reactions, max iterations, max complex size, or JS heap memory limits are exceeded.
+   *
+   * Invariants:
+   * - **Browser-API-Free**: This function relies on zero browser or DOM APIs and is fully compatible with server-side Node.js, Web Worker, and headless MCP contexts.
+   *
+   * @param seedSpecies - The initial species graphs to populate the network.
+   * @param rules - The reaction rules (with defined rate constants, reactants, products, and constraints) to expand.
+   * @param onProgress - Optional callback invoked periodically with current generation metrics.
+   * @param signal - Optional AbortSignal to cancel the network generation.
+   * @returns A promise resolving to an object containing arrays of generated Species and Rxn reactions.
+   * @throws {NetworkGenerationLimitError} If species, reaction, iteration, or memory thresholds are breached.
+   */
   async generate(
     seedSpecies: SpeciesGraph[],
     rules: RxnRule[],
