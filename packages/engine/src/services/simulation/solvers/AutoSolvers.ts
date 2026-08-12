@@ -52,44 +52,6 @@ export class AutoSolver {
 }
 
 /**
- * Smart auto-switching solver: starts with fast RK4, switches to Rosenbrock23 only if stiff
- */
-export class SmartAutoSolver {
-  private rk4: FastRK4Solver;
-  private rosenbrock: Rosenbrock23Solver;
-  private useImplicit: boolean = false;
-
-  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}) {
-    this.rk4 = new FastRK4Solver(n, f, options);
-    this.rosenbrock = new Rosenbrock23Solver(n, f, options);
-  }
-
-  integrate(
-    y0: Float64Array,
-    t0: number,
-    tEnd: number,
-    checkCancelled?: () => void
-  ): SolverResult {
-    if (this.useImplicit) {
-      return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
-    }
-
-    const result = this.rk4.integrate(y0, t0, tEnd, checkCancelled);
-
-    if (result.success) {
-      return result;
-    }
-
-    if (result.errorMessage === 'STIFF_DETECTED') {
-      this.useImplicit = true;
-      return this.rosenbrock.integrate(result.y, result.t, tEnd, checkCancelled);
-    }
-
-    return result;
-  }
-}
-
-/**
  * CVODE Auto-switching solver: tries CVODE first (fast for most models),
  * automatically falls back to Rosenbrock23 on convergence failure.
  */
