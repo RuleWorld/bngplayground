@@ -52,16 +52,45 @@ function getFirstActiveLine(src: string): string | null {
   let start = 0;
   const len = src.length;
   while (start < len) {
+    // Skip leading whitespace of the current line
+    while (start < len) {
+      const char = src.charCodeAt(start);
+      if (char === 32 || char === 9 || char === 13) { // space, tab, carriage return
+        start++;
+      } else {
+        break;
+      }
+    }
+    if (start >= len) return null;
+    const char = src.charCodeAt(start);
+    if (char === 10) { // newline
+      start++;
+      continue;
+    }
+    if (char === 35) { // '#' - comment line, skip to end of line
+      const end = src.indexOf('\n', start);
+      if (end === -1) {
+        return null;
+      }
+      start = end + 1;
+      continue;
+    }
+    // Found active line, find its end and return the substring
     let end = src.indexOf('\n', start);
     if (end === -1) {
       end = len;
     }
-    const line = src.substring(start, end);
-    const trimmed = line.trim();
-    if (trimmed !== '' && !trimmed.startsWith('#')) {
-      return trimmed;
+    // Trim trailing carriage return if any
+    let last = end - 1;
+    while (last >= start) {
+      const lastChar = src.charCodeAt(last);
+      if (lastChar === 32 || lastChar === 9 || lastChar === 13) {
+        last--;
+      } else {
+        break;
+      }
     }
-    start = end + 1;
+    return src.substring(start, last + 1);
   }
   return null;
 }
@@ -97,7 +126,10 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     // Create lexer and parser
     // Some published BNGL files can start with a UTF-8 BOM (U+FEFF). BNG2.pl
     // accepts this; our lexer should too.
-    let sanitizedInput = input.replace(/^\uFEFF/, '');
+    let sanitizedInput = input;
+    if (input.charCodeAt(0) === 0xFEFF) {
+      sanitizedInput = input.substring(1);
+    }
 
     // Normalize legacy 'begin molecules' / 'end molecules' blocks to
     // the preferred 'begin molecule types' / 'end molecule types' form.
@@ -107,23 +139,19 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       if (!/molecules/i.test(src)) {
         return { normalized: src, warned: false };
       }
-      const lines = src.split(/\r\n|\n/);
       let warned = false;
-      const out = lines.map(line => {
-        const trimmedStart = line.replace(/^\s*/, '');
-        // Skip commented lines
-        if (/^#/.test(trimmedStart)) return line;
-        if (/^\s*begin\s+molecules\b/i.test(line)) {
-          warned = true;
-          return line.replace(/begin\s+molecules\b/i, 'begin molecule types');
-        }
-        if (/^\s*end\s+molecules\b/i.test(line)) {
-          warned = true;
-          return line.replace(/end\s+molecules\b/i, 'end molecule types');
-        }
-        return line;
-      });
-      return { normalized: out.join('\n'), warned };
+      let next = src;
+      const beginRe = /^[^\S\r\n]*(?!#)begin\s+molecules\b/im;
+      const endRe = /^[^\S\r\n]*(?!#)end\s+molecules\b/im;
+      if (beginRe.test(next)) {
+        warned = true;
+        next = next.replace(/(^[^\S\r\n]*(?!#)begin\s+)molecules\b/gim, '$1molecule types');
+      }
+      if (endRe.test(next)) {
+        warned = true;
+        next = next.replace(/(^[^\S\r\n]*(?!#)end\s+)molecules\b/gim, '$1molecule types');
+      }
+      return { normalized: next, warned };
     }
 
     function normalizeLegacySyntax(src: string): { normalized: string; warnings: string[] } {
@@ -190,17 +218,20 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         closeStart: number;
         closeEnd: number;
       } | null {
-        const lower = source.toLowerCase();
-        const beginToken = `begin ${beginName}`;
-        const endToken = `end ${endName}`;
-        const openStart = lower.indexOf(beginToken);
-        if (openStart < 0) return null;
+        const beginRegex = new RegExp(`begin\\s+${beginName}`, 'gi');
+        const beginMatch = beginRegex.exec(source);
+        if (!beginMatch) return null;
+        const openStart = beginMatch.index;
 
         const openLineEnd = source.indexOf('\n', openStart);
         const openEnd = openLineEnd >= 0 ? openLineEnd : source.length;
         const bodyStart = openEnd < source.length ? openEnd + 1 : openEnd;
-        const closeStart = lower.indexOf(endToken, bodyStart);
-        if (closeStart < 0) return null;
+
+        const endRegex = new RegExp(`end\\s+${endName}`, 'gi');
+        endRegex.lastIndex = bodyStart;
+        const endMatch = endRegex.exec(source);
+        if (!endMatch) return null;
+        const closeStart = endMatch.index;
 
         let closeEnd = source.indexOf('\n', closeStart);
         if (closeEnd < 0) closeEnd = source.length;
