@@ -98,4 +98,76 @@ end model
         const body = JSON.parse(result.content[0].text);
         expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/no reactions|no firings/i);
     });
+
+    // --- Edge Case 1: Malformed input (unparseable JSON / wrong types) ---
+    it('rejects wrong types or malformed inputs gracefully', async () => {
+        // wrong type of n_steps (string instead of positiveInt)
+        const resultWrongType = await handleReactionInformationFlow({
+            code: LINEAR_CASCADE,
+            t_end: 200,
+            n_steps: 'one_hundred' as any,
+        });
+        const bodyWrongType = JSON.parse(resultWrongType.content[0].text);
+        expect(bodyWrongType.error ?? '').toMatch(/Invalid arguments/i);
+        expect(bodyWrongType.diagnosis ?? '').toMatch(/arguments passed to the MCP tool did not match/i);
+
+        // missing required field t_end
+        const resultMissingField = await handleReactionInformationFlow({
+            code: LINEAR_CASCADE,
+            n_steps: 100,
+        } as any);
+        const bodyMissingField = JSON.parse(resultMissingField.content[0].text);
+        expect(bodyMissingField.error ?? '').toMatch(/Invalid arguments/i);
+        expect(bodyMissingField.diagnosis ?? '').toMatch(/arguments passed to the MCP tool did not match/i);
+    });
+
+    // --- Edge Case 2: Missing optional fields ---
+    it('succeeds and uses defaults when optional fields are missing', async () => {
+        const resultNoOptional = await handleReactionInformationFlow({
+            code: LINEAR_CASCADE,
+            t_end: 100,
+            n_steps: 50,
+            seed: 42,
+        });
+        const body = JSON.parse(resultNoOptional.content[0].text);
+        expect(body.error ?? body.message ?? '').toBeFalsy();
+        expect(body.summary.nReactions).toBe(3);
+    });
+
+    // --- Edge Case 3: Boundary conditions (empty string, zero, negative/large numbers) ---
+    it('rejects empty or blank model code with a structured error', async () => {
+        const resultEmpty = await handleReactionInformationFlow({
+            code: '',
+            t_end: 100,
+            n_steps: 10,
+        });
+        const bodyEmpty = JSON.parse(resultEmpty.content[0].text);
+        expect(bodyEmpty.error ?? '').toMatch(/non-empty, non-blank string/i);
+
+        const resultWhitespace = await handleReactionInformationFlow({
+            code: '     ',
+            t_end: 100,
+            n_steps: 10,
+        });
+        const bodyWhitespace = JSON.parse(resultWhitespace.content[0].text);
+        expect(bodyWhitespace.error ?? '').toMatch(/non-empty, non-blank string/i);
+    });
+
+    it('rejects non-positive boundary conditions like t_end = 0 or n_steps = -5 gracefully', async () => {
+        const resultZeroTend = await handleReactionInformationFlow({
+            code: LINEAR_CASCADE,
+            t_end: 0,
+            n_steps: 100,
+        });
+        const bodyZero = JSON.parse(resultZeroTend.content[0].text);
+        expect(bodyZero.error ?? '').toMatch(/Invalid arguments|t_end/i);
+
+        const resultNegNsteps = await handleReactionInformationFlow({
+            code: LINEAR_CASCADE,
+            t_end: 10,
+            n_steps: -5,
+        });
+        const bodyNeg = JSON.parse(resultNegNsteps.content[0].text);
+        expect(bodyNeg.error ?? '').toMatch(/Invalid arguments|n_steps/i);
+    });
 });
