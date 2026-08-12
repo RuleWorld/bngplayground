@@ -8,6 +8,7 @@ export {
     parameterScanArgsSchema,
     validateModelArgsSchema,
     getContactMapArgsSchema,
+    verifyModelArgsSchema,
 } from './core.js';
 
 export {

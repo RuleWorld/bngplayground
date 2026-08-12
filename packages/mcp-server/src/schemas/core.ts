@@ -81,3 +81,9 @@ export const validateModelArgsSchema = z.object({
 export const getContactMapArgsSchema = z.object({
     code: z.string(),
 }).strict();
+
+export const verifyModelArgsSchema = z.object({
+    code: z.string(),
+    query: z.string(),
+    maxSpecies: z.number().int().positive().optional(),
+}).strict();
