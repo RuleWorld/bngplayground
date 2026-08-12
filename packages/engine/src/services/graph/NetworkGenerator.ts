@@ -4126,7 +4126,7 @@ export class NetworkGenerator {
     }
 
     // Track mapping: (reactantIdx, reactantMolIdx) -> productMolIdx  
-    const reactantToProductMol = new Map<string, number>();
+    const reactantToProductMol = new Map<number, number>();
     // Track mapping: patternMolIdx -> productMolIdx
     const patternToProductMol = new Map<number, number>();
     // Track component mapping: "pMolIdx:pCompIdx" -> product component index
@@ -4422,7 +4422,7 @@ export class NetworkGenerator {
     // - It does NOT exist in the product pattern (unbound or different label)
     // 
     // Broken bonds should NOT be traversed when finding connected components.
-    const includedMols = new Set<string>(); // "reactantIdx:molIdx"
+    const includedMols = new Set<number>(); // 32-bit bitwise integer key: (reactantIdx << 16) | molIdx
 
     // Build a set of bonds that are BROKEN by this transformation.
     // IMPORTANT: track broken bonds as endpoint pairs (not endpoint flags), so
@@ -4644,7 +4644,7 @@ export class NetworkGenerator {
       const startMolIdx = mapping.targetMolIdx;
 
       // Include the matched molecule
-      includedMols.add(`${mapping.reactantIdx}:${startMolIdx}`);
+      includedMols.add((mapping.reactantIdx << 16) | startMolIdx);
 
       // Traverse connected component, but skip broken bonds
       const visited = new Set<number>([startMolIdx]);
@@ -4684,7 +4684,7 @@ export class NetworkGenerator {
                 }
 
                 visited.add(partnerMolIdx);
-                includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx}`);
+                includedMols.add((mapping.reactantIdx << 16) | partnerMolIdx);
                 queue.push(partnerMolIdx);
               }
             }
@@ -4767,7 +4767,7 @@ export class NetworkGenerator {
             const _dIdx6 = bondTarget.indexOf('.');
             const partnerMolStr = bondTarget.slice(0, _dIdx6);
             const partnerMolIdx = Number(partnerMolStr);
-            includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx}`);
+            includedMols.add((mapping.reactantIdx << 16) | partnerMolIdx);
 
             if (shouldLogNetworkGenerator) {
               debugNetworkLog(`[buildProductGraph] !+ wildcard at pattern comp ${pMolIdx}.${pCompIdx} -> reactant comp ${mapping.targetMolIdx}.${reactantCompIdx} -> bonded to mol ${partnerMolIdx}`);
@@ -4795,7 +4795,7 @@ export class NetworkGenerator {
 
                       if (!visited.has(partnerMolIdx2)) {
                         visited.add(partnerMolIdx2);
-                        includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx2}`);
+                        includedMols.add((mapping.reactantIdx << 16) | partnerMolIdx2);
                         toProcess.push(partnerMolIdx2);
                       }
                     }
@@ -4814,17 +4814,14 @@ export class NetworkGenerator {
 
     // Clone included molecules
     for (const key of includedMols) {
-      const _cIdx4 = key.indexOf(':');
-      const rStr = key.slice(0, _cIdx4);
-      const molIdxStr = key.slice(_cIdx4 + 1);
-      const r = Number(rStr);
-      const molIdx = Number(molIdxStr);
+      const r = key >> 16;
+      const molIdx = key & 0xffff;
 
       if (reactantToProductMol.has(key)) continue;
 
       const sourceMol = reactantGraphs[r].molecules[molIdx];
       const clone = this.cloneMoleculeStructure(sourceMol);
-      clone._sourceKey = key; // Preserve source mapping (reactantIdx:molIdx)
+      clone._sourceKey = `${r}:${molIdx}`; // Preserve source mapping (reactantIdx:molIdx)
       clone._sourceR = r;
       clone._sourceM = molIdx;
 
@@ -4866,7 +4863,7 @@ export class NetworkGenerator {
       const mapping = productPatternToReactant.get(pMolIdx);
       if (!mapping) continue;
 
-      const key = `${mapping.reactantIdx}:${mapping.targetMolIdx}`;
+      const key = (mapping.reactantIdx << 16) | mapping.targetMolIdx;
       const productMolIdx = reactantToProductMol.get(key);
       if (productMolIdx !== undefined) {
         patternToProductMol.set(pMolIdx, productMolIdx);
@@ -5150,8 +5147,8 @@ export class NetworkGenerator {
           if (isNaN(molIdx) || isNaN(compIdx) || isNaN(partnerMolIdx) || isNaN(partnerCompIdx)) continue;
 
           // Check if both molecules are included
-          const mol1Key = `${r}:${molIdx}`;
-          const mol2Key = `${r}:${partnerMolIdx}`;
+          const mol1Key = (r << 16) | molIdx;
+          const mol2Key = (r << 16) | partnerMolIdx;
           if (!includedMols.has(mol1Key) || !includedMols.has(mol2Key)) continue;
 
           // Check if this specific bond is BROKEN by the rule transformation
