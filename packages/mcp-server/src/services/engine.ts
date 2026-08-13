@@ -146,6 +146,21 @@ export function buildSimulationOptions(args: any) {
 }
 
 /**
+ * Marks an internal simulation as consuming observable headers/data only.
+ * Public simulation defaults remain unchanged; this is for high-volume analysis loops.
+ */
+export function withDataOnlySimulationOutput<const T extends Record<string, unknown>>(options: T): T & {
+    includeSpeciesData: false;
+    includeExpandedNetwork: false;
+} {
+    return {
+        ...options,
+        includeSpeciesData: false,
+        includeExpandedNetwork: false,
+    };
+}
+
+/**
  * Merges network generation limits from MCP tool arguments into the model's configuration.
  * Adapts user-provided MCP arguments (e.g., max_agents) to internal engine configuration structures (e.g., maxSpecies).
  * If no overrides are provided, it returns the exact same model instance.

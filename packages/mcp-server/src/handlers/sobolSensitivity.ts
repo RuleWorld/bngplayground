@@ -2,7 +2,7 @@ import { sobolSensitivity, simulate, loadEvaluator } from '@bngplayground/engine
 import type { SobolResult } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult, MCPErrorResult } from '../types/index.js';
 import { sobolSensitivityArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult<SobolResult[] | MCPErrorResult>> {
@@ -40,7 +40,7 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
             }
         }
 
-        const simOptions = buildSimulationOptions(parsedArgs);
+        const simOptions = withDataOnlySimulationOutput(buildSimulationOptions(parsedArgs));
         await loadEvaluator();
 
         const results = await sobolSensitivity({
