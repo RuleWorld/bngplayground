@@ -1,6 +1,7 @@
 import { collapseWhitespace } from './stringUtils';
 import { stripInlineComment } from './stringUtils';
 import { BNGLParser } from '../services/graph/core/BNGLParser';
+import type { BNGLModel } from '../types';
 
 /**
  * Re-evaluates seed species' initial concentrations based on their initial expressions
@@ -16,10 +17,10 @@ import { BNGLParser } from '../services/graph/core/BNGLParser';
  * @param model - The parsed model object containing parameters, species, and functions.
  * @param seedExpressions - A Map containing original string expressions for each species.
  */
-export function reevaluateSeedSpecies(model: any, seedExpressions: Map<string, string>): void {
+export function reevaluateSeedSpecies(model: BNGLModel, seedExpressions: Map<string, string>): void {
   const paramMap = new Map<string, number>(Object.entries(model.parameters ?? {}));
   const functionMap = new Map<string, { args: string[]; expr: string }>(
-    (model.functions ?? []).map((fn: any) => [fn.name, { args: fn.args ?? [], expr: fn.expression ?? '' }]),
+    (model.functions ?? []).map((fn) => [fn.name, { args: fn.args ?? [], expr: fn.expression ?? '' }]),
   );
 
   for (const species of model.species ?? []) {
