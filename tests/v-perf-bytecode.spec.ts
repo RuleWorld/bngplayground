@@ -53,20 +53,31 @@ describe('Functional Rate Bytecode Performance', () => {
 
         console.log(`[Benchmark] Starting performance test (${N} Hill reactions, 1000 steps)...`);
 
-        // RUN JS FIRST to warm up
-        const startJS = performance.now();
+        // Warm up runs to ensure WASM module initialization and JIT compiling are excluded from hot timings
         await simulate(1, model as any, { ...baseOptions, disableNativeBytecode: true } as any, callbacks as any);
-        const endJS = performance.now();
-        const jsTime = endJS - startJS;
-
-        // RUN NATIVE
-        const startNative = performance.now();
         await simulate(2, model as any, { ...baseOptions, enableNativeBytecode: true } as any, callbacks as any);
-        const endNative = performance.now();
-        const nativeTime = endNative - startNative;
 
-        console.log(`[Benchmark] JS Evaluation Time: ${jsTime.toFixed(2)}ms`);
-        console.log(`[Benchmark] Native Bytecode Time: ${nativeTime.toFixed(2)}ms`);
+        const trials = 3;
+        let jsTime = Infinity;
+        let nativeTime = Infinity;
+
+        // Run multiple trials and take the minimum (best) to filter out garbage collection / VM scheduler noise
+        for (let t = 0; t < trials; t++) {
+            const startJS = performance.now();
+            await simulate(1, model as any, { ...baseOptions, disableNativeBytecode: true } as any, callbacks as any);
+            const endJS = performance.now();
+            jsTime = Math.min(jsTime, endJS - startJS);
+        }
+
+        for (let t = 0; t < trials; t++) {
+            const startNative = performance.now();
+            await simulate(2, model as any, { ...baseOptions, enableNativeBytecode: true } as any, callbacks as any);
+            const endNative = performance.now();
+            nativeTime = Math.min(nativeTime, endNative - startNative);
+        }
+
+        console.log(`[Benchmark] JS Evaluation Time: ${jsTime.toFixed(2)}ms (best of ${trials})`);
+        console.log(`[Benchmark] Native Bytecode Time: ${nativeTime.toFixed(2)}ms (best of ${trials})`);
         console.log(`[Benchmark] Speedup: ${(jsTime / nativeTime).toFixed(2)}x`);
         
         // Allow margin for CI runner variance — native should generally be
