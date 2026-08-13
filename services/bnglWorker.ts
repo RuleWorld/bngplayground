@@ -779,6 +779,8 @@ if (typeof ctx.addEventListener === 'function') {
                 utl: options.utl,
                 gml: options.gml,
                 equilibrate: options.equilibrate,
+                includeSpeciesData: options.includeSpeciesData,
+                includeExpandedNetwork: options.includeExpandedNetwork,
                 timeoutMs: 300000, // 5 minutes for NFsim simulations
                 requireRuntime: true,
                 verbose: true

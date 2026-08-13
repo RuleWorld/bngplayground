@@ -685,6 +685,26 @@ describe('bnglWorker cached network expansion', () => {
     expect(nfModel.species).toHaveLength(1);
   });
 
+  it('forwards lean result options to pure NFsim runs', async () => {
+    const engine = await import('@bngplayground/engine');
+    await sendAndWait(19, 'simulate', {
+      model: sourceModel(),
+      options: {
+        method: 'nf',
+        t_end: 1,
+        n_steps: 1,
+        includeSpeciesData: false,
+        includeExpandedNetwork: false,
+      },
+    }, 'simulate_success');
+
+    expect(engine.runNFsimSimulation).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(engine.runNFsimSimulation).mock.calls[0][1]).toEqual(expect.objectContaining({
+      includeSpeciesData: false,
+      includeExpandedNetwork: false,
+    }));
+  });
+
   it('removes the expanded network when its model is released', async () => {
     const engine = await import('@bngplayground/engine');
     await sendAndWait(20, 'cache_model', { model: sourceModel() }, 'cache_model_success');

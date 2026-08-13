@@ -18,6 +18,10 @@ export interface NFsimSimulationOptions {
   timeoutMs?: number;
   requireRuntime?: boolean;
   verbose?: boolean;
+  /** Include per-species trajectories in results (default: true). */
+  includeSpeciesData?: boolean;
+  /** Include expanded reaction/species metadata in results (default: true). */
+  includeExpandedNetwork?: boolean;
 }
 
 export const validateModelForNFsim = (model: BNGLModel): ValidationResult =>
@@ -75,8 +79,9 @@ export async function runNFsimSimulation(
     if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] Generated XML:\n', xml);
     const hasSpeciesObservables = (inputModel.observables || [])
       .some((obs) => String(obs.type ?? '').toLowerCase() === 'species');
+    const { includeSpeciesData, includeExpandedNetwork, ...runtimeOptions } = options;
     const runOptions = {
-      ...options,
+      ...runtimeOptions,
       cb: options.cb ?? hasSpeciesObservables
     };
     // Attach a progress callback so we can forward NFsim stdout lines to the main thread as 'progress' messages
@@ -120,7 +125,10 @@ export async function runNFsimSimulation(
       (globalThis as any).postMessage({ id: jobId ?? -1, type: 'progress', payload: { message: 'Simulation complete', simulationProgress: 100, simulationTime: runOptions.t_end } });
     }
 
-    return NFsimResultAdapter.adaptGdatToSimulationResults(gdat, inputModel);
+    return NFsimResultAdapter.adaptGdatToSimulationResults(gdat, inputModel, {
+      includeSpeciesData,
+      includeExpandedNetwork
+    });
   } catch (error) {
     const formatted = formatNFsimError(error);
     if (options.requireRuntime) {
@@ -137,7 +145,9 @@ export async function runNFsimSimulation(
       method: 'ssa',
       t_end: options.t_end,
       n_steps: options.n_steps,
-      seed: options.seed
+      seed: options.seed,
+      includeSpeciesData: options.includeSpeciesData,
+      includeExpandedNetwork: options.includeExpandedNetwork
     };
     return simulate(-1, expanded, ssaOptions, {
       checkCancelled: () => undefined,
