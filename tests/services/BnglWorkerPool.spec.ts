@@ -290,6 +290,9 @@ describe('BnglWorkerPool class', () => {
     });
 
     it('bounds ensembles to one outstanding simulation per worker and preserves seed ordering', async () => {
+        let peakConcurrentSimulations = 0;
+        let seedZeroCompleted = false;
+        const pilotWorkersStartedBeforeSeedZeroCompleted = new Set<number>();
         class ControlledEnsembleWorker {
             handlers: any[] = [];
             outstandingSimulations = 0;
@@ -311,13 +314,24 @@ describe('BnglWorkerPool class', () => {
                     }));
                 } else if (request.type === 'simulate') {
                     this.outstandingSimulations++;
+                    peakConcurrentSimulations = Math.max(
+                        peakConcurrentSimulations,
+                        mockWorkerInsts.reduce(
+                            (total, worker) => total + worker.outstandingSimulations,
+                            0
+                        )
+                    );
                     this.maxOutstandingSimulations = Math.max(
                         this.maxOutstandingSimulations,
                         this.outstandingSimulations
                     );
                     this.simulateSeeds.push(request.payload.options.seed);
                     const seed = request.payload.options.seed;
+                    if (seed < 3 && !seedZeroCompleted) {
+                        pilotWorkersStartedBeforeSeedZeroCompleted.add(mockWorkerInsts.indexOf(this));
+                    }
                     setTimeout(() => {
+                        if (seed === 0) seedZeroCompleted = true;
                         this.outstandingSimulations--;
                         this.trigger({
                             id: request.id,
@@ -359,6 +373,8 @@ describe('BnglWorkerPool class', () => {
             [1, 4, 7],
             [2, 5],
         ]);
+        expect(pilotWorkersStartedBeforeSeedZeroCompleted).toEqual(new Set([0, 1, 2]));
+        expect(peakConcurrentSimulations).toBe(3);
         expect(mockWorkerInsts.every(worker => worker.maxOutstandingSimulations === 1)).toBe(true);
         expect(progress).toHaveLength(8);
         expect(progress.at(-1)).toBe(8);
@@ -447,6 +463,88 @@ describe('BnglWorkerPool class', () => {
             [0, 2, 4],
             [1, 3],
         ]);
+        expect(mockWorkerInsts.every(worker => worker.maxOutstandingSimulations === 1)).toBe(true);
+    });
+
+    it('falls back to ordered ordinary results when the initial wave has mismatched shapes', async () => {
+        class ShapeMismatchWorker {
+            handlers: any[] = [];
+            outstandingSimulations = 0;
+            maxOutstandingSimulations = 0;
+            simulateRequests: any[] = [];
+            addEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers.push(handler);
+            });
+            removeEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers = this.handlers.filter(h => h !== handler);
+            });
+            terminate = vi.fn();
+            postMessage = vi.fn((request) => {
+                const workerIdx = mockWorkerInsts.indexOf(this);
+                if (request.type === 'cache_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'cache_model_success',
+                        payload: { modelId: workerIdx + 400 },
+                    }));
+                } else if (request.type === 'simulate') {
+                    this.outstandingSimulations++;
+                    this.maxOutstandingSimulations = Math.max(
+                        this.maxOutstandingSimulations,
+                        this.outstandingSimulations
+                    );
+                    this.simulateRequests.push(request);
+                    const seed = request.payload.options.seed;
+                    setTimeout(() => {
+                        this.outstandingSimulations--;
+                        if (request.payload.sharedOutput) {
+                            this.trigger({
+                                id: request.id,
+                                type: 'simulate_error',
+                                payload: { message: 'mismatched pilot must not use shared output' },
+                            });
+                            return;
+                        }
+                        const mismatched = seed === 1;
+                        this.trigger({
+                            id: request.id,
+                            type: 'simulate_success',
+                            payload: {
+                                headers: mismatched ? ['seed', 'extra'] : ['seed'],
+                                data: [mismatched ? { seed, extra: 1 } : { seed }],
+                            },
+                        });
+                    }, seed % 2);
+                } else if (request.type === 'release_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'release_model_success',
+                        payload: { modelId: request.payload.modelId },
+                    }));
+                }
+            });
+
+            trigger(eventData: any) {
+                this.handlers.forEach(handler => handler({ data: eventData }));
+            }
+
+            constructor() {
+                mockWorkerInsts.push(this);
+            }
+        }
+
+        vi.stubGlobal('Worker', ShapeMismatchWorker);
+        const pool = new BnglWorkerPool(2);
+        const results = await pool.runEnsemble({} as any, {} as any, 5);
+
+        expect(isSharedEnsembleResultsHandle(results)).toBe(false);
+        expect(Array.isArray(results)).toBe(true);
+        if (!Array.isArray(results)) throw new Error('Expected ordinary ensemble results');
+        expect(results.map(run => run.data[0].seed)).toEqual([0, 1, 2, 3, 4]);
+        expect(results[1].headers).toEqual(['seed', 'extra']);
+        expect(mockWorkerInsts.flatMap(worker => worker.simulateRequests).every(
+            (request: any) => request.payload.sharedOutput === undefined
+        )).toBe(true);
         expect(mockWorkerInsts.every(worker => worker.maxOutstandingSimulations === 1)).toBe(true);
     });
 

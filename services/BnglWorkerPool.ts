@@ -337,22 +337,51 @@ export class BnglWorkerPool {
 
         const modelIds = preparationResults.map((r) => (r as PromiseFulfilledResult<number>).value);
         try {
-            const firstWorker = this.workers[0];
-            const firstModelId = modelIds[0];
-            const firstResult = await this.simulateCachedOnWorker(firstWorker, firstModelId, { ...options, seed: 0 });
+            const initialWaveCount = Math.min(count, this.workers.length);
+            const initialResults: SimulationResults[] = new Array(initialWaveCount);
+            let completed = 0;
+            const initialWave = await Promise.allSettled(
+                Array.from({ length: initialWaveCount }, async (_, taskIdx) => {
+                    const result = await this.simulateCachedOnWorker(
+                        this.workers[taskIdx],
+                        modelIds[taskIdx],
+                        { ...options, seed: taskIdx }
+                    );
+                    initialResults[taskIdx] = result;
+                    completed++;
+                    onProgress?.(completed);
+                })
+            );
+            const initialFailure = initialWave.find(
+                (result): result is PromiseRejectedResult => result.status === 'rejected'
+            );
+            if (initialFailure) throw initialFailure.reason;
 
             if (count === 1) {
-                onProgress?.(1);
-                return [firstResult];
+                return initialResults;
             }
 
-            if (canUseSharedArrayBuffer() && firstResult.data.length > 0 && firstResult.headers.length > 0) {
-                const shared = createSharedEnsembleResults(count, firstResult.headers, firstResult.data.length);
-                writeSimulationResultsToShared(shared, 0, firstResult);
-                let completed = 1;
-                onProgress?.(completed);
+            const referenceResult = initialResults[0];
+            const hasSharedShape = canUseSharedArrayBuffer()
+                && referenceResult.data.length > 0
+                && referenceResult.headers.length > 0
+                && initialResults.every((result) =>
+                    result.data.length === referenceResult.data.length
+                    && result.headers.length === referenceResult.headers.length
+                    && result.headers.every((header, index) => header === referenceResult.headers[index])
+                );
 
-                await this.runBoundedEnsembleTasks(count, async (workerIdx, taskIdx) => {
+            if (hasSharedShape) {
+                const shared = createSharedEnsembleResults(
+                    count,
+                    referenceResult.headers,
+                    referenceResult.data.length
+                );
+                for (let taskIdx = 0; taskIdx < initialWaveCount; taskIdx++) {
+                    writeSimulationResultsToShared(shared, taskIdx, initialResults[taskIdx]);
+                }
+
+                await this.runBoundedEnsembleTasks(count, initialWaveCount, async (workerIdx, taskIdx) => {
                     const worker = this.workers[workerIdx];
                     const modelId = modelIds[workerIdx];
                     await this.simulateCachedOnWorkerShared(worker, modelId, { ...options, seed: taskIdx }, {
@@ -372,11 +401,11 @@ export class BnglWorkerPool {
             }
 
             const results: SimulationResults[] = new Array(count);
-            results[0] = firstResult;
-            let completed = 1;
-            onProgress?.(completed);
+            for (let taskIdx = 0; taskIdx < initialWaveCount; taskIdx++) {
+                results[taskIdx] = initialResults[taskIdx];
+            }
 
-            await this.runBoundedEnsembleTasks(count, async (workerIdx, taskIdx) => {
+            await this.runBoundedEnsembleTasks(count, initialWaveCount, async (workerIdx, taskIdx) => {
                 const worker = this.workers[workerIdx];
                 const modelId = modelIds[workerIdx];
 
@@ -394,14 +423,17 @@ export class BnglWorkerPool {
 
     private async runBoundedEnsembleTasks(
         count: number,
+        initialWaveCount: number,
         runTask: (workerIdx: number, taskIdx: number) => Promise<void>
     ): Promise<void> {
         const workerCount = this.workers.length;
         const workerLoops = this.workers.map(async (_worker, workerIdx) => {
-            // Run zero already used worker 0 to establish the result shape.
-            // Continue with the same task-to-worker modulo assignment as before,
-            // but await each request before posting the next one to that worker.
-            const firstTaskIdx = workerIdx === 0 ? workerCount : workerIdx;
+            // Each worker already completed its corresponding initial-wave task.
+            // Continue the same modulo assignment while awaiting every request
+            // before posting that worker's next simulation.
+            const firstTaskIdx = workerIdx < initialWaveCount
+                ? workerIdx + workerCount
+                : workerIdx;
             for (let taskIdx = firstTaskIdx; taskIdx < count; taskIdx += workerCount) {
                 await runTask(workerIdx, taskIdx);
             }
