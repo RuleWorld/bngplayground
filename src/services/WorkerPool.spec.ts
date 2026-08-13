@@ -111,9 +111,9 @@ describe('WorkerPool', () => {
       const task3Promise = pool.submit('RUN_SIMULATION', { task: 3 });
 
       // Attach catch handlers to avoid unhandled rejections on teardown
-      const p1 = task1Promise.catch(() => {});
-      const p2 = task2Promise.catch(() => {});
-      const p3 = task3Promise.catch(() => {});
+      void task1Promise.catch(() => {});
+      void task2Promise.catch(() => {});
+      void task3Promise.catch(() => {});
 
       // Wait for tasks to be picked up
       await new Promise(resolve => setTimeout(resolve, 10));
