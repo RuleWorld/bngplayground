@@ -87,3 +87,11 @@ export const verifyModelArgsSchema = z.object({
     query: z.string(),
     maxSpecies: z.number().int().positive().optional(),
 }).strict();
+
+export const searchStructureArgsSchema = z.object({
+    code: z.string(),
+    experimental_data: z.array(z.any()),
+    inclusion_prior: z.number().optional(),
+    n_particles: z.number().int().positive().optional(),
+    n_generations: z.number().int().positive().optional(),
+}).strict();
