@@ -24,6 +24,7 @@ const shouldLogGraphMatcher = typeof process !== 'undefined' && process.env?.DEB
 // - MAX_COMPONENT_ITERATIONS: component-level assignment enumeration (typical: <100 iterations)
 const MAX_VF2_ITERATIONS = 100000;
 const MAX_COMPONENT_ITERATIONS = 10000;
+const SINGLE_NODE_ORDERING = [0];
 
 // WeakMaps for nested caching: Pattern -> Target -> MatchMap[]
 // To support both strict and relaxed matching, as well as symmetry-breaking,
@@ -287,7 +288,9 @@ export class GraphMatcher {
     }
 
     const matches: MatchMap[] = [];
-    const ordering = this.computeNodeOrdering(pattern, target);
+    const ordering = pattern.molecules.length === 1
+      ? SINGLE_NODE_ORDERING
+      : this.computeNodeOrdering(pattern, target);
     const state = new VF2State(
       pattern,
       target,
@@ -448,7 +451,9 @@ export class GraphMatcher {
       return null;
     }
 
-    const ordering = this.computeNodeOrdering(pattern, target);
+    const ordering = pattern.molecules.length === 1
+      ? SINGLE_NODE_ORDERING
+      : this.computeNodeOrdering(pattern, target);
     const state = new VF2State(
       pattern,
       target,

@@ -218,8 +218,8 @@ export type { SteadyState, SteadyStateConfig } from './services/analysis/SteadyS
 export { qrEigenvalues, arnoldiEigenvalues } from './services/analysis/EigenSolver';
 export { continuation, detectBifurcation } from './services/analysis/Continuation';
 export type { ContinuationConfig, ContinuationPoint, BifurcationPoint, ContinuationResult } from './services/analysis/Continuation';
-export { continuationWithConservation } from './services/analysis/ContinuationWithConservation';
-export type { ConservedContinuationConfig, ConservedContinuationResult } from './services/analysis/ContinuationWithConservation';
+export { continuationWithConservation, runBifurcationAnalysis } from './services/analysis/ContinuationWithConservation';
+export type { ConservedContinuationConfig, ConservedContinuationResult, RunBifurcationAnalysisConfig, RunBifurcationAnalysisResult } from './services/analysis/ContinuationWithConservation';
 export { attributeBifurcation, eigenvalueSensitivity } from './services/analysis/BifurcationAttribution';
 export type { AttributionResult as BifurcationAttributionResult } from './services/analysis/BifurcationAttribution';
 export { computeNullclines } from './services/analysis/Nullclines';

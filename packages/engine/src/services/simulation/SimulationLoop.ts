@@ -1423,7 +1423,7 @@ export async function simulate(
       // tree wins. The choice is fixed per network (numReactions doesn't change
       // within a run), so a given model always uses one method -> reproducible.
       // In linear mode the Fenwick tree is never built or updated.
-      const SSA_LINEAR_SELECT_MAX = 32;
+      const SSA_LINEAR_SELECT_MAX = 64;
       const useFenwick = numReactions > SSA_LINEAR_SELECT_MAX;
 
       // OPT 10: interval between full propensity recomputes. propensities[] are
