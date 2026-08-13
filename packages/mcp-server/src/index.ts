@@ -545,7 +545,49 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'search_structure',
         description: 'Search the space of possible rule sets to find model structures that best explain experimental data',
-        inputSchema: { type: 'object', properties: { code: { type: 'string' }, experimental_data: { type: 'array' }, n_particles: { type: 'number' }, n_generations: { type: 'number' } }, required: ['code', 'experimental_data'] },
+        inputSchema: {
+          type: 'object',
+          properties: {
+            code: { type: 'string' },
+            experimental_data: {
+              type: 'array',
+              minItems: 1,
+              items: {
+                oneOf: [
+                  {
+                    type: 'object',
+                    properties: {
+                      time: { type: 'number' },
+                      observable: { type: 'string' },
+                      value: { type: 'number' },
+                      error: { type: 'number', exclusiveMinimum: 0 },
+                    },
+                    required: ['time', 'observable', 'value'],
+                    additionalProperties: false,
+                  },
+                  {
+                    type: 'object',
+                    properties: {
+                      time: { type: 'number' },
+                      observables: {
+                        type: 'object',
+                        additionalProperties: { type: 'number' },
+                        minProperties: 1,
+                      },
+                    },
+                    required: ['time', 'observables'],
+                    additionalProperties: false,
+                  },
+                ],
+              },
+            },
+            inclusion_prior: { type: 'number', minimum: 0, maximum: 1 },
+            n_particles: { type: 'number', minimum: 1 },
+            n_generations: { type: 'number', minimum: 1 },
+          },
+          required: ['code', 'experimental_data'],
+          additionalProperties: false,
+        },
       },
       {
         name: 'pkpd',

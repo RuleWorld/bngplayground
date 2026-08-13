@@ -9,6 +9,7 @@ export {
     validateModelArgsSchema,
     getContactMapArgsSchema,
     verifyModelArgsSchema,
+    searchStructureArgsSchema,
 } from './core.js';
 
 export {
