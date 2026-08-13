@@ -72,4 +72,38 @@ describe('BnglService model cache', () => {
     expect(FakeWorker.messages.filter((message) => message.type === 'cache_model')).toHaveLength(2);
     expect(FakeWorker.messages.some((message) => message.type === 'release_model')).toBe(true);
   });
+
+  it('invalidates the cached transfer when non-parameter model data changes in place', async () => {
+    const { bnglService } = await import('../../services/bnglService');
+    const model = createModel();
+    const options = { method: 'ode' as const, t_end: 10, n_steps: 10 };
+
+    await bnglService.simulate(model, options);
+    model.observables.push({ type: 'Molecules', name: 'A_total', pattern: 'A()' });
+    await bnglService.simulate(model, options);
+
+    expect(FakeWorker.messages.filter((message) => message.type === 'cache_model')).toHaveLength(2);
+    expect(FakeWorker.messages.filter((message) => message.type === 'release_model')).toHaveLength(1);
+  });
+
+  it('serializes overlapping cache replacements without orphaning a model', async () => {
+    const { bnglService } = await import('../../services/bnglService');
+    const firstModel = createModel();
+    const secondModel = createModel();
+    secondModel.parameters.k = 2;
+    const options = { method: 'ode' as const, t_end: 10, n_steps: 10 };
+
+    await Promise.all([
+      bnglService.simulate(firstModel, options),
+      bnglService.simulate(secondModel, options),
+    ]);
+
+    expect(FakeWorker.messages.map((message) => message.type)).toEqual([
+      'cache_model',
+      'simulate',
+      'release_model',
+      'cache_model',
+      'simulate',
+    ]);
+  });
 });

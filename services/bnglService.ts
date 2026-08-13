@@ -94,6 +94,7 @@ class BnglService {
   private lastCachedModel?: BNGLModel;
   private lastCachedModelSignature?: string;
   private lastCachedModelPromise?: Promise<number>;
+  private modelCacheRequestId = 0;
   private progressListeners = new Set<(payload: any) => void>();
   private warningListeners = new Set<(payload: any) => void>();
 
@@ -425,27 +426,46 @@ class BnglService {
       return this.lastCachedModelPromise;
     }
 
-    // If we previously cached a model, try to release it to keep worker memory bounded.
-    const prev = this.lastCachedModelId;
-    if (typeof prev === 'number') {
-      // Fire-and-forget release; do not block the prepareModel call on release response.
-      this.releaseModel(prev).catch((err) => {
-        console.warn('[BnglService] Failed to release previous cached model', prev, err);
-      });
-    }
-
+    const previousPromise = this.lastCachedModelPromise;
+    const previousId = this.lastCachedModelId;
+    const cacheRequestId = ++this.modelCacheRequestId;
     this.lastCachedModel = model;
     this.lastCachedModelSignature = signature;
-    const cachePromise = this.postMessage<{ modelId: number }>('cache_model', { model }, { ...requestOptions, description: 'Cache model' }).then((res) => {
-      const modelId = (res as { modelId: number }).modelId;
-      if (this.lastCachedModelPromise === cachePromise) {
+
+    const cachePromise = (async () => {
+      let modelIdToRelease = previousId;
+      if (previousPromise) {
+        try {
+          modelIdToRelease = await previousPromise;
+        } catch {
+          modelIdToRelease = undefined;
+        }
+      }
+
+      if (typeof modelIdToRelease === 'number') {
+        try {
+          await this.postMessage<{ modelId: number }>(
+            'release_model',
+            { modelId: modelIdToRelease },
+            { description: 'Release cached model' },
+          );
+        } catch (error) {
+          console.warn('[BnglService] Failed to release previous cached model', modelIdToRelease, error);
+        }
+      }
+
+      const response = await this.postMessage<{ modelId: number }>(
+        'cache_model',
+        { model },
+        { ...requestOptions, description: 'Cache model' },
+      );
+      const modelId = response.modelId;
+      if (this.modelCacheRequestId === cacheRequestId) {
         this.lastCachedModelId = modelId;
       }
       return modelId;
-    }).catch((error) => {
-      if (this.lastCachedModelPromise === cachePromise) {
-        this.clearModelCache();
-      }
+    })().catch((error) => {
+      if (this.modelCacheRequestId === cacheRequestId) this.clearModelCache();
       throw error;
     });
     this.lastCachedModelPromise = cachePromise;
@@ -474,6 +494,7 @@ class BnglService {
   }
 
   private clearModelCache() {
+    this.modelCacheRequestId++;
     this.lastCachedModelId = undefined;
     this.lastCachedModel = undefined;
     this.lastCachedModelSignature = undefined;
@@ -481,14 +502,11 @@ class BnglService {
   }
 
   private getModelCacheSignature(model: BNGLModel): string {
-    const parameters = Object.entries(model.parameters ?? {})
-      .sort(([left], [right]) => left.localeCompare(right))
-      .map(([name, value]) => `${name}:${value}`)
-      .join('|');
-    const seeds = model.species
-      .map((species) => `${species.name}:${species.initialConcentration}:${species.isConstant ? 1 : 0}`)
-      .join('|');
-    return `${model.reactionRules?.length ?? 0};${model.reactions?.length ?? 0};${parameters};${seeds}`;
+    const signature = JSON.stringify(model);
+    if (signature === undefined) {
+      throw new Error('Unable to serialize model for worker cache validation');
+    }
+    return signature;
   }
 
   /**
