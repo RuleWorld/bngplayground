@@ -194,6 +194,9 @@ export class WorkerPool {
 
     instance.busy = false;
     instance.currentTask = null;
+
+    // Process next task in queue
+    this.processQueue();
   }
 
   /**
@@ -305,6 +308,9 @@ export class WorkerPool {
       instance.worker.terminate();
     }
     this.workers = [];
+    this.pendingTaskMap.forEach((pending) => {
+      pending.reject(new Error('WorkerPool was terminated'));
+    });
     this.pendingTaskMap.clear();
     this.taskQueue = [];
     this.isInitialized = false;

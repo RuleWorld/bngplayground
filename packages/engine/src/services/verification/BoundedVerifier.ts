@@ -162,12 +162,40 @@ function initializeSpecies(model: BNGLModel): {
 /* ---------- Public API ---------- */
 
 /**
- * Bounded reachability check: expand the reaction network from seed species,
- * checking each new species against the target pattern.
+ * Performs a bounded state-space reachability analysis using Layer 2 bounded network exploration.
  *
- * @param model - BNGLModel with reactionRules and species
- * @param pattern - Target pattern to search for
- * @param config - Exploration bounds
+ * This function explores the reaction network starting from the model's initial seed species by
+ * iteratively applying reaction rules (both unimolecular and bimolecular) in a Breadth-First Search
+ * (BFS) manner. It tests whether any of the generated species match the user-defined target pattern.
+ *
+ * Key behaviors of the exploration loop:
+ * 1. Parses the target pattern and model's reaction rules into graph representations.
+ * 2. Checks if any of the initial seed species already match the target pattern. If so, returns
+ *    immediately with a seed-level success witness.
+ * 3. Iteratively applies the reaction rules to the active frontier of species:
+ *    - Unimolecular rules are applied individually to each species.
+ *    - Bimolecular rules are applied to all possible pairs of currently discovered species.
+ * 4. Limits network expansion using the provided configuration parameter threshold bounds (`maxSpecies`,
+ *    `maxIterations`, and `maxReactions`) to prevent excessive memory and CPU usage on infinite or
+ *    extremely large state spaces.
+ * 5. If the target pattern matches any newly generated species, it stops immediately and traces
+ *    the sequential rule application path from seed species to the matching species to build the witness.
+ *
+ * **Non-obvious Invariant**:
+ * This function remains completely browser-API-free, making zero assumptions about DOM, web contexts,
+ * or global window attributes, which is essential for execution inside headless services and background Web Workers.
+ *
+ * @param model - The BNGLModel object containing the list of seed species and reaction rules.
+ * @param pattern - The target query pattern string to look for.
+ * @param config - Optional configuration object to customize the search bounds (`maxSpecies`, `maxIterations`, `maxReactions`).
+ * @returns A structured result of type {@link BoundedVerificationResult}:
+ *  - `reachable`: Boolean indicating whether the target pattern was successfully reached.
+ *  - `witness`: (Optional) If reachable, provides details of the target species, its internal species index,
+ *    and the sequence of rule names that generated it from the seeds.
+ *  - `explorationComplete`: Boolean indicating whether the state-space exploration finished completely
+ *    without hitting any of the configuration bounds (meaning the entire state space is finite and fully mapped).
+ *  - `speciesExplored`: Total count of unique species discovered and registered during search.
+ *  - `reactionsGenerated`: Total count of reaction rule applications that occurred during the search.
  */
 export function boundedReachabilityCheck(
   model: BNGLModel,

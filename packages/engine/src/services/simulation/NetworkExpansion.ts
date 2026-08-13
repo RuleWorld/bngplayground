@@ -208,17 +208,37 @@ export async function generateExpandedNetwork(
     };
     const resolvedSeedConcentrations = inputModel.species.map((s) => resolveSeedConcentration(s));
 
+    type SeedEntry = {
+        graph: ReturnType<typeof BNGLParser.parseSpeciesGraph>;
+        canonical: string;
+        concentration: number;
+        isConstant: boolean;
+    };
+    const seedEntries: SeedEntry[] = inputModel.species.map((species, index) => ({
+        graph: __seedSpecies[index],
+        canonical: GraphCanonicalizer.canonicalize(__seedSpecies[index]),
+        concentration: resolvedSeedConcentrations[index] ?? 0,
+        isConstant: !!species.isConstant,
+    }));
+
     // CRITICAL FIX (Parity Issue 2): Map Canonical Names -> Initial Concentrations
     // BNG2 evaluates species concentrations *after* parameters.
     // In our Visitor, we pre-evaluate them. Here, we build a lookup map.
     // When generating species, we check this map to assign the correct initial value (e.g. "A0" -> 100).
     // Reference: BNG2.pl parameter evaluation order.
     const seedConcentrationMap = new Map<string, number>();
-    inputModel.species.forEach((s, index) => {
-        const g = BNGLParser.parseSpeciesGraph(s.name);
-        const canonicalName = GraphCanonicalizer.canonicalize(g);
-        seedConcentrationMap.set(canonicalName, resolvedSeedConcentrations[index] ?? 0);
-    });
+    const seedEntryMap = new Map<string, SeedEntry>();
+    const normalizedSeedEntryMap = new Map<string, SeedEntry>();
+    const structuralSeedBuckets = new Map<string, SeedEntry[]>();
+    for (const entry of seedEntries) {
+        seedConcentrationMap.set(entry.canonical, entry.concentration);
+        seedEntryMap.set(entry.canonical, entry);
+        normalizedSeedEntryMap.set(normalizeCompartmentSyntax(entry.canonical), entry);
+        const structuralHash = entry.graph.getStructuralHash();
+        const bucket = structuralSeedBuckets.get(structuralHash);
+        if (bucket) bucket.push(entry);
+        else structuralSeedBuckets.set(structuralHash, [entry]);
+    }
 
     // -------------------------------------------------------------------------
     // 2. Rule Preparation
@@ -588,22 +608,9 @@ export async function generateExpandedNetwork(
 
     checkCancelled();
 
-    // Map of canonical seed names to their species objects for efficient lookup
-    const seedMap = new Map<string, { isConstant: boolean }>();
-    type SeedEntry = { graph: ReturnType<typeof BNGLParser.parseSpeciesGraph>; concentration: number; isConstant: boolean };
-    const seedEntries = inputModel.species.map((sp, i) => ({
-        graph: __seedSpecies[i],
-        concentration: resolvedSeedConcentrations[i] ?? 0,
-        isConstant: !!sp.isConstant,
-    })) as SeedEntry[];
-    for (const sp of inputModel.species) {
-        try {
-            const seedG = BNGLParser.parseSpeciesGraph(sp.name);
-            const canon = GraphCanonicalizer.canonicalize(seedG);
-            seedMap.set(canon, { isConstant: !!sp.isConstant });
-            if (VERBOSE_NETEXP_DEBUG) console.log('[NetworkExpansion] Seed:', sp.name, '-> Canonical:', canon, 'Constant:', !!sp.isConstant);
-        } catch (e) {
-            console.warn('[NetworkExpansion] Could not parse seed species:', sp.name, e);
+    if (VERBOSE_NETEXP_DEBUG) {
+        for (const entry of seedEntries) {
+            console.log('[NetworkExpansion] Seed canonical:', entry.canonical, 'Constant:', entry.isConstant);
         }
     }
 
@@ -616,7 +623,7 @@ export async function generateExpandedNetwork(
     const generatedSpecies = result.species.map((s: Species) => {
         // Canonicalize the graph representation for consistent string keys.
         const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
-        let matchedSeedEntry: SeedEntry | undefined;
+        let matchedSeedEntry = seedEntryMap.get(canonicalName);
 
         // Lookup exact match in the pre-calculated seed map.
         let concentration = seedConcentrationMap.get(canonicalName);
@@ -626,11 +633,11 @@ export async function generateExpandedNetwork(
         // If exact canonical match fails, we normalize whitespace and 'in' syntax, then try again.
         if (concentration === undefined) {
             const normalizedTarget = normalizeCompartmentSyntax(canonicalName);
-            for (const [seedCanon, seedConc] of seedConcentrationMap.entries()) {
-                if (normalizeCompartmentSyntax(seedCanon) === normalizedTarget) {
-                    concentration = seedConc;
-                    if (VERBOSE_NETEXP_DEBUG) console.log(`[NetworkExpansion] Found concentration via loose match for '${canonicalName}': ${concentration}`);
-                    break;
+            matchedSeedEntry = normalizedSeedEntryMap.get(normalizedTarget);
+            concentration = matchedSeedEntry?.concentration;
+            if (concentration !== undefined) {
+                if (VERBOSE_NETEXP_DEBUG) {
+                    console.log(`[NetworkExpansion] Found concentration via loose match for '${canonicalName}': ${concentration}`);
                 }
             }
         }
@@ -638,7 +645,8 @@ export async function generateExpandedNetwork(
         // Structural fallback for canonicalization-order discrepancies.
         // This ensures seed concentrations transfer even if canonical string formatting differs.
         if (concentration === undefined) {
-            for (const entry of seedEntries) {
+            const candidates = structuralSeedBuckets.get(s.graph.getStructuralHash()) ?? [];
+            for (const entry of candidates) {
                 const forward = GraphMatcher.matchesPattern(entry.graph, s.graph);
                 if (!forward) continue;
                 const backward = GraphMatcher.matchesPattern(s.graph, entry.graph);
@@ -659,8 +667,7 @@ export async function generateExpandedNetwork(
 
         // Check if this species was marked as "Constant" (Fixed concentration) in inputs.
         // Reference: BNG2 "Species" block attributes.
-        const seedInfo = seedMap.get(canonicalName);
-        const isConstant = seedInfo?.isConstant ?? matchedSeedEntry?.isConstant ?? false;
+        const isConstant = matchedSeedEntry?.isConstant ?? false;
 
         if (VERBOSE_NETEXP_DEBUG) {
             console.log(`[NetworkExpansion] Expanded Species: '${canonicalName}', Conc: ${concentration}, Constant: ${isConstant}`);

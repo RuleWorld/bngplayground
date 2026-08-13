@@ -57,7 +57,6 @@
   "dependencies": {
     "antlr4ts": "^0.5.0-alpha.4",
     "decimal.js": "^10.6.0",
-    "fast-xml-parser": "^5.7.1",
     "jsep": "^1.4.0"
   },
   "devDependencies": {

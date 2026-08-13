@@ -171,6 +171,7 @@ bng_exec_*/
 test-results/
 
 # Workspace repositories (Root-relative to avoid matching source)
+/RuleHub/
 /nfsim/
 /nfsim-src/
 /bionetgen/
@@ -265,3 +266,4 @@ tests/fixtures/fuzzer/
 
 # End of .gitignore
 coverage
+/RuleHub/

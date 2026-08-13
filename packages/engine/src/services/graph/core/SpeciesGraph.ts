@@ -556,10 +556,11 @@ export class SpeciesGraph {
     if (molIdx < 0 || molIdx >= this.molecules.length) return visited;
 
     const queue = [molIdx];
+    let head = 0;
     visited.add(molIdx);
 
-    while (queue.length > 0) {
-      const curr = queue.shift()!;
+    while (head < queue.length) {
+      const curr = queue[head++];
       // Check neighbors via adjacency (support multi-site bonding)
       const mol = this.molecules[curr];
       for (let c = 0; c < mol.components.length; c++) {
@@ -592,10 +593,11 @@ export class SpeciesGraph {
 
       const componentMols: number[] = [];
       const queue = [i];
+      let head = 0;
       visited.add(i);
 
-      while (queue.length > 0) {
-        const curr = queue.shift()!;
+      while (head < queue.length) {
+        const curr = queue[head++];
         componentMols.push(curr);
 
         // Check neighbors via adjacency (support multi-site bonding)

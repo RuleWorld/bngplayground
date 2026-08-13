@@ -828,7 +828,44 @@ export class NetworkGenerator {
     return this.areCompartmentsAdjacent(comp1Name, comp2Name);
   }
 
-
+  /**
+   * Generates a complete or bounded reaction network from seed species and reaction rules.
+   *
+   * Replicating the core network expansion algorithm of BioNetGen (equivalent to BNG2's generate_network action),
+   * this method executes the following steps:
+   * 1. **Initialization & Cache Reset**: Resets generation start times, clears inverted species lookup maps,
+   *    structural hash maps, and global match caches.
+   * 2. **Seed Injection**: Canonicalizes and registers seed species, adding them to the reactive processing queue.
+   * 3. **Zero-Order Synthesis**: Processes rules with zero reactants to immediately produce initial species and
+   *    synthesis reactions.
+   * 4. **Iterative Expansion Queue**: Iterates until the queue is empty or limits are hit. In each iteration:
+   *    - Pulls a batch of species from the queue and computes their canonical keys.
+   *    - Applies unimolecular and N-ary reaction rules to discover new reactions and species.
+   *    - Emits periodic progress callbacks with current network statistics.
+   * 5. **Unimolecular Rule Application**: Matches unimolecular rule patterns against targets, checks exclude/include
+   *    constraints, resolves product-implied free site constraints, and handles symmetry-equivalent embeddings via
+   *    stable event-signature deduplication. Translates collapsed symmetries into exact statistical rate factors.
+   * 6. **N-ary (Bimolecular/Multimer) Application**: Recursively searches for reactant partners. Employs a canonical
+   *    anchor-species check to prevent double counting, applies spectator-corrected combinatorial multipliers for
+   *    selective equivalent site bonding, and maps products.
+   * 7. **Rule Transformation**: Clones molecules, resolves bonds, and executes state or compartment changes. Supports
+   *    `DeleteMolecules` and whole-species deletion, selective orphan/bystander harvesting to preserve unmapped fragments,
+   *    and propagates `MoveConnected` transitions across connected complexes.
+   * 8. **Compartment Adjacency Validation**: Verifies that newly formed bonds only span identical or adjacent compartments,
+   *    rejecting invalid trans-compartmental product topologies.
+   * 9. **Resource Constraint Monitoring**: Safeguards the execution context by throwing error limits or gracefully
+   *    returning partial networks if max species, max reactions, max iterations, max complex size, or JS heap memory limits are exceeded.
+   *
+   * Invariants:
+   * - **Browser-API-Free**: This function relies on zero browser or DOM APIs and is fully compatible with server-side Node.js, Web Worker, and headless MCP contexts.
+   *
+   * @param seedSpecies - The initial species graphs to populate the network.
+   * @param rules - The reaction rules (with defined rate constants, reactants, products, and constraints) to expand.
+   * @param onProgress - Optional callback invoked periodically with current generation metrics.
+   * @param signal - Optional AbortSignal to cancel the network generation.
+   * @returns A promise resolving to an object containing arrays of generated Species and Rxn reactions.
+   * @throws {NetworkGenerationLimitError} If species, reaction, iteration, or memory thresholds are breached.
+   */
   async generate(
     seedSpecies: SpeciesGraph[],
     rules: RxnRule[],
@@ -3353,7 +3390,7 @@ export class NetworkGenerator {
 
       const productGraphs: SpeciesGraph[] = [];
       const usedReactantMolsInReaction = new Set<number>(); // Tracks reactant graph molecules surviving in products
-      const usedReactantPatternMols = new Set<string>(); // Tracks reactant pattern molecules (for mapping correctness)
+      const usedReactantPatternMols = new Set<number>(); // Tracks reactant pattern molecules (for mapping correctness)
       const survivorLocations = reactantGraphs.map(() => new Map<number, { graphIdx: number; molIdx: number }>()); // NOTE: Track where survivors ended up
 
       // 0. Identify which molecules were explicitly matched by the rule (Targeted for transformation/deletion)
@@ -4035,7 +4072,7 @@ export class NetworkGenerator {
     reactantPatterns: SpeciesGraph[],
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[],
-    usedReactantPatternMols: Set<string>, // NEW: Shared tracking across product patterns
+    usedReactantPatternMols: Set<number>, // Shared tracking across product patterns
     _isMoveConnectedRule: boolean
   ): SpeciesGraph | null {
     if (shouldLogNetworkGenerator) {
@@ -4089,7 +4126,7 @@ export class NetworkGenerator {
     }
 
     // Track mapping: (reactantIdx, reactantMolIdx) -> productMolIdx  
-    const reactantToProductMol = new Map<string, number>();
+    const reactantToProductMol = new Map<number, number>();
     // Track mapping: patternMolIdx -> productMolIdx
     const patternToProductMol = new Map<number, number>();
     // Track component mapping: "pMolIdx:pCompIdx" -> product component index
@@ -4112,7 +4149,6 @@ export class NetworkGenerator {
       patternMolIdx: number,
       name: string,
       targetMolIdx: number,
-      isBound: boolean  // NEW: track if this molecule is bonded within its pattern
     }> = [];
 
     for (let r = 0; r < reactantPatterns.length; r++) {
@@ -4123,23 +4159,11 @@ export class NetworkGenerator {
       for (let patternMolIdx = 0; patternMolIdx < reactantPattern.molecules.length; patternMolIdx++) {
         const targetMolIdx = match.moleculeMap.get(patternMolIdx);
         if (targetMolIdx !== undefined) {
-          // Check if this molecule is bonded to other molecules in the pattern
-          const patternMol = reactantPattern.molecules[patternMolIdx];
-          let isBound = false;
-          for (const comp of patternMol.components) {
-            // Check for explicit bonds (!1, !2 etc) or wildcards (!+)
-            if (comp.edges.size > 0 || comp.wildcard === '+') {
-              isBound = true;
-              break;
-            }
-          }
-
           allReactantPatternMols.push({
             reactantIdx: r,
             patternMolIdx,
             name: reactantPattern.molecules[patternMolIdx].name,
-            targetMolIdx,
-            isBound
+            targetMolIdx
           });
         }
       }
@@ -4170,8 +4194,7 @@ export class NetworkGenerator {
 
     const scorePatternMolMatch = (
       pMol: Molecule,
-      rpm: { reactantIdx: number; patternMolIdx: number; name: string; targetMolIdx: number; isBound: boolean },
-      _pMolIsBound: boolean
+      rpm: { reactantIdx: number; patternMolIdx: number; name: string; targetMolIdx: number }
     ): number => {
       const rpMol = reactantPatterns[rpm.reactantIdx].molecules[rpm.patternMolIdx];
       if (!rpMol) return -Infinity;
@@ -4197,49 +4220,87 @@ export class NetworkGenerator {
 
       // Prefer compatible component states. This helps disambiguate identical molecule names
       // in symmetric complexes (e.g., multiple R molecules with different Y1/Y2 states).
-      const rpCompByName = new Map<string, Component>();
-      for (const c of rpMol.components) rpCompByName.set(c.name, c);
-      const targetCompByName = new Map<string, Component>();
-      for (const c of targetMol.components) targetCompByName.set(c.name, c);
-
       // Reward overlap of *specified* component names between the two pattern molecules.
       // This is important because BNGL patterns often omit components as wildcards, and
       // different molecules in the same rule may specify different components.
-      const rpCompNames = new Set<string>(rpMol.components.map((c: Component) => c.name));
-      const pCompNames = new Set<string>(pMol.components.map((c: Component) => c.name));
       let sharedCompNames = 0;
-      for (const name of pCompNames) {
-        if (rpCompNames.has(name)) sharedCompNames++;
+      let productCompNameCount = 0;
+      let reactantCompNameCount = 0;
+      for (let pIdx = 0; pIdx < pMol.components.length; pIdx++) {
+        const name = pMol.components[pIdx].name;
+        let seenEarlier = false;
+        for (let i = 0; i < pIdx; i++) {
+          if (pMol.components[i].name === name) {
+            seenEarlier = true;
+            break;
+          }
+        }
+        if (seenEarlier) continue;
+        productCompNameCount++;
+        for (const rc of rpMol.components) {
+          if (rc.name === name) {
+            sharedCompNames++;
+            break;
+          }
+        }
+      }
+      for (let rIdx = 0; rIdx < rpMol.components.length; rIdx++) {
+        const name = rpMol.components[rIdx].name;
+        let seenEarlier = false;
+        for (let i = 0; i < rIdx; i++) {
+          if (rpMol.components[i].name === name) {
+            seenEarlier = true;
+            break;
+          }
+        }
+        if (!seenEarlier) reactantCompNameCount++;
       }
       if (!sameName) {
-        if (rpCompNames.size !== pCompNames.size) return -Infinity;
-        for (const name of pCompNames) {
-          if (!rpCompNames.has(name)) return -Infinity;
-        }
+        if (reactantCompNameCount !== productCompNameCount || sharedCompNames !== productCompNameCount) return -Infinity;
       }
       score += sharedCompNames * 25;
 
       // Reward overlap of the *bonded sites* (component names that carry an explicit bond
       // or a !+ wildcard) to disambiguate cases like R(Y1~P!2) vs R(Y2~P!1).
-      const rpBondSites = new Set<string>();
-      for (const c of rpMol.components) {
-        if (c.wildcard === '+' || c.edges?.size > 0) rpBondSites.add(c.name);
-      }
-      const pBondSites = new Set<string>();
-      for (const c of pMol.components) {
-        if (c.wildcard === '+' || c.edges?.size > 0) pBondSites.add(c.name);
-      }
       let sharedBondSites = 0;
-      for (const name of pBondSites) {
-        if (rpBondSites.has(name)) sharedBondSites++;
+      for (let pIdx = 0; pIdx < pMol.components.length; pIdx++) {
+        const pc = pMol.components[pIdx];
+        if (pc.wildcard !== '+' && pc.edges.size === 0) continue;
+        let seenEarlier = false;
+        for (let i = 0; i < pIdx; i++) {
+          const earlier = pMol.components[i];
+          if (earlier.name === pc.name && (earlier.wildcard === '+' || earlier.edges.size > 0)) {
+            seenEarlier = true;
+            break;
+          }
+        }
+        if (seenEarlier) continue;
+        for (const rc of rpMol.components) {
+          if (rc.name === pc.name && (rc.wildcard === '+' || rc.edges.size > 0)) {
+            sharedBondSites++;
+            break;
+          }
+        }
       }
       score += sharedBondSites * 50;
 
       for (const pc of pMol.components) {
         if (!pc.wildcard && pc.edges.size > 0) {
-          const tc = targetCompByName.get(pc.name);
-          if (tc) {
-            const rcForBondCheck = rpCompByName.get(pc.name);
+            let tc: Component | undefined;
+            for (let i = targetMol.components.length - 1; i >= 0; i--) {
+              if (targetMol.components[i].name === pc.name) {
+                tc = targetMol.components[i];
+                break;
+              }
+            }
+            if (tc) {
+              let rcForBondCheck: Component | undefined;
+              for (let i = rpMol.components.length - 1; i >= 0; i--) {
+                if (rpMol.components[i].name === pc.name) {
+                  rcForBondCheck = rpMol.components[i];
+                  break;
+                }
+              }
 
             // If the reactant pattern does not mention this component (or mentions it
             // as explicitly unbound), product bond creation should originate from a free
@@ -4272,7 +4333,13 @@ export class NetworkGenerator {
           }
         }
 
-        const rc = rpCompByName.get(pc.name);
+        let rc: Component | undefined;
+        for (let i = rpMol.components.length - 1; i >= 0; i--) {
+          if (rpMol.components[i].name === pc.name) {
+            rc = rpMol.components[i];
+            break;
+          }
+        }
         if (!rc) continue;
 
         const pState = pc.state;
@@ -4292,15 +4359,17 @@ export class NetworkGenerator {
         // since product patterns may introduce new bonds not present in reactant patterns.
         // Use a strong reward so state-flip rules on symmetric molecules preserve molecule identity
         // by bond topology instead of swapping molecules by state similarity.
-        const pLabels = new Set<number>();
-        for (const [lbl] of pc.edges) {
-          if (typeof lbl === 'number') pLabels.add(lbl);
-        }
-        if (pLabels.size > 0) {
-          let shared = 0;
-          for (const [lbl] of rc.edges) {
-            if (typeof lbl === 'number' && pLabels.has(lbl)) shared++;
+        let shared = 0;
+        for (const [reactantLabel] of rc.edges) {
+          if (typeof reactantLabel !== 'number') continue;
+          for (const [productLabel] of pc.edges) {
+            if (productLabel === reactantLabel) {
+              shared++;
+              break;
+            }
           }
+        }
+        if (shared > 0) {
           score += shared * 250;
         }
       }
@@ -4311,38 +4380,28 @@ export class NetworkGenerator {
     for (let pMolIdx = 0; pMolIdx < pattern.molecules.length; pMolIdx++) {
       const pMol = pattern.molecules[pMolIdx];
 
-      // Determine if product molecule is bound within the product pattern
-      let pMolIsBound = false;
-      for (const comp of pMol.components) {
-        if (comp.edges.size > 0 || comp.wildcard === '+') {
-          pMolIsBound = true;
-          break;
-        }
-      }
-
       // Try to find the best matching reactant molecule
       let bestMatchIdx = -1;
       let bestScore = -Infinity;
 
-      const availableIndices: number[] = [];
-      const availableSameNameIndices: number[] = [];
+      let hasAvailableSameName = false;
       for (let i = 0; i < allReactantPatternMols.length; i++) {
-        const rpmKey = `${allReactantPatternMols[i].reactantIdx}:${allReactantPatternMols[i].patternMolIdx}`;
+        const rpmKey = (allReactantPatternMols[i].reactantIdx << 16) | allReactantPatternMols[i].patternMolIdx;
         if (usedReactantPatternMols.has(rpmKey)) continue;
-        availableIndices.push(i);
         if (allReactantPatternMols[i].name === pMol.name) {
-          availableSameNameIndices.push(i);
+          hasAvailableSameName = true;
+          break;
         }
       }
 
       // Prefer same-name mappings whenever available; only allow cross-name
       // mappings when no same-name reactant pattern molecule exists.
-      const candidateIndices =
-        availableSameNameIndices.length > 0 ? availableSameNameIndices : availableIndices;
-
-      for (const i of candidateIndices) {
+      for (let i = 0; i < allReactantPatternMols.length; i++) {
         const rpm = allReactantPatternMols[i];
-        const score = scorePatternMolMatch(pMol, rpm, pMolIsBound);
+        const rpmKey = (rpm.reactantIdx << 16) | rpm.patternMolIdx;
+        if (usedReactantPatternMols.has(rpmKey)) continue;
+        if (hasAvailableSameName && rpm.name !== pMol.name) continue;
+        const score = scorePatternMolMatch(pMol, rpm);
 
         // Bonus for matching pattern index (for multi-pattern rules)
         // For catalysis reactions, the free product should come from the second reactant pattern
@@ -4358,7 +4417,7 @@ export class NetworkGenerator {
 
       if (bestMatchIdx !== -1 && Number.isFinite(bestScore)) {
         const rpm = allReactantPatternMols[bestMatchIdx];
-        const rpmKey = `${rpm.reactantIdx}:${rpm.patternMolIdx}`;
+        const rpmKey = (rpm.reactantIdx << 16) | rpm.patternMolIdx;
         usedReactantPatternMols.add(rpmKey);
         productPatternToReactant.set(pMolIdx, {
           reactantIdx: rpm.reactantIdx,
@@ -4385,7 +4444,7 @@ export class NetworkGenerator {
     // - It does NOT exist in the product pattern (unbound or different label)
     // 
     // Broken bonds should NOT be traversed when finding connected components.
-    const includedMols = new Set<string>(); // "reactantIdx:molIdx"
+    const includedMols = new Set<number>(); // 32-bit bitwise integer key: (reactantIdx << 16) | molIdx
 
     // Build a set of bonds that are BROKEN by this transformation.
     // IMPORTANT: track broken bonds as endpoint pairs (not endpoint flags), so
@@ -4607,7 +4666,7 @@ export class NetworkGenerator {
       const startMolIdx = mapping.targetMolIdx;
 
       // Include the matched molecule
-      includedMols.add(`${mapping.reactantIdx}:${startMolIdx}`);
+      includedMols.add((mapping.reactantIdx << 16) | startMolIdx);
 
       // Traverse connected component, but skip broken bonds
       const visited = new Set<number>([startMolIdx]);
@@ -4647,7 +4706,7 @@ export class NetworkGenerator {
                 }
 
                 visited.add(partnerMolIdx);
-                includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx}`);
+                includedMols.add((mapping.reactantIdx << 16) | partnerMolIdx);
                 queue.push(partnerMolIdx);
               }
             }
@@ -4730,7 +4789,7 @@ export class NetworkGenerator {
             const _dIdx6 = bondTarget.indexOf('.');
             const partnerMolStr = bondTarget.slice(0, _dIdx6);
             const partnerMolIdx = Number(partnerMolStr);
-            includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx}`);
+            includedMols.add((mapping.reactantIdx << 16) | partnerMolIdx);
 
             if (shouldLogNetworkGenerator) {
               debugNetworkLog(`[buildProductGraph] !+ wildcard at pattern comp ${pMolIdx}.${pCompIdx} -> reactant comp ${mapping.targetMolIdx}.${reactantCompIdx} -> bonded to mol ${partnerMolIdx}`);
@@ -4758,7 +4817,7 @@ export class NetworkGenerator {
 
                       if (!visited.has(partnerMolIdx2)) {
                         visited.add(partnerMolIdx2);
-                        includedMols.add(`${mapping.reactantIdx}:${partnerMolIdx2}`);
+                        includedMols.add((mapping.reactantIdx << 16) | partnerMolIdx2);
                         toProcess.push(partnerMolIdx2);
                       }
                     }
@@ -4777,17 +4836,14 @@ export class NetworkGenerator {
 
     // Clone included molecules
     for (const key of includedMols) {
-      const _cIdx4 = key.indexOf(':');
-      const rStr = key.slice(0, _cIdx4);
-      const molIdxStr = key.slice(_cIdx4 + 1);
-      const r = Number(rStr);
-      const molIdx = Number(molIdxStr);
+      const r = key >> 16;
+      const molIdx = key & 0xffff;
 
       if (reactantToProductMol.has(key)) continue;
 
       const sourceMol = reactantGraphs[r].molecules[molIdx];
       const clone = this.cloneMoleculeStructure(sourceMol);
-      clone._sourceKey = key; // Preserve source mapping (reactantIdx:molIdx)
+      clone._sourceKey = `${r}:${molIdx}`; // Preserve source mapping (reactantIdx:molIdx)
       clone._sourceR = r;
       clone._sourceM = molIdx;
 
@@ -4829,7 +4885,7 @@ export class NetworkGenerator {
       const mapping = productPatternToReactant.get(pMolIdx);
       if (!mapping) continue;
 
-      const key = `${mapping.reactantIdx}:${mapping.targetMolIdx}`;
+      const key = (mapping.reactantIdx << 16) | mapping.targetMolIdx;
       const productMolIdx = reactantToProductMol.get(key);
       if (productMolIdx !== undefined) {
         patternToProductMol.set(pMolIdx, productMolIdx);
@@ -5113,8 +5169,8 @@ export class NetworkGenerator {
           if (isNaN(molIdx) || isNaN(compIdx) || isNaN(partnerMolIdx) || isNaN(partnerCompIdx)) continue;
 
           // Check if both molecules are included
-          const mol1Key = `${r}:${molIdx}`;
-          const mol2Key = `${r}:${partnerMolIdx}`;
+          const mol1Key = (r << 16) | molIdx;
+          const mol2Key = (r << 16) | partnerMolIdx;
           if (!includedMols.has(mol1Key) || !includedMols.has(mol2Key)) continue;
 
           // Check if this specific bond is BROKEN by the rule transformation

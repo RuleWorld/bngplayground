@@ -104,7 +104,7 @@ describe('MCP server tool handlers', () => {
   });
 
   it('rejects invalid generate_network arguments', async () => {
-    await expect(server.handle(CallToolRequestSchema, {
+    const result = await server.handle(CallToolRequestSchema, {
       params: {
         name: 'generate_network',
         arguments: {
@@ -112,7 +112,9 @@ describe('MCP server tool handlers', () => {
           max_agents: -1,
         },
       },
-    })).rejects.toThrow('Invalid arguments for generate_network');
+    });
+    expect(result.structuredContent.error).toContain('Invalid arguments for generate_network');
+    expect(result.structuredContent.diagnosis).toBeDefined();
   });
 
   it('generates an expanded network from BNGL', async () => {

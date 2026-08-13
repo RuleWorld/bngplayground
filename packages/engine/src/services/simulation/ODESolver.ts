@@ -5,7 +5,7 @@
  *   - Rosenbrock23Solver (+ LUSolver)
  *   - RK45Solver, FastRK4Solver
  *   - CVODESolver (+ CVodeModule interface)
- *   - AutoSolver, SmartAutoSolver, CVODEAutoSolver, createSolver
+ *   - AutoSolver, CVODEAutoSolver, createSolver
  *
  * Shared types and utilities live in utils/solverUtils.ts.
  */

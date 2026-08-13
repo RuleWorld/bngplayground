@@ -24,6 +24,7 @@ const shouldLogGraphMatcher = typeof process !== 'undefined' && process.env?.DEB
 // - MAX_COMPONENT_ITERATIONS: component-level assignment enumeration (typical: <100 iterations)
 const MAX_VF2_ITERATIONS = 100000;
 const MAX_COMPONENT_ITERATIONS = 10000;
+const SINGLE_NODE_ORDERING = [0];
 
 // WeakMaps for nested caching: Pattern -> Target -> MatchMap[]
 // To support both strict and relaxed matching, as well as symmetry-breaking,
@@ -287,7 +288,9 @@ export class GraphMatcher {
     }
 
     const matches: MatchMap[] = [];
-    const ordering = this.computeNodeOrdering(pattern, target);
+    const ordering = pattern.molecules.length === 1
+      ? SINGLE_NODE_ORDERING
+      : this.computeNodeOrdering(pattern, target);
     const state = new VF2State(
       pattern,
       target,
@@ -448,7 +451,9 @@ export class GraphMatcher {
       return null;
     }
 
-    const ordering = this.computeNodeOrdering(pattern, target);
+    const ordering = pattern.molecules.length === 1
+      ? SINGLE_NODE_ORDERING
+      : this.computeNodeOrdering(pattern, target);
     const state = new VF2State(
       pattern,
       target,
@@ -637,8 +642,6 @@ class VF2State {
   nodeOrdering: number[];
   symmetryBreaking: boolean;
   allowExtraTargetBonds: boolean;
-  private componentCandidateCache: Map<number, Map<number, Map<number, Map<number, number[]>>>>;
-  private componentCandidateCacheLarge: Map<number, Map<number, Map<number, Map<string, number[]>>>>;
   private frontierBits: Uint8Array;
   private frontierSize: number;
   private componentOrders: number[][];
@@ -687,8 +690,6 @@ class VF2State {
     }
     this.symmetryBreaking = symmetryBreaking;
     this.allowExtraTargetBonds = allowExtraTargetBonds;
-    this.componentCandidateCache = new Map();
-    this.componentCandidateCacheLarge = new Map();
     this.frontierBits = new Uint8Array(Math.max(pLen, tLen));
     this.frontierSize = 0;
 
@@ -1596,45 +1597,12 @@ class VF2State {
     return false;
   }
 
-  private getUsedTargetsKey(usedTargets: Set<number>): string {
-    this.largeUsedKeyScratch.length = 0;
-    for (const value of usedTargets) {
-      this.largeUsedKeyScratch.push(value);
-    }
-    this.largeUsedKeyScratch.sort((a, b) => a - b);
-    return this.largeUsedKeyScratch.join(',');
-  }
-
   private getComponentCandidatesLarge(
     pMolIdx: number,
     tMolIdx: number,
     pCompIdx: number,
     usedTargets: Set<number>
   ): number[] {
-    const usedKey = this.getUsedTargetsKey(usedTargets);
-    let level1 = this.componentCandidateCacheLarge.get(pMolIdx);
-    if (!level1) {
-      level1 = new Map();
-      this.componentCandidateCacheLarge.set(pMolIdx, level1);
-    }
-
-    let level2 = level1.get(tMolIdx);
-    if (!level2) {
-      level2 = new Map();
-      level1.set(tMolIdx, level2);
-    }
-
-    let level3 = level2.get(pCompIdx);
-    if (!level3) {
-      level3 = new Map();
-      level2.set(pCompIdx, level3);
-    }
-
-    const cached = level3.get(usedKey);
-    if (cached) {
-      return cached;
-    }
-
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
     const targetMol = this.target.molecules[tMolIdx];
     const candidates: number[] = [];
@@ -1647,7 +1615,6 @@ class VF2State {
       candidates.push(idx);
     }
 
-    level3.set(usedKey, candidates);
     return candidates;
   }
 
@@ -1723,30 +1690,6 @@ class VF2State {
     pCompIdx: number,
     usedTargetsMask: number
   ): number[] {
-    const usedKey = usedTargetsMask;
-    let level1 = this.componentCandidateCache.get(pMolIdx);
-    if (!level1) {
-      level1 = new Map();
-      this.componentCandidateCache.set(pMolIdx, level1);
-    }
-
-    let level2 = level1.get(tMolIdx);
-    if (!level2) {
-      level2 = new Map();
-      level1.set(tMolIdx, level2);
-    }
-
-    let level3 = level2.get(pCompIdx);
-    if (!level3) {
-      level3 = new Map();
-      level2.set(pCompIdx, level3);
-    }
-
-    const cached = level3.get(usedKey);
-    if (cached) {
-      return cached;
-    }
-
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
     const targetMol = this.target.molecules[tMolIdx];
     const candidates: number[] = [];
@@ -1759,7 +1702,6 @@ class VF2State {
       candidates.push(idx);
     }
 
-    level3.set(usedKey, candidates);
     return candidates;
   }
 

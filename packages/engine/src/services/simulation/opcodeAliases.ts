@@ -19,7 +19,6 @@ export const OP_POW = OpCode.POW;
 export const OP_NEG = OpCode.NEG;
 export const OP_EXP = OpCode.EXP;
 export const OP_LOG = OpCode.LOG;
-export const OP_LOG10 = OpCode.LOG10;
 export const OP_SQRT = OpCode.SQRT;
 export const OP_ABS = OpCode.ABS;
 export const OP_SIN = OpCode.SIN;

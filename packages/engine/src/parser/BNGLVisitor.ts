@@ -69,15 +69,9 @@ const visitorDebugLog = (...args: unknown[]): void => {
 
 export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements BNGParserVisitor<unknown> {
   public hasCompartments: boolean = true;
-  private moleculeTypesMap: Map<string, BNGLMoleculeType> | null = null;
+  private moleculeTypesMap: Map<string, BNGLMoleculeType> = new Map();
 
   private getMoleculeType(name: string): BNGLMoleculeType | undefined {
-    if (!this.moleculeTypesMap) {
-      this.moleculeTypesMap = new Map();
-      for (const mt of this.moleculeTypes) {
-        this.moleculeTypesMap.set(mt.name, mt);
-      }
-    }
     return this.moleculeTypesMap.get(name);
   }
 
@@ -473,9 +467,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     const mt = { name, components };
     this.moleculeTypes.push(mt);
-    if (this.moleculeTypesMap) {
-      this.moleculeTypesMap.set(name, mt);
-    }
+    this.moleculeTypesMap.set(name, mt);
   }
 
   // Seed species block
@@ -1452,11 +1444,24 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
   // Helper: Get species pattern as string
   private getSpeciesString(
-    ctx: Parser.Species_defContext,
+    ctx: Parser.Species_defContext & { _cachedComplete?: string; _cachedLiteral?: string },
     options: { completeMissingComponents?: boolean } = {}
   ): string {
+    const shouldComplete = options.completeMissingComponents === true;
+    if (shouldComplete && ctx._cachedComplete !== undefined) {
+      return ctx._cachedComplete;
+    }
+    if (!shouldComplete && ctx._cachedLiteral !== undefined) {
+      return ctx._cachedLiteral;
+    }
+
     const molPatterns = ctx.molecule_pattern();
-    if (!molPatterns || molPatterns.length === 0) return '';
+    if (!molPatterns || molPatterns.length === 0) {
+      const emptyStr = '';
+      if (shouldComplete) ctx._cachedComplete = emptyStr;
+      else ctx._cachedLiteral = emptyStr;
+      return emptyStr;
+    }
 
     // DEBUG LOGGING
 
@@ -1657,6 +1662,12 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
           res = `@${comp}:${name1}`;
         }
       }
+    }
+
+    if (shouldComplete) {
+      ctx._cachedComplete = res;
+    } else {
+      ctx._cachedLiteral = res;
     }
 
     return res;

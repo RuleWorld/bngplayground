@@ -35,9 +35,21 @@ function parseCommaSeparated(str: string, filterEmpty: boolean = true): string[]
 }
 
 /**
- * Parse a BioNetGen .net file into a BNGLModel
- * @param content The full text content of the .net file
- * @returns Parse result with model and any errors/warnings
+ * Parses the raw content of a BioNetGen .net file into a structured `BNGLModel` object.
+ *
+ * This function processes the text line-by-line, tracking active block sections (e.g.,
+ * `parameters`, `compartments`, `species`, `reactions`, `groups` / `observables`, and `functions`)
+ * to reconstruct the structured model's attributes. Comments (lines starting with `#` or inline
+ * comment suffixes) are automatically ignored.
+ *
+ * It is commonly used in BNG Playground to load post-network-generation `.net` files produced by
+ * BioNetGen's `writeNetwork` action, thereby enabling "continue" simulation workflows.
+ *
+ * @invariant Must remain free of browser-specific APIs (browser-API-free) as a core engine package utility in @bngplayground/engine.
+ *
+ * @param content - The full plain text string content of the BioNetGen .net file.
+ * @returns An object of type `NetFileParseResult` indicating success, containing the reconstructed `BNGLModel`,
+ *          as well as arrays of accumulated parsing error and warning strings.
  */
 export function parseNetFile(content: string): NetFileParseResult {
   const errors: string[] = [];

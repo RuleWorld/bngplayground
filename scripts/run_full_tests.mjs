@@ -20,6 +20,7 @@ const child = spawn(
 
 let output = '';
 let lastOutputTime = Date.now();
+const ANSI_ESCAPE_PATTERN = new RegExp(`${String.fromCharCode(27)}\\[[0-9;]*m`, 'g');
 
 child.stdout.on('data', (chunk) => {
   output += chunk.toString();
@@ -34,13 +35,24 @@ child.stderr.on('data', (chunk) => {
 
 // ── Idle detector: if no output for 15s, vitest is hung during shutdown ──
 const IDLE_KILL_MS = 15_000;
-const HARD_TIMEOUT_MS = 5 * 60 * 1000;
+const isProfileRun = args.some((arg) => arg.includes('vitest.profile.config'));
+const configuredHardTimeout = Number(process.env.RUN_FULL_TESTS_HARD_TIMEOUT_MS);
+const HARD_TIMEOUT_MS = Number.isFinite(configuredHardTimeout) && configuredHardTimeout > 0
+  ? configuredHardTimeout
+  : (isProfileRun ? 20 : 5) * 60 * 1000;
 let killed = false;
+
+function hasCompletionSignal() {
+  const clean = output.replace(ANSI_ESCAPE_PATTERN, '');
+  return /Test Files\s/.test(clean) || /Tests\s+\d+ passed/.test(clean);
+}
 
 const idleCheck = setInterval(() => {
   if (killed) return;
   const idle = Date.now() - lastOutputTime;
-  if (idle >= IDLE_KILL_MS && output.length > 0) {
+  // A long-running test can legitimately produce no output for many minutes.
+  // Only treat silence as a shutdown hang after Vitest printed its summary.
+  if (idle >= IDLE_KILL_MS && hasCompletionSignal()) {
     console.error(`\n[run_full_tests] No output for ${Math.round(idle/1000)}s — killing hung vitest`);
     killed = true;
     child.kill('SIGKILL');
@@ -64,29 +76,13 @@ hardTimer.unref();
  */
 function didTestsPass() {
   // Strip ANSI escape codes for reliable matching
-  const clean = output.replace(/\x1b\[[0-9;]*m/g, '');
+  const clean = output.replace(ANSI_ESCAPE_PATTERN, '');
 
-  // Best signal: vitest printed its summary
-  if (/Test Files\s.*passed/.test(clean)) {
-    if (/Test Files\s.*failed/.test(clean)) return false;
-    return true;
-  }
-
-  // Vitest was killed before summary. Check test-level markers:
-  //   ✓ = passed test file,  ✗ = failed test file
-  const passedFiles = (clean.match(/^ ✓ (?:packages\/[A-Za-z0-9_.-]+\/)?(?:tests|src)\//gm) || []).length;
-  const failedFiles = (clean.match(/^ ✗ (?:packages\/[A-Za-z0-9_.-]+\/)?(?:tests|src)\//gm) || []).length;
-
-  if (passedFiles > 0 && failedFiles === 0) {
-    return true;
-  }
-
-  // ShardTrace fallback (shard 3 only)
-  if (/\[ShardTrace\] FILE END/.test(clean) && failedFiles === 0) {
-    return true;
-  }
-
-  return false;
+  // Only a complete, error-free Vitest summary can prove success. In
+  // particular, "N passed" plus an "Unhandled Errors" section is a failure.
+  if (/Unhandled Errors?/.test(clean) || /Errors\s+\d+ errors?/.test(clean)) return false;
+  if (/Test Files\s.*failed/.test(clean)) return false;
+  return /Test Files\s.*passed/.test(clean);
 }
 
 child.on('close', (code, signal) => {
@@ -99,9 +95,9 @@ child.on('close', (code, signal) => {
     process.exit(0);
   }
 
-  // Vitest was killed (code=null, signal=SIGKILL) or crashed.
-  // Determine pass/fail from captured output.
-  if (didTestsPass()) {
+  // Only forgive a non-zero close when this wrapper killed a process that had
+  // already printed a complete, error-free summary during pool shutdown.
+  if (killed && didTestsPass()) {
     const reason = signal ? `killed by ${signal} during pool shutdown` : `exit code ${code}`;
     console.log(`\n[run_full_tests] All tests passed (${reason})`);
     process.exit(0);

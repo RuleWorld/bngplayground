@@ -86,3 +86,21 @@ export interface SymbolicSteadyStateResult {
     biological: string;
     strategic: string;
 }
+
+export interface VerifyModelResult {
+    query: string;
+    answer: boolean | number | 'unknown';
+    confidence: 'exact' | 'over_approximate' | 'bounded' | 'unknown';
+    layerUsed: number;
+    explanation: string;
+    technical?: string;
+    biological?: string;
+    strategic?: string;
+    bound?: number;
+    witness?: {
+        speciesIndex: number;
+        speciesString: string;
+        generatingRuleSequence: string[];
+    } | string[];
+    speciesExplored?: number;
+}
