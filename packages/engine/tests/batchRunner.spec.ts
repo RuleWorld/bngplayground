@@ -74,7 +74,12 @@ describe('batchRunner', () => {
         expect(simulator.generateNetwork).toHaveBeenCalledTimes(1);
         expect(simulator.simulate).toHaveBeenCalledTimes(1);
         const simulatedModel = (simulator.simulate as ReturnType<typeof vi.fn>).mock.calls[0][0] as BNGLModel;
+        const simulationOptions = (simulator.simulate as ReturnType<typeof vi.fn>).mock.calls[0][1];
         expect(simulatedModel.simulationPhases).toEqual([{ method: 'ode', t_end: 12, n_steps: 6 }]);
+        expect(simulationOptions).toMatchObject({
+            includeSpeciesData: false,
+            includeExpandedNetwork: false,
+        });
     });
 
     it('injects a default ODE phase for models without simulate actions', async () => {

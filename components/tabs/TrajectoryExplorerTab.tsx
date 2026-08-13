@@ -71,6 +71,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                 n_steps: Number(defaults.nSteps) || 100,
                 includeInfluence: false, // Disable DIN for maximum speed in explorer
                 includeSpeciesData: false,
+                includeExpandedNetwork: false,
                 // Stochastic seed (SSA, PLA, PSA, NFsim)
                 ...(seed ? { seed: parseInt(seed) } : {}),
                 // NFsim-specific

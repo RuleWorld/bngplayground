@@ -891,6 +891,7 @@ export async function simulate(
     const dataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const includeSpeciesData = options.includeSpeciesData ?? true;
+    const includeExpandedNetwork = options.includeExpandedNetwork ?? true;
 
     const normalizeSuffixKey = (suffix?: unknown): string => {
       const raw = typeof suffix === 'string' ? suffix : (suffix == null ? '' : String(suffix));
@@ -2187,8 +2188,10 @@ export async function simulate(
         speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
         speciesData: includeSpeciesData ? speciesDataBySuffix[defaultSuffix] || [] : undefined,
         speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
-        expandedReactions: model.reactions,
-        expandedSpecies: model.species,
+        ...(includeExpandedNetwork ? {
+          expandedReactions: model.reactions,
+          expandedSpecies: model.species,
+        } : {}),
         ssaInfluence,
         // OPT 1: Materialize firing log from typed arrays only at return time
         firingLog: shouldRecordFirings && logCount > 0 && logTimes && logRxnIndices && logPropensities
@@ -3248,8 +3251,10 @@ export async function simulate(
             speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
             speciesData: includeSpeciesData ? speciesDataBySuffix[defaultWgpuSuffix] || [] : undefined,
             speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
-            expandedReactions: model.reactions,
-            expandedSpecies: model.species
+            ...(includeExpandedNetwork ? {
+              expandedReactions: model.reactions,
+              expandedSpecies: model.species,
+            } : {})
           } satisfies SimulationResults;
           gpuSolver.dispose();
           return results;
@@ -3827,8 +3832,10 @@ export async function simulate(
       speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
       speciesData: includeSpeciesData ? speciesDataBySuffix[defaultOdeSuffix] || [] : undefined,
       speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
-      expandedReactions: model.reactions,
-      expandedSpecies: model.species,
+      ...(includeExpandedNetwork ? {
+        expandedReactions: model.reactions,
+        expandedSpecies: model.species,
+      } : {}),
       denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined
     } satisfies SimulationResults;
   }

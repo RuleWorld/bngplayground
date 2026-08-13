@@ -454,6 +454,8 @@ export async function computeDoseResponseBySimulation(
         t_end: tEnd,
         n_steps: 200,
         solver: 'auto',
+        includeSpeciesData: false,
+        includeExpandedNetwork: false,
     } as any;
 
     for (const dose of doses) {

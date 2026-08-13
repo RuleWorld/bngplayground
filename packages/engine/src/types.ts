@@ -316,6 +316,8 @@ export interface SimulationOptions {
     verbose?: boolean;
     includeInfluence?: boolean;
     includeSpeciesData?: boolean;
+    /** Include expanded reaction/species metadata in results (default: true). */
+    includeExpandedNetwork?: boolean;
     maxEvents?: number;
     /** Record individual reaction firing events for information-theoretic analysis */
     recordFirings?: boolean;
