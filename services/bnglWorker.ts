@@ -306,6 +306,48 @@ const ensureNotCancelled = (id: number) => {
   }
 };
 
+interface QueuedSimulation {
+  id: number;
+  run: () => Promise<void>;
+}
+
+const simulationQueue: QueuedSimulation[] = [];
+let simulationQueueHead = 0;
+let simulationQueueRunning = false;
+
+const drainSimulationQueue = async (): Promise<void> => {
+  if (simulationQueueRunning) return;
+  simulationQueueRunning = true;
+
+  try {
+    while (simulationQueueHead < simulationQueue.length) {
+      const queued = simulationQueue[simulationQueueHead++];
+      try {
+        await queued.run();
+      } catch (error) {
+        // Individual jobs normally serialize their own errors. Keep the drain
+        // alive even if an unexpected exception escapes that boundary.
+        console.error('[Worker] Unexpected simulation queue error for job', queued.id, error);
+      }
+    }
+  } finally {
+    if (simulationQueueHead > 0) {
+      simulationQueue.splice(0, simulationQueueHead);
+      simulationQueueHead = 0;
+    }
+    simulationQueueRunning = false;
+    // Defensive restart in case a future queue producer can run during cleanup.
+    if (simulationQueue.length > 0) {
+      void drainSimulationQueue();
+    }
+  }
+};
+
+const enqueueSimulation = (id: number, run: () => Promise<void>): void => {
+  simulationQueue.push({ id, run });
+  void drainSimulationQueue();
+};
+
 const serializeError = (error: unknown): SerializedWorkerError => {
   if (error instanceof DOMException) {
     return { name: error.name, message: error.message, stack: error.stack ?? undefined };
@@ -546,8 +588,12 @@ if (typeof ctx.addEventListener === 'function') {
       registerJob(id);
       const jobEntry = jobStates.get(id);
       if (!jobEntry) return; // Should not happen
-      (async () => {
+      enqueueSimulation(id, async () => {
         try {
+          // A queued request may have been cancelled while another simulation
+          // was active. Do not let it touch shared evaluator/JIT state.
+          ensureNotCancelled(id);
+
           if (!payload || typeof payload !== 'object') {
             throw new Error('Simulation payload missing');
           }
@@ -788,7 +834,7 @@ if (typeof ctx.addEventListener === 'function') {
             activeSimulationMethod = null;
           }
         }
-      })();
+      });
       return;
     }
 

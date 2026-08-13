@@ -381,6 +381,190 @@ describe('bnglWorker - getCacheSizes', () => {
   });
 });
 
+describe('bnglWorker simulation queue', () => {
+  let mockPostMessage: ReturnType<typeof vi.fn>;
+  let mockAddEventListener: ReturnType<typeof vi.fn>;
+  let messageListener: (event: unknown) => Promise<void>;
+  let originalConsoleLog: typeof console.log;
+  let originalConsoleWarn: typeof console.warn;
+  let originalConsoleError: typeof console.error;
+  let originalConsoleDebug: typeof console.debug;
+
+  const model = {
+    parameters: {},
+    moleculeTypes: [],
+    species: [],
+    observables: [],
+    reactions: [{}],
+    reactionRules: [],
+  };
+  const options = { method: 'ssa' as const, t_end: 1, n_steps: 1 };
+  const result = { headers: ['time'], data: [{ time: 0 }] };
+
+  const sendSimulation = async (id: number) => {
+    await messageListener({
+      origin: '',
+      data: { id, type: 'simulate', payload: { model, options: { ...options } } },
+    });
+  };
+
+  const sendCancel = async (requestId: number, targetId: number) => {
+    await messageListener({
+      origin: '',
+      data: { id: requestId, type: 'cancel', payload: { targetId } },
+    });
+  };
+
+  const terminalMessages = () => mockPostMessage.mock.calls
+    .map((call) => call[0])
+    .filter((message) => message?.type === 'simulate_success' || message?.type === 'simulate_error');
+
+  beforeEach(async () => {
+    vi.resetModules();
+    vi.clearAllMocks();
+    mockPostMessage = vi.fn();
+    mockAddEventListener = vi.fn();
+    originalConsoleLog = console.log;
+    originalConsoleWarn = console.warn;
+    originalConsoleError = console.error;
+    originalConsoleDebug = console.debug;
+    (global as any).self = {
+      postMessage: mockPostMessage,
+      addEventListener: mockAddEventListener,
+      location: { origin: '' },
+    };
+
+    await import('../../services/bnglWorker');
+    messageListener = mockAddEventListener.mock.calls.find((c: any) => c[0] === 'message')[1];
+  });
+
+  afterEach(() => {
+    console.log = originalConsoleLog;
+    console.warn = originalConsoleWarn;
+    console.error = originalConsoleError;
+    console.debug = originalConsoleDebug;
+    vi.clearAllMocks();
+    delete (global as any).self;
+  });
+
+  it('runs simulations one at a time and preserves progress and terminal ids', async () => {
+    const engine = await import('@bngplayground/engine');
+    let resolveFirst!: (value: typeof result) => void;
+    const firstResult = new Promise<typeof result>((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    vi.mocked(engine.simulate).mockImplementation(async (jobId, _model, _options, callbacks) => {
+      callbacks.postMessage({ type: 'progress', payload: { jobId } });
+      return jobId === 101 ? await firstResult : result;
+    });
+
+    await sendSimulation(101);
+    await sendSimulation(102);
+
+    expect(engine.simulate).toHaveBeenCalledTimes(1);
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      id: 101,
+      type: 'progress',
+      payload: { jobId: 101 },
+    }));
+    expect(mockPostMessage).not.toHaveBeenCalledWith(expect.objectContaining({
+      id: 102,
+      type: 'progress',
+    }));
+
+    resolveFirst(result);
+    await vi.waitFor(() => expect(engine.simulate).toHaveBeenCalledTimes(2));
+    await vi.waitFor(() => expect(terminalMessages()).toHaveLength(2));
+
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      id: 102,
+      type: 'progress',
+      payload: { jobId: 102 },
+    }));
+    expect(terminalMessages().map(({ id, type }) => ({ id, type }))).toEqual([
+      { id: 101, type: 'simulate_success' },
+      { id: 102, type: 'simulate_success' },
+    ]);
+  });
+
+  it('continues with the next simulation after a rejection', async () => {
+    const engine = await import('@bngplayground/engine');
+    vi.mocked(engine.simulate)
+      .mockRejectedValueOnce(new Error('first simulation failed'))
+      .mockResolvedValueOnce(result as any);
+
+    await sendSimulation(201);
+    await sendSimulation(202);
+
+    await vi.waitFor(() => expect(terminalMessages()).toHaveLength(2));
+    expect(engine.simulate).toHaveBeenCalledTimes(2);
+    expect(terminalMessages().map(({ id, type }) => ({ id, type }))).toEqual([
+      { id: 201, type: 'simulate_error' },
+      { id: 202, type: 'simulate_success' },
+    ]);
+    expect(terminalMessages()[0].payload).toEqual(expect.objectContaining({
+      message: 'first simulation failed',
+    }));
+  });
+
+  it('continues after cancelling the active simulation', async () => {
+    const engine = await import('@bngplayground/engine');
+    let releaseFirst!: () => void;
+    const firstGate = new Promise<void>((resolve) => {
+      releaseFirst = resolve;
+    });
+
+    vi.mocked(engine.simulate)
+      .mockImplementationOnce(async (_jobId, _model, _options, callbacks) => {
+        await firstGate;
+        callbacks.checkCancelled();
+        return result as any;
+      })
+      .mockResolvedValueOnce(result as any);
+
+    await sendSimulation(301);
+    await sendSimulation(302);
+    await sendCancel(9001, 301);
+    releaseFirst();
+
+    await vi.waitFor(() => expect(terminalMessages()).toHaveLength(2));
+    expect(engine.simulate).toHaveBeenCalledTimes(2);
+    expect(terminalMessages().map(({ id, type }) => ({ id, type }))).toEqual([
+      { id: 301, type: 'simulate_error' },
+      { id: 302, type: 'simulate_success' },
+    ]);
+    expect(terminalMessages()[0].payload).toEqual(expect.objectContaining({ name: 'AbortError' }));
+  });
+
+  it('skips a cancelled queued simulation without blocking later work', async () => {
+    const engine = await import('@bngplayground/engine');
+    let resolveFirst!: (value: typeof result) => void;
+    const firstResult = new Promise<typeof result>((resolve) => {
+      resolveFirst = resolve;
+    });
+
+    vi.mocked(engine.simulate)
+      .mockImplementationOnce(async () => await firstResult)
+      .mockResolvedValueOnce(result as any);
+
+    await sendSimulation(401);
+    await sendSimulation(402);
+    await sendSimulation(403);
+    await sendCancel(9002, 402);
+    resolveFirst(result);
+
+    await vi.waitFor(() => expect(terminalMessages()).toHaveLength(3));
+    expect(engine.simulate).toHaveBeenCalledTimes(2);
+    expect(terminalMessages().map(({ id, type }) => ({ id, type }))).toEqual([
+      { id: 401, type: 'simulate_success' },
+      { id: 402, type: 'simulate_error' },
+      { id: 403, type: 'simulate_success' },
+    ]);
+    expect(terminalMessages()[1].payload).toEqual(expect.objectContaining({ name: 'AbortError' }));
+  });
+});
+
 describe('bnglWorker cached network expansion', () => {
   let mockPostMessage: ReturnType<typeof vi.fn>;
   let mockAddEventListener: ReturnType<typeof vi.fn>;
