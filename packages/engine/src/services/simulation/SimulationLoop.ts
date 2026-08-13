@@ -3593,9 +3593,9 @@ export async function simulate(
             currentSolverType = 'cvode';
           }
 
-          if (VERBOSE_SIM_DEBUG) {
-            console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
-          }
+          // This is also the public activation signal used by integration
+          // diagnostics, so retain it even when verbose tracing is disabled.
+          console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
         }
       }
 
