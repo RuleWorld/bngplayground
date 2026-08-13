@@ -265,3 +265,6 @@ tests/fixtures/fuzzer/
 
 # End of .gitignore
 coverage
+
+# RuleHub checkout ignored locally
+/RuleHub/
