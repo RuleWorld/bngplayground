@@ -392,6 +392,24 @@ export interface GeneratorOptions {
   parameters?: Map<string, number>; // For evaluating Arrhenius expressions
 }
 
+interface PureStateChangeDelta {
+  reactantComponentIndex: number;
+  componentName: string;
+  fromState: string;
+  toState: string;
+}
+
+interface PureStateChangePlan {
+  deltas: PureStateChangeDelta[];
+  // Plain product components are interpreted as explicitly unbound by the
+  // general builder when their matched target site is bound. The shortcut can
+  // only preserve topology when those sites are actually unbound at runtime.
+  requiresUnboundTarget: Array<{
+    reactantComponentIndex: number;
+    componentName: string;
+  }>;
+}
+
 
 export class NetworkGenerator {
   private options: GeneratorOptions;
@@ -421,6 +439,9 @@ export class NetworkGenerator {
     applyCarryThroughAnchorSkip: boolean;
     identicalPatternGroups: Map<string, number[]>;
   }> = new WeakMap();
+  // A rule object is immutable during generation. Cache both successful plans
+  // and conservative rejections so the structural proof is paid once per rule.
+  private pureStateChangePlanCache: WeakMap<RxnRule, PureStateChangePlan | null> = new WeakMap();
 
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
@@ -886,6 +907,7 @@ export class NetworkGenerator {
     // Reset inverted index and caches
     this.speciesByMoleculeIndex.clear();
     this.structuralHashMap.clear();
+    this.pureStateChangePlanCache = new WeakMap();
     clearMatchCache();
 
     const speciesMap = new Map<string, Species>();
@@ -3337,6 +3359,189 @@ export class NetworkGenerator {
    * FIX: Properly apply rule transformation
    * Handles degradation rules (X -> 0) by returning empty products array
    */
+  private getPureStateChangePlan(rule: RxnRule): PureStateChangePlan | null {
+    const cached = this.pureStateChangePlanCache.get(rule);
+    if (cached !== undefined) return cached;
+
+    const reject = (): null => {
+      this.pureStateChangePlanCache.set(rule, null);
+      return null;
+    };
+
+    // MoveConnected and DeleteMolecules add semantics beyond the product graph
+    // itself, so neither can use the direct clone-and-update path.
+    if (rule.isMoveConnected || rule.isDeleteMolecules) return reject();
+    if (rule.reactants.length !== 1 || rule.products.length !== 1) return reject();
+
+    const reactant = rule.reactants[0];
+    const product = rule.products[0];
+    if (reactant.compartment !== product.compartment) return reject();
+
+    // One pattern molecule makes the product-to-reactant molecule mapping
+    // unambiguous. Multi-molecule state rules retain the general path until an
+    // exact, uniqueness-proving graph correspondence is available.
+    if (reactant.molecules.length !== 1 || product.molecules.length !== 1) return reject();
+
+    const reactantMol = reactant.molecules[0];
+    const productMol = product.molecules[0];
+    if (
+      reactantMol.name !== productMol.name ||
+      reactantMol.compartment !== productMol.compartment ||
+      reactantMol.label !== productMol.label ||
+      reactantMol.wildcard !== productMol.wildcard ||
+      reactantMol.hasExplicitEmptyComponentList !== productMol.hasExplicitEmptyComponentList ||
+      reactantMol.components.length !== productMol.components.length
+    ) {
+      return reject();
+    }
+
+    // Repeated component names can make the positional product correspondence
+    // ambiguous even when the written arrays line up. Fall back rather than
+    // guessing which repeated site the product intended to modify.
+    const componentNames = new Set<string>();
+    for (const component of reactantMol.components) {
+      if (componentNames.has(component.name)) return reject();
+      componentNames.add(component.name);
+    }
+
+    const adjacencySignature = (graph: SpeciesGraph): string => {
+      const entries: string[] = [];
+      for (const [endpoint, partners] of graph.adjacency) {
+        entries.push(`${endpoint}>${[...partners].sort().join(',')}`);
+      }
+      entries.sort();
+      return entries.join('|');
+    };
+    if (adjacencySignature(reactant) !== adjacencySignature(product)) return reject();
+
+    const deltas: PureStateChangeDelta[] = [];
+    const requiresUnboundTarget: PureStateChangePlan['requiresUnboundTarget'] = [];
+    for (let componentIndex = 0; componentIndex < reactantMol.components.length; componentIndex++) {
+      const reactantComponent = reactantMol.components[componentIndex];
+      const productComponent = productMol.components[componentIndex];
+
+      const reactantEdgeTargets = [...reactantComponent.edges.values()].sort((a, b) => a - b);
+      const productEdgeTargets = [...productComponent.edges.values()].sort((a, b) => a - b);
+      if (
+        reactantComponent.name !== productComponent.name ||
+        reactantComponent.wildcard !== productComponent.wildcard ||
+        reactantComponent.syntheticWildcard !== productComponent.syntheticWildcard ||
+        reactantEdgeTargets.length !== productEdgeTargets.length ||
+        reactantEdgeTargets.some((target, index) => target !== productEdgeTargets[index])
+      ) {
+        return reject();
+      }
+
+      if (!productComponent.wildcard && productComponent.edges.size === 0) {
+        requiresUnboundTarget.push({
+          reactantComponentIndex: componentIndex,
+          componentName: reactantComponent.name,
+        });
+      }
+
+      if (reactantComponent.state === productComponent.state) continue;
+      const fromState = reactantComponent.state;
+      const toState = productComponent.state;
+      if (!fromState || fromState === '?' || !toState || toState === '?') return reject();
+      deltas.push({
+        reactantComponentIndex: componentIndex,
+        componentName: reactantComponent.name,
+        fromState,
+        toState,
+      });
+    }
+
+    if (deltas.length === 0) return reject();
+    const plan = { deltas, requiresUnboundTarget };
+    this.pureStateChangePlanCache.set(rule, plan);
+    return plan;
+  }
+
+  private tryApplyPureStateChangePlan(
+    plan: PureStateChangePlan,
+    reactantPatterns: SpeciesGraph[],
+    reactantGraphs: SpeciesGraph[],
+    matches: MatchMap[]
+  ): SpeciesGraph | null {
+    if (reactantPatterns.length !== 1 || reactantGraphs.length !== 1 || matches.length !== 1) return null;
+
+    const target = reactantGraphs[0];
+    const match = matches[0];
+    if (!target || !match) return null;
+
+    // Network species are connected, but callers can construct SpeciesGraph
+    // directly. Preserve the general path's split behavior for malformed or
+    // deliberately disconnected targets by declining the shortcut.
+    if (
+      target.molecules.length > 1 &&
+      target.getConnectedComponentMolecules(0).size !== target.molecules.length
+    ) {
+      return null;
+    }
+
+    const targetMolIndex = match.moleculeMap.get(0);
+    if (targetMolIndex === undefined || !target.molecules[targetMolIndex]) return null;
+
+    const resolveTargetComponent = (
+      reactantComponentIndex: number,
+      componentName: string
+    ): { molIndex: number; componentIndex: number; component: Component } | null => {
+      const mappedComponent = match.componentMap.get(`0.${reactantComponentIndex}`);
+      if (!mappedComponent) return null;
+      const dotIndex = mappedComponent.indexOf('.');
+      if (dotIndex <= 0) return null;
+      const molIndex = Number(mappedComponent.slice(0, dotIndex));
+      const componentIndex = Number(mappedComponent.slice(dotIndex + 1));
+      if (!Number.isInteger(molIndex) || !Number.isInteger(componentIndex) || molIndex !== targetMolIndex) {
+        return null;
+      }
+      const component = target.molecules[molIndex]?.components[componentIndex];
+      if (!component || component.name !== componentName) return null;
+      return { molIndex, componentIndex, component };
+    };
+
+    for (const required of plan.requiresUnboundTarget) {
+      const resolved = resolveTargetComponent(
+        required.reactantComponentIndex,
+        required.componentName
+      );
+      if (!resolved) return null;
+      const endpoint = `${resolved.molIndex}.${resolved.componentIndex}`;
+      if (resolved.component.edges.size > 0 || (target.adjacency.get(endpoint)?.length ?? 0) > 0) {
+        return null;
+      }
+    }
+
+    const product = target.clone();
+    for (let molIndex = 0; molIndex < product.molecules.length; molIndex++) {
+      const productMol = product.molecules[molIndex];
+      productMol._sourceKey = `0:${molIndex}`;
+      productMol._sourceR = 0;
+      productMol._sourceM = molIndex;
+      // These are transient builder markers, not species metadata. The general
+      // builder starts with a fresh molecule structure on every transformation.
+      productMol._explicitUnboundComponents = undefined;
+      productMol._explicitBondedComponents = undefined;
+    }
+
+    for (const delta of plan.deltas) {
+      const resolved = resolveTargetComponent(delta.reactantComponentIndex, delta.componentName);
+      if (!resolved) return null;
+      const targetComponent = resolved.component;
+      const productComponent =
+        product.molecules[resolved.molIndex]?.components[resolved.componentIndex];
+      if (
+        !productComponent ||
+        targetComponent.state !== delta.fromState
+      ) {
+        return null;
+      }
+      productComponent.state = delta.toState;
+    }
+
+    return product;
+  }
+
   private applyRuleTransformation(
     rule: RxnRule,
     reactantPatterns: SpeciesGraph[],
@@ -3359,6 +3564,17 @@ export class NetworkGenerator {
 
     const _profStart = profilingEnabled ? performance.now() : 0;
     try {
+      const pureStateChangePlan = this.getPureStateChangePlan(rule);
+      if (pureStateChangePlan) {
+        const product = this.tryApplyPureStateChangePlan(
+          pureStateChangePlan,
+          reactantPatterns,
+          reactantGraphs,
+          matches
+        );
+        if (product) return [product];
+      }
+
       if (shouldLogNetworkGenerator) {
         debugNetworkLog(
           `[applyTransformation] Rule ${rule.name}, ${reactantGraphs.length} reactants -> ${rule.products.length} products`
