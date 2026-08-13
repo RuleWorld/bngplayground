@@ -62,10 +62,12 @@ let profilingEnabled = false;
 
 export function enableProfiling() {
   profilingEnabled = true;
+  GraphMatcher.setProfilingEnabled(true);
 }
 
 export function disableProfiling() {
   profilingEnabled = false;
+  GraphMatcher.setProfilingEnabled(false);
 }
 
 // Profiling counters
@@ -395,7 +397,8 @@ export class NetworkGenerator {
   private options: GeneratorOptions;
   // NEW: map Molecule name -> set of species indices that contain that molecule
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
-  // NEW: map Structural Hash -> Canonical String (for fast prefiltering)
+  // Bond-free graphs have no lost topology in the structural description, so
+  // their structural hash is safe to reuse as canonical identity.
   private structuralHashMap: Map<string, string> = new Map();
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
@@ -890,11 +893,6 @@ export class NetworkGenerator {
     const reactionsList: Rxn[] = [];
     this.currentSpeciesList = speciesList;
     this.currentReactionsList = reactionsList;
-    // NOTE: dedup is done via `reactionIndexByKey` (Map) below; this Set is no
-    // longer populated (its `.add` calls were removed as redundant). The empty
-    // Set + its parameter plumbing are harmless and can be fully removed in a
-    // follow-up compiler-in-hand pass across the apply*Rule signatures.
-    const reactionKeys = new Set<string>();
     const reactionIndexByKey = new Map<string, number>();
     const queue: SpeciesGraph[] = [];
     const reactiveRules = rules.filter(r => r.reactants.length > 0);
@@ -958,7 +956,7 @@ export class NetworkGenerator {
     let iteration = 0;
     let lastLoggedSpeciesCount = speciesList.length;
     const logInterval = 50; // Log every 50 new species
-    let lastProgressCallback = Date.now();
+    let lastProgressCallback = onProgress ? Date.now() : 0;
 
     progressLog(`[NetworkGenerator] Starting with ${speciesList.length} seed species, ${rules.length} rules`);
 
@@ -968,7 +966,7 @@ export class NetworkGenerator {
         if (signal?.aborted) {
           throw new DOMException('Network generation cancelled', 'AbortError');
         }
-        await this.checkResourceLimits(signal);
+        this.checkResourceLimits(signal);
         iteration++;
 
         // Take a snapshot of the current queue - this is one "iteration" in BNG2 terms
@@ -1042,7 +1040,6 @@ export class NetworkGenerator {
                 speciesList,
                 queue,
                 reactionsList,
-                reactionKeys,
                 reactionIndexByKey,
                 signal
               );
@@ -1059,7 +1056,6 @@ export class NetworkGenerator {
                 speciesList,
                 queue,
                 reactionsList,
-                reactionKeys,
                 reactionIndexByKey,
                 signal
               );
@@ -1075,16 +1071,18 @@ export class NetworkGenerator {
           this.currentRuleName = null;
 
           // Progress update check inside batch loop for smoother UI
-          const now = Date.now();
-          if (onProgress && (now - lastProgressCallback >= 100)) { // Update every 100ms
-            lastProgressCallback = now;
-            onProgress({
-              species: speciesList.length,
-              reactions: reactionsList.length,
-              iteration,
-              memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
-              timeElapsed: Date.now() - this.startTime
-            });
+          if (onProgress) {
+            const now = Date.now();
+            if (now - lastProgressCallback >= 100) { // Update every 100ms
+              lastProgressCallback = now;
+              onProgress({
+                species: speciesList.length,
+                reactions: reactionsList.length,
+                iteration,
+                memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
+                timeElapsed: now - this.startTime
+              });
+            }
           }
         } // End of batch for-loop
 
@@ -1092,16 +1090,18 @@ export class NetworkGenerator {
         queue.splice(0, batchSize);
 
         // Ensure final update at end of iteration if not just updated
-        const now2 = Date.now();
-        if (onProgress && now2 - lastProgressCallback > 50) {
-          lastProgressCallback = now2;
-          onProgress({
-            species: speciesList.length,
-            reactions: reactionsList.length,
-            iteration,
-            memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
-            timeElapsed: Date.now() - this.startTime
-          });
+        if (onProgress) {
+          const now = Date.now();
+          if (now - lastProgressCallback > 50) {
+            lastProgressCallback = now;
+            onProgress({
+              species: speciesList.length,
+              reactions: reactionsList.length,
+              iteration,
+              memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
+              timeElapsed: now - this.startTime
+            });
+          }
         }
       }
     } catch (e: unknown) {
@@ -1263,7 +1263,6 @@ export class NetworkGenerator {
     speciesList: Species[],
     queue: SpeciesGraph[],
     reactionsList: Rxn[],
-    reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
   ): Promise<void> {
@@ -1600,25 +1599,7 @@ export class NetworkGenerator {
         debugNetworkLog(`[applyUnimolecularRule] Transformation result: ${products ? products.map(p => p.toString()).join(', ') : 'null'}`);
       }
 
-      // products === null means transformation failed (e.g., no match)
-      // products === [] (empty array) is valid for degradation rules
-      if (!this.validateProducts(products)) {
-        continue;
-      }
-
-      // BNG2.pl parity check (RxnRule.pm lines 3156-3170):
-      // Number of product graphs must equal number of product patterns.
-      // For example, reverse unbind "A.B -> A + B" has 2 product patterns.
-      // If applied to a ternary complex where breaking one bond leaves the complex
-      // still connected (e.g., by another bond), result is 1 connected product.
-      // Reaction is rejected because 1 != 2.
-      const expectedProductCount = rule.products.length;
-      if (products.length < expectedProductCount) {
-        if (shouldLogNetworkGenerator) {
-          debugNetworkLog(`[applyUnimolecularRule] Rejecting rule ${rule.name}: product count ${products.length} != expected ${expectedProductCount}`);
-        }
-        continue;
-      }
+      // Candidate products were validated before being stored in matchOutcomes.
       const signatureMultiplicity = signature ? (signatureMultiplicityByOutcome.get(signature) ?? 1) : 1;
       const hasTopologyChangingSignature = !!signature && !signature.startsWith('addMol:');
 
@@ -2296,7 +2277,6 @@ export class NetworkGenerator {
     speciesList: Species[],
     queue: SpeciesGraph[],
     reactionsList: Rxn[],
-    reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
   ): Promise<void> {
@@ -2446,7 +2426,6 @@ export class NetworkGenerator {
             speciesList,
             queue,
             reactionsList,
-            reactionKeys,
             reactionIndexByKey,
             signal
           );
@@ -2552,7 +2531,6 @@ export class NetworkGenerator {
           speciesList,
           queue,
           reactionsList,
-          reactionKeys,
           reactionIndexByKey,
           signal
         );
@@ -2574,7 +2552,6 @@ export class NetworkGenerator {
     speciesList: Species[],
     queue: SpeciesGraph[],
     reactionsList: Rxn[],
-    reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
   ): Promise<void> {
@@ -5858,16 +5835,22 @@ export class NetworkGenerator {
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
 
-    // Use structural hash prefiltering to avoid canonicalization
-    const structHash = graph.getStructuralHash();
     let canonical: string;
-    const cached = this.structuralHashMap.get(structHash);
-    if (cached !== undefined) {
-      canonical = cached;
-      graph.cachedCanonical = canonical;
+    if (graph.adjacency.size === 0) {
+      const structHash = graph.getStructuralHash();
+      const cached = this.structuralHashMap.get(structHash);
+      if (cached !== undefined) {
+        canonical = cached;
+        graph.cachedCanonical = canonical;
+      } else {
+        canonical = profiledCanonicalize(graph);
+        this.structuralHashMap.set(structHash, canonical);
+      }
     } else {
+      // A structural hash contains only local neighbour descriptions. Distinct
+      // bonded topologies (for example K3,3 and a triangular prism) can collide,
+      // so bonded species must establish identity by canonical labeling.
       canonical = profiledCanonicalize(graph);
-      this.structuralHashMap.set(structHash, canonical);
     }
 
     if (speciesMap.has(canonical)) {
@@ -5917,7 +5900,7 @@ export class NetworkGenerator {
 
 
 
-  private async checkResourceLimits(signal?: AbortSignal): Promise<void> {
+  private checkResourceLimits(signal?: AbortSignal): void {
     // Removed yielding to event loop - it causes issues in some test runners
     if (signal?.aborted) {
       throw new Error(
