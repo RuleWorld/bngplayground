@@ -916,21 +916,9 @@ export class NetworkGenerator {
     this.currentSpeciesList = speciesList;
     this.currentReactionsList = reactionsList;
     const reactionIndexByKey = new Map<string, number>();
-    const queue: SpeciesGraph[] = [];
+    const queue: Species[] = [];
     const reactiveRules = rules.filter(r => r.reactants.length > 0);
     const synthesisRules = rules.filter(r => r.reactants.length === 0);
-
-    // Track species processed per rule (by reactive rule index) to prevent
-    // runaway generation. Keyed by numeric species index rather than the
-    // canonical string, which avoids building/hashing long canonical keys in the
-    // hot loop. The previous `processedPairs` Set encoded the identical fact and
-    // has been removed as redundant.
-    const ruleProcessedSpecies = new Map<number, Set<number>>();
-
-    // Initialize rule processed sets using reactive rule index as key
-    for (let i = 0; i < reactiveRules.length; i++) {
-      ruleProcessedSpecies.set(i, new Set<number>());
-    }
 
     // Initialize with seed species
     for (const sg of seedSpecies) {
@@ -1003,15 +991,13 @@ export class NetworkGenerator {
 
         // Process all species in the current batch
         for (let batchIdx = 0; batchIdx < batchSize; batchIdx++) {
-          const currentSpecies = queue[batchIdx];
-          const currentCanonical = currentSpecies.cachedCanonical || profiledCanonicalize(currentSpecies);
-          const currentSpeciesObj = speciesMap.get(currentCanonical)!;
+          const currentSpeciesObj = queue[batchIdx];
 
 
 
           if (shouldLogNetworkGenerator) {
             debugNetworkLog(
-              `[NetworkGenerator] Iter ${iteration}, Species ${currentSpeciesObj.index}: ${currentSpecies
+              `[NetworkGenerator] Iter ${iteration}, Species ${currentSpeciesObj.index}: ${currentSpeciesObj.graph
                 .toString()
                 .slice(0, 100)}`
             );
@@ -1041,12 +1027,6 @@ export class NetworkGenerator {
                 `[NetworkGenerator] Rule dispatch idx=${ruleIdx} name=${rule.name ?? '<unnamed>'} reactants=${rule.reactants.length} :: ${reactantInfo}`
               );
             }
-
-            // Skip if this species was already processed for this rule (prevents
-            // runaway generation, and dedups repeated (species, rule) visits).
-            const ruleProcessed = ruleProcessedSpecies.get(ruleIdx)!;
-            if (ruleProcessed.has(currentSpeciesObj.index)) continue;
-            ruleProcessed.add(currentSpeciesObj.index);
 
             if (rule.reactants.length === 1) {
               // Unimolecular rule
@@ -1283,7 +1263,7 @@ export class NetworkGenerator {
     reactantSpecies: Species,
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     reactionsList: Rxn[],
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
@@ -2297,7 +2277,7 @@ export class NetworkGenerator {
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     reactionsList: Rxn[],
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
@@ -2572,7 +2552,7 @@ export class NetworkGenerator {
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     reactionsList: Rxn[],
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
@@ -6046,7 +6026,7 @@ export class NetworkGenerator {
     graph: SpeciesGraph,
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     signal?: AbortSignal
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
@@ -6091,7 +6071,7 @@ export class NetworkGenerator {
     speciesMap.set(canonical, species);
     speciesList.push(species);
     this.indexSpecies(species);
-    queue.push(graph);
+    queue.push(species);
 
     if (signal?.aborted) {
       throw new DOMException('Network generation cancelled', 'AbortError');
