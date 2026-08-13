@@ -635,8 +635,10 @@ export async function generateExpandedNetwork(
             const normalizedTarget = normalizeCompartmentSyntax(canonicalName);
             matchedSeedEntry = normalizedSeedEntryMap.get(normalizedTarget);
             concentration = matchedSeedEntry?.concentration;
-            if (concentration !== undefined && VERBOSE_NETEXP_DEBUG) {
-                console.log(`[NetworkExpansion] Found concentration via loose match for '${canonicalName}': ${concentration}`);
+            if (concentration !== undefined) {
+                if (VERBOSE_NETEXP_DEBUG) {
+                    console.log(`[NetworkExpansion] Found concentration via loose match for '${canonicalName}': ${concentration}`);
+                }
             }
         }
 
