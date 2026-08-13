@@ -11,6 +11,7 @@
 
 import fs from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { pipeline } from '@xenova/transformers';
 
@@ -203,40 +204,47 @@ async function loadRuleHubManifest() {
  * Load model metadata and BNGL text from RuleHub.
  */
 async function scanModels() {
-  const models = [];
-
   const manifest = await loadRuleHubManifest();
   const manifestBase = DEFAULT_RULEHUB_MANIFEST_URL.replace(/\/manifest\.json(?:[?#].*)?$/i, '');
+  const entries = manifest.filter((entry) =>
+    (entry?.bng2_compatible || entry?.compatibility?.bng2) && entry?.path
+  );
+  const models = new Array(entries.length);
+  let nextIndex = 0;
+  const requestedConcurrency = Number.parseInt(process.env.EMBEDDING_FETCH_CONCURRENCY || '12', 10);
+  const concurrency = Math.max(1, Math.min(Number.isFinite(requestedConcurrency) ? requestedConcurrency : 12, entries.length));
 
-  for (const entry of manifest) {
-    if (!(entry?.bng2_compatible || entry?.compatibility?.bng2) || !entry?.path) {
-      continue;
-    }
+  const fetchNext = async () => {
+    while (nextIndex < entries.length) {
+      const index = nextIndex++;
+      const entry = entries[index];
+      const rawUrl = entry.rawUrl || joinUrl(manifestBase, entry.path);
+      try {
+        const response = await fetch(rawUrl);
+        if (!response.ok) {
+          console.warn(`Skipping ${entry.id}: fetch failed (${response.status})`);
+          continue;
+        }
 
-    const rawUrl = entry.rawUrl || joinUrl(manifestBase, entry.path);
-    try {
-      const response = await fetch(rawUrl);
-      if (!response.ok) {
-        console.warn(`Skipping ${entry.id}: fetch failed (${response.status})`);
-        continue;
+        const content = await response.text();
+        models[index] = {
+          id: entry.id,
+          filename: entry.file || path.basename(entry.path),
+          path: entry.path,
+          tags: entry.tags?.length ? entry.tags : extractTags(entry.path, content),
+          searchText: `${entry.name || entry.id} ${entry.description || ''} ${extractSearchableText(path.basename(entry.path), content)}`.toLowerCase(),
+          observables: extractObservables(content),
+          simulationMode: extractSimulationMode(content),
+        };
+      } catch (error) {
+        console.warn(`Skipping ${entry.id}: ${error.message}`);
       }
-
-      const content = await response.text();
-      models.push({
-        id: entry.id,
-        filename: entry.file || path.basename(entry.path),
-        path: entry.path,
-        tags: entry.tags?.length ? entry.tags : extractTags(entry.path, content),
-        searchText: `${entry.name || entry.id} ${entry.description || ''} ${extractSearchableText(path.basename(entry.path), content)}`.toLowerCase(),
-        observables: extractObservables(content),
-        simulationMode: extractSimulationMode(content),
-      });
-    } catch (error) {
-      console.warn(`Skipping ${entry.id}: ${error.message}`);
     }
-  }
+  };
 
-  return models;
+  await Promise.all(Array.from({ length: concurrency }, () => fetchNext()));
+
+  return models.filter(Boolean);
 }
 
 /**
@@ -266,16 +274,38 @@ function getCanonicalCategoryMap() {
 async function generateEmbeddings() {
   console.log('Scanning for BNGL models...');
   const models = await scanModels();
+  models.sort((left, right) => left.path.localeCompare(right.path));
   console.log(`Found ${models.length} models.`);
 
   const canonicalMap = getCanonicalCategoryMap();
 
-  // Support DRY_RUN for testing the filter without running the heavy embedding step
+  const inputHash = crypto.createHash('sha256')
+    .update('embeddings-v1\0Xenova/all-MiniLM-L6-v2\0')
+    .update(JSON.stringify(models.map((model) => ({
+      ...model,
+      tags: canonicalMap.get(model.id) || model.tags || [],
+    }))))
+    .digest('hex');
+  const outputPath = path.join(ROOT, 'public', 'model-embeddings.json');
+  const inputHashPath = path.join(ROOT, 'tools', 'build', 'model-embeddings.sha256');
+
+  // Support DRY_RUN for testing the scan and cache key without loading the model.
   if (process.env.DRY_RUN) {
-    console.log('DRY_RUN=1: would embed the following models:');
+    console.log(`DRY_RUN=1 inputHash=${inputHash}`);
+    console.log('Would embed the following models:');
     models.forEach(m => console.log(' -', m.id, m.path));
     console.log('Exiting due to DRY_RUN flag.');
-    process.exit(0);
+    return;
+  }
+
+  if (
+    !process.env.FORCE_REGENERATE
+    && fs.existsSync(outputPath)
+    && fs.existsSync(inputHashPath)
+    && fs.readFileSync(inputHashPath, 'utf8').trim() === inputHash
+  ) {
+    console.log('Embedding inputs unchanged; keeping existing output.');
+    return;
   }
 
   const embed = await getEmbedder();
@@ -370,7 +400,6 @@ async function generateEmbeddings() {
   console.log('UMAP projections computed.');
 
   // Write output
-  const outputPath = path.join(ROOT, 'public', 'model-embeddings.json');
   fs.writeFileSync(outputPath, JSON.stringify({
     version: 2,
     model: 'Xenova/all-MiniLM-L6-v2',
@@ -380,6 +409,7 @@ async function generateEmbeddings() {
     hasUMAP: true,
     models: results,
   }, null, 2));
+  fs.writeFileSync(inputHashPath, `${inputHash}\n`);
 
   console.log(`\nGenerated embeddings for ${results.length} models.`);
   console.log(`Output: ${outputPath}`);
@@ -388,4 +418,3 @@ async function generateEmbeddings() {
 
 // Run
 generateEmbeddings().catch(console.error);
-

@@ -1,39 +1,40 @@
-import React, { useState } from 'react';
+import React, { Suspense, lazy, useState } from 'react';
 import { BNGLModel, SimulationOptions, SimulationResults } from '../types';
 import { ResultsChart } from './ResultsChart';
-import { ContactMapTab } from './tabs/ContactMapTab';
-import { InfluenceGraphViewer } from './InfluenceGraphViewer';
 import { buildRuleOverlays } from '../services/visualization/buildRuleOverlays';
 import { computeInfluenceGraph } from '../services/visualization/computeInfluence';
-import { SteadyStateTab } from './tabs/SteadyStateTab';
-import { FIMTab } from './tabs/FIMTab';
-import { CartoonTab } from './tabs/CartoonTab';
-import { RegulatoryTab } from './tabs/RegulatoryTab';
-import { RulesTab } from './tabs/RulesTab';
-import { VerificationTab } from './tabs/VerificationTab';
-import { ParameterScanTab } from './tabs/ParameterScanTab';
-import { ParameterEstimationTab } from './tabs/ParameterEstimationTab';
-import { FluxAnalysisTab } from './tabs/FluxAnalysisTab';
-import { SobolSensitivityTab } from './tabs/SobolSensitivityTab';
-import { ProfileLikelihoodTab } from './tabs/ProfileLikelihoodTab';
-import { ABCSMCTab } from './tabs/ABCSMCTab';
-import { ModelExplorerTab } from './tabs/ModelExplorerTab';
-import { TrajectoryExplorerTab } from './tabs/TrajectoryExplorerTab';
 import { BNGLParser } from '@bngplayground/engine';
 import { ExpressionInputPanel, CustomExpression } from './ExpressionInputPanel';
-import { ComparisonPanel } from './ComparisonPanel';
-import { JupyterExportTab } from './tabs/JupyterExportTab';
-import { NetworkAnalysisTab } from './tabs/NetworkAnalysisTab';
 import { Dropdown, DropdownItem } from './ui/Dropdown';
 import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { HelpSection } from './HelpSection';
-import { SpatialPanel } from './SpatialPanel';
 import { ErrorBoundary } from './ui/ErrorBoundary';
-import { BifurcationTab } from './tabs/BifurcationTab';
-import { TemporalAnalysisTab } from './tabs/TemporalAnalysisTab';
-import { VersionHistoryTab } from './tabs/VersionHistoryTab';
-import { MultiscaleTab } from './tabs/MultiscaleTab';
-import { PKPDTab } from './tabs/PKPDTab';
+
+const ContactMapTab = lazy(() => import('./tabs/ContactMapTab').then((module) => ({ default: module.ContactMapTab })));
+const InfluenceGraphViewer = lazy(() => import('./InfluenceGraphViewer').then((module) => ({ default: module.InfluenceGraphViewer })));
+const SteadyStateTab = lazy(() => import('./tabs/SteadyStateTab').then((module) => ({ default: module.SteadyStateTab })));
+const FIMTab = lazy(() => import('./tabs/FIMTab').then((module) => ({ default: module.FIMTab })));
+const CartoonTab = lazy(() => import('./tabs/CartoonTab').then((module) => ({ default: module.CartoonTab })));
+const RegulatoryTab = lazy(() => import('./tabs/RegulatoryTab').then((module) => ({ default: module.RegulatoryTab })));
+const RulesTab = lazy(() => import('./tabs/RulesTab').then((module) => ({ default: module.RulesTab })));
+const VerificationTab = lazy(() => import('./tabs/VerificationTab').then((module) => ({ default: module.VerificationTab })));
+const ParameterScanTab = lazy(() => import('./tabs/ParameterScanTab').then((module) => ({ default: module.ParameterScanTab })));
+const ParameterEstimationTab = lazy(() => import('./tabs/ParameterEstimationTab').then((module) => ({ default: module.ParameterEstimationTab })));
+const FluxAnalysisTab = lazy(() => import('./tabs/FluxAnalysisTab').then((module) => ({ default: module.FluxAnalysisTab })));
+const SobolSensitivityTab = lazy(() => import('./tabs/SobolSensitivityTab').then((module) => ({ default: module.SobolSensitivityTab })));
+const ProfileLikelihoodTab = lazy(() => import('./tabs/ProfileLikelihoodTab').then((module) => ({ default: module.ProfileLikelihoodTab })));
+const ABCSMCTab = lazy(() => import('./tabs/ABCSMCTab').then((module) => ({ default: module.ABCSMCTab })));
+const ModelExplorerTab = lazy(() => import('./tabs/ModelExplorerTab').then((module) => ({ default: module.ModelExplorerTab })));
+const TrajectoryExplorerTab = lazy(() => import('./tabs/TrajectoryExplorerTab').then((module) => ({ default: module.TrajectoryExplorerTab })));
+const ComparisonPanel = lazy(() => import('./ComparisonPanel').then((module) => ({ default: module.ComparisonPanel })));
+const JupyterExportTab = lazy(() => import('./tabs/JupyterExportTab').then((module) => ({ default: module.JupyterExportTab })));
+const NetworkAnalysisTab = lazy(() => import('./tabs/NetworkAnalysisTab').then((module) => ({ default: module.NetworkAnalysisTab })));
+const SpatialPanel = lazy(() => import('./SpatialPanel').then((module) => ({ default: module.SpatialPanel })));
+const BifurcationTab = lazy(() => import('./tabs/BifurcationTab').then((module) => ({ default: module.BifurcationTab })));
+const TemporalAnalysisTab = lazy(() => import('./tabs/TemporalAnalysisTab').then((module) => ({ default: module.TemporalAnalysisTab })));
+const VersionHistoryTab = lazy(() => import('./tabs/VersionHistoryTab').then((module) => ({ default: module.VersionHistoryTab })));
+const MultiscaleTab = lazy(() => import('./tabs/MultiscaleTab').then((module) => ({ default: module.MultiscaleTab })));
+const PKPDTab = lazy(() => import('./tabs/PKPDTab').then((module) => ({ default: module.PKPDTab })));
 
 
 
@@ -88,7 +89,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
   const [expressions, setExpressions] = useState<CustomExpression[]>([]);
-  const reactionRules = model?.reactionRules ?? [];
+  const reactionRules = React.useMemo(() => model?.reactionRules ?? [], [model?.reactionRules]);
 
   // Local active tab state if not controlled
   const [localActiveTab, setLocalActiveTab] = useState(0);
@@ -181,10 +182,12 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   }, [bnglCode]);
 
   const influenceGraphData = React.useMemo(() => {
-    if (!model || reactionRules.length === 0) return { nodes: [], edges: [] };
+    if (activeTab !== 1 || networkViewMode !== 'influence' || !model || reactionRules.length === 0) {
+      return { nodes: [], edges: [] };
+    }
     const overlays = buildRuleOverlays(reactionRules);
     return computeInfluenceGraph(overlays, reactionRules);
-  }, [model]);
+  }, [activeTab, model, networkViewMode, reactionRules]);
 
   return (
     <div role="region" aria-label="Visualization panel" className="flex h-full min-h-0 flex-col gap-0 border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
@@ -322,6 +325,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
       {/* Content Panels */}
       <div className="flex-1 min-h-0 flex flex-col p-4 overflow-hidden">
+        <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-300">Loading analysis…</div>}>
         {activeTab === 0 && (
           <div role="tabpanel" id="viz-tabpanel-0" aria-labelledby="viz-tab-0" aria-label="Time courses" className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-2">
             <HelpSection
@@ -850,6 +854,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
         )}
 
 
+        </Suspense>
       </div>
     </div>
   );
