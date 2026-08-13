@@ -346,9 +346,8 @@ export async function simulate(
   }
 ): Promise<SimulationResults> {
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
-  const simulationStartTime = performance.now();
+  const simulationStartTime = VERBOSE_SIM_DEBUG ? performance.now() : 0;
   const strictFunctionalRates = !!options.strictFunctionalRates;
-  // ... using simulationStartTime later ...
   callbacks.checkCancelled();
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
   if (VERBOSE_SIM_DEBUG) console.log('[Worker] Starting simulation with', inputModel.species.length, 'species,', inputModel.reactions?.length, 'reactions, and', inputModel.reactionRules?.length ?? 0, 'rules');
@@ -672,11 +671,15 @@ export async function simulate(
   const speciesVolumes = new Float64Array(numSpecies);
   const compartmentMap = new Map<string, number>();
   if (model.compartments && model.compartments.length > 0) {
-    console.log(`[Worker] RESOLVING COMPARTMENTS: Found ${model.compartments.length} compartments`);
+    if (VERBOSE_SIM_DEBUG) {
+      console.log(`[Worker] RESOLVING COMPARTMENTS: Found ${model.compartments.length} compartments`);
+    }
     (model.compartments || []).forEach(c => {
       const vol = c.resolvedVolume ?? c.size ?? 1.0;
       compartmentMap.set(c.name, vol);
-      console.log(`[Worker]   - Compartment: '${c.name}', Vol: ${vol}`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker]   - Compartment: '${c.name}', Vol: ${vol}`);
+      }
     });
   }
 
@@ -836,7 +839,13 @@ export async function simulate(
   };
 
   const isOde = !allSsa && !allPla && !allPsa && options.method !== 'ssa' && options.method !== 'pla' && options.method !== 'psa';
-  const hasHeterogeneousSpeciesVolumes = Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
+  let hasHeterogeneousSpeciesVolumes = false;
+  for (let i = 0; i < speciesVolumes.length; i++) {
+    if (Math.abs(speciesVolumes[i] - 1) > 1e-15) {
+      hasHeterogeneousSpeciesVolumes = true;
+      break;
+    }
+  }
   // The amount-space branch fixes CVODE parity for compartment models whose rates
   // depend on observables/functions. Keep pure mass-action compartment models on
   // the existing concentration-space fast path for performance.
@@ -844,7 +853,7 @@ export async function simulate(
   const solverVolumes = odeUsesAmountState
     ? new Float64Array(numSpecies).fill(1.0)
     : speciesVolumes;
-  if (odeUsesAmountState) {
+  if (VERBOSE_SIM_DEBUG && odeUsesAmountState) {
     console.log(`[Worker] Using amount-space ODE integration (heterogeneous compartment volumes + ${functionalRateCount} functional rate(s))`);
   }
   const state = new Float64Array(numSpecies);
@@ -861,15 +870,24 @@ export async function simulate(
     }
 
     // DEBUG: Trace FB initialization in SimulationLoop
-    if (s.name.includes('FB')) {
+    if (VERBOSE_SIM_DEBUG && s.name.includes('FB')) {
       console.log(`[Worker] State Init FB (Idx ${i}): name='${s.name}', initAmt=${initAmt}, vol=${speciesVolumes[i]}, isOde=${isOde}, finalState=${state[i]}`);
     }
   });
 
   // DEBUG: Scaling volumes check
-  const minVol = Math.min(...Array.from(speciesVolumes));
-  const maxVol = Math.max(...Array.from(speciesVolumes));
-  console.log(`[Worker] Scaling Check: Species Vol Range [${minVol}, ${maxVol}]. Count 1.0s: ${Array.from(speciesVolumes).filter(v => v === 1.0).length}`);
+  if (VERBOSE_SIM_DEBUG) {
+    let minVol = Number.POSITIVE_INFINITY;
+    let maxVol = Number.NEGATIVE_INFINITY;
+    let unitVolumeCount = 0;
+    for (let i = 0; i < speciesVolumes.length; i++) {
+      const volume = speciesVolumes[i];
+      if (volume < minVol) minVol = volume;
+      if (volume > maxVol) maxVol = volume;
+      if (volume === 1.0) unitVolumeCount++;
+    }
+    console.log(`[Worker] Scaling Check: Species Vol Range [${minVol}, ${maxVol}]. Count 1.0s: ${unitVolumeCount}`);
+  }
   const stateValueToSpeciesOutput = (value: number, speciesIdx: number): number =>
     (isOde && odeUsesAmountState) ? (value / speciesVolumes[speciesIdx]) : value;
 
@@ -1773,7 +1791,7 @@ export async function simulate(
           if (mode === 'save') {
             const label = change.label ?? DEFAULT_CONC_LABEL;
             concentrationCache.set(label, new Float64Array(state));
-            console.log(`[Worker] SSA: Saved concentrations with label "${label}"`);
+            if (VERBOSE_SIM_DEBUG) console.log(`[Worker] SSA: Saved concentrations with label "${label}"`);
             continue;
           }
           if (mode === 'reset') {
@@ -1782,7 +1800,7 @@ export async function simulate(
             if (saved) {
               // Restore from cached saved state
               state.set(saved);
-              console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
+              if (VERBOSE_SIM_DEBUG) console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
             } else {
               // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
               // BNG2 semantics recalculate initial values with current parameters
@@ -1791,7 +1809,7 @@ export async function simulate(
                 for (let k = 0; k < numSpecies; k++) {
                   state[k] = resolveInitialAmount(model.species[k], currentParamMap); // SSA uses raw counts
                 }
-                console.log(`[Worker] SSA: Reset concentrations to initial seed species (recalculated with current parameters)`);
+                if (VERBOSE_SIM_DEBUG) console.log('[Worker] SSA: Reset concentrations to initial seed species (recalculated with current parameters)');
               } else {
                 // No-op, as per BNG2 behavior
               }
@@ -1929,7 +1947,9 @@ export async function simulate(
           if (!(aTot > 0)) {
             // If the total is exactly 0, we gracefully finish (stable state).
             // If it was NaN, the check above would have caught it.
-            console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
+            if (VERBOSE_SIM_DEBUG) {
+              console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
+            }
             break;
           }
 
@@ -2190,7 +2210,9 @@ export async function simulate(
         }
       } : undefined;
 
-      console.log(`[Worker] SSA simulation complete: ${getTotalDataLength()} data points, globalTime=${globalTime}`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker] SSA simulation complete: ${getTotalDataLength()} data points, globalTime=${globalTime}`);
+      }
 
       const defaultSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
       return {
@@ -2488,7 +2510,7 @@ export async function simulate(
           compiledMassActionJit = jitCompiler.compile(buildMassActionJitReactions(), numSpecies, model.parameters, constantSpeciesMask, undefined, model.functions);
 
           // Return the JIT-compiled function but wrapped to handle speciesVolumes
-          console.log(`[Worker] JIT compiler active for ${concreteReactions.length} reactions.`);
+          if (VERBOSE_SIM_DEBUG) console.log(`[Worker] JIT compiler active for ${concreteReactions.length} reactions.`);
           return (yIn: Float64Array, dydt: Float64Array) => {
             compiledMassActionJit!.evaluate(0, yIn, dydt, solverVolumes);
           };
@@ -2546,10 +2568,12 @@ export async function simulate(
         }
         sparseFlatReactantOffsets[sparseNRxns] = srOff;
 
-        console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
+        if (VERBOSE_SIM_DEBUG) {
+          console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
+        }
 
         return (yIn: Float64Array, dydt: Float64Array) => {
-          if (!(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
+          if (VERBOSE_SIM_DEBUG && !(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
             console.log('[Worker] DERIVATIVE FUNCTION CALLED (Sparse CSR Fallback)');
             (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
           }
@@ -2661,10 +2685,12 @@ export async function simulate(
       flatReactantOffsets[nRxns] = rOff;
       flatProductOffsets[nRxns] = pOff;
 
-      console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
+      }
 
       return (yIn: Float64Array, dydt: Float64Array) => {
-        if (!(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
+        if (VERBOSE_SIM_DEBUG && !(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
           console.log('[Worker] DERIVATIVE FUNCTION CALLED (Zero-Copy Dense Fallback)');
           (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
         }
@@ -2851,7 +2877,9 @@ export async function simulate(
       if (stiffnessProfile.category === 'extreme' || stiffnessProfile.category === 'severe') {
         // Override: extremely stiff models should start with Jacobian-equipped CVODE
         // even in auto_detect mode — the runtime probe will confirm.
-        console.log('[SimulationLoop] auto_detect: static pre-analysis suggests severe stiffness, starting with cvode_jac');
+        if (VERBOSE_SIM_DEBUG) {
+          console.log('[SimulationLoop] auto_detect: static pre-analysis suggests severe stiffness, starting with cvode_jac');
+        }
       }
       // Leave solverType as 'auto_detect' — createSolver will handle it
     } else if (solverType === 'cvode') {
@@ -2931,25 +2959,30 @@ export async function simulate(
       parameters: new Map(Object.entries(model.parameters || {}))
     };
 
-    const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
-    const isCbnglSimpleModel =
-      observableNamesSet.has('TF_nuc') &&
-      observableNamesSet.has('Tot_mRNA') &&
-      observableNamesSet.has('Tot_P') &&
-      observableNamesSet.has('P_R');
-    const cbnglTraceSteps = new Set([1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 470, 478, 500]);
+    let isCbnglSimpleModel = false;
+    const cbnglTraceSteps = VERBOSE_SIM_DEBUG
+      ? new Set([1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 470, 478, 500])
+      : undefined;
     let tfCpIdx = -1;
     let tfNuIdx = -1;
-    for (let i = 0; i < model.species.length; i++) {
-      const name = model.species[i].name;
-      if (tfCpIdx === -1 && name === '@CP::TF(d~pY)') {
-        tfCpIdx = i;
-      }
-      if (tfNuIdx === -1 && name === '@NU::TF(d~pY)') {
-        tfNuIdx = i;
-      }
-      if (tfCpIdx !== -1 && tfNuIdx !== -1) {
-        break;
+    if (VERBOSE_SIM_DEBUG) {
+      const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
+      isCbnglSimpleModel =
+        observableNamesSet.has('TF_nuc') &&
+        observableNamesSet.has('Tot_mRNA') &&
+        observableNamesSet.has('Tot_P') &&
+        observableNamesSet.has('P_R');
+      for (let i = 0; i < model.species.length; i++) {
+        const name = model.species[i].name;
+        if (tfCpIdx === -1 && name === '@CP::TF(d~pY)') {
+          tfCpIdx = i;
+        }
+        if (tfNuIdx === -1 && name === '@NU::TF(d~pY)') {
+          tfNuIdx = i;
+        }
+        if (tfCpIdx !== -1 && tfNuIdx !== -1) {
+          break;
+        }
       }
     }
 
@@ -3281,7 +3314,7 @@ export async function simulate(
 
 
     // ODE Loop
-    const odeStart = performance.now();
+    const odeStart = VERBOSE_SIM_DEBUG ? performance.now() : 0;
     const y = new Float64Array(state);
     const conservationLawReductionEnabled = getFeatureFlags().conservationLawReduction;
     const conservationTemplate = conservationLawReductionEnabled
@@ -3327,7 +3360,9 @@ export async function simulate(
     for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
       const phase = phases[phaseIdx];
       const isLastPhase = phaseIdx === phases.length - 1;
-      console.log(`[Worker] Starting Phase ${phaseIdx}: method=${phase.method}, t_end=${phase.t_end}, continue=${phase.continue}`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker] Starting Phase ${phaseIdx}: method=${phase.method}, t_end=${phase.t_end}, continue=${phase.continue}`);
+      }
 
       const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
 
@@ -3350,7 +3385,7 @@ export async function simulate(
         if (mode === 'save') {
           const label = change.label ?? DEFAULT_CONC_LABEL;
           concentrationCache.set(label, new Float64Array(y));
-          console.log(`[Worker] ODE: Saved concentrations with label "${label}"`);
+          if (VERBOSE_SIM_DEBUG) console.log(`[Worker] ODE: Saved concentrations with label "${label}"`);
           continue;
         }
         if (mode === 'reset') {
@@ -3360,7 +3395,7 @@ export async function simulate(
             // Restore from cached saved state
             y.set(saved);
             state.set(saved);
-            console.log(`[Worker] ODE: Reset concentrations to saved label "${label}"`);
+            if (VERBOSE_SIM_DEBUG) console.log(`[Worker] ODE: Reset concentrations to saved label "${label}"`);
           } else {
             // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
             if (label === DEFAULT_CONC_LABEL) {
@@ -3370,7 +3405,7 @@ export async function simulate(
                 y[k] = odeUsesAmountState ? initialAmount : (initialAmount / speciesVolumes[k]);
                 state[k] = y[k];
               }
-              console.log(`[Worker] ODE: Reset concentrations to initial seed species (recalculated with current parameters)`);
+              if (VERBOSE_SIM_DEBUG) console.log('[Worker] ODE: Reset concentrations to initial seed species (recalculated with current parameters)');
             } else {
               console.warn(`[Worker] ODE: resetConcentrations label "${label}" not found in cache`);
             }
@@ -3441,7 +3476,7 @@ export async function simulate(
 
       // **Requirement 10.4**: NFsim phase handling in mixed-method workflows
       if (phase.method === 'nf') {
-        console.log(`[Worker] NFsim phase ${phaseIdx} detected in mixed-method workflow`);
+        if (VERBOSE_SIM_DEBUG) console.log(`[Worker] NFsim phase ${phaseIdx} detected in mixed-method workflow`);
 
         // Import NFsim runner dynamically to avoid circular dependencies
         const { runNFsimSimulation } = await import('./nfsim/NFsimRunner');
@@ -3497,7 +3532,7 @@ export async function simulate(
           // Update model time
           modelTime = phaseStart + phaseDuration;
 
-          console.log(`[Worker] NFsim phase ${phaseIdx} complete`);
+          if (VERBOSE_SIM_DEBUG) console.log(`[Worker] NFsim phase ${phaseIdx} complete`);
           continue; // Skip ODE solver for this phase
         } catch (nfsimError) {
           console.error(`[Worker] NFsim phase ${phaseIdx} failed:`, nfsimError);
@@ -3558,7 +3593,9 @@ export async function simulate(
             currentSolverType = 'cvode';
           }
 
-          console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
+          if (VERBOSE_SIM_DEBUG) {
+            console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
+          }
         }
       }
 
@@ -3679,7 +3716,7 @@ export async function simulate(
               appendSpeciesSnapshot(phase.suffix, sp);
             }
 
-            if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
+            if (VERBOSE_SIM_DEBUG && isCbnglSimpleModel && cbnglTraceSteps?.has(i)) {
               const tfCpAmt = tfCpIdx >= 0 ? (odeUsesAmountState ? y[tfCpIdx] : (y[tfCpIdx] * speciesVolumes[tfCpIdx])) : NaN;
               const tfNuAmt = tfNuIdx >= 0 ? (odeUsesAmountState ? y[tfNuIdx] : (y[tfNuIdx] * speciesVolumes[tfNuIdx])) : NaN;
               let rateTranscribeVal = Number.NaN;
@@ -3735,7 +3772,9 @@ export async function simulate(
             const dx = Math.sqrt(sumSq) / numSpecies;
 
             if (dx < steadyStateAtol) {
-              console.log(`[Worker] Phase ${phaseIdx + 1}: Steady state reached at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}, dx=${dx.toExponential(4)} < atol=${steadyStateAtol.toExponential(2)}`);
+              if (VERBOSE_SIM_DEBUG) {
+                console.log(`[Worker] Phase ${phaseIdx + 1}: Steady state reached at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}, dx=${dx.toExponential(4)} < atol=${steadyStateAtol.toExponential(2)}`);
+              }
               shouldStop = true;
               break; // Exit integration loop immediately when steady state is reached
             }
@@ -3756,7 +3795,9 @@ export async function simulate(
                 strictFunctionalRates
               );
               if (stopResult !== 0) {
-                console.log(`[Worker] Phase ${phaseIdx + 1}: stop_if condition met at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}: ${phase.stop_if}`);
+                if (VERBOSE_SIM_DEBUG) {
+                  console.log(`[Worker] Phase ${phaseIdx + 1}: stop_if condition met at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}: ${phase.stop_if}`);
+                }
                 shouldStop = true;
                 break;
               }
@@ -3832,10 +3873,11 @@ export async function simulate(
       leftoverSolver.destroy?.();
     }
 
-    const odeTime = performance.now() - odeStart;
-    const totalTime = performance.now() - simulationStartTime;
-    if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: ODE integration took', odeTime.toFixed(0), 'ms');
-    if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: Total simulation time', totalTime.toFixed(0), 'ms');
+    if (VERBOSE_SIM_DEBUG) {
+      const simulationEndTime = performance.now();
+      console.log('[Worker] ⏱️ TIMING: ODE integration took', (simulationEndTime - odeStart).toFixed(0), 'ms');
+      console.log('[Worker] ⏱️ TIMING: Total simulation time', (simulationEndTime - simulationStartTime).toFixed(0), 'ms');
+    }
     const defaultOdeSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
     return {
       headers,
