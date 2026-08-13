@@ -170,12 +170,11 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
     species: (inputModel.species || []).map((species) => ({ ...species })),
     observables: (inputModel.observables || []).map((observable) => ({ ...observable })),
     actions: inputModel.actions?.map((action) => ({ ...action, args: { ...(action.args || {}) } })),
-    reactions: inputModel.reactions?.map((reaction) => ({
-      ...reaction,
-      reactants: [...reaction.reactants],
-      products: [...reaction.products],
-      productStoichiometries: reaction.productStoichiometries ? [...reaction.productStoichiometries] : undefined
-    })),
+    // Expanded reactions are immutable simulation input. All solver-specific
+    // state, including rates changed between phases, lives in the freshly built
+    // ConcreteReaction array below. Sharing avoids an O(reactions) object/array
+    // clone on every replicate while retaining per-run parameter isolation.
+    reactions: inputModel.reactions,
     reactionRules: inputModel.reactionRules?.map((rule) => ({
       ...rule,
       reactants: [...rule.reactants],
@@ -199,6 +198,19 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
     paramExpressions: inputModel.paramExpressions ? { ...inputModel.paramExpressions } : undefined,
     energyPatterns: inputModel.energyPatterns?.map((pattern) => ({ ...pattern }))
   };
+}
+
+function cloneReactionsForResult(
+  reactions: BNGLReaction[] | undefined
+): BNGLReaction[] | undefined {
+  return reactions?.map((reaction) => ({
+    ...reaction,
+    reactants: [...reaction.reactants],
+    products: [...reaction.products],
+    productStoichiometries: reaction.productStoichiometries
+      ? [...reaction.productStoichiometries]
+      : undefined,
+  }));
 }
 
 /**
@@ -2189,7 +2201,7 @@ export async function simulate(
         speciesData: includeSpeciesData ? speciesDataBySuffix[defaultSuffix] || [] : undefined,
         speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
         ...(includeExpandedNetwork ? {
-          expandedReactions: model.reactions,
+          expandedReactions: cloneReactionsForResult(model.reactions),
           expandedSpecies: model.species,
         } : {}),
         ssaInfluence,
@@ -3252,7 +3264,7 @@ export async function simulate(
             speciesData: includeSpeciesData ? speciesDataBySuffix[defaultWgpuSuffix] || [] : undefined,
             speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
             ...(includeExpandedNetwork ? {
-              expandedReactions: model.reactions,
+              expandedReactions: cloneReactionsForResult(model.reactions),
               expandedSpecies: model.species,
             } : {})
           } satisfies SimulationResults;
@@ -3833,7 +3845,7 @@ export async function simulate(
       speciesData: includeSpeciesData ? speciesDataBySuffix[defaultOdeSuffix] || [] : undefined,
       speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
       ...(includeExpandedNetwork ? {
-        expandedReactions: model.reactions,
+        expandedReactions: cloneReactionsForResult(model.reactions),
         expandedSpecies: model.species,
       } : {}),
       denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined
