@@ -1373,12 +1373,11 @@ export async function simulate(
       const propensities = new Float64Array(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
-      const propOrder = new Int32Array(numReactions);
 
       // === OPT 2: INLINED FENWICK TREE ===
       // Inlining eliminates class method dispatch overhead (~2-3ns per call)
       const fenwickTree = new Float64Array(numReactions + 1);
-      const fenwickHighBit = numReactions > 0 ? (1 << (Math.floor(Math.log2(numReactions)) + 1)) : 1;
+      const fenwickHighBit = numReactions > 0 ? (1 << Math.floor(Math.log2(numReactions))) : 1;
 
       const fenwickBuild = (values: Float64Array): void => {
         const n = numReactions;
@@ -1391,6 +1390,7 @@ export async function simulate(
       };
 
       const fenwickAdd = (idx: number, delta: number): void => {
+        if (delta === 0) return;
         let i = idx + 1;
         const tree = fenwickTree;
         const n = numReactions;
@@ -1398,23 +1398,6 @@ export async function simulate(
           tree[i] += delta;
           i += i & -i;
         }
-      };
-
-      const fenwickFind = (target: number): number => {
-        const tree = fenwickTree;
-        const n = numReactions;
-        let idx = 0;
-        let bitMask = fenwickHighBit;
-        let t = target;
-        while (bitMask !== 0) {
-          const next = idx + bitMask;
-          if (next <= n && tree[next] <= t) {
-            t -= tree[next];
-            idx = next;
-          }
-          bitMask >>= 1;
-        }
-        return idx; // 0-based index
       };
 
       // === OPT 7: ADAPTIVE REACTION SELECTION ===
@@ -1455,7 +1438,7 @@ export async function simulate(
       const firingActive = shouldRecordFirings && logTimes !== null && logRxnIndices !== null && logPropensities !== null;
 
       // === OPT 3: INLINED PRNG (Mulberry32) ===
-      // Eliminates class method dispatch overhead on every SSA event
+      // V8 inlines this compact helper in the SSA event loop.
       let rngState = (options.seed ?? 12345) | 0;
       const nextRand = (): number => {
         let t = (rngState += 0x6d2b79f5);
@@ -1765,10 +1748,6 @@ export async function simulate(
         const phase = phases[phaseIdx];
         const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
 
-        for (let j = 0; j < numReactions; j++) {
-          propOrder[j] = j;
-        }
-
         const shouldEmitPhaseStart = recordThisPhase && (phaseIdx === recordFromPhaseIdx || !(phase.continue ?? false));
 
         // Apply parameter changes before this phase
@@ -1866,9 +1845,11 @@ export async function simulate(
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
           pushDataRow(phase.suffix, outT0, state as Float64Array);
-          const speciesPoint0: Record<string, number> = { time: outT0 };
-          for (let i = 0; i < numSpecies; i++) setSafeNumberField(speciesPoint0, speciesHeaders[i], state[i]);
-          appendSpeciesSnapshot(phase.suffix, speciesPoint0);
+          if (includeSpeciesData) {
+            const speciesPoint0: Record<string, number> = { time: outT0 };
+            for (let i = 0; i < numSpecies; i++) setSafeNumberField(speciesPoint0, speciesHeaders[i], state[i]);
+            appendSpeciesSnapshot(phase.suffix, speciesPoint0);
+          }
         }
         let totalEvents = 0;
         let nEventsThisPhase = 0;
@@ -1951,8 +1932,18 @@ export async function simulate(
           // OPT 7: adaptive selection (linear scan for small R, Fenwick for large R)
           let reactionIndex: number;
           if (useFenwick) {
-            const fenwickIdx = fenwickFind(r2);
-            reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
+            let idx = 0;
+            let bitMask = fenwickHighBit;
+            let target = r2;
+            while (bitMask !== 0) {
+              const next = idx + bitMask;
+              if (next <= numReactions && fenwickTree[next] <= target) {
+                target -= fenwickTree[next];
+                idx = next;
+              }
+              bitMask >>= 1;
+            }
+            reactionIndex = idx < numReactions ? idx : 0;
           } else {
             reactionIndex = selectLinear(r2);
           }
@@ -2135,11 +2126,13 @@ export async function simulate(
               const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
               if (outT >= nextTOut || totalEvents >= maxEvents) {
                 pushDataRow(phase.suffix, outT, state as Float64Array);
-                const sp: Record<string, number> = { time: outT };
-                for (let k = 0; k < numSpecies; k++) {
-                  setSafeNumberField(sp, speciesHeaders[k], state[k]);
+                if (includeSpeciesData) {
+                  const sp: Record<string, number> = { time: outT };
+                  for (let k = 0; k < numSpecies; k++) {
+                    setSafeNumberField(sp, speciesHeaders[k], state[k]);
+                  }
+                  appendSpeciesSnapshot(phase.suffix, sp);
                 }
-                appendSpeciesSnapshot(phase.suffix, sp);
               }
             }
             // Always advance the output index regardless of recordThisPhase to prevent
@@ -2160,9 +2153,11 @@ export async function simulate(
           while (nextOutIdx <= phaseNSteps) {
             const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
             pushDataRow(phase.suffix, outT, state as Float64Array);
-            const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], state[k]);
-            appendSpeciesSnapshot(phase.suffix, sp);
+            if (includeSpeciesData) {
+              const sp: Record<string, number> = { time: outT };
+              for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], state[k]);
+              appendSpeciesSnapshot(phase.suffix, sp);
+            }
             nextOutIdx++;
           }
         }
@@ -3239,9 +3234,11 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(y64);
             const wgpuSuffix = phases[0]?.suffix;
             appendDataRow(wgpuSuffix, { time, ...obsValues });
-            const sp: Record<string, number> = { time };
-            for (let j = 0; j < numSpecies; j++) setSafeNumberField(sp, speciesHeaders[j], conc[j]);
-            appendSpeciesSnapshot(wgpuSuffix, sp);
+            if (includeSpeciesData) {
+              const sp: Record<string, number> = { time };
+              for (let j = 0; j < numSpecies; j++) setSafeNumberField(sp, speciesHeaders[j], conc[j]);
+              appendSpeciesSnapshot(wgpuSuffix, sp);
+            }
           }
           const defaultWgpuSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
           const results = {
@@ -3586,9 +3583,11 @@ export async function simulate(
         const outT0 = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, 0);
         const obsValues = evaluateObservablesFast(y);
         appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
-        const s0: Record<string, number> = { time: outT0 };
-        for (let i = 0; i < numSpecies; i++) setSafeNumberField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
-        appendSpeciesSnapshot(phase.suffix, s0);
+        if (includeSpeciesData) {
+          const s0: Record<string, number> = { time: outT0 };
+          for (let i = 0; i < numSpecies; i++) setSafeNumberField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
+          appendSpeciesSnapshot(phase.suffix, s0);
+        }
       }
 
       try {
@@ -3657,9 +3656,11 @@ export async function simulate(
             const outT = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i);
             const obsValues = evaluateObservablesFast(y);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
-            const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
-            appendSpeciesSnapshot(phase.suffix, sp);
+            if (includeSpeciesData) {
+              const sp: Record<string, number> = { time: outT };
+              for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
+              appendSpeciesSnapshot(phase.suffix, sp);
+            }
 
             if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
               const tfCpAmt = tfCpIdx >= 0 ? (odeUsesAmountState ? y[tfCpIdx] : (y[tfCpIdx] * speciesVolumes[tfCpIdx])) : NaN;
@@ -3788,16 +3789,18 @@ export async function simulate(
 
       // Always output final species state for multi-phase propagation support
       // This ensures batchRunner can capture the equilibrated state even when recordThisPhase=false
-      const suffixSpeciesArray = getSuffixSpeciesDataArray(phase.suffix);
-      if (includeSpeciesData && recordThisPhase && (suffixSpeciesArray.length === 0 || t > 0)) {
-        // Check if final state was already recorded (last speciesData row has matching time)
-        const finalT = modelTime;
-        const lastRecordedT = suffixSpeciesArray.length > 0 ? suffixSpeciesArray[suffixSpeciesArray.length - 1].time : -1;
-        if (lastRecordedT !== finalT) {
-          // Record final species state for multi-phase propagation
-          const spFinal: Record<string, number> = { time: finalT };
-          for (let k = 0; k < numSpecies; k++) setSafeNumberField(spFinal, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
-          appendSpeciesSnapshot(phase.suffix, spFinal);
+      if (includeSpeciesData && recordThisPhase) {
+        const suffixSpeciesArray = getSuffixSpeciesDataArray(phase.suffix);
+        if (suffixSpeciesArray.length === 0 || t > 0) {
+          // Check if final state was already recorded (last speciesData row has matching time)
+          const finalT = modelTime;
+          const lastRecordedT = suffixSpeciesArray.length > 0 ? suffixSpeciesArray[suffixSpeciesArray.length - 1].time : -1;
+          if (lastRecordedT !== finalT) {
+            // Record final species state for multi-phase propagation
+            const spFinal: Record<string, number> = { time: finalT };
+            for (let k = 0; k < numSpecies; k++) setSafeNumberField(spFinal, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
+            appendSpeciesSnapshot(phase.suffix, spFinal);
+          }
         }
       }
 
