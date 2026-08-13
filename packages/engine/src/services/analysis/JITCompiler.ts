@@ -168,6 +168,10 @@ export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private observableCache: Map<string, JITCompiledObservableFunction> = new Map();
     private bytecodeCache: Map<string, NetworkByteCode> = new Map();
+    // Full generated source is the cache key, so reuse cannot cross networks or
+    // folded rate constants. This avoids paying `new Function` compilation on
+    // every SSA replicate while retaining exact arithmetic and evaluation order.
+    private ssaPropensityCache: Map<string, (state: Float64Array, propensities: Float64Array) => number> = new Map();
     // Cache for compiled SSA event updaters, keyed on a full structural signature
     // string (not a hash) so there is zero risk of a collision returning a
     // function compiled for a different network. Persists across replicate runs
@@ -927,7 +931,17 @@ export class JITCompiler {
 
             const safeSource0 = this.sanitizeSource(source);
             const source0 = safeSource0 + "return aTotal;\n";
-            return this.createFn(["state", "propensities"], source0) as (state: Float64Array, propensities: Float64Array) => number;
+            const cached = this.ssaPropensityCache.get(source0);
+            if (cached) return cached;
+
+            const compiled = this.createFn(["state", "propensities"], source0) as
+                (state: Float64Array, propensities: Float64Array) => number;
+            if (this.ssaPropensityCache.size >= this.maxCacheSize) {
+                const oldest = this.ssaPropensityCache.keys().next().value;
+                if (oldest !== undefined) this.ssaPropensityCache.delete(oldest);
+            }
+            this.ssaPropensityCache.set(source0, compiled);
+            return compiled;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
             return null;
@@ -1749,6 +1763,8 @@ export class JITCompiler {
         this.cache.clear();
         this.observableCache.clear();
         this.bytecodeCache.clear();
+        this.ssaPropensityCache.clear();
+        this.ssaEventUpdaterCache.clear();
         console.log('[JITCompiler] Cache cleared');
     }
 
@@ -1761,7 +1777,8 @@ export class JITCompiler {
      */
     getCacheStats(): { size: number; maxSize: number } {
         return {
-            size: this.cache.size + this.observableCache.size,
+            size: this.cache.size + this.observableCache.size +
+                this.ssaPropensityCache.size + this.ssaEventUpdaterCache.size,
             maxSize: this.maxCacheSize
         };
     }

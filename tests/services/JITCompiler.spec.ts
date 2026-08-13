@@ -1,11 +1,46 @@
 
 import { describe, it, expect } from 'vitest';
-import { jitCompiler } from '@bngplayground/engine';
+import { getFeatureFlags, jitCompiler, setFeatureFlags } from '@bngplayground/engine';
 import { OpCode } from '../../packages/engine/src/services/simulation/ExpressionCompiler';
 
 describe('JITCompiler Service', () => {
 
     describe('compile', () => {
+        it('reuses exact SSA propensity programs and invalidates them with the cache', () => {
+             const previousFlag = getFeatureFlags().enableJitFastPath;
+             setFeatureFlags({ enableJitFastPath: true });
+             try {
+                 jitCompiler.clearCache();
+                 const reactions = [{
+                     reactants: new Int32Array([0, 1]),
+                     rateConstant: 0.5,
+                     propensityFactor: 2,
+                 }];
+                 const volumes = new Float64Array([4]);
+
+                 const first = jitCompiler.compileSSAPropensities(reactions, volumes);
+                 const second = jitCompiler.compileSSAPropensities(reactions, volumes);
+                 expect(first).not.toBeNull();
+                 expect(second).toBe(first);
+
+                 const state = new Float64Array([3, 5]);
+                 const propensities = new Float64Array(1);
+                 expect(first?.(state, propensities)).toBeCloseTo(3.75);
+                 expect(propensities[0]).toBeCloseTo(3.75);
+
+                 const changedRate = jitCompiler.compileSSAPropensities([
+                     { ...reactions[0], rateConstant: 0.75 },
+                 ], volumes);
+                 expect(changedRate).not.toBe(first);
+
+                 jitCompiler.clearCache();
+                 const afterClear = jitCompiler.compileSSAPropensities(reactions, volumes);
+                 expect(afterClear).not.toBe(first);
+             } finally {
+                 setFeatureFlags({ enableJitFastPath: previousFlag });
+             }
+        });
+
         it('should compile simple A -> B', () => {
              // A -> B, k=2.0
              const nSpecies = 2;
