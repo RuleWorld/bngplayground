@@ -1,7 +1,8 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
-import { simulate, loadEvaluator, enumerateRules, structureSearch, CandidateRule } from '@bngplayground/engine';
+import { simulate, loadEvaluator, enumerateRules, structureSearch } from '@bngplayground/engine';
+import type { CandidateRule } from '@bngplayground/engine';
 import { searchStructureArgsSchema } from '../schemas/index.js';
 
 interface SimulatorOptions {
@@ -11,9 +12,28 @@ interface SimulatorOptions {
   [key: string]: unknown;
 }
 
+type StructureExperimentalDataPoint =
+  | { time: number; observable: string; value: number; error?: number }
+  | { time: number; observables: Record<string, number> };
+
+export function normalizeStructureExperimentalData(
+  points: StructureExperimentalDataPoint[],
+): Array<{ time: number; observable: string; value: number; error?: number }> {
+  return points.flatMap((point) => {
+    if ('observables' in point) {
+      return Object.entries(point.observables).map(([observable, value]) => ({
+        time: point.time,
+        observable,
+        value,
+      }));
+    }
+    return [point];
+  });
+}
+
 export async function handleSearchStructure(args: ToolArgs): Promise<ToolResult<unknown>> {
   try {
-    const parsedArgs = searchStructureArgsSchema.parse(args ?? {});
+    const parsedArgs = parseArgs('search_structure', searchStructureArgsSchema, args);
     const model = parseModelOrThrow(parsedArgs.code);
     await loadEvaluator();
 
@@ -36,13 +56,13 @@ export async function handleSearchStructure(args: ToolArgs): Promise<ToolResult<
         moleculeTypes: model.moleculeTypes || [],
         seedSpecies: model.species || [],
         observables: model.observables || [],
-        experimentalData: parsedArgs.experimental_data,
-        inclusionPrior: parsedArgs.inclusion_prior || 0.1,
+        experimentalData: normalizeStructureExperimentalData(parsedArgs.experimental_data),
+        inclusionPrior: parsedArgs.inclusion_prior ?? 0.1,
         parameterBounds: Object.fromEntries(
           Object.keys(model.parameters || {}).map((k: string) => [k, [1e-4, 1e4] as [number, number]])
         ),
-        nParticles: parsedArgs.n_particles || 100,
-        nGenerations: parsedArgs.n_generations || 10,
+        nParticles: parsedArgs.n_particles ?? 100,
+        nGenerations: parsedArgs.n_generations ?? 10,
       },
       simulatorFn,
     );
