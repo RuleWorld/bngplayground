@@ -45,12 +45,13 @@ const extractErrorMessage = (payload: SerializedWorkerError | unknown): string =
 const toError = (type: string, payload: SerializedWorkerError | unknown): Error => {
   const message = extractErrorMessage(payload) || `${type} failed`;
   if (payload && typeof payload === 'object') {
-    const p = payload as Record<string, unknown>;
+    const p = payload as SerializedWorkerError;
     const name = typeof p.name === 'string' ? p.name : undefined;
     const stack = typeof p.stack === 'string' ? p.stack : undefined;
-    const filename = typeof p.filename === 'string' ? p.filename : undefined;
-    const lineno = typeof p.lineno === 'number' ? p.lineno : undefined;
-    const colno = typeof p.colno === 'number' ? p.colno : undefined;
+    const details = p.details;
+    const filename = details && typeof details.filename === 'string' ? details.filename : undefined;
+    const lineno = details && typeof details.lineno === 'number' ? details.lineno : undefined;
+    const colno = details && typeof details.colno === 'number' ? details.colno : undefined;
 
     if (name === 'AbortError') {
       return new DOMException(message || 'Operation cancelled', 'AbortError');
@@ -147,10 +148,12 @@ class BnglService {
 
       if (id === -1 && type === 'worker_internal_error') {
         const detail = extractErrorMessage(payload);
-        const location =
-          payload && typeof payload === 'object'
-            ? `${(payload as { filename?: string }).filename ?? 'unknown'}:${(payload as { lineno?: number }).lineno ?? '?'}:${(payload as { colno?: number }).colno ?? '?'}`
-            : 'unknown:?';
+        const p = payload && typeof payload === 'object' ? (payload as SerializedWorkerError) : undefined;
+        const details = p?.details;
+        const filename = details && typeof details.filename === 'string' ? details.filename : undefined;
+        const lineno = details && typeof details.lineno === 'number' ? details.lineno : undefined;
+        const colno = details && typeof details.colno === 'number' ? details.colno : undefined;
+        const location = `${filename ?? 'unknown'}:${lineno ?? '?'}:${colno ?? '?'}`;
         const stack =
           payload && typeof payload === 'object' && 'stack' in payload && typeof (payload as { stack?: unknown }).stack === 'string'
             ? (payload as { stack: string }).stack
