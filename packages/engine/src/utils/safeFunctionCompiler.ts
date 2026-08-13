@@ -12,17 +12,6 @@ export function validateIdentifier(id: string): boolean {
   return SAFE_BODY_RE.test(id) && !FORBIDDEN_KEYS.has(id);
 }
 
-export function sanitizeNumberLiteral(v: unknown): string {
-  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
-  if (typeof v === 'bigint') return String(v);
-  throw new Error(`Invalid numeric literal: ${v}`);
-}
-
-export function sanitizeIntegerLiteral(v: unknown): string {
-  if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return String(v);
-  throw new Error(`Invalid integer literal: ${v}`);
-}
-
 /**
  * Wrap `new Function` with a final safety check on the generated source body.
  *
