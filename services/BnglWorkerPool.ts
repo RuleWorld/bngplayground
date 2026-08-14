@@ -6,6 +6,7 @@
  */
 
 import { BNGLModel, SharedSimulationOutputDescriptor, SimulationOptions, SimulationResults, WorkerRequest, WorkerResponse } from '../types';
+import { extractErrorMessage, toError } from './workerErrorUtils';
 
 export interface SharedEnsembleResultsHandle {
     kind: 'shared';
@@ -180,9 +181,20 @@ export class BnglWorkerPool {
         const { id, type, payload } = event.data ?? {};
 
         if (type === 'worker_internal_error') {
-            const errorMsg = payload?.message || 'Worker internal error';
-            console.error(`[Pool] Worker ${workerIdx} internal error reported:`, payload);
-            this.rejectAllPendingOnWorker(worker, new Error(`Worker internal error: ${errorMsg}`));
+            const detail = extractErrorMessage(payload);
+            const p = payload && typeof payload === 'object' ? (payload as any) : undefined;
+            const details = p?.details;
+            const filename = details && typeof details.filename === 'string' ? details.filename : undefined;
+            const lineno = details && typeof details.lineno === 'number' ? details.lineno : undefined;
+            const colno = details && typeof details.colno === 'number' ? details.colno : undefined;
+            const location = `${filename ?? 'unknown'}:${lineno ?? '?'}:${colno ?? '?'}`;
+            const stack = p && 'stack' in p && typeof p.stack === 'string' ? p.stack : undefined;
+            if (stack) {
+                console.error(`[Pool] Worker ${workerIdx} internal error reported: ${detail} (${location})\n${stack}`);
+            } else {
+                console.error(`[Pool] Worker ${workerIdx} internal error reported: ${detail} (${location})`);
+            }
+            this.rejectAllPendingOnWorker(worker, new Error(`Worker internal error: ${detail} (${location})`));
             return;
         }
 
@@ -195,11 +207,15 @@ export class BnglWorkerPool {
             req.resolvePayload(payload);
         } else if (type === req.errorType) {
             this.removePendingRequest(worker, id);
-            const errorMsg = (payload as { message?: string } | undefined)?.message || req.defaultErrorMessage;
+            const errType = type === 'simulate_error' ? 'simulate'
+              : type === 'cache_model_error' ? 'cache_model'
+              : type === 'release_model_error' ? 'release_model'
+              : 'request';
+            const err = toError(errType, payload);
             if (req.errorLogLabel) {
-                console.error(`[Pool] Worker ${req.errorLogLabel}: ${errorMsg}`, payload);
+                console.error(`[Pool] Worker ${req.errorLogLabel}: ${err.message}`, payload);
             }
-            req.reject(new Error(errorMsg));
+            req.reject(err);
         }
         // Progress and warning notifications are intentionally non-terminal.
     }
