@@ -59,10 +59,40 @@ const computeResolvedVolumes = (compartments: BNGLCompartment[]): Map<string, nu
   return resolved;
 };
 
+/**
+ * Determines whether a BioNetGen model defines one or more compartments that require volume resolution.
+ *
+ * @param model - The parsed BNGL model object to inspect.
+ * @returns `true` if the model contains at least one defined compartment entry; `false` otherwise.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) as a core engine package utility.
+ */
 export const requiresCompartmentResolution = (model: BNGLModel): boolean => {
   return !!(model.compartments && model.compartments.length > 0);
 };
 
+/**
+ * Asynchronously resolves hierarchical 3D/2D compartment volumes for a BNGL model.
+ *
+ * In BioNetGen, nested compartments form a hierarchy where parent volumes can enclose child
+ * compartments of the same spatial dimension. This function performs a depth-first search (DFS)
+ * over the compartment tree to compute the cumulative `resolvedVolume` for each compartment
+ * by adding the resolved volumes of all direct child compartments matching the parent's dimension
+ * to its own normalized base `size` (defaulting non-positive/missing sizes to 1.0).
+ *
+ * It guards against circular parent-child relationships by detecting cycles during graph traversal
+ * and issuing a warning while defaulting cyclic entries to volume 1.0.
+ *
+ * Each compartment in the returned model is updated with:
+ * - `size`: The normalized base volume.
+ * - `resolvedVolume`: The cumulative resolved volume (base size + sum of same-dimension children resolved volumes).
+ * - `scalingFactor`: The ratio `resolvedVolume / base` (or 1.0 if base size <= 0).
+ *
+ * @param model - The BNGL model containing compartment definitions to resolve.
+ * @returns A Promise resolving to a copy of the BNGL model with updated compartment properties, or the original model if no compartments exist.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) as a core engine package utility.
+ */
 export const resolveCompartmentVolumes = async (model: BNGLModel): Promise<BNGLModel> => {
   if (!model.compartments || model.compartments.length === 0) return model;
 
