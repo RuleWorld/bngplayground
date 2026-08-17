@@ -27,6 +27,7 @@ import { handleCompareModels } from '../src/handlers/compareModels';
 import { handleSearchStructure } from '../src/handlers/searchStructure';
 import { handlePKPD } from '../src/handlers/pkpd';
 import { handleMultiscaleSimulation } from '../src/handlers/multiscaleSimulation';
+import { ToolResult } from '../src/types/index';
 
 // ---------------------------------------------------------------------------
 // Shared model fixtures
@@ -87,7 +88,14 @@ const SAMPLE_DATA = [
 // Helpers
 // ---------------------------------------------------------------------------
 
-function assertStructuredResponse(result: any): void {
+function getProp(obj: unknown, key: string): unknown {
+  if (typeof obj === 'object' && obj !== null && key in obj) {
+    return (obj as Record<string, unknown>)[key];
+  }
+  return undefined;
+}
+
+function assertStructuredResponse(result: ToolResult<unknown>): void {
   expect(result).toBeDefined();
   expect(result.content).toBeDefined();
   expect(result.structuredContent).toBeDefined();
@@ -99,12 +107,12 @@ function assertStructuredResponse(result: any): void {
  * handler produced a *meaningful* error rather than a segfault or hang.
  * Returns either the structured tool result or a synthetic error envelope.
  */
-async function safeCall(fn: () => Promise<any>): Promise<any> {
+async function safeCall(fn: () => Promise<ToolResult<unknown>>): Promise<ToolResult<unknown>> {
   try {
     return await fn();
-  } catch (err: any) {
+  } catch (err: unknown) {
     // The handler threw -- verify it is a meaningful error string
-    const msg = err?.message ?? String(err);
+    const msg = err instanceof Error ? err.message : String(err);
     expect(typeof msg).toBe('string');
     expect(msg.length).toBeGreaterThan(0);
     // Return a synthetic envelope so callers can do further checks
@@ -128,7 +136,7 @@ describe('MCP Tool Robustness', { timeout: 60000 }, () => {
     it('should parse a valid model', async () => {
       const result = await handleParseBngl({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect(result.structuredContent.success).toBe(true);
+      expect(getProp(result.structuredContent, 'success')).toBe(true);
     });
 
     it('should not crash on empty string', async () => {
@@ -144,11 +152,11 @@ describe('MCP Tool Robustness', { timeout: 60000 }, () => {
     it('should not crash on missing code field', async () => {
       const result = await handleParseBngl({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on numeric code field', async () => {
-      const result = await handleParseBngl({ code: 12345 as any });
+      const result = await handleParseBngl({ code: 12345 });
       assertStructuredResponse(result);
     });
   });
@@ -160,7 +168,7 @@ describe('MCP Tool Robustness', { timeout: 60000 }, () => {
     it('should generate a network from a valid model', async () => {
       const result = await handleGenerateNetwork({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect(result.structuredContent.species).toBeDefined();
+      expect(getProp(result.structuredContent, 'species')).toBeDefined();
     });
 
     it('should not crash on empty code', async () => {
@@ -171,7 +179,7 @@ describe('MCP Tool Robustness', { timeout: 60000 }, () => {
     it('should not crash on missing code field', async () => {
       const result = await safeCall(() => handleGenerateNetwork({}));
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on model with no rules', async () => {
@@ -211,7 +219,7 @@ end reaction rules`;
     it('should simulate a valid model with t_end', async () => {
       const result = await handleSimulate({ code: WORKING_MODEL, t_end: 5, n_steps: 10 });
       assertStructuredResponse(result);
-      expect(result.structuredContent.data).toBeDefined();
+      expect(getProp(result.structuredContent, 'data')).toBeDefined();
     });
 
     it('should not crash with missing t_end (uses default)', async () => {
@@ -227,7 +235,7 @@ end reaction rules`;
     it('should not crash with negative t_end', async () => {
       const result = await safeCall(() => handleSimulate({ code: WORKING_MODEL, t_end: -5 }));
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on empty code', async () => {
@@ -238,7 +246,7 @@ end reaction rules`;
     it('should not crash on missing code field', async () => {
       const result = await safeCall(() => handleSimulate({}));
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -252,15 +260,15 @@ end reaction rules`;
     });
 
     it('should not crash on invalid method string', async () => {
-      const result = await safeCall(() => handleSimulate({ code: WORKING_MODEL, method: 'bogus' as any, t_end: 1 }));
+      const result = await safeCall(() => handleSimulate({ code: WORKING_MODEL, method: 'bogus', t_end: 1 }));
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash with numeric code field', async () => {
-      const result = await safeCall(() => handleSimulate({ code: 999 as any, t_end: 1 }));
+      const result = await safeCall(() => handleSimulate({ code: 999, t_end: 1 }));
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
   });
 
@@ -279,7 +287,7 @@ end reaction rules`;
         n_steps: 5,
       });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).mode).toBe('1d');
+      expect(getProp(result.structuredContent, 'mode')).toBe('1d');
     });
 
     it('should not crash on nonexistent parameter', async () => {
@@ -298,13 +306,13 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleParameterScan({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing parameter name', async () => {
       const result = await handleParameterScan({ code: WORKING_MODEL, start: 0, end: 1, steps: 2 });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -326,7 +334,7 @@ end reaction rules`;
     it('should validate a correct model', async () => {
       const result = await handleValidateModel({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).valid).toBe(true);
+      expect(getProp(result.structuredContent, 'valid')).toBe(true);
     });
 
     it('should not crash on empty code', async () => {
@@ -342,11 +350,11 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleValidateModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on numeric code', async () => {
-      const result = await handleValidateModel({ code: 42 as any });
+      const result = await handleValidateModel({ code: 42 });
       assertStructuredResponse(result);
     });
 
@@ -363,7 +371,7 @@ end reaction rules`;
     it('should build contact map for valid model', async () => {
       const result = await handleGetContactMap({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).nodes).toBeDefined();
+      expect(getProp(result.structuredContent, 'nodes')).toBeDefined();
     });
 
     it('should not crash on empty model', async () => {
@@ -374,7 +382,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleGetContactMap({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -383,20 +391,20 @@ end reaction rules`;
     });
 
     it('should fail with structured error on invalid argument type', async () => {
-      const result = await handleGetContactMap({ code: 12345 as any });
+      const result = await handleGetContactMap({ code: 12345 });
       assertStructuredResponse(result);
-      const errorObj = result.structuredContent as any;
-      expect(errorObj.error).toContain('expected string, received number');
-      expect(errorObj.diagnosis).toContain('expected schema');
-      expect(errorObj.recovery).toContain('Check the tool schema');
+      const errorObj = result.structuredContent;
+      expect(String(getProp(errorObj, 'error'))).toContain('expected string, received number');
+      expect(String(getProp(errorObj, 'diagnosis'))).toContain('expected schema');
+      expect(String(getProp(errorObj, 'recovery'))).toContain('Check the tool schema');
     });
 
     it('should fail with structured error on missing code field', async () => {
       const result = await handleGetContactMap(undefined);
       assertStructuredResponse(result);
-      const errorObj = result.structuredContent as any;
-      expect(errorObj.error).toContain('expected string, received undefined');
-      expect(errorObj.diagnosis).toContain('expected schema');
+      const errorObj = result.structuredContent;
+      expect(String(getProp(errorObj, 'error'))).toContain('expected string, received undefined');
+      expect(String(getProp(errorObj, 'diagnosis'))).toContain('expected schema');
     });
 
     it('should handle boundary conditions such as whitespace code or models with missing components gracefully', async () => {
@@ -413,7 +421,7 @@ begin reaction rules
 end reaction rules`;
       const contactMapResult = await handleGetContactMap({ code: incompleteModel });
       assertStructuredResponse(contactMapResult);
-      expect((contactMapResult.structuredContent as any).nodes).toBeDefined();
+      expect(getProp(contactMapResult.structuredContent, 'nodes')).toBeDefined();
     });
   });
 
@@ -434,13 +442,13 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleFitParameters({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing parameters field', async () => {
       const result = await handleFitParameters({ code: WORKING_MODEL, data: SAMPLE_DATA });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing data field', async () => {
@@ -449,7 +457,7 @@ end reaction rules`;
         parameters: { kf: { min: 0.01, max: 1.0 } },
       });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code with valid params/data', async () => {
@@ -470,13 +478,13 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleImportPetab({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing measurements', async () => {
       const result = await handleImportPetab({ code: WORKING_MODEL, petab_parameters: 'col1\tcol2' });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on all empty strings', async () => {
@@ -515,7 +523,7 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleReduceModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -546,7 +554,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleQueryPathwayCommons({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -574,19 +582,19 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleSobolSensitivity({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing parameters array', async () => {
       const result = await handleSobolSensitivity({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on empty parameters array', async () => {
       const result = await handleSobolSensitivity({ code: WORKING_MODEL, parameters: [] });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should return explicit error for unknown observables', async () => {
@@ -597,7 +605,7 @@ end reaction rules`;
         n_samples: 8,
       });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toContain('Unknown Sobol observables');
+      expect(String(getProp(result.structuredContent, 'error'))).toContain('Unknown Sobol observables');
     });
 
     it('should not crash on garbage code', async () => {
@@ -629,13 +637,13 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleIdentifiability({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing data', async () => {
       const result = await handleIdentifiability({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -668,7 +676,7 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleBayesianInference({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing priors', async () => {
@@ -677,7 +685,7 @@ end reaction rules`;
         data: SAMPLE_DATA,
       });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing data', async () => {
@@ -686,7 +694,7 @@ end reaction rules`;
         priors: [{ name: 'kf', distribution: 'uniform', min: 0.01, max: 1 }],
       });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -726,21 +734,21 @@ end reaction rules`;
     });
 
     it('should not crash on invalid format', async () => {
-      const result = await handleExportModel({ code: WORKING_MODEL, format: 'pdf' as any });
+      const result = await handleExportModel({ code: WORKING_MODEL, format: 'pdf' });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on empty input', async () => {
       const result = await handleExportModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing code', async () => {
       const result = await handleExportModel({ format: 'sbml' });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -758,7 +766,7 @@ end reaction rules`;
         statements: ['A binds B with rate kon'],
       });
       assertStructuredResponse(result);
-      expect(result.structuredContent.code).toBeDefined();
+      expect(getProp(result.structuredContent, 'code')).toBeDefined();
     });
 
     it('should not crash on empty statements array', async () => {
@@ -769,7 +777,7 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleComposeModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage statements', async () => {
@@ -780,7 +788,7 @@ end reaction rules`;
     });
 
     it('should not crash on numeric statements', async () => {
-      const result = await handleComposeModel({ statements: [12345 as any] });
+      const result = await handleComposeModel({ statements: [12345] });
       assertStructuredResponse(result);
     });
   });
@@ -805,13 +813,13 @@ end reaction rules`;
     it('should not crash on missing operations field', async () => {
       const result = await handleEditModel({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on empty input', async () => {
       const result = await handleEditModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on invalid operation action', async () => {
@@ -845,7 +853,7 @@ end reaction rules`;
         max_parameters: 2,
       });
       assertStructuredResponse(result);
-      expect(result.structuredContent.structure).toBeDefined();
+      expect(getProp(result.structuredContent, 'structure')).toBeDefined();
     });
 
     it('should not crash on empty code', async () => {
@@ -856,7 +864,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleDiagnoseModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -877,7 +885,7 @@ end reaction rules`;
     it('should explain a valid model', async () => {
       const result = await handleExplainModel({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect(result.structuredContent.summary).toBeDefined();
+      expect(getProp(result.structuredContent, 'summary')).toBeDefined();
     });
 
     it('should not crash on empty code', async () => {
@@ -888,7 +896,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleExplainModel({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -919,7 +927,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleOptimalExperiment({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -1048,7 +1056,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleTemporalAnalysis({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -1079,7 +1087,7 @@ end reaction rules`;
     it('should not crash on missing code', async () => {
       const result = await handleSymbolicSteadyState({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -1119,7 +1127,7 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleCompareModels({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code in variants', async () => {
@@ -1150,13 +1158,13 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleSearchStructure({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing experimental_data', async () => {
       const result = await handleSearchStructure({ code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on garbage code', async () => {
@@ -1195,14 +1203,14 @@ end reaction rules`;
     });
 
     it('should not crash on invalid action', async () => {
-      const result = await handlePKPD({ action: 'nonexistent_action' as any });
+      const result = await handlePKPD({ action: 'nonexistent_action' });
       assertStructuredResponse(result);
     });
 
     it('should not crash on empty input', async () => {
       const result = await handlePKPD({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on compute_metrics without required fields', async () => {
@@ -1223,19 +1231,19 @@ end reaction rules`;
     it('should fail with structured error for negative dose', async () => {
       const result = await handlePKPD({ action: 'generate_model', dose: -50 });
       assertStructuredResponse(result);
-      expect(result.structuredContent.error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should fail with structured error for excessive patients (boundary check)', async () => {
       const result = await handlePKPD({ action: 'population_simulation', n_patients: 2000, code: WORKING_MODEL });
       assertStructuredResponse(result);
-      expect(result.structuredContent.error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should fail with structured error for negative dosing interval', async () => {
       const result = await handlePKPD({ action: 'simulate_dosing', code: WORKING_MODEL, dosing_interval: -10 });
       assertStructuredResponse(result);
-      expect(result.structuredContent.error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
   });
 
@@ -1246,7 +1254,7 @@ end reaction rules`;
     it('should not crash on empty input', async () => {
       const result = await handleMultiscaleSimulation({});
       assertStructuredResponse(result);
-      expect((result.structuredContent as any).error).toBeDefined();
+      expect(getProp(result.structuredContent, 'error')).toBeDefined();
     });
 
     it('should not crash on missing definition', async () => {
@@ -1267,7 +1275,7 @@ end reaction rules`;
     });
 
     it('should not crash on numeric definition', async () => {
-      const result = await handleMultiscaleSimulation({ definition: 12345 as any });
+      const result = await handleMultiscaleSimulation({ definition: 12345 });
       assertStructuredResponse(result);
     });
   });
