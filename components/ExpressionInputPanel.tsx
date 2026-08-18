@@ -247,6 +247,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
               value={newExprName}
               onChange={(e) => setNewExprName(e.target.value)}
               placeholder="Name"
+              aria-label="Expression name"
               className="w-full text-sm"
             />
             <div className="relative min-w-0">
@@ -255,6 +256,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 onChange={handleInputChange}
                 onBlur={() => setTimeout(() => setShowSuggestions(false), 200)}
                 placeholder={mode === 'math' ? 'e.g., A / (A + B)' : 'e.g., A(b!+)'}
+                aria-label="Expression pattern or formula"
                 className="w-full text-sm"
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') addExpression();
