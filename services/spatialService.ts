@@ -149,6 +149,17 @@ class SpatialService {
         this.setState('error');
         this.callbacks.onError?.(msg.message);
         break;
+
+      default: {
+        const unknownMsg = msg as { type?: unknown; message?: unknown };
+        console.warn('[SpatialService] Unhandled worker message type:', unknownMsg);
+        this.setState('error');
+        const errText = typeof unknownMsg.message === 'string'
+          ? unknownMsg.message
+          : `SpatialService received unhandled worker message type: ${String(unknownMsg.type)}`;
+        this.callbacks.onError?.(errText);
+        break;
+      }
     }
   }
 }
