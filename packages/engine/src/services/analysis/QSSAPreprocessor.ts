@@ -185,6 +185,19 @@ export function analyzeQSSA(
     }
     
     candidates.sort((a, b) => b.ratio - a.ratio);
+
+    // Apply global rate span threshold check. If the overall model rate constant span
+    // is smaller than fastSlowThreshold, QSSA candidates are not reliable.
+    const positiveRates = Object.values(parameters)
+        .map((val) => (typeof val === 'number' ? val : parseFloat(String(val))))
+        .filter((val): val is number => Number.isFinite(val) && val > 0);
+    const maxParamRate = positiveRates.length > 0 ? Math.max(...positiveRates) : 0;
+    const minParamRate = positiveRates.length > 0 ? Math.min(...positiveRates) : 0;
+    const globalRateSpan = minParamRate > 0 ? maxParamRate / minParamRate : 0;
+
+    const normalizedCandidates = globalRateSpan < opts.fastSlowThreshold
+        ? candidates.filter((c) => c.recommendation !== 'QSSA')
+        : candidates;
     
     // ⚡ Bolt Optimization: Replace O(N) chained array methods (.filter().length, .filter().slice().map())
     // with a single loop to calculate counts and extract the top QSSA candidates.
@@ -192,7 +205,7 @@ export function analyzeQSSA(
     let conservationCount = 0;
     const topQssaCandidates: string[] = [];
 
-    for (const c of candidates) {
+    for (const c of normalizedCandidates) {
         if (c.recommendation === 'QSSA') {
             qssaCount++;
             if (topQssaCandidates.length < 3) {
@@ -224,7 +237,7 @@ export function analyzeQSSA(
     }
     
     return {
-        candidates,
+        candidates: normalizedCandidates,
         summary,
         ...(reducedModel ? { reducedModel } : {}),
     };

@@ -70,33 +70,22 @@ export async function handleQssaReduction(args: ToolArgs): Promise<ToolResult<an
                 ...qssaOptions,
             });
 
-            const threshold = parsedArgs.fast_slow_threshold ?? 100;
-            const positiveRates = Object.values(model.parameters ?? {})
-                .filter((value): value is number => Number.isFinite(value) && value > 0);
-            const maxRate = positiveRates.length > 0 ? Math.max(...positiveRates) : 0;
-            const minRate = positiveRates.length > 0 ? Math.min(...positiveRates) : 0;
-            const globalRateSpan = minRate > 0 ? maxRate / minRate : 0;
-
-            const normalizedCandidates = globalRateSpan < threshold
-                ? result.candidates.filter((c) => c.recommendation !== 'QSSA')
-                : result.candidates;
-
-            const recommendedForQssa = normalizedCandidates.filter(
+            const recommendedForQssa = result.candidates.filter(
                 (c) => c.recommendation === 'QSSA',
             );
-            const recommendedForConservation = normalizedCandidates.filter(
+            const recommendedForConservation = result.candidates.filter(
                 (c) => c.recommendation === 'CONSERVATION',
             );
 
             return createToolResult({
                 mode: 'analyze',
                 summary: {
-                    nCandidates: normalizedCandidates.length,
+                    nCandidates: result.candidates.length,
                     nRecommendedForQssa: recommendedForQssa.length,
                     nRecommendedForConservation: recommendedForConservation.length,
                     textSummary: result.summary,
                 },
-                candidates: normalizedCandidates,
+                candidates: result.candidates,
                 ...(result.reducedModel
                     ? { estimate: result.reducedModel }
                     : {}),
