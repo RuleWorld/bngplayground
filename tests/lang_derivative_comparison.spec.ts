@@ -22,7 +22,11 @@ const runDerivativeTest = async () => {
     // Dynamic import to ensure mocks are in place
     const { simulate, parseBNGLStrict } = await import('@bngplayground/engine');
 
-    const modelPath = findRuleHubModelPath('Lang_2024')!;
+    const modelPath = findRuleHubModelPath('Lang_2024');
+    if (!modelPath) {
+      console.warn('Skipping test: Lang_2024 model not found in RuleHub');
+      return null;
+    }
     const modelContent = fs.readFileSync(modelPath, 'utf8');
     console.log('Parsing Lang_2024.bngl...');
 

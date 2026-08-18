@@ -11,7 +11,12 @@ const maybeIt = hasCvode ? it : it.skip;
 
 describe('native CVODE bytecode', () => {
   maybeIt('matches fallback CVODE on the AB tutorial', async () => {
-    const code = readFileSync(findRuleHubModelPath('AB')!, 'utf8');
+    const modelPath = findRuleHubModelPath('AB');
+    if (!modelPath) {
+      console.warn('Skipping test: AB model not found in RuleHub');
+      return;
+    }
+    const code = readFileSync(modelPath, 'utf8');
     const parsed = parseBNGL(code);
     const expanded = await generateExpandedNetwork(parsed as any, () => {}, () => {});
     const model = {
