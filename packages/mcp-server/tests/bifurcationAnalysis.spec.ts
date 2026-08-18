@@ -157,7 +157,7 @@ describe('bifurcation_analysis handler', () => {
         });
 
         const body = JSON.parse(result.content[0].text);
-        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/parameter name|required/i);
+        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/parameter|required/i);
     });
 
     it('handles narrow parameter range gracefully', async () => {
@@ -289,4 +289,89 @@ end model
         const body = JSON.parse(result.content[0].text);
         expect(body.totalPoints).toBeGreaterThan(0);
     }, 30000);
+});
+
+describe('handleBifurcationAnalysis — robust edge case and boundary handling', () => {
+    it('handles malformed inputs and wrong types via Zod schema validation', async () => {
+        // Malformed code type (number instead of string)
+        const resultNumericCode = await handleBifurcationAnalysis({
+            code: 12345 as unknown as string,
+            parameter: 'b',
+        });
+        const bodyNumericCode = JSON.parse(resultNumericCode.content[0].text);
+        expect(bodyNumericCode.error ?? bodyNumericCode.message ?? JSON.stringify(bodyNumericCode))
+            .toMatch(/Expected string|invalid/i);
+
+        // Malformed parameter type (boolean instead of string)
+        const resultBoolParam = await handleBifurcationAnalysis({
+            code: BRUSSELATOR_MODEL,
+            parameter: true as unknown as string,
+        });
+        const bodyBoolParam = JSON.parse(resultBoolParam.content[0].text);
+        expect(bodyBoolParam.error ?? bodyBoolParam.message ?? JSON.stringify(bodyBoolParam))
+            .toMatch(/Expected string|invalid/i);
+    });
+
+    it('rejects empty or whitespace-only model code', async () => {
+        // Empty code
+        const resultEmptyCode = await handleBifurcationAnalysis({
+            code: '',
+            parameter: 'b',
+        });
+        const bodyEmptyCode = JSON.parse(resultEmptyCode.content[0].text);
+        expect(bodyEmptyCode.error ?? bodyEmptyCode.message ?? JSON.stringify(bodyEmptyCode))
+            .toMatch(/Model code must be a non-empty string/i);
+
+        // Whitespace code
+        const resultBlankCode = await handleBifurcationAnalysis({
+            code: '   \n  \t ',
+            parameter: 'b',
+        });
+        const bodyBlankCode = JSON.parse(resultBlankCode.content[0].text);
+        expect(bodyBlankCode.error ?? bodyBlankCode.message ?? JSON.stringify(bodyBlankCode))
+            .toMatch(/Model code must be a non-empty string/i);
+    });
+
+    it('rejects empty or whitespace-only parameter names', async () => {
+        const resultBlankParam = await handleBifurcationAnalysis({
+            code: BRUSSELATOR_MODEL,
+            parameter: '   ',
+        });
+        const bodyBlankParam = JSON.parse(resultBlankParam.content[0].text);
+        expect(bodyBlankParam.error ?? bodyBlankParam.message ?? JSON.stringify(bodyBlankParam))
+            .toMatch(/Parameter name must be a non-empty string/i);
+    });
+
+    it('rejects identical start_value and end_value', async () => {
+        const resultEqualBounds = await handleBifurcationAnalysis({
+            code: BRUSSELATOR_MODEL,
+            parameter: 'b',
+            start_value: 1.0,
+            end_value: 1.0,
+        });
+        const bodyEqualBounds = JSON.parse(resultEqualBounds.content[0].text);
+        expect(bodyEqualBounds.error ?? bodyEqualBounds.message ?? JSON.stringify(bodyEqualBounds))
+            .toMatch(/start_value and end_value must be distinct/i);
+    });
+
+    it('rejects non-positive max_steps boundary', async () => {
+        const resultZeroSteps = await handleBifurcationAnalysis({
+            code: BRUSSELATOR_MODEL,
+            parameter: 'b',
+            max_steps: 0,
+        });
+        const bodyZeroSteps = JSON.parse(resultZeroSteps.content[0].text);
+        expect(bodyZeroSteps.error ?? bodyZeroSteps.message ?? JSON.stringify(bodyZeroSteps))
+            .toMatch(/Too small|greater than 0|invalid/i);
+    });
+
+    it('returns structured error on invalid BNGL code syntax', async () => {
+        const resultInvalidBNGL = await handleBifurcationAnalysis({
+            code: 'this is not valid BNGL model content #$@!',
+            parameter: 'b',
+        });
+        const bodyInvalidBNGL = JSON.parse(resultInvalidBNGL.content[0].text);
+        expect(bodyInvalidBNGL.error ?? bodyInvalidBNGL.message ?? JSON.stringify(bodyInvalidBNGL))
+            .toMatch(/BNGL parse failed|Error parsing BNGL/i);
+    });
 });

@@ -216,3 +216,11 @@ export const temporalAnalysisArgsSchema = z.object({
 export const symbolicSteadyStateArgsSchema = z.object({
     code: z.string().describe('BNGL model code'),
 }).strict();
+
+export const bifurcationAnalysisArgsSchema = z.object({
+    code: z.string().describe('BNGL model code'),
+    parameter: z.string().describe('Parameter to vary during continuation'),
+    start_value: finiteNumber.optional().describe('Starting parameter value'),
+    end_value: finiteNumber.optional().describe('Ending parameter value'),
+    max_steps: positiveInt.optional().describe('Maximum continuation steps (default 500)'),
+}).strict();
