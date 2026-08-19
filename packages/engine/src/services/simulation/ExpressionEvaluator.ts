@@ -363,6 +363,30 @@ function preExpandExpression(
 }
 
 
+/**
+ * Compiles a pre-expanded functional rate mathematical expression into an executable JS function.
+ *
+ * Deriving its behavior directly from its implementation, this function performs the following:
+ * 1. Verifies that `functionalRatesEnabled` is active in `getFeatureFlags()`; throws an error if disabled.
+ * 2. Retrieves the active `ExpressionEvaluator` (or `evaluatorOverride`).
+ * 3. Handles missing evaluator instances by returning a fallback function that evaluates single identifiers against `context` or parses numeric literals (returning `0` for unmapped variables or `NaN`).
+ * 4. Extracts referenced variable names from the expression using `evaluator.getReferencedVariables(...)` and filters them against provided `varNames`.
+ * 5. Checks the bounded `compiledRateFunctions` cache using a key generated from `COMPILED_RATE_CACHE_VERSION`, `fnv1aHash(expandedExpr)`, and sorted `usedVars`.
+ * 6. Compiles the expression via `evaluator.compile(expandedExpr, usedVars)` and caches the resulting evaluator function.
+ * 7. On compilation error or missing variables, logs diagnostic error messages and caches/returns a zero fallback function `() => 0`.
+ *
+ * Invariants & Key Behaviors:
+ * - **Browser-API-Free**: Designed for execution in node, browser workers, and server contexts without browser APIs.
+ * - **Feature Flag Guard**: Throws immediately if `functionalRatesEnabled` feature flag is disabled.
+ * - **Bounded LRU Caching**: Caches compiled functions up to `MAX_COMPILED_RATE_FUNCTIONS` (2000 entries).
+ * - **Error Fallback**: Returns `() => 0` on expression compilation failure rather than leaving rate functions unhandled.
+ *
+ * @param expandedExpr - The pre-expanded mathematical rate expression string (macros/user functions inlined).
+ * @param varNames - List of known valid context variable names to extract and bind for evaluation.
+ * @param evaluatorOverride - Optional custom `ExpressionEvaluator` instance overriding default evaluator resolution.
+ * @returns A compiled function taking a `context` record of variable values and returning the evaluated numeric rate.
+ * @throws An Error if functional rates are disabled via feature flags.
+ */
 export function getCompiledRateFunction(
   expandedExpr: string,
   varNames: string[],
