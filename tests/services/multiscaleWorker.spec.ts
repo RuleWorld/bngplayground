@@ -8,9 +8,12 @@ vi.mock('@bngplayground/engine', () => ({
 
 describe('multiscaleWorker message handling', () => {
   let mockPostMessage: ReturnType<typeof vi.fn>;
-  let originalOnmessage: any;
+  let originalPostMessage: any;
+  let originalSelf: any;
 
   beforeEach(() => {
+    originalPostMessage = (globalThis as any).postMessage;
+    originalSelf = (globalThis as any).self;
     mockPostMessage = vi.fn();
     (globalThis as any).postMessage = mockPostMessage;
     (globalThis as any).self = globalThis;
@@ -18,7 +21,16 @@ describe('multiscaleWorker message handling', () => {
   });
 
   afterEach(() => {
-    delete (globalThis as any).postMessage;
+    if (originalPostMessage !== undefined) {
+      (globalThis as any).postMessage = originalPostMessage;
+    } else {
+      delete (globalThis as any).postMessage;
+    }
+    if (originalSelf !== undefined) {
+      (globalThis as any).self = originalSelf;
+    } else {
+      delete (globalThis as any).self;
+    }
   });
 
   it('posts an error response when receiving null or non-object message', async () => {
