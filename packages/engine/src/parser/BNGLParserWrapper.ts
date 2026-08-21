@@ -8,6 +8,7 @@ import { CharStreams, CommonTokenStream } from 'antlr4ts';
 import { PredictionMode } from 'antlr4ts/atn/PredictionMode';
 import { BailErrorStrategy } from 'antlr4ts/BailErrorStrategy';
 import { DefaultErrorStrategy } from 'antlr4ts/DefaultErrorStrategy';
+import { ParseCancellationException } from 'antlr4ts/misc/ParseCancellationException.js';
 import { BNGLexer } from './generated/BNGLexer';
 import { BNGParser } from './generated/BNGParser';
 import { BNGLVisitor } from './BNGLVisitor';
@@ -530,14 +531,17 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       console.warn(`[BNGL parser] ${warning}`);
     }
 
+    const lexerErrors: ParseError[] = [];
+    const parserErrors: ParseError[] = [];
+
     const inputStream = CharStreams.fromString(sanitizedInput);
     const lexer = new BNGLexer(inputStream);
 
-    // Collect lexer errors
+    // Collect lexer errors separately so they are preserved across parser prediction mode fallbacks
     lexer.removeErrorListeners();
     lexer.addErrorListener({
       syntaxError: (_recognizer, _offendingSymbol, line, charPositionInLine, msg) => {
-        errors.push({ line, column: charPositionInLine, message: msg });
+        lexerErrors.push({ line, column: charPositionInLine, message: msg });
       }
     });
 
@@ -548,7 +552,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     parser.removeErrorListeners();
     parser.addErrorListener({
       syntaxError: (_recognizer, _offendingSymbol, line, charPositionInLine, msg) => {
-        errors.push({ line, column: charPositionInLine, message: msg });
+        parserErrors.push({ line, column: charPositionInLine, message: msg });
       }
     });
 
@@ -560,9 +564,12 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     let tree;
     try {
       tree = parser.prog();
-    } catch (e: any) {
-      if (e && (e.name === 'ParseCancellationException' || e.constructor?.name === 'ParseCancellationException')) {
-        errors.length = 0;
+    } catch (e: unknown) {
+      if (
+        e instanceof ParseCancellationException ||
+        (e && typeof e === 'object' && 'name' in e && (e as { name?: string }).name === 'ParseCancellationException')
+      ) {
+        parserErrors.length = 0;
         tokenStream.seek(0);
         parser.reset();
         parser.errorHandler = new DefaultErrorStrategy();
@@ -572,6 +579,8 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         throw e;
       }
     }
+
+    errors.push(...lexerErrors, ...parserErrors);
 
     // Visit the parse tree and build BNGLModel even if there are errors (best effort)
     let model: BNGLModel | undefined;
