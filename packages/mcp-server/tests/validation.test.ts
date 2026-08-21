@@ -1,4 +1,16 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+
+vi.mock('../src/services/pathwayCommons/pathwayCommonsService.js', () => ({
+    queryPathwayCommons: vi.fn(async () => ({
+        interactions: [],
+        missingInteractions: [],
+        confirmedInteractions: [],
+        pathways: [],
+        unknownMolecules: [],
+        summary: 'Mock Pathway Commons response for testing.',
+    })),
+}));
+
 import { handleParseBngl } from '../src/handlers/parseBngl';
 import { handleGenerateNetwork } from '../src/handlers/generateNetwork';
 import { handleSimulate } from '../src/handlers/simulate';

@@ -178,10 +178,19 @@ export async function queryPathwayCommons(bnglCode: string): Promise<PCQueryResu
   const pathways: PCPathway[] = [];
   const pathwayMap = new Map<string, PCPathway>();
 
-  for (const mol of moleculeNames.slice(0, 5)) {
-    try {
+  const targetMolecules = moleculeNames.slice(0, 5);
+  const pathwayResults = await Promise.allSettled(
+    targetMolecules.map(async (mol) => {
       const molPathways = await searchPathways(mol);
-      for (const pw of molPathways) {
+      return { mol, molPathways };
+    })
+  );
+
+  for (let i = 0; i < pathwayResults.length; i++) {
+    const res = pathwayResults[i];
+    const mol = targetMolecules[i];
+    if (res.status === 'fulfilled') {
+      for (const pw of res.value.molPathways) {
         const existing = pathwayMap.get(pw.name);
         if (existing) {
           if (!existing.matchedMolecules.includes(mol)) {
@@ -191,8 +200,7 @@ export async function queryPathwayCommons(bnglCode: string): Promise<PCQueryResu
           pathwayMap.set(pw.name, pw);
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 200));
-    } catch {
+    } else {
       unknownMolecules.push(mol);
     }
   }
