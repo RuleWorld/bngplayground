@@ -60,4 +60,41 @@ describe('ContactMapBuilder', () => {
         expect(edge.ruleIds).toContain('Binding_A_B');
         expect(edge.ruleLabels).toContain('Binding_A_B');
     });
+
+    it('handles molecule and component names with underscores without key collision', () => {
+        const moleculeTypes: BNGLMoleculeType[] = [
+            { name: 'A_B', components: ['c_d'] },
+            { name: 'E_F', components: ['g_h'] },
+        ];
+
+        const rules: ReactionRule[] = [
+            {
+                name: 'Rule_Underscore',
+                reactants: ['A_B(c_d)', 'E_F(g_h)'],
+                products: ['A_B(c_d!1).E_F(g_h!1)'],
+                rate: 'k1',
+                isBidirectional: false,
+            },
+        ];
+
+        const result = buildContactMap(rules, moleculeTypes);
+
+        const abNode = result.nodes.find((n) => n.label === 'A_B' && n.type === 'molecule');
+        const efNode = result.nodes.find((n) => n.label === 'E_F' && n.type === 'molecule');
+
+        expect(abNode).toBeDefined();
+        expect(efNode).toBeDefined();
+
+        const cdNode = result.nodes.find((n) => n.label === 'c_d' && n.parent === abNode?.id);
+        const ghNode = result.nodes.find((n) => n.label === 'g_h' && n.parent === efNode?.id);
+
+        expect(cdNode).toBeDefined();
+        expect(ghNode).toBeDefined();
+
+        expect(result.edges.length).toBe(1);
+        const edge = result.edges[0];
+        expect(edge.from).toBe(cdNode?.id);
+        expect(edge.to).toBe(ghNode?.id);
+        expect(edge.componentPair).toEqual(['c_d', 'g_h']);
+    });
 });
