@@ -23,6 +23,31 @@ export interface ParseResult {
   errors: ParseError[];
 }
 
+/**
+ * Parses raw BioNetGen Language (BNGL) model text using ANTLR4 grammar into a structured model.
+ *
+ * This function performs comprehensive preprocessing/normalization steps on the input to handle legacy
+ * cBNGL syntax and BNG2.pl compatibility quirks prior to executing the ANTLR lexer and parser:
+ * - Strips UTF-8 Byte Order Marks (BOM).
+ * - Normalizes legacy blocks like 'begin/end molecules' to 'begin/end molecule types' (ignoring comments).
+ * - Strips and normalizes legacy local function context syntax (%x::Pattern -> Pattern) for rule-level matching.
+ * - Restructures legacy compartment-before-parentheses molecules: Mol@Comp(...) -> Mol(...)@Comp.
+ * - Folds line continuations ('\') to resolve rules spread across multiple lines.
+ * - Expands state-inheritance labels ('%') in rules to generate concrete combinatorial rules based on declared molecule types.
+ * - Cascades unmatched '%' labels to wildcard state '~?' to ensure parser compatibility when type info is missing.
+ * - Folds standalone parameter or compartment include/exclude modifier lines onto their preceding rules.
+ * - Disables/comments out top-level pre-amble directives (e.g., version(), setOption()) located before 'begin model' blocks.
+ *
+ * Once parsing of the normalized text completes (either successfully or through best-effort recovery),
+ * it validates the model's semantic properties (e.g. valid molecule type definitions, missing components in seed species
+ * or created reaction rules) and returns the aggregated errors and the parsed model representation.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) as a core package utility in @bngplayground/engine.
+ *
+ * @param input - The raw BNGL source string to parse.
+ * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
+ *          and list of accumulated syntactic/semantic parsing errors.
+ */
 function getFirstActiveLine(src: string): string | null {
   let start = 0;
   const len = src.length;
@@ -70,31 +95,6 @@ function getFirstActiveLine(src: string): string | null {
   return null;
 }
 
-/**
- * Parses raw BioNetGen Language (BNGL) model text using ANTLR4 grammar into a structured model.
- *
- * This function performs comprehensive preprocessing/normalization steps on the input to handle legacy
- * cBNGL syntax and BNG2.pl compatibility quirks prior to executing the ANTLR lexer and parser:
- * - Strips UTF-8 Byte Order Marks (BOM).
- * - Normalizes legacy blocks like 'begin/end molecules' to 'begin/end molecule types' (ignoring comments).
- * - Strips and normalizes legacy local function context syntax (%x::Pattern -> Pattern) for rule-level matching.
- * - Restructures legacy compartment-before-parentheses molecules: Mol@Comp(...) -> Mol(...)@Comp.
- * - Folds line continuations ('\') to resolve rules spread across multiple lines.
- * - Expands state-inheritance labels ('%') in rules to generate concrete combinatorial rules based on declared molecule types.
- * - Cascades unmatched '%' labels to wildcard state '~?' to ensure parser compatibility when type info is missing.
- * - Folds standalone parameter or compartment include/exclude modifier lines onto their preceding rules.
- * - Disables/comments out top-level pre-amble directives (e.g., version(), setOption()) located before 'begin model' blocks.
- *
- * Once parsing of the normalized text completes (either successfully or through best-effort recovery),
- * it validates the model's semantic properties (e.g. valid molecule type definitions, missing components in seed species
- * or created reaction rules) and returns the aggregated errors and the parsed model representation.
- *
- * @invariant Must remain free of browser APIs (browser-API-free) as a core package utility in @bngplayground/engine.
- *
- * @param input - The raw BNGL source string to parse.
- * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
- *          and list of accumulated syntactic/semantic parsing errors.
- */
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
@@ -564,17 +564,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
 }
 
 /**
- * Parses raw BioNetGen Language (BNGL) model text and returns the parsed model, throwing an Error if parsing fails.
- *
- * This function wraps `parseBNGLWithANTLR`, delegating full parsing, ANTLR lexing, legacy syntax normalization,
- * and semantic validation. If syntactic or semantic validation errors occur, it aggregates error messages formatted
- * with line and column numbers and throws a detailed Error.
- *
- * @invariant Must remain free of browser APIs (browser-API-free) as a core package utility in @bngplayground/engine.
- *
- * @param input - The raw BNGL model source code string to parse.
- * @returns The fully parsed and validated `BNGLModel` object.
- * @throws {Error} If `parseBNGLWithANTLR` fails to produce a model or encounters syntax or semantic errors.
+ * Parse BNGL and throw on error (for compatibility with existing code)
  */
 export function parseBNGLStrict(input: string): BNGLModel {
   const result = parseBNGLWithANTLR(input);
@@ -606,14 +596,8 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
     declaredMoleculeTypes.set(mt.name, componentNames);
   }
 
-  interface GraphMolecule {
-    name: string;
-    components: Array<{ name: string; toString(): string }>;
-    hasExplicitEmptyComponentList?: boolean;
-  }
-
   // Helper function to check a molecule's components
-  const checkMoleculeComponents = (mol: GraphMolecule, line: number, column: number, contextMsg: string): ParseError | null => {
+  const checkMoleculeComponents = (mol: any, line: number, column: number, contextMsg: string): ParseError | null => {
     const declaredComps = declaredMoleculeTypes.get(mol.name);
     if (!declaredComps) {
       const prefix = contextMsg ? `${contextMsg}: ` : '';
@@ -624,7 +608,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
       };
     }
 
-    const presentComps = new Set(mol.components.map((c) => c.name));
+    const presentComps = new Set(mol.components.map((c: any) => c.name));
     const missing: string[] = [];
     for (const comp of declaredComps) {
       if (!presentComps.has(comp)) {
@@ -634,7 +618,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
 
     if (missing.length > 0) {
       const compStr = mol.components.length > 0 || mol.hasExplicitEmptyComponentList
-        ? '(' + mol.components.map((c) => c.toString()).join(',') + ')'
+        ? '(' + mol.components.map((c: any) => c.toString()).join(',') + ')'
         : '()';
       const molStr = `${mol.name}${compStr}`;
       const prefix = contextMsg ? `${contextMsg}: ` : '';
@@ -655,12 +639,12 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
     try {
       const graph = BNGLParser.parseSpeciesGraph(sp.name);
       for (const mol of graph.molecules) {
-        const err = checkMoleculeComponents(mol as GraphMolecule, line, column, '');
+        const err = checkMoleculeComponents(mol, line, column, '');
         if (err) {
           errors.push(err);
         }
       }
-    } catch {
+    } catch (e) {
       // Ignore parse errors of species names here
     }
   }
@@ -670,24 +654,20 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
     const line = rule.line ?? 0;
     const column = rule.column ?? 0;
     
-    const reactantMols: GraphMolecule[] = [];
+    const reactantMols: any[] = [];
     for (const rStr of rule.literalReactants || rule.reactants) {
       try {
         const graph = BNGLParser.parseSpeciesGraph(rStr);
-        reactantMols.push(...(graph.molecules as GraphMolecule[]));
-      } catch {
-        /* ignore parse errors in rule reactants */
-      }
+        reactantMols.push(...graph.molecules);
+      } catch (e) {}
     }
 
-    const productMols: GraphMolecule[] = [];
+    const productMols: any[] = [];
     for (const pStr of rule.literalProducts || rule.products) {
       try {
         const graph = BNGLParser.parseSpeciesGraph(pStr);
-        productMols.push(...(graph.molecules as GraphMolecule[]));
-      } catch {
-        /* ignore parse errors in rule products */
-      }
+        productMols.push(...graph.molecules);
+      } catch (e) {}
     }
 
     const reactantCounts = new Map<string, number>();
@@ -695,7 +675,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
       reactantCounts.set(rMol.name, (reactantCounts.get(rMol.name) ?? 0) + 1);
     }
 
-    const incompleteProductsByName = new Map<string, GraphMolecule[]>();
+    const incompleteProductsByName = new Map<string, any[]>();
     for (const pMol of productMols) {
       const declaredComps = declaredMoleculeTypes.get(pMol.name);
       if (!declaredComps) {
@@ -707,7 +687,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
         continue;
       }
 
-      const presentComps = new Set(pMol.components.map((c) => c.name));
+      const presentComps = new Set(pMol.components.map((c: any) => c.name));
       const hasMissing = Array.from(declaredComps).some(comp => !presentComps.has(comp));
       if (hasMissing) {
         if (!incompleteProductsByName.has(pMol.name)) {
@@ -721,25 +701,23 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
       const L = reactantCounts.get(name) ?? 0;
       if (incompleteList.length > L) {
         const pMol = incompleteList[0];
-        const declaredComps = declaredMoleculeTypes.get(name);
-        if (declaredComps) {
-          const presentComps = new Set(pMol.components.map((c) => c.name));
-          const missing: string[] = [];
-          for (const comp of declaredComps) {
-            if (!presentComps.has(comp)) {
-              missing.push(comp);
-            }
+        const declaredComps = declaredMoleculeTypes.get(name)!;
+        const presentComps = new Set(pMol.components.map((c: any) => c.name));
+        const missing: string[] = [];
+        for (const comp of declaredComps) {
+          if (!presentComps.has(comp)) {
+            missing.push(comp);
           }
-          const compStr = pMol.components.length > 0 || pMol.hasExplicitEmptyComponentList
-            ? '(' + pMol.components.map((c) => c.toString()).join(',') + ')'
-            : '()';
-          const molStr = `${pMol.name}${compStr}`;
-          errors.push({
-            line,
-            column,
-            message: `Molecule created in reaction rule: Component(s) ${missing.join(',')} missing from molecule ${molStr}`
-          });
         }
+        const compStr = pMol.components.length > 0 || pMol.hasExplicitEmptyComponentList
+          ? '(' + pMol.components.map((c: any) => c.toString()).join(',') + ')'
+          : '()';
+        const molStr = `${pMol.name}${compStr}`;
+        errors.push({
+          line,
+          column,
+          message: `Molecule created in reaction rule: Component(s) ${missing.join(',')} missing from molecule ${molStr}`
+        });
       }
     }
   }

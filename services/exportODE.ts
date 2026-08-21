@@ -1,4 +1,5 @@
 import {
+  buildSymbolicODESystem,
   exprToString,
   substitute,
   symVar,
@@ -510,4 +511,15 @@ export async function exportModelToODE(
   lines.push('done');
   lines.push('');
   return lines.join('\n');
+}
+
+// Retained for callers/tests that build a mass-action system explicitly.
+export function buildMassActionODESystem(
+  speciesNames: string[],
+  reactions: Parameters<typeof buildSymbolicODESystem>[1],
+  parameterNames: string[],
+  initialConcentrations: number[],
+  parameterValues: number[],
+): SymbolicODESystem {
+  return buildSymbolicODESystem(speciesNames, reactions, parameterNames, initialConcentrations, parameterValues);
 }

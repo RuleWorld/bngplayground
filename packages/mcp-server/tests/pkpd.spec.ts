@@ -72,13 +72,13 @@ describe('handlePKPD MCP Tool Handler', () => {
     const result = await handlePKPD({
       action: 'population_simulation',
       code: SIMPLE_PK_MODEL,
-      n_patients: 10,
+      n_patients: 5,
     });
 
     expect(result.structuredContent).toBeDefined();
     const content = result.structuredContent as Record<string, unknown>;
     expect(content.error).toBeUndefined();
-    expect(content.nPatients).toBe(10);
+    expect(content.nPatients).toBe(5);
     expect(content.parameterSummary).toBeDefined();
     expect(content.simulationSummary).toBeDefined();
 

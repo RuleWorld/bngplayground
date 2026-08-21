@@ -52,14 +52,12 @@ class SpatialService {
     };
 
     this.worker.onerror = (error) => {
-      this.cleanupWorker();
       this.setState('error');
       this.callbacks.onError?.(error.message);
     };
 
     this.worker.onmessageerror = (event) => {
       console.error('[SpatialService] Worker failed to deserialize message:', event.data);
-      this.cleanupWorker();
       this.setState('error');
       this.callbacks.onError?.('SpatialService worker failed to deserialize message');
     };
@@ -100,11 +98,7 @@ class SpatialService {
   cancel(): void {
     if (this.worker) {
       const request: SpatialWorkerRequest = { type: 'cancel' };
-      try {
-        this.worker.postMessage(request);
-      } catch {
-        // ignore if worker is already dead or not accepting messages
-      }
+      this.worker.postMessage(request);
     }
     this.setState('idle');
   }
@@ -113,25 +107,13 @@ class SpatialService {
    * Terminate the worker and clean up.
    */
   terminate(): void {
-    this.cleanupWorker();
-    this.worker = null;
-    this.setState('idle');
-  }
-
-  /**
-   * Cleans up the worker and prevents any background resource thread leaks.
-   */
-  private cleanupWorker(): void {
     if (this.worker) {
-      try {
-        const request: SpatialWorkerRequest = { type: 'destroy' };
-        this.worker.postMessage(request);
-      } catch {
-        // ignore if worker is already dead or not accepting messages
-      }
+      const request: SpatialWorkerRequest = { type: 'destroy' };
+      this.worker.postMessage(request);
       this.worker.terminate();
       this.worker = null;
     }
+    this.setState('idle');
   }
 
   getState(): SpatialSimulationState {
@@ -159,13 +141,11 @@ class SpatialService {
         break;
 
       case 'complete':
-        this.cleanupWorker();
         this.setState('complete');
         this.callbacks.onComplete?.(msg.result);
         break;
 
       case 'error':
-        this.cleanupWorker();
         this.setState('error');
         this.callbacks.onError?.(msg.message);
         break;
