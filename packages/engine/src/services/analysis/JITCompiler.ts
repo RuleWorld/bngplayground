@@ -161,20 +161,6 @@ export interface JITCompileDebugContext {
     callsite?: string;
 }
 
-export interface JITJsepNode {
-    type: string;
-    name?: string;
-    value?: number | string | boolean | null;
-    operator?: string;
-    left?: JITJsepNode;
-    right?: JITJsepNode;
-    argument?: JITJsepNode;
-    callee?: JITJsepNode;
-    arguments?: JITJsepNode[];
-    object?: JITJsepNode;
-    property?: JITJsepNode;
-}
-
 /**
  * JIT Compiler for ODE RHS functions
  */
@@ -543,7 +529,6 @@ export class JITCompiler {
             rateConstantIndex?: number;
             scalingVolume?: number; // Reacting volume anchor (BNG2-style)
             totalRate?: boolean; // Parsed modifier; BNG2 ODE/network ignores TotalRate
-            statisticalFactor?: number;
         }>,
         nSpecies: number,
         parameters?: Record<string, number>,
@@ -633,8 +618,8 @@ export class JITCompiler {
 
             // Apply multiplicity/degeneracy if using symbolic expression
             // Numeric rateConstant already includes degeneracy aggregated in NetworkGenerator
-            if (typeof rxn.rateConstant !== 'number' && rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
-                rateExpr = `(${rateExpr}) * ${rxn.statisticalFactor}`;
+            if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
+                rateExpr = `(${rateExpr}) * ${(rxn as any).statisticalFactor}`;
             }
 
             // Apply reacting volume anchor (matches BNG2 compartmental mass-action scaling)
@@ -743,8 +728,8 @@ export class JITCompiler {
                 let rate = rateEvaluators[i](parameterContext);
                 if (!Number.isFinite(rate)) continue;
 
-                if (typeof rxn.rateConstant !== 'number' && rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
-                    rate *= rxn.statisticalFactor;
+                if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
+                    rate *= (rxn as any).statisticalFactor;
                 }
 
                 const vAnchor = rxn.scalingVolume || 1.0;
@@ -1809,22 +1794,19 @@ export class JITCompiler {
             const expandedExpr = this.normalizeExpressionForValidation(
                 this.expandZeroArgFunctions(expr, functions)
             );
-            const ast = jsep(expandedExpr) as unknown as JITJsepNode;
+            const ast = jsep(expandedExpr);
             const bytes: number[] = [];
             let usesParameters = false;
             const speciesIndexByName = new Map<string, number>();
             speciesNames.forEach((name, index) => speciesIndexByName.set(name, index));
 
-            const walk = (node: JITJsepNode) => {
+            const walk = (node: any) => {
                 if (node.type === 'Literal') {
                     bytes.push(OP_PUSH_CONST);
                     const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = typeof node.value === 'number' ? node.value : Number(node.value);
+                    new Float64Array(buf)[0] = node.value;
                     bytes.push(...new Uint8Array(buf));
                 } else if (node.type === 'Identifier') {
-                    if (!node.name) {
-                        throw new Error('Identifier missing name');
-                    }
                     // Support common global constants used in BNGL expressions
                     if (node.name === 'NaN') {
                         bytes.push(OP_PUSH_CONST);
@@ -1876,9 +1858,6 @@ export class JITCompiler {
                     }
                     throw new Error(`Unsupported member expression in ${expandedExpr}`);
                 } else if (node.type === 'BinaryExpression' || node.type === 'LogicalExpression') {
-                    if (!node.left || !node.right) {
-                        throw new Error('Malformed binary expression');
-                    }
                     walk(node.left);
                     walk(node.right);
                     if (node.operator === '+') bytes.push(OP_ADD);
@@ -1896,33 +1875,25 @@ export class JITCompiler {
                     else if (node.operator === '||') bytes.push(OP_OR);
                     else throw new Error(`Unsupported binary operator: ${node.operator}`);
                 } else if (node.type === 'UnaryExpression') {
-                    if (!node.argument) {
-                        throw new Error('Malformed unary expression');
-                    }
                     walk(node.argument);
                     if (node.operator === '-') bytes.push(OP_NEG);
                     else if (node.operator === '!') bytes.push(OP_NOT);
                     else throw new Error(`Unsupported unary operator: ${node.operator}`);
                 } else if (node.type === 'CallExpression') {
-                    const name = node.callee?.name?.toLowerCase();
-                    if (!name) {
-                        throw new Error('Invalid function call');
-                    }
+                    const name = node.callee.name.toLowerCase();
                     if (name === 'sat') {
                         if ((node.arguments?.length ?? 0) !== 2) {
                             throw new Error('sat() expects 2 arguments');
                         }
                         // sat(a,b) = a / (a + b)
-                        if (node.arguments) {
-                            walk(node.arguments[0]);
-                            walk(node.arguments[0]);
-                            walk(node.arguments[1]);
-                        }
+                        walk(node.arguments[0]);
+                        walk(node.arguments[0]);
+                        walk(node.arguments[1]);
                         bytes.push(OP_ADD);
                         bytes.push(OP_DIV);
                         return;
                     }
-                    node.arguments?.forEach((arg: JITJsepNode) => walk(arg));
+                    node.arguments.forEach((arg: any) => walk(arg));
                     if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
                     else if (name === 'exp') bytes.push(OP_EXP);
                     else if (name === 'log10') bytes.push(OP_LOG10);
