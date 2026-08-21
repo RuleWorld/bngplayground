@@ -194,7 +194,9 @@ export async function queryPathwayCommons(bnglCode: string): Promise<PCQueryResu
           pathwayMap.set(pw.name, pw);
         }
       }
-      await new Promise((resolve) => setTimeout(resolve, 200));
+      if (!process.env.VITEST) {
+        await new Promise((resolve) => setTimeout(resolve, 200));
+      }
     } catch {
       unknownMolecules.push(mol);
     }
