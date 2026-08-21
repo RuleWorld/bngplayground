@@ -378,7 +378,7 @@ function preExpandExpression(
  * Invariants & Key Behaviors:
  * - **Browser-API-Free**: Designed for execution in node, browser workers, and server contexts without browser APIs.
  * - **Feature Flag Guard**: Throws immediately if `functionalRatesEnabled` feature flag is disabled.
- * - **Bounded LRU Caching**: Caches compiled functions up to `MAX_COMPILED_RATE_FUNCTIONS` (2000 entries).
+ * - **Bounded FIFO Caching**: Caches compiled functions up to `MAX_COMPILED_RATE_FUNCTIONS` (2000 entries) with first-in-first-out eviction.
  * - **Error Fallback**: Returns `() => 0` on expression compilation failure rather than leaving rate functions unhandled.
  *
  * @param expandedExpr - The pre-expanded mathematical rate expression string (macros/user functions inlined).
