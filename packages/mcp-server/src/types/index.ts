@@ -21,27 +21,7 @@ export type ValidationMessage = {
     relatedElement?: string;
 };
 
-export type ContactNode = {
-    id: string;
-    label: string;
-    type: 'molecule' | 'component' | 'state' | 'compartment';
-    parent?: string;
-    isGroup?: boolean;
-};
-
-export type ContactEdge = {
-    from: string;
-    to: string;
-    interactionType: 'binding';
-    componentPair?: [string, string];
-    ruleIds: string[];
-    ruleLabels: string[];
-};
-
-export type ContactMap = {
-    nodes: ContactNode[];
-    edges: ContactEdge[];
-};
+export type { ContactNode, ContactEdge, ContactMap } from '@bngplayground/engine';
 
 export type ParameterScanResult = {
     mode: '1d' | '2d';
