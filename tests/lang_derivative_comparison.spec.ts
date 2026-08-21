@@ -18,16 +18,14 @@ if (typeof window === 'undefined') {
 }
 (global as any).postMessage = () => { /* silent */ };
 
+const langPath = findRuleHubModelPath('Lang_2024');
+const maybeIt = langPath ? it : it.skip;
+
 const runDerivativeTest = async () => {
     // Dynamic import to ensure mocks are in place
     const { simulate, parseBNGLStrict } = await import('@bngplayground/engine');
 
-    const modelPath = findRuleHubModelPath('Lang_2024');
-    if (!modelPath) {
-      console.warn('Skipping test: Lang_2024 model not found in RuleHub');
-      return null;
-    }
-    const modelContent = fs.readFileSync(modelPath, 'utf8');
+    const modelContent = fs.readFileSync(langPath!, 'utf8');
     console.log('Parsing Lang_2024.bngl...');
 
     const parsedModel = parseBNGLStrict(modelContent);
@@ -49,7 +47,7 @@ const runDerivativeTest = async () => {
 };
 
 describe('Lang_2024 Derivative Comparison', () => {
-    it('should compute and display initial derivatives', async () => {
+    maybeIt('should compute and display initial derivatives', async () => {
         const results = await runDerivativeTest();
 
         if (!results || !results.expandedSpecies || !results.expandedReactions) {
