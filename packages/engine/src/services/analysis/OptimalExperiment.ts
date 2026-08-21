@@ -1,6 +1,11 @@
 import type { BNGLModel } from '../../types.js';
 import { simulate } from '../simulation/SimulationLoop.js';
 import { computeFIM } from './FisherInformationMatrix.js';
+import { updateMassActionRates as engineUpdateMassActionRates } from './DoseResponse.js';
+
+function defaultCloneExpandedModel(model: BNGLModel): BNGLModel {
+  return structuredClone(model);
+}
 
 /**
  * Configuration options for optimal experiment design analysis.
@@ -13,8 +18,8 @@ export interface OptimalExperimentConfig {
   nSamples: number;
   method: 'ode' | 'ssa';
   tEnd: number;
-  cloneExpandedModel: (m: BNGLModel) => BNGLModel;
-  updateMassActionRates: (m: BNGLModel) => void;
+  cloneExpandedModel?: (m: BNGLModel) => BNGLModel;
+  updateMassActionRates?: (m: BNGLModel) => void;
 }
 
 /**
@@ -58,15 +63,14 @@ export async function analyzeOptimalExperiment(
     nSamples,
     method,
     tEnd,
-    cloneExpandedModel,
-    updateMassActionRates,
+    cloneExpandedModel = defaultCloneExpandedModel,
+    updateMassActionRates = engineUpdateMassActionRates,
   } = config;
 
   const recommendations: OptimalExperimentRecommendation[] = [];
 
   for (const obs of observables) {
-    // Run simulation to verify/initialize
-    await simulate(
+    const baseSimResult = await simulate(
       0,
       expandedModel,
       {
@@ -80,7 +84,6 @@ export async function analyzeOptimalExperiment(
       },
     );
 
-    // Get up to first 5 parameters
     const paramNames = Object.keys(model.parameters).slice(0, 5);
     const params: Record<string, number> = {};
     for (const p of paramNames) {
@@ -89,6 +92,7 @@ export async function analyzeOptimalExperiment(
 
     let identifiability: 'high' | 'moderate' | 'low' = 'low';
     let rationale = 'Limited identifiability - model may need redesign';
+    let bestSuggestedTimes = candidateTimes.slice(0, 3);
 
     try {
       const fimResult = await computeFIM({
@@ -131,13 +135,45 @@ export async function analyzeOptimalExperiment(
         identifiability = 'moderate';
         rationale = 'Moderate conditioning - consider additional timepoints';
       }
+
+      // Rank candidateTimes for this observable based on dynamic change in simulation data
+      if (candidateTimes.length > 0 && baseSimResult.data.length > 0) {
+        const simTimes = baseSimResult.data.map((d) => Number(d.time ?? 0));
+        const obsValues = baseSimResult.data.map((d) => Number(d[obs] ?? 0));
+
+        const scoredTimes = candidateTimes.map((tc) => {
+          let bestIdx = 0;
+          let minDiff = Math.abs(simTimes[0] - tc);
+          for (let i = 1; i < simTimes.length; i++) {
+            const diff = Math.abs(simTimes[i] - tc);
+            if (diff < minDiff) {
+              minDiff = diff;
+              bestIdx = i;
+            }
+          }
+          const prevVal = obsValues[Math.max(0, bestIdx - 1)];
+          const nextVal = obsValues[Math.min(obsValues.length - 1, bestIdx + 1)];
+          const dt =
+            simTimes[Math.min(simTimes.length - 1, bestIdx + 1)] -
+            simTimes[Math.max(0, bestIdx - 1)] || 1e-6;
+          const slope = Math.abs(nextVal - prevVal) / dt;
+          const magnitude = Math.abs(obsValues[bestIdx]);
+          const score = slope * 10 + magnitude;
+          return { time: tc, score };
+        });
+
+        scoredTimes.sort((a, b) => b.score - a.score);
+        const topTimes = scoredTimes.map((st) => st.time).slice(0, 3);
+        topTimes.sort((a, b) => a - b);
+        bestSuggestedTimes = topTimes;
+      }
     } catch {
       // Keep default low identifiability
     }
 
     recommendations.push({
       observable: obs,
-      suggested_times: candidateTimes.slice(0, 3),
+      suggested_times: bestSuggestedTimes,
       expected_identifiability: identifiability,
       rationale,
     });
