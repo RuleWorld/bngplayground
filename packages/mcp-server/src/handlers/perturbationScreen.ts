@@ -11,19 +11,6 @@ import {
 } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-function parseBlock(code: string, blockName: string): string[] {
-    const regex = new RegExp(
-        `begin\\s+${blockName}\\s*\\n([\\s\\S]*?)\\nend\\s+${blockName}`,
-        'i',
-    );
-    const match = code.match(regex);
-    if (!match) return [];
-    return match[1]
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith('#'));
-}
-
 /**
  * perturbation_screen
  *
@@ -42,65 +29,16 @@ function parseBlock(code: string, blockName: string): string[] {
 export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResult<any>> {
     try {
         const parsedArgs = parseArgs('perturbation_screen', perturbationScreenArgsSchema, args);
-
-        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
-            return createToolResult(structureError(
-                new Error('Model code must be a non-empty string.'),
-            ));
-        }
-
-        if (parsedArgs.max_pairwise !== undefined && parsedArgs.max_pairwise > 1000) {
-            return createToolResult(structureError(
-                new Error('max_pairwise > 1000 is not supported to avoid excessive execution times.'),
-            ));
-        }
-
         await loadEvaluator();
 
         // Validate up-front that the BNGL parses, so the user gets a clean
         // error before we spawn N background simulations.
         const wtModel = parseModelOrThrow(parsedArgs.code);
-
-        // Deduplicate observables and perturbations
-        const uniqueObservables = Array.from(new Set(parsedArgs.observables));
-        const uniquePerturbations = Array.from(new Set(parsedArgs.perturbations));
-
         const modelObsNames = new Set((wtModel.observables ?? []).map((o) => o.name));
-        const missingObs = uniqueObservables.filter((o) => !modelObsNames.has(o));
+        const missingObs = parsedArgs.observables.filter((o) => !modelObsNames.has(o));
         if (missingObs.length > 0) {
             return createToolResult(structureError(
                 new Error(`Observables not defined in model: ${missingObs.join(', ')}`),
-            ));
-        }
-
-        // Pre-estimate the number of simulations to prevent excessive resource utilization / timeout
-        const ruleLines = parseBlock(parsedArgs.code, 'reaction rules');
-        const speciesLines = [
-            ...parseBlock(parsedArgs.code, 'seed species'),
-            ...parseBlock(parsedArgs.code, 'species'),
-        ];
-        const moleculeTypeLines = parseBlock(parsedArgs.code, 'molecule types');
-
-        let expectedSimulations = 1; // wild-type
-        if (uniquePerturbations.includes('rule_knockout')) {
-            expectedSimulations += ruleLines.length;
-        }
-        if (uniquePerturbations.includes('species_knockdown')) {
-            expectedSimulations += speciesLines.length;
-        }
-        if (uniquePerturbations.includes('molecule_knockout')) {
-            expectedSimulations += moleculeTypeLines.length;
-        }
-        if (uniquePerturbations.includes('pairwise_rules')) {
-            const nRuleResults = ruleLines.length;
-            const maxPairwise = parsedArgs.max_pairwise ?? 500;
-            const expectedPairs = (nRuleResults * (nRuleResults - 1)) / 2;
-            expectedSimulations += Math.min(expectedPairs, maxPairwise);
-        }
-
-        if (expectedSimulations > 300) {
-            return createToolResult(structureError(
-                new Error(`The requested perturbation screen requires ${expectedSimulations} simulations, which exceeds the limit of 300. Please reduce the size of the model, decrease max_pairwise, or select fewer perturbation classes.`),
             ));
         }
 
@@ -108,8 +46,8 @@ export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResu
             code: parsedArgs.code,
             t_end: parsedArgs.t_end,
             n_steps: parsedArgs.n_steps,
-            observables: uniqueObservables,
-            perturbations: uniquePerturbations as any,
+            observables: parsedArgs.observables,
+            perturbations: parsedArgs.perturbations,
             knockdownFraction: parsedArgs.knockdown_fraction,
             metric: parsedArgs.metric,
             maxPairwise: parsedArgs.max_pairwise,
@@ -124,26 +62,10 @@ export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResu
                     method: parsedArgs.method ?? 'ode',
                     t_end,
                     n_steps,
-                    strictFunctionalRates: true,
                     ...(parsedArgs.solver ? { solver: parsedArgs.solver } : {}),
                 } as any, { checkCancelled: () => {}, postMessage: () => {} });
             },
         });
-
-        // Check if zero perturbations could actually be applied
-        if (result.results.length === 0) {
-            return createToolResult(structureError(
-                new Error('No perturbations could be applied. Check that the model contains elements (rules, species, or molecule types) matching the requested perturbation classes.'),
-            ));
-        }
-
-        // Check if all perturbed simulations failed
-        if (result.results.every((r) => !r.success)) {
-            const errorMessages = Array.from(new Set(result.results.map((r) => r.error).filter(Boolean)));
-            return createToolResult(structureError(
-                new Error(`All perturbed simulations failed. Errors: ${errorMessages.join('; ')}`),
-            ));
-        }
 
         // Rank results by aggregate score (descending — biggest effects first).
         const rankedResults = [...result.results].sort((a, b) => b.aggregateScore - a.aggregateScore);

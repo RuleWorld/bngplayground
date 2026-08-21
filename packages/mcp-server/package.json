@@ -1,7 +1,7 @@
 {
   "name": "@bngplayground/mcp-server",
   "version": "1.0.0",
-  "description": "MCP server for BioNetGen Language modeling with 44 tools for modeling, simulation, calibration, verification, analysis, and export",
+  "description": "MCP server for BioNetGen Language modeling — 19 tools for parsing, simulation, sensitivity analysis, identifiability, Bayesian inference, and mechanistic causal tracing",
   "license": "MIT",
   "author": "RuleWorld <https://github.com/RuleWorld>",
   "repository": {

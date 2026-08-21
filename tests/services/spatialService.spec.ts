@@ -170,7 +170,7 @@ describe('spatialService', () => {
     mockWorker.onmessage({ data: { type: 'complete', result: {} as any } });
 
     spatialService.run();
-    expect(consoleSpy).toHaveBeenCalledWith('SpatialService: No worker available');
+    expect(consoleSpy).toHaveBeenCalledWith('SpatialService: Cannot run, state is', 'complete');
 
     consoleSpy.mockRestore();
   });
