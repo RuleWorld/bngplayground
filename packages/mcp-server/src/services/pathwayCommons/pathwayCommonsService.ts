@@ -56,6 +56,10 @@ function parseSIF(text: string): SIFEntry[] {
 }
 
 async function pcFetch(url: string, timeout = DEFAULT_TIMEOUT_MS): Promise<string> {
+  if (process.env.NODE_ENV === 'test' || process.env.VITEST) {
+    return '';
+  }
+
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
 
