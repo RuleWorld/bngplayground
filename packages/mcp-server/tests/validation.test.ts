@@ -12,7 +12,16 @@ import { handleEditModel } from '../src/handlers/editModel';
 import { handleDiagnoseModel } from '../src/handlers/diagnoseModel';
 import { handleExplainModel } from '../src/handlers/explainModel';
 import { handleSuggestFix } from '../src/handlers/suggestFix';
+import { vi } from 'vitest';
 import { ParameterScanResult, ValidateModelResult, ContactMap } from '../src/types/index';
+
+vi.mock('../src/services/pathwayCommons/pathwayCommonsService.js', () => ({
+    queryPathwayCommons: vi.fn(async () => ({
+        summary: '',
+        confirmedInteractions: [],
+        missingInteractions: [],
+    })),
+}));
 
 const simpleModel = `
 begin parameters
