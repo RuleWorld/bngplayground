@@ -1,0 +1,495 @@
+{
+  "generatedAt": "2026-08-21T03:59:30.572Z",
+  "baselineDir": "/tmp/baseline-worktree-ONFnLo",
+  "candidateDir": "/app",
+  "rounds": 3,
+  "runtimes": [
+    {
+      "name": "node-22",
+      "version": "v22.23.2"
+    },
+    {
+      "name": "node-26",
+      "version": "v26.7.0"
+    }
+  ],
+  "runOrder": [
+    {
+      "runtime": "node-22",
+      "round": 1,
+      "position": 1,
+      "label": "candidate"
+    },
+    {
+      "runtime": "node-22",
+      "round": 1,
+      "position": 2,
+      "label": "baseline"
+    },
+    {
+      "runtime": "node-22",
+      "round": 2,
+      "position": 1,
+      "label": "baseline"
+    },
+    {
+      "runtime": "node-22",
+      "round": 2,
+      "position": 2,
+      "label": "candidate"
+    },
+    {
+      "runtime": "node-22",
+      "round": 3,
+      "position": 1,
+      "label": "candidate"
+    },
+    {
+      "runtime": "node-22",
+      "round": 3,
+      "position": 2,
+      "label": "baseline"
+    },
+    {
+      "runtime": "node-26",
+      "round": 1,
+      "position": 1,
+      "label": "candidate"
+    },
+    {
+      "runtime": "node-26",
+      "round": 1,
+      "position": 2,
+      "label": "baseline"
+    },
+    {
+      "runtime": "node-26",
+      "round": 2,
+      "position": 1,
+      "label": "baseline"
+    },
+    {
+      "runtime": "node-26",
+      "round": 2,
+      "position": 2,
+      "label": "candidate"
+    },
+    {
+      "runtime": "node-26",
+      "round": 3,
+      "position": 1,
+      "label": "candidate"
+    },
+    {
+      "runtime": "node-26",
+      "round": 3,
+      "position": 2,
+      "label": "baseline"
+    }
+  ],
+  "guardFailures": [],
+  "comparisons": [
+    {
+      "runtime": "node-22",
+      "model": "chain_5 (baseline, unimolecular)",
+      "metric": "parseMs",
+      "baseline": [
+        8.23464100000001,
+        12.533687999999984,
+        8.050707999999759
+      ],
+      "candidate": [
+        4.279395000000022,
+        4.037763000000268,
+        3.928197000000182
+      ],
+      "baselineMedian": 8.23464100000001,
+      "baselineMin": 8.050707999999759,
+      "baselineMax": 12.533687999999984,
+      "candidateMedian": 4.037763000000268,
+      "candidateMin": 3.928197000000182,
+      "candidateMax": 4.279395000000022,
+      "ratio": 0.49033868021693516
+    },
+    {
+      "runtime": "node-22",
+      "model": "chain_5 (baseline, unimolecular)",
+      "metric": "genMs",
+      "baseline": [
+        8.225491000000147,
+        3.9718120000002273,
+        8.29870899999969
+      ],
+      "candidate": [
+        4.169084000000112,
+        3.5356230000002142,
+        4.0299190000000635
+      ],
+      "baselineMedian": 8.225491000000147,
+      "baselineMin": 3.9718120000002273,
+      "baselineMax": 8.29870899999969,
+      "candidateMedian": 4.0299190000000635,
+      "candidateMin": 3.5356230000002142,
+      "candidateMax": 4.169084000000112,
+      "ratio": 0.4899305099233579
+    },
+    {
+      "runtime": "node-22",
+      "model": "chain_5 (baseline, unimolecular)",
+      "metric": "ssa:t_end=1",
+      "baseline": [
+        1.7549870000002556,
+        1.698964999999589,
+        1.6881260000000111
+      ],
+      "candidate": [
+        1.5769299999997202,
+        1.6215809999998783,
+        1.5230860000001485
+      ],
+      "baselineMedian": 1.698964999999589,
+      "baselineMin": 1.6881260000000111,
+      "baselineMax": 1.7549870000002556,
+      "candidateMedian": 1.5769299999997202,
+      "candidateMin": 1.5230860000001485,
+      "candidateMax": 1.6215809999998783,
+      "ratio": 0.9281709746817042,
+      "trajectoryHash": "6715bcce6aeb4b368ef084ce462963403bb1c6264952cdd105a79ca88f8689e8"
+    },
+    {
+      "runtime": "node-22",
+      "model": "binding_AB (bimolecular)",
+      "metric": "parseMs",
+      "baseline": [
+        6.462954000000082,
+        6.128474000000097,
+        6.169843000000128
+      ],
+      "candidate": [
+        3.8166699999997036,
+        3.6716239999996105,
+        3.3971270000001823
+      ],
+      "baselineMedian": 6.169843000000128,
+      "baselineMin": 6.128474000000097,
+      "baselineMax": 6.462954000000082,
+      "candidateMedian": 3.6716239999996105,
+      "candidateMin": 3.3971270000001823,
+      "candidateMax": 3.8166699999997036,
+      "ratio": 0.5950919658732863
+    },
+    {
+      "runtime": "node-22",
+      "model": "binding_AB (bimolecular)",
+      "metric": "genMs",
+      "baseline": [
+        1.676495000000159,
+        1.6366400000001704,
+        1.7853979999999865
+      ],
+      "candidate": [
+        1.5680309999997917,
+        1.3734039999999368,
+        1.4542059999998855
+      ],
+      "baselineMedian": 1.676495000000159,
+      "baselineMin": 1.6366400000001704,
+      "baselineMax": 1.7853979999999865,
+      "candidateMedian": 1.4542059999998855,
+      "candidateMin": 1.3734039999999368,
+      "candidateMax": 1.5680309999997917,
+      "ratio": 0.8674084921218063
+    },
+    {
+      "runtime": "node-22",
+      "model": "binding_AB (bimolecular)",
+      "metric": "ssa:t_end=1",
+      "baseline": [
+        1.3448630000002595,
+        1.0971349999999802,
+        1.3626989999997932
+      ],
+      "candidate": [
+        1.5831239999997706,
+        1.461416999999983,
+        1.264310999999907
+      ],
+      "baselineMedian": 1.3448630000002595,
+      "baselineMin": 1.0971349999999802,
+      "baselineMax": 1.3626989999997932,
+      "candidateMedian": 1.461416999999983,
+      "candidateMin": 1.264310999999907,
+      "candidateMax": 1.5831239999997706,
+      "ratio": 1.0866660767674485,
+      "trajectoryHash": "49372cd10fa64a99128ea74677bda6d972ed8b65f62f6cb984fdf00c75e4293d"
+    },
+    {
+      "runtime": "node-22",
+      "model": "multisite_5 (2^5 species, combinatorial)",
+      "metric": "parseMs",
+      "baseline": [
+        11.451192999999876,
+        10.80153399999972,
+        11.27177599999959
+      ],
+      "candidate": [
+        12.698558999999932,
+        13.665903000000071,
+        13.059028000000126
+      ],
+      "baselineMedian": 11.27177599999959,
+      "baselineMin": 10.80153399999972,
+      "baselineMax": 11.451192999999876,
+      "candidateMedian": 13.059028000000126,
+      "candidateMin": 12.698558999999932,
+      "candidateMax": 13.665903000000071,
+      "ratio": 1.158559928799206
+    },
+    {
+      "runtime": "node-22",
+      "model": "multisite_5 (2^5 species, combinatorial)",
+      "metric": "genMs",
+      "baseline": [
+        23.383456000000024,
+        23.510017999999945,
+        21.838035999999647
+      ],
+      "candidate": [
+        24.09703300000001,
+        22.51198099999965,
+        22.40405499999997
+      ],
+      "baselineMedian": 23.383456000000024,
+      "baselineMin": 21.838035999999647,
+      "baselineMax": 23.510017999999945,
+      "candidateMedian": 22.51198099999965,
+      "candidateMin": 22.40405499999997,
+      "candidateMax": 24.09703300000001,
+      "ratio": 0.9627311292222855
+    },
+    {
+      "runtime": "node-22",
+      "model": "multisite_5 (2^5 species, combinatorial)",
+      "metric": "ssa:t_end=1",
+      "baseline": [
+        14.707168000000365,
+        14.64158099999986,
+        14.34817699999985
+      ],
+      "candidate": [
+        16.983214999999745,
+        16.375224000000344,
+        16.342305000000124
+      ],
+      "baselineMedian": 14.64158099999986,
+      "baselineMin": 14.34817699999985,
+      "baselineMax": 14.707168000000365,
+      "candidateMedian": 16.375224000000344,
+      "candidateMin": 16.342305000000124,
+      "candidateMax": 16.983214999999745,
+      "ratio": 1.1184054508867929,
+      "trajectoryHash": "ea7b702ac44ac0a40058a898afa7ad4992124f473b8fb15985278cccbb118b4e"
+    },
+    {
+      "runtime": "node-26",
+      "model": "chain_5 (baseline, unimolecular)",
+      "metric": "parseMs",
+      "baseline": [
+        8.129149999999754,
+        8.15603400000009,
+        8.158030000000053
+      ],
+      "candidate": [
+        5.038065000000188,
+        4.867423000000144,
+        4.427897999999914
+      ],
+      "baselineMedian": 8.15603400000009,
+      "baselineMin": 8.129149999999754,
+      "baselineMax": 8.158030000000053,
+      "candidateMedian": 4.867423000000144,
+      "candidateMin": 4.427897999999914,
+      "candidateMax": 5.038065000000188,
+      "ratio": 0.5967879731742278
+    },
+    {
+      "runtime": "node-26",
+      "model": "chain_5 (baseline, unimolecular)",
+      "metric": "genMs",
+      "baseline": [
+        3.194727999999941,
+        3.1927519999999276,
+        3.132959000000028
+      ],
+      "candidate": [
+        3.100032000000283,
+        3.24832699999979,
+        3.1071489999999358
+      ],
+      "baselineMedian": 3.1927519999999276,
+      "baselineMin": 3.132959000000028,
+      "baselineMax": 3.194727999999941,
+      "candidateMedian": 3.1071489999999358,
+      "candidateMin": 3.100032000000283,
+      "candidateMax": 3.24832699999979,
+      "ratio": 0.9731883340766856
+    },
+    {
+      "runtime": "node-26",
+      "model": "chain_5 (baseline, unimolecular)",
+      "metric": "ssa:t_end=1",
+      "baseline": [
+        1.8282469999999194,
+        1.8047169999999824,
+        1.8822479999998905
+      ],
+      "candidate": [
+        1.8577430000000277,
+        1.8773740000001453,
+        1.948551999999836
+      ],
+      "baselineMedian": 1.8282469999999194,
+      "baselineMin": 1.8047169999999824,
+      "baselineMax": 1.8822479999998905,
+      "candidateMedian": 1.8773740000001453,
+      "candidateMin": 1.8577430000000277,
+      "candidateMax": 1.948551999999836,
+      "ratio": 1.0268710956452975,
+      "trajectoryHash": "6715bcce6aeb4b368ef084ce462963403bb1c6264952cdd105a79ca88f8689e8"
+    },
+    {
+      "runtime": "node-26",
+      "model": "binding_AB (bimolecular)",
+      "metric": "parseMs",
+      "baseline": [
+        5.398581999999806,
+        4.840921999999864,
+        4.824051000000054
+      ],
+      "candidate": [
+        2.9190090000001874,
+        3.084538000000066,
+        3.0123320000002423
+      ],
+      "baselineMedian": 4.840921999999864,
+      "baselineMin": 4.824051000000054,
+      "baselineMax": 5.398581999999806,
+      "candidateMedian": 3.0123320000002423,
+      "candidateMin": 2.9190090000001874,
+      "candidateMax": 3.084538000000066,
+      "ratio": 0.6222641058873345
+    },
+    {
+      "runtime": "node-26",
+      "model": "binding_AB (bimolecular)",
+      "metric": "genMs",
+      "baseline": [
+        1.6836140000000341,
+        1.5066640000000007,
+        1.6170609999999215
+      ],
+      "candidate": [
+        1.564060000000154,
+        1.553316999999879,
+        1.4359269999999924
+      ],
+      "baselineMedian": 1.6170609999999215,
+      "baselineMin": 1.5066640000000007,
+      "baselineMax": 1.6836140000000341,
+      "candidateMedian": 1.553316999999879,
+      "candidateMin": 1.4359269999999924,
+      "candidateMax": 1.564060000000154,
+      "ratio": 0.9605803367961718
+    },
+    {
+      "runtime": "node-26",
+      "model": "binding_AB (bimolecular)",
+      "metric": "ssa:t_end=1",
+      "baseline": [
+        1.4586229999999887,
+        1.363557000000128,
+        1.389948000000004
+      ],
+      "candidate": [
+        1.3237480000002506,
+        1.4038980000000265,
+        1.3814470000002075
+      ],
+      "baselineMedian": 1.389948000000004,
+      "baselineMin": 1.363557000000128,
+      "baselineMax": 1.4586229999999887,
+      "candidateMedian": 1.3814470000002075,
+      "candidateMin": 1.3237480000002506,
+      "candidateMax": 1.4038980000000265,
+      "ratio": 0.9938839438599167,
+      "trajectoryHash": "49372cd10fa64a99128ea74677bda6d972ed8b65f62f6cb984fdf00c75e4293d"
+    },
+    {
+      "runtime": "node-26",
+      "model": "multisite_5 (2^5 species, combinatorial)",
+      "metric": "parseMs",
+      "baseline": [
+        9.814740000000256,
+        9.943586000000323,
+        9.85035599999992
+      ],
+      "candidate": [
+        6.319026000000122,
+        6.046109999999771,
+        4.937127000000146
+      ],
+      "baselineMedian": 9.85035599999992,
+      "baselineMin": 9.814740000000256,
+      "baselineMax": 9.943586000000323,
+      "candidateMedian": 6.046109999999771,
+      "candidateMin": 4.937127000000146,
+      "candidateMax": 6.319026000000122,
+      "ratio": 0.6137960902123558
+    },
+    {
+      "runtime": "node-26",
+      "model": "multisite_5 (2^5 species, combinatorial)",
+      "metric": "genMs",
+      "baseline": [
+        27.863786999999775,
+        28.649483999999575,
+        27.900143999999727
+      ],
+      "candidate": [
+        31.652129999999943,
+        27.949751000000106,
+        25.330945000000156
+      ],
+      "baselineMedian": 27.900143999999727,
+      "baselineMin": 27.863786999999775,
+      "baselineMax": 28.649483999999575,
+      "candidateMedian": 27.949751000000106,
+      "candidateMin": 25.330945000000156,
+      "candidateMax": 31.652129999999943,
+      "ratio": 1.0017780194969739
+    },
+    {
+      "runtime": "node-26",
+      "model": "multisite_5 (2^5 species, combinatorial)",
+      "metric": "ssa:t_end=1",
+      "baseline": [
+        16.78866700000026,
+        27.73398300000008,
+        26.018415000000005
+      ],
+      "candidate": [
+        21.751386000000366,
+        33.40524400000004,
+        28.391963000000032
+      ],
+      "baselineMedian": 26.018415000000005,
+      "baselineMin": 16.78866700000026,
+      "baselineMax": 27.73398300000008,
+      "candidateMedian": 28.391963000000032,
+      "candidateMin": 21.751386000000366,
+      "candidateMax": 33.40524400000004,
+      "ratio": 1.0912256953392445,
+      "trajectoryHash": "ea7b702ac44ac0a40058a898afa7ad4992124f473b8fb15985278cccbb118b4e"
+    }
+  ]
+}
