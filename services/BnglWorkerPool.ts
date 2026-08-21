@@ -181,20 +181,13 @@ export class BnglWorkerPool {
         const { id, type, payload } = event.data ?? {};
 
         if (type === 'worker_internal_error') {
-            const detail = extractErrorMessage(payload);
-            const p = payload && typeof payload === 'object' ? (payload as any) : undefined;
-            const details = p?.details;
-            const filename = details && typeof details.filename === 'string' ? details.filename : undefined;
-            const lineno = details && typeof details.lineno === 'number' ? details.lineno : undefined;
-            const colno = details && typeof details.colno === 'number' ? details.colno : undefined;
-            const location = `${filename ?? 'unknown'}:${lineno ?? '?'}:${colno ?? '?'}`;
-            const stack = p && 'stack' in p && typeof p.stack === 'string' ? p.stack : undefined;
-            if (stack) {
-                console.error(`[Pool] Worker ${workerIdx} internal error reported: ${detail} (${location})\n${stack}`);
+            const err = toError('worker_internal_error', payload);
+            if (err.stack) {
+                console.error(`[Pool] Worker ${workerIdx} internal error reported: ${err.message}\n${err.stack}`);
             } else {
-                console.error(`[Pool] Worker ${workerIdx} internal error reported: ${detail} (${location})`);
+                console.error(`[Pool] Worker ${workerIdx} internal error reported: ${err.message}`);
             }
-            this.rejectAllPendingOnWorker(worker, new Error(`Worker internal error: ${detail} (${location})`));
+            this.rejectAllPendingOnWorker(worker, err);
             return;
         }
 

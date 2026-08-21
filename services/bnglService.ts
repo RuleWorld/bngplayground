@@ -91,23 +91,13 @@ class BnglService {
       }
 
       if (id === -1 && type === 'worker_internal_error') {
-        const detail = extractErrorMessage(payload);
-        const p = payload && typeof payload === 'object' ? (payload as SerializedWorkerError) : undefined;
-        const details = p?.details;
-        const filename = details && typeof details.filename === 'string' ? details.filename : undefined;
-        const lineno = details && typeof details.lineno === 'number' ? details.lineno : undefined;
-        const colno = details && typeof details.colno === 'number' ? details.colno : undefined;
-        const location = `${filename ?? 'unknown'}:${lineno ?? '?'}:${colno ?? '?'}`;
-        const stack =
-          payload && typeof payload === 'object' && 'stack' in payload && typeof (payload as { stack?: unknown }).stack === 'string'
-            ? (payload as { stack: string }).stack
-            : undefined;
-        if (stack) {
-          console.error(`[Worker] ${detail} (${location})\n${stack}`);
+        const err = toError('worker_internal_error', payload);
+        if (err.stack) {
+          console.error(`[Worker] ${err.message}\n${err.stack}`);
         } else {
-          console.error(`[Worker] ${detail} (${location})`);
+          console.error(`[Worker] ${err.message}`);
         }
-        this.rejectAllPending(`Worker internal error: ${detail} (${location})`);
+        this.rejectAllPending(err);
         return;
       }
 
@@ -199,8 +189,8 @@ class BnglService {
     }
   }
 
-  private rejectAllPending(message: string) {
-    const err = new Error(message);
+  private rejectAllPending(reason: string | Error) {
+    const err = reason instanceof Error ? reason : new Error(reason);
     this.promises.forEach((pending, requestId) => {
       this.promises.delete(requestId);
       this.markResponseAsIgnorable(requestId);

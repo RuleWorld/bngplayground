@@ -230,22 +230,29 @@ describe('BnglWorkerPool class', () => {
 
         await new Promise(r => setTimeout(r, 0));
 
+        const payload = {
+            name: 'RangeError',
+            message: 'Out of bound',
+            stack: 'RangeError: Out of bound\n  at worker.ts:42:7',
+            details: {
+                filename: 'test-file.js',
+                lineno: 42,
+                colno: 7
+            }
+        };
+
         worker.trigger({
             id: -1,
             type: 'worker_internal_error',
-            payload: {
-                message: 'Out of bound',
-                details: {
-                    filename: 'test-file.js',
-                    lineno: 42,
-                    colno: 7
-                }
-            }
+            payload
         });
 
         await simulatePromise;
         expect(error).toBeDefined();
+        expect(error.name).toBe('RangeError');
         expect(error.message).toContain('test-file.js:42:7');
+        expect(error.stack).toContain('worker.ts:42:7');
+        expect(error.cause).toEqual(payload);
     });
 
     it('retains stack traces and custom error names for simulation failures', async () => {

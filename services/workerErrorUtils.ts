@@ -18,7 +18,10 @@ export const extractErrorMessage = (payload: SerializedWorkerError | unknown): s
 };
 
 export const toError = (type: string, payload: SerializedWorkerError | unknown): Error => {
-  const message = extractErrorMessage(payload) || `${type} failed`;
+  const extracted = extractErrorMessage(payload);
+  const message = (type === 'worker_internal_error' && !extracted.startsWith('Worker internal error'))
+    ? `Worker internal error: ${extracted}`
+    : (extracted || `${type} failed`);
   if (payload && typeof payload === 'object') {
     const p = payload as SerializedWorkerError;
     const name = typeof p.name === 'string' ? p.name : undefined;
