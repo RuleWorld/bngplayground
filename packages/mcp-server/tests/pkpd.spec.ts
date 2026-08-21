@@ -68,19 +68,33 @@ describe('handlePKPD MCP Tool Handler', () => {
     expect(content.nca).toBeDefined();
   });
 
-  it('executes population simulation with patient profile summaries', async () => {
+  it('executes population simulation with patient profile summaries and parameter variance', async () => {
     const result = await handlePKPD({
       action: 'population_simulation',
       code: SIMPLE_PK_MODEL,
-      n_patients: 5,
+      n_patients: 10,
     });
 
     expect(result.structuredContent).toBeDefined();
     const content = result.structuredContent as Record<string, unknown>;
     expect(content.error).toBeUndefined();
-    expect(content.nPatients).toBe(5);
+    expect(content.nPatients).toBe(10);
     expect(content.parameterSummary).toBeDefined();
     expect(content.simulationSummary).toBeDefined();
+
+    // Verify 5th percentile, mean, and 95th percentile profiles differ due to updated rates across parameter draws
+    const summary = content.simulationSummary as {
+      meanProfile: Record<string, number>[];
+      percentile5: Record<string, number>[];
+      percentile95: Record<string, number>[];
+    };
+    expect(summary.meanProfile.length).toBeGreaterThan(0);
+    const lastIdx = summary.meanProfile.length - 1;
+
+    // Fast-elimination patients (percentile5) vs slow-elimination patients (percentile95) should have distinct endpoint concentrations
+    const val5 = summary.percentile5[lastIdx].A_obs;
+    const val95 = summary.percentile95[lastIdx].A_obs;
+    expect(val5).not.toEqual(val95);
   });
 
   it('handles errors gracefully when code is missing for simulate_dosing', async () => {

@@ -12,7 +12,13 @@ import {
 } from '@bngplayground/engine';
 import type { PKModelType, StandardDosingConfig } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import {
+  createToolResult,
+  parseArgs,
+  parseModelOrThrow,
+  expandModel,
+  updateMassActionRates,
+} from '../services/engine.js';
 import { pkpdArgsSchema } from '../schemas/index.js';
 import { structureError } from '../services/errors.js';
 
@@ -185,6 +191,7 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
             for (const [k, v] of Object.entries(paramOverrides)) {
               patientExpanded.parameters[k] = v;
             }
+            updateMassActionRates(patientExpanded);
             return simulate(0, patientExpanded, {
               method: 'ode',
               t_end: 200,
