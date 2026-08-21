@@ -554,7 +554,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
 
     // Two-stage parsing: try fast SLL prediction mode first with BailErrorStrategy.
     // If ambiguity or syntax error occurs in SLL mode, fall back to standard LL prediction mode.
-    parser.interpreter.predictionMode = PredictionMode.SLL;
+    (parser.interpreter as unknown as { predictionMode: PredictionMode }).predictionMode = PredictionMode.SLL;
     parser.errorHandler = new BailErrorStrategy();
 
     let tree;
@@ -566,7 +566,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         tokenStream.seek(0);
         parser.reset();
         parser.errorHandler = new DefaultErrorStrategy();
-        parser.interpreter.predictionMode = PredictionMode.LL;
+        (parser.interpreter as unknown as { predictionMode: PredictionMode }).predictionMode = PredictionMode.LL;
         tree = parser.prog();
       } else {
         throw e;

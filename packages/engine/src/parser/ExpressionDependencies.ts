@@ -71,7 +71,7 @@ export function getExpressionDependencies(expression: string): Set<string> {
         // Turn off default error logging to avoid console spam on invalid fragments (if any)
         parser.removeErrorListeners(); 
         
-        parser.interpreter.predictionMode = PredictionMode.SLL;
+        (parser.interpreter as unknown as { predictionMode: PredictionMode }).predictionMode = PredictionMode.SLL;
         parser.errorHandler = new BailErrorStrategy();
 
         let tree;
@@ -82,7 +82,7 @@ export function getExpressionDependencies(expression: string): Set<string> {
                 tokenStream.seek(0);
                 parser.reset();
                 parser.errorHandler = new DefaultErrorStrategy();
-                parser.interpreter.predictionMode = PredictionMode.LL;
+                (parser.interpreter as unknown as { predictionMode: PredictionMode }).predictionMode = PredictionMode.LL;
                 tree = parser.expression();
             } else {
                 throw e;
