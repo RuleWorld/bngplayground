@@ -1,6 +1,31 @@
 import { describe, expect, it } from 'vitest';
 import { handleOptimalExperiment } from '../src/handlers/optimalExperiment.js';
 
+const SATURATION_MODEL = `begin model
+begin parameters
+  L_total  10.0
+  kf       0.1
+  kr       0.5
+  R_total  100
+end parameters
+begin molecule types
+  L(r)
+  R(l)
+end molecule types
+begin seed species
+  L(r)  L_total
+  R(l)  R_total
+end seed species
+begin observables
+  Molecules  Bound   L(r!1).R(l!1)
+  Molecules  FreeR   R(l)
+end observables
+begin reaction rules
+  L(r) + R(l) <-> L(r!1).R(l!1)  kf, kr
+end reaction rules
+end model
+`;
+
 const SIMPLE_MODEL = `begin model
 begin parameters
   k 1.0
@@ -36,7 +61,36 @@ end reaction rules
 end model
 `;
 
-describe('optimal_experiment handler — edge cases & robustness', () => {
+describe('optimal_experiment handler', () => {
+    it('produces experiment recommendations for valid input', async () => {
+        const result = await handleOptimalExperiment({
+            code: SATURATION_MODEL,
+            observables: ['Bound'],
+            candidate_times: [10, 20, 30],
+            n_samples: 5,
+            t_end: 50,
+        });
+
+        const body = result.structuredContent as any;
+        expect(body.recommendations).toHaveLength(1);
+        expect(body.recommendations[0].observable).toBe('Bound');
+        expect(body.recommendations[0].suggested_times).toEqual([10, 20, 30]);
+        expect(['high', 'moderate', 'low']).toContain(body.recommendations[0].expected_identifiability);
+        expect(body.recommendations[0].rationale).toBeDefined();
+        expect(body.summary).toMatch(/Analyzed 1 observables across 3 candidate timepoints/i);
+    }, 30000);
+
+    it('handles default values when observables and candidate_times are omitted', async () => {
+        const result = await handleOptimalExperiment({
+            code: SATURATION_MODEL,
+            t_end: 10,
+        });
+
+        const body = result.structuredContent as any;
+        expect(body.recommendations.length).toBeGreaterThan(0);
+        expect(body.summary).toMatch(/Analyzed \d+ observables across \d+ candidate timepoints/i);
+    }, 30000);
+
     it('succeeds on a valid model with default optional fields', async () => {
         const result = await handleOptimalExperiment({ code: SIMPLE_MODEL });
         expect(result.structuredContent).toBeDefined();

@@ -306,6 +306,10 @@ export type { FirstPassageTimeConfig, FPTDistribution } from './services/analysi
 export { computeDoseResponse, computeDoseResponseBySimulation } from './services/analysis/DoseResponse';
 export type { DoseResponseConfig, DoseResponseResult, DoseResponseCurve, HillFit } from './services/analysis/DoseResponse';
 
+// ── Optimal Experiment Design ──────────────────────────────────────
+export { analyzeOptimalExperiment } from './services/analysis/OptimalExperiment';
+export type { OptimalExperimentConfig, OptimalExperimentRecommendation, OptimalExperimentResult } from './services/analysis/OptimalExperiment';
+
 // ── Perturbation Screen ────────────────────────────────────────────
 export { perturbationScreen } from './services/analysis/PerturbationScreen';
 export type { PerturbationScreenConfig, PerturbationScreenResult, PerturbationResult, SyntheticLethalPair } from './services/analysis/PerturbationScreen';
