@@ -61,6 +61,35 @@ describe('ContactMapBuilder', () => {
         expect(edge.ruleLabels).toContain('Binding_A_B');
     });
 
+    it('aggregates reversed endpoint order into one logical edge', () => {
+        const moleculeTypes: BNGLMoleculeType[] = [
+            { name: 'A', components: ['b'] },
+            { name: 'B', components: ['a'] },
+        ];
+        const rules: ReactionRule[] = [
+            {
+                name: 'Forward_Order',
+                reactants: ['A(b)', 'B(a)'],
+                products: ['A(b!1).B(a!1)'],
+                rate: 'k1',
+                isBidirectional: false,
+            },
+            {
+                name: 'Reverse_Order',
+                reactants: ['B(a)', 'A(b)'],
+                products: ['B(a!1).A(b!1)'],
+                rate: 'k2',
+                isBidirectional: false,
+            },
+        ];
+
+        const result = buildContactMap(rules, moleculeTypes);
+
+        expect(result.edges).toHaveLength(1);
+        expect(result.edges[0].ruleIds).toEqual(['Forward_Order', 'Reverse_Order']);
+        expect(result.edges[0].componentPair).toEqual(['b', 'a']);
+    });
+
     it('handles molecule and component names with underscores without key collision', () => {
         const moleculeTypes: BNGLMoleculeType[] = [
             { name: 'A_B', components: ['c_d'] },

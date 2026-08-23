@@ -25,6 +25,9 @@ export interface ContactMap {
 
 type ParsedSpeciesGraph = ReturnType<typeof BNGLParser.parseSpeciesGraph>;
 
+const endpointKey = (molecule: string, component: string): string =>
+    JSON.stringify([molecule, component]);
+
 function splitByTopLevelCommas(pattern: string): string[] {
     const parts: string[] = [];
     let current = '';
@@ -97,13 +100,20 @@ function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string;
                         continue;
                     }
                     const partnerName = sanitize(partnerMolecule.name);
-                    const endpoints = [`${molName}:${component.name}`, `${partnerName}:${partnerComponent.name}`].sort();
-                    const key = endpoints.join('|');
+                    const endpoints = [
+                        { molecule: molName, component: component.name },
+                        { molecule: partnerName, component: partnerComponent.name },
+                    ].sort((left, right) =>
+                        endpointKey(left.molecule, left.component).localeCompare(
+                            endpointKey(right.molecule, right.component)
+                        )
+                    );
+                    const key = JSON.stringify(endpoints.map((endpoint) => [endpoint.molecule, endpoint.component]));
                     bonds.set(key, {
-                        mol1: molName,
-                        mol2: partnerName,
-                        comp1: component.name,
-                        comp2: partnerComponent.name,
+                        mol1: endpoints[0].molecule,
+                        mol2: endpoints[1].molecule,
+                        comp1: endpoints[0].component,
+                        comp2: endpoints[1].component,
                     });
                 }
             });
@@ -137,7 +147,7 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
             const componentName = parts[0];
             moleculeMap.get(moleculeType.name)?.add(componentName);
             if (parts.length > 1) {
-                const stateKey = `${moleculeType.name}_${componentName}`;
+                const stateKey = endpointKey(moleculeType.name, componentName);
                 if (!componentStateMap.has(stateKey)) {
                     componentStateMap.set(stateKey, new Set());
                 }
@@ -171,7 +181,7 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
                         moleculeMap.get(moleculeName)?.add(component.name);
                     }
                     if (component.state && component.state !== '?') {
-                        const stateKey = `${moleculeName}_${component.name}`;
+                        const stateKey = endpointKey(moleculeName, component.name);
                         if (!componentStateMap.has(stateKey)) {
                             componentStateMap.set(stateKey, new Set());
                         }
@@ -186,9 +196,9 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
         extractBonds(productGraphs).forEach((value, key) => bonds.set(key, value));
 
         bonds.forEach((bond) => {
-            const source = `${bond.mol1}_${bond.comp1}`;
-            const target = `${bond.mol2}_${bond.comp2}`;
-            const edgeKey = `${source}->${target}`;
+            const source = endpointKey(bond.mol1, bond.comp1);
+            const target = endpointKey(bond.mol2, bond.comp2);
+            const edgeKey = JSON.stringify([source, target]);
             if (!edgeMap.has(edgeKey)) {
                 edgeMap.set(edgeKey, {
                     from: source,
@@ -223,8 +233,8 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
         });
         components.forEach((componentName, componentIndex) => {
             const componentId = `${moleculeIndex}.${componentIndex}`;
-            idMap.set(`${moleculeName}_${componentName}`, componentId);
-            const stateKey = `${moleculeName}_${componentName}`;
+            idMap.set(endpointKey(moleculeName, componentName), componentId);
+            const stateKey = endpointKey(moleculeName, componentName);
             const states = Array.from(componentStateMap.get(stateKey) ?? []).sort();
             nodes.push({
                 id: componentId,
