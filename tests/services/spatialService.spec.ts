@@ -113,6 +113,18 @@ describe('spatialService', () => {
     expect(onStateChange).toHaveBeenCalledWith('error');
   });
 
+  it('handles unhandled worker response type without silently dropping it', async () => {
+    const onError = vi.fn();
+    const onStateChange = vi.fn();
+    await spatialService.init('', {}, { onError, onStateChange });
+
+    mockWorker.onmessage({ data: { type: 'unknown_type' as any, message: 'Custom unknown message' } });
+
+    expect(onError).toHaveBeenCalledWith('Custom unknown message');
+    expect(spatialService.getState()).toBe('error');
+    expect(onStateChange).toHaveBeenCalledWith('error');
+  });
+
   it('handles worker native onerror event', async () => {
     const onError = vi.fn();
     const onStateChange = vi.fn();
@@ -170,7 +182,7 @@ describe('spatialService', () => {
     mockWorker.onmessage({ data: { type: 'complete', result: {} as any } });
 
     spatialService.run();
-    expect(consoleSpy).toHaveBeenCalledWith('SpatialService: Cannot run, state is', 'complete');
+    expect(consoleSpy).toHaveBeenCalledWith('SpatialService: No worker available');
 
     consoleSpy.mockRestore();
   });

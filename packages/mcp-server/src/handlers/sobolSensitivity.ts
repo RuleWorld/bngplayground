@@ -18,25 +18,37 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
 
+        if (!expandedModel.observables || expandedModel.observables.length === 0) {
+            return createToolResult(structureError(
+                new Error('Model defines no observables. Sobol sensitivity requires at least one observable.'),
+            ));
+        }
+
         const modelParameterNames = new Set(Object.keys(expandedModel.parameters));
         const unknownParameters = parsedArgs.parameters
             .map((p) => p.name)
             .filter((name: string) => !modelParameterNames.has(name));
         if (unknownParameters.length > 0) {
-            throw new Error(`Unknown Sobol parameters: ${unknownParameters.join(', ')}. Available parameters: ${Array.from(modelParameterNames).join(', ')}`);
+            return createToolResult(structureError(
+                new Error(`Unknown Sobol parameters: ${unknownParameters.join(', ')}. Available parameters: ${Array.from(modelParameterNames).join(', ')}`),
+            ));
         }
 
         const invalidBounds = parsedArgs.parameters.filter((p) => !Number.isFinite(p.min) || !Number.isFinite(p.max) || p.min >= p.max);
         if (invalidBounds.length > 0) {
             const details = invalidBounds.map((p) => `${p.name} [min=${p.min}, max=${p.max}]`).join('; ');
-            throw new Error(`Invalid Sobol parameter bounds (expected finite min < max): ${details}`);
+            return createToolResult(structureError(
+                new Error(`Invalid Sobol parameter bounds (expected finite min < max): ${details}`),
+            ));
         }
 
         const modelObservableNames = new Set(expandedModel.observables.map((o) => o.name));
         if (parsedArgs.observables && parsedArgs.observables.length > 0) {
             const unknownObservables = parsedArgs.observables.filter((name: string) => !modelObservableNames.has(name));
             if (unknownObservables.length > 0) {
-                throw new Error(`Unknown Sobol observables: ${unknownObservables.join(', ')}. Available observables: ${Array.from(modelObservableNames).join(', ')}`);
+                return createToolResult(structureError(
+                    new Error(`Unknown Sobol observables: ${unknownObservables.join(', ')}. Available observables: ${Array.from(modelObservableNames).join(', ')}`),
+                ));
             }
         }
 

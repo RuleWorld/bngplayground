@@ -24,6 +24,16 @@ export interface NFsimSimulationOptions {
   includeExpandedNetwork?: boolean;
 }
 
+/**
+ * Validates whether a BNGL model is compatible with NFsim (network-free simulation).
+ *
+ * Verifies that the model defines required sections (species, molecule types, reaction rules, and observables)
+ * and checks for unsupported features such as observable-dependent rule rates.
+ *
+ * @param model - The parsed BNGL model object to validate.
+ * @returns A {@link ValidationResult} object indicating whether the model is valid for NFsim
+ *          and listing any validation errors or warnings found.
+ */
 export const validateModelForNFsim = (model: BNGLModel): ValidationResult =>
   NFsimValidator.validateForNFsim(model);
 
@@ -58,6 +68,26 @@ const ensureExpandedNetwork = async (model: BNGLModel): Promise<BNGLModel> => {
   );
 };
 
+/**
+ * Executes a network-free simulation (NFsim) on a BNGL model.
+ *
+ * Converts the BNGL model to BioNetGen XML format, invokes the WASM/JS NFsim runtime via
+ * {@link runNFsim}, reports progress if running in a worker context, and adapts the GDAT
+ * output into {@link SimulationResults}.
+ *
+ * If NFsim validation fails (e.g., missing required model sections or observable-dependent rule rates), an error is thrown.
+ * If the NFsim WASM runtime is unavailable and `options.requireRuntime` is false, this function
+ * logs a warning and gracefully falls back to stochastic network expansion simulation (SSA) via {@link simulate}.
+ *
+ * **Invariant**: Must remain browser-API-free (Node.js and Web Worker compatible).
+ *
+ * @param inputModel - The parsed BNGL model to simulate.
+ * @param options - Configuration options controlling end time, step count, random seed, UTL/GML bounds,
+ *                  and data inclusion flags.
+ * @param jobId - Optional numeric ID for tracking the simulation job and tagging worker progress messages.
+ * @returns A promise resolving to the adapted {@link SimulationResults}.
+ * @throws {Error} If model validation fails or if NFsim execution fails and `options.requireRuntime` is true.
+ */
 export async function runNFsimSimulation(
   inputModel: BNGLModel,
   options: NFsimSimulationOptions,

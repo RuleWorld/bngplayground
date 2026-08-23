@@ -142,11 +142,12 @@ export async function initializeNFsimHeadless() {
 
 // Generate a random valid BNGL model
 export function generateModel(rng: SeededRandom): { bngl: string; hasCompartments: boolean } {
-  const hasCompartments = rng.next() > 0.5;
+  const compartmentMode = rng.nextInt(0, 2); // 0: none, 1: single 3D, 2: nested 3D/2D/3D
+  const hasCompartments = compartmentMode > 0;
 
   const bnglParts: string[] = [];
 
-  // 1. Parameters Block
+  // 1. Parameters Block (literals + expressions)
   bnglParts.push('begin parameters');
   bnglParts.push(`  k1 ${ (0.05 + rng.next() * 0.1).toFixed(4) }`);
   bnglParts.push(`  k2 ${ (0.01 + rng.next() * 0.05).toFixed(4) }`);
@@ -154,34 +155,49 @@ export function generateModel(rng: SeededRandom): { bngl: string; hasCompartment
   bnglParts.push(`  koff ${ (0.02 + rng.next() * 0.1).toFixed(4) }`);
   bnglParts.push(`  kdeg ${ (0.05 + rng.next() * 0.05).toFixed(4) }`);
   bnglParts.push(`  ksynth ${ rng.nextInt(5, 20) }`);
+  // Dependent expression parameters
+  bnglParts.push('  k_bind kon * 1.2');
+  bnglParts.push('  k_unbind koff + 0.01');
   bnglParts.push('end parameters');
 
-  // 2. Compartments Block (optional)
-  if (hasCompartments) {
+  // 2. Compartments Block
+  if (compartmentMode === 1) {
     bnglParts.push('begin compartments');
-    bnglParts.push('  EC 3 1.0');
-    bnglParts.push('  PM 2 0.1 EC');
-    bnglParts.push('  CP 3 0.5 PM');
+    bnglParts.push('  cell 3 1.0');
+    bnglParts.push('end compartments');
+  } else if (compartmentMode === 2) {
+    bnglParts.push('begin compartments');
+    bnglParts.push('  EC 3 10.0');
+    bnglParts.push('  PM 2 1.0 EC');
+    bnglParts.push('  CP 3 2.0 PM');
     bnglParts.push('end compartments');
   }
 
   // 3. Molecule Types Block
   bnglParts.push('begin molecule types');
-  bnglParts.push('  A(b, s~0~1)');
-  bnglParts.push('  B(a)');
-  bnglParts.push('  C()');
+  bnglParts.push('  A(b, s~0~1~2, p~0~1)');
+  bnglParts.push('  B(a, loc~cyt~nuc)');
+  bnglParts.push('  C(d)');
+  bnglParts.push('  D()');
   bnglParts.push('end molecule types');
 
   // 4. Seed Species Block
   bnglParts.push('begin seed species');
-  if (hasCompartments) {
-    bnglParts.push('  A(b, s~0)@CP 100');
-    bnglParts.push('  B(a)@CP 50');
-    bnglParts.push('  C()@EC 10');
+  if (compartmentMode === 1) {
+    bnglParts.push('  A(b, s~0, p~0)@cell 100');
+    bnglParts.push('  B(a, loc~cyt)@cell 50');
+    bnglParts.push('  C(d)@cell 10');
+    bnglParts.push('  D()@cell 5');
+  } else if (compartmentMode === 2) {
+    bnglParts.push('  A(b, s~0, p~0)@CP 100');
+    bnglParts.push('  B(a, loc~cyt)@CP 50');
+    bnglParts.push('  C(d)@EC 10');
+    bnglParts.push('  D()@CP 5');
   } else {
-    bnglParts.push('  A(b, s~0) 100');
-    bnglParts.push('  B(a) 50');
-    bnglParts.push('  C() 10');
+    bnglParts.push('  A(b, s~0, p~0) 100');
+    bnglParts.push('  B(a, loc~cyt) 50');
+    bnglParts.push('  C(d) 10');
+    bnglParts.push('  D() 5');
   }
   bnglParts.push('end seed species');
 
@@ -189,24 +205,39 @@ export function generateModel(rng: SeededRandom): { bngl: string; hasCompartment
   bnglParts.push('begin observables');
   bnglParts.push('  Molecules A_tot A()');
   bnglParts.push('  Molecules B_tot B()');
-  if (hasCompartments) {
-    bnglParts.push('  Species A_state0 A(s~0)@CP');
-    bnglParts.push('  Species A_state1 A(s~1)@CP');
+  bnglParts.push('  Molecules A_bound A(b!1)');
+  if (compartmentMode === 1) {
+    bnglParts.push('  Species A_s0 A(s~0)@cell');
+    bnglParts.push('  Species A_s1 A(s~1)@cell');
+  } else if (compartmentMode === 2) {
+    bnglParts.push('  Species A_s0 A(s~0)@CP');
+    bnglParts.push('  Species A_s1 A(s~1)@CP');
   } else {
-    bnglParts.push('  Species A_state0 A(s~0)');
-    bnglParts.push('  Species A_state1 A(s~1)');
+    bnglParts.push('  Species A_s0 A(s~0)');
+    bnglParts.push('  Species A_s1 A(s~1)');
   }
   bnglParts.push('end observables');
 
-  // 6. Reaction Rules Block
+  // 6. Functions Block (math operations + observables)
+  bnglParts.push('begin functions');
+  bnglParts.push('  f_rate() k1 * (1 + abs(sin(A_tot / 100)))');
+  bnglParts.push('  f_bind() k_bind * sqrt(1 + B_tot)');
+  bnglParts.push('end functions');
+
+  // 7. Reaction Rules Block
   bnglParts.push('begin reaction rules');
-  // State change rule
+  // State transitions
   bnglParts.push('  A(s~0) -> A(s~1) k1');
-  // Reversible binding/unbinding rules
-  bnglParts.push('  A(b) + B(a) <-> A(b!1).B(a!1) kon, koff');
-  // Synthesis and degradation rules
-  bnglParts.push('  C() -> 0 kdeg');
-  bnglParts.push('  0 -> C() ksynth');
+  bnglParts.push('  A(s~1) -> A(s~2) f_rate()');
+  // Reversible binding with expression rate
+  bnglParts.push('  A(b) + B(a) <-> A(b!1).B(a!1) k_bind, k_unbind');
+  // Phosphorylation state change
+  bnglParts.push('  A(p~0) -> A(p~1) k2');
+  // Synthesis / degradation
+  bnglParts.push('  C(d) -> 0 kdeg');
+  bnglParts.push('  0 -> C(d) ksynth');
+  // Rule modifier (unbracketed modifier following rate law)
+  bnglParts.push('  D() -> 0 kdeg DeleteMolecules');
   bnglParts.push('end reaction rules');
 
   return { bngl: bnglParts.join('\n'), hasCompartments };

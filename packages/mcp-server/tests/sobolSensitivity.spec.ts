@@ -157,4 +157,33 @@ describe('sobol_sensitivity handler', () => {
         const errStr = body.error ?? body.message ?? JSON.stringify(body);
         expect(errStr).toMatch(/Invalid arguments for sobol_sensitivity|Number must be greater than 0/i);
     });
+
+    it('rejects model with no defined observables', async () => {
+        const NO_OBS_MODEL = `begin model
+begin parameters
+  kf 0.1
+end parameters
+begin molecule types
+  A(s)
+end molecule types
+begin seed species
+  A(s) 100
+end seed species
+begin reaction rules
+  A(s) -> 0 kf
+end reaction rules
+end model`;
+
+        const result = await handleSobolSensitivity({
+            code: NO_OBS_MODEL,
+            parameters: [
+                { name: 'kf', min: 0.01, max: 0.5 },
+            ],
+            n_samples: 5,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        const errStr = body.error ?? body.message ?? JSON.stringify(body);
+        expect(errStr).toMatch(/Model defines no observables/i);
+    });
 });
