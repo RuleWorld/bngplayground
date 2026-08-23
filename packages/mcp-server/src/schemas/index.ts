@@ -26,6 +26,7 @@ export {
     qssaReductionArgsSchema,
     temporalAnalysisArgsSchema,
     symbolicSteadyStateArgsSchema,
+    bifurcationAnalysisArgsSchema,
 } from './analysis.js';
 
 export {
