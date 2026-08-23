@@ -470,6 +470,7 @@ export const SimulationControls: React.FC<SimulationControlsProps> = ({
                     id="sim-solver"
                     value={solver}
                     onChange={e => setSolver(e.target.value)}
+                    aria-label="Select solver algorithm"
                     className="w-full px-2 py-1.5 text-xs border rounded bg-white dark:bg-slate-900 dark:bg-slate-900 border-slate-300 dark:border-slate-600 dark:border-slate-600 text-slate-700 dark:text-slate-200"
                   >
                     <option value="auto">Auto (recommended)</option>

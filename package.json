@@ -81,7 +81,7 @@
     "@types/node": "^26.1.2",
     "@types/pako": "^2.0.4",
     "@types/react": "^19.2.8",
-    "@types/react-dom": "^19.2.3",
+    "@types/react-dom": "^19.2.4",
     "@types/three": "^0.185.1",
     "@vitejs/plugin-react": "^6.0.5",
     "@vitest/coverage-v8": "^4.1.9",
@@ -93,7 +93,7 @@
     "autoprefixer": "^10.5.0",
     "baseline-browser-mapping": "^2.11.13",
     "chai": "^6.2.2",
-    "eslint": "^10.0.0",
+    "eslint": "^10.8.1",
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.1.1",
     "fast-check": "^4.9.0",
@@ -109,7 +109,7 @@
     "typescript-eslint": "^8.66.0",
     "util": "^0.12.5",
     "sharp": "^0.35.3",
-    "vite": "^8.0.8",
+    "vite": "^8.2.2",
     "vitest": "^4.1.0"
   },
   "overrides": {
