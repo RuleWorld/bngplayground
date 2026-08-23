@@ -109,7 +109,7 @@
     "typescript-eslint": "^8.66.0",
     "util": "^0.12.5",
     "sharp": "^0.35.3",
-    "vite": "^8.0.8",
+    "vite": "^8.2.2",
     "vitest": "^4.1.0"
   },
   "overrides": {
