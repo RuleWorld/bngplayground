@@ -219,6 +219,73 @@ describe('BnglWorkerPool class', () => {
         expect(error.message).toContain('Worker internal error: Fatal out of memory');
     });
 
+    it('retains rich error fields, stack, and location details on worker_internal_error', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let error: any;
+        const simulatePromise = pool.simulate({} as any, {} as any).catch(err => error = err);
+
+        const worker = mockWorkerInsts[0];
+
+        await new Promise(r => setTimeout(r, 0));
+
+        const payload = {
+            name: 'RangeError',
+            message: 'Out of bound',
+            stack: 'RangeError: Out of bound\n  at worker.ts:42:7',
+            details: {
+                filename: 'test-file.js',
+                lineno: 42,
+                colno: 7
+            }
+        };
+
+        worker.trigger({
+            id: -1,
+            type: 'worker_internal_error',
+            payload
+        });
+
+        await simulatePromise;
+        expect(error).toBeDefined();
+        expect(error.name).toBe('RangeError');
+        expect(error.message).toContain('test-file.js:42:7');
+        expect(error.stack).toContain('worker.ts:42:7');
+        expect(error.cause).toEqual(payload);
+    });
+
+    it('retains stack traces and custom error names for simulation failures', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let error: any;
+        const simulatePromise = pool.simulate({} as any, {} as any).catch(err => error = err);
+
+        const worker = mockWorkerInsts[0];
+
+        await new Promise(r => setTimeout(r, 0));
+
+        const postMessageCall = worker.postMessage.mock.calls[0];
+        const messageId = postMessageCall[0].id;
+
+        worker.trigger({
+            id: messageId,
+            type: 'simulate_error',
+            payload: {
+                name: 'StiffnessError',
+                message: 'Simulation detected numerical stiffness',
+                stack: 'Error: Simulation detected numerical stiffness\n  at runSimulation (bnglWorker.ts:12:34)'
+            }
+        });
+
+        await simulatePromise;
+        expect(error).toBeDefined();
+        expect(error.name).toBe('StiffnessError');
+        expect(error.message).toBe('Simulation detected numerical stiffness');
+        expect(error.stack).toContain('bnglWorker.ts:12:34');
+    });
+
     it('rejects and clears all pending requests after a global worker error', async () => {
         const pool = new BnglWorkerPool(1);
         await pool.initialize();

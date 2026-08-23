@@ -3165,8 +3165,6 @@ export async function simulate(
     const enableNativeBytecode = !disableNativeBytecode;
     rebuildNativeByteCode = () => {
       delete solverOptions.networkByteCode;
-      // Clear JIT bytecode cache so expression bytecodes are recompiled with new parameter values
-      jitCompiler.clearBytecodeCache();
 
       const canUseNativeBytecode =
         enableNativeBytecode &&
