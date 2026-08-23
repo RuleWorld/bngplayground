@@ -2,12 +2,9 @@ import { describe, it, expect, vi } from 'vitest';
 
 vi.mock('../src/services/pathwayCommons/pathwayCommonsService.js', () => ({
     queryPathwayCommons: vi.fn(async () => ({
-        interactions: [],
-        missingInteractions: [],
+        summary: '',
         confirmedInteractions: [],
-        pathways: [],
-        unknownMolecules: [],
-        summary: 'Mock Pathway Commons response for testing.',
+        missingInteractions: [],
     })),
 }));
 
