@@ -81,6 +81,8 @@ export async function analyzePhaseHandoff(config: PhaseHandoffConfig): Promise<P
         method,
         t_end: transitionTime,
         n_steps: 100,
+        includeSpeciesData: false,
+        includeExpandedNetwork: false,
     }, {
         checkCancelled: () => {},
         postMessage: () => {},
@@ -127,6 +129,8 @@ export async function analyzePhaseHandoff(config: PhaseHandoffConfig): Promise<P
         method,
         t_end: actualTEnd,
         n_steps: 100,
+        includeSpeciesData: false,
+        includeExpandedNetwork: false,
     }, {
         checkCancelled: () => {},
         postMessage: () => {},

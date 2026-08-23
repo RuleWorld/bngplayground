@@ -3,6 +3,7 @@ import {
     BnglWorkerPool,
     createSharedEnsembleResults,
     getSharedEnsembleFeatureVector,
+    isSharedEnsembleResultsHandle,
     materializeSharedSimulationResult,
     writeSimulationResultsToShared,
 } from '../../services/BnglWorkerPool';
@@ -86,19 +87,27 @@ describe('BnglWorkerPool class', () => {
         mockWorkerInsts = [];
         class MockWorker {
             handlers: any[] = [];
+            eventHandlers = new Map<string, any[]>();
             addEventListener = vi.fn((event, handler) => {
-                if (event === 'message') this.handlers.push(handler);
+                const handlers = this.eventHandlers.get(event) ?? [];
+                handlers.push(handler);
+                this.eventHandlers.set(event, handlers);
+                if (event === 'message') this.handlers = handlers;
             });
             removeEventListener = vi.fn((event, handler) => {
-                if (event === 'message') {
-                    this.handlers = this.handlers.filter(h => h !== handler);
-                }
+                const handlers = (this.eventHandlers.get(event) ?? []).filter(h => h !== handler);
+                this.eventHandlers.set(event, handlers);
+                if (event === 'message') this.handlers = handlers;
             });
             postMessage = vi.fn();
             terminate = vi.fn();
 
             trigger(eventData: any) {
                 this.handlers.forEach(h => h({ data: eventData }));
+            }
+
+            triggerEvent(event: string, eventData: any) {
+                (this.eventHandlers.get(event) ?? []).forEach(h => h(eventData));
             }
             constructor() {
                 mockWorkerInsts.push(this);
@@ -144,6 +153,33 @@ describe('BnglWorkerPool class', () => {
         expect(resultData).toEqual(mockResults);
     });
 
+    it('uses one permanent message listener while dispatching concurrent replies by id', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+        const worker = mockWorkerInsts[0];
+
+        const first = pool.simulate({ label: 'first' } as any, {} as any);
+        const second = pool.simulate({ label: 'second' } as any, {} as any);
+        await Promise.resolve();
+
+        const messageListenerRegistrations = worker.addEventListener.mock.calls
+            .filter(([event]: [string]) => event === 'message');
+        expect(messageListenerRegistrations).toHaveLength(1);
+        expect(worker.handlers).toHaveLength(1);
+
+        const [firstRequest, secondRequest] = worker.postMessage.mock.calls.map(([request]: [any]) => request);
+        const firstResult = { headers: [], data: [], marker: 'first' };
+        const secondResult = { headers: [], data: [], marker: 'second' };
+
+        // Replies may arrive in any order; the dispatcher must route by ID.
+        worker.trigger({ id: secondRequest.id, type: 'simulate_success', payload: secondResult });
+        worker.trigger({ id: firstRequest.id, type: 'simulate_success', payload: firstResult });
+
+        await expect(first).resolves.toEqual(firstResult);
+        await expect(second).resolves.toEqual(secondResult);
+        expect(worker.handlers).toHaveLength(1);
+    });
+
     it('rejects when simulation fails', async () => {
         const pool = new BnglWorkerPool(1);
         await pool.initialize();
@@ -181,6 +217,99 @@ describe('BnglWorkerPool class', () => {
         await simulatePromise;
         expect(error).toBeDefined();
         expect(error.message).toContain('Worker internal error: Fatal out of memory');
+    });
+
+    it('retains rich error fields, stack, and location details on worker_internal_error', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let error: any;
+        const simulatePromise = pool.simulate({} as any, {} as any).catch(err => error = err);
+
+        const worker = mockWorkerInsts[0];
+
+        await new Promise(r => setTimeout(r, 0));
+
+        const payload = {
+            name: 'RangeError',
+            message: 'Out of bound',
+            stack: 'RangeError: Out of bound\n  at worker.ts:42:7',
+            details: {
+                filename: 'test-file.js',
+                lineno: 42,
+                colno: 7
+            }
+        };
+
+        worker.trigger({
+            id: -1,
+            type: 'worker_internal_error',
+            payload
+        });
+
+        await simulatePromise;
+        expect(error).toBeDefined();
+        expect(error.name).toBe('RangeError');
+        expect(error.message).toContain('test-file.js:42:7');
+        expect(error.stack).toContain('worker.ts:42:7');
+        expect(error.cause).toEqual(payload);
+    });
+
+    it('retains stack traces and custom error names for simulation failures', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let error: any;
+        const simulatePromise = pool.simulate({} as any, {} as any).catch(err => error = err);
+
+        const worker = mockWorkerInsts[0];
+
+        await new Promise(r => setTimeout(r, 0));
+
+        const postMessageCall = worker.postMessage.mock.calls[0];
+        const messageId = postMessageCall[0].id;
+
+        worker.trigger({
+            id: messageId,
+            type: 'simulate_error',
+            payload: {
+                name: 'StiffnessError',
+                message: 'Simulation detected numerical stiffness',
+                stack: 'Error: Simulation detected numerical stiffness\n  at runSimulation (bnglWorker.ts:12:34)'
+            }
+        });
+
+        await simulatePromise;
+        expect(error).toBeDefined();
+        expect(error.name).toBe('StiffnessError');
+        expect(error.message).toBe('Simulation detected numerical stiffness');
+        expect(error.stack).toContain('bnglWorker.ts:12:34');
+    });
+
+    it('rejects and clears all pending requests after a global worker error', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+        const worker = mockWorkerInsts[0];
+
+        const firstError = pool.simulate({} as any, {} as any).catch(error => error);
+        const secondError = pool.simulate({} as any, {} as any).catch(error => error);
+        await Promise.resolve();
+
+        worker.triggerEvent('error', { message: 'worker process crashed' });
+
+        await expect(firstError).resolves.toMatchObject({ message: 'Worker global error: worker process crashed' });
+        await expect(secondError).resolves.toMatchObject({ message: 'Worker global error: worker process crashed' });
+
+        // The pending map was cleared, so the permanent dispatcher can serve a
+        // later request without stale callbacks or additional listeners.
+        const recovery = pool.simulate({} as any, {} as any);
+        await Promise.resolve();
+        const recoveryRequest = worker.postMessage.mock.calls.at(-1)[0];
+        const recoveryResult = { headers: [], data: [] };
+        worker.trigger({ id: recoveryRequest.id, type: 'simulate_success', payload: recoveryResult });
+
+        await expect(recovery).resolves.toEqual(recoveryResult);
+        expect(worker.handlers).toHaveLength(1);
     });
 
     it('runs an ensemble simulation automatically responding', async () => {
@@ -225,5 +354,332 @@ describe('BnglWorkerPool class', () => {
         // count: 1 means it returns an array of length 1
         expect(Array.isArray(results)).toBe(true);
         expect(results).toHaveLength(1);
+    });
+
+    it('bounds ensembles to one outstanding simulation per worker and preserves seed ordering', async () => {
+        let peakConcurrentSimulations = 0;
+        let seedZeroCompleted = false;
+        const pilotWorkersStartedBeforeSeedZeroCompleted = new Set<number>();
+        class ControlledEnsembleWorker {
+            handlers: any[] = [];
+            outstandingSimulations = 0;
+            maxOutstandingSimulations = 0;
+            simulateSeeds: number[] = [];
+            addEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers.push(handler);
+            });
+            removeEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers = this.handlers.filter(h => h !== handler);
+            });
+            terminate = vi.fn();
+            postMessage = vi.fn((request) => {
+                if (request.type === 'cache_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'cache_model_success',
+                        payload: { modelId: mockWorkerInsts.indexOf(this) + 100 },
+                    }));
+                } else if (request.type === 'simulate') {
+                    this.outstandingSimulations++;
+                    peakConcurrentSimulations = Math.max(
+                        peakConcurrentSimulations,
+                        mockWorkerInsts.reduce(
+                            (total, worker) => total + worker.outstandingSimulations,
+                            0
+                        )
+                    );
+                    this.maxOutstandingSimulations = Math.max(
+                        this.maxOutstandingSimulations,
+                        this.outstandingSimulations
+                    );
+                    this.simulateSeeds.push(request.payload.options.seed);
+                    const seed = request.payload.options.seed;
+                    if (seed < 3 && !seedZeroCompleted) {
+                        pilotWorkersStartedBeforeSeedZeroCompleted.add(mockWorkerInsts.indexOf(this));
+                    }
+                    setTimeout(() => {
+                        if (seed === 0) seedZeroCompleted = true;
+                        this.outstandingSimulations--;
+                        this.trigger({
+                            id: request.id,
+                            type: 'simulate_success',
+                            payload: { headers: ['seed'], data: [{ seed }] },
+                        });
+                    }, seed % 3);
+                } else if (request.type === 'release_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'release_model_success',
+                        payload: { modelId: request.payload.modelId },
+                    }));
+                }
+            });
+
+            trigger(eventData: any) {
+                this.handlers.forEach(handler => handler({ data: eventData }));
+            }
+
+            constructor() {
+                mockWorkerInsts.push(this);
+            }
+        }
+
+        vi.stubGlobal('Worker', ControlledEnsembleWorker);
+        vi.stubGlobal('SharedArrayBuffer', undefined);
+        const pool = new BnglWorkerPool(3);
+        const progress: number[] = [];
+        const results = await pool.runEnsemble(
+            {} as any,
+            {} as any,
+            8,
+            value => progress.push(value)
+        ) as SimulationResults[];
+        expect(results.map(run => run.data[0].seed)).toEqual([0, 1, 2, 3, 4, 5, 6, 7]);
+        expect(mockWorkerInsts.map(worker => worker.simulateSeeds)).toEqual([
+            [0, 3, 6],
+            [1, 4, 7],
+            [2, 5],
+        ]);
+        expect(pilotWorkersStartedBeforeSeedZeroCompleted).toEqual(new Set([0, 1, 2]));
+        expect(peakConcurrentSimulations).toBe(3);
+        expect(mockWorkerInsts.every(worker => worker.maxOutstandingSimulations === 1)).toBe(true);
+        expect(progress).toHaveLength(8);
+        expect(progress.at(-1)).toBe(8);
+        expect(mockWorkerInsts.every(worker => worker.postMessage.mock.calls.some(
+            ([request]: [any]) => request.type === 'release_model'
+        ))).toBe(true);
+    });
+
+    it('preserves bounded scheduling and slot ordering for shared ensemble output', async () => {
+        class SharedEnsembleWorker {
+            handlers: any[] = [];
+            outstandingSimulations = 0;
+            maxOutstandingSimulations = 0;
+            simulateSeeds: number[] = [];
+            addEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers.push(handler);
+            });
+            removeEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers = this.handlers.filter(h => h !== handler);
+            });
+            terminate = vi.fn();
+            postMessage = vi.fn((request) => {
+                const workerIdx = mockWorkerInsts.indexOf(this);
+                if (request.type === 'cache_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'cache_model_success',
+                        payload: { modelId: workerIdx + 300 },
+                    }));
+                } else if (request.type === 'simulate') {
+                    this.outstandingSimulations++;
+                    this.maxOutstandingSimulations = Math.max(
+                        this.maxOutstandingSimulations,
+                        this.outstandingSimulations
+                    );
+                    const seed = request.payload.options.seed;
+                    this.simulateSeeds.push(seed);
+                    setTimeout(() => {
+                        this.outstandingSimulations--;
+                        const sharedOutput = request.payload.sharedOutput;
+                        if (sharedOutput) {
+                            const values = new Float64Array(sharedOutput.valuesBuffer);
+                            const completion = new Int32Array(sharedOutput.completionBuffer);
+                            values[sharedOutput.slot] = seed;
+                            Atomics.store(completion, sharedOutput.slot, 1);
+                            this.trigger({
+                                id: request.id,
+                                type: 'simulate_shared_success',
+                                payload: { slot: sharedOutput.slot },
+                            });
+                        } else {
+                            this.trigger({
+                                id: request.id,
+                                type: 'simulate_success',
+                                payload: { headers: ['seed'], data: [{ seed }] },
+                            });
+                        }
+                    }, seed % 2);
+                } else if (request.type === 'release_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'release_model_success',
+                        payload: { modelId: request.payload.modelId },
+                    }));
+                }
+            });
+
+            trigger(eventData: any) {
+                this.handlers.forEach(handler => handler({ data: eventData }));
+            }
+
+            constructor() {
+                mockWorkerInsts.push(this);
+            }
+        }
+
+        vi.stubGlobal('Worker', SharedEnsembleWorker);
+        const pool = new BnglWorkerPool(2);
+        const results = await pool.runEnsemble({} as any, {} as any, 5);
+
+        expect(isSharedEnsembleResultsHandle(results)).toBe(true);
+        if (!isSharedEnsembleResultsHandle(results)) throw new Error('Expected shared ensemble output');
+        expect(Array.from(results.completion)).toEqual([1, 1, 1, 1, 1]);
+        expect(Array.from(results.values)).toEqual([0, 1, 2, 3, 4]);
+        expect(mockWorkerInsts.map(worker => worker.simulateSeeds)).toEqual([
+            [0, 2, 4],
+            [1, 3],
+        ]);
+        expect(mockWorkerInsts.every(worker => worker.maxOutstandingSimulations === 1)).toBe(true);
+    });
+
+    it('falls back to ordered ordinary results when the initial wave has mismatched shapes', async () => {
+        class ShapeMismatchWorker {
+            handlers: any[] = [];
+            outstandingSimulations = 0;
+            maxOutstandingSimulations = 0;
+            simulateRequests: any[] = [];
+            addEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers.push(handler);
+            });
+            removeEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers = this.handlers.filter(h => h !== handler);
+            });
+            terminate = vi.fn();
+            postMessage = vi.fn((request) => {
+                const workerIdx = mockWorkerInsts.indexOf(this);
+                if (request.type === 'cache_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'cache_model_success',
+                        payload: { modelId: workerIdx + 400 },
+                    }));
+                } else if (request.type === 'simulate') {
+                    this.outstandingSimulations++;
+                    this.maxOutstandingSimulations = Math.max(
+                        this.maxOutstandingSimulations,
+                        this.outstandingSimulations
+                    );
+                    this.simulateRequests.push(request);
+                    const seed = request.payload.options.seed;
+                    setTimeout(() => {
+                        this.outstandingSimulations--;
+                        if (request.payload.sharedOutput) {
+                            this.trigger({
+                                id: request.id,
+                                type: 'simulate_error',
+                                payload: { message: 'mismatched pilot must not use shared output' },
+                            });
+                            return;
+                        }
+                        const mismatched = seed === 1;
+                        this.trigger({
+                            id: request.id,
+                            type: 'simulate_success',
+                            payload: {
+                                headers: mismatched ? ['seed', 'extra'] : ['seed'],
+                                data: [mismatched ? { seed, extra: 1 } : { seed }],
+                            },
+                        });
+                    }, seed % 2);
+                } else if (request.type === 'release_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'release_model_success',
+                        payload: { modelId: request.payload.modelId },
+                    }));
+                }
+            });
+
+            trigger(eventData: any) {
+                this.handlers.forEach(handler => handler({ data: eventData }));
+            }
+
+            constructor() {
+                mockWorkerInsts.push(this);
+            }
+        }
+
+        vi.stubGlobal('Worker', ShapeMismatchWorker);
+        const pool = new BnglWorkerPool(2);
+        const results = await pool.runEnsemble({} as any, {} as any, 5);
+
+        expect(isSharedEnsembleResultsHandle(results)).toBe(false);
+        expect(Array.isArray(results)).toBe(true);
+        if (!Array.isArray(results)) throw new Error('Expected ordinary ensemble results');
+        expect(results.map(run => run.data[0].seed)).toEqual([0, 1, 2, 3, 4]);
+        expect(results[1].headers).toEqual(['seed', 'extra']);
+        expect(mockWorkerInsts.flatMap(worker => worker.simulateRequests).every(
+            (request: any) => request.payload.sharedOutput === undefined
+        )).toBe(true);
+        expect(mockWorkerInsts.every(worker => worker.maxOutstandingSimulations === 1)).toBe(true);
+    });
+
+    it('waits for sibling worker loops and releases every model after an ensemble rejection', async () => {
+        class RejectingEnsembleWorker {
+            handlers: any[] = [];
+            simulateCount = 0;
+            activeSimulations = 0;
+            releaseWhileActive = false;
+            addEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers.push(handler);
+            });
+            removeEventListener = vi.fn((event, handler) => {
+                if (event === 'message') this.handlers = this.handlers.filter(h => h !== handler);
+            });
+            terminate = vi.fn();
+            postMessage = vi.fn((request) => {
+                const workerIdx = mockWorkerInsts.indexOf(this);
+                if (request.type === 'cache_model') {
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'cache_model_success',
+                        payload: { modelId: workerIdx + 200 },
+                    }));
+                } else if (request.type === 'simulate') {
+                    this.simulateCount++;
+                    this.activeSimulations++;
+                    const seed = request.payload.options.seed;
+                    setTimeout(() => {
+                        this.activeSimulations--;
+                        this.trigger(workerIdx === 1 && seed === 1
+                            ? { id: request.id, type: 'simulate_error', payload: { message: 'seed one failed' } }
+                            : {
+                                id: request.id,
+                                type: 'simulate_success',
+                                payload: { headers: ['seed'], data: [{ seed }] },
+                            });
+                    }, workerIdx === 0 && seed > 0 ? 10 : 0);
+                } else if (request.type === 'release_model') {
+                    if (mockWorkerInsts.some(worker => worker.activeSimulations > 0)) {
+                        this.releaseWhileActive = true;
+                    }
+                    queueMicrotask(() => this.trigger({
+                        id: request.id,
+                        type: 'release_model_success',
+                        payload: { modelId: request.payload.modelId },
+                    }));
+                }
+            });
+
+            trigger(eventData: any) {
+                this.handlers.forEach(handler => handler({ data: eventData }));
+            }
+
+            constructor() {
+                mockWorkerInsts.push(this);
+            }
+        }
+
+        vi.stubGlobal('Worker', RejectingEnsembleWorker);
+        vi.stubGlobal('SharedArrayBuffer', undefined);
+        const pool = new BnglWorkerPool(2);
+
+        await expect(pool.runEnsemble({} as any, {} as any, 5)).rejects.toThrow('seed one failed');
+        expect(mockWorkerInsts.every(worker => worker.postMessage.mock.calls.some(
+            ([request]: [any]) => request.type === 'release_model'
+        ))).toBe(true);
+        expect(mockWorkerInsts.every(worker => worker.releaseWhileActive === false)).toBe(true);
+        expect(mockWorkerInsts.every(worker => worker.activeSimulations === 0)).toBe(true);
     });
 });

@@ -1,8 +1,64 @@
 import { describe, it, expect } from 'vitest';
-import { applyQSSAReduction } from '../../packages/engine/src/services/analysis/QSSAPreprocessor';
+import { analyzeQSSA, applyQSSAReduction } from '../../packages/engine/src/services/analysis/QSSAPreprocessor';
 import type { BNGLModel } from '../../packages/engine/src/types';
 
 describe('QSSAPreprocessor test with full parser', () => {
+    it('derives rate span only from parameters used in reaction rules, ignoring non-rate parameters like initial concentrations', () => {
+        const model: BNGLModel = {
+            parameters: {
+                kf_fast: 1000,
+                kr_fast: 1000,
+                kcat_slow: 1,
+                E_init: 0.001, // Very small concentration parameter that shouldn't be treated as a kinetic rate constant
+                S_init: 5000,  // Very large initial species parameter
+            },
+            moleculeTypes: [],
+            species: [
+                { name: 'E(s)', initialConcentration: 0.001 },
+                { name: 'S(s)', initialConcentration: 5000 },
+                { name: 'ES(s)', initialConcentration: 0 },
+                { name: 'P()', initialConcentration: 0 },
+            ],
+            observables: [],
+            reactions: [],
+            reactionRules: [
+                {
+                    name: 'fast_bind1',
+                    reactants: ['E(s)', 'S(s)'],
+                    products: ['ES(s)'],
+                    rate: 'kf_fast',
+                    isBidirectional: false,
+                },
+                {
+                    name: 'fast_bind2',
+                    reactants: ['E(s)', 'S(s)'],
+                    products: ['ES(s)'],
+                    rate: 'kf_fast',
+                    isBidirectional: false,
+                },
+                {
+                    name: 'fast_unbind',
+                    reactants: ['ES(s)'],
+                    products: ['E(s)', 'S(s)'],
+                    rate: 'kr_fast',
+                    isBidirectional: false,
+                },
+                {
+                    name: 'slow_cat',
+                    reactants: ['ES(s)'],
+                    products: ['E(s)', 'P()'],
+                    rate: 'kcat_slow',
+                    isBidirectional: false,
+                },
+            ],
+        };
+
+        const result = analyzeQSSA(model, { fastSlowThreshold: 100 });
+        const qssaCandidates = result.candidates.filter((c) => c.recommendation === 'QSSA');
+        expect(qssaCandidates.length).toBeGreaterThan(0);
+        expect(qssaCandidates.map((c) => c.species)).toContain('ES(s)');
+    });
+
     it('should correctly identify compartmental species', async () => {
         const model: BNGLModel = {
             parameters: {},

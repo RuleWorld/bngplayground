@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 import { runNFsimSimulation } from '../src/services/simulation/nfsim/NFsimRunner';
+import { runNFsim } from '../src/services/simulation/nfsim/NFsimLoader';
 import { BNGLModel } from '../src/types';
 
 // Mock the runNFsim loader
@@ -74,6 +75,63 @@ describe('NFsimRunner postMessage Resilience', () => {
       if (originalSelf !== undefined && originalSelfPostMessage !== undefined) {
         originalSelf.postMessage = originalSelfPostMessage;
       }
+    }
+  });
+
+  it('retains result metadata by default and omits it without changing trajectory data', async () => {
+    const defaultResult = await runNFsimSimulation(baseModel, {
+      t_end: 1.0,
+      n_steps: 10,
+      requireRuntime: true,
+    });
+    const leanResult = await runNFsimSimulation(baseModel, {
+      t_end: 1.0,
+      n_steps: 10,
+      requireRuntime: true,
+      includeSpeciesData: false,
+      includeExpandedNetwork: false,
+    });
+    const withoutSpeciesData = await runNFsimSimulation(baseModel, {
+      t_end: 1.0,
+      n_steps: 10,
+      requireRuntime: true,
+      includeSpeciesData: false,
+    });
+    const withoutExpandedNetwork = await runNFsimSimulation(baseModel, {
+      t_end: 1.0,
+      n_steps: 10,
+      requireRuntime: true,
+      includeExpandedNetwork: false,
+    });
+
+    expect(defaultResult).toHaveProperty('speciesHeaders');
+    expect(defaultResult).toHaveProperty('speciesData');
+    expect(defaultResult).toHaveProperty('expandedReactions');
+    expect(defaultResult).toHaveProperty('expandedSpecies');
+
+    expect(leanResult).not.toHaveProperty('speciesHeaders');
+    expect(leanResult).not.toHaveProperty('speciesData');
+    expect(leanResult).not.toHaveProperty('expandedReactions');
+    expect(leanResult).not.toHaveProperty('expandedSpecies');
+
+    expect(withoutSpeciesData).not.toHaveProperty('speciesHeaders');
+    expect(withoutSpeciesData).not.toHaveProperty('speciesData');
+    expect(withoutSpeciesData).toHaveProperty('expandedReactions');
+    expect(withoutSpeciesData).toHaveProperty('expandedSpecies');
+
+    expect(withoutExpandedNetwork).toHaveProperty('speciesHeaders');
+    expect(withoutExpandedNetwork).toHaveProperty('speciesData');
+    expect(withoutExpandedNetwork).not.toHaveProperty('expandedReactions');
+    expect(withoutExpandedNetwork).not.toHaveProperty('expandedSpecies');
+
+    for (const result of [leanResult, withoutSpeciesData, withoutExpandedNetwork]) {
+      expect(result.headers).toEqual(defaultResult.headers);
+      expect(result.data).toEqual(defaultResult.data);
+    }
+
+    for (const [, runtimeOptions] of vi.mocked(runNFsim).mock.calls) {
+      expect(runtimeOptions).not.toHaveProperty('includeSpeciesData');
+      expect(runtimeOptions).not.toHaveProperty('includeExpandedNetwork');
     }
   });
 });

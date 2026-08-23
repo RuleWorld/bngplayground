@@ -25,63 +25,7 @@ type PendingRequest = {
 
 const DEFAULT_TIMEOUT_MS = 300_000;
 
-const extractErrorMessage = (payload: SerializedWorkerError | unknown): string => {
-  if (payload && typeof payload === 'object' && 'message' in payload && typeof (payload as { message?: unknown }).message === 'string') {
-    return (payload as { message: string }).message;
-  }
-  if (payload instanceof Error) {
-    return payload.message;
-  }
-  if (typeof payload === 'string') {
-    return payload;
-  }
-  try {
-    return JSON.stringify(payload);
-  } catch {
-    return 'Worker error';
-  }
-};
-
-const toError = (type: string, payload: SerializedWorkerError | unknown): Error => {
-  const message = extractErrorMessage(payload) || `${type} failed`;
-  if (payload && typeof payload === 'object') {
-    const p = payload as Record<string, unknown>;
-    const name = typeof p.name === 'string' ? p.name : undefined;
-    const stack = typeof p.stack === 'string' ? p.stack : undefined;
-    const filename = typeof p.filename === 'string' ? p.filename : undefined;
-    const lineno = typeof p.lineno === 'number' ? p.lineno : undefined;
-    const colno = typeof p.colno === 'number' ? p.colno : undefined;
-
-    if (name === 'AbortError') {
-      return new DOMException(message || 'Operation cancelled', 'AbortError');
-    }
-
-    if (name === 'TimeoutError') {
-      const err = new Error(message);
-      err.name = 'TimeoutError';
-      if (stack) (err as any).stack = stack;
-      // attach the serialized payload for debugging
-      try {
-        (err as any).cause = payload;
-      } catch (e) {
-        // ignore property assignment errors
-      }
-      return err;
-    }
-
-    const err = new Error(message + (filename ? ` (${filename}:${lineno ?? '?'}:${colno ?? '?'})` : ''));
-    if (name) err.name = String(name);
-    if (stack) (err as any).stack = stack;
-    try {
-      (err as any).cause = payload;
-    } catch (e) {
-      // ignore
-    }
-    return err;
-  }
-
-  return new Error(message);
-};
+import { extractErrorMessage, toError } from './workerErrorUtils';
 
 class BnglService {
   private worker!: Worker;
@@ -90,6 +34,10 @@ class BnglService {
   private ignoredResponseIds = new Set<number>();
   private terminated = false;
   private lastCachedModelId?: number;
+  private lastCachedModel?: BNGLModel;
+  private lastCachedModelSignature?: string;
+  private lastCachedModelPromise?: Promise<number>;
+  private modelCacheRequestId = 0;
   private progressListeners = new Set<(payload: any) => void>();
   private warningListeners = new Set<(payload: any) => void>();
 
@@ -104,6 +52,7 @@ class BnglService {
     this.messageId = 0;
     this.promises = new Map();
     this.ignoredResponseIds = new Set();
+    this.clearModelCache();
 
     this.worker.addEventListener('message', (event: MessageEvent<WorkerResponse>) => {
       const { id, type, payload } = event.data ?? {};
@@ -142,21 +91,13 @@ class BnglService {
       }
 
       if (id === -1 && type === 'worker_internal_error') {
-        const detail = extractErrorMessage(payload);
-        const location =
-          payload && typeof payload === 'object'
-            ? `${(payload as { filename?: string }).filename ?? 'unknown'}:${(payload as { lineno?: number }).lineno ?? '?'}:${(payload as { colno?: number }).colno ?? '?'}`
-            : 'unknown:?';
-        const stack =
-          payload && typeof payload === 'object' && 'stack' in payload && typeof (payload as { stack?: unknown }).stack === 'string'
-            ? (payload as { stack: string }).stack
-            : undefined;
-        if (stack) {
-          console.error(`[Worker] ${detail} (${location})\n${stack}`);
+        const err = toError('worker_internal_error', payload);
+        if (err.stack) {
+          console.error(`[Worker] ${err.message}\n${err.stack}`);
         } else {
-          console.error(`[Worker] ${detail} (${location})`);
+          console.error(`[Worker] ${err.message}`);
         }
-        this.rejectAllPending(`Worker internal error: ${detail} (${location})`);
+        this.rejectAllPending(err);
         return;
       }
 
@@ -248,8 +189,8 @@ class BnglService {
     }
   }
 
-  private rejectAllPending(message: string) {
-    const err = new Error(message);
+  private rejectAllPending(reason: string | Error) {
+    const err = reason instanceof Error ? reason : new Error(reason);
     this.promises.forEach((pending, requestId) => {
       this.promises.delete(requestId);
       this.markResponseAsIgnorable(requestId);
@@ -358,6 +299,7 @@ class BnglService {
     } catch (error) {
       console.warn('[BnglService] Error terminating worker', error);
     }
+    this.clearModelCache();
     this.rejectAllPending(reason ?? 'Worker terminated');
   }
 
@@ -377,10 +319,9 @@ class BnglService {
   }
 
   public simulate(model: BNGLModel, options: SimulationOptions, requestOptions?: RequestOptions): Promise<SimulationResults> {
-    return this.postMessage<SimulationResults>('simulate', { model, options }, {
-      ...requestOptions,
-      description: requestOptions?.description ?? `Simulation (${options.method})`,
-    });
+    return this.prepareModel(model, requestOptions).then((modelId) =>
+      this.simulateCached(modelId, undefined, options, requestOptions)
+    );
   }
 
   public atomize(sbmlCode: string, requestOptions?: RequestOptions): Promise<import('../types').AtomizerResult> {
@@ -409,20 +350,59 @@ class BnglService {
    * for each simulation run. Returns a numeric modelId that can be used with simulateCached.
    */
   public prepareModel(model: BNGLModel, requestOptions?: RequestOptions): Promise<number> {
-    // If we previously cached a model, try to release it to keep worker memory bounded.
-    const prev = this.lastCachedModelId;
-    if (typeof prev === 'number') {
-      // Fire-and-forget release; do not block the prepareModel call on release response.
-      this.releaseModel(prev).catch((err) => {
-        console.warn('[BnglService] Failed to release previous cached model', prev, err);
-      });
+    const signature = this.getModelCacheSignature(model);
+    if (
+      this.lastCachedModel === model
+      && this.lastCachedModelSignature === signature
+      && this.lastCachedModelPromise
+    ) {
+      return this.lastCachedModelPromise;
     }
 
-    return this.postMessage<{ modelId: number }>('cache_model', { model }, { ...requestOptions, description: 'Cache model' }).then((res) => {
-      const modelId = (res as { modelId: number }).modelId;
-      this.lastCachedModelId = modelId;
+    const previousPromise = this.lastCachedModelPromise;
+    const previousId = this.lastCachedModelId;
+    const cacheRequestId = ++this.modelCacheRequestId;
+    this.lastCachedModel = model;
+    this.lastCachedModelSignature = signature;
+
+    const cachePromise = (async () => {
+      let modelIdToRelease = previousId;
+      if (previousPromise) {
+        try {
+          modelIdToRelease = await previousPromise;
+        } catch {
+          modelIdToRelease = undefined;
+        }
+      }
+
+      if (typeof modelIdToRelease === 'number') {
+        try {
+          await this.postMessage<{ modelId: number }>(
+            'release_model',
+            { modelId: modelIdToRelease },
+            { description: 'Release cached model' },
+          );
+        } catch (error) {
+          console.warn('[BnglService] Failed to release previous cached model', modelIdToRelease, error);
+        }
+      }
+
+      const response = await this.postMessage<{ modelId: number }>(
+        'cache_model',
+        { model },
+        { ...requestOptions, description: 'Cache model' },
+      );
+      const modelId = response.modelId;
+      if (this.modelCacheRequestId === cacheRequestId) {
+        this.lastCachedModelId = modelId;
+      }
       return modelId;
+    })().catch((error) => {
+      if (this.modelCacheRequestId === cacheRequestId) this.clearModelCache();
+      throw error;
     });
+    this.lastCachedModelPromise = cachePromise;
+    return cachePromise;
   }
 
   /**
@@ -440,7 +420,26 @@ class BnglService {
    * Release a previously cached model in the worker to free memory.
    */
   public releaseModel(modelId: number, requestOptions?: RequestOptions): Promise<{ modelId: number } | void> {
+    if (this.lastCachedModelId === modelId) {
+      this.clearModelCache();
+    }
     return this.postMessage<{ modelId: number }>('release_model', { modelId }, { ...requestOptions, description: 'Release cached model' });
+  }
+
+  private clearModelCache() {
+    this.modelCacheRequestId++;
+    this.lastCachedModelId = undefined;
+    this.lastCachedModel = undefined;
+    this.lastCachedModelSignature = undefined;
+    this.lastCachedModelPromise = undefined;
+  }
+
+  private getModelCacheSignature(model: BNGLModel): string {
+    const signature = JSON.stringify(model);
+    if (signature === undefined) {
+      throw new Error('Unable to serialize model for worker cache validation');
+    }
+    return signature;
   }
 
   /**

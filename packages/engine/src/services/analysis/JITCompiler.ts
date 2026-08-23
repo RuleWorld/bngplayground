@@ -161,6 +161,20 @@ export interface JITCompileDebugContext {
     callsite?: string;
 }
 
+export interface JITJsepNode {
+    type: string;
+    name?: string;
+    value?: number | string | boolean | null;
+    operator?: string;
+    left?: JITJsepNode;
+    right?: JITJsepNode;
+    argument?: JITJsepNode;
+    callee?: JITJsepNode;
+    arguments?: JITJsepNode[];
+    object?: JITJsepNode;
+    property?: JITJsepNode;
+}
+
 /**
  * JIT Compiler for ODE RHS functions
  */
@@ -168,6 +182,10 @@ export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private observableCache: Map<string, JITCompiledObservableFunction> = new Map();
     private bytecodeCache: Map<string, NetworkByteCode> = new Map();
+    // Full generated source is the cache key, so reuse cannot cross networks or
+    // folded rate constants. This avoids paying `new Function` compilation on
+    // every SSA replicate while retaining exact arithmetic and evaluation order.
+    private ssaPropensityCache: Map<string, (state: Float64Array, propensities: Float64Array) => number> = new Map();
     // Cache for compiled SSA event updaters, keyed on a full structural signature
     // string (not a hash) so there is zero risk of a collision returning a
     // function compiled for a different network. Persists across replicate runs
@@ -266,9 +284,16 @@ export class JITCompiler {
             indices: Int32Array | number[];
             coefficients: Float64Array | number[];
         }>,
-        functions?: JITFunctionDefinition[]
+        functions?: JITFunctionDefinition[],
+        parameters?: Record<string, number>
     ): string {
         const parts = [`n=${nSpecies}`];
+        if (parameters) {
+            const keys = Object.keys(parameters).sort();
+            for (const k of keys) {
+                parts.push(`p:${k}=${parameters[k]}`);
+            }
+        }
         const fnSig = this.functionSignature(functions);
         if (fnSig) parts.push(`f=${fnSig}`);
         if (constantSpeciesMask && constantSpeciesMask.length > 0) {
@@ -525,6 +550,7 @@ export class JITCompiler {
             rateConstantIndex?: number;
             scalingVolume?: number; // Reacting volume anchor (BNG2-style)
             totalRate?: boolean; // Parsed modifier; BNG2 ODE/network ignores TotalRate
+            statisticalFactor?: number;
         }>,
         nSpecies: number,
         parameters?: Record<string, number>,
@@ -614,8 +640,8 @@ export class JITCompiler {
 
             // Apply multiplicity/degeneracy if using symbolic expression
             // Numeric rateConstant already includes degeneracy aggregated in NetworkGenerator
-            if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
-                rateExpr = `(${rateExpr}) * ${(rxn as any).statisticalFactor}`;
+            if (typeof rxn.rateConstant !== 'number' && rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                rateExpr = `(${rateExpr}) * ${rxn.statisticalFactor}`;
             }
 
             // Apply reacting volume anchor (matches BNG2 compartmental mass-action scaling)
@@ -724,8 +750,8 @@ export class JITCompiler {
                 let rate = rateEvaluators[i](parameterContext);
                 if (!Number.isFinite(rate)) continue;
 
-                if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
-                    rate *= (rxn as any).statisticalFactor;
+                if (typeof rxn.rateConstant !== 'number' && rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                    rate *= rxn.statisticalFactor;
                 }
 
                 const vAnchor = rxn.scalingVolume || 1.0;
@@ -927,7 +953,17 @@ export class JITCompiler {
 
             const safeSource0 = this.sanitizeSource(source);
             const source0 = safeSource0 + "return aTotal;\n";
-            return this.createFn(["state", "propensities"], source0) as (state: Float64Array, propensities: Float64Array) => number;
+            const cached = this.ssaPropensityCache.get(source0);
+            if (cached) return cached;
+
+            const compiled = this.createFn(["state", "propensities"], source0) as
+                (state: Float64Array, propensities: Float64Array) => number;
+            if (this.ssaPropensityCache.size >= this.maxCacheSize) {
+                const oldest = this.ssaPropensityCache.keys().next().value;
+                if (oldest !== undefined) this.ssaPropensityCache.delete(oldest);
+            }
+            this.ssaPropensityCache.set(source0, compiled);
+            return compiled;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
             return null;
@@ -1404,7 +1440,7 @@ export class JITCompiler {
                 );
             }
 
-            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables, functions);
+            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables, functions, safeParameters);
             const cached = this.bytecodeCache.get(signature);
 
             if (cached) {
@@ -1749,6 +1785,8 @@ export class JITCompiler {
         this.cache.clear();
         this.observableCache.clear();
         this.bytecodeCache.clear();
+        this.ssaPropensityCache.clear();
+        this.ssaEventUpdaterCache.clear();
         console.log('[JITCompiler] Cache cleared');
     }
 
@@ -1761,7 +1799,8 @@ export class JITCompiler {
      */
     getCacheStats(): { size: number; maxSize: number } {
         return {
-            size: this.cache.size + this.observableCache.size,
+            size: this.cache.size + this.observableCache.size +
+                this.ssaPropensityCache.size + this.ssaEventUpdaterCache.size,
             maxSize: this.maxCacheSize
         };
     }
@@ -1777,19 +1816,22 @@ export class JITCompiler {
             const expandedExpr = this.normalizeExpressionForValidation(
                 this.expandZeroArgFunctions(expr, functions)
             );
-            const ast = jsep(expandedExpr);
+            const ast = jsep(expandedExpr) as unknown as JITJsepNode;
             const bytes: number[] = [];
             let usesParameters = false;
             const speciesIndexByName = new Map<string, number>();
             speciesNames.forEach((name, index) => speciesIndexByName.set(name, index));
 
-            const walk = (node: any) => {
+            const walk = (node: JITJsepNode) => {
                 if (node.type === 'Literal') {
                     bytes.push(OP_PUSH_CONST);
                     const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = node.value;
+                    new Float64Array(buf)[0] = typeof node.value === 'number' ? node.value : Number(node.value);
                     bytes.push(...new Uint8Array(buf));
                 } else if (node.type === 'Identifier') {
+                    if (!node.name) {
+                        throw new Error('Identifier missing name');
+                    }
                     // Support common global constants used in BNGL expressions
                     if (node.name === 'NaN') {
                         bytes.push(OP_PUSH_CONST);
@@ -1841,6 +1883,9 @@ export class JITCompiler {
                     }
                     throw new Error(`Unsupported member expression in ${expandedExpr}`);
                 } else if (node.type === 'BinaryExpression' || node.type === 'LogicalExpression') {
+                    if (!node.left || !node.right) {
+                        throw new Error('Malformed binary expression');
+                    }
                     walk(node.left);
                     walk(node.right);
                     if (node.operator === '+') bytes.push(OP_ADD);
@@ -1858,25 +1903,33 @@ export class JITCompiler {
                     else if (node.operator === '||') bytes.push(OP_OR);
                     else throw new Error(`Unsupported binary operator: ${node.operator}`);
                 } else if (node.type === 'UnaryExpression') {
+                    if (!node.argument) {
+                        throw new Error('Malformed unary expression');
+                    }
                     walk(node.argument);
                     if (node.operator === '-') bytes.push(OP_NEG);
                     else if (node.operator === '!') bytes.push(OP_NOT);
                     else throw new Error(`Unsupported unary operator: ${node.operator}`);
                 } else if (node.type === 'CallExpression') {
-                    const name = node.callee.name.toLowerCase();
+                    const name = node.callee?.name?.toLowerCase();
+                    if (!name) {
+                        throw new Error('Invalid function call');
+                    }
                     if (name === 'sat') {
                         if ((node.arguments?.length ?? 0) !== 2) {
                             throw new Error('sat() expects 2 arguments');
                         }
                         // sat(a,b) = a / (a + b)
-                        walk(node.arguments[0]);
-                        walk(node.arguments[0]);
-                        walk(node.arguments[1]);
+                        if (node.arguments) {
+                            walk(node.arguments[0]);
+                            walk(node.arguments[0]);
+                            walk(node.arguments[1]);
+                        }
                         bytes.push(OP_ADD);
                         bytes.push(OP_DIV);
                         return;
                     }
-                    node.arguments.forEach((arg: any) => walk(arg));
+                    node.arguments?.forEach((arg: JITJsepNode) => walk(arg));
                     if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
                     else if (name === 'exp') bytes.push(OP_EXP);
                     else if (name === 'log10') bytes.push(OP_LOG10);

@@ -1,38 +1,58 @@
 import { sobolSensitivity, simulate, loadEvaluator } from '@bngplayground/engine';
-import type { ToolArgs, ToolResult } from '../types/index.js';
+import type { SobolResult } from '@bngplayground/engine';
+import type { ToolArgs, ToolResult, MCPErrorResult } from '../types/index.js';
 import { sobolSensitivityArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult<any>> {
+export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult<SobolResult[] | MCPErrorResult>> {
     try {
         const parsedArgs = parseArgs('sobol_sensitivity', sobolSensitivityArgsSchema, args);
+
+        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+            return createToolResult(structureError(
+                new Error('Model code must be a non-empty string.'),
+            ));
+        }
+
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
 
-        const modelParameterNames = new Set(Object.keys(expandedModel.parameters));
-        const unknownParameters = parsedArgs.parameters
-            .map((p: any) => p.name)
-            .filter((name: string) => !modelParameterNames.has(name));
-        if (unknownParameters.length > 0) {
-            throw new Error(`Unknown Sobol parameters: ${unknownParameters.join(', ')}. Available parameters: ${Array.from(modelParameterNames).join(', ')}`);
+        if (!expandedModel.observables || expandedModel.observables.length === 0) {
+            return createToolResult(structureError(
+                new Error('Model defines no observables. Sobol sensitivity requires at least one observable.'),
+            ));
         }
 
-        const invalidBounds = parsedArgs.parameters.filter((p: any) => !Number.isFinite(p.min) || !Number.isFinite(p.max) || p.min >= p.max);
+        const modelParameterNames = new Set(Object.keys(expandedModel.parameters));
+        const unknownParameters = parsedArgs.parameters
+            .map((p) => p.name)
+            .filter((name: string) => !modelParameterNames.has(name));
+        if (unknownParameters.length > 0) {
+            return createToolResult(structureError(
+                new Error(`Unknown Sobol parameters: ${unknownParameters.join(', ')}. Available parameters: ${Array.from(modelParameterNames).join(', ')}`),
+            ));
+        }
+
+        const invalidBounds = parsedArgs.parameters.filter((p) => !Number.isFinite(p.min) || !Number.isFinite(p.max) || p.min >= p.max);
         if (invalidBounds.length > 0) {
-            const details = invalidBounds.map((p: any) => `${p.name} [min=${p.min}, max=${p.max}]`).join('; ');
-            throw new Error(`Invalid Sobol parameter bounds (expected finite min < max): ${details}`);
+            const details = invalidBounds.map((p) => `${p.name} [min=${p.min}, max=${p.max}]`).join('; ');
+            return createToolResult(structureError(
+                new Error(`Invalid Sobol parameter bounds (expected finite min < max): ${details}`),
+            ));
         }
 
         const modelObservableNames = new Set(expandedModel.observables.map((o) => o.name));
         if (parsedArgs.observables && parsedArgs.observables.length > 0) {
             const unknownObservables = parsedArgs.observables.filter((name: string) => !modelObservableNames.has(name));
             if (unknownObservables.length > 0) {
-                throw new Error(`Unknown Sobol observables: ${unknownObservables.join(', ')}. Available observables: ${Array.from(modelObservableNames).join(', ')}`);
+                return createToolResult(structureError(
+                    new Error(`Unknown Sobol observables: ${unknownObservables.join(', ')}. Available observables: ${Array.from(modelObservableNames).join(', ')}`),
+                ));
             }
         }
 
-        const simOptions = buildSimulationOptions(parsedArgs);
+        const simOptions = withDataOnlySimulationOutput(buildSimulationOptions(parsedArgs));
         await loadEvaluator();
 
         const results = await sobolSensitivity({
@@ -47,7 +67,7 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
                     postMessage: () => { },
                 });
             },
-            params: parsedArgs.parameters.map((p: any) => ({
+            params: parsedArgs.parameters.map((p) => ({
                 name: p.name,
                 min: p.min,
                 max: p.max,

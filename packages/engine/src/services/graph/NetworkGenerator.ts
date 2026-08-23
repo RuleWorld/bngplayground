@@ -62,10 +62,12 @@ let profilingEnabled = false;
 
 export function enableProfiling() {
   profilingEnabled = true;
+  GraphMatcher.setProfilingEnabled(true);
 }
 
 export function disableProfiling() {
   profilingEnabled = false;
+  GraphMatcher.setProfilingEnabled(false);
 }
 
 // Profiling counters
@@ -390,12 +392,31 @@ export interface GeneratorOptions {
   parameters?: Map<string, number>; // For evaluating Arrhenius expressions
 }
 
+interface PureStateChangeDelta {
+  reactantComponentIndex: number;
+  componentName: string;
+  fromState: string;
+  toState: string;
+}
+
+interface PureStateChangePlan {
+  deltas: PureStateChangeDelta[];
+  // Plain product components are interpreted as explicitly unbound by the
+  // general builder when their matched target site is bound. The shortcut can
+  // only preserve topology when those sites are actually unbound at runtime.
+  requiresUnboundTarget: Array<{
+    reactantComponentIndex: number;
+    componentName: string;
+  }>;
+}
+
 
 export class NetworkGenerator {
   private options: GeneratorOptions;
   // NEW: map Molecule name -> set of species indices that contain that molecule
   private speciesByMoleculeIndex: Map<string, Set<number>> = new Map();
-  // NEW: map Structural Hash -> Canonical String (for fast prefiltering)
+  // Bond-free graphs have no lost topology in the structural description, so
+  // their structural hash is safe to reuse as canonical identity.
   private structuralHashMap: Map<string, string> = new Map();
   // NEW: map Compartment name -> Size (for volume scaling)
   private compartmentVolumes: Map<string, number> = new Map();
@@ -418,6 +439,9 @@ export class NetworkGenerator {
     applyCarryThroughAnchorSkip: boolean;
     identicalPatternGroups: Map<string, number[]>;
   }> = new WeakMap();
+  // A rule object is immutable during generation. Cache both successful plans
+  // and conservative rejections so the structural proof is paid once per rule.
+  private pureStateChangePlanCache: WeakMap<RxnRule, PureStateChangePlan | null> = new WeakMap();
 
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
@@ -883,6 +907,7 @@ export class NetworkGenerator {
     // Reset inverted index and caches
     this.speciesByMoleculeIndex.clear();
     this.structuralHashMap.clear();
+    this.pureStateChangePlanCache = new WeakMap();
     clearMatchCache();
 
     const speciesMap = new Map<string, Species>();
@@ -890,27 +915,10 @@ export class NetworkGenerator {
     const reactionsList: Rxn[] = [];
     this.currentSpeciesList = speciesList;
     this.currentReactionsList = reactionsList;
-    // NOTE: dedup is done via `reactionIndexByKey` (Map) below; this Set is no
-    // longer populated (its `.add` calls were removed as redundant). The empty
-    // Set + its parameter plumbing are harmless and can be fully removed in a
-    // follow-up compiler-in-hand pass across the apply*Rule signatures.
-    const reactionKeys = new Set<string>();
     const reactionIndexByKey = new Map<string, number>();
-    const queue: SpeciesGraph[] = [];
+    const queue: Species[] = [];
     const reactiveRules = rules.filter(r => r.reactants.length > 0);
     const synthesisRules = rules.filter(r => r.reactants.length === 0);
-
-    // Track species processed per rule (by reactive rule index) to prevent
-    // runaway generation. Keyed by numeric species index rather than the
-    // canonical string, which avoids building/hashing long canonical keys in the
-    // hot loop. The previous `processedPairs` Set encoded the identical fact and
-    // has been removed as redundant.
-    const ruleProcessedSpecies = new Map<number, Set<number>>();
-
-    // Initialize rule processed sets using reactive rule index as key
-    for (let i = 0; i < reactiveRules.length; i++) {
-      ruleProcessedSpecies.set(i, new Set<number>());
-    }
 
     // Initialize with seed species
     for (const sg of seedSpecies) {
@@ -958,7 +966,7 @@ export class NetworkGenerator {
     let iteration = 0;
     let lastLoggedSpeciesCount = speciesList.length;
     const logInterval = 50; // Log every 50 new species
-    let lastProgressCallback = Date.now();
+    let lastProgressCallback = onProgress ? Date.now() : 0;
 
     progressLog(`[NetworkGenerator] Starting with ${speciesList.length} seed species, ${rules.length} rules`);
 
@@ -968,7 +976,7 @@ export class NetworkGenerator {
         if (signal?.aborted) {
           throw new DOMException('Network generation cancelled', 'AbortError');
         }
-        await this.checkResourceLimits(signal);
+        this.checkResourceLimits(signal);
         iteration++;
 
         // Take a snapshot of the current queue - this is one "iteration" in BNG2 terms
@@ -983,15 +991,13 @@ export class NetworkGenerator {
 
         // Process all species in the current batch
         for (let batchIdx = 0; batchIdx < batchSize; batchIdx++) {
-          const currentSpecies = queue[batchIdx];
-          const currentCanonical = currentSpecies.cachedCanonical || profiledCanonicalize(currentSpecies);
-          const currentSpeciesObj = speciesMap.get(currentCanonical)!;
+          const currentSpeciesObj = queue[batchIdx];
 
 
 
           if (shouldLogNetworkGenerator) {
             debugNetworkLog(
-              `[NetworkGenerator] Iter ${iteration}, Species ${currentSpeciesObj.index}: ${currentSpecies
+              `[NetworkGenerator] Iter ${iteration}, Species ${currentSpeciesObj.index}: ${currentSpeciesObj.graph
                 .toString()
                 .slice(0, 100)}`
             );
@@ -1022,12 +1028,6 @@ export class NetworkGenerator {
               );
             }
 
-            // Skip if this species was already processed for this rule (prevents
-            // runaway generation, and dedups repeated (species, rule) visits).
-            const ruleProcessed = ruleProcessedSpecies.get(ruleIdx)!;
-            if (ruleProcessed.has(currentSpeciesObj.index)) continue;
-            ruleProcessed.add(currentSpeciesObj.index);
-
             if (rule.reactants.length === 1) {
               // Unimolecular rule
               if (shouldLogNetworkGenerator) {
@@ -1042,7 +1042,6 @@ export class NetworkGenerator {
                 speciesList,
                 queue,
                 reactionsList,
-                reactionKeys,
                 reactionIndexByKey,
                 signal
               );
@@ -1059,7 +1058,6 @@ export class NetworkGenerator {
                 speciesList,
                 queue,
                 reactionsList,
-                reactionKeys,
                 reactionIndexByKey,
                 signal
               );
@@ -1075,16 +1073,18 @@ export class NetworkGenerator {
           this.currentRuleName = null;
 
           // Progress update check inside batch loop for smoother UI
-          const now = Date.now();
-          if (onProgress && (now - lastProgressCallback >= 100)) { // Update every 100ms
-            lastProgressCallback = now;
-            onProgress({
-              species: speciesList.length,
-              reactions: reactionsList.length,
-              iteration,
-              memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
-              timeElapsed: Date.now() - this.startTime
-            });
+          if (onProgress) {
+            const now = Date.now();
+            if (now - lastProgressCallback >= 100) { // Update every 100ms
+              lastProgressCallback = now;
+              onProgress({
+                species: speciesList.length,
+                reactions: reactionsList.length,
+                iteration,
+                memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
+                timeElapsed: now - this.startTime
+              });
+            }
           }
         } // End of batch for-loop
 
@@ -1092,16 +1092,18 @@ export class NetworkGenerator {
         queue.splice(0, batchSize);
 
         // Ensure final update at end of iteration if not just updated
-        const now2 = Date.now();
-        if (onProgress && now2 - lastProgressCallback > 50) {
-          lastProgressCallback = now2;
-          onProgress({
-            species: speciesList.length,
-            reactions: reactionsList.length,
-            iteration,
-            memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
-            timeElapsed: Date.now() - this.startTime
-          });
+        if (onProgress) {
+          const now = Date.now();
+          if (now - lastProgressCallback > 50) {
+            lastProgressCallback = now;
+            onProgress({
+              species: speciesList.length,
+              reactions: reactionsList.length,
+              iteration,
+              memoryUsed: (performance as ExtendedPerformance).memory?.usedJSHeapSize || 0,
+              timeElapsed: now - this.startTime
+            });
+          }
         }
       }
     } catch (e: unknown) {
@@ -1261,9 +1263,8 @@ export class NetworkGenerator {
     reactantSpecies: Species,
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     reactionsList: Rxn[],
-    reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
   ): Promise<void> {
@@ -1600,25 +1601,7 @@ export class NetworkGenerator {
         debugNetworkLog(`[applyUnimolecularRule] Transformation result: ${products ? products.map(p => p.toString()).join(', ') : 'null'}`);
       }
 
-      // products === null means transformation failed (e.g., no match)
-      // products === [] (empty array) is valid for degradation rules
-      if (!this.validateProducts(products)) {
-        continue;
-      }
-
-      // BNG2.pl parity check (RxnRule.pm lines 3156-3170):
-      // Number of product graphs must equal number of product patterns.
-      // For example, reverse unbind "A.B -> A + B" has 2 product patterns.
-      // If applied to a ternary complex where breaking one bond leaves the complex
-      // still connected (e.g., by another bond), result is 1 connected product.
-      // Reaction is rejected because 1 != 2.
-      const expectedProductCount = rule.products.length;
-      if (products.length < expectedProductCount) {
-        if (shouldLogNetworkGenerator) {
-          debugNetworkLog(`[applyUnimolecularRule] Rejecting rule ${rule.name}: product count ${products.length} != expected ${expectedProductCount}`);
-        }
-        continue;
-      }
+      // Candidate products were validated before being stored in matchOutcomes.
       const signatureMultiplicity = signature ? (signatureMultiplicityByOutcome.get(signature) ?? 1) : 1;
       const hasTopologyChangingSignature = !!signature && !signature.startsWith('addMol:');
 
@@ -2294,9 +2277,8 @@ export class NetworkGenerator {
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     reactionsList: Rxn[],
-    reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
   ): Promise<void> {
@@ -2446,7 +2428,6 @@ export class NetworkGenerator {
             speciesList,
             queue,
             reactionsList,
-            reactionKeys,
             reactionIndexByKey,
             signal
           );
@@ -2552,7 +2533,6 @@ export class NetworkGenerator {
           speciesList,
           queue,
           reactionsList,
-          reactionKeys,
           reactionIndexByKey,
           signal
         );
@@ -2572,9 +2552,8 @@ export class NetworkGenerator {
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     reactionsList: Rxn[],
-    reactionKeys: Set<string>,
     reactionIndexByKey: Map<string, number>,
     signal?: AbortSignal
   ): Promise<void> {
@@ -3360,6 +3339,189 @@ export class NetworkGenerator {
    * FIX: Properly apply rule transformation
    * Handles degradation rules (X -> 0) by returning empty products array
    */
+  private getPureStateChangePlan(rule: RxnRule): PureStateChangePlan | null {
+    const cached = this.pureStateChangePlanCache.get(rule);
+    if (cached !== undefined) return cached;
+
+    const reject = (): null => {
+      this.pureStateChangePlanCache.set(rule, null);
+      return null;
+    };
+
+    // MoveConnected and DeleteMolecules add semantics beyond the product graph
+    // itself, so neither can use the direct clone-and-update path.
+    if (rule.isMoveConnected || rule.isDeleteMolecules) return reject();
+    if (rule.reactants.length !== 1 || rule.products.length !== 1) return reject();
+
+    const reactant = rule.reactants[0];
+    const product = rule.products[0];
+    if (reactant.compartment !== product.compartment) return reject();
+
+    // One pattern molecule makes the product-to-reactant molecule mapping
+    // unambiguous. Multi-molecule state rules retain the general path until an
+    // exact, uniqueness-proving graph correspondence is available.
+    if (reactant.molecules.length !== 1 || product.molecules.length !== 1) return reject();
+
+    const reactantMol = reactant.molecules[0];
+    const productMol = product.molecules[0];
+    if (
+      reactantMol.name !== productMol.name ||
+      reactantMol.compartment !== productMol.compartment ||
+      reactantMol.label !== productMol.label ||
+      reactantMol.wildcard !== productMol.wildcard ||
+      reactantMol.hasExplicitEmptyComponentList !== productMol.hasExplicitEmptyComponentList ||
+      reactantMol.components.length !== productMol.components.length
+    ) {
+      return reject();
+    }
+
+    // Repeated component names can make the positional product correspondence
+    // ambiguous even when the written arrays line up. Fall back rather than
+    // guessing which repeated site the product intended to modify.
+    const componentNames = new Set<string>();
+    for (const component of reactantMol.components) {
+      if (componentNames.has(component.name)) return reject();
+      componentNames.add(component.name);
+    }
+
+    const adjacencySignature = (graph: SpeciesGraph): string => {
+      const entries: string[] = [];
+      for (const [endpoint, partners] of graph.adjacency) {
+        entries.push(`${endpoint}>${[...partners].sort().join(',')}`);
+      }
+      entries.sort();
+      return entries.join('|');
+    };
+    if (adjacencySignature(reactant) !== adjacencySignature(product)) return reject();
+
+    const deltas: PureStateChangeDelta[] = [];
+    const requiresUnboundTarget: PureStateChangePlan['requiresUnboundTarget'] = [];
+    for (let componentIndex = 0; componentIndex < reactantMol.components.length; componentIndex++) {
+      const reactantComponent = reactantMol.components[componentIndex];
+      const productComponent = productMol.components[componentIndex];
+
+      const reactantEdgeTargets = [...reactantComponent.edges.values()].sort((a, b) => a - b);
+      const productEdgeTargets = [...productComponent.edges.values()].sort((a, b) => a - b);
+      if (
+        reactantComponent.name !== productComponent.name ||
+        reactantComponent.wildcard !== productComponent.wildcard ||
+        reactantComponent.syntheticWildcard !== productComponent.syntheticWildcard ||
+        reactantEdgeTargets.length !== productEdgeTargets.length ||
+        reactantEdgeTargets.some((target, index) => target !== productEdgeTargets[index])
+      ) {
+        return reject();
+      }
+
+      if (!productComponent.wildcard && productComponent.edges.size === 0) {
+        requiresUnboundTarget.push({
+          reactantComponentIndex: componentIndex,
+          componentName: reactantComponent.name,
+        });
+      }
+
+      if (reactantComponent.state === productComponent.state) continue;
+      const fromState = reactantComponent.state;
+      const toState = productComponent.state;
+      if (!fromState || fromState === '?' || !toState || toState === '?') return reject();
+      deltas.push({
+        reactantComponentIndex: componentIndex,
+        componentName: reactantComponent.name,
+        fromState,
+        toState,
+      });
+    }
+
+    if (deltas.length === 0) return reject();
+    const plan = { deltas, requiresUnboundTarget };
+    this.pureStateChangePlanCache.set(rule, plan);
+    return plan;
+  }
+
+  private tryApplyPureStateChangePlan(
+    plan: PureStateChangePlan,
+    reactantPatterns: SpeciesGraph[],
+    reactantGraphs: SpeciesGraph[],
+    matches: MatchMap[]
+  ): SpeciesGraph | null {
+    if (reactantPatterns.length !== 1 || reactantGraphs.length !== 1 || matches.length !== 1) return null;
+
+    const target = reactantGraphs[0];
+    const match = matches[0];
+    if (!target || !match) return null;
+
+    // Network species are connected, but callers can construct SpeciesGraph
+    // directly. Preserve the general path's split behavior for malformed or
+    // deliberately disconnected targets by declining the shortcut.
+    if (
+      target.molecules.length > 1 &&
+      target.getConnectedComponentMolecules(0).size !== target.molecules.length
+    ) {
+      return null;
+    }
+
+    const targetMolIndex = match.moleculeMap.get(0);
+    if (targetMolIndex === undefined || !target.molecules[targetMolIndex]) return null;
+
+    const resolveTargetComponent = (
+      reactantComponentIndex: number,
+      componentName: string
+    ): { molIndex: number; componentIndex: number; component: Component } | null => {
+      const mappedComponent = match.componentMap.get(`0.${reactantComponentIndex}`);
+      if (!mappedComponent) return null;
+      const dotIndex = mappedComponent.indexOf('.');
+      if (dotIndex <= 0) return null;
+      const molIndex = Number(mappedComponent.slice(0, dotIndex));
+      const componentIndex = Number(mappedComponent.slice(dotIndex + 1));
+      if (!Number.isInteger(molIndex) || !Number.isInteger(componentIndex) || molIndex !== targetMolIndex) {
+        return null;
+      }
+      const component = target.molecules[molIndex]?.components[componentIndex];
+      if (!component || component.name !== componentName) return null;
+      return { molIndex, componentIndex, component };
+    };
+
+    for (const required of plan.requiresUnboundTarget) {
+      const resolved = resolveTargetComponent(
+        required.reactantComponentIndex,
+        required.componentName
+      );
+      if (!resolved) return null;
+      const endpoint = `${resolved.molIndex}.${resolved.componentIndex}`;
+      if (resolved.component.edges.size > 0 || (target.adjacency.get(endpoint)?.length ?? 0) > 0) {
+        return null;
+      }
+    }
+
+    const product = target.clone();
+    for (let molIndex = 0; molIndex < product.molecules.length; molIndex++) {
+      const productMol = product.molecules[molIndex];
+      productMol._sourceKey = `0:${molIndex}`;
+      productMol._sourceR = 0;
+      productMol._sourceM = molIndex;
+      // These are transient builder markers, not species metadata. The general
+      // builder starts with a fresh molecule structure on every transformation.
+      productMol._explicitUnboundComponents = undefined;
+      productMol._explicitBondedComponents = undefined;
+    }
+
+    for (const delta of plan.deltas) {
+      const resolved = resolveTargetComponent(delta.reactantComponentIndex, delta.componentName);
+      if (!resolved) return null;
+      const targetComponent = resolved.component;
+      const productComponent =
+        product.molecules[resolved.molIndex]?.components[resolved.componentIndex];
+      if (
+        !productComponent ||
+        targetComponent.state !== delta.fromState
+      ) {
+        return null;
+      }
+      productComponent.state = delta.toState;
+    }
+
+    return product;
+  }
+
   private applyRuleTransformation(
     rule: RxnRule,
     reactantPatterns: SpeciesGraph[],
@@ -3382,6 +3544,17 @@ export class NetworkGenerator {
 
     const _profStart = profilingEnabled ? performance.now() : 0;
     try {
+      const pureStateChangePlan = this.getPureStateChangePlan(rule);
+      if (pureStateChangePlan) {
+        const product = this.tryApplyPureStateChangePlan(
+          pureStateChangePlan,
+          reactantPatterns,
+          reactantGraphs,
+          matches
+        );
+        if (product) return [product];
+      }
+
       if (shouldLogNetworkGenerator) {
         debugNetworkLog(
           `[applyTransformation] Rule ${rule.name}, ${reactantGraphs.length} reactants -> ${rule.products.length} products`
@@ -5853,21 +6026,27 @@ export class NetworkGenerator {
     graph: SpeciesGraph,
     speciesMap: Map<string, Species>,
     speciesList: Species[],
-    queue: SpeciesGraph[],
+    queue: Species[],
     signal?: AbortSignal
   ): Species {
     const _dedupStart = profilingEnabled ? performance.now() : 0;
 
-    // Use structural hash prefiltering to avoid canonicalization
-    const structHash = graph.getStructuralHash();
     let canonical: string;
-    const cached = this.structuralHashMap.get(structHash);
-    if (cached !== undefined) {
-      canonical = cached;
-      graph.cachedCanonical = canonical;
+    if (graph.adjacency.size === 0) {
+      const structHash = graph.getStructuralHash();
+      const cached = this.structuralHashMap.get(structHash);
+      if (cached !== undefined) {
+        canonical = cached;
+        graph.cachedCanonical = canonical;
+      } else {
+        canonical = profiledCanonicalize(graph);
+        this.structuralHashMap.set(structHash, canonical);
+      }
     } else {
+      // A structural hash contains only local neighbour descriptions. Distinct
+      // bonded topologies (for example K3,3 and a triangular prism) can collide,
+      // so bonded species must establish identity by canonical labeling.
       canonical = profiledCanonicalize(graph);
-      this.structuralHashMap.set(structHash, canonical);
     }
 
     if (speciesMap.has(canonical)) {
@@ -5892,7 +6071,7 @@ export class NetworkGenerator {
     speciesMap.set(canonical, species);
     speciesList.push(species);
     this.indexSpecies(species);
-    queue.push(graph);
+    queue.push(species);
 
     if (signal?.aborted) {
       throw new DOMException('Network generation cancelled', 'AbortError');
@@ -5917,7 +6096,7 @@ export class NetworkGenerator {
 
 
 
-  private async checkResourceLimits(signal?: AbortSignal): Promise<void> {
+  private checkResourceLimits(signal?: AbortSignal): void {
     // Removed yielding to event loop - it causes issues in some test runners
     if (signal?.aborted) {
       throw new Error(

@@ -2,7 +2,7 @@ import { ParamBounds, ExperimentalDataPoint, fitParameters, simulate, loadEvalua
 import { z } from 'zod';
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { fitParametersArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 type FitParametersArgs = z.infer<typeof fitParametersArgsSchema>;
@@ -43,7 +43,7 @@ export async function handleFitParameters(args: ToolArgs): Promise<ToolResult<an
                     runModel.parameters[k] = v;
                 });
                 updateMassActionRates(runModel);
-                return simulate(0, runModel, { ...simulationOptions, ...options }, {
+                return simulate(0, runModel, withDataOnlySimulationOutput({ ...simulationOptions, ...options }), {
                     checkCancelled: () => { },
                     postMessage: () => { },
                 });

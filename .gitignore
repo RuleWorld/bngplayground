@@ -171,6 +171,7 @@ bng_exec_*/
 test-results/
 
 # Workspace repositories (Root-relative to avoid matching source)
+/RuleHub/
 /nfsim/
 /nfsim-src/
 /bionetgen/
@@ -262,6 +263,9 @@ run_build.bat
 
 # Fuzzer ephemeral output — regenerated each run, never committed (verified ignored)
 tests/fixtures/fuzzer/
+packages/engine/tests/fixtures/fuzzer/
+fuzzer_output*.txt
 
 # End of .gitignore
 coverage
+/RuleHub/

@@ -25,6 +25,7 @@ const shouldLogGraphMatcher = typeof process !== 'undefined' && process.env?.DEB
 const MAX_VF2_ITERATIONS = 100000;
 const MAX_COMPONENT_ITERATIONS = 10000;
 const SINGLE_NODE_ORDERING = [0];
+let componentProfilingEnabled = false;
 
 // WeakMaps for nested caching: Pattern -> Target -> MatchMap[]
 // To support both strict and relaxed matching, as well as symmetry-breaking,
@@ -77,6 +78,11 @@ export class GraphMatcher {
   // Profiling counters for component matching (innermost hot path)
   static matchComponentsTime = 0;
   static matchComponentsCount = 0;
+
+  /** Enable innermost matcher timing only while the network profiler is active. */
+  static setProfilingEnabled(enabled: boolean): void {
+    componentProfilingEnabled = enabled;
+  }
 
   /**
    * VF2++ Algorithm 1 (Egerváry & Madarasi 2018, Section 3): compute an order that prioritizes
@@ -1225,20 +1231,25 @@ class VF2State {
    * This uses the FULL corePattern (all molecule mappings) to constrain component choices.
    */
   private matchComponentsWithBondConsistency(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
-    const profStart = performance.now();
+    const shouldProfile = componentProfilingEnabled;
+    const profStart = shouldProfile ? performance.now() : 0;
     const patternMol = this.pattern.molecules[pMolIdx];
     const targetMol = this.target.molecules[tMolIdx];
     if (patternMol.components.length === 0) {
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return new Map();
     }
 
     // X-1 guard: bitmask overflows for >31 target components
     if (targetMol.components.length > 31) {
       const result = this.matchComponentsWithBondConsistencyLarge(pMolIdx, tMolIdx);
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return result;
     }
 
@@ -1255,8 +1266,10 @@ class VF2State {
       pMolIdx, tMolIdx, this.orderScratch, 0, assignment, 0, iterationCount
     );
     if (!success) {
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return null;
     }
 
@@ -1264,8 +1277,10 @@ class VF2State {
     for (let i = 0; i < nComps; i++) {
       if (assignment[i] !== -1) result.set(i, assignment[i]);
     }
-    GraphMatcher.matchComponentsTime += performance.now() - profStart;
-    GraphMatcher.matchComponentsCount++;
+    if (shouldProfile) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+    }
     return result;
   }
 
@@ -1471,20 +1486,25 @@ class VF2State {
   }
 
   private matchComponents(pMolIdx: number, tMolIdx: number): boolean {
-    const profStart = performance.now();
+    const shouldProfile = componentProfilingEnabled;
+    const profStart = shouldProfile ? performance.now() : 0;
     const patternMol = this.pattern.molecules[pMolIdx];
     const targetMol = this.target.molecules[tMolIdx];
     if (patternMol.components.length === 0) {
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return true;
     }
 
     // X-1 guard: bitmask overflows for >31 target components
     if (targetMol.components.length > 31) {
       const result = this.matchComponentsLarge(pMolIdx, tMolIdx);
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return result;
     }
 
@@ -1500,8 +1520,10 @@ class VF2State {
     const success = this.assignComponentsBacktrack(
       pMolIdx, tMolIdx, this.orderScratch, 0, assignment, 0, iterationCount
     );
-    GraphMatcher.matchComponentsTime += performance.now() - profStart;
-    GraphMatcher.matchComponentsCount++;
+    if (shouldProfile) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+    }
     return success;
   }
 

@@ -146,6 +146,7 @@ export async function executeMultiPhaseSimulation(
     const options = getSimulationOptionsFromParsedModel(model, 'default', {
         solver: 'cvode',
         includeSpeciesData: false,
+        includeExpandedNetwork: false,
         ...(seed !== undefined ? { seed } : {}),
         ...(strictFunctionalRates !== undefined ? { strictFunctionalRates } : {})
     });
