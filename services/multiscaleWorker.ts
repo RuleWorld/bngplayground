@@ -87,9 +87,10 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
       }
 
       default: {
+        const unknownType = (msg as { type?: unknown }).type;
         const response: MultiscaleWorkerResponse = {
           type: 'error',
-          message: `MultiscaleWorker received unrecognized message type: ${(msg as any).type}`,
+          message: `MultiscaleWorker received unrecognized message type: ${String(unknownType)}`,
         };
         self.postMessage(response);
         break;
