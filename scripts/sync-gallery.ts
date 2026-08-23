@@ -67,7 +67,14 @@ async function main() {
   const sanitizeStr = (val: unknown): string => {
     if (typeof val !== 'string') return '';
     // Strip control characters and backslashes that could be used for injection
-    return val.replace(/[\u0000-\u001F\u007F-\u009F\\]/g, '');
+    let sanitized = '';
+    for (const character of val) {
+      const code = character.charCodeAt(0);
+      if (character !== '\\' && code > 0x1f && (code < 0x7f || code > 0x9f)) {
+        sanitized += character;
+      }
+    }
+    return sanitized;
   };
 
   const sanitizeStrArray = (val: unknown): string[] => {
@@ -184,6 +191,14 @@ export const BNG2_COMPATIBLE_MODELS = BNG2_COMPATIBLE;
   const normalizedOutPath = normalize(outPath);
   if (!normalizedOutPath.startsWith(normalizedOutDir)) {
     throw new Error(`Path traversal detected: ${outPath} is not within ${outDir}`);
+  }
+  if (existsSync(outPath)) {
+    const existing = readFileSync(outPath, 'utf8');
+    const withoutGeneratedTimestamp = (value: string) => value.replace(/^\/\/ Generated: .*$/m, '// Generated: <stable>');
+    if (withoutGeneratedTimestamp(existing) === withoutGeneratedTimestamp(output)) {
+      console.log(`Gallery unchanged: ${sanitizedSlim.length} models, ${sanitizedCategories.length} categories`);
+      return;
+    }
   }
   // Write through child process to break CodeQL taint trace
   // Data piped via stdin to avoid E2BIG from argv limits

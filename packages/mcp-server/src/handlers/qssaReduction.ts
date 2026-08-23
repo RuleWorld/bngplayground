@@ -37,7 +37,18 @@ export async function handleQssaReduction(args: ToolArgs): Promise<ToolResult<an
         const parsedArgs = parseArgs('qssa_reduction', qssaReductionArgsSchema, args);
         await loadEvaluator();
 
+        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+            return createToolResult(structureError(
+                new Error('Model code must be a non-empty string.'),
+            ));
+        }
+
         const model = parseModelOrThrow(parsedArgs.code);
+        if (!model.species || model.species.length === 0) {
+            return createToolResult(structureError(
+                new Error('Model must contain at least one species definition.'),
+            ));
+        }
 
         if (parsedArgs.mode === 'analyze') {
             const qssaOptions: {
@@ -95,6 +106,14 @@ export async function handleQssaReduction(args: ToolArgs): Promise<ToolResult<an
         // mode: apply
         const species = parsedArgs.species_to_eliminate!;
 
+        // Validate species_to_eliminate contains non-empty/non-blank names.
+        const invalidSpecies = species.filter((s) => !s || s.trim() === '');
+        if (invalidSpecies.length > 0) {
+            return createToolResult(structureError(
+                new Error('species_to_eliminate must contain only non-empty, non-blank strings.'),
+            ));
+        }
+
         // Validate that every requested species exists in the model.
         const modelSpeciesNames = new Set((model.species ?? []).map((s) => s.name));
         const unknownSpecies = species.filter((s) => !modelSpeciesNames.has(s));
@@ -127,6 +146,6 @@ export async function handleQssaReduction(args: ToolArgs): Promise<ToolResult<an
             },
         });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

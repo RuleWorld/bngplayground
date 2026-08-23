@@ -10,7 +10,7 @@ export async function handleExplainModel(args: ToolArgs): Promise<ToolResult<any
         const explanation = await explainModelNarrative(parsedArgs.code, parsedArgs.include_crux ?? false);
         return createToolResult(explanation);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

@@ -71,6 +71,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                 n_steps: Number(defaults.nSteps) || 100,
                 includeInfluence: false, // Disable DIN for maximum speed in explorer
                 includeSpeciesData: false,
+                includeExpandedNetwork: false,
                 // Stochastic seed (SSA, PLA, PSA, NFsim)
                 ...(seed ? { seed: parseInt(seed) } : {}),
                 // NFsim-specific
@@ -219,6 +220,7 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                             value={method}
                             onChange={(e) => setMethod(e.target.value as 'ssa' | 'pla' | 'psa' | 'nf')}
                             disabled={isSimulating}
+                            aria-label="Simulation Method"
                             className="rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700 bg-white dark:bg-slate-900 dark:bg-slate-800 px-2 py-1 text-sm outline-none focus:ring-2 focus:ring-indigo-500/20"
                         >
                             <option value="ssa">Gillespie (SSA)</option>

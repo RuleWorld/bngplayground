@@ -1,7 +1,7 @@
 import { abcSMC, simulate, loadEvaluator, type ABCSMCConfig } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { bayesianInferenceArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleBayesianInference(args: ToolArgs): Promise<ToolResult<any>> {
@@ -10,7 +10,7 @@ export async function handleBayesianInference(args: ToolArgs): Promise<ToolResul
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
 
-        const simOptions = buildSimulationOptions(parsedArgs);
+        const simOptions = withDataOnlySimulationOutput(buildSimulationOptions(parsedArgs));
         await loadEvaluator();
 
         const experimentalData = parsedArgs.data.map((d: any) => ({
@@ -42,7 +42,7 @@ export async function handleBayesianInference(args: ToolArgs): Promise<ToolResul
 
         return createToolResult(result);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

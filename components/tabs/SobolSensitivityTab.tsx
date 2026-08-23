@@ -84,6 +84,8 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
           method: 'ode',
           t_end: 100, // Default for sensitivity
           n_steps: 10, // Few steps needed for t_end value
+          includeSpeciesData: false,
+          includeExpandedNetwork: false,
         }, { signal: abortController.signal });
         return { data: results.data };
       };

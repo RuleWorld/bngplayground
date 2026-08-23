@@ -78,6 +78,11 @@ export async function computeFIM(
   if (!parameterNames || parameterNames.length === 0) throw new Error('No parameters specified');
 
   const startTotal = performance.now();
+  const leanSimulationOptions: SimulationOptions = {
+    ...simulationOptions,
+    includeSpeciesData: false,
+    includeExpandedNetwork: false,
+  };
 
   // Ensure we always release any cached model created for this computation
   let modelId: number | undefined;
@@ -92,7 +97,7 @@ export async function computeFIM(
     const preparedModelId = modelId;
 
     // baseline simulation (no overrides)
-    const baseline = await bnglService.simulateCached(preparedModelId, undefined, simulationOptions, { signal });
+    const baseline = await bnglService.simulateCached(preparedModelId, undefined, leanSimulationOptions, { signal });
 
     // Determine observables and timepoints
     const T = baseline.data.length;
@@ -164,7 +169,7 @@ export async function computeFIM(
     const simStartTime = performance.now();
     const perturbResults = await Promise.all(
       perturbJobs.map(job =>
-        bnglService.simulateCached(preparedModelId, { [job.param]: job.val as number } as Record<string, number>, simulationOptions, { signal })
+        bnglService.simulateCached(preparedModelId, { [job.param]: job.val as number } as Record<string, number>, leanSimulationOptions, { signal })
       )
     );
     totalSimMs = performance.now() - simStartTime;
@@ -567,7 +572,7 @@ export async function computeFIM(
           const paramMap: Record<string, number> = { ...baseParams };
           paramMap[parameterNames[fixedIdx]] = fixedVal;
           for (let k = 0; k < freeIdxs.length; k++) paramMap[parameterNames[freeIdxs[k]]] = x[k];
-          const res = await recordSim(() => bnglService.simulateCached(modelIdLocal, paramMap, simulationOptions, { signal }));
+          const res = await recordSim(() => bnglService.simulateCached(modelIdLocal, paramMap, leanSimulationOptions, { signal }));
           const vec: number[] = [];
           for (let ti = 0; ti < (includeAllTimepoints ? res.data.length : 1); ti++) {
             const rIdx = includeAllTimepoints ? ti : res.data.length - 1;
@@ -611,7 +616,7 @@ export async function computeFIM(
             const out = await reoptimizeAtFixed(preparedModelId, idx, val, baseParams, { maxIter: 30, maxEvals: 120, initialStep: 0.25 });
             ssrArr.push(out.ssr);
           } else {
-            const res = await recordSim(() => bnglService.simulateCached(preparedModelId, { [name]: val as number } as Record<string, number>, simulationOptions, { signal }));
+            const res = await recordSim(() => bnglService.simulateCached(preparedModelId, { [name]: val as number } as Record<string, number>, leanSimulationOptions, { signal }));
             const vec: number[] = [];
             for (let ti = 0; ti < (includeAllTimepoints ? res.data.length : 1); ti++) {
               const rIdx = includeAllTimepoints ? ti : res.data.length - 1;

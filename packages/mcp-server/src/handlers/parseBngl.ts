@@ -10,7 +10,7 @@ export async function handleParseBngl(args: ToolArgs): Promise<ToolResult<any>> 
         const result = parseBNGLWithANTLR(parsedArgs.code);
         return createToolResult(result);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

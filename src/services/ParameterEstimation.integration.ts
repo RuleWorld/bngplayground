@@ -60,9 +60,16 @@ export class ODESolverAdapter {
       t_end: maxTime,
       n_steps: nSteps,
       atol: 1e-6,
-      rtol: 1e-6
+      rtol: 1e-6,
+      includeSpeciesData: false,
+      includeExpandedNetwork: false
     };
 
+    // WARNING: engine.simulate on the browser main thread with method:'ode' and
+    // default solver (cvode) would crash because CVODESolver.cvodeModuleFactory
+    // is only injected in workers. This is safe in Node (cvode_node.ts fallback)
+    // and when called from a worker context. If this adapter is ever wired to a
+    // browser UI, route through bnglService.simulate (lazy-imported) instead.
     const simulationResult = await simulate(
       0, // jobId
       modifiedModel,

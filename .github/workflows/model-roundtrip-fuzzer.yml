@@ -1,0 +1,44 @@
+name: Model Round-Trip Fuzzer
+on:
+  schedule:
+    - cron: '0 17 * * 1-5'
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
+jobs:
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566
+        with:
+          prompt: |
+            Fuzzing agent for the BNG Playground monorepo.
+            Standing objective: catch edge-case crashes, hangs, and silent
+            failures by generating random valid BNGL models.
+
+            1. Reference the ANTLR grammar in `packages/engine/src/parser/`
+               and the BioNetGen auth spec documentation to understand
+               valid BNGL constructs.
+            2. Generate 50 random syntactically-correct BNGL models
+               exercising different feature combinations (reaction rules,
+               compartments, observables, parameter expressions, etc.).
+            3. Run each through the full pipeline:
+               parse → network generate → ODE solve → SSA solve → NFsim solve.
+            4. For each failure (crash, hang >60s, silent empty output),
+               minimize the model to the smallest reproducing input and
+               file an issue with the minimized model and stack trace.
+            5. When fuzzing, do not commit generated .bngl models or timing dumps. The fuzzer's generator and seed are the committed artifacts; the models it emits are ephemeral and regenerated each run. If fuzzing uncovers a real failure, fix the root cause and commit one minimal reproducer as a named fixture (e.g. tests/fixtures/regression/<short-bug-name>.bngl) with a test that asserts the fixed behavior — not the whole batch that ran. Never add a suite that loops over N random committed models; that is noise, not regression coverage. Also add a line to .gitignore for the ephemeral output path (tests/fixtures/fuzzer/ or wherever the generator writes), so even if the agent runs the fuzzer locally the models can't be staged by accident. Belt and suspenders: gitignore stops the accident, the CI gate stops the deliberate bulk commit.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
+
+            Rules:
+            - Do NOT exhaust the model space — 50 is the cap per run.
+            - Never import browser APIs into packages/engine.
+            - Never commit generated .bngl models or timing dumps in bulk.
+            Never ask questions — make your best autonomous judgment; open a PR with your best shot.
+          jules_api_key: ${{ secrets.JULES_API_KEY }}

@@ -42,8 +42,18 @@ export class DependencyVisitor extends AbstractParseTreeVisitor<void> implements
 }
 
 /**
- * Extracts all identifiers (observables, functions, parameters) from an expression string using ANTLR parser.
- * This ensures robust parsing of nested function calls and avoids regex pitfalls.
+ * Extracts all identifiers (observables, functions, parameters) from an expression string
+ * using the ANTLR parser.
+ *
+ * This ensures robust parsing of nested function calls and avoids regex pitfalls by
+ * visiting the parse tree of the expression and capturing all simple identifiers and
+ * observable references while ignoring built-in math functions (e.g., sin, exp).
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) to allow running in Node.js,
+ *            Web Workers, and other headless/server environments.
+ *
+ * @param expression - The BNGL math or rule expression string to parse.
+ * @returns A Set of string identifiers representing the extracted dependencies.
  */
 export function getExpressionDependencies(expression: string): Set<string> {
     // Return empty for empty strings

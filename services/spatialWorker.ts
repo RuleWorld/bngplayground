@@ -24,6 +24,28 @@ export type SpatialWorkerResponse =
   | { type: 'complete'; result: SpatialSimulationResult }
   | { type: 'error'; message: string };
 
+if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+  self.addEventListener('error', (event) => {
+    const errMsg = event.error?.message ?? event.message ?? 'Unknown worker error';
+    const response: SpatialWorkerResponse = { type: 'error', message: `SpatialWorker error: ${errMsg}` };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+
+  self.addEventListener('unhandledrejection', (event) => {
+    const errMsg = event.reason?.message ?? String(event.reason ?? 'Unhandled rejection in worker');
+    const response: SpatialWorkerResponse = { type: 'error', message: `SpatialWorker unhandled rejection: ${errMsg}` };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+
+  self.addEventListener('messageerror', (event) => {
+    const response: SpatialWorkerResponse = { type: 'error', message: 'SpatialWorker failed to deserialize incoming message' };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+}
+
 let simulation: SpatialSimulation | null = null;
 let cancelled = false;
 
@@ -35,6 +57,11 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
   }
 
   const msg = event.data;
+  if (!msg || typeof msg !== 'object') {
+    const response: SpatialWorkerResponse = { type: 'error', message: 'SpatialWorker received null, undefined, or non-object message' };
+    self.postMessage(response);
+    return;
+  }
 
   try {
     switch (msg.type) {
@@ -68,15 +95,22 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
         cancelled = false;
 
         try {
-          const result = await simulation.run((snapshot: SpatialSnapshot) => {
-            if (cancelled) return;
-            if (!snapshot.positions) return;
+          const result = await simulation.run(
+            (snapshot: SpatialSnapshot) => {
+              if (cancelled) return;
+              if (!snapshot.positions) return;
 
-            // Transfer the positions buffer for zero-copy
-            const transferable = snapshot.positions.buffer;
-            const response: SpatialWorkerResponse = { type: 'snapshot', snapshot };
-            self.postMessage(response, [transferable]);
-          });
+              // Transfer the positions buffer for zero-copy
+              const transferable = snapshot.positions.buffer;
+              const response: SpatialWorkerResponse = { type: 'snapshot', snapshot };
+              self.postMessage(response, [transferable]);
+            },
+            (step: number, totalSteps: number, time: number) => {
+              if (cancelled) return;
+              const response: SpatialWorkerResponse = { type: 'progress', step, totalSteps, time };
+              self.postMessage(response);
+            }
+          );
 
           if (!cancelled) {
             const response: SpatialWorkerResponse = { type: 'complete', result };
@@ -101,6 +135,15 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
           simulation.destroy();
           simulation = null;
         }
+        break;
+      }
+
+      default: {
+        const response: SpatialWorkerResponse = {
+          type: 'error',
+          message: `SpatialWorker received unrecognized message type: ${(msg as any).type}`,
+        };
+        self.postMessage(response);
         break;
       }
     }

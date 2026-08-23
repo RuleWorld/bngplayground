@@ -105,6 +105,18 @@ export default createCVodeModule;
 EOF
 
 echo "Installing artifacts to original project..."
+WASM_OPT="wasm-opt"
+if [ -f "/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt" ]; then
+  WASM_OPT="/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt"
+fi
+
+if command -v "$WASM_OPT" &> /dev/null; then
+  echo "Optimizing cvode.wasm with wasm-opt..."
+  "$WASM_OPT" -Oz --enable-exception-handling --enable-sign-ext cvode.wasm -o cvode.wasm
+else
+  echo "wasm-opt not found, skipping optimization for cvode.wasm."
+fi
+
 cp cvode.js "$ORIG_DIR/../services/cvode_loader.js"
 cp cvode.wasm "$ORIG_DIR/../public/cvode.wasm"
 

@@ -19,7 +19,7 @@ import fs from 'fs';
 
 // ── Config ──────────────────────────────────────────────────────────
 const BIOMODELS_DIR = process.env.BIOMODELS_DIR
-  || 'C:\\Users\\Achyudhan\\OneDrive - University of Pittsburgh\\Desktop\\Achyudhan\\School\\PhD\\Research\\BioNetGen\\Biomodels';
+  || '';
 const SHARD = parseInt(process.argv[2] || process.env.SLURM_ARRAY_TASK_ID || '0', 10);
 const NSHARD = parseInt(process.argv[3] || process.env.NSHARD || '1', 10);
 const MAX_MATH_LEN = 300_000;
@@ -220,7 +220,7 @@ const balOK = s => {
   }
   return d === 0;
 };
-const leakExamples = [], emptyExamples = [], unbalExamples = [];
+const emptyExamples = [], unbalExamples = [];
 
 const started = Date.now();
 for (const f of mine) {

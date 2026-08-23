@@ -445,7 +445,9 @@ function App() {
       }
 
       // Update state to reflect parameter-only changes; do not reparse or simulate
-      setModel({ ...currentModel });
+      // A new identity prevents the worker cache from reusing the pre-edit model.
+      const updatedModel = { ...currentModel };
+      setModel(updatedModel);
 
       // Re-run validation and lint so editor markers update (but do not run network generation/simulation)
       const warnings = validateBNGLModel(currentModel);
@@ -460,7 +462,7 @@ function App() {
 
       // If we already have simulation results and options, re-solve without re-parsing (debounced upstream)
       if (results && simOptionsRef.current) {
-        void runSimulationForParameterUpdate(currentModel, simOptionsRef.current);
+        void runSimulationForParameterUpdate(updatedModel, simOptionsRef.current);
       }
     } catch (e) {
       console.warn('Parameter patch failed:', e);

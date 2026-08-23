@@ -5,7 +5,7 @@
  *   - Rosenbrock23Solver (+ LUSolver)
  *   - RK45Solver, FastRK4Solver
  *   - CVODESolver (+ CVodeModule interface)
- *   - AutoSolver, SmartAutoSolver, CVODEAutoSolver, createSolver
+ *   - AutoSolver, CVODEAutoSolver, createSolver
  *
  * Shared types and utilities live in utils/solverUtils.ts.
  */
@@ -25,4 +25,4 @@ export { buildJacobianFunction, isPurelyMassAction, computeJacobian, computeFini
 export type { JacobianReaction } from '../simulation/AnalyticalJacobian';
 
 // ── Auto-switching wrappers & factory ───────────────────────────────
-export { AutoSolver, SmartAutoSolver, CVODEAutoSolver, createSolver } from './solvers/AutoSolvers';
+export { AutoSolver, createSolver } from './solvers/AutoSolvers';

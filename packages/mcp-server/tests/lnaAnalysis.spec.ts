@@ -126,3 +126,93 @@ describe('lna_analysis handler — time course', () => {
         expect(body.variances[body.variances.length - 1][xIdx]).toBeGreaterThan(0);
     }, 30000);
 });
+
+describe('lna_analysis handler — edge cases & robustness', () => {
+    it('rejects empty or blank model code with a structured error', async () => {
+        const result = await handleLnaAnalysis({
+            code: '   ',
+            mode: 'steady_state',
+        });
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error).toMatch(/must be a non-empty and non-blank string/i);
+    });
+
+    it('rejects malformed inputs / wrong types gracefully', async () => {
+        // volume of wrong type
+        const resultVal = await handleLnaAnalysis({
+            code: BIRTH_DEATH_MODEL,
+            mode: 'steady_state',
+            volume: 'not-a-number' as any,
+        });
+        const bodyVal = JSON.parse(resultVal.content[0].text);
+        expect(bodyVal.error).toMatch(/volume/i);
+
+        // code of wrong type
+        const resultCode = await handleLnaAnalysis({
+            code: 12345 as any,
+            mode: 'steady_state',
+        });
+        const bodyCode = JSON.parse(resultCode.content[0].text);
+        expect(bodyCode.error).toMatch(/code/i);
+    });
+
+    it('handles garbage/unparseable BNGL code by returning structured parse error', async () => {
+        const result = await handleLnaAnalysis({
+            code: 'not even close to BNGL @#$%^&*',
+            mode: 'steady_state',
+        });
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error).toMatch(/BNGL parse failed|has no reactions/i);
+    });
+
+    it('validates boundary conditions: non-positive volume or t_end is rejected', async () => {
+        const resultVolume = await handleLnaAnalysis({
+            code: BIRTH_DEATH_MODEL,
+            mode: 'steady_state',
+            volume: 0,
+        });
+        const bodyVolume = JSON.parse(resultVolume.content[0].text);
+        expect(bodyVolume.error).toMatch(/volume/i);
+
+        const resultTEnd = await handleLnaAnalysis({
+            code: BIRTH_DEATH_MODEL,
+            mode: 'time_course',
+            t_end: -5,
+        });
+        const bodyTEnd = JSON.parse(resultTEnd.content[0].text);
+        expect(bodyTEnd.error).toMatch(/t_end/i);
+    });
+
+    it('rejects model with zero reaction rules', async () => {
+        const NO_RULES_MODEL = `begin model
+begin parameters
+end parameters
+begin molecule types
+  A()
+end molecule types
+begin seed species
+  A() 10
+end seed species
+begin reaction rules
+end reaction rules
+end model
+`;
+        const result = await handleLnaAnalysis({
+            code: NO_RULES_MODEL,
+            mode: 'steady_state',
+        });
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error).toMatch(/has no reactions/i);
+    });
+
+    it('handles missing optional fields by falling back to default values', async () => {
+        const result = await handleLnaAnalysis({
+            code: BIRTH_DEATH_MODEL,
+            // omitting mode (defaults to steady_state), volume (defaults to 1), include_covariance_matrix (defaults to true)
+        });
+        const body = JSON.parse(result.content[0].text);
+        expect(body.mode).toBe('steady_state');
+        expect(body.volume).toBe(1);
+        expect(body.covariance).toBeDefined();
+    });
+});

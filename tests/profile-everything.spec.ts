@@ -37,7 +37,11 @@
  *   PROFILE_MULTISITE      comma list of site counts for the combinatorial
  *                          stressor (default "5,7" -> 2^5 and 2^7 species)
  *   PROFILE_SIM            comma list of sim methods (default "ode,ssa"; add "nf")
- *   PROFILE_TEND           sim end time (default 10)
+ *   PROFILE_TEND           non-SSA sim end time (default 10)
+ *   PROFILE_SSA_TENDS      comma list of SSA end times (default "1,100"). The
+ *                          first case captures startup; the last represents the
+ *                          production default and remains available as simMs.ssa
+ *                          for compatibility with existing report consumers.
  *   PROFILE_NSTEPS         sim output steps (default 100)
  *   PROFILE_OUT            report path (default "profile-report.md" in cwd;
  *                          a matching .json is written alongside)
@@ -45,6 +49,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync, writeFileSync } from 'node:fs';
+import { createHash } from 'node:crypto';
 import { join, basename } from 'node:path';
 import { beforeAll, describe, it } from 'vitest';
 
@@ -74,6 +79,15 @@ import {
 const REPEATS = Math.max(1, parseInt(process.env.PROFILE_REPEATS || '3', 10));
 const SIM_METHODS = (process.env.PROFILE_SIM || 'ode,ssa').split(',').map(s => s.trim()).filter(Boolean);
 const T_END = Number(process.env.PROFILE_TEND || 10);
+const SSA_T_ENDS = [...new Set(
+  (process.env.PROFILE_SSA_TENDS || '1,100')
+    .split(',')
+    .map(s => Number(s.trim()))
+    .filter(n => Number.isFinite(n) && n > 0),
+)];
+if (SSA_T_ENDS.length === 0) {
+  throw new Error('PROFILE_SSA_TENDS must contain at least one positive finite number');
+}
 const N_STEPS = Number(process.env.PROFILE_NSTEPS || 100);
 const OUT_PATH = process.env.PROFILE_OUT || join(process.cwd(), 'profile-report.md');
 const MULTISITE_SITES = (process.env.PROFILE_MULTISITE || '5,7').split(',').map(s => parseInt(s.trim(), 10)).filter(n => n > 0);
@@ -249,6 +263,7 @@ interface PhaseResult {
   parseMs: number;
   genMs: number;
   simMs: Record<string, number | null>;   // method -> median ms (null = skipped/failed)
+  simStats: Record<string, SimulationTiming>;
   species: number;
   reactions: number;
   heapDeltaMB: number;
@@ -268,9 +283,46 @@ interface PhaseResult {
   error?: string;
 }
 
+interface SimulationTiming {
+  method: string;
+  tEnd: number;
+  medianMs: number | null;
+  minMs: number | null;
+  maxMs: number | null;
+  samplesMs: number[];
+  trajectoryHash: string | null;
+  error?: string;
+}
+
+function simulationCaseKey(method: string, tEnd: number): string {
+  return `${method}:t_end=${tEnd}`;
+}
+
+// This is deliberately computed after the timer stops; it is a reproducibility
+// guard, not part of the benchmark metric.
+function trajectoryHash(value: unknown): string {
+  const result = value as Partial<{
+    headers: unknown;
+    data: unknown;
+    dataBySuffix: unknown;
+    speciesHeaders: unknown;
+    speciesData: unknown;
+    speciesDataBySuffix: unknown;
+  }> | null;
+  const text = JSON.stringify({
+    headers: result?.headers,
+    data: result?.data,
+    dataBySuffix: result?.dataBySuffix,
+    speciesHeaders: result?.speciesHeaders,
+    speciesData: result?.speciesData,
+    speciesDataBySuffix: result?.speciesDataBySuffix,
+  });
+  return createHash('sha256').update(text).digest('hex');
+}
+
 async function profileModel(spec: ModelSpec): Promise<PhaseResult> {
   const result: PhaseResult = {
-    parseMs: NaN, genMs: NaN, simMs: {}, species: 0, reactions: 0, heapDeltaMB: 0,
+    parseMs: NaN, genMs: NaN, simMs: {}, simStats: {}, species: 0, reactions: 0, heapDeltaMB: 0,
     breakdown: Object.fromEntries(SECTIONS.map(s => [s, { ms: 0, calls: 0 }])) as PhaseResult['breakdown'],
   };
 
@@ -341,7 +393,7 @@ async function profileModel(spec: ModelSpec): Promise<PhaseResult> {
     };
 
     // Helper: time a simulation config (warm-up + median), returning the last result.
-    const runSimTimed = async (options: any): Promise<{ medianMs: number | null; result: any | null; error?: string }> => {
+    const runSimTimed = async (options: any): Promise<{ timing: SimulationTiming; result: any | null }> => {
       try {
         await simulate(0, simModel as any, options, NOOP_CB as any); // warm-up
         const times: number[] = [];
@@ -351,22 +403,49 @@ async function profileModel(spec: ModelSpec): Promise<PhaseResult> {
           simResult = await simulate(r + 1, simModel as any, options, NOOP_CB as any);
           times.push(performance.now() - s0);
         }
-        return { medianMs: median(times), result: simResult };
+        return {
+          timing: {
+            method: options.method,
+            tEnd: options.t_end,
+            medianMs: median(times),
+            minMs: Math.min(...times),
+            maxMs: Math.max(...times),
+            samplesMs: times,
+            trajectoryHash: trajectoryHash(simResult),
+          },
+          result: simResult,
+        };
       } catch (e) {
-        return { medianMs: null, result: null, error: (e as Error).message };
+        return {
+          timing: {
+            method: options.method,
+            tEnd: options.t_end,
+            medianMs: null,
+            minMs: null,
+            maxMs: null,
+            samplesMs: [],
+            trajectoryHash: null,
+            error: (e as Error).message,
+          },
+          result: null,
+        };
       }
     };
 
     let denseOdeResult: any = null;
     for (const method of SIM_METHODS) {
       if (method === 'ode' && !HAS_CVODE) { result.simMs[method] = null; continue; }
-      const options: any = { method, t_end: T_END, n_steps: N_STEPS };
-      if (method === 'ode') options.solver = 'cvode'; // -> dense cvode_jac for large mass-action N
+      const tEnds = method === 'ssa' ? SSA_T_ENDS : [T_END];
+      for (const tEnd of tEnds) {
+        const options: any = { method, t_end: tEnd, n_steps: N_STEPS, seed: 12345 };
+        if (method === 'ode') options.solver = 'cvode'; // -> dense cvode_jac for large mass-action N
 
-      const { medianMs, result: simResult, error } = await runSimTimed(options);
-      result.simMs[method] = medianMs;
-      if (error) console.warn(`[profile] ${spec.name}: ${method} sim failed: ${error}`);
-      if (method === 'ode') denseOdeResult = simResult;
+        const { timing, result: simResult } = await runSimTimed(options);
+        result.simStats[simulationCaseKey(method, tEnd)] = timing;
+        result.simMs[method] = timing.medianMs;
+        if (timing.error) console.warn(`[profile] ${spec.name}: ${method} t_end=${tEnd} sim failed: ${timing.error}`);
+        if (method === 'ode') denseOdeResult = simResult;
+      }
     }
 
     // --- dense-vs-sparse ODE comparison on the SAME model: the go/no-go on routing
@@ -379,18 +458,18 @@ async function profileModel(spec: ModelSpec): Promise<PhaseResult> {
         result.odeVsSparse = { denseMs, sparseMs: null, speedup: null, maxAbs: NaN, maxRel: NaN, comparedCells: 0, status: 'dense-failed' };
       } else {
         const sparse = await runSimTimed({ method: 'ode', solver: 'cvode_sparse', t_end: T_END, n_steps: N_STEPS });
-        if (sparse.error || !sparse.result) {
+        if (sparse.timing.error || !sparse.result) {
           result.odeVsSparse = {
             denseMs, sparseMs: null, speedup: null, maxAbs: NaN, maxRel: NaN,
-            comparedCells: 0, status: 'sparse-failed', error: sparse.error,
+            comparedCells: 0, status: 'sparse-failed', error: sparse.timing.error,
           };
-          console.warn(`[profile] ${spec.name}: cvode_sparse failed (may need the WASM sparse rebuild): ${sparse.error}`);
+          console.warn(`[profile] ${spec.name}: cvode_sparse failed (may need the WASM sparse rebuild): ${sparse.timing.error}`);
         } else {
           const diff = trajMaxDiff(denseOdeResult, sparse.result);
           result.odeVsSparse = {
             denseMs,
-            sparseMs: sparse.medianMs,
-            speedup: (sparse.medianMs && sparse.medianMs > 0) ? denseMs / sparse.medianMs : null,
+            sparseMs: sparse.timing.medianMs,
+            speedup: (sparse.timing.medianMs && sparse.timing.medianMs > 0) ? denseMs / sparse.timing.medianMs : null,
             maxAbs: diff.maxAbs, maxRel: diff.maxRel, comparedCells: diff.cells,
             status: 'ok',
           };
@@ -414,7 +493,9 @@ function buildReport(rows: Array<{ spec: ModelSpec; res: PhaseResult }>): string
   push('');
   push('==============================================================================');
   push(` PIPELINE PROFILE   (median of ${REPEATS} run${REPEATS > 1 ? 's' : ''}, warm-up discarded)`);
+  push(` runtime: ${process.version}   platform: ${process.platform}/${process.arch}`);
   push(` cvode.wasm present: ${HAS_CVODE ? 'yes' : 'NO (ODE skipped)'}   sim methods: ${SIM_METHODS.join(', ')}`);
+  if (SIM_METHODS.includes('ssa')) push(` SSA cases: ${SSA_T_ENDS.map(t => `t_end=${t}`).join(', ')}`);
   if (ODE_COMPARE) push(' dense-vs-sparse ODE comparison: ON (see the DENSE vs SPARSE section below)');
   push('==============================================================================');
   push('');
@@ -422,7 +503,8 @@ function buildReport(rows: Array<{ spec: ModelSpec; res: PhaseResult }>): string
   // ---- per-model phase table ----
   const header =
     pad('model', 40) + padL('species', 9) + padL('rxns', 8) +
-    padL('parse', 9) + padL('gen', 10) + padL('ode', 9) + padL('ssa', 9) + padL('heapMB', 9);
+    padL('parse', 9) + padL('gen', 10) + padL('ode', 9) +
+    padL(`ssa@${SSA_T_ENDS[SSA_T_ENDS.length - 1]}`, 11) + padL('heapMB', 9);
   push(header);
   push('-'.repeat(header.length));
   for (const { spec, res } of rows) {
@@ -437,13 +519,35 @@ function buildReport(rows: Array<{ spec: ModelSpec; res: PhaseResult }>): string
       padL(ms(res.parseMs), 9) +
       padL(ms(res.genMs), 10) +
       padL(res.simMs['ode'] == null ? '-' : ms(res.simMs['ode']!), 9) +
-      padL(res.simMs['ssa'] == null ? '-' : ms(res.simMs['ssa']!), 9) +
+      padL(res.simMs['ssa'] == null ? '-' : ms(res.simMs['ssa']!), 11) +
       padL(res.heapDeltaMB.toFixed(1), 9)
     );
   }
   push('');
   push('(all times in ms)');
   push('');
+
+  // ---- raw simulation timing samples and spread ----
+  const hasSimulationStats = rows.some(({ res }) => Object.keys(res.simStats).length > 0);
+  if (hasSimulationStats) {
+    push('==============================================================================');
+    push(' SIMULATION SAMPLE SPREAD');
+    push('==============================================================================');
+    push(' Raw samples are retained in execution order; hashing occurs outside the timer.');
+    push('');
+    for (const { spec, res } of rows) {
+      for (const [caseName, timing] of Object.entries(res.simStats)) {
+        const samples = timing.samplesMs.map(value => value.toFixed(3)).join(', ');
+        const spread = timing.medianMs == null
+          ? `FAILED: ${timing.error ?? 'unknown error'}`
+          : `median=${timing.medianMs.toFixed(3)} min=${timing.minMs!.toFixed(3)} max=${timing.maxMs!.toFixed(3)}`;
+        push(` ${spec.name} | ${caseName} | ${spread}`);
+        push(`   samples_ms=[${samples}] trajectory_hash=${timing.trajectoryHash ?? '-'}`);
+      }
+    }
+    push('==============================================================================');
+    push('');
+  }
 
   // ---- generation breakdown per model ----
   for (const { spec, res } of rows) {

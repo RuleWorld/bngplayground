@@ -17,8 +17,13 @@ import type { BNGLModel, SimulationResults, SimulationPhase, ConcentrationChange
 
 import modelsList from './gdat_models.json';
 
-const GDAT_REFERENCE_DIR = path.resolve(__dirname, '..', 'gdat_comparison_output');
+const BIONETGEN_WEB_ROOT = process.env.BIONETGEN_WEB_ROOT || path.resolve(__dirname, '..');
+const GDAT_REFERENCE_DIR = path.resolve(BIONETGEN_WEB_ROOT, 'gdat_comparison_output');
 const HAS_GDAT_REFERENCE_DATA = fs.existsSync(GDAT_REFERENCE_DIR);
+const resolveGdatPath = (relativePath: string): string =>
+  path.isAbsolute(relativePath)
+    ? relativePath
+    : path.resolve(BIONETGEN_WEB_ROOT, relativePath);
 
 beforeAll(async () => {
   await NautyService.getInstance().init();
@@ -767,7 +772,7 @@ describe.skipIf(!HAS_GDAT_REFERENCE_DATA)('GDAT Comparison: Web Simulator vs BNG
     const modelName = modelInfo.modelName;
 
     // Pre-resolve BNGL path and early skip reasons so Vitest reports these as skipped.
-    const bng2GdatPath = modelInfo.bng2GdatPath;
+    const bng2GdatPath = resolveGdatPath(modelInfo.bng2GdatPath);
     const projectRoot = path.resolve(__dirname, '..');
     let bnglPath: string | null = null;
 

@@ -8,7 +8,7 @@
  */
 import { describe, it, expect } from 'vitest';
 import { SBMLWriter } from '@bngplayground/engine/services/export/SBMLWriter';
-import { infixToMathML, infixToContentMathML } from '@bngplayground/engine/utils/infixToMathML';
+
 import type { BNGLModel } from '@bngplayground/engine/types';
 import type { ExpandedNetwork } from '@bngplayground/engine/interfaces/SimulationEngine';
 

@@ -146,6 +146,21 @@ export function buildSimulationOptions(args: any) {
 }
 
 /**
+ * Marks an internal simulation as consuming observable headers/data only.
+ * Public simulation defaults remain unchanged; this is for high-volume analysis loops.
+ */
+export function withDataOnlySimulationOutput<const T extends Record<string, unknown>>(options: T): T & {
+    includeSpeciesData: false;
+    includeExpandedNetwork: false;
+} {
+    return {
+        ...options,
+        includeSpeciesData: false,
+        includeExpandedNetwork: false,
+    };
+}
+
+/**
  * Merges network generation limits from MCP tool arguments into the model's configuration.
  * Adapts user-provided MCP arguments (e.g., max_agents) to internal engine configuration structures (e.g., maxSpecies).
  * If no overrides are provided, it returns the exact same model instance.
@@ -374,7 +389,7 @@ function splitByTopLevelCommas(pattern: string): string[] {
 
 function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
     const graphs: ParsedSpeciesGraph[] = [];
-    for (const pattern of patterns) {
+    for (const pattern of (patterns ?? [])) {
         const pieces = splitByTopLevelCommas(String(pattern));
         for (const piece of pieces) {
             graphs.push(BNGLParser.parseSpeciesGraph(piece, true));
@@ -386,15 +401,18 @@ function parseSpeciesGraphs(patterns: string[]): ParsedSpeciesGraph[] {
 function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }> {
     const bonds = new Map<string, { mol1: string; mol2: string; comp1: string; comp2: string }>();
     const sanitize = (name: string) => {
+        if (typeof name !== 'string') return '';
         const dotIdx = name.indexOf('.');
         return dotIdx === -1 ? name : name.slice(0, dotIdx);
     };
 
-    graphs.forEach((graph) => {
-        graph.molecules.forEach((molecule, molIdx) => {
+    (graphs ?? []).forEach((graph) => {
+        graph?.molecules?.forEach((molecule, molIdx) => {
+            if (!molecule) return;
             const molName = sanitize(molecule.name);
-            molecule.components.forEach((component, compIdx) => {
-                const partnerKeys = graph.adjacency.get(`${molIdx}.${compIdx}`);
+            molecule.components?.forEach((component, compIdx) => {
+                if (!component) return;
+                const partnerKeys = graph.adjacency?.get(`${molIdx}.${compIdx}`);
                 if (!partnerKeys || partnerKeys.length === 0) {
                     return;
                 }
@@ -408,8 +426,8 @@ function extractBonds(graphs: ParsedSpeciesGraph[]): Map<string, { mol1: string;
                     if (partnerMolIdx < molIdx || (partnerMolIdx === molIdx && partnerCompIdx < compIdx)) {
                         continue;
                     }
-                    const partnerMolecule = graph.molecules[partnerMolIdx];
-                    const partnerComponent = partnerMolecule?.components[partnerCompIdx];
+                    const partnerMolecule = graph.molecules?.[partnerMolIdx];
+                    const partnerComponent = partnerMolecule?.components?.[partnerCompIdx];
                     if (!partnerMolecule || !partnerComponent) {
                         continue;
                     }
@@ -435,11 +453,13 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
     const componentStateMap = new Map<string, Set<string>>();
     const edgeMap = new Map<string, ContactEdge>();
 
-    moleculeTypes.forEach((moleculeType) => {
+    (moleculeTypes ?? []).forEach((moleculeType) => {
+        if (!moleculeType) return;
         if (!moleculeMap.has(moleculeType.name)) {
             moleculeMap.set(moleculeType.name, new Set());
         }
-        moleculeType.components.forEach((componentDefinition) => {
+        moleculeType.components?.forEach((componentDefinition) => {
+            if (typeof componentDefinition !== 'string') return;
             const parts = componentDefinition.split('~');
             const componentName = parts[0];
             moleculeMap.get(moleculeType.name)?.add(componentName);
@@ -453,23 +473,30 @@ export function buildContactMap(rules: ReactionRule[], moleculeTypes: BNGLMolecu
         });
     });
 
-    rules.forEach((rule, index) => {
+    (rules ?? []).forEach((rule, index) => {
+        if (!rule) return;
         const ruleId = rule.name ?? `rule_${index + 1}`;
         const ruleLabel = rule.name ?? `Rule ${index + 1}`;
-        const reactantGraphs = parseSpeciesGraphs(rule.reactants);
-        const productGraphs = parseSpeciesGraphs(rule.products);
+        const reactantGraphs = parseSpeciesGraphs(rule.reactants ?? []);
+        const productGraphs = parseSpeciesGraphs(rule.products ?? []);
         [...reactantGraphs, ...productGraphs].forEach((graph) => {
-            graph.molecules.forEach((molecule) => {
-                if (molecule.name === '0') {
+            graph?.molecules?.forEach((molecule) => {
+                if (!molecule || molecule.name === '0') {
                     return;
                 }
-                const dotIdx = molecule.name.indexOf('.');
-                const moleculeName = dotIdx === -1 ? molecule.name : molecule.name.slice(0, dotIdx);
-                if (!moleculeMap.has(moleculeName)) {
-                    moleculeMap.set(moleculeName, new Set());
+                const name = molecule.name ?? '';
+                const dotIdx = name.indexOf('.');
+                const moleculeName = dotIdx === -1 ? name : name.slice(0, dotIdx);
+                if (moleculeName.length > 0) {
+                    if (!moleculeMap.has(moleculeName)) {
+                        moleculeMap.set(moleculeName, new Set());
+                    }
                 }
-                molecule.components.forEach((component) => {
-                    moleculeMap.get(moleculeName)?.add(component.name);
+                molecule.components?.forEach((component) => {
+                    if (!component || typeof component.name !== 'string') return;
+                    if (moleculeName.length > 0) {
+                        moleculeMap.get(moleculeName)?.add(component.name);
+                    }
                     if (component.state && component.state !== '?') {
                         const stateKey = `${moleculeName}_${component.name}`;
                         if (!componentStateMap.has(stateKey)) {

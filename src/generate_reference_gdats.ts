@@ -14,8 +14,9 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const BNG2_PATH = 'C:\\Users\\Achyudhan\\anaconda3\\envs\\Research\\Lib\\site-packages\\bionetgen\\bng-win\\BNG2.pl';
-const OUTPUT_DIR = path.join(__dirname, '../gdat_comparison_output');
+const REPO_ROOT = process.env.BIONETGEN_WEB_ROOT || path.resolve(__dirname, '..');
+const BNG2_PATH = process.env.BNG2_PATH || '';
+const OUTPUT_DIR = path.join(REPO_ROOT, 'gdat_comparison_output');
 // Ensure output directory exists
 if (!fs.existsSync(OUTPUT_DIR)) {
     fs.mkdirSync(OUTPUT_DIR, { recursive: true });
@@ -94,9 +95,10 @@ for (const model of targetModels) {
         const lines = gdatContent.trim().split('\n');
         if (lines.length > 0) {
             const headers = lines[0].trim().replace(/^#\s*/, '').split(/\s+/);
+            const relativeGdatPath = path.relative(REPO_ROOT, gdatPath);
             newConfigs.push({
                 modelName,
-                bng2GdatPath: gdatPath,
+                bng2GdatPath: relativeGdatPath,
                 bng2Headers: headers,
                 bng2DataPoints: lines.length - 1,
                 status: 'ready_for_comparison'

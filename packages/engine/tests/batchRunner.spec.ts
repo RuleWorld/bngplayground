@@ -70,11 +70,16 @@ describe('batchRunner', () => {
             { name: 'ode-missing-phases', code: 'simulate_ode({t_end=>12,n_steps=>6})' }
         );
 
-        expect(success).toBe(true);
+        expect(success).toBe('success');
         expect(simulator.generateNetwork).toHaveBeenCalledTimes(1);
         expect(simulator.simulate).toHaveBeenCalledTimes(1);
         const simulatedModel = (simulator.simulate as ReturnType<typeof vi.fn>).mock.calls[0][0] as BNGLModel;
+        const simulationOptions = (simulator.simulate as ReturnType<typeof vi.fn>).mock.calls[0][1];
         expect(simulatedModel.simulationPhases).toEqual([{ method: 'ode', t_end: 12, n_steps: 6 }]);
+        expect(simulationOptions).toMatchObject({
+            includeSpeciesData: false,
+            includeExpandedNetwork: false,
+        });
     });
 
     it('injects a default ODE phase for models without simulate actions', async () => {
@@ -90,7 +95,7 @@ describe('batchRunner', () => {
             { name: 'missing-simulate', code: 'begin model\nend model' }
         );
 
-        expect(success).toBe(true);
+        expect(success).toBe('success');
         expect(simulator.generateNetwork).toHaveBeenCalledTimes(1);
         const simulatedModel = (simulator.simulate as ReturnType<typeof vi.fn>).mock.calls[0][0] as BNGLModel;
         expect(simulatedModel.simulationPhases).toEqual([{ method: 'ode', t_end: 25, n_steps: 5 }]);
@@ -108,7 +113,7 @@ describe('batchRunner', () => {
             { name: 'ssa-model', code: 'simulate_ssa({t_end=>10,n_steps=>10})' }
         );
 
-        expect(success).toBe(true);
+        expect(success).toBe('success');
         expect(simulator.simulate).toHaveBeenCalledTimes(1);
         expect(reporter.warn).not.toHaveBeenCalled();
     });
@@ -125,11 +130,28 @@ describe('batchRunner', () => {
             { name: 'nf-model', code: 'simulate_nf({t_end=>10,n_steps=>10})' }
         );
 
-        expect(success).toBe(false);
+        expect(success).toBe('skipped');
         expect(simulator.simulate).not.toHaveBeenCalled();
         expect(reporter.warn).toHaveBeenCalledWith(
             '[Batch] Skipping nf-model: NFsim models are not supported by the batch runner (detected: nfsim).'
         );
+    });
+
+    it('reports failed when simulation throws', async () => {
+        (simulator.parse as ReturnType<typeof vi.fn>).mockResolvedValue({
+            ...createBaseModel(),
+            simulationPhases: [],
+            actions: [],
+        });
+        (simulator.simulate as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('boom'));
+
+        const success = await runSingleBatchItem(
+            { simulator, reporter },
+            { name: 'boom-model', code: 'simulate_ode({t_end=>10,n_steps=>10})' }
+        );
+
+        expect(success).toBe('failed');
+        expect(reporter.error).toHaveBeenCalledWith('❌ Failed:', expect.any(Error));
     });
 });
 

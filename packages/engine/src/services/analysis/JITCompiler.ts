@@ -17,8 +17,9 @@ import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import { getFeatureFlags } from '../../featureFlags';
 import jsep from 'jsep';
+
+import { SAFE_BODY_CHARS, createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import { isJITSafe } from '../simulation/ExpressionEvaluator.ts';
-import { createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import {
     OP_STOP,
     OP_PUSH_CONST,
@@ -160,6 +161,20 @@ export interface JITCompileDebugContext {
     callsite?: string;
 }
 
+export interface JITJsepNode {
+    type: string;
+    name?: string;
+    value?: number | string | boolean | null;
+    operator?: string;
+    left?: JITJsepNode;
+    right?: JITJsepNode;
+    argument?: JITJsepNode;
+    callee?: JITJsepNode;
+    arguments?: JITJsepNode[];
+    object?: JITJsepNode;
+    property?: JITJsepNode;
+}
+
 /**
  * JIT Compiler for ODE RHS functions
  */
@@ -167,6 +182,10 @@ export class JITCompiler {
     private cache: Map<string, JITCompiledFunction> = new Map();
     private observableCache: Map<string, JITCompiledObservableFunction> = new Map();
     private bytecodeCache: Map<string, NetworkByteCode> = new Map();
+    // Full generated source is the cache key, so reuse cannot cross networks or
+    // folded rate constants. This avoids paying `new Function` compilation on
+    // every SSA replicate while retaining exact arithmetic and evaluation order.
+    private ssaPropensityCache: Map<string, (state: Float64Array, propensities: Float64Array) => number> = new Map();
     // Cache for compiled SSA event updaters, keyed on a full structural signature
     // string (not a hash) so there is zero risk of a collision returning a
     // function compiled for a different network. Persists across replicate runs
@@ -188,6 +207,18 @@ export class JITCompiler {
         return createCompiledFunction(args, body);
     }
 
+    /**
+     * Validate a JIT source string and return it.
+     * CodeQL tracks the return value (a new string) through data flow,
+     * which closes the taint path from model input to `new Function`.
+     */
+    private sanitizeSource(s: string): string {
+        if (!SAFE_BODY_CHARS.test(s)) {
+            throw new Error(`Unsafe JIT source`);
+        }
+        return s;
+    }
+
     private buildReactionSignature(
         reactions: Array<{
             reactantIndices: Array<number | string>;
@@ -200,9 +231,12 @@ export class JITCompiler {
         }>,
         nSpecies: number,
         parameterNames: string[],
-        constantSpeciesMask?: boolean[]
+        constantSpeciesMask?: boolean[],
+        functions?: JITFunctionDefinition[]
     ): string {
         const parts: string[] = [`n=${nSpecies}`, `p=${parameterNames.join(',')}`];
+        const fnSig = this.functionSignature(functions);
+        if (fnSig) parts.push(`f=${fnSig}`);
         if (constantSpeciesMask && constantSpeciesMask.length > 0) {
             parts.push(`c=${constantSpeciesMask.map((value) => (value ? '1' : '0')).join('')}`);
         }
@@ -218,6 +252,18 @@ export class JITCompiler {
             ].join('|'));
         }
         return this.hashString(parts.join(';'));
+    }
+
+    /**
+     * Serialize zero-arg function definitions into a stable signature fragment.
+     * Used to invalidate the JIT/bytecode caches when function bodies change.
+     */
+    private functionSignature(functions?: JITFunctionDefinition[]): string {
+        if (!functions || functions.length === 0) return '';
+        return functions
+            .map((f) => `${f.name}(${f.args.join(',')})=${f.expression}`)
+            .sort()
+            .join('||');
     }
 
     private getBytecodeSignature(
@@ -237,9 +283,12 @@ export class JITCompiler {
             name: string;
             indices: Int32Array | number[];
             coefficients: Float64Array | number[];
-        }>
+        }>,
+        functions?: JITFunctionDefinition[]
     ): string {
         const parts = [`n=${nSpecies}`];
+        const fnSig = this.functionSignature(functions);
+        if (fnSig) parts.push(`f=${fnSig}`);
         if (constantSpeciesMask && constantSpeciesMask.length > 0) {
             parts.push(`c=${constantSpeciesMask.map((value) => (value ? '1' : '0')).join('')}`);
         }
@@ -494,14 +543,16 @@ export class JITCompiler {
             rateConstantIndex?: number;
             scalingVolume?: number; // Reacting volume anchor (BNG2-style)
             totalRate?: boolean; // Parsed modifier; BNG2 ODE/network ignores TotalRate
+            statisticalFactor?: number;
         }>,
         nSpecies: number,
         parameters?: Record<string, number>,
         constantSpeciesMask?: boolean[],
-        debugContext?: JITCompileDebugContext
+        debugContext?: JITCompileDebugContext,
+        functions?: JITFunctionDefinition[]
     ): JITCompiledFunction {
         const parameterNames = this.extractParameterNames(parameters);
-        const configSignature = this.buildReactionSignature(reactions, nSpecies, parameterNames, constantSpeciesMask);
+        const configSignature = this.buildReactionSignature(reactions, nSpecies, parameterNames, constantSpeciesMask, functions);
 
         const cached = this.cache.get(configSignature);
         if (cached) {
@@ -549,11 +600,15 @@ export class JITCompiler {
                 rateEvaluators[i] = () => rxn.rateConstant as number;
             } else {
                 const rxnStr = rxn.rateConstant.toString();
+                // Inline zero-arg global functions (e.g. `phiM()`, `Stimulus()`) BEFORE
+                // the security validation so legitimately-defined functions are not
+                // rejected as unknown.
+                const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
                 // Security check before translating and interpolating
-                this.assertSafeRateExpression(rxnStr, parameterNames);
-                const normalizedExpr = this.normalizeExpressionForValidation(rxnStr);
+                this.assertSafeRateExpression(inlinedExpr, expressionVariableNames);
+                const normalizedExpr = this.normalizeExpressionForValidation(inlinedExpr);
                 rateEvaluators[i] = SafeExpressionEvaluator.compile(normalizedExpr, expressionVariableNames);
-                rateExpr = `(${ExpressionTranslator.translate(rxnStr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
+                rateExpr = `(${ExpressionTranslator.translate(inlinedExpr).replace(/\bt\b/g, '__t__')})`; // Expression in parentheses for safety
             }
 
             // NOTE: TotalRate is handled upstream during network expansion (NetworkGenerator
@@ -578,8 +633,8 @@ export class JITCompiler {
 
             // Apply multiplicity/degeneracy if using symbolic expression
             // Numeric rateConstant already includes degeneracy aggregated in NetworkGenerator
-            if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
-                rateExpr = `(${rateExpr}) * ${(rxn as any).statisticalFactor}`;
+            if (typeof rxn.rateConstant !== 'number' && rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                rateExpr = `(${rateExpr}) * ${rxn.statisticalFactor}`;
             }
 
             // Apply reacting volume anchor (matches BNG2 compartmental mass-action scaling)
@@ -688,8 +743,8 @@ export class JITCompiler {
                 let rate = rateEvaluators[i](parameterContext);
                 if (!Number.isFinite(rate)) continue;
 
-                if (typeof rxn.rateConstant !== 'number' && (rxn as any).statisticalFactor && (rxn as any).statisticalFactor !== 1) {
-                    rate *= (rxn as any).statisticalFactor;
+                if (typeof rxn.rateConstant !== 'number' && rxn.statisticalFactor && rxn.statisticalFactor !== 1) {
+                    rate *= rxn.statisticalFactor;
                 }
 
                 const vAnchor = rxn.scalingVolume || 1.0;
@@ -771,7 +826,8 @@ export class JITCompiler {
         nSpecies: number,
         speciesIndexMap: Map<string, number>,
         parameters?: Record<string, number>,
-        debugContext?: JITCompileDebugContext
+        debugContext?: JITCompileDebugContext,
+        functions?: JITFunctionDefinition[]
     ): JITCompiledFunction {
         const resolveSpeciesIndex = (rawIndex: number | string): number => {
             if (typeof rawIndex === 'number' && Number.isInteger(rawIndex)) {
@@ -827,7 +883,7 @@ export class JITCompiler {
             };
         });
 
-        return this.compile(simpleReactions, nSpecies, parameters, undefined, debugContext);
+        return this.compile(simpleReactions, nSpecies, parameters, undefined, debugContext, functions);
     }
 
     /**
@@ -888,8 +944,19 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            source += "return aTotal;\n";
-            return this.createFn(["state", "propensities"], source) as (state: Float64Array, propensities: Float64Array) => number;
+            const safeSource0 = this.sanitizeSource(source);
+            const source0 = safeSource0 + "return aTotal;\n";
+            const cached = this.ssaPropensityCache.get(source0);
+            if (cached) return cached;
+
+            const compiled = this.createFn(["state", "propensities"], source0) as
+                (state: Float64Array, propensities: Float64Array) => number;
+            if (this.ssaPropensityCache.size >= this.maxCacheSize) {
+                const oldest = this.ssaPropensityCache.keys().next().value;
+                if (oldest !== undefined) this.ssaPropensityCache.delete(oldest);
+            }
+            this.ssaPropensityCache.set(source0, compiled);
+            return compiled;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities:', e);
             return null;
@@ -999,8 +1066,9 @@ export class JITCompiler {
                 source += `aTotal += propensities[${i}];\n`;
             }
 
-            source += "return aTotal;\n";
-            return this.createFn(["state", "propensities"], source) as (state: Float64Array, propensities: Float64Array) => number;
+            const safeSource1 = this.sanitizeSource(source);
+            const source1 = safeSource1 + "return aTotal;\n";
+            return this.createFn(["state", "propensities"], source1) as (state: Float64Array, propensities: Float64Array) => number;
         } catch (e) {
             console.warn('[JITCompiler] Failed to compile SSA propensities with functional rates:', e);
             return null;
@@ -1106,9 +1174,10 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            source += '}\nreturn totalDelta;\n';
+            const safeSource2 = this.sanitizeSource(source);
+            const source2 = safeSource2 + '}\nreturn totalDelta;\n';
 
-            return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source) as
+            return this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source2) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
         } catch (e) {
@@ -1256,9 +1325,10 @@ export class JITCompiler {
                 source += '  break;\n}\n';
             }
 
-            source += '}\nreturn totalDelta;\n';
+            const safeSource3 = this.sanitizeSource(source);
+            const source3 = safeSource3 + '}\nreturn totalDelta;\n';
 
-            const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source) as
+            const fn = this.createFn(['firedRxnIdx', 'state', 'propensities', 'fenwickAdd'], source3) as
                 (firedRxnIdx: number, state: Float64Array, propensities: Float64Array,
                     fenwickAdd: (idx: number, delta: number) => void) => number;
 
@@ -1363,7 +1433,7 @@ export class JITCompiler {
                 );
             }
 
-            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables);
+            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables, functions);
             const cached = this.bytecodeCache.get(signature);
 
             if (cached) {
@@ -1380,10 +1450,16 @@ export class JITCompiler {
                             k = 0;
                         } else {
                             const rxnStr = rxn.rateConstant.toString();
-                            this.assertSafeRateExpression(rxnStr, paramKeys);
-                            const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
+                            const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                            const allowedNames = [
+                                ...paramKeys,
+                                ...(observables || []).map(o => o.name),
+                                '__t__'
+                            ];
+                            this.assertSafeRateExpression(inlinedExpr, allowedNames);
+                            const normalizedExpr = inlinedExpr.replace(/\bMath\./g, '');
                             try {
-                                const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
+                                const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, allowedNames);
                                 k = evaluator(safeParameters);
                                 if (Number.isNaN(k) || !Number.isFinite(k)) return null;
                             } catch {
@@ -1456,11 +1532,17 @@ export class JITCompiler {
                     } else {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
-                        this.assertSafeRateExpression(rxnStr, paramKeys);
-                        const normalizedExpr = rxnStr.replace(/\bMath\./g, '');
+                        const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                        const allowedNames = [
+                            ...paramKeys,
+                            ...(observables || []).map(o => o.name),
+                            '__t__'
+                        ];
+                        this.assertSafeRateExpression(inlinedExpr, allowedNames);
+                        const normalizedExpr = inlinedExpr.replace(/\bMath\./g, '');
 
                         try {
-                            const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, paramKeys);
+                            const evaluator = SafeExpressionEvaluator.compile(normalizedExpr, allowedNames);
                             k = evaluator(safeParameters);
                             if (Number.isNaN(k) || !Number.isFinite(k)) return null;
                         } catch {
@@ -1696,6 +1778,8 @@ export class JITCompiler {
         this.cache.clear();
         this.observableCache.clear();
         this.bytecodeCache.clear();
+        this.ssaPropensityCache.clear();
+        this.ssaEventUpdaterCache.clear();
         console.log('[JITCompiler] Cache cleared');
     }
 
@@ -1708,7 +1792,8 @@ export class JITCompiler {
      */
     getCacheStats(): { size: number; maxSize: number } {
         return {
-            size: this.cache.size + this.observableCache.size,
+            size: this.cache.size + this.observableCache.size +
+                this.ssaPropensityCache.size + this.ssaEventUpdaterCache.size,
             maxSize: this.maxCacheSize
         };
     }
@@ -1724,19 +1809,22 @@ export class JITCompiler {
             const expandedExpr = this.normalizeExpressionForValidation(
                 this.expandZeroArgFunctions(expr, functions)
             );
-            const ast = jsep(expandedExpr);
+            const ast = jsep(expandedExpr) as unknown as JITJsepNode;
             const bytes: number[] = [];
             let usesParameters = false;
             const speciesIndexByName = new Map<string, number>();
             speciesNames.forEach((name, index) => speciesIndexByName.set(name, index));
 
-            const walk = (node: any) => {
+            const walk = (node: JITJsepNode) => {
                 if (node.type === 'Literal') {
                     bytes.push(OP_PUSH_CONST);
                     const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = node.value;
+                    new Float64Array(buf)[0] = typeof node.value === 'number' ? node.value : Number(node.value);
                     bytes.push(...new Uint8Array(buf));
                 } else if (node.type === 'Identifier') {
+                    if (!node.name) {
+                        throw new Error('Identifier missing name');
+                    }
                     // Support common global constants used in BNGL expressions
                     if (node.name === 'NaN') {
                         bytes.push(OP_PUSH_CONST);
@@ -1788,6 +1876,9 @@ export class JITCompiler {
                     }
                     throw new Error(`Unsupported member expression in ${expandedExpr}`);
                 } else if (node.type === 'BinaryExpression' || node.type === 'LogicalExpression') {
+                    if (!node.left || !node.right) {
+                        throw new Error('Malformed binary expression');
+                    }
                     walk(node.left);
                     walk(node.right);
                     if (node.operator === '+') bytes.push(OP_ADD);
@@ -1805,25 +1896,33 @@ export class JITCompiler {
                     else if (node.operator === '||') bytes.push(OP_OR);
                     else throw new Error(`Unsupported binary operator: ${node.operator}`);
                 } else if (node.type === 'UnaryExpression') {
+                    if (!node.argument) {
+                        throw new Error('Malformed unary expression');
+                    }
                     walk(node.argument);
                     if (node.operator === '-') bytes.push(OP_NEG);
                     else if (node.operator === '!') bytes.push(OP_NOT);
                     else throw new Error(`Unsupported unary operator: ${node.operator}`);
                 } else if (node.type === 'CallExpression') {
-                    const name = node.callee.name.toLowerCase();
+                    const name = node.callee?.name?.toLowerCase();
+                    if (!name) {
+                        throw new Error('Invalid function call');
+                    }
                     if (name === 'sat') {
                         if ((node.arguments?.length ?? 0) !== 2) {
                             throw new Error('sat() expects 2 arguments');
                         }
                         // sat(a,b) = a / (a + b)
-                        walk(node.arguments[0]);
-                        walk(node.arguments[0]);
-                        walk(node.arguments[1]);
+                        if (node.arguments) {
+                            walk(node.arguments[0]);
+                            walk(node.arguments[0]);
+                            walk(node.arguments[1]);
+                        }
                         bytes.push(OP_ADD);
                         bytes.push(OP_DIV);
                         return;
                     }
-                    node.arguments.forEach((arg: any) => walk(arg));
+                    node.arguments?.forEach((arg: JITJsepNode) => walk(arg));
                     if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
                     else if (name === 'exp') bytes.push(OP_EXP);
                     else if (name === 'log10') bytes.push(OP_LOG10);

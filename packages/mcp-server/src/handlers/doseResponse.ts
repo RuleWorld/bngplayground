@@ -27,6 +27,12 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
         const parsedArgs = parseArgs('dose_response', doseResponseArgsSchema, args);
         await loadEvaluator();
 
+        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+            return createToolResult(structureError(
+                new Error(`Model code must be a non-empty string. Received: '${parsedArgs.code}'`),
+            ));
+        }
+
         const model = parseModelOrThrow(parsedArgs.code);
         const expanded = await expandModel(model);
 
@@ -135,15 +141,12 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             const totalSimPoints = simulated.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
 
             if (totalSimPoints === 0) {
-                return createToolResult({
-                inputParameter: result.inputParameter,
-                methodUsed: result.methodUsed,
-                fallbackUsed: result.fallbackUsed,
-                warning: result.warning,
-                failedDoses: result.failedDoses,
-                summary: result.summary,
-                curves: result.curves,
-            });
+                return createToolResult(structureError(
+                    new Error(
+                        `dose_response analysis failed: both steady-state root-finding and fallback simulation failed to converge for input parameter '${parsedArgs.input_parameter}' over range [${parsedArgs.input_min}, ${parsedArgs.input_max}]. ` +
+                        'Check that your parameter ranges, rate constants, or initial species concentrations are physically reasonable.'
+                    )
+                ));
             }
 
             return createToolResult({
@@ -191,6 +194,6 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             })),
         });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

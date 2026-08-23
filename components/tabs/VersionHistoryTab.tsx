@@ -107,6 +107,9 @@ export const VersionHistoryTab: React.FC<VersionHistoryTabProps> = ({
           if (!m.model) throw new Error('Parse error');
           const expanded = await engine.generateExpandedNetwork(m.model, () => {}, () => {});
           // Use SSA as fallback if CVODE isn't available (avoids factory error)
+          // WARNING: main-thread engine.simulate with method:'ode' would crash here
+          // because CVODESolver.cvodeModuleFactory is only injected in workers.
+          // This is safe only because method:'ssa' returns before the ODE solver path.
           return await engine.simulate(0, expanded, { method: 'ssa', t_end: 100, n_steps: 200 }, {
             checkCancelled: () => {},
             postMessage: () => {},

@@ -33,6 +33,7 @@ export default defineConfig({
       'tests/*spawnsync*.{test,spec}.ts',
       'tests/*sequential*.{test,spec}.ts',
       'tests/**/*benchmark*.{test,spec}.ts',
+      'tests/profile-everything.spec.ts',
       'tests/gdat-regression.spec.ts',
       'tests/examples.spec.ts',
       'tests/examples_copy.spec.ts',

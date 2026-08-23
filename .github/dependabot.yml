@@ -17,6 +17,11 @@ updates:
       - dependency-name: "expr-eval"
         versions:
           - "*"
+      # npm lockfile workspace links are local paths, not registry packages.
+      # Dependabot otherwise queries these names on registry.npmjs.org and
+      # fails the entire update job with HTTP 405 responses.
+      - dependency-name: "packages/engine"
+      - dependency-name: "packages/mcp-server"
 
   - package-ecosystem: "github-actions"
     directory: "/"

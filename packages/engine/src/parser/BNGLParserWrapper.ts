@@ -23,8 +23,77 @@ export interface ParseResult {
   errors: ParseError[];
 }
 
+function getFirstActiveLine(src: string): string | null {
+  let start = 0;
+  const len = src.length;
+  while (start < len) {
+    // Skip leading whitespace of the current line
+    while (start < len) {
+      const char = src.charCodeAt(start);
+      if (char === 32 || char === 9 || char === 13) { // space, tab, carriage return
+        start++;
+      } else {
+        break;
+      }
+    }
+    if (start >= len) return null;
+    const char = src.charCodeAt(start);
+    if (char === 10) { // newline
+      start++;
+      continue;
+    }
+    if (char === 35) { // '#' - comment line, skip to end of line
+      const end = src.indexOf('\n', start);
+      if (end === -1) {
+        return null;
+      }
+      start = end + 1;
+      continue;
+    }
+    // Found active line, find its end and return the substring
+    let end = src.indexOf('\n', start);
+    if (end === -1) {
+      end = len;
+    }
+    // Trim trailing carriage return if any
+    let last = end - 1;
+    while (last >= start) {
+      const lastChar = src.charCodeAt(last);
+      if (lastChar === 32 || lastChar === 9 || lastChar === 13) {
+        last--;
+      } else {
+        break;
+      }
+    }
+    return src.substring(start, last + 1);
+  }
+  return null;
+}
+
 /**
- * Parse a BNGL file using ANTLR4 grammar
+ * Parses raw BioNetGen Language (BNGL) model text using ANTLR4 grammar into a structured model.
+ *
+ * This function performs comprehensive preprocessing/normalization steps on the input to handle legacy
+ * cBNGL syntax and BNG2.pl compatibility quirks prior to executing the ANTLR lexer and parser:
+ * - Strips UTF-8 Byte Order Marks (BOM).
+ * - Normalizes legacy blocks like 'begin/end molecules' to 'begin/end molecule types' (ignoring comments).
+ * - Strips and normalizes legacy local function context syntax (%x::Pattern -> Pattern) for rule-level matching.
+ * - Restructures legacy compartment-before-parentheses molecules: Mol@Comp(...) -> Mol(...)@Comp.
+ * - Folds line continuations ('\') to resolve rules spread across multiple lines.
+ * - Expands state-inheritance labels ('%') in rules to generate concrete combinatorial rules based on declared molecule types.
+ * - Cascades unmatched '%' labels to wildcard state '~?' to ensure parser compatibility when type info is missing.
+ * - Folds standalone parameter or compartment include/exclude modifier lines onto their preceding rules.
+ * - Disables/comments out top-level pre-amble directives (e.g., version(), setOption()) located before 'begin model' blocks.
+ *
+ * Once parsing of the normalized text completes (either successfully or through best-effort recovery),
+ * it validates the model's semantic properties (e.g. valid molecule type definitions, missing components in seed species
+ * or created reaction rules) and returns the aggregated errors and the parsed model representation.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) as a core package utility in @bngplayground/engine.
+ *
+ * @param input - The raw BNGL source string to parse.
+ * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
+ *          and list of accumulated syntactic/semantic parsing errors.
  */
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
@@ -57,30 +126,32 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     // Create lexer and parser
     // Some published BNGL files can start with a UTF-8 BOM (U+FEFF). BNG2.pl
     // accepts this; our lexer should too.
-    let sanitizedInput = input.replace(/^\uFEFF/, '');
+    let sanitizedInput = input;
+    if (input.charCodeAt(0) === 0xFEFF) {
+      sanitizedInput = input.substring(1);
+    }
 
     // Normalize legacy 'begin molecules' / 'end molecules' blocks to
     // the preferred 'begin molecule types' / 'end molecule types' form.
     // We do this as a pre-parse normalization to preserve repository files
     // but remain compatible with BNG2.pl. We skip lines that are comments.
     function normalizeLegacyBlocks(src: string): { normalized: string; warned: boolean } {
-      const lines = src.split(/\r\n|\n/);
+      if (!/molecules/i.test(src)) {
+        return { normalized: src, warned: false };
+      }
       let warned = false;
-      const out = lines.map(line => {
-        const trimmedStart = line.replace(/^\s*/, '');
-        // Skip commented lines
-        if (/^#/.test(trimmedStart)) return line;
-        if (/^\s*begin\s+molecules\b/i.test(line)) {
-          warned = true;
-          return line.replace(/begin\s+molecules\b/i, 'begin molecule types');
-        }
-        if (/^\s*end\s+molecules\b/i.test(line)) {
-          warned = true;
-          return line.replace(/end\s+molecules\b/i, 'end molecule types');
-        }
-        return line;
-      });
-      return { normalized: out.join('\n'), warned };
+      let next = src;
+      const beginRe = /^[^\S\r\n]*(?!#)begin\s+molecules\b/im;
+      const endRe = /^[^\S\r\n]*(?!#)end\s+molecules\b/im;
+      if (beginRe.test(next)) {
+        warned = true;
+        next = next.replace(/(^[^\S\r\n]*(?!#)begin\s+)molecules\b/gim, '$1molecule types');
+      }
+      if (endRe.test(next)) {
+        warned = true;
+        next = next.replace(/(^[^\S\r\n]*(?!#)end\s+)molecules\b/gim, '$1molecule types');
+      }
+      return { normalized: next, warned };
     }
 
     function normalizeLegacySyntax(src: string): { normalized: string; warnings: string[] } {
@@ -95,32 +166,38 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // The local function bodies and calls are preserved so NetworkExpansion.ts can
       // detect which rules use local functions and compute per-species rates at
       // network-generation time.
-      const localContextMatches = Array.from(next.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)::/g));
-      if (localContextMatches.length > 0) {
-        // Only strip the %x:: prefix from pattern positions; leave function defs/calls intact.
-        next = next.replace(/%[A-Za-z_][A-Za-z0-9_]*::/g, '');
+      if (next.includes('::')) {
+        const localContextMatches = Array.from(next.matchAll(/%([A-Za-z_][A-Za-z0-9_]*)::/g));
+        if (localContextMatches.length > 0) {
+          // Only strip the %x:: prefix from pattern positions; leave function defs/calls intact.
+          next = next.replace(/%[A-Za-z_][A-Za-z0-9_]*::/g, '');
 
-        warnings.push('Detected local-function context syntax (%x::); local function calls preserved for per-species rate evaluation.');
+          warnings.push('Detected local-function context syntax (%x::); local function calls preserved for per-species rate evaluation.');
+        }
       }
 
       // Normalize legacy compartment-before-parentheses molecule syntax used in
       // some cBNGL models: Mol@Comp(...) -> Mol(...)@Comp.
       // This keeps semantics while matching the ANTLR grammar's expected order.
-      const legacyCompBeforeParen = next.replace(
-        /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-z0-9_]*)\(([^(){}]*)\)/g,
-        (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
-      );
-      if (legacyCompBeforeParen !== next) {
-        warnings.push('Normalized legacy compartment-before-parentheses syntax (Mol@Comp(...) -> Mol(...)@Comp).');
-        next = legacyCompBeforeParen;
+      if (next.includes('@')) {
+        const legacyCompBeforeParen = next.replace(
+          /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-z0-9_]*)\(([^(){}]*)\)/g,
+          (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
+        );
+        if (legacyCompBeforeParen !== next) {
+          warnings.push('Normalized legacy compartment-before-parentheses syntax (Mol@Comp(...) -> Mol(...)@Comp).');
+          next = legacyCompBeforeParen;
+        }
       }
 
       // Normalize explicit line continuations used in legacy reaction rules by
       // folding continued lines into a single logical rule line.
-      const joined = next.replace(/\\\s*\r?\n\s*/g, ' ');
-      if (joined !== next) {
-        warnings.push('Joined legacy line continuations (\\) for parser compatibility.');
-        next = joined;
+      if (next.includes('\\')) {
+        const joined = next.replace(/\\\s*\r?\n\s*/g, ' ');
+        if (joined !== next) {
+          warnings.push('Joined legacy line continuations (\\) for parser compatibility.');
+          next = joined;
+        }
       }
 
       // Legacy state-inheritance labels in component patterns use "%" (e.g., c1%1).
@@ -141,17 +218,20 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         closeStart: number;
         closeEnd: number;
       } | null {
-        const lower = source.toLowerCase();
-        const beginToken = `begin ${beginName}`;
-        const endToken = `end ${endName}`;
-        const openStart = lower.indexOf(beginToken);
-        if (openStart < 0) return null;
+        const beginRegex = new RegExp(`begin\\s+${beginName}`, 'gi');
+        const beginMatch = beginRegex.exec(source);
+        if (!beginMatch) return null;
+        const openStart = beginMatch.index;
 
         const openLineEnd = source.indexOf('\n', openStart);
         const openEnd = openLineEnd >= 0 ? openLineEnd : source.length;
         const bodyStart = openEnd < source.length ? openEnd + 1 : openEnd;
-        const closeStart = lower.indexOf(endToken, bodyStart);
-        if (closeStart < 0) return null;
+
+        const endRegex = new RegExp(`end\\s+${endName}`, 'gi');
+        endRegex.lastIndex = bodyStart;
+        const endMatch = endRegex.exec(source);
+        if (!endMatch) return null;
+        const closeStart = endMatch.index;
 
         let closeEnd = source.indexOf('\n', closeStart);
         if (closeEnd < 0) closeEnd = source.length;
@@ -289,66 +369,70 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
         });
       }
 
-      // ── apply expansion to reaction rules block ────────────────────────────
-      const molCompStates = extractMolCompStates(next);
-      if (/%[A-Za-z0-9_]+/.test(next) && molCompStates.size > 0) {
-        const ruleBlock = findNamedBlock(next, 'reaction rules', 'reaction rules');
-        let expandedSrc = next;
-        if (ruleBlock) {
-          const body = next.slice(ruleBlock.bodyStart, ruleBlock.bodyEnd);
-          const lines = body.split(/\r?\n/);
-          const outLines: string[] = [];
-          for (const line of lines) {
-            const t = line.trim();
-            if (!t || t.startsWith('#') || !/%[A-Za-z0-9_]+/.test(t)) {
-              outLines.push(line);
-              continue;
+      if (next.includes('%')) {
+        // ── apply expansion to reaction rules block ────────────────────────────
+        const molCompStates = extractMolCompStates(next);
+        if (/%[A-Za-z0-9_]+/.test(next) && molCompStates.size > 0) {
+          const ruleBlock = findNamedBlock(next, 'reaction rules', 'reaction rules');
+          let expandedSrc = next;
+          if (ruleBlock) {
+            const body = next.slice(ruleBlock.bodyStart, ruleBlock.bodyEnd);
+            const lines = body.split(/\r?\n/);
+            const outLines: string[] = [];
+            for (const line of lines) {
+              const t = line.trim();
+              if (!t || t.startsWith('#') || !/%[A-Za-z0-9_]+/.test(t)) {
+                outLines.push(line);
+                continue;
+              }
+              const expanded = expandRuleLine(t, molCompStates);
+              if (expanded) {
+                outLines.push(...expanded);
+              } else {
+                outLines.push(line);
+              }
             }
-            const expanded = expandRuleLine(t, molCompStates);
-            if (expanded) {
-              outLines.push(...expanded);
-            } else {
-              outLines.push(line);
-            }
+            expandedSrc = `${next.slice(0, ruleBlock.bodyStart)}${outLines.join('\n')}${next.slice(ruleBlock.bodyEnd)}`;
           }
-          expandedSrc = `${next.slice(0, ruleBlock.bodyStart)}${outLines.join('\n')}${next.slice(ruleBlock.bodyEnd)}`;
+          if (expandedSrc !== next) {
+            warnings.push('Expanded state-inheritance "%" labels into concrete rules (BNG2 style).');
+            next = expandedSrc;
+          }
         }
-        if (expandedSrc !== next) {
-          warnings.push('Expanded state-inheritance "%" labels into concrete rules (BNG2 style).');
-          next = expandedSrc;
-        }
-      }
 
-      // Fallback: if any %n patterns remain (molecule type info unavailable or
-      // expansion did not apply), strip to wildcard ~? to keep rules applicable.
-      // Keep molecule labels like ")%1" unchanged by anchoring to component starts.
-      const percentInheritanceNormalized = next.replace(/([,(]\s*[A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_+-]+)/g, '$1~?');
-      if (percentInheritanceNormalized !== next) {
-        warnings.push('Normalized legacy component inheritance "%" labels to wildcard state "~?" (fallback: no molecule type info available).');
-        next = percentInheritanceNormalized;
+        // Fallback: if any %n patterns remain (molecule type info unavailable or
+        // expansion did not apply), strip to wildcard ~? to keep rules applicable.
+        // Keep molecule labels like ")%1" unchanged by anchoring to component starts.
+        const percentInheritanceNormalized = next.replace(/([,(]\s*[A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_+-]+)/g, '$1~?');
+        if (percentInheritanceNormalized !== next) {
+          warnings.push('Normalized legacy component inheritance "%" labels to wildcard state "~?" (fallback: no molecule type info available).');
+          next = percentInheritanceNormalized;
+        }
       }
 
       // Fold standalone include/exclude_* modifier-only lines onto the previous
       // non-empty rule line instead of dropping them (semantics-preserving).
-      const modifierOnlyLinePattern = /^\s*(?:(?:include|exclude)_(?:reactants|products)\([^)]*\)\s*)+$/i;
-      const foldedLines = next.split(/\r\n|\n/);
-      let foldedStandaloneModifierLines = false;
-      for (let i = 0; i < foldedLines.length; i++) {
-        const line = foldedLines[i];
-        if (!modifierOnlyLinePattern.test(line)) continue;
+      if (/include_|exclude_/i.test(next)) {
+        const modifierOnlyLinePattern = /^\s*(?:(?:include|exclude)_(?:reactants|products)\([^)]*\)\s*)+$/i;
+        const foldedLines = next.split(/\r\n|\n/);
+        let foldedStandaloneModifierLines = false;
+        for (let i = 0; i < foldedLines.length; i++) {
+          const line = foldedLines[i];
+          if (!modifierOnlyLinePattern.test(line)) continue;
 
-        let prev = i - 1;
-        while (prev >= 0 && foldedLines[prev].trim() === '') prev--;
-        if (prev >= 0 && !/^\s*#/.test(foldedLines[prev])) {
-          foldedLines[prev] = `${foldedLines[prev].trimEnd()} ${line.trim()}`;
-          foldedLines[i] = '';
-          foldedStandaloneModifierLines = true;
+          let prev = i - 1;
+          while (prev >= 0 && foldedLines[prev].trim() === '') prev--;
+          if (prev >= 0 && !/^\s*#/.test(foldedLines[prev])) {
+            foldedLines[prev] = `${foldedLines[prev].trimEnd()} ${line.trim()}`;
+            foldedLines[i] = '';
+            foldedStandaloneModifierLines = true;
+          }
         }
+        if (foldedStandaloneModifierLines) {
+          warnings.push('Folded standalone legacy include/exclude_* modifier lines onto preceding rules.');
+        }
+        next = foldedLines.join('\n');
       }
-      if (foldedStandaloneModifierLines) {
-        warnings.push('Folded standalone legacy include/exclude_* modifier lines onto preceding rules.');
-      }
-      next = foldedLines.join('\n');
 
       // Additional unsupported constructs are handled by worker-level best-effort
       // parsing when recoverable.
@@ -356,48 +440,53 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       // Some published legacy files place version()/setOption() before begin model.
       // Our grammar only parses model blocks and actions, so preserve line count by
       // replacing those directive lines with comments.
-      const lines = next.split(/\r\n|\n/);
-      let seenBeginModel = false;
-      let _insideAnyBlock = false;
-      let seenAnyBlock = false;
-      let rewroteTopLevelDirectives = false;
-      const rewritten = lines.map(line => {
-        const trimmed = line.trim();
-        if (/^begin\s+model\b/i.test(trimmed)) {
-          seenBeginModel = true;
-          _insideAnyBlock = true;
-          seenAnyBlock = true;
-          return line;
-        }
-        if (/^begin\b/i.test(trimmed)) {
-          _insideAnyBlock = true;
-          seenAnyBlock = true;
-          return line;
-        }
-        if (/^end\b/i.test(trimmed)) {
-          _insideAnyBlock = false;
-          return line;
-        }
+      const firstActiveLine = getFirstActiveLine(next);
+      const skipPreambleNormalize = firstActiveLine && firstActiveLine.toLowerCase().startsWith('begin');
+      if (!skipPreambleNormalize) {
+        const lines = next.split(/\r\n|\n/);
+        let seenBeginModel = false;
+        let _insideAnyBlock = false;
+        let seenAnyBlock = false;
+        let rewroteTopLevelDirectives = false;
+        const rewritten = lines.map(line => {
+          const trimmed = line.trim();
+          if (/^begin\s+model\b/i.test(trimmed)) {
+            seenBeginModel = true;
+            _insideAnyBlock = true;
+            seenAnyBlock = true;
+            return line;
+          }
+          if (/^begin\b/i.test(trimmed)) {
+            _insideAnyBlock = true;
+            seenAnyBlock = true;
+            return line;
+          }
+          if (/^end\b/i.test(trimmed)) {
+            _insideAnyBlock = false;
+            return line;
+          }
 
-        // Only rewrite truly top-level preamble text (before any begin/end block).
-        // This preserves bare-block BNGL files that intentionally omit begin/end model.
-        if (!seenBeginModel && !seenAnyBlock && trimmed !== '') {
-          if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
-            rewroteTopLevelDirectives = true;
-            return `# [parser-normalized] ${line}`;
+          // Only rewrite truly top-level preamble text (before any begin/end block).
+          // This preserves bare-block BNGL files that intentionally omit begin/end model.
+          if (!seenBeginModel && !seenAnyBlock && trimmed !== '') {
+            if (/^version\s*\(/i.test(trimmed) || /^setOption\s*\(/i.test(trimmed)) {
+              rewroteTopLevelDirectives = true;
+              return `# [parser-normalized] ${line}`;
+            }
+            if (!/^#/.test(trimmed)) {
+              rewroteTopLevelDirectives = true;
+              return `# [parser-normalized] ${line}`;
+            }
           }
-          if (!/^#/.test(trimmed)) {
-            rewroteTopLevelDirectives = true;
-            return `# [parser-normalized] ${line}`;
-          }
+          return line;
+        });
+        if (rewroteTopLevelDirectives) {
+          warnings.push('Commented top-level legacy directives or non-BNGL content before begin model.');
         }
-        return line;
-      });
-      if (rewroteTopLevelDirectives) {
-        warnings.push('Commented top-level legacy directives or non-BNGL content before begin model.');
+        next = rewritten.join('\n');
       }
 
-      return { normalized: rewritten.join('\n'), warnings };
+      return { normalized: next, warnings };
     }
 
     const { normalized: legacyBlockNormalized, warned } = normalizeLegacyBlocks(sanitizedInput);
@@ -442,6 +531,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     let model: BNGLModel | undefined;
     try {
       const visitor = new BNGLVisitor();
+      visitor.hasCompartments = sanitizedInput.includes('@');
       model = visitor.visit(tree);
     } catch (visitorError) {
       const message = visitorError instanceof Error ? visitorError.message : String(visitorError);
@@ -474,7 +564,17 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
 }
 
 /**
- * Parse BNGL and throw on error (for compatibility with existing code)
+ * Parses raw BioNetGen Language (BNGL) model text and returns the parsed model, throwing an Error if parsing fails.
+ *
+ * This function wraps `parseBNGLWithANTLR`, delegating full parsing, ANTLR lexing, legacy syntax normalization,
+ * and semantic validation. If syntactic or semantic validation errors occur, it aggregates error messages formatted
+ * with line and column numbers and throws a detailed Error.
+ *
+ * @invariant Must remain free of browser APIs (browser-API-free) as a core package utility in @bngplayground/engine.
+ *
+ * @param input - The raw BNGL model source code string to parse.
+ * @returns The fully parsed and validated `BNGLModel` object.
+ * @throws {Error} If `parseBNGLWithANTLR` fails to produce a model or encounters syntax or semantic errors.
  */
 export function parseBNGLStrict(input: string): BNGLModel {
   const result = parseBNGLWithANTLR(input);
@@ -499,14 +599,21 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
   for (const mt of model.moleculeTypes) {
     const componentNames = new Set<string>();
     for (const comp of mt.components) {
-      const baseName = comp.split('~')[0].trim();
+      const tildeIdx = comp.indexOf('~');
+      const baseName = tildeIdx !== -1 ? comp.substring(0, tildeIdx).trim() : comp.trim();
       componentNames.add(baseName);
     }
     declaredMoleculeTypes.set(mt.name, componentNames);
   }
 
+  interface GraphMolecule {
+    name: string;
+    components: Array<{ name: string; toString(): string }>;
+    hasExplicitEmptyComponentList?: boolean;
+  }
+
   // Helper function to check a molecule's components
-  const checkMoleculeComponents = (mol: any, line: number, column: number, contextMsg: string): ParseError | null => {
+  const checkMoleculeComponents = (mol: GraphMolecule, line: number, column: number, contextMsg: string): ParseError | null => {
     const declaredComps = declaredMoleculeTypes.get(mol.name);
     if (!declaredComps) {
       const prefix = contextMsg ? `${contextMsg}: ` : '';
@@ -517,7 +624,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
       };
     }
 
-    const presentComps = new Set(mol.components.map((c: any) => c.name));
+    const presentComps = new Set(mol.components.map((c) => c.name));
     const missing: string[] = [];
     for (const comp of declaredComps) {
       if (!presentComps.has(comp)) {
@@ -527,7 +634,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
 
     if (missing.length > 0) {
       const compStr = mol.components.length > 0 || mol.hasExplicitEmptyComponentList
-        ? '(' + mol.components.map((c: any) => c.toString()).join(',') + ')'
+        ? '(' + mol.components.map((c) => c.toString()).join(',') + ')'
         : '()';
       const molStr = `${mol.name}${compStr}`;
       const prefix = contextMsg ? `${contextMsg}: ` : '';
@@ -548,12 +655,12 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
     try {
       const graph = BNGLParser.parseSpeciesGraph(sp.name);
       for (const mol of graph.molecules) {
-        const err = checkMoleculeComponents(mol, line, column, '');
+        const err = checkMoleculeComponents(mol as GraphMolecule, line, column, '');
         if (err) {
           errors.push(err);
         }
       }
-    } catch (e) {
+    } catch {
       // Ignore parse errors of species names here
     }
   }
@@ -563,20 +670,24 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
     const line = rule.line ?? 0;
     const column = rule.column ?? 0;
     
-    const reactantMols: any[] = [];
+    const reactantMols: GraphMolecule[] = [];
     for (const rStr of rule.literalReactants || rule.reactants) {
       try {
         const graph = BNGLParser.parseSpeciesGraph(rStr);
-        reactantMols.push(...graph.molecules);
-      } catch (e) {}
+        reactantMols.push(...(graph.molecules as GraphMolecule[]));
+      } catch {
+        /* ignore parse errors in rule reactants */
+      }
     }
 
-    const productMols: any[] = [];
+    const productMols: GraphMolecule[] = [];
     for (const pStr of rule.literalProducts || rule.products) {
       try {
         const graph = BNGLParser.parseSpeciesGraph(pStr);
-        productMols.push(...graph.molecules);
-      } catch (e) {}
+        productMols.push(...(graph.molecules as GraphMolecule[]));
+      } catch {
+        /* ignore parse errors in rule products */
+      }
     }
 
     const reactantCounts = new Map<string, number>();
@@ -584,7 +695,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
       reactantCounts.set(rMol.name, (reactantCounts.get(rMol.name) ?? 0) + 1);
     }
 
-    const incompleteProductsByName = new Map<string, any[]>();
+    const incompleteProductsByName = new Map<string, GraphMolecule[]>();
     for (const pMol of productMols) {
       const declaredComps = declaredMoleculeTypes.get(pMol.name);
       if (!declaredComps) {
@@ -596,7 +707,7 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
         continue;
       }
 
-      const presentComps = new Set(pMol.components.map((c: any) => c.name));
+      const presentComps = new Set(pMol.components.map((c) => c.name));
       const hasMissing = Array.from(declaredComps).some(comp => !presentComps.has(comp));
       if (hasMissing) {
         if (!incompleteProductsByName.has(pMol.name)) {
@@ -610,23 +721,25 @@ export function validateModelSemantics(model: BNGLModel): ParseError[] {
       const L = reactantCounts.get(name) ?? 0;
       if (incompleteList.length > L) {
         const pMol = incompleteList[0];
-        const declaredComps = declaredMoleculeTypes.get(name)!;
-        const presentComps = new Set(pMol.components.map((c: any) => c.name));
-        const missing: string[] = [];
-        for (const comp of declaredComps) {
-          if (!presentComps.has(comp)) {
-            missing.push(comp);
+        const declaredComps = declaredMoleculeTypes.get(name);
+        if (declaredComps) {
+          const presentComps = new Set(pMol.components.map((c) => c.name));
+          const missing: string[] = [];
+          for (const comp of declaredComps) {
+            if (!presentComps.has(comp)) {
+              missing.push(comp);
+            }
           }
+          const compStr = pMol.components.length > 0 || pMol.hasExplicitEmptyComponentList
+            ? '(' + pMol.components.map((c) => c.toString()).join(',') + ')'
+            : '()';
+          const molStr = `${pMol.name}${compStr}`;
+          errors.push({
+            line,
+            column,
+            message: `Molecule created in reaction rule: Component(s) ${missing.join(',')} missing from molecule ${molStr}`
+          });
         }
-        const compStr = pMol.components.length > 0 || pMol.hasExplicitEmptyComponentList
-          ? '(' + pMol.components.map((c: any) => c.toString()).join(',') + ')'
-          : '()';
-        const molStr = `${pMol.name}${compStr}`;
-        errors.push({
-          line,
-          column,
-          message: `Molecule created in reaction rule: Component(s) ${missing.join(',')} missing from molecule ${molStr}`
-        });
       }
     }
   }

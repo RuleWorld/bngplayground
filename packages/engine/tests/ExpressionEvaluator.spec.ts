@@ -77,6 +77,49 @@ describe('ExpressionEvaluator Service', () => {
             const res = evaluateFunctionalRate(expr, {}, {});
             expect(res).toBe(0);
         });
+
+        it('should throw on undefined variables in strict mode', () => {
+            const expr = 'k1 + missingParam';
+            const params = { k1: 5 };
+            mockEvaluator.getReferencedVariables.mockReturnValue(['k1', 'missingParam']);
+            mockEvaluator.compile.mockReturnValue((ctx: any) => ctx.k1);
+
+            expect(() =>
+                evaluateFunctionalRate(expr, params, {}, undefined, undefined, undefined, true)
+            ).toThrow(/references undefined variable.*missingParam/);
+        });
+
+        it('should throw on non-numeric (NaN) results in strict mode', () => {
+            const expr = 'k1';
+            const params = { k1: 5 };
+            mockEvaluator.getReferencedVariables.mockReturnValue(['k1']);
+            mockEvaluator.compile.mockReturnValue(() => NaN);
+
+            expect(() =>
+                evaluateFunctionalRate(expr, params, {}, undefined, undefined, undefined, true)
+            ).toThrow(/non-numeric/);
+        });
+
+        it('should throw on evaluation failures in strict mode', () => {
+            const expr = 'k1';
+            const params = { k1: 5 };
+            mockEvaluator.getReferencedVariables.mockReturnValue(['k1']);
+            mockEvaluator.compile.mockReturnValue(() => { throw new Error('boom'); });
+
+            expect(() =>
+                evaluateFunctionalRate(expr, params, {}, undefined, undefined, undefined, true)
+            ).toThrow(/boom/);
+        });
+
+        it('should still return 0 for undefined variables in non-strict mode', () => {
+            const expr = 'k1 + missingParam';
+            const params = { k1: 5 };
+            mockEvaluator.getReferencedVariables.mockReturnValue(['k1', 'missingParam']);
+            mockEvaluator.compile.mockReturnValue(() => 0);
+
+            const res = evaluateFunctionalRate(expr, params, {});
+            expect(res).toBe(0);
+        });
     });
 
     describe('evaluateExpressionOrParse', () => {

@@ -12,17 +12,6 @@ export function validateIdentifier(id: string): boolean {
   return SAFE_BODY_RE.test(id) && !FORBIDDEN_KEYS.has(id);
 }
 
-export function sanitizeNumberLiteral(v: unknown): string {
-  if (typeof v === 'number' && Number.isFinite(v)) return String(v);
-  if (typeof v === 'bigint') return String(v);
-  throw new Error(`Invalid numeric literal: ${v}`);
-}
-
-export function sanitizeIntegerLiteral(v: unknown): string {
-  if (typeof v === 'number' && Number.isInteger(v) && v >= 0) return String(v);
-  throw new Error(`Invalid integer literal: ${v}`);
-}
-
 /**
  * Wrap `new Function` with a final safety check on the generated source body.
  *
@@ -34,7 +23,7 @@ export function sanitizeIntegerLiteral(v: unknown): string {
  * This is intended to help static analysis tools (CodeQL) verify that
  * dynamic code generation is only used with pre-sanitised inputs.
  */
-const SAFE_BODY_CHARS = /^[\s\w$+\-*/%&|^~<>=!?:;.,()\[\]{}'"]+$/;
+export const SAFE_BODY_CHARS = /^[\s\w$+\-*/%&|^~<>=!?:;.,()\[\]{}'"]+$/;
 
 export function createCompiledFunction(
   args: string[],

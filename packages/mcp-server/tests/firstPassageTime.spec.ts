@@ -90,4 +90,56 @@ describe('first_passage_time handler', () => {
         expect(d.crossingFraction).toBeLessThan(1);
         expect(d.nCrossings).toBe(0);
     }, 30000);
+
+    it('rejects empty or blank model code', async () => {
+        const result = await handleFirstPassageTime({
+            code: '   ',
+            thresholds: [{ observable: 'Cplx', value: 5, direction: 'above' }],
+            n_trajectories: 5,
+            t_end: 10,
+            n_steps: 20,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/non-empty string/i);
+    });
+
+    it('rejects non-positive t_end', async () => {
+        const result = await handleFirstPassageTime({
+            code: LOW_COUNT_BINDING,
+            thresholds: [{ observable: 'Cplx', value: 5, direction: 'above' }],
+            n_trajectories: 5,
+            t_end: 0,
+            n_steps: 20,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/t_end: Too small|expected number to be >0/i);
+    });
+
+    it('rejects non-positive n_steps', async () => {
+        const result = await handleFirstPassageTime({
+            code: LOW_COUNT_BINDING,
+            thresholds: [{ observable: 'Cplx', value: 5, direction: 'above' }],
+            n_trajectories: 5,
+            t_end: 10,
+            n_steps: -5,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/n_steps: Too small|expected number to be >0/i);
+    });
+
+    it('rejects non-positive n_trajectories', async () => {
+        const result = await handleFirstPassageTime({
+            code: LOW_COUNT_BINDING,
+            thresholds: [{ observable: 'Cplx', value: 5, direction: 'above' }],
+            n_trajectories: 0,
+            t_end: 10,
+            n_steps: 20,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/n_trajectories: Too small|expected number to be >0/i);
+    });
 });

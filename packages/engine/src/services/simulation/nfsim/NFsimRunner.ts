@@ -18,8 +18,22 @@ export interface NFsimSimulationOptions {
   timeoutMs?: number;
   requireRuntime?: boolean;
   verbose?: boolean;
+  /** Include per-species trajectories in results (default: true). */
+  includeSpeciesData?: boolean;
+  /** Include expanded reaction/species metadata in results (default: true). */
+  includeExpandedNetwork?: boolean;
 }
 
+/**
+ * Validates whether a BNGL model is compatible with NFsim (network-free simulation).
+ *
+ * Verifies that the model defines required sections (species, molecule types, reaction rules, and observables)
+ * and checks for unsupported features such as observable-dependent rule rates.
+ *
+ * @param model - The parsed BNGL model object to validate.
+ * @returns A {@link ValidationResult} object indicating whether the model is valid for NFsim
+ *          and listing any validation errors or warnings found.
+ */
 export const validateModelForNFsim = (model: BNGLModel): ValidationResult =>
   NFsimValidator.validateForNFsim(model);
 
@@ -54,6 +68,26 @@ const ensureExpandedNetwork = async (model: BNGLModel): Promise<BNGLModel> => {
   );
 };
 
+/**
+ * Executes a network-free simulation (NFsim) on a BNGL model.
+ *
+ * Converts the BNGL model to BioNetGen XML format, invokes the WASM/JS NFsim runtime via
+ * {@link runNFsim}, reports progress if running in a worker context, and adapts the GDAT
+ * output into {@link SimulationResults}.
+ *
+ * If NFsim validation fails (e.g., missing required model sections or observable-dependent rule rates), an error is thrown.
+ * If the NFsim WASM runtime is unavailable and `options.requireRuntime` is false, this function
+ * logs a warning and gracefully falls back to stochastic network expansion simulation (SSA) via {@link simulate}.
+ *
+ * **Invariant**: Must remain browser-API-free (Node.js and Web Worker compatible).
+ *
+ * @param inputModel - The parsed BNGL model to simulate.
+ * @param options - Configuration options controlling end time, step count, random seed, UTL/GML bounds,
+ *                  and data inclusion flags.
+ * @param jobId - Optional numeric ID for tracking the simulation job and tagging worker progress messages.
+ * @returns A promise resolving to the adapted {@link SimulationResults}.
+ * @throws {Error} If model validation fails or if NFsim execution fails and `options.requireRuntime` is true.
+ */
 export async function runNFsimSimulation(
   inputModel: BNGLModel,
   options: NFsimSimulationOptions,
@@ -75,8 +109,9 @@ export async function runNFsimSimulation(
     if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] Generated XML:\n', xml);
     const hasSpeciesObservables = (inputModel.observables || [])
       .some((obs) => String(obs.type ?? '').toLowerCase() === 'species');
+    const { includeSpeciesData, includeExpandedNetwork, ...runtimeOptions } = options;
     const runOptions = {
-      ...options,
+      ...runtimeOptions,
       cb: options.cb ?? hasSpeciesObservables
     };
     // Attach a progress callback so we can forward NFsim stdout lines to the main thread as 'progress' messages
@@ -104,8 +139,10 @@ export async function runNFsimSimulation(
            if (VERBOSE_NFSIM_DEBUG) console.log(`[NF Progress] t=${payload.simulationTime.toFixed(4)}`);
         }
 
-        (self as any).postMessage({ id: jobId ?? -1, type: 'progress', payload });
-      } catch (e) {
+        if (typeof self !== 'undefined' && typeof (self as any).postMessage === 'function') {
+          (self as any).postMessage({ id: jobId ?? -1, type: 'progress', payload });
+        }
+      } catch {
         // swallow
       }
     };
@@ -114,16 +151,22 @@ export async function runNFsimSimulation(
     if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] gdat output (first 800 chars):\n', gdat.slice(0, 800));
 
     // Ensure final progress update shows completed time
-    (globalThis as any).postMessage({ id: jobId ?? -1, type: 'progress', payload: { message: 'Simulation complete', simulationProgress: 100, simulationTime: runOptions.t_end } });
+    if (typeof globalThis !== 'undefined' && typeof (globalThis as any).postMessage === 'function') {
+      (globalThis as any).postMessage({ id: jobId ?? -1, type: 'progress', payload: { message: 'Simulation complete', simulationProgress: 100, simulationTime: runOptions.t_end } });
+    }
 
-    return NFsimResultAdapter.adaptGdatToSimulationResults(gdat, inputModel);
+    return NFsimResultAdapter.adaptGdatToSimulationResults(gdat, inputModel, {
+      includeSpeciesData,
+      includeExpandedNetwork
+    });
   } catch (error) {
     const formatted = formatNFsimError(error);
     if (options.requireRuntime) {
       throw new Error(
         `NFsim simulation failed: ${formatted}. ` +
         'This may be caused by invalid XML output from the model, or an issue in the NFsim WASM runtime. ' +
-        'Try simplifying the model or switching to simulate({method=>"ssa"}).'
+        'Try simplifying the model or switching to simulate({method=>"ssa"}).',
+        { cause: error }
       );
     }
     console.warn('[NFsimRunner] NFsim runtime unavailable, falling back to SSA.', formatted);
@@ -132,7 +175,9 @@ export async function runNFsimSimulation(
       method: 'ssa',
       t_end: options.t_end,
       n_steps: options.n_steps,
-      seed: options.seed
+      seed: options.seed,
+      includeSpeciesData: options.includeSpeciesData,
+      includeExpandedNetwork: options.includeExpandedNetwork
     };
     return simulate(-1, expanded, ssaOptions, {
       checkCancelled: () => undefined,

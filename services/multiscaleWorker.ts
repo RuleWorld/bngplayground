@@ -28,6 +28,28 @@ export type MultiscaleWorkerResponse =
   | { type: 'complete'; result: MultiscaleResult }
   | { type: 'error'; message: string };
 
+if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
+  self.addEventListener('error', (event) => {
+    const errMsg = event.error?.message ?? event.message ?? 'Unknown worker error';
+    const response: MultiscaleWorkerResponse = { type: 'error', message: `MultiscaleWorker error: ${errMsg}` };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+
+  self.addEventListener('unhandledrejection', (event) => {
+    const errMsg = event.reason?.message ?? String(event.reason ?? 'Unhandled rejection in worker');
+    const response: MultiscaleWorkerResponse = { type: 'error', message: `MultiscaleWorker unhandled rejection: ${errMsg}` };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+
+  self.addEventListener('messageerror', (event) => {
+    const response: MultiscaleWorkerResponse = { type: 'error', message: 'MultiscaleWorker failed to deserialize incoming message' };
+    self.postMessage(response);
+    event.preventDefault();
+  });
+}
+
 let cancelled = false;
 
 self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
@@ -38,6 +60,11 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
   }
 
   const msg = event.data;
+  if (!msg || typeof msg !== 'object') {
+    const response: MultiscaleWorkerResponse = { type: 'error', message: 'MultiscaleWorker received null, undefined, or non-object message' };
+    self.postMessage(response);
+    return;
+  }
 
   try {
     switch (msg.type) {
@@ -56,6 +83,15 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
 
       case 'cancel': {
         cancelled = true;
+        break;
+      }
+
+      default: {
+        const response: MultiscaleWorkerResponse = {
+          type: 'error',
+          message: `MultiscaleWorker received unrecognized message type: ${(msg as any).type}`,
+        };
+        self.postMessage(response);
         break;
       }
     }
