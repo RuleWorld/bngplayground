@@ -103,17 +103,46 @@ export function analyzeQSSA(
         speciesReactionMap[sp.name] = { fast: 0, slow: 0, reactions: [] };
     }
     
-    // ⚡ Bolt Optimization: Replace O(N) chained allocations (.map/.filter) and
-    // spread operators (which risk stack overflow on large models) with a single loop.
-    let maxRate = 1e-6;
-    let minRate = 1e-6;
-    for (const val of Object.values(parameters)) {
-        const numVal = typeof val === 'number' ? val : parseFloat(String(val));
-        if (Number.isFinite(numVal) && numVal > 0) {
-            if (numVal > maxRate) maxRate = numVal;
-            if (numVal < minRate) minRate = numVal;
+    // Derive kinetic rate values only from parameters and rate literals actually referenced in reaction rules,
+    // ignoring non-rate parameters like initial concentrations, compartment volumes, or totals.
+    const rateParamNames = new Set<string>();
+    for (const rule of reactionRules) {
+        if (rule.rate && rule.rate in parameters) {
+            rateParamNames.add(rule.rate);
+        }
+        if (rule.reverseRate && rule.reverseRate in parameters) {
+            rateParamNames.add(rule.reverseRate);
         }
     }
+
+    const rateValues: number[] = [];
+    for (const pName of rateParamNames) {
+        const val = parameters[pName];
+        const numVal = typeof val === 'number' ? val : parseFloat(String(val));
+        if (Number.isFinite(numVal) && numVal > 0) {
+            rateValues.push(numVal);
+        }
+    }
+    for (const rule of reactionRules) {
+        if (!rule.isFunctionalRate) {
+            if (rule.rate && !(rule.rate in parameters)) {
+                const numeric = parseFloat(rule.rate);
+                if (Number.isFinite(numeric) && numeric > 0) {
+                    rateValues.push(Math.abs(numeric));
+                }
+            }
+            if (rule.reverseRate && !(rule.reverseRate in parameters)) {
+                const numeric = parseFloat(rule.reverseRate);
+                if (Number.isFinite(numeric) && numeric > 0) {
+                    rateValues.push(Math.abs(numeric));
+                }
+            }
+        }
+    }
+
+    const maxRate = rateValues.length > 0 ? Math.max(...rateValues) : 0;
+    const minRate = rateValues.length > 0 ? Math.min(...rateValues) : 0;
+    const globalRateSpan = minRate > 0 ? maxRate / minRate : 0;
 
     // ⚡ Bolt Optimization: Pre-compute the set of available species for O(1) lookups
     const availableSpeciesArray = Object.keys(speciesReactionMap);
@@ -134,7 +163,7 @@ export function analyzeQSSA(
             }
         }
         
-        const isFast = rateValue >= maxRate / opts.fastSlowThreshold;
+        const isFast = maxRate > 0 && rateValue >= maxRate / opts.fastSlowThreshold;
         
 
         const allMols = [...rule.reactants, ...rule.products];
@@ -185,6 +214,12 @@ export function analyzeQSSA(
     }
     
     candidates.sort((a, b) => b.ratio - a.ratio);
+
+    // Apply global rate span threshold check based on rate parameters. If the overall rate constant span
+    // is smaller than fastSlowThreshold, QSSA candidates are not reliable.
+    const normalizedCandidates = globalRateSpan < opts.fastSlowThreshold
+        ? candidates.filter((c) => c.recommendation !== 'QSSA')
+        : candidates;
     
     // ⚡ Bolt Optimization: Replace O(N) chained array methods (.filter().length, .filter().slice().map())
     // with a single loop to calculate counts and extract the top QSSA candidates.
@@ -192,7 +227,7 @@ export function analyzeQSSA(
     let conservationCount = 0;
     const topQssaCandidates: string[] = [];
 
-    for (const c of candidates) {
+    for (const c of normalizedCandidates) {
         if (c.recommendation === 'QSSA') {
             qssaCount++;
             if (topQssaCandidates.length < 3) {
@@ -224,7 +259,7 @@ export function analyzeQSSA(
     }
     
     return {
-        candidates,
+        candidates: normalizedCandidates,
         summary,
         ...(reducedModel ? { reducedModel } : {}),
     };
