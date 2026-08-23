@@ -202,6 +202,8 @@ export type { VerificationQuery, VerificationResult } from './services/verificat
 export { checkAbstractReachability, enumerateAbstractComplexes } from './services/verification/ContactMapReachability';
 export { boundedReachabilityCheck, checkDeadlock, checkRuleFires } from './services/verification/BoundedVerifier';
 export { fullReachabilityCheck } from './services/verification/SymmetryReducedVerifier';
+export { buildContactMap } from './services/verification/ContactMapBuilder';
+export type { ContactNode, ContactEdge, ContactMap } from './services/verification/ContactMapBuilder';
 
 // ── Structure Learning ──────────────────────────────────────────────
 export { enumerateRules, countCandidateRules } from './services/verification/RuleEnumerator';
@@ -303,6 +305,10 @@ export type { FirstPassageTimeConfig, FPTDistribution } from './services/analysi
 // ── Dose-Response ──────────────────────────────────────────────────
 export { computeDoseResponse, computeDoseResponseBySimulation } from './services/analysis/DoseResponse';
 export type { DoseResponseConfig, DoseResponseResult, DoseResponseCurve, HillFit } from './services/analysis/DoseResponse';
+
+// ── Optimal Experiment Design ──────────────────────────────────────
+export { analyzeOptimalExperiment } from './services/analysis/OptimalExperiment';
+export type { OptimalExperimentConfig, OptimalExperimentRecommendation, OptimalExperimentResult } from './services/analysis/OptimalExperiment';
 
 // ── Perturbation Screen ────────────────────────────────────────────
 export { perturbationScreen } from './services/analysis/PerturbationScreen';
