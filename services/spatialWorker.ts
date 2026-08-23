@@ -139,10 +139,9 @@ self.onmessage = async (event: MessageEvent<SpatialWorkerRequest>) => {
       }
 
       default: {
-        const unknownType = (msg as { type?: unknown }).type;
         const response: SpatialWorkerResponse = {
           type: 'error',
-          message: `SpatialWorker received unknown request type: ${String(unknownType)}`,
+          message: `SpatialWorker received unrecognized message type: ${(msg as any).type}`,
         };
         self.postMessage(response);
         break;

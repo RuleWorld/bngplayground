@@ -404,7 +404,8 @@ export function compile(
     ast = jsep(expr) as unknown as JsepNode;
   } catch (e) {
     throw new Error(
-      `Failed to parse expression: "${expr}"\nSyntax error: ${e instanceof Error ? e.message : String(e)}`
+      `Failed to parse expression: "${expr}"\nSyntax error: ${e instanceof Error ? e.message : String(e)}`,
+      { cause: e }
     );
   }
 
@@ -435,6 +436,22 @@ export function compile(
   };
 }
 
+/**
+ * Evaluates a constant mathematical or logical string expression that contains no variable dependencies.
+ *
+ * Validates the expression's syntax, checks against DoS constraints (max length, paren depth),
+ * and computes its numerical value using only allowlisted mathematical functions and constants (`ALLOWED_CONSTS`).
+ * If non-constant variables are referenced or evaluation fails, returns either `NaN` (if `fallbackNaN` is true)
+ * or `0`.
+ *
+ * **Engine invariant:** Operates purely in memory using sandboxed AST evaluation without relying on browser APIs
+ * or unsafe `eval`/`Function` constructors.
+ *
+ * @param expr - The constant string expression to evaluate (e.g. `"100 * 2.5"` or `"sin(PI / 2)"`).
+ * @param fallbackNaN - When true, returns `NaN` on evaluation errors or variable detection instead of `0`. Default is `false`.
+ * @param silent - When true, suppresses warning logs on evaluation failure. Default is `false`.
+ * @returns The resulting finite numerical value, or `0`/`NaN` on error.
+ */
 export function evaluateConstant(expr: string, fallbackNaN: boolean = false, silent: boolean = false): number {
   try {
     validateExprBasics(expr);
