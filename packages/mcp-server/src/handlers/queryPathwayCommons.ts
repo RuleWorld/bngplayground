@@ -36,6 +36,6 @@ export async function handleQueryPathwayCommons(args: ToolArgs): Promise<ToolRes
             unknown_molecules: result.unknownMolecules,
         });
     } catch (error) {
-        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+        return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
 }

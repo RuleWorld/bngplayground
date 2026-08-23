@@ -381,7 +381,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
   const numReactants = reactantIds.length;
   const numProducts = productIds.length;
 
-  // Synthesis: 0 → A
+  // Synthesis: 0 ? A
   if (numReactants === 0 && numProducts >= 1) {
     return {
       type: 'synthesis',
@@ -391,7 +391,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Degradation: A → 0
+  // Degradation: A ? 0
   if (numReactants >= 1 && numProducts === 0) {
     return {
       type: 'degradation',
@@ -427,7 +427,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     }
   }
 
-  // Binding: A + B → C
+  // Binding: A + B ? C
   if (numReactants === 2 && numProducts === 1) {
     return {
       type: 'binding',
@@ -437,7 +437,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Complex binding: A + B + C → D
+  // Complex binding: A + B + C ? D
   if (numReactants > 2 && numProducts === 1) {
     return {
       type: 'binding',
@@ -462,7 +462,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     }
   }
 
-  // Unbinding: C → A + B
+  // Unbinding: C ? A + B
   if (numReactants === 1 && numProducts === 2) {
     return {
       type: 'unbinding',
@@ -472,7 +472,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Complex unbinding: D → A + B + C
+  // Complex unbinding: D ? A + B + C
   if (numReactants === 1 && numProducts > 2) {
     return {
       type: 'unbinding',
@@ -482,7 +482,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Modification: A → A'
+  // Modification: A ? A'
   if (numReactants === 1 && numProducts === 1) {
     return {
       type: 'modification',
@@ -492,7 +492,7 @@ export function classifyReaction(reaction: SBMLReaction): ReactionPattern {
     };
   }
 
-  // Catalysis: A + E → A' + E (enzyme unchanged)
+  // Catalysis: A + E ? A' + E (enzyme unchanged)
   if (numReactants === 2 && numProducts === 2) {
     // Check if one species is unchanged (catalyst)
     if (commonSpecies.length === 1) {
@@ -727,7 +727,18 @@ function createElementalSpecies(
   // Try to parse the pattern using readFromString
   try {
     const parsedSpecies = readFromString(nameWithoutCompartment);
-    if (parsedSpecies.molecules.length > 0) {
+    // Only trust a name-derived structure when it carries REAL structure (components) —
+    // that's how RuleHub / BNG2-exported patterns like "L(r!1)" are preserved. A plain
+    // label such as "Mos" or "Mos-P" parses to a bare, component-less molecule whose name
+    // ("Mos") is shared by every phospho-form of the same protein, collapsing distinct SBML
+    // species onto ONE stateless molecule. That makes conversion reactions (MKKK -> MKKK_P)
+    // emit as no-ops (M_Mos -> M_Mos), so generate_network finds no reactions and BNG2
+    // aborts. For those, fall through to an id-based molecule below (ids are unique), which
+    // keeps the species distinct and the reactions real.
+    const isStructured =
+      parsedSpecies.molecules.length > 0 &&
+      parsedSpecies.molecules.some((m: Molecule) => m.components && m.components.length > 0);
+    if (isStructured) {
       sanitizeSpeciesStructureNames(parsedSpecies);
       // Update molecule IDs to use SBML species ID
       for (const mol of parsedSpecies.molecules) {
@@ -738,10 +749,11 @@ function createElementalSpecies(
   } catch (e) {
     // Fall back to simple molecule creation
   }
-  
-  // Fallback: create simple molecule without components
+
+  // Fallback: create a simple molecule. Use the SBML species id (guaranteed unique) as the
+  // molecule name so plain-label species never collapse onto a shared stateless molecule.
   const species = new Species();
-  const name = useId ? sbmlSpecies.id : standardizeName(nameWithoutCompartment);
+  const name = standardizeName(sbmlSpecies.id);
   const molecule = new Molecule(name, sbmlSpecies.id);
   species.addMolecule(molecule);
 
@@ -1064,6 +1076,29 @@ export function buildSpeciesCompositionTable(
     // Parse and apply compartment info from species name
     parseAndApplyCompartments(speciesName, structure);
 
+    // Reconcile name-derived compartments against the declared set. BNG2/COPASI-exported SBML can
+    // carry a BNGL compartment label in the species NAME (e.g. "@cyto::C2E(...)") that differs from
+    // the authoritative SBML `compartment` attribute (e.g. "cell") and is NOT in the compartment
+    // list, so BNG2 aborts "Undefined compartment cyto" (BIOMD568). The SBML compartment attribute
+    // is authoritative (SBML L3); when a molecule's name-derived compartment is undeclared, fall
+    // back to it. GUARD: only fires for an undeclared compartment where the SBML attribute IS
+    // declared, so models with consistent/declared compartments are untouched (no regression path;
+    // an undeclared compartment already aborts BNG2 today).
+    {
+      const declaredStd = new Set(
+        Array.from(model.compartments.keys()).map((c) => standardizeName(c))
+      );
+      const sbmlComp = sbmlSpecies.compartment;
+      const sbmlCompStd = sbmlComp ? standardizeName(sbmlComp) : '';
+      if (sbmlComp && declaredStd.has(sbmlCompStd)) {
+        for (const mol of structure.molecules) {
+          if (mol.compartment && !declaredStd.has(standardizeName(mol.compartment))) {
+            mol.setCompartment(sbmlComp);
+          }
+        }
+      }
+    }
+
     const entry: SCTEntry = {
       structure,
       components,
@@ -1231,25 +1266,89 @@ function updateMoleculeType(existing: Molecule, mol: Molecule): void {
 /**
  * Get seed species from the SCT
  */
+/**
+ * Disambiguate distinct SBML species that atomization collapsed onto one identical BNGL pattern
+ * (localized isoforms sharing a base name, e.g. cytosolic ppERKc vs nuclear ppERKn -> both
+ * M_ppERK(cytosol,nucleus)). Adds a discriminator component `__sp` whose state is the species id.
+ * GUARD: only groups with >1 distinct species id AND identical (pattern + compartment) are touched,
+ * so models without a real collision are a strict no-op. Numerically identity-preserving: it only
+ * SPLITS an over-merged pair; it never merges or alters a correctly-distinct species.
+ */
+export function disambiguateCollidingSpecies(
+  sct: SpeciesCompositionTable,
+  model: SBMLModel
+): number {
+  const groups = new Map<string, string[]>();
+  for (const [speciesId, entry] of sct.entries) {
+    if (!entry.structure || entry.structure.molecules.length === 0) continue;
+    const pattern = entry.structure.molecules
+      .map((m: Molecule) => m.toString(true))
+      .sort()
+      .join('.');
+    const comp = model.species.get(speciesId)?.compartment ?? '';
+    const key = `${comp}::${pattern}`;
+    const arr = groups.get(key);
+    if (arr) arr.push(speciesId);
+    else groups.set(key, [speciesId]);
+  }
+
+  let disambiguated = 0;
+  for (const ids of groups.values()) {
+    const distinct = Array.from(new Set(ids));
+    if (distinct.length < 2) continue;
+    for (const speciesId of distinct) {
+      const entry = sct.entries.get(speciesId);
+      if (!entry || !entry.structure || entry.structure.molecules.length === 0) continue;
+      const state = standardizeName(speciesId);
+      const disc = new Component('__sp', '', [], [state]);
+      disc.activeState = state;
+      entry.structure.molecules[0].addComponent(disc);
+      disambiguated += 1;
+    }
+  }
+  return disambiguated;
+}
+
 export function getSeedSpecies(
   sct: SpeciesCompositionTable,
   model: SBMLModel
 ): SeedSpeciesEntry[] {
   const seedSpecies: SeedSpeciesEntry[] = [];
 
+  // Species whose starting value is supplied by an <initialAssignment> rather than an attribute.
+  // Previously these were dropped, so the species seeded at 0.
+  const initialAssignmentBySymbol = new Map<string, string>();
+  for (const ia of model.initialAssignments || []) {
+    initialAssignmentBySymbol.set(ia.symbol, ia.math);
+  }
+
   for (const [speciesId, entry] of sct.entries) {
     const sbmlSpecies = model.species.get(speciesId)!;
 
+    const compId = standardizeName(sbmlSpecies.compartment);
+    const volParam = `__compartment_${compId}__`;
+    // Species value is an amount if hasOnlySubstanceUnits; otherwise it is a concentration and
+    // must be multiplied by Na*V to become a molecule count.
+    const asAmount = (expr: string) => sbmlSpecies.hasOnlySubstanceUnits
+      ? `(${expr})`
+      : `(${expr} * __Avogadro__ * ${volParam})`;
+
+    // Fall back to the old ">0" heuristic only when the set/unset flag is unavailable (e.g. the
+    // species was built without access to the raw SBML), so nothing regresses.
+    const amountSet = sbmlSpecies.initialAmountSet ?? (sbmlSpecies.initialAmount !== 0);
+    const concSet = sbmlSpecies.initialConcentrationSet ?? (sbmlSpecies.initialConcentration !== 0);
+    const ia = initialAssignmentBySymbol.get(speciesId);
+
     let amountExpr: string;
-    if (sbmlSpecies.initialAmount > 0) {
-      // BNG exports SBML with molecule counts in initialAmount
-      // We use the value directly regardless of hasOnlySubstanceUnits
+    if (ia !== undefined) {
+      // An initialAssignment overrides any initial-value attribute (SBML spec), and is evaluated
+      // in the species' units (amount vs concentration per hasOnlySubstanceUnits).
+      amountExpr = asAmount(ia);
+    } else if (amountSet) {
+      // initialAmount is already a substance amount (count in BNG-exported SBML); use directly.
       amountExpr = sbmlSpecies.initialAmount.toString();
-    } else if (sbmlSpecies.initialConcentration > 0) {
-      // Concentration based: scale by Na * Vol
-      const compId = standardizeName(sbmlSpecies.compartment);
-      const volParam = `__compartment_${compId}__`;
-      amountExpr = `(${sbmlSpecies.initialConcentration} * Na * ${volParam})`;
+    } else if (concSet) {
+      amountExpr = `(${sbmlSpecies.initialConcentration} * __Avogadro__ * ${volParam})`;
     } else {
       amountExpr = '0';
     }

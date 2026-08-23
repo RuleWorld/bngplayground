@@ -2,10 +2,6 @@ import { SpeciesGraph } from './SpeciesGraph.ts';
 import { Component } from './Component.ts';
 import { countEmbeddingDegeneracy } from './degeneracy.ts';
 
-const getNeighborMolecules = (graph: SpeciesGraph, molIdx: number): number[] => {
-  return graph.neighborList[molIdx] ?? [];
-};
-
 export interface MatchMap {
   moleculeMap: Map<number, number>;      // pattern mol => target mol
   componentMap: Map<string, string>;     // "pMol.pCompIdx" => "tMol.tCompIdx"
@@ -28,6 +24,8 @@ const shouldLogGraphMatcher = typeof process !== 'undefined' && process.env?.DEB
 // - MAX_COMPONENT_ITERATIONS: component-level assignment enumeration (typical: <100 iterations)
 const MAX_VF2_ITERATIONS = 100000;
 const MAX_COMPONENT_ITERATIONS = 10000;
+const SINGLE_NODE_ORDERING = [0];
+let componentProfilingEnabled = false;
 
 // WeakMaps for nested caching: Pattern -> Target -> MatchMap[]
 // To support both strict and relaxed matching, as well as symmetry-breaking,
@@ -38,11 +36,24 @@ let matchCacheStrictSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMa
 let matchCacheRelaxedNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
 let matchCacheRelaxedSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap[]>>();
 
+let firstMapCacheStrictNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+let firstMapCacheStrictSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+let firstMapCacheRelaxedNoSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+let firstMapCacheRelaxedSB = new WeakMap<SpeciesGraph, WeakMap<SpeciesGraph, MatchMap | null>>();
+
 function getSelectedCache(allowExtra: boolean, sb: boolean) {
   if (allowExtra) {
     return sb ? matchCacheRelaxedSB : matchCacheRelaxedNoSB;
   } else {
     return sb ? matchCacheStrictSB : matchCacheStrictNoSB;
+  }
+}
+
+function getFirstMapSelectedCache(allowExtra: boolean, sb: boolean) {
+  if (allowExtra) {
+    return sb ? firstMapCacheRelaxedSB : firstMapCacheRelaxedNoSB;
+  } else {
+    return sb ? firstMapCacheStrictSB : firstMapCacheStrictNoSB;
   }
 }
 
@@ -54,6 +65,10 @@ export function clearMatchCache() {
   matchCacheStrictSB = new WeakMap();
   matchCacheRelaxedNoSB = new WeakMap();
   matchCacheRelaxedSB = new WeakMap();
+  firstMapCacheStrictNoSB = new WeakMap();
+  firstMapCacheStrictSB = new WeakMap();
+  firstMapCacheRelaxedNoSB = new WeakMap();
+  firstMapCacheRelaxedSB = new WeakMap();
 }
 
 /**
@@ -63,6 +78,11 @@ export class GraphMatcher {
   // Profiling counters for component matching (innermost hot path)
   static matchComponentsTime = 0;
   static matchComponentsCount = 0;
+
+  /** Enable innermost matcher timing only while the network profiler is active. */
+  static setProfilingEnabled(enabled: boolean): void {
+    componentProfilingEnabled = enabled;
+  }
 
   /**
    * VF2++ Algorithm 1 (Egerváry & Madarasi 2018, Section 3): compute an order that prioritizes
@@ -79,10 +99,11 @@ export class GraphMatcher {
     const ordering: number[] = [];
     const visited = new Set<number>();
     const labelFrequency = this.buildTargetLabelFrequency(target);
-    const components = this.findConnectedComponents(pattern);
+    const patternNeighbors = pattern.neighborList; // Get once!
+    const components = this.findConnectedComponentsWithNeighbors(pattern, patternNeighbors);
 
     for (const component of components) {
-      const root = this.selectBfsRoot(component, pattern, labelFrequency);
+      const root = this.selectBfsRootWithNeighbors(component, pattern, labelFrequency, patternNeighbors);
       if (root === undefined) {
         continue;
       }
@@ -99,7 +120,9 @@ export class GraphMatcher {
 
         for (let i = levelIndex; i < levelEnd; i++) {
           const node = queue[i];
-          for (const neighbor of getNeighborMolecules(pattern, node)) {
+          const nList = patternNeighbors[node] ?? [];
+          for (let ni = 0; ni < nList.length; ni++) {
+            const neighbor = nList[ni];
             if (!component.has(neighbor) || visited.has(neighbor) || nextLevelSet.has(neighbor)) {
               continue;
             }
@@ -115,8 +138,8 @@ export class GraphMatcher {
         const freq = new Array(k);
         for (let ni = 0; ni < k; ni++) {
           const node = nextLevel[ni];
-          covered[ni] = this.countCoveredNeighbors(pattern, node, visited);
-          degree[ni] = getNeighborMolecules(pattern, node).length;
+          covered[ni] = this.countCoveredNeighborsWithNeighbors(node, visited, patternNeighbors);
+          degree[ni] = (patternNeighbors[node] ?? []).length;
           freq[ni] = labelFrequency.get(pattern.molecules[node].name) ?? 0;
         }
         // sort indices by covered desc, degree desc, freq asc, index asc
@@ -153,7 +176,7 @@ export class GraphMatcher {
     return freq;
   }
 
-  private static findConnectedComponents(graph: SpeciesGraph): Array<Set<number>> {
+  private static findConnectedComponentsWithNeighbors(graph: SpeciesGraph, neighbors: number[][]): Array<Set<number>> {
     const visited = new Set<number>();
     const components: Array<Set<number>> = [];
 
@@ -180,7 +203,9 @@ export class GraphMatcher {
         visited.add(node);
         component.add(node);
 
-        for (const neighbor of getNeighborMolecules(graph, node)) {
+        const nList = neighbors[node] ?? [];
+        for (let ni = 0; ni < nList.length; ni++) {
+          const neighbor = nList[ni];
           if (!visited.has(neighbor)) {
             stack.push(neighbor);
           }
@@ -193,17 +218,18 @@ export class GraphMatcher {
     return components;
   }
 
-  private static selectBfsRoot(
+  private static selectBfsRootWithNeighbors(
     component: Set<number>,
     pattern: SpeciesGraph,
-    labelFrequency: Map<string, number>
+    labelFrequency: Map<string, number>,
+    neighbors: number[][]
   ): number | undefined {
     let bestNode: number | undefined;
     let bestDegree = -1;
     let bestLabelFrequency = Number.POSITIVE_INFINITY;
 
     for (const node of component) {
-      const degree = getNeighborMolecules(pattern, node).length;
+      const degree = (neighbors[node] ?? []).length;
       const freq = labelFrequency.get(pattern.molecules[node].name) ?? 0;
 
       if (
@@ -220,13 +246,15 @@ export class GraphMatcher {
     return bestNode;
   }
 
-  private static countCoveredNeighbors(
-    pattern: SpeciesGraph,
+  private static countCoveredNeighborsWithNeighbors(
     node: number,
-    visited: Set<number>
+    visited: Set<number>,
+    neighbors: number[][]
   ): number {
     let covered = 0;
-    for (const neighbor of getNeighborMolecules(pattern, node)) {
+    const nList = neighbors[node] ?? [];
+    for (let ni = 0; ni < nList.length; ni++) {
+      const neighbor = nList[ni];
       if (visited.has(neighbor)) {
         covered += 1;
       }
@@ -256,11 +284,19 @@ export class GraphMatcher {
       if (shouldLogGraphMatcher && pattern.toString().includes('C3(s~b)')) {
         console.log(`[GM_DEBUG] canPossiblyMatch failed for ${pattern.toString()} in ${target.toString()}`);
       }
+      let tMap = selectedCache.get(pattern);
+      if (tMap === undefined) {
+        tMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+        selectedCache.set(pattern, tMap);
+      }
+      tMap.set(target, []);
       return [];
     }
 
     const matches: MatchMap[] = [];
-    const ordering = this.computeNodeOrdering(pattern, target);
+    const ordering = pattern.molecules.length === 1
+      ? SINGLE_NODE_ORDERING
+      : this.computeNodeOrdering(pattern, target);
     const state = new VF2State(
       pattern,
       target,
@@ -299,30 +335,17 @@ export class GraphMatcher {
    * along with fast topological checks (bond count, max degree, and bound components) to prune rejections in O(1) time.
    */
   public static canPossiblyMatch(pattern: SpeciesGraph, target: SpeciesGraph): boolean {
-    // 0. Fingerprint check
-    const patternList = pattern.wildcardFreeFingerprintList;
-    const targetFp = target.fingerprint;
-    for (let i = 0; i < patternList.length; i++) {
-      const entry = patternList[i];
-      const tarCount = targetFp.get(entry[0]) ?? 0;
-      if (tarCount < entry[1]) {
-        return false;
-      }
-    }
-
     // 1. Read cached topological aggregates for pattern
-    const patternCounts = pattern.molTypeCounts;
     const patternBonds = pattern.bondCount;
     const patternBoundComps = pattern.boundCompCount;
     const maxPatternDegree = pattern.maxDegree;
 
     // 2. Read cached topological aggregates for target
-    const targetCounts = target.molTypeCounts;
     const targetBonds = target.bondCount;
     const targetBoundComps = target.boundCompCount;
     const maxTargetDegree = target.maxDegree;
 
-    // 3. Topological rejections
+    // 3. Topological rejections (extremely cheap O(1) checks first!)
     if (targetBonds < patternBonds) {
       return false;
     }
@@ -333,7 +356,37 @@ export class GraphMatcher {
       return false;
     }
 
-    // 3.5 Type-connectivity check
+    const targetTotal = target.molecules.length;
+    const patternTotal = pattern.molecules.length;
+    if (targetTotal < patternTotal) {
+      return false;
+    }
+
+    // 4. Name-based molecule count checks (cheap map queries before full fingerprint check)
+    const patternCounts = pattern.molTypeCounts;
+    const targetCounts = target.molTypeCounts;
+
+    for (const [molType, count] of patternCounts) {
+      if (molType === '*') {
+        continue;
+      }
+      if ((targetCounts.get(molType) || 0) < count) {
+        return false;
+      }
+    }
+
+    // 0. Fingerprint check (deferred after topological checks to avoid map/string hashing overhead)
+    const patternList = pattern.wildcardFreeFingerprintList;
+    const targetFp = target.fingerprint;
+    for (let i = 0; i < patternList.length; i++) {
+      const entry = patternList[i];
+      const tarCount = targetFp.get(entry[0]) ?? 0;
+      if (tarCount < entry[1]) {
+        return false;
+      }
+    }
+
+    // 3.5 Type-connectivity check (run only if the rest matches)
     const patternBondsMap = pattern.typeBonds;
     const targetBondsMap = target.typeBonds;
     for (const [pairKey, patCount] of patternBondsMap.entries()) {
@@ -346,21 +399,7 @@ export class GraphMatcher {
       }
     }
 
-    // 4. Name-based molecule count checks
-    const targetTotal = target.molecules.length;
-    const patternTotal = pattern.molecules.length;
-
-    for (const [molType, count] of patternCounts) {
-      if (molType === '*') {
-        // '*' matches anything, don't check name-based counts for these
-        continue;
-      }
-      if ((targetCounts.get(molType) || 0) < count) {
-        return false;
-      }
-    }
-
-    return targetTotal >= patternTotal;
+    return true;
   }
 
   /**
@@ -375,11 +414,52 @@ export class GraphMatcher {
    * This is a performance-friendly alternative to `findAllMaps` for boolean checks.
    */
   static findFirstMap(pattern: SpeciesGraph, target: SpeciesGraph, options: GraphMatchOptions = {}): MatchMap | null {
+    // 1. Check if there's already a full findAllMaps cached result
+    const selectedCache = getSelectedCache(options.allowExtraTargetBonds ?? false, options.symmetryBreaking ?? false);
+    const targetMap = selectedCache.get(pattern);
+    if (targetMap !== undefined) {
+      const cached = targetMap.get(target);
+      if (cached !== undefined) {
+        return cached[0] ?? null;
+      }
+    }
+
+    // 2. Check dedicated firstMapCache
+    const firstMapCache = getFirstMapSelectedCache(options.allowExtraTargetBonds ?? false, options.symmetryBreaking ?? false);
+    let targetFirstMap = firstMapCache.get(pattern);
+    if (targetFirstMap !== undefined) {
+      const cached = targetFirstMap.get(target);
+      if (cached !== undefined) {
+        return cached;
+      }
+    }
+
+    // 3. Fast pre-filter
     if (!this.canPossiblyMatch(pattern, target)) {
+      // If it can't possibly match, then BOTH findFirstMap and findAllMaps are guaranteed to be empty/null!
+      // So we can cache both!
+      if (targetMap === undefined) {
+        const newTargetMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+        selectedCache.set(pattern, newTargetMap);
+        newTargetMap.set(target, []);
+      } else {
+        targetMap.set(target, []);
+      }
+
+      if (targetFirstMap === undefined) {
+        const newTargetFirstMap = new WeakMap<SpeciesGraph, MatchMap | null>();
+        firstMapCache.set(pattern, newTargetFirstMap);
+        newTargetFirstMap.set(target, null);
+      } else {
+        targetFirstMap.set(target, null);
+      }
+
       return null;
     }
 
-    const ordering = this.computeNodeOrdering(pattern, target);
+    const ordering = pattern.molecules.length === 1
+      ? SINGLE_NODE_ORDERING
+      : this.computeNodeOrdering(pattern, target);
     const state = new VF2State(
       pattern,
       target,
@@ -388,7 +468,26 @@ export class GraphMatcher {
       options.allowExtraTargetBonds ?? false
     );
     const iterationCount = { value: 0 };
-    return this.vf2BacktrackFirst(state, iterationCount);
+    const result = this.vf2BacktrackFirst(state, iterationCount);
+
+    // Cache the result in firstMapCache
+    if (targetFirstMap === undefined) {
+      targetFirstMap = new WeakMap<SpeciesGraph, MatchMap | null>();
+      firstMapCache.set(pattern, targetFirstMap);
+    }
+    targetFirstMap.set(target, result);
+
+    // If result is null, we can also cache it in the full findAllMaps cache as []!
+    if (result === null) {
+      let tMap = selectedCache.get(pattern);
+      if (tMap === undefined) {
+        tMap = new WeakMap<SpeciesGraph, MatchMap[]>();
+        selectedCache.set(pattern, tMap);
+      }
+      tMap.set(target, []);
+    }
+
+    return result;
   }
 
   /**
@@ -414,8 +513,14 @@ export class GraphMatcher {
       return;
     }
 
-    const candidates = state.getCandidatePairs();
-    for (const [pNode, tNode] of candidates) {
+    const candidateResult = state.getCandidateTargetNodes();
+    if (!candidateResult) return;
+
+    const pNode = candidateResult.pNode;
+    const tNodes = candidateResult.tNodes;
+
+    for (let i = 0; i < tNodes.length; i++) {
+      const tNode = tNodes[i];
       // Early exit if we've hit the iteration limit
       if (iterationCount.value > MAX_VF2_ITERATIONS) {
         return;
@@ -446,8 +551,14 @@ export class GraphMatcher {
       return state.tryGetMatch();
     }
 
-    const candidates = state.getCandidatePairs();
-    for (const [pNode, tNode] of candidates) {
+    const candidateResult = state.getCandidateTargetNodes();
+    if (!candidateResult) return null;
+
+    const pNode = candidateResult.pNode;
+    const tNodes = candidateResult.tNodes;
+
+    for (let i = 0; i < tNodes.length; i++) {
+      const tNode = tNodes[i];
       if (state.isFeasible(pNode, tNode)) {
         state.addPair(pNode, tNode);
         const result = this.vf2BacktrackFirst(state, iterationCount);
@@ -518,7 +629,6 @@ interface BondEndpoint {
 interface PendingComponentResult {
   patternMolIdx: number;
   targetMolIdx: number;
-  mapping: Map<number, number>;
 }
 
 /**
@@ -527,17 +637,17 @@ interface PendingComponentResult {
 class VF2State {
   pattern: SpeciesGraph;
   target: SpeciesGraph;
+  patternNeighbors: number[][];
+  targetNeighbors: number[][];
   corePattern: Int32Array;
   coreTarget: Int32Array;
   coreSize: number;
-  componentMatches: Map<number, Map<number, number>>;
+  componentMatchesArray: Int32Array[];
   pendingComponentResult?: PendingComponentResult;
   bondPartnerLookup: Map<string, BondEndpoint>;
   nodeOrdering: number[];
   symmetryBreaking: boolean;
   allowExtraTargetBonds: boolean;
-  private componentCandidateCache: Map<number, Map<number, Map<number, Map<number, number[]>>>>;
-  private componentCandidateCacheLarge: Map<number, Map<number, Map<number, Map<string, number[]>>>>;
   private frontierBits: Uint8Array;
   private frontierSize: number;
   private componentOrders: number[][];
@@ -557,6 +667,8 @@ class VF2State {
   ) {
     this.pattern = pattern;
     this.target = target;
+    this.patternNeighbors = pattern.neighborList;
+    this.targetNeighbors = target.neighborList;
     const pLen = pattern.molecules.length;
     const tLen = target.molecules.length;
     this.corePattern = new Int32Array(pLen);
@@ -564,25 +676,31 @@ class VF2State {
     this.coreTarget = new Int32Array(tLen);
     this.coreTarget.fill(-1);
     this.coreSize = 0;
-    this.componentMatches = new Map();
-    this.bondPartnerLookup = this.buildBondPartnerLookup();
-    this.nodeOrdering = nodeOrdering.length ? nodeOrdering : pattern.molecules.map((_, idx) => idx);
+    this.componentMatchesArray = new Array(pLen);
+    for (let i = 0; i < pLen; i++) {
+      const cCount = pattern.molecules[i].components.length;
+      const arr = new Int32Array(cCount);
+      arr.fill(-1);
+      this.componentMatchesArray[i] = arr;
+    }
+    this.bondPartnerLookup = pattern.bondPartnerLookup;
+    if (nodeOrdering.length) {
+      this.nodeOrdering = nodeOrdering;
+    } else {
+      const pLen = pattern.molecules.length;
+      const order = new Array<number>(pLen);
+      for (let i = 0; i < pLen; i++) {
+        order[i] = i;
+      }
+      this.nodeOrdering = order;
+    }
     this.symmetryBreaking = symmetryBreaking;
     this.allowExtraTargetBonds = allowExtraTargetBonds;
-    this.componentCandidateCache = new Map();
-    this.componentCandidateCacheLarge = new Map();
     this.frontierBits = new Uint8Array(Math.max(pLen, tLen));
     this.frontierSize = 0;
 
-    let maxComps = 0;
-    this.componentOrders = new Array(pattern.molecules.length);
-    for (let m = 0; m < pattern.molecules.length; m++) {
-      const mol = pattern.molecules[m];
-      this.componentOrders[m] = mol.components
-        .map((_, idx) => idx)
-        .sort((a, b) => this.componentPriority(mol.components[b]) - this.componentPriority(mol.components[a]));
-      if (mol.components.length > maxComps) maxComps = mol.components.length;
-    }
+    this.componentOrders = pattern.componentOrders;
+    const maxComps = pattern.maxComps;
     this.scratchAssignment = new Int32Array(maxComps);
     this.scratchIterationCount = { value: 0 };
     this.mcvCandidateCache = new Map();
@@ -603,7 +721,9 @@ class VF2State {
     let count = 0;
     for (let pIdx = 0; pIdx < core.length; pIdx++) {
       if (core[pIdx] === -1) continue;
-      for (const neighbor of getNeighborMolecules(this.pattern, pIdx)) {
+      const nList = this.patternNeighbors[pIdx] ?? [];
+      for (let ni = 0; ni < nList.length; ni++) {
+        const neighbor = nList[ni];
         if (core[neighbor] === -1 && bits[neighbor] === 0) {
           bits[neighbor] = 1;
           count++;
@@ -621,7 +741,9 @@ class VF2State {
     let count = 0;
     for (let tIdx = 0; tIdx < core.length; tIdx++) {
       if (core[tIdx] === -1) continue;
-      for (const neighbor of getNeighborMolecules(this.target, tIdx)) {
+      const nList = this.targetNeighbors[tIdx] ?? [];
+      for (let ni = 0; ni < nList.length; ni++) {
+        const neighbor = nList[ni];
         if (core[neighbor] === -1 && bits[neighbor] === 0) {
           bits[neighbor] = 1;
           count++;
@@ -664,7 +786,9 @@ class VF2State {
   private neighborConsistencyCheck(pNode: number, tNode: number): boolean {
     let patternUncovered = 0;
     const pCore = this.corePattern;
-    for (const neighbor of getNeighborMolecules(this.pattern, pNode)) {
+    const pList = this.patternNeighbors[pNode] ?? [];
+    for (let ni = 0; ni < pList.length; ni++) {
+      const neighbor = pList[ni];
       if (pCore[neighbor] === -1) {
         patternUncovered += 1;
       }
@@ -672,7 +796,9 @@ class VF2State {
 
     let targetUncovered = 0;
     const tCore = this.coreTarget;
-    for (const neighbor of getNeighborMolecules(this.target, tNode)) {
+    const tList = this.targetNeighbors[tNode] ?? [];
+    for (let ni = 0; ni < tList.length; ni++) {
+      const neighbor = tList[ni];
       if (tCore[neighbor] === -1) {
         targetUncovered += 1;
       }
@@ -686,9 +812,10 @@ class VF2State {
    * adjacent to the current core), falling back to uncovered nodes following the precomputed
    * ordering. Target candidates are filtered with quick feasibility and neighbourhood degree
    * consistency before being returned for recursive exploration.
+   *
+   * Optimized to completely avoid allocating tuple arrays [pNode, tNode][] during backtracking.
    */
-  getCandidatePairs(): [number, number][] {
-    const pairs: [number, number][] = [];
+  getCandidateTargetNodes(): { pNode: number; tNodes: number[] } | null {
     const pCore = this.corePattern;
     const tCore = this.coreTarget;
 
@@ -701,7 +828,7 @@ class VF2State {
       return this.frontierSize;
     })();
 
-    if (patternCandidatesSize === 0) return pairs;
+    if (patternCandidatesSize === 0) return null;
 
     let nextPatternIdx: number | undefined;
     for (const idx of this.nodeOrdering) {
@@ -712,16 +839,13 @@ class VF2State {
     }
 
     if (nextPatternIdx === undefined) {
-      return pairs;
+      return null;
     }
 
     // NOTE: When the next pattern node is NOT in the pattern frontier (i.e., it's from
     // a disconnected component in the pattern), we must consider ALL uncovered target nodes,
     // not just the target frontier. This is essential for patterns like "A.B" where A and B
     // are not directly bonded but must be in the same species/complex.
-    // 
-    // BNG semantics: "A.B" means A and B are in the same complex, but they don't need to
-    // be directly bonded. They could be connected through intermediate molecules.
     const isNextPatternNodeInFrontier = patternFrontierSize > 0 && bits[nextPatternIdx] === 1;
 
     if (isNextPatternNodeInFrontier) {
@@ -730,6 +854,7 @@ class VF2State {
       this.computeUncoveredTargetNodes();
     }
 
+    const tNodes: number[] = [];
     // Iterate target candidates in order (bitset naturally gives ascending order)
     for (let tIdx = 0; tIdx < tCore.length; tIdx++) {
       if (bits[tIdx] !== 1) continue;
@@ -743,10 +868,10 @@ class VF2State {
         continue;
       }
 
-      pairs.push([nextPatternIdx, tIdx]);
+      tNodes.push(tIdx);
     }
 
-    return pairs;
+    return { pNode: nextPatternIdx, tNodes };
   }
 
   isFeasible(pMol: number, tMol: number): boolean {
@@ -760,8 +885,8 @@ class VF2State {
       return false;
     }
 
-    const componentMapping = this.matchComponents(pMol, tMol);
-    if (!componentMapping) {
+    const isMatched = this.matchComponents(pMol, tMol);
+    if (!isMatched) {
       if (shouldLogGraphMatcher) {
         console.log(`[GraphMatcher] Component match failed for P${pMol} -> T${tMol}`);
       }
@@ -774,8 +899,7 @@ class VF2State {
 
     this.pendingComponentResult = {
       patternMolIdx: pMol,
-      targetMolIdx: tMol,
-      mapping: componentMapping
+      targetMolIdx: tMol
     };
 
     return true;
@@ -812,19 +936,11 @@ class VF2State {
       return false;
     }
 
-    const requiredCounts = new Map<string, number>();
-    for (const comp of patternMol.components) {
-      requiredCounts.set(comp.name, (requiredCounts.get(comp.name) ?? 0) + 1);
-    }
+    const requiredCounts = patternMol.componentCounts;
+    const targetCounts = targetMol.componentCounts;
 
     for (const [name, count] of requiredCounts.entries()) {
-      let available = 0;
-      for (const targetComp of targetMol.components) {
-        if (targetComp.name === name) {
-          available += 1;
-        }
-      }
-      if (available < count) {
+      if ((targetCounts.get(name) ?? 0) < count) {
         return false;
       }
     }
@@ -847,7 +963,9 @@ class VF2State {
     const patternNameOnlyCounts = new Map<string, number>();
 
     const addPatternNeighbors = (sourceIdx: number, skipCandidate: boolean) => {
-      for (const neighbor of getNeighborMolecules(this.pattern, sourceIdx)) {
+      const pList = this.patternNeighbors[sourceIdx] ?? [];
+      for (let ni = 0; ni < pList.length; ni++) {
+        const neighbor = pList[ni];
         if (pCore[neighbor] !== -1) {
           continue;
         }
@@ -880,7 +998,9 @@ class VF2State {
     const targetNameOnlyCounts = new Map<string, number>();
 
     const addTargetNeighbors = (sourceIdx: number, skipCandidate: boolean) => {
-      for (const neighbor of getNeighborMolecules(this.target, sourceIdx)) {
+      const tList = this.targetNeighbors[sourceIdx] ?? [];
+      for (let ni = 0; ni < tList.length; ni++) {
+        const neighbor = tList[ni];
         if (tCore[neighbor] !== -1) {
           continue;
         }
@@ -923,7 +1043,9 @@ class VF2State {
     const patternCounts = new Map<string, number>();
     const patternNameOnlyCounts = new Map<string, number>();
 
-    for (const neighbor of getNeighborMolecules(this.pattern, pMol)) {
+    const pList = this.patternNeighbors[pMol] ?? [];
+    for (let ni = 0; ni < pList.length; ni++) {
+      const neighbor = pList[ni];
       if (pCore[neighbor] !== -1) {
         continue;
       }
@@ -947,7 +1069,9 @@ class VF2State {
     const targetCounts = new Map<string, number>();
     const targetNameOnlyCounts = new Map<string, number>();
 
-    for (const neighbor of getNeighborMolecules(this.target, tMol)) {
+    const tList = this.targetNeighbors[tMol] ?? [];
+    for (let ni = 0; ni < tList.length; ni++) {
+      const neighbor = tList[ni];
       if (tCore[neighbor] !== -1) {
         continue;
       }
@@ -987,10 +1111,12 @@ class VF2State {
       this.pendingComponentResult.patternMolIdx === p &&
       this.pendingComponentResult.targetMolIdx === t
     ) {
-      this.componentMatches.set(p, new Map(this.pendingComponentResult.mapping));
+      const arr = this.componentMatchesArray[p];
+      arr.set(this.scratchAssignment.subarray(0, arr.length));
     } else {
-      const fallback = this.matchComponents(p, t) ?? new Map<number, number>();
-      this.componentMatches.set(p, fallback);
+      this.matchComponents(p, t);
+      const arr = this.componentMatchesArray[p];
+      arr.set(this.scratchAssignment.subarray(0, arr.length));
     }
 
     this.pendingComponentResult = undefined;
@@ -1001,7 +1127,7 @@ class VF2State {
     this.corePattern[p] = -1;
     this.coreTarget[t] = -1;
     this.coreSize--;
-    this.componentMatches.delete(p);
+    this.componentMatchesArray[p].fill(-1);
   }
 
   tryGetMatch(): MatchMap | null {
@@ -1013,21 +1139,24 @@ class VF2State {
       if (tMolIdx === -1) continue;
       molMap.set(pMolIdx, tMolIdx);
 
-      const storedMap = this.componentMatches.get(pMolIdx);
+      const storedArr = this.componentMatchesArray[pMolIdx];
+      const isConsistent = storedArr && this.isStoredComponentMapConsistent(pMolIdx, tMolIdx, storedArr);
 
-      let perMolMap: Map<number, number> | null = null;
-      if (storedMap && this.isStoredComponentMapConsistent(pMolIdx, tMolIdx, storedMap)) {
-        perMolMap = storedMap;
+      if (isConsistent) {
+        for (let pCompIdx = 0; pCompIdx < storedArr.length; pCompIdx++) {
+          const tCompIdx = storedArr[pCompIdx];
+          if (tCompIdx !== -1) {
+            componentMap.set(`${pMolIdx}.${pCompIdx}`, `${tMolIdx}.${tCompIdx}`);
+          }
+        }
       } else {
-        perMolMap = this.matchComponentsWithBondConsistency(pMolIdx, tMolIdx);
-      }
-
-      if (!perMolMap) {
-        return null;
-      }
-
-      for (const [pCompIdx, tCompIdx] of perMolMap.entries()) {
-        componentMap.set(`${pMolIdx}.${pCompIdx}`, `${tMolIdx}.${tCompIdx}`);
+        const perMolMap = this.matchComponentsWithBondConsistency(pMolIdx, tMolIdx);
+        if (!perMolMap) {
+          return null;
+        }
+        for (const [pCompIdx, tCompIdx] of perMolMap.entries()) {
+          componentMap.set(`${pMolIdx}.${pCompIdx}`, `${tMolIdx}.${tCompIdx}`);
+        }
       }
     }
 
@@ -1040,18 +1169,17 @@ class VF2State {
   private isStoredComponentMapConsistent(
     pMolIdx: number,
     tMolIdx: number,
-    storedMap: Map<number, number>
+    storedArr: Int32Array
   ): boolean {
     const patternMol = this.pattern.molecules[pMolIdx];
     const targetMol = this.target.molecules[tMolIdx];
     if (!patternMol || !targetMol) return false;
 
-    // If the stored map is incomplete, we must recompute.
-    if (storedMap.size < patternMol.components.length) return false;
-
     // Injective within molecule.
     const seenTargets = new Set<number>();
-    for (const [pCompIdx, tCompIdx] of storedMap.entries()) {
+    for (let pCompIdx = 0; pCompIdx < storedArr.length; pCompIdx++) {
+      const tCompIdx = storedArr[pCompIdx];
+      if (tCompIdx === -1) return false;
       if (seenTargets.has(tCompIdx)) return false;
       seenTargets.add(tCompIdx);
       const pComp = patternMol.components[pCompIdx];
@@ -1063,8 +1191,8 @@ class VF2State {
     // Bond consistency across already-mapped molecules: any pattern bond to a mapped partner
     // must correspond to a bond to the partner molecule in the target.
     for (let pCompIdx = 0; pCompIdx < patternMol.components.length; pCompIdx++) {
-      const mappedTargetCompIdx = storedMap.get(pCompIdx);
-      if (mappedTargetCompIdx === undefined) return false;
+      const mappedTargetCompIdx = storedArr[pCompIdx];
+      if (mappedTargetCompIdx === -1) return false;
       const pComp = patternMol.components[pCompIdx];
 
       for (const [bondLabel] of pComp.edges.entries()) {
@@ -1078,14 +1206,14 @@ class VF2State {
         if (this.corePattern[partnerMolIdx] === -1) continue;
 
         const targetPartnerMolIdx = this.corePattern[partnerMolIdx];
-        const partnerStoredMap = this.componentMatches.get(partnerMolIdx);
-        if (!partnerStoredMap) {
+        const partnerStoredArr = this.componentMatchesArray[partnerMolIdx];
+        if (!partnerStoredArr) {
           // Can't validate without partner's mapping.
           return false;
         }
 
-        const targetPartnerCompIdx = partnerStoredMap.get(partner.compIdx);
-        if (targetPartnerCompIdx === undefined) {
+        const targetPartnerCompIdx = partnerStoredArr[partner.compIdx];
+        if (targetPartnerCompIdx === -1) {
           return false;
         }
 
@@ -1103,20 +1231,25 @@ class VF2State {
    * This uses the FULL corePattern (all molecule mappings) to constrain component choices.
    */
   private matchComponentsWithBondConsistency(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
-    const profStart = performance.now();
+    const shouldProfile = componentProfilingEnabled;
+    const profStart = shouldProfile ? performance.now() : 0;
     const patternMol = this.pattern.molecules[pMolIdx];
     const targetMol = this.target.molecules[tMolIdx];
     if (patternMol.components.length === 0) {
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return new Map();
     }
 
     // X-1 guard: bitmask overflows for >31 target components
     if (targetMol.components.length > 31) {
       const result = this.matchComponentsWithBondConsistencyLarge(pMolIdx, tMolIdx);
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return result;
     }
 
@@ -1133,8 +1266,10 @@ class VF2State {
       pMolIdx, tMolIdx, this.orderScratch, 0, assignment, 0, iterationCount
     );
     if (!success) {
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return null;
     }
 
@@ -1142,8 +1277,10 @@ class VF2State {
     for (let i = 0; i < nComps; i++) {
       if (assignment[i] !== -1) result.set(i, assignment[i]);
     }
-    GraphMatcher.matchComponentsTime += performance.now() - profStart;
-    GraphMatcher.matchComponentsCount++;
+    if (shouldProfile) {
+      GraphMatcher.matchComponentsTime += performance.now() - profStart;
+      GraphMatcher.matchComponentsCount++;
+    }
     return result;
   }
 
@@ -1348,21 +1485,26 @@ class VF2State {
     return `${molIdx}.${compIdx}.${bondLabel}`;
   }
 
-  private matchComponents(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
-    const profStart = performance.now();
+  private matchComponents(pMolIdx: number, tMolIdx: number): boolean {
+    const shouldProfile = componentProfilingEnabled;
+    const profStart = shouldProfile ? performance.now() : 0;
     const patternMol = this.pattern.molecules[pMolIdx];
     const targetMol = this.target.molecules[tMolIdx];
     if (patternMol.components.length === 0) {
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
-      return new Map();
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
+      return true;
     }
 
     // X-1 guard: bitmask overflows for >31 target components
     if (targetMol.components.length > 31) {
       const result = this.matchComponentsLarge(pMolIdx, tMolIdx);
-      GraphMatcher.matchComponentsTime += performance.now() - profStart;
-      GraphMatcher.matchComponentsCount++;
+      if (shouldProfile) {
+        GraphMatcher.matchComponentsTime += performance.now() - profStart;
+        GraphMatcher.matchComponentsCount++;
+      }
       return result;
     }
 
@@ -1378,19 +1520,11 @@ class VF2State {
     const success = this.assignComponentsBacktrack(
       pMolIdx, tMolIdx, this.orderScratch, 0, assignment, 0, iterationCount
     );
-    if (!success) {
+    if (shouldProfile) {
       GraphMatcher.matchComponentsTime += performance.now() - profStart;
       GraphMatcher.matchComponentsCount++;
-      return null;
     }
-
-    const result = new Map<number, number>();
-    for (let i = 0; i < nComps; i++) {
-      if (assignment[i] !== -1) result.set(i, assignment[i]);
-    }
-    GraphMatcher.matchComponentsTime += performance.now() - profStart;
-    GraphMatcher.matchComponentsCount++;
-    return result;
+    return success;
   }
 
   private assignComponentsBacktrack(
@@ -1485,45 +1619,12 @@ class VF2State {
     return false;
   }
 
-  private getUsedTargetsKey(usedTargets: Set<number>): string {
-    this.largeUsedKeyScratch.length = 0;
-    for (const value of usedTargets) {
-      this.largeUsedKeyScratch.push(value);
-    }
-    this.largeUsedKeyScratch.sort((a, b) => a - b);
-    return this.largeUsedKeyScratch.join(',');
-  }
-
   private getComponentCandidatesLarge(
     pMolIdx: number,
     tMolIdx: number,
     pCompIdx: number,
     usedTargets: Set<number>
   ): number[] {
-    const usedKey = this.getUsedTargetsKey(usedTargets);
-    let level1 = this.componentCandidateCacheLarge.get(pMolIdx);
-    if (!level1) {
-      level1 = new Map();
-      this.componentCandidateCacheLarge.set(pMolIdx, level1);
-    }
-
-    let level2 = level1.get(tMolIdx);
-    if (!level2) {
-      level2 = new Map();
-      level1.set(tMolIdx, level2);
-    }
-
-    let level3 = level2.get(pCompIdx);
-    if (!level3) {
-      level3 = new Map();
-      level2.set(pCompIdx, level3);
-    }
-
-    const cached = level3.get(usedKey);
-    if (cached) {
-      return cached;
-    }
-
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
     const targetMol = this.target.molecules[tMolIdx];
     const candidates: number[] = [];
@@ -1536,7 +1637,6 @@ class VF2State {
       candidates.push(idx);
     }
 
-    level3.set(usedKey, candidates);
     return candidates;
   }
 
@@ -1587,10 +1687,10 @@ class VF2State {
     return false;
   }
 
-  private matchComponentsLarge(pMolIdx: number, tMolIdx: number): Map<number, number> | null {
+  private matchComponentsLarge(pMolIdx: number, tMolIdx: number): boolean {
     const patternMol = this.pattern.molecules[pMolIdx];
     const nComps = patternMol.components.length;
-    if (nComps === 0) return new Map();
+    if (nComps === 0) return true;
 
     const cachedOrder = this.componentOrders[pMolIdx];
     for (let i = 0; i < nComps; i++) this.orderScratch[i] = cachedOrder[i];
@@ -1603,13 +1703,7 @@ class VF2State {
     const success = this.assignComponentsBacktrackLarge(
       pMolIdx, tMolIdx, this.orderScratch, 0, assignment, this.largeUsedFlags, iterationCount
     );
-    if (!success) return null;
-
-    const result = new Map<number, number>();
-    for (let i = 0; i < nComps; i++) {
-      if (assignment[i] !== -1) result.set(i, assignment[i]);
-    }
-    return result;
+    return success;
   }
 
   private getComponentCandidates(
@@ -1618,30 +1712,6 @@ class VF2State {
     pCompIdx: number,
     usedTargetsMask: number
   ): number[] {
-    const usedKey = usedTargetsMask;
-    let level1 = this.componentCandidateCache.get(pMolIdx);
-    if (!level1) {
-      level1 = new Map();
-      this.componentCandidateCache.set(pMolIdx, level1);
-    }
-
-    let level2 = level1.get(tMolIdx);
-    if (!level2) {
-      level2 = new Map();
-      level1.set(tMolIdx, level2);
-    }
-
-    let level3 = level2.get(pCompIdx);
-    if (!level3) {
-      level3 = new Map();
-      level2.set(pCompIdx, level3);
-    }
-
-    const cached = level3.get(usedKey);
-    if (cached) {
-      return cached;
-    }
-
     const pComp = this.pattern.molecules[pMolIdx].components[pCompIdx];
     const targetMol = this.target.molecules[tMolIdx];
     const candidates: number[] = [];
@@ -1654,7 +1724,6 @@ class VF2State {
       candidates.push(idx);
     }
 
-    level3.set(usedKey, candidates);
     return candidates;
   }
 

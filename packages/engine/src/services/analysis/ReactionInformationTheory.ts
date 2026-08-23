@@ -714,3 +714,72 @@ export function compareCausalGraphs(
 
     return { concordant, structuralOnly, emergent };
 }
+
+export interface TemporalAnalysisSummary {
+    firingEvents: number;
+    reactionsAnalyzed: number;
+    topCoupledPairs: Array<{
+        reactions: string;
+        normalizedMI: number;
+        pValue: number;
+    }>;
+    topCausalFlows: Array<{
+        flow: string;
+        netInformationFlow: number;
+        pValue: number;
+    }>;
+    perReactionEntropy: Array<{
+        reaction: string;
+        entropy: number;
+    }>;
+    technical: string;
+    biological: string;
+    strategic: string;
+}
+
+export function summarizeTemporalAnalysis(
+    itResult: ReactionITResult,
+    firingEvents: number,
+    nReactions: number,
+): TemporalAnalysisSummary {
+    const topMI = [...itResult.mutualInformation]
+        .sort((a, b) => b.normalizedMI - a.normalizedMI)
+        .slice(0, 10);
+    const topTE = [...itResult.transferEntropy]
+        .sort((a, b) => Math.abs(b.netInformationFlow) - Math.abs(a.netInformationFlow))
+        .slice(0, 10);
+
+    const topCoupledPairs = topMI.map((mi) => ({
+        reactions: `${mi.pair.reaction1Name || `R${mi.pair.reaction1 + 1}`} \u2194 ${mi.pair.reaction2Name || `R${mi.pair.reaction2 + 1}`}`,
+        normalizedMI: mi.normalizedMI,
+        pValue: mi.pValue,
+    }));
+
+    const topCausalFlows = topTE.map((te) => ({
+        flow: `${te.sourceName || `R${te.source + 1}`} \u2192 ${te.targetName || `R${te.target + 1}`}`,
+        netInformationFlow: te.netInformationFlow,
+        pValue: te.pValue,
+    }));
+
+    const perReactionEntropy = itResult.entropy.map((e) => ({
+        reaction: e.name || `R${e.reactionIndex + 1}`,
+        entropy: e.entropy,
+    }));
+
+    const technical = `Analyzed ${firingEvents} firing events across ${nReactions} reactions. Top MI pair: ${topMI[0]?.normalizedMI?.toFixed(3) || 'N/A'}.`;
+    const biological = topTE.length > 0
+        ? `Strongest causal flow: ${topTE[0]?.sourceName || `R${topTE[0]?.source + 1}`} \u2192 ${topTE[0]?.targetName || `R${topTE[0]?.target + 1}`} (${topTE[0]?.netInformationFlow?.toFixed(3)} bits).`
+        : 'No significant directional information flow detected between reactions.';
+    const strategic = 'Transfer entropy reveals which reactions drive others \u2014 emergent couplings not in any single rule are particularly interesting.';
+
+    return {
+        firingEvents,
+        reactionsAnalyzed: nReactions,
+        topCoupledPairs,
+        topCausalFlows,
+        perReactionEntropy,
+        technical,
+        biological,
+        strategic,
+    };
+}

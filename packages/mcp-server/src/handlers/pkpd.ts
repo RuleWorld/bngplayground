@@ -1,11 +1,12 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
-import { createToolResult, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel } from '../services/engine.js';
+import { pkpdArgsSchema } from '../schemas/index.js';
 import { structureError } from '../services/errors.js';
 import { simulate, loadEvaluator } from '@bngplayground/engine';
 
 export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
-  const parsedArgs = (args ?? {}) as any;
   try {
+    const parsedArgs = parseArgs('pkpd', pkpdArgsSchema, args);
     const engine = await import('@bngplayground/engine') as any;
     await loadEvaluator();
 
@@ -92,13 +93,7 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
 
         return createToolResult({
           nPatients: population.length,
-          parameterSummary: Object.fromEntries(
-            Object.keys(population[0]?.parameters || {}).map((name: string) => {
-              const values = population.map((p: any) => p.parameters[name]);
-              const mean = values.reduce((a: number, b: number) => a + b, 0) / values.length;
-              return [name, { mean, cv: Math.sqrt(values.reduce((s: number, v: number) => s + (v - mean) ** 2, 0) / values.length) / mean }];
-            })
-          ),
+          parameterSummary: engine.summarizePopulationParameters(population),
           technical: `Generated ${nPatients} virtual patients with log-normal PK parameter distributions (CV=30%).`,
           biological: 'Virtual patient population captures inter-individual variability in drug disposition.',
           strategic: 'Run population simulation to predict the range of PK exposures across a patient population.',
@@ -109,6 +104,6 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
         throw new Error(`Unknown action: ${parsedArgs.action}`);
     }
   } catch (error: any) {
-    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error))));
+    return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
   }
 }

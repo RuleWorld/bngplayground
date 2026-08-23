@@ -114,6 +114,11 @@ export class WorkerPool {
         this.handleWorkerError(instance, error);
       };
 
+      worker.onmessageerror = (event) => {
+        console.error(`[WorkerPool] Worker ${i} deserialization error:`, event.data);
+        this.handleWorkerError(instance, new ErrorEvent('error', { message: 'Worker message deserialization/serialization failure' }));
+      };
+
       this.workers.push(instance);
 
       // Wait for worker to signal ready
@@ -158,10 +163,11 @@ export class WorkerPool {
     if (pending) {
       this.pendingTaskMap.delete(taskId);
 
-      if (result.type === 'ERROR') {
-        pending.reject(new Error(result.error || 'Unknown worker error'));
+      const safeResult = result ?? ({} as WorkerResult);
+      if (safeResult.type === 'ERROR') {
+        pending.reject(new Error(safeResult.error || 'Unknown worker error'));
       } else {
-        pending.resolve(result.data);
+        pending.resolve(safeResult.data);
       }
     }
 
@@ -175,19 +181,22 @@ export class WorkerPool {
   /**
    * Handle worker error
    */
-  private handleWorkerError(instance: WorkerInstance, error: ErrorEvent): void {
+  private handleWorkerError(instance: WorkerInstance, error: ErrorEvent | { message?: string } | null | undefined): void {
     if (instance.currentTask) {
       const taskId = instance.currentTask;
       const pending = this.pendingTaskMap.get(taskId);
 
       if (pending) {
         this.pendingTaskMap.delete(taskId);
-        pending.reject(new Error(`Worker error: ${error.message}`));
+        pending.reject(new Error(`Worker error: ${error?.message ?? 'Unknown worker error'}`));
       }
     }
 
     instance.busy = false;
     instance.currentTask = null;
+
+    // Process next task in queue
+    this.processQueue();
   }
 
   /**
@@ -299,6 +308,9 @@ export class WorkerPool {
       instance.worker.terminate();
     }
     this.workers = [];
+    this.pendingTaskMap.forEach((pending) => {
+      pending.reject(new Error('WorkerPool was terminated'));
+    });
     this.pendingTaskMap.clear();
     this.taskQueue = [];
     this.isInitialized = false;

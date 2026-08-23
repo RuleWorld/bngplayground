@@ -294,6 +294,8 @@ export async function handleSimulate(
           utl: options.utl,
           gml: options.gml,
           equilibrate: options.equilibrate,
+          includeSpeciesData: options.includeSpeciesData,
+          includeExpandedNetwork: options.includeExpandedNetwork,
           timeoutMs: 300000,
           requireRuntime: true,
           verbose: true,

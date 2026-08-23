@@ -1,13 +1,18 @@
 name: Engine MCP Parity Auditor
 on:
   schedule:
-    - cron: '0 8 * * 1,3,5'
+    - cron: '0 8 * * 1-5'
   workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: jules-${{ github.workflow }}
+  cancel-in-progress: false
 jobs:
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: google-labs-code/jules-action@v1.0.0
+      - uses: google-labs-code/jules-action@bff7875eaa123cac6742b7cfc51005b95ba4d566
         with:
           prompt: |
             You are the shared-engine parity auditor. The project's core
@@ -25,11 +30,17 @@ jobs:
             3. Refactor the handler to call the shared engine function. If the
                engine lacks a needed function but clearly should own the logic,
                move it into the engine and have the handler call it.
-            4. Validate with `npm run test:full` and `npm run type-check`.
+            4. Validate with `npm run test:full:safe` and `npm run type-check`.
             5. One violation per PR. Describe the drift you removed.
+
+            pick a below-threshold target, varied from recent runs (rotate files/areas so successive runs don't re-search the same spot).
 
             Rules:
             - Never import browser APIs into packages/engine.
             - Keep total registered MCP tools <= 40; do not add tools, only
               de-duplicate against the engine.
+            Never edit a metric, threshold, benchmark, or test in the same PR that claims to satisfy it.
+            In the PR body, state the assumptions and either/or decisions you made that you would otherwise have asked about.
+            Always open a PR. If you found a fix, PR it. If you found nothing, PR a short artifact (the ranked list of what you considered and why each was skipped) so the dead end is on record. Never rename variables or reword comments just to produce a diff.
+            Never ask questions — make your best autonomous judgment; open a PR with your best shot.
           jules_api_key: ${{ secrets.JULES_API_KEY }}

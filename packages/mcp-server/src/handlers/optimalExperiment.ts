@@ -18,7 +18,37 @@ type OptimalExperimentArgs = z.infer<typeof optimalExperimentArgsSchema>;
 export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResult<any>> {
     try {
         const parsedArgs = parseArgs('optimal_experiment', optimalExperimentArgsSchema, args) as OptimalExperimentArgs;
+
+        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+            return createToolResult(structureError(
+                new Error('Model code must be a non-empty string.'),
+            ));
+        }
+
+        if (parsedArgs.candidate_times && parsedArgs.candidate_times.some((t) => t <= 0 || !Number.isFinite(t))) {
+            return createToolResult(structureError(
+                new Error('candidate_times must contain only positive finite numbers.'),
+            ));
+        }
+
         const model = parseModelOrThrow(parsedArgs.code);
+
+        const modelObsNames = new Set((model.observables ?? []).map((o) => o.name));
+        if (parsedArgs.observables && parsedArgs.observables.length > 0) {
+            const missing = parsedArgs.observables.filter((o) => !modelObsNames.has(o));
+            if (missing.length > 0) {
+                return createToolResult(structureError(
+                    new Error(`observables references names not defined in model: ${missing.join(', ')}`),
+                ));
+            }
+        }
+
+        if (model.observables.length === 0 && (!parsedArgs.observables || parsedArgs.observables.length === 0)) {
+            return createToolResult(structureError(
+                new Error('Model does not define any observables to analyze for optimal design.'),
+            ));
+        }
+
         const expandedModel = await expandModel(model);
         
         const observables = parsedArgs.observables ?? model.observables.map(o => o.name);
@@ -108,7 +138,7 @@ export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResul
             note: 'Results are approximate - actual identifiability depends on experimental noise',
         });
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

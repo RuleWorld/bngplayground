@@ -7,6 +7,25 @@ import { CVODESolver } from '@bngplayground/engine/services/simulation/solvers/C
 // Extend Vitest's expect with jest-dom matchers
 expect.extend(matchers as any);
 
+// Node 26 exposes a global localStorage accessor that warns and returns undefined
+// unless --localstorage-file is provided. Install one deterministic implementation
+// in every test environment so behavior does not depend on the Node invocation.
+const localStorageValues = new Map<string, string>();
+const testLocalStorage: Storage = {
+  get length() { return localStorageValues.size; },
+  clear() { localStorageValues.clear(); },
+  getItem(key) { return localStorageValues.get(String(key)) ?? null; },
+  key(index) { return Array.from(localStorageValues.keys())[index] ?? null; },
+  removeItem(key) { localStorageValues.delete(String(key)); },
+  setItem(key, value) { localStorageValues.set(String(key), String(value)); },
+};
+Object.defineProperty(globalThis, 'localStorage', {
+  configurable: true,
+  enumerable: true,
+  value: testLocalStorage,
+  writable: false,
+});
+
 const TRACE_SHARD = process.env.VITEST_TRACE_SHARD === '1';
 const WATCHDOG_TIMEOUT_MS = 120_000; // 2 minutes of silence triggers watchdog
 

@@ -170,12 +170,11 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
     species: (inputModel.species || []).map((species) => ({ ...species })),
     observables: (inputModel.observables || []).map((observable) => ({ ...observable })),
     actions: inputModel.actions?.map((action) => ({ ...action, args: { ...(action.args || {}) } })),
-    reactions: inputModel.reactions?.map((reaction) => ({
-      ...reaction,
-      reactants: [...reaction.reactants],
-      products: [...reaction.products],
-      productStoichiometries: reaction.productStoichiometries ? [...reaction.productStoichiometries] : undefined
-    })),
+    // Expanded reactions are immutable simulation input. All solver-specific
+    // state, including rates changed between phases, lives in the freshly built
+    // ConcreteReaction array below. Sharing avoids an O(reactions) object/array
+    // clone on every replicate while retaining per-run parameter isolation.
+    reactions: inputModel.reactions,
     reactionRules: inputModel.reactionRules?.map((rule) => ({
       ...rule,
       reactants: [...rule.reactants],
@@ -199,6 +198,19 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
     paramExpressions: inputModel.paramExpressions ? { ...inputModel.paramExpressions } : undefined,
     energyPatterns: inputModel.energyPatterns?.map((pattern) => ({ ...pattern }))
   };
+}
+
+function cloneReactionsForResult(
+  reactions: BNGLReaction[] | undefined
+): BNGLReaction[] | undefined {
+  return reactions?.map((reaction) => ({
+    ...reaction,
+    reactants: [...reaction.reactants],
+    products: [...reaction.products],
+    productStoichiometries: reaction.productStoichiometries
+      ? [...reaction.productStoichiometries]
+      : undefined,
+  }));
 }
 
 /**
@@ -334,8 +346,8 @@ export async function simulate(
   }
 ): Promise<SimulationResults> {
   const VERBOSE_SIM_DEBUG = false; // set true to enable verbose simulation debug
-  const simulationStartTime = performance.now();
-  // ... using simulationStartTime later ...
+  const simulationStartTime = VERBOSE_SIM_DEBUG ? performance.now() : 0;
+  const strictFunctionalRates = !!options.strictFunctionalRates;
   callbacks.checkCancelled();
   if (VERBOSE_SIM_DEBUG) console.log('[NetworkGen] ⏱️ TIMING: Network generation took 0ms (pre-generated)'); // Placeholder for parity, network gen happens before simulate
   if (VERBOSE_SIM_DEBUG) console.log('[Worker] Starting simulation with', inputModel.species.length, 'species,', inputModel.reactions?.length, 'reactions, and', inputModel.reactionRules?.length ?? 0, 'rules');
@@ -659,11 +671,15 @@ export async function simulate(
   const speciesVolumes = new Float64Array(numSpecies);
   const compartmentMap = new Map<string, number>();
   if (model.compartments && model.compartments.length > 0) {
-    console.log(`[Worker] RESOLVING COMPARTMENTS: Found ${model.compartments.length} compartments`);
+    if (VERBOSE_SIM_DEBUG) {
+      console.log(`[Worker] RESOLVING COMPARTMENTS: Found ${model.compartments.length} compartments`);
+    }
     (model.compartments || []).forEach(c => {
       const vol = c.resolvedVolume ?? c.size ?? 1.0;
       compartmentMap.set(c.name, vol);
-      console.log(`[Worker]   - Compartment: '${c.name}', Vol: ${vol}`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker]   - Compartment: '${c.name}', Vol: ${vol}`);
+      }
     });
   }
 
@@ -823,7 +839,13 @@ export async function simulate(
   };
 
   const isOde = !allSsa && !allPla && !allPsa && options.method !== 'ssa' && options.method !== 'pla' && options.method !== 'psa';
-  const hasHeterogeneousSpeciesVolumes = Array.from(speciesVolumes).some((vol) => Math.abs(vol - 1) > 1e-15);
+  let hasHeterogeneousSpeciesVolumes = false;
+  for (let i = 0; i < speciesVolumes.length; i++) {
+    if (Math.abs(speciesVolumes[i] - 1) > 1e-15) {
+      hasHeterogeneousSpeciesVolumes = true;
+      break;
+    }
+  }
   // The amount-space branch fixes CVODE parity for compartment models whose rates
   // depend on observables/functions. Keep pure mass-action compartment models on
   // the existing concentration-space fast path for performance.
@@ -831,7 +853,7 @@ export async function simulate(
   const solverVolumes = odeUsesAmountState
     ? new Float64Array(numSpecies).fill(1.0)
     : speciesVolumes;
-  if (odeUsesAmountState) {
+  if (VERBOSE_SIM_DEBUG && odeUsesAmountState) {
     console.log(`[Worker] Using amount-space ODE integration (heterogeneous compartment volumes + ${functionalRateCount} functional rate(s))`);
   }
   const state = new Float64Array(numSpecies);
@@ -848,15 +870,24 @@ export async function simulate(
     }
 
     // DEBUG: Trace FB initialization in SimulationLoop
-    if (s.name.includes('FB')) {
+    if (VERBOSE_SIM_DEBUG && s.name.includes('FB')) {
       console.log(`[Worker] State Init FB (Idx ${i}): name='${s.name}', initAmt=${initAmt}, vol=${speciesVolumes[i]}, isOde=${isOde}, finalState=${state[i]}`);
     }
   });
 
   // DEBUG: Scaling volumes check
-  const minVol = Math.min(...Array.from(speciesVolumes));
-  const maxVol = Math.max(...Array.from(speciesVolumes));
-  console.log(`[Worker] Scaling Check: Species Vol Range [${minVol}, ${maxVol}]. Count 1.0s: ${Array.from(speciesVolumes).filter(v => v === 1.0).length}`);
+  if (VERBOSE_SIM_DEBUG) {
+    let minVol = Number.POSITIVE_INFINITY;
+    let maxVol = Number.NEGATIVE_INFINITY;
+    let unitVolumeCount = 0;
+    for (let i = 0; i < speciesVolumes.length; i++) {
+      const volume = speciesVolumes[i];
+      if (volume < minVol) minVol = volume;
+      if (volume > maxVol) maxVol = volume;
+      if (volume === 1.0) unitVolumeCount++;
+    }
+    console.log(`[Worker] Scaling Check: Species Vol Range [${minVol}, ${maxVol}]. Count 1.0s: ${unitVolumeCount}`);
+  }
   const stateValueToSpeciesOutput = (value: number, speciesIdx: number): number =>
     (isOde && odeUsesAmountState) ? (value / speciesVolumes[speciesIdx]) : value;
 
@@ -890,6 +921,7 @@ export async function simulate(
     const dataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const includeSpeciesData = options.includeSpeciesData ?? true;
+    const includeExpandedNetwork = options.includeExpandedNetwork ?? true;
 
     const normalizeSuffixKey = (suffix?: unknown): string => {
       const raw = typeof suffix === 'string' ? suffix : (suffix == null ? '' : String(suffix));
@@ -1045,9 +1077,10 @@ export async function simulate(
           setSafeNumberField(
             results,
             f.name,
-            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions)
+            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions, undefined, undefined, strictFunctionalRates)
           );
-        } catch {
+        } catch (e) {
+          if (strictFunctionalRates) throw e;
           setSafeNumberField(results, f.name, 0);
         }
       }
@@ -1145,8 +1178,9 @@ export async function simulate(
           if (typeof change.value === 'number') newVal = change.value;
           else {
             try {
-              newVal = evaluateFunctionalRate(change.value, model.parameters, currentObsValues, model.functions);
-            } catch {
+              newVal = evaluateFunctionalRate(change.value, model.parameters, currentObsValues, model.functions, undefined, undefined, strictFunctionalRates);
+            } catch (e) {
+              if (strictFunctionalRates) throw e;
               newVal = parseFloat(String(change.value)) || 0;
             }
           }
@@ -1181,13 +1215,14 @@ export async function simulate(
               }
               const expr = model.paramExpressions[name]; // safe: isSafeObjectKey(name) on line above
               try {
-                const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions);
+                const val = evaluateFunctionalRate(expr, model.parameters, currentObsValues, model.functions, undefined, undefined, strictFunctionalRates);
                 if (Math.abs(val - (model.parameters[name] || 0)) > 1e-12) { // safe: isSafeObjectKey(name) above
 
                   setSafeNumberField(model.parameters as Record<string, number>, name, val);
                   anyChanged = true;
                 }
               } catch (e: unknown) {
+                if (strictFunctionalRates) throw e;
                 /* ignore */
               }
             }
@@ -1206,12 +1241,13 @@ export async function simulate(
           if (!rxn.isFunctionalRate && rxn.rate && typeof rxn.rate === 'string' && rxn.rate !== 'undefined') {
             try {
               const oldK = rxn.rateConstant;
-              const newK = evaluateFunctionalRate(rxn.rate as string, context, {}, model.functions);
+              const newK = evaluateFunctionalRate(rxn.rate as string, context, {}, model.functions, undefined, undefined, strictFunctionalRates);
               if (!isNaN(newK) && isFinite(newK) && Math.abs(newK - oldK) > 1e-15) {
 
                 rxn.rateConstant = newK;
               }
             } catch (e: unknown) {
+              if (strictFunctionalRates) throw e;
               /* ignore */
             }
           }
@@ -1278,28 +1314,67 @@ export async function simulate(
       const numReactions = concreteReactions.length;
 
       // Pre-compute: which reactions depend on which species? (for sparse influence tracking)
-      const speciesDependents: number[][] = new Array(numSpecies);
-      for (let i = 0; i < numSpecies; i++) speciesDependents[i] = [];
+      const speciesDepCounts = new Int32Array(numSpecies);
       for (let i = 0; i < numReactions; i++) {
-        for (let j = 0; j < concreteReactions[i].reactants.length; j++) {
-          speciesDependents[concreteReactions[i].reactants[j]].push(i);
+        const reactants = concreteReactions[i].reactants;
+        for (let j = 0; j < reactants.length; j++) {
+          speciesDepCounts[reactants[j]]++;
         }
       }
+      const speciesDependents = new Array<Int32Array>(numSpecies);
+      for (let i = 0; i < numSpecies; i++) {
+        speciesDependents[i] = new Int32Array(speciesDepCounts[i]);
+      }
+      const speciesDepCursors = new Int32Array(numSpecies);
+      for (let i = 0; i < numReactions; i++) {
+        const reactants = concreteReactions[i].reactants;
+        for (let j = 0; j < reactants.length; j++) {
+          const sIdx = reactants[j];
+          speciesDependents[sIdx][speciesDepCursors[sIdx]++] = i;
+        }
+      }
+
       // Precompute rxnUpdateRxn for SSA incremental propensity updates
       // This is a reaction dependency graph: for each reaction, which other reactions are affected?
       const rxnUpdateRxn: Int32Array[] = new Array(numReactions);
+      const visitedRxns = new Uint8Array(numReactions);
+      const tempDeps = new Int32Array(numReactions);
+
       for (let r = 0; r < numReactions; r++) {
         const rxn = concreteReactions[r];
-        const deps = new Set<number>();
-        for (const idx of rxn.reactants) {
+        let depCount = 0;
+
+        // Helper to add a reaction index if not visited
+        const addDep = (depIdx: number) => {
+          if (visitedRxns[depIdx] === 0) {
+            visitedRxns[depIdx] = 1;
+            tempDeps[depCount++] = depIdx;
+          }
+        };
+
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          const idx = rxn.reactants[j];
           const dependentRxns = speciesDependents[idx];
-          for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          for (let i = 0; i < dependentRxns.length; i++) {
+            addDep(dependentRxns[i]);
+          }
         }
-        for (const idx of rxn.products) {
+        for (let j = 0; j < rxn.products.length; j++) {
+          const idx = rxn.products[j];
           const dependentRxns = speciesDependents[idx];
-          for (let i = 0; i < dependentRxns.length; i++) deps.add(dependentRxns[i]);
+          for (let i = 0; i < dependentRxns.length; i++) {
+            addDep(dependentRxns[i]);
+          }
         }
-        rxnUpdateRxn[r] = new Int32Array(Array.from(deps));
+
+        // Copy from tempDeps to a precisely sized Int32Array
+        const depsArray = new Int32Array(depCount);
+        for (let i = 0; i < depCount; i++) {
+          depsArray[i] = tempDeps[i];
+          // Reset visitedRxns for the next iteration
+          visitedRxns[tempDeps[i]] = 0;
+        }
+        rxnUpdateRxn[r] = depsArray;
       }
 
 
@@ -1329,12 +1404,11 @@ export async function simulate(
       const propensities = new Float64Array(numReactions);
       const affectedReactionIndices = includeInfluence ? new Int32Array(numReactions) : null;
       const oldPropensityValues = includeInfluence ? new Float64Array(numReactions) : null;
-      const propOrder = new Int32Array(numReactions);
 
       // === OPT 2: INLINED FENWICK TREE ===
       // Inlining eliminates class method dispatch overhead (~2-3ns per call)
       const fenwickTree = new Float64Array(numReactions + 1);
-      const fenwickHighBit = numReactions > 0 ? (1 << (Math.floor(Math.log2(numReactions)) + 1)) : 1;
+      const fenwickHighBit = numReactions > 0 ? (1 << Math.floor(Math.log2(numReactions))) : 1;
 
       const fenwickBuild = (values: Float64Array): void => {
         const n = numReactions;
@@ -1347,6 +1421,7 @@ export async function simulate(
       };
 
       const fenwickAdd = (idx: number, delta: number): void => {
+        if (delta === 0) return;
         let i = idx + 1;
         const tree = fenwickTree;
         const n = numReactions;
@@ -1356,30 +1431,13 @@ export async function simulate(
         }
       };
 
-      const fenwickFind = (target: number): number => {
-        const tree = fenwickTree;
-        const n = numReactions;
-        let idx = 0;
-        let bitMask = fenwickHighBit;
-        let t = target;
-        while (bitMask !== 0) {
-          const next = idx + bitMask;
-          if (next <= n && tree[next] <= t) {
-            t -= tree[next];
-            idx = next;
-          }
-          bitMask >>= 1;
-        }
-        return idx; // 0-based index
-      };
-
       // === OPT 7: ADAPTIVE REACTION SELECTION ===
       // For small networks a flat cumulative scan beats the Fenwick tree on
       // constant factors and cache behaviour; for large networks the O(log R)
       // tree wins. The choice is fixed per network (numReactions doesn't change
       // within a run), so a given model always uses one method -> reproducible.
       // In linear mode the Fenwick tree is never built or updated.
-      const SSA_LINEAR_SELECT_MAX = 32;
+      const SSA_LINEAR_SELECT_MAX = 64;
       const useFenwick = numReactions > SSA_LINEAR_SELECT_MAX;
 
       // OPT 10: interval between full propensity recomputes. propensities[] are
@@ -1411,7 +1469,7 @@ export async function simulate(
       const firingActive = shouldRecordFirings && logTimes !== null && logRxnIndices !== null && logPropensities !== null;
 
       // === OPT 3: INLINED PRNG (Mulberry32) ===
-      // Eliminates class method dispatch overhead on every SSA event
+      // V8 inlines this compact helper in the SSA event loop.
       let rngState = (options.seed ?? 12345) | 0;
       const nextRand = (): number => {
         let t = (rngState += 0x6d2b79f5);
@@ -1563,12 +1621,94 @@ export async function simulate(
         }
       }
 
+      // Flatten reaction reactants for ultra-fast, zero-overhead mass-action calculations
+      const rxnReactantCount = new Int32Array(numReactions);
+      const rxnReactant0 = new Int32Array(numReactions).fill(-1);
+      const rxnReactant1 = new Int32Array(numReactions).fill(-1);
+      const rxnReactant2 = new Int32Array(numReactions).fill(-1);
+      const rxnReactantsRemaining = new Array<Int32Array | null>(numReactions).fill(null);
+
+      for (let i = 0; i < numReactions; i++) {
+        const reactants = concreteReactions[i].reactants;
+        const len = reactants.length;
+        rxnReactantCount[i] = len;
+        if (len > 0) rxnReactant0[i] = reactants[0];
+        if (len > 1) rxnReactant1[i] = reactants[1];
+        if (len > 2) rxnReactant2[i] = reactants[2];
+        if (len > 3) {
+          rxnReactantsRemaining[i] = reactants.subarray(3);
+        }
+      }
+
+      // Pre-compute coalesced net state changes per reaction for ultra-fast, zero-overhead state updates
+      const changeCount = new Int32Array(numReactions);
+      const changeSpecies0 = new Int32Array(numReactions).fill(-1);
+      const changeDelta0 = new Int32Array(numReactions);
+      const changeSpecies1 = new Int32Array(numReactions).fill(-1);
+      const changeDelta1 = new Int32Array(numReactions);
+      const changeSpecies2 = new Int32Array(numReactions).fill(-1);
+      const changeDelta2 = new Int32Array(numReactions);
+      const changeSpecies3 = new Int32Array(numReactions).fill(-1);
+      const changeDelta3 = new Int32Array(numReactions);
+      const changeSpeciesRemaining = new Array<Int32Array | null>(numReactions).fill(null);
+      const changeDeltaRemaining = new Array<Int32Array | null>(numReactions).fill(null);
+
+      for (let i = 0; i < numReactions; i++) {
+        const rxn = concreteReactions[i];
+        const netDelta = new Map<number, number>();
+        for (let j = 0; j < rxn.reactants.length; j++) {
+          const idx = rxn.reactants[j];
+          netDelta.set(idx, (netDelta.get(idx) ?? 0) - 1);
+        }
+        for (let j = 0; j < rxn.products.length; j++) {
+          const idx = rxn.products[j];
+          const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+          netDelta.set(idx, (netDelta.get(idx) ?? 0) + stoich);
+        }
+        // Remove species with zero net change (e.g. catalysts)
+        for (const [idx, d] of netDelta.entries()) {
+          if (d === 0) {
+            netDelta.delete(idx);
+          }
+        }
+
+        const entries = Array.from(netDelta.entries());
+        const len = entries.length;
+        changeCount[i] = len;
+        if (len > 0) {
+          changeSpecies0[i] = entries[0][0];
+          changeDelta0[i] = entries[0][1];
+        }
+        if (len > 1) {
+          changeSpecies1[i] = entries[1][0];
+          changeDelta1[i] = entries[1][1];
+        }
+        if (len > 2) {
+          changeSpecies2[i] = entries[2][0];
+          changeDelta2[i] = entries[2][1];
+        }
+        if (len > 3) {
+          changeSpecies3[i] = entries[3][0];
+          changeDelta3[i] = entries[3][1];
+        }
+        if (len > 4) {
+          const remSp = new Int32Array(len - 4);
+          const remDl = new Int32Array(len - 4);
+          for (let j = 4; j < len; j++) {
+            remSp[j - 4] = entries[j][0];
+            remDl[j - 4] = entries[j][1];
+          }
+          changeSpeciesRemaining[i] = remSp;
+          changeDeltaRemaining[i] = remDl;
+        }
+      }
+
       // Helper: calculate propensity for a single reaction
       // OPT 5: Uses ssaObsRecord (live incremental buffer) instead of evaluateObservablesFast
       const calcPropensity = (rxnIdx: number): number => {
-        const rxn = concreteReactions[rxnIdx];
         if (isFunctionalRxn[rxnIdx]) {
           try {
+            const rxn = concreteReactions[rxnIdx];
             const currentObs = buildSsaObsRecord();
             const rate = evaluateFunctionalRate(
               rxn.rateExpression!,
@@ -1576,11 +1716,12 @@ export async function simulate(
               currentObs,
               model.functions,
               undefined,
-              undefined
+              undefined,
+              strictFunctionalRates
             );
             let a = rate * rxn.propensityFactor;
             const volume = reactionReactingVolumes[rxnIdx];
-            const n = rxn.reactants.length;
+            const n = rxnReactantCount[rxnIdx];
             if (n === 0) {
               a *= volume;
             } else if (n === 2) {
@@ -1590,32 +1731,53 @@ export async function simulate(
             } else if (n > 3) {
               a /= Math.pow(volume, n - 1);
             }
-            for (let j = 0; j < rxn.reactants.length; j++) {
-              a *= state[rxn.reactants[j]];
+            if (n === 1) {
+              return a * state[rxnReactant0[rxnIdx]];
+            } else if (n === 2) {
+              return a * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]];
+            } else if (n === 0) {
+              return a;
+            } else if (n === 3) {
+              return a * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+            } else {
+              a *= state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+              const rem = rxnReactantsRemaining[rxnIdx]!;
+              for (let j = 0; j < rem.length; j++) {
+                a *= state[rem[j]];
+              }
+              return a;
             }
-            return a;
           } catch (e: unknown) {
+            if (strictFunctionalRates) throw e;
             console.error(`[Worker] SSA functional rate evaluation failed for reaction ${rxnIdx}:`, e instanceof Error ? e.message : String(e));
             return 0;
           }
         }
 
-        // Mass-action: use precomputed effective rate constant
-        let a = kEff[rxnIdx];
-        for (let j = 0; j < rxn.reactants.length; j++) {
-          a *= state[rxn.reactants[j]];
+        // Mass-action: use precomputed effective rate constant and flat reactant arrays
+        const count = rxnReactantCount[rxnIdx];
+        if (count === 1) {
+          return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]];
+        } else if (count === 2) {
+          return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]];
+        } else if (count === 0) {
+          return kEff[rxnIdx];
+        } else if (count === 3) {
+          return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+        } else {
+          let a = kEff[rxnIdx] * state[rxnReactant0[rxnIdx]] * state[rxnReactant1[rxnIdx]] * state[rxnReactant2[rxnIdx]];
+          const rem = rxnReactantsRemaining[rxnIdx]!;
+          for (let j = 0; j < rem.length; j++) {
+            a *= state[rem[j]];
+          }
+          return a;
         }
-        return a;
       };
 
       let globalTime = 0;
       for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
         const phase = phases[phaseIdx];
         const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
-
-        for (let j = 0; j < numReactions; j++) {
-          propOrder[j] = j;
-        }
 
         const shouldEmitPhaseStart = recordThisPhase && (phaseIdx === recordFromPhaseIdx || !(phase.continue ?? false));
 
@@ -1629,7 +1791,7 @@ export async function simulate(
           if (mode === 'save') {
             const label = change.label ?? DEFAULT_CONC_LABEL;
             concentrationCache.set(label, new Float64Array(state));
-            console.log(`[Worker] SSA: Saved concentrations with label "${label}"`);
+            if (VERBOSE_SIM_DEBUG) console.log(`[Worker] SSA: Saved concentrations with label "${label}"`);
             continue;
           }
           if (mode === 'reset') {
@@ -1638,7 +1800,7 @@ export async function simulate(
             if (saved) {
               // Restore from cached saved state
               state.set(saved);
-              console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
+              if (VERBOSE_SIM_DEBUG) console.log(`[Worker] SSA: Reset concentrations to saved label "${label}"`);
             } else {
               // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
               // BNG2 semantics recalculate initial values with current parameters
@@ -1647,7 +1809,7 @@ export async function simulate(
                 for (let k = 0; k < numSpecies; k++) {
                   state[k] = resolveInitialAmount(model.species[k], currentParamMap); // SSA uses raw counts
                 }
-                console.log(`[Worker] SSA: Reset concentrations to initial seed species (recalculated with current parameters)`);
+                if (VERBOSE_SIM_DEBUG) console.log('[Worker] SSA: Reset concentrations to initial seed species (recalculated with current parameters)');
               } else {
                 // No-op, as per BNG2 behavior
               }
@@ -1714,9 +1876,11 @@ export async function simulate(
         if (shouldEmitPhaseStart) {
           const outT0 = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, 0);
           pushDataRow(phase.suffix, outT0, state as Float64Array);
-          const speciesPoint0: Record<string, number> = { time: outT0 };
-          for (let i = 0; i < numSpecies; i++) setSafeNumberField(speciesPoint0, speciesHeaders[i], state[i]);
-          appendSpeciesSnapshot(phase.suffix, speciesPoint0);
+          if (includeSpeciesData) {
+            const speciesPoint0: Record<string, number> = { time: outT0 };
+            for (let i = 0; i < numSpecies; i++) setSafeNumberField(speciesPoint0, speciesHeaders[i], state[i]);
+            appendSpeciesSnapshot(phase.suffix, speciesPoint0);
+          }
         }
         let totalEvents = 0;
         let nEventsThisPhase = 0;
@@ -1783,7 +1947,9 @@ export async function simulate(
           if (!(aTot > 0)) {
             // If the total is exactly 0, we gracefully finish (stable state).
             // If it was NaN, the check above would have caught it.
-            console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
+            if (VERBOSE_SIM_DEBUG) {
+              console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
+            }
             break;
           }
 
@@ -1799,8 +1965,18 @@ export async function simulate(
           // OPT 7: adaptive selection (linear scan for small R, Fenwick for large R)
           let reactionIndex: number;
           if (useFenwick) {
-            const fenwickIdx = fenwickFind(r2);
-            reactionIndex = fenwickIdx < numReactions ? fenwickIdx : 0;
+            let idx = 0;
+            let bitMask = fenwickHighBit;
+            let target = r2;
+            while (bitMask !== 0) {
+              const next = idx + bitMask;
+              if (next <= numReactions && fenwickTree[next] <= target) {
+                target -= fenwickTree[next];
+                idx = next;
+              }
+              bitMask >>= 1;
+            }
+            reactionIndex = idx < numReactions ? idx : 0;
           } else {
             reactionIndex = selectLinear(r2);
           }
@@ -1861,28 +2037,68 @@ export async function simulate(
             eventDelta = compiledSSAEventUpdater(reactionIndex, state, propensities, fenwickAdd);
           } else {
             // Interpreted fallback (functional rates, or JIT unavailable).
-            // Apply state changes; maintain ssaObsValues only when it is actually
-            // read (functional rates) using the flat CSR contribution arrays (OPT 4).
-            for (let j = 0; j < firedRxn.reactants.length; j++) {
-              const spIdx = firedRxn.reactants[j];
-              state[spIdx]--;
+            // Apply net state changes flatly and quickly, maintaining ssaObsValues as required.
+            const cc = changeCount[reactionIndex];
+            if (cc >= 1) {
+              const sp0 = changeSpecies0[reactionIndex];
+              const d0 = changeDelta0[reactionIndex];
+              state[sp0] += d0;
               if (maintainObs) {
-                const end = speciesObsOffsets[spIdx + 1];
-                for (let k = speciesObsOffsets[spIdx]; k < end; k++) {
-                  ssaObsValues[speciesObsIdx[k]] -= speciesObsCoeff[k];
+                const end = speciesObsOffsets[sp0 + 1];
+                for (let k = speciesObsOffsets[sp0]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d0;
                 }
               }
             }
-            for (let j = 0; j < firedRxn.products.length; j++) {
-              const spIdx = firedRxn.products[j];
-              state[spIdx]++;
+            if (cc >= 2) {
+              const sp1 = changeSpecies1[reactionIndex];
+              const d1 = changeDelta1[reactionIndex];
+              state[sp1] += d1;
               if (maintainObs) {
-                const end = speciesObsOffsets[spIdx + 1];
-                for (let k = speciesObsOffsets[spIdx]; k < end; k++) {
-                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k];
+                const end = speciesObsOffsets[sp1 + 1];
+                for (let k = speciesObsOffsets[sp1]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d1;
                 }
               }
             }
+            if (cc >= 3) {
+              const sp2 = changeSpecies2[reactionIndex];
+              const d2 = changeDelta2[reactionIndex];
+              state[sp2] += d2;
+              if (maintainObs) {
+                const end = speciesObsOffsets[sp2 + 1];
+                for (let k = speciesObsOffsets[sp2]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d2;
+                }
+              }
+            }
+            if (cc >= 4) {
+              const sp3 = changeSpecies3[reactionIndex];
+              const d3 = changeDelta3[reactionIndex];
+              state[sp3] += d3;
+              if (maintainObs) {
+                const end = speciesObsOffsets[sp3 + 1];
+                for (let k = speciesObsOffsets[sp3]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d3;
+                }
+              }
+            }
+            if (cc > 4) {
+              const remSp = changeSpeciesRemaining[reactionIndex]!;
+              const remDl = changeDeltaRemaining[reactionIndex]!;
+              for (let j = 0; j < remSp.length; j++) {
+                const sp = remSp[j];
+                const d = remDl[j];
+                state[sp] += d;
+                if (maintainObs) {
+                  const end = speciesObsOffsets[sp + 1];
+                  for (let k = speciesObsOffsets[sp]; k < end; k++) {
+                    ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d;
+                  }
+                }
+              }
+            }
+
             eventDelta = 0;
             const deps = rxnUpdateRxn[reactionIndex];
             for (let d = 0; d < deps.length; d++) {
@@ -1943,11 +2159,13 @@ export async function simulate(
               const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
               if (outT >= nextTOut || totalEvents >= maxEvents) {
                 pushDataRow(phase.suffix, outT, state as Float64Array);
-                const sp: Record<string, number> = { time: outT };
-                for (let k = 0; k < numSpecies; k++) {
-                  setSafeNumberField(sp, speciesHeaders[k], state[k]);
+                if (includeSpeciesData) {
+                  const sp: Record<string, number> = { time: outT };
+                  for (let k = 0; k < numSpecies; k++) {
+                    setSafeNumberField(sp, speciesHeaders[k], state[k]);
+                  }
+                  appendSpeciesSnapshot(phase.suffix, sp);
                 }
-                appendSpeciesSnapshot(phase.suffix, sp);
               }
             }
             // Always advance the output index regardless of recordThisPhase to prevent
@@ -1968,9 +2186,11 @@ export async function simulate(
           while (nextOutIdx <= phaseNSteps) {
             const outT = toBngGridTime(globalTime, phaseTEnd, phaseNSteps, nextOutIdx);
             pushDataRow(phase.suffix, outT, state as Float64Array);
-            const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], state[k]);
-            appendSpeciesSnapshot(phase.suffix, sp);
+            if (includeSpeciesData) {
+              const sp: Record<string, number> = { time: outT };
+              for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], state[k]);
+              appendSpeciesSnapshot(phase.suffix, sp);
+            }
             nextOutIdx++;
           }
         }
@@ -1990,7 +2210,9 @@ export async function simulate(
         }
       } : undefined;
 
-      console.log(`[Worker] SSA simulation complete: ${getTotalDataLength()} data points, globalTime=${globalTime}`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker] SSA simulation complete: ${getTotalDataLength()} data points, globalTime=${globalTime}`);
+      }
 
       const defaultSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
       return {
@@ -2000,8 +2222,10 @@ export async function simulate(
         speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
         speciesData: includeSpeciesData ? speciesDataBySuffix[defaultSuffix] || [] : undefined,
         speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
-        expandedReactions: model.reactions,
-        expandedSpecies: model.species,
+        ...(includeExpandedNetwork ? {
+          expandedReactions: cloneReactionsForResult(model.reactions),
+          expandedSpecies: model.species,
+        } : {}),
         ssaInfluence,
         // OPT 1: Materialize firing log from typed arrays only at return time
         firingLog: shouldRecordFirings && logCount > 0 && logTimes && logRxnIndices && logPropensities
@@ -2204,14 +2428,26 @@ export async function simulate(
                     model.parameters,
                     obsValues,
                     model.functions,
-                    rateContext
+                    rateContext,
+                    undefined,
+                    strictFunctionalRates
                   );
                 }
                 if (isNaN(rate) || !isFinite(rate)) {
+                  if (strictFunctionalRates) {
+                    throw new Error(
+                      `[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate} (strict mode).`
+                    );
+                  }
                   console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' returned ${rate}.`);
                   rate = 0;
                 }
               } catch (e: unknown) {
+                if (strictFunctionalRates) {
+                  throw new Error(
+                    `[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed: ${e instanceof Error ? e.message : String(e)}`
+                  );
+                }
                 console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed:`, e instanceof Error ? e.message : String(e));
                 rate = 0;
               }
@@ -2271,10 +2507,10 @@ export async function simulate(
       if (allowJit) {
         try {
           const constantSpeciesMask = model.species.map((s) => !!s.isConstant);
-          compiledMassActionJit = jitCompiler.compile(buildMassActionJitReactions(), numSpecies, model.parameters, constantSpeciesMask);
+          compiledMassActionJit = jitCompiler.compile(buildMassActionJitReactions(), numSpecies, model.parameters, constantSpeciesMask, undefined, model.functions);
 
           // Return the JIT-compiled function but wrapped to handle speciesVolumes
-          console.log(`[Worker] JIT compiler active for ${concreteReactions.length} reactions.`);
+          if (VERBOSE_SIM_DEBUG) console.log(`[Worker] JIT compiler active for ${concreteReactions.length} reactions.`);
           return (yIn: Float64Array, dydt: Float64Array) => {
             compiledMassActionJit!.evaluate(0, yIn, dydt, solverVolumes);
           };
@@ -2332,10 +2568,12 @@ export async function simulate(
         }
         sparseFlatReactantOffsets[sparseNRxns] = srOff;
 
-        console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
+        if (VERBOSE_SIM_DEBUG) {
+          console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
+        }
 
         return (yIn: Float64Array, dydt: Float64Array) => {
-          if (!(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
+          if (VERBOSE_SIM_DEBUG && !(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
             console.log('[Worker] DERIVATIVE FUNCTION CALLED (Sparse CSR Fallback)');
             (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
           }
@@ -2447,10 +2685,12 @@ export async function simulate(
       flatReactantOffsets[nRxns] = rOff;
       flatProductOffsets[nRxns] = pOff;
 
-      console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
+      }
 
       return (yIn: Float64Array, dydt: Float64Array) => {
-        if (!(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
+        if (VERBOSE_SIM_DEBUG && !(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
           console.log('[Worker] DERIVATIVE FUNCTION CALLED (Zero-Copy Dense Fallback)');
           (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
         }
@@ -2602,7 +2842,7 @@ export async function simulate(
     // relative trajectory diff ~1e-8) at ~50-60x the speed on a 2048-species model.
     // (The old "KLU needs a WASM rebuild" note was stale; _init_solver_sparse is live.)
     const AUTO_JAC_SPECIES_THRESHOLD = 50;   // >= this (mass-action) => at least dense analytical
-    const SPARSE_MIN_SPECIES = 200;          // >= this + sparse Jacobian => KLU sparse
+    const SPARSE_MIN_SPECIES = 100;          // >= this + sparse Jacobian => KLU sparse
     const JAC_DENSE_FRACTION_MAX = 0.25;     // (over-estimated) fill below this => treat as sparse
     const autoJacEligible =
       numSpecies >= AUTO_JAC_SPECIES_THRESHOLD &&
@@ -2637,7 +2877,9 @@ export async function simulate(
       if (stiffnessProfile.category === 'extreme' || stiffnessProfile.category === 'severe') {
         // Override: extremely stiff models should start with Jacobian-equipped CVODE
         // even in auto_detect mode — the runtime probe will confirm.
-        console.log('[SimulationLoop] auto_detect: static pre-analysis suggests severe stiffness, starting with cvode_jac');
+        if (VERBOSE_SIM_DEBUG) {
+          console.log('[SimulationLoop] auto_detect: static pre-analysis suggests severe stiffness, starting with cvode_jac');
+        }
       }
       // Leave solverType as 'auto_detect' — createSolver will handle it
     } else if (solverType === 'cvode') {
@@ -2717,25 +2959,30 @@ export async function simulate(
       parameters: new Map(Object.entries(model.parameters || {}))
     };
 
-    const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
-    const isCbnglSimpleModel =
-      observableNamesSet.has('TF_nuc') &&
-      observableNamesSet.has('Tot_mRNA') &&
-      observableNamesSet.has('Tot_P') &&
-      observableNamesSet.has('P_R');
-    const cbnglTraceSteps = new Set([1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 470, 478, 500]);
+    let isCbnglSimpleModel = false;
+    const cbnglTraceSteps = VERBOSE_SIM_DEBUG
+      ? new Set([1, 2, 3, 5, 10, 20, 50, 100, 200, 300, 400, 470, 478, 500])
+      : undefined;
     let tfCpIdx = -1;
     let tfNuIdx = -1;
-    for (let i = 0; i < model.species.length; i++) {
-      const name = model.species[i].name;
-      if (tfCpIdx === -1 && name === '@CP::TF(d~pY)') {
-        tfCpIdx = i;
-      }
-      if (tfNuIdx === -1 && name === '@NU::TF(d~pY)') {
-        tfNuIdx = i;
-      }
-      if (tfCpIdx !== -1 && tfNuIdx !== -1) {
-        break;
+    if (VERBOSE_SIM_DEBUG) {
+      const observableNamesSet = new Set((model.observables || []).map((o) => o.name));
+      isCbnglSimpleModel =
+        observableNamesSet.has('TF_nuc') &&
+        observableNamesSet.has('Tot_mRNA') &&
+        observableNamesSet.has('Tot_P') &&
+        observableNamesSet.has('P_R');
+      for (let i = 0; i < model.species.length; i++) {
+        const name = model.species[i].name;
+        if (tfCpIdx === -1 && name === '@CP::TF(d~pY)') {
+          tfCpIdx = i;
+        }
+        if (tfNuIdx === -1 && name === '@NU::TF(d~pY)') {
+          tfNuIdx = i;
+        }
+        if (tfCpIdx !== -1 && tfNuIdx !== -1) {
+          break;
+        }
       }
     }
 
@@ -2761,8 +3008,9 @@ export async function simulate(
           const context = { ...model.parameters, ...obsValues, t };
           for (let i = 0; i < rootExprs.length; i++) {
             try {
-              gout[i] = evaluateFunctionalRate(rootExprs[i], model.parameters, obsValues, model.functions, context);
-            } catch {
+              gout[i] = evaluateFunctionalRate(rootExprs[i], model.parameters, obsValues, model.functions, context, undefined, strictFunctionalRates);
+            } catch (e: unknown) {
+              if (strictFunctionalRates) throw e;
               gout[i] = 0;
             }
           }
@@ -3034,9 +3282,11 @@ export async function simulate(
             const obsValues = evaluateObservablesFast(y64);
             const wgpuSuffix = phases[0]?.suffix;
             appendDataRow(wgpuSuffix, { time, ...obsValues });
-            const sp: Record<string, number> = { time };
-            for (let j = 0; j < numSpecies; j++) setSafeNumberField(sp, speciesHeaders[j], conc[j]);
-            appendSpeciesSnapshot(wgpuSuffix, sp);
+            if (includeSpeciesData) {
+              const sp: Record<string, number> = { time };
+              for (let j = 0; j < numSpecies; j++) setSafeNumberField(sp, speciesHeaders[j], conc[j]);
+              appendSpeciesSnapshot(wgpuSuffix, sp);
+            }
           }
           const defaultWgpuSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
           const results = {
@@ -3046,8 +3296,10 @@ export async function simulate(
             speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
             speciesData: includeSpeciesData ? speciesDataBySuffix[defaultWgpuSuffix] || [] : undefined,
             speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
-            expandedReactions: model.reactions,
-            expandedSpecies: model.species
+            ...(includeExpandedNetwork ? {
+              expandedReactions: cloneReactionsForResult(model.reactions),
+              expandedSpecies: model.species,
+            } : {})
           } satisfies SimulationResults;
           gpuSolver.dispose();
           return results;
@@ -3062,7 +3314,7 @@ export async function simulate(
 
 
     // ODE Loop
-    const odeStart = performance.now();
+    const odeStart = VERBOSE_SIM_DEBUG ? performance.now() : 0;
     const y = new Float64Array(state);
     const conservationLawReductionEnabled = getFeatureFlags().conservationLawReduction;
     const conservationTemplate = conservationLawReductionEnabled
@@ -3108,7 +3360,9 @@ export async function simulate(
     for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
       const phase = phases[phaseIdx];
       const isLastPhase = phaseIdx === phases.length - 1;
-      console.log(`[Worker] Starting Phase ${phaseIdx}: method=${phase.method}, t_end=${phase.t_end}, continue=${phase.continue}`);
+      if (VERBOSE_SIM_DEBUG) {
+        console.log(`[Worker] Starting Phase ${phaseIdx}: method=${phase.method}, t_end=${phase.t_end}, continue=${phase.continue}`);
+      }
 
       const recordThisPhase = (phaseIdx >= recordFromPhaseIdx);
 
@@ -3131,7 +3385,7 @@ export async function simulate(
         if (mode === 'save') {
           const label = change.label ?? DEFAULT_CONC_LABEL;
           concentrationCache.set(label, new Float64Array(y));
-          console.log(`[Worker] ODE: Saved concentrations with label "${label}"`);
+          if (VERBOSE_SIM_DEBUG) console.log(`[Worker] ODE: Saved concentrations with label "${label}"`);
           continue;
         }
         if (mode === 'reset') {
@@ -3141,7 +3395,7 @@ export async function simulate(
             // Restore from cached saved state
             y.set(saved);
             state.set(saved);
-            console.log(`[Worker] ODE: Reset concentrations to saved label "${label}"`);
+            if (VERBOSE_SIM_DEBUG) console.log(`[Worker] ODE: Reset concentrations to saved label "${label}"`);
           } else {
             // No cache hit: if default label, reset to initial seed species (BNG2 SpeciesList fallback)
             if (label === DEFAULT_CONC_LABEL) {
@@ -3151,7 +3405,7 @@ export async function simulate(
                 y[k] = odeUsesAmountState ? initialAmount : (initialAmount / speciesVolumes[k]);
                 state[k] = y[k];
               }
-              console.log(`[Worker] ODE: Reset concentrations to initial seed species (recalculated with current parameters)`);
+              if (VERBOSE_SIM_DEBUG) console.log('[Worker] ODE: Reset concentrations to initial seed species (recalculated with current parameters)');
             } else {
               console.warn(`[Worker] ODE: resetConcentrations label "${label}" not found in cache`);
             }
@@ -3163,8 +3417,9 @@ export async function simulate(
         if (typeof change.value === 'number') resolvedValue = change.value;
         else {
           try {
-            resolvedValue = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions);
-          } catch {
+            resolvedValue = evaluateFunctionalRate(change.value, model.parameters, {}, model.functions, undefined, undefined, strictFunctionalRates);
+          } catch (e) {
+            if (strictFunctionalRates) throw e;
             resolvedValue = parseFloat(String(change.value)) || 0;
           }
         }
@@ -3221,7 +3476,7 @@ export async function simulate(
 
       // **Requirement 10.4**: NFsim phase handling in mixed-method workflows
       if (phase.method === 'nf') {
-        console.log(`[Worker] NFsim phase ${phaseIdx} detected in mixed-method workflow`);
+        if (VERBOSE_SIM_DEBUG) console.log(`[Worker] NFsim phase ${phaseIdx} detected in mixed-method workflow`);
 
         // Import NFsim runner dynamically to avoid circular dependencies
         const { runNFsimSimulation } = await import('./nfsim/NFsimRunner');
@@ -3277,7 +3532,7 @@ export async function simulate(
           // Update model time
           modelTime = phaseStart + phaseDuration;
 
-          console.log(`[Worker] NFsim phase ${phaseIdx} complete`);
+          if (VERBOSE_SIM_DEBUG) console.log(`[Worker] NFsim phase ${phaseIdx} complete`);
           continue; // Skip ODE solver for this phase
         } catch (nfsimError) {
           console.error(`[Worker] NFsim phase ${phaseIdx} failed:`, nfsimError);
@@ -3338,6 +3593,8 @@ export async function simulate(
             currentSolverType = 'cvode';
           }
 
+          // This is also the public activation signal used by integration
+          // diagnostics, so retain it even when verbose tracing is disabled.
           console.log(`[SimulationLoop] Using conservation-law reduced ODE system for phase ${phaseIdx}: ${numSpecies} -> ${reducedSystem.reducedSize}`);
         }
       }
@@ -3380,9 +3637,11 @@ export async function simulate(
         const outT0 = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, 0);
         const obsValues = evaluateObservablesFast(y);
         appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
-        const s0: Record<string, number> = { time: outT0 };
-        for (let i = 0; i < numSpecies; i++) setSafeNumberField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
-        appendSpeciesSnapshot(phase.suffix, s0);
+        if (includeSpeciesData) {
+          const s0: Record<string, number> = { time: outT0 };
+          for (let i = 0; i < numSpecies; i++) setSafeNumberField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
+          appendSpeciesSnapshot(phase.suffix, s0);
+        }
       }
 
       try {
@@ -3451,11 +3710,13 @@ export async function simulate(
             const outT = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i);
             const obsValues = evaluateObservablesFast(y);
             appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
-            const sp: Record<string, number> = { time: outT };
-            for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
-            appendSpeciesSnapshot(phase.suffix, sp);
+            if (includeSpeciesData) {
+              const sp: Record<string, number> = { time: outT };
+              for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
+              appendSpeciesSnapshot(phase.suffix, sp);
+            }
 
-            if (isCbnglSimpleModel && cbnglTraceSteps.has(i)) {
+            if (VERBOSE_SIM_DEBUG && isCbnglSimpleModel && cbnglTraceSteps?.has(i)) {
               const tfCpAmt = tfCpIdx >= 0 ? (odeUsesAmountState ? y[tfCpIdx] : (y[tfCpIdx] * speciesVolumes[tfCpIdx])) : NaN;
               const tfNuAmt = tfNuIdx >= 0 ? (odeUsesAmountState ? y[tfNuIdx] : (y[tfNuIdx] * speciesVolumes[tfNuIdx])) : NaN;
               let rateTranscribeVal = Number.NaN;
@@ -3475,9 +3736,13 @@ export async function simulate(
                     rateTranscribeFn.expression,
                     model.parameters || {},
                     obsValues,
-                    model.functions
+                    model.functions,
+                    undefined,
+                    undefined,
+                    strictFunctionalRates
                   );
-                } catch {
+                } catch (e: unknown) {
+                  if (strictFunctionalRates) throw e;
                   rateTranscribeVal = Number.NaN;
                 }
               }
@@ -3507,7 +3772,9 @@ export async function simulate(
             const dx = Math.sqrt(sumSq) / numSpecies;
 
             if (dx < steadyStateAtol) {
-              console.log(`[Worker] Phase ${phaseIdx + 1}: Steady state reached at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}, dx=${dx.toExponential(4)} < atol=${steadyStateAtol.toExponential(2)}`);
+              if (VERBOSE_SIM_DEBUG) {
+                console.log(`[Worker] Phase ${phaseIdx + 1}: Steady state reached at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}, dx=${dx.toExponential(4)} < atol=${steadyStateAtol.toExponential(2)}`);
+              }
               shouldStop = true;
               break; // Exit integration loop immediately when steady state is reached
             }
@@ -3522,14 +3789,20 @@ export async function simulate(
                 phase.stop_if,
                 model.parameters || {},
                 { ...currentObsValues, time: t },
-                model.functions
+                model.functions,
+                undefined,
+                undefined,
+                strictFunctionalRates
               );
               if (stopResult !== 0) {
-                console.log(`[Worker] Phase ${phaseIdx + 1}: stop_if condition met at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}: ${phase.stop_if}`);
+                if (VERBOSE_SIM_DEBUG) {
+                  console.log(`[Worker] Phase ${phaseIdx + 1}: stop_if condition met at step ${i}, t=${toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i)}: ${phase.stop_if}`);
+                }
                 shouldStop = true;
                 break;
               }
             } catch (err: unknown) {
+              if (strictFunctionalRates) throw err;
               console.warn(`[Worker] Phase ${phaseIdx + 1}: stop_if evaluation failed: ${err instanceof Error ? err.message : String(err)}`);
             }
           }
@@ -3574,16 +3847,18 @@ export async function simulate(
 
       // Always output final species state for multi-phase propagation support
       // This ensures batchRunner can capture the equilibrated state even when recordThisPhase=false
-      const suffixSpeciesArray = getSuffixSpeciesDataArray(phase.suffix);
-      if (includeSpeciesData && recordThisPhase && (suffixSpeciesArray.length === 0 || t > 0)) {
-        // Check if final state was already recorded (last speciesData row has matching time)
-        const finalT = modelTime;
-        const lastRecordedT = suffixSpeciesArray.length > 0 ? suffixSpeciesArray[suffixSpeciesArray.length - 1].time : -1;
-        if (lastRecordedT !== finalT) {
-          // Record final species state for multi-phase propagation
-          const spFinal: Record<string, number> = { time: finalT };
-          for (let k = 0; k < numSpecies; k++) setSafeNumberField(spFinal, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
-          appendSpeciesSnapshot(phase.suffix, spFinal);
+      if (includeSpeciesData && recordThisPhase) {
+        const suffixSpeciesArray = getSuffixSpeciesDataArray(phase.suffix);
+        if (suffixSpeciesArray.length === 0 || t > 0) {
+          // Check if final state was already recorded (last speciesData row has matching time)
+          const finalT = modelTime;
+          const lastRecordedT = suffixSpeciesArray.length > 0 ? suffixSpeciesArray[suffixSpeciesArray.length - 1].time : -1;
+          if (lastRecordedT !== finalT) {
+            // Record final species state for multi-phase propagation
+            const spFinal: Record<string, number> = { time: finalT };
+            for (let k = 0; k < numSpecies; k++) setSafeNumberField(spFinal, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
+            appendSpeciesSnapshot(phase.suffix, spFinal);
+          }
         }
       }
 
@@ -3598,10 +3873,11 @@ export async function simulate(
       leftoverSolver.destroy?.();
     }
 
-    const odeTime = performance.now() - odeStart;
-    const totalTime = performance.now() - simulationStartTime;
-    if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: ODE integration took', odeTime.toFixed(0), 'ms');
-    if (VERBOSE_SIM_DEBUG) console.log('[Worker] ⏱️ TIMING: Total simulation time', totalTime.toFixed(0), 'ms');
+    if (VERBOSE_SIM_DEBUG) {
+      const simulationEndTime = performance.now();
+      console.log('[Worker] ⏱️ TIMING: ODE integration took', (simulationEndTime - odeStart).toFixed(0), 'ms');
+      console.log('[Worker] ⏱️ TIMING: Total simulation time', (simulationEndTime - simulationStartTime).toFixed(0), 'ms');
+    }
     const defaultOdeSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
     return {
       headers,
@@ -3610,8 +3886,10 @@ export async function simulate(
       speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
       speciesData: includeSpeciesData ? speciesDataBySuffix[defaultOdeSuffix] || [] : undefined,
       speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
-      expandedReactions: model.reactions,
-      expandedSpecies: model.species,
+      ...(includeExpandedNetwork ? {
+        expandedReactions: cloneReactionsForResult(model.reactions),
+        expandedSpecies: model.species,
+      } : {}),
       denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined
     } satisfies SimulationResults;
   }

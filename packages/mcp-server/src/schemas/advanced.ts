@@ -46,3 +46,16 @@ export const reduceModelArgsSchema = z.object({
     method: z.enum(['ode', 'ssa']).default('ode'),
     max_iterations: z.number().default(1000),
 }).strict();
+
+export const pkpdArgsSchema = z.object({
+    action: z.enum(['generate_model', 'simulate_dosing', 'compute_metrics', 'population_simulation']),
+    model_type: z.string().optional(),
+    drug_name: z.string().optional(),
+    route: z.string().optional(),
+    dose: z.number().finite().positive().max(1000000).optional(),
+    code: z.string().optional(),
+    observable: z.string().optional(),
+    n_patients: z.number().int().positive().max(1000).optional(),
+    dosing_interval: z.number().finite().positive().max(1000).optional(),
+    n_doses: z.number().int().positive().max(100).optional(),
+}).strict();

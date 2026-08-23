@@ -5,6 +5,41 @@ import { BNGLParser as CoreBNGLParser } from '../services/graph/core/BNGLParser.
  * Converts ANTLR4 parse tree to BNGLModel type.
  */
 import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
+
+const getRuleIndex = (node: unknown): number | undefined => {
+  if (!node || typeof node !== 'object') return undefined;
+  const maybeRuleIndex = (node as { ruleIndex?: unknown }).ruleIndex;
+  return typeof maybeRuleIndex === 'number' ? maybeRuleIndex : undefined;
+};
+
+const getBaseComponentName = (comp: string): string => {
+  let len = comp.length;
+  const tildeIdx = comp.indexOf('~');
+  if (tildeIdx !== -1) {
+    len = tildeIdx;
+  }
+  const bangIdx = comp.indexOf('!');
+  if (bangIdx !== -1 && bangIdx < len) {
+    len = bangIdx;
+  }
+  return comp.substring(0, len).trim();
+};
+
+const getBaseCompDef = (compDef: string): string => {
+  const tildeIdx = compDef.indexOf('~');
+  if (tildeIdx !== -1) {
+    return compDef.substring(0, tildeIdx);
+  }
+  return compDef;
+};
+
+const buildWildcardComponent = (compDef: string): string => {
+  const tildeIdx = compDef.indexOf('~');
+  if (tildeIdx !== -1) {
+    return compDef.substring(0, tildeIdx) + '~?!?__SYN__';
+  }
+  return compDef + '!?__SYN__';
+};
 import type { BNGParserVisitor } from './generated/BNGParserVisitor.ts';
 import * as Parser from './generated/BNGParser.ts';
 import type {
@@ -33,6 +68,13 @@ const visitorDebugLog = (...args: unknown[]): void => {
 };
 
 export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements BNGParserVisitor<unknown> {
+  public hasCompartments: boolean = true;
+  private moleculeTypesMap: Map<string, BNGLMoleculeType> = new Map();
+
+  private getMoleculeType(name: string): BNGLMoleculeType | undefined {
+    return this.moleculeTypesMap.get(name);
+  }
+
   private parameters: Record<string, number> = {};
   private moleculeTypes: BNGLMoleculeType[] = [];
   private species: BNGLSpecies[] = [];
@@ -423,7 +465,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
     }
 
-    this.moleculeTypes.push({ name, components });
+    const mt = { name, components };
+    this.moleculeTypes.push(mt);
+    this.moleculeTypesMap.set(name, mt);
   }
 
   // Seed species block
@@ -1001,11 +1045,17 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     const parts = content.split(',');
     for (const part of parts) {
-      const [key, valStr] = part.split('=>');
-      if (key && valStr) {
-        const val = parseFloat(valStr.trim());
-        if (!isNaN(val)) {
-          map[key.trim()] = val;
+      // ⚡ Bolt Optimization: Use zero-allocation index scanning instead of .split('=>')
+      // Reduces intermediate array allocations inside hot map-parsing loops
+      const arrowIdx = part.indexOf('=>');
+      if (arrowIdx !== -1) {
+        const key = part.substring(0, arrowIdx);
+        const valStr = part.substring(arrowIdx + 2);
+        if (key && valStr) {
+          const val = parseFloat(valStr.trim());
+          if (!isNaN(val)) {
+            map[key.trim()] = val;
+          }
         }
       }
     }
@@ -1394,11 +1444,24 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
   // Helper: Get species pattern as string
   private getSpeciesString(
-    ctx: Parser.Species_defContext,
+    ctx: Parser.Species_defContext & { _cachedComplete?: string; _cachedLiteral?: string },
     options: { completeMissingComponents?: boolean } = {}
   ): string {
+    const shouldComplete = options.completeMissingComponents === true;
+    if (shouldComplete && ctx._cachedComplete !== undefined) {
+      return ctx._cachedComplete;
+    }
+    if (!shouldComplete && ctx._cachedLiteral !== undefined) {
+      return ctx._cachedLiteral;
+    }
+
     const molPatterns = ctx.molecule_pattern();
-    if (!molPatterns || molPatterns.length === 0) return '';
+    if (!molPatterns || molPatterns.length === 0) {
+      const emptyStr = '';
+      if (shouldComplete) ctx._cachedComplete = emptyStr;
+      else ctx._cachedLiteral = emptyStr;
+      return emptyStr;
+    }
 
     // DEBUG LOGGING
 
@@ -1420,11 +1483,6 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
 
     const moleculeEntries: Array<{ pattern: Parser.Molecule_patternContext; compartment?: string }> = [];
-    const getRuleIndex = (node: unknown): number | undefined => {
-      if (!node || typeof node !== 'object') return undefined;
-      const maybeRuleIndex = (node as { ruleIndex?: unknown }).ruleIndex;
-      return typeof maybeRuleIndex === 'number' ? maybeRuleIndex : undefined;
-    };
     if (ctx.children) {
       for (const child of ctx.children) {
         const ruleIndex = getRuleIndex(child);
@@ -1451,26 +1509,10 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       const nameNode = mp.STRING() || ("keyword_as_mol_name" in mp && typeof (mp as unknown as Record<string, unknown>).keyword_as_mol_name === "function" ? (mp as unknown as {keyword_as_mol_name: () => import("antlr4ts").ParserRuleContext}).keyword_as_mol_name() : undefined);
       if (!nameNode) return '';
       const name = nameNode.text;
-      const rawPatternText = mp.text?.replace(/\s+/g, '') ?? '';
       const compListCtx = mp.component_pattern_list();
 
       const shouldComplete = options.completeMissingComponents === true;
-      const molType = this.moleculeTypes.find((m) => m.name === name);
-
-      const buildWildcardComponent = (compDef: string): string => {
-        const parts = compDef.split('~');
-        const base = parts[0];
-        let comp = base;
-        if (parts.length > 1) {
-          comp += '~?';
-        }
-        // Use !?__SYN__ to mark this as a synthetically-added wildcard (absent in user rule).
-        // BNGLParser.parseComponent recognises __SYN__ and sets syntheticWildcard=true so that
-        // matchRespectsProductImpliedFreeConstraints can treat this component as absent rather than
-        // as an explicit !? carry-through (e.g. CD40(l!?) which must NOT be treated as synthetic).
-        comp += '!?__SYN__';
-        return comp;
-      };
+      const molType = this.getMoleculeType(name);
 
       let molStr = `${name}()`;
 
@@ -1526,14 +1568,14 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
           if (shouldComplete && molType && molType.components.length > 0) {
             const byName = new Map<string, string[]>();
             for (const comp of components) {
-              const base = comp.split('~')[0].split('!')[0].trim();
+              const base = getBaseComponentName(comp);
               if (!byName.has(base)) byName.set(base, []);
-              byName.get(base)?.push(comp);
+              byName.get(base)!.push(comp);
             }
 
             const ordered: string[] = [];
             for (const compDef of molType.components) {
-              const base = compDef.split('~')[0];
+              const base = getBaseCompDef(compDef);
               const queue = byName.get(base);
               if (queue && queue.length > 0) {
                 ordered.push(queue.shift()!);
@@ -1567,8 +1609,9 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
       if (entry.compartment) {
         molStr += `@${entry.compartment}`;
-      } else {
-        // Legacy compartment-before-parentheses syntax support, e.g. "B@EC()".
+      } else if (this.hasCompartments) {
+        // Only run legacy check if we actually have compartments in the file
+        const rawPatternText = mp.text?.replace(/\s+/g, '') ?? '';
         const legacyCompBeforeParen = rawPatternText.match(/^([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)$/);
         if (legacyCompBeforeParen && legacyCompBeforeParen[1] === name && !/@[A-Za-z0-9_]+$/.test(molStr)) {
           const comp = legacyCompBeforeParen[2];
@@ -1579,12 +1622,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       return molStr;
     }).filter(m => m); // Filter out empty molecules
 
-    const rawSpeciesText = ctx.text?.replace(/\s+/g, '') ?? '';
     let res = prefix + molecules.join('.');
 
     // Handle species-level suffix compartment (AT STRING at end) - e.g., A.B@PM
     // This is distinct from molecule_compartment contexts (e.g., A@EC.B@PM).
-    if (!prefix && ctx.children && ctx.children.length >= 2) {
+    if (this.hasCompartments && !prefix && ctx.children && ctx.children.length >= 2) {
       const last = ctx.children[ctx.children.length - 1];
       const prev = ctx.children[ctx.children.length - 2];
       const suffixComp = last?.text ?? '';
@@ -1596,19 +1638,22 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Fallback: recover compartment-before-parentheses syntax when parse-tree
     // compartment nodes are missing in some observable contexts.
     // Example: `B@EC()` should normalize to `B()@EC`.
-    if (!prefix && !res.includes('@') && rawSpeciesText.includes('@')) {
-      const normalizedRaw = rawSpeciesText.replace(
-        /([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g,
-        (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
-      );
-      if (normalizedRaw.includes('@')) {
-        res = normalizedRaw;
+    if (this.hasCompartments && !prefix && !res.includes('@')) {
+      const rawSpeciesText = ctx.text?.replace(/\s+/g, '') ?? '';
+      if (rawSpeciesText.includes('@')) {
+        const normalizedRaw = rawSpeciesText.replace(
+          /([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g,
+          (_m, mol, comp, args) => `${mol}(${String(args ?? '')})@${comp}`
+        );
+        if (normalizedRaw.includes('@')) {
+          res = normalizedRaw;
+        }
       }
     }
 
     // Workaround for Issue where prefix is sometimes duplicated as suffix in complex patterns
     // e.g. E2F(...)@cell:E2F(...)
-    if (res.includes('@') && res.includes(':')) {
+    if (this.hasCompartments && res.includes('@') && res.includes(':')) {
       const match = res.match(/^(.+)@([a-zA-Z0-9_]+):(.+)$/);
       if (match) {
         const [_, name1, comp, name2] = match;
@@ -1617,6 +1662,12 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
           res = `@${comp}:${name1}`;
         }
       }
+    }
+
+    if (shouldComplete) {
+      ctx._cachedComplete = res;
+    } else {
+      ctx._cachedLiteral = res;
     }
 
     return res;

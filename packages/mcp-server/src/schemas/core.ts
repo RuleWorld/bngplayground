@@ -81,3 +81,33 @@ export const validateModelArgsSchema = z.object({
 export const getContactMapArgsSchema = z.object({
     code: z.string(),
 }).strict();
+
+export const verifyModelArgsSchema = z.object({
+    code: z.string(),
+    query: z.string(),
+    maxSpecies: z.number().int().positive().optional(),
+}).strict();
+
+const flatStructureDataPointSchema = z.object({
+    time: finiteNumber,
+    observable: z.string().trim().min(1),
+    value: finiteNumber,
+    error: finiteNumber.positive().optional(),
+}).strict();
+
+const groupedStructureDataPointSchema = z.object({
+    time: finiteNumber,
+    observables: z.record(z.string(), finiteNumber)
+        .refine((observables) => Object.keys(observables).length > 0, 'At least one observable is required'),
+}).strict();
+
+export const searchStructureArgsSchema = z.object({
+    code: z.string().trim().min(1),
+    experimental_data: z.array(z.union([
+        flatStructureDataPointSchema,
+        groupedStructureDataPointSchema,
+    ])).min(1),
+    inclusion_prior: finiteNumber.min(0).max(1).optional(),
+    n_particles: positiveInt.optional(),
+    n_generations: positiveInt.optional(),
+}).strict();

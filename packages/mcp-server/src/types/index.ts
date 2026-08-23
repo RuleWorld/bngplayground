@@ -76,3 +76,31 @@ export interface MCPErrorResult {
     severity: 'fatal' | 'recoverable' | 'warning';
     relatedTools?: string[];
 }
+
+export interface SymbolicSteadyStateResult {
+    solutions: Record<string, string>;
+    latex: Record<string, string>;
+    sensitivities: Record<string, Record<string, string>>;
+    exact: boolean;
+    technical: string;
+    biological: string;
+    strategic: string;
+}
+
+export interface VerifyModelResult {
+    query: string;
+    answer: boolean | number | 'unknown';
+    confidence: 'exact' | 'over_approximate' | 'bounded' | 'unknown';
+    layerUsed: number;
+    explanation: string;
+    technical?: string;
+    biological?: string;
+    strategic?: string;
+    bound?: number;
+    witness?: {
+        speciesIndex: number;
+        speciesString: string;
+        generatingRuleSequence: string[];
+    } | string[];
+    speciesExplored?: number;
+}

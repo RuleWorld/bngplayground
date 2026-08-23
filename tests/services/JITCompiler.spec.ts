@@ -1,11 +1,46 @@
 
 import { describe, it, expect } from 'vitest';
-import { jitCompiler } from '@bngplayground/engine';
+import { getFeatureFlags, jitCompiler, setFeatureFlags } from '@bngplayground/engine';
 import { OpCode } from '../../packages/engine/src/services/simulation/ExpressionCompiler';
 
 describe('JITCompiler Service', () => {
 
     describe('compile', () => {
+        it('reuses exact SSA propensity programs and invalidates them with the cache', () => {
+             const previousFlag = getFeatureFlags().enableJitFastPath;
+             setFeatureFlags({ enableJitFastPath: true });
+             try {
+                 jitCompiler.clearCache();
+                 const reactions = [{
+                     reactants: new Int32Array([0, 1]),
+                     rateConstant: 0.5,
+                     propensityFactor: 2,
+                 }];
+                 const volumes = new Float64Array([4]);
+
+                 const first = jitCompiler.compileSSAPropensities(reactions, volumes);
+                 const second = jitCompiler.compileSSAPropensities(reactions, volumes);
+                 expect(first).not.toBeNull();
+                 expect(second).toBe(first);
+
+                 const state = new Float64Array([3, 5]);
+                 const propensities = new Float64Array(1);
+                 expect(first?.(state, propensities)).toBeCloseTo(3.75);
+                 expect(propensities[0]).toBeCloseTo(3.75);
+
+                 const changedRate = jitCompiler.compileSSAPropensities([
+                     { ...reactions[0], rateConstant: 0.75 },
+                 ], volumes);
+                 expect(changedRate).not.toBe(first);
+
+                 jitCompiler.clearCache();
+                 const afterClear = jitCompiler.compileSSAPropensities(reactions, volumes);
+                 expect(afterClear).not.toBe(first);
+             } finally {
+                 setFeatureFlags({ enableJitFastPath: previousFlag });
+             }
+        });
+
         it('should compile simple A -> B', () => {
              // A -> B, k=2.0
              const nSpecies = 2;
@@ -236,39 +271,112 @@ describe('JITCompiler Service', () => {
                ]);
            });
         
-        // Property / Fuzz Testing
-        for (let i = 0; i < 20; i++) {
-            it(`should correctly evaluate random network #${i}`, () => {
-                const k = Math.random() * 10;
-                const A_idx = 0;
-                const B_idx = 1;
-                const stoichA = Math.floor(Math.random() * 3) + 1;
-                const nSpecies = 2;
-                
-                const rxns = [{
-                    reactantIndices: [A_idx],
-                    reactantStoich: [stoichA],
-                    productIndices: [B_idx],
+         // Property / Fuzz Testing
+         for (let i = 0; i < 20; i++) {
+             it(`should correctly evaluate random network #${i}`, () => {
+                 const k = Math.random() * 10;
+                 const A_idx = 0;
+                 const B_idx = 1;
+                 const stoichA = Math.floor(Math.random() * 3) + 1;
+                 const nSpecies = 2;
+                 
+                 const rxns = [{
+                     reactantIndices: [A_idx],
+                     reactantStoich: [stoichA],
+                     productIndices: [B_idx],
+                     productStoich: [1],
+                     rateConstant: k
+                 }];
+                 
+                 const compiled = jitCompiler.compile(rxns, nSpecies);
+                 
+                 const A_val = Math.random() * 5;
+                 const B_val = Math.random() * 5;
+                 const y = new Float64Array([A_val, B_val]);
+                 const dydt = new Float64Array(2);
+                 
+                 compiled.evaluate(0, y, dydt);
+                 
+                 const rate = k * Math.pow(A_val, stoichA);
+                 const expected_dA = -stoichA * rate;
+                 const expected_dB = rate;
+                 
+                 expect(dydt[0]).toBeCloseTo(expected_dA);
+                 expect(dydt[1]).toBeCloseTo(expected_dB);
+             });
+         }
+    });
+
+    describe('global zero-arg functions', () => {
+        it('compile() should inline zero-arg functions before the security check', () => {
+            const functions = [
+                { name: 'Stimulus', args: [], expression: 'Amp * (sin(Freq * t + Phase) + 1) / 2' }
+            ];
+            const nSpecies = 1;
+            const rxns = [{
+                reactantIndices: [0],
+                reactantStoich: [1],
+                productIndices: [],
+                productStoich: [],
+                rateConstant: 'Stimulus()'
+            }];
+            const params = { Amp: 2, Freq: 1, Phase: 0 };
+
+            // Must NOT throw a Security Error for the unknown function Stimulus().
+            expect(() => jitCompiler.compile(rxns, nSpecies, params, undefined, undefined, functions)).not.toThrow();
+        });
+
+        it('compile() should reject genuinely unknown functions that are not defined', () => {
+            const nSpecies = 1;
+            const rxns = [{
+                reactantIndices: [0],
+                reactantStoich: [1],
+                productIndices: [],
+                productStoich: [],
+                rateConstant: 'unknownFn(A)'
+            }];
+
+            expect(() => jitCompiler.compile(rxns, nSpecies, { A: 2.0 })).toThrow(/Security Error: Unknown function: unknownFn/);
+        });
+
+        it('compileToByteCode() should inline zero-arg functions referencing observables', () => {
+            const functions = [
+                { name: 'phiM', args: [], expression: 'IM + E2to5M' }
+            ];
+            const bytecode = jitCompiler.compileToByteCode([
+                {
+                    reactantIndices: [0],
+                    reactantStoich: [1],
+                    productIndices: [1],
                     productStoich: [1],
-                    rateConstant: k
-                }];
-                
-                const compiled = jitCompiler.compile(rxns, nSpecies);
-                
-                const A_val = Math.random() * 5;
-                const B_val = Math.random() * 5;
-                const y = new Float64Array([A_val, B_val]);
-                const dydt = new Float64Array(2);
-                
-                compiled.evaluate(0, y, dydt);
-                
-                const rate = k * Math.pow(A_val, stoichA);
-                const expected_dA = -stoichA * rate;
-                const expected_dB = rate;
-                
-                expect(dydt[0]).toBeCloseTo(expected_dA);
-                expect(dydt[1]).toBeCloseTo(expected_dB);
-            });
-        }
+                    rateConstant: 'phiM()'
+                }
+            ], 2, {}, undefined, undefined, [
+                { name: 'IM', indices: [0], coefficients: [1] },
+                { name: 'E2to5M', indices: [1], coefficients: [1] }
+            ], ['A', 'B'], functions);
+
+            expect(bytecode).not.toBeNull();
+            expect(bytecode?.exprBytecode.length).toBeGreaterThan(0);
+        });
+
+        it('compileToByteCode() should compile param-only zero-arg functions to bytecode', () => {
+            const functions = [
+                { name: 'kbase', args: [], expression: 'kf * 10' }
+            ];
+            const bytecode = jitCompiler.compileToByteCode([
+                {
+                    reactantIndices: [0],
+                    reactantStoich: [1],
+                    productIndices: [1],
+                    productStoich: [1],
+                    rateConstant: 'kbase()'
+                }
+            ], 2, { kf: 0.5 }, undefined, undefined, undefined, undefined, functions);
+
+            expect(bytecode).not.toBeNull();
+            expect(bytecode?.exprBytecode.length).toBeGreaterThan(0);
+            expect(bytecode?.requiresParameterRebuild).toBe(true);
+        });
     });
 });

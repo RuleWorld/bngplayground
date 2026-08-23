@@ -29,6 +29,7 @@ import type { NFsimSimulationOptions } from '@bngplayground/engine';
 import { Atomizer } from '../src/lib/atomizer';
 import { analyseGraph } from './igraphLoader';
 import { isRecord } from './workerHandlers/guards';
+import { applyParameterOverrides } from './workerHandlers/applyParameterOverrides';
 import type { JobState } from './workerHandlers/types';
 
 // Wire up the CVODE factory with a lazy dynamic import so:
@@ -244,10 +245,14 @@ const workerVerboseLog = (...args: any[]) => {
   console.log(...args);
 };
 const cachedModels = new Map<number, BNGLModel>();
+// Generated networks are cached separately so parameter-overridden simulations can
+// still start from the original rule model when rates or seed expressions change.
+const expandedCachedModels = new Map<number, BNGLModel>();
 let nextModelId = 1;
-// LRU cache size limit for cached models inside the worker
-// Limit chosen to support multiple open tabs/models without excessive memory (8 × ~1MB avg = ~8MB)
+// Keep more compact source models than expanded networks: generated networks can
+// be orders of magnitude larger than their rule-model inputs.
 const MAX_CACHED_MODELS = 8;
+const MAX_EXPANDED_CACHED_MODELS = 2;
 
 const touchCachedModel = (modelId: number) => {
   const m = cachedModels.get(modelId);
@@ -255,6 +260,24 @@ const touchCachedModel = (modelId: number) => {
   // move to the end to mark as recently used
   cachedModels.delete(modelId);
   cachedModels.set(modelId, m);
+};
+
+const touchExpandedCachedModel = (modelId: number): BNGLModel | undefined => {
+  const model = expandedCachedModels.get(modelId);
+  if (!model) return undefined;
+  expandedCachedModels.delete(modelId);
+  expandedCachedModels.set(modelId, model);
+  return model;
+};
+
+const cacheExpandedModel = (modelId: number, model: BNGLModel): void => {
+  expandedCachedModels.delete(modelId);
+  expandedCachedModels.set(modelId, model);
+  while (expandedCachedModels.size > MAX_EXPANDED_CACHED_MODELS) {
+    const oldest = expandedCachedModels.keys().next().value as number | undefined;
+    if (oldest === undefined) break;
+    expandedCachedModels.delete(oldest);
+  }
 };
 
 const registerJob = (id: number) => {
@@ -281,6 +304,48 @@ const ensureNotCancelled = (id: number) => {
   if (entry && entry.cancelled) {
     throw new DOMException('Operation cancelled by main thread', 'AbortError');
   }
+};
+
+interface QueuedSimulation {
+  id: number;
+  run: () => Promise<void>;
+}
+
+const simulationQueue: QueuedSimulation[] = [];
+let simulationQueueHead = 0;
+let simulationQueueRunning = false;
+
+const drainSimulationQueue = async (): Promise<void> => {
+  if (simulationQueueRunning) return;
+  simulationQueueRunning = true;
+
+  try {
+    while (simulationQueueHead < simulationQueue.length) {
+      const queued = simulationQueue[simulationQueueHead++];
+      try {
+        await queued.run();
+      } catch (error) {
+        // Individual jobs normally serialize their own errors. Keep the drain
+        // alive even if an unexpected exception escapes that boundary.
+        console.error('[Worker] Unexpected simulation queue error for job', queued.id, error);
+      }
+    }
+  } finally {
+    if (simulationQueueHead > 0) {
+      simulationQueue.splice(0, simulationQueueHead);
+      simulationQueueHead = 0;
+    }
+    simulationQueueRunning = false;
+    // Defensive restart in case a future queue producer can run during cleanup.
+    if (simulationQueue.length > 0) {
+      void drainSimulationQueue();
+    }
+  }
+};
+
+const enqueueSimulation = (id: number, run: () => Promise<void>): void => {
+  simulationQueue.push({ id, run });
+  void drainSimulationQueue();
 };
 
 const serializeError = (error: unknown): SerializedWorkerError => {
@@ -410,6 +475,14 @@ if (typeof ctx.addEventListener === 'function') {
   });
 }
 
+if (typeof ctx.addEventListener === 'function') {
+  ctx.addEventListener('messageerror', (event) => {
+    const payload: SerializedWorkerError = { message: 'Worker failed to deserialize incoming message' };
+    safePostMessage({ id: -1, type: 'worker_internal_error', payload });
+    event.preventDefault();
+  });
+}
+
 // Re-export getCacheSizes or proxy it
 export function getCacheSizes() {
   return getEvaluatorCacheSizes();
@@ -515,8 +588,12 @@ if (typeof ctx.addEventListener === 'function') {
       registerJob(id);
       const jobEntry = jobStates.get(id);
       if (!jobEntry) return; // Should not happen
-      (async () => {
+      enqueueSimulation(id, async () => {
         try {
+          // A queued request may have been cancelled while another simulation
+          // was active. Do not let it touch shared evaluator/JIT state.
+          ensureNotCancelled(id);
+
           if (!payload || typeof payload !== 'object') {
             throw new Error('Simulation payload missing');
           }
@@ -525,6 +602,9 @@ if (typeof ctx.addEventListener === 'function') {
           const p = payload as unknown;
           let model: BNGLModel | undefined;
           let options: SimulationOptions | undefined;
+          let cachedModelId: number | undefined;
+          let cachedSourceModel: BNGLModel | undefined;
+          let hasParameterOverrides = false;
 
           if (isSimulateModelPayload(p)) {
             model = p.model;
@@ -533,34 +613,18 @@ if (typeof ctx.addEventListener === 'function') {
             const cached = cachedModels.get(p.modelId);
             if (!cached) throw new Error('Cached model not found in worker');
             touchCachedModel(p.modelId);
+            cachedModelId = p.modelId;
+            cachedSourceModel = cached;
             options = p.options;
+            hasParameterOverrides = !!p.parameterOverrides && Object.keys(p.parameterOverrides).length > 0;
 
-            if (!p.parameterOverrides || Object.keys(p.parameterOverrides).length === 0) {
-              model = cached;
+            if (hasParameterOverrides) {
+              model = applyParameterOverrides(cached, p.parameterOverrides!);
             } else {
-              const overrides: Record<string, number> = p.parameterOverrides;
-              const nextModel: BNGLModel = {
-                ...cached,
-                parameters: { ...(cached.parameters || {}), ...overrides },
-                species: (cached.species || []).map(s => {
-                  if (overrides[s.name] !== undefined) {
-                    return { ...s, initialConcentration: overrides[s.name] };
-                  }
-                  return s;
-                }),
-                reactions: [],
-              } as BNGLModel;
-
-              (cached.reactions || []).forEach((r) => {
-                const rateConst = nextModel.parameters[r.rate] ?? Number.parseFloat(r.rate);
-                if (isNaN(rateConst)) {
-                  workerVerboseLog('[Worker] Unresolved rate parameter:', r.rate);
-                  // If we can't resolve it, we'll let SimulationLoop handle it (sets to 0) 
-                  // but we'll log it here for diagnostics.
-                }
-                nextModel.reactions.push({ ...r, rateConstant: rateConst });
-              });
-              model = nextModel;
+              // Defer expanded-cache selection until the effective method is
+              // known. Pure NFsim must use the compact source rule model and
+              // should not make an unused expanded network look recently used.
+              model = cached;
             }
           }
 
@@ -571,10 +635,6 @@ if (typeof ctx.addEventListener === 'function') {
           const sharedOutput = isRecord(p) && 'sharedOutput' in p && isSharedSimulationOutputDescriptor((p as Record<string, unknown>).sharedOutput)
             ? (p as { sharedOutput: SharedSimulationOutputDescriptor }).sharedOutput
             : undefined;
-
-          // Auto-generate network if model has reaction rules but no reactions
-          const hasRules = (model.reactionRules && model.reactionRules.length > 0);
-          const hasReactions = (model.reactions && model.reactions.length > 0);
 
           // Determine if this is an NFsim simulation
           const phases = model.simulationPhases || [];
@@ -611,6 +671,22 @@ if (typeof ctx.addEventListener === 'function') {
           const hasMixedMethods = phases.length > 1 &&
             phases.some(p => p.method !== phases[0].method);
 
+          // Pure NFsim keeps the original seed/rule model. Other cached baseline
+          // workflows can reuse the generated network and update its LRU position.
+          if (
+            cachedModelId !== undefined &&
+            cachedSourceModel &&
+            !hasParameterOverrides &&
+            (!isNF || hasMixedMethods)
+          ) {
+            model = touchExpandedCachedModel(cachedModelId) ?? cachedSourceModel;
+          }
+
+          // Auto-generate a rule model only after the final source/expanded model
+          // has been selected for this simulation method.
+          const hasRules = !!(model.reactionRules && model.reactionRules.length > 0);
+          const hasReactions = !!(model.reactions && model.reactions.length > 0);
+
           const VERBOSE_BNGL_WORKER_DEBUG = false; // enable for extra bngl worker debug
           if (VERBOSE_BNGL_WORKER_DEBUG) {
             workerVerboseLog(
@@ -632,12 +708,24 @@ if (typeof ctx.addEventListener === 'function') {
                 () => ensureNotCancelled(id),
                 (p) => safePostMessage({ id, type: 'generate_network_progress', payload: p })
               );
+              // Reuse only the unmodified base network. Parameter-dependent local
+              // functions, Arrhenius rates, and seed expressions are baked during
+              // expansion, so override variants must continue to regenerate.
+              if (
+                cachedModelId !== undefined &&
+                cachedSourceModel !== undefined &&
+                !hasParameterOverrides &&
+                (model.reactions?.length ?? 0) > 0 &&
+                cachedModels.get(cachedModelId) === cachedSourceModel
+              ) {
+                cacheExpandedModel(cachedModelId, model);
+              }
               workerVerboseLog(
                 `[Worker] Network auto-generation complete: ${model.species.length} species, ${model.reactions?.length ?? 0} reactions`
               );
             } catch (genError) {
               console.error('[Worker] Network auto-generation failed:', genError);
-              throw new Error(`Network generation failed: ${genError instanceof Error ? genError.message : String(genError)}`);
+              throw new Error(`Network generation failed: ${genError instanceof Error ? genError.message : String(genError)}`, { cause: genError });
             }
           }
 
@@ -691,6 +779,8 @@ if (typeof ctx.addEventListener === 'function') {
                 utl: options.utl,
                 gml: options.gml,
                 equilibrate: options.equilibrate,
+                includeSpeciesData: options.includeSpeciesData,
+                includeExpandedNetwork: options.includeExpandedNetwork,
                 timeoutMs: 300000, // 5 minutes for NFsim simulations
                 requireRuntime: true,
                 verbose: true
@@ -706,7 +796,7 @@ if (typeof ctx.addEventListener === 'function') {
               if (!model || !options) throw new Error('Model or options missing during simulate');
               return await simulate(id, model, options, {
                 checkCancelled: () => ensureNotCancelled(id),
-                postMessage: (msg) => safePostMessage(msg)
+                postMessage: (msg) => forwardWorkerNotification(id, msg as Record<string, unknown>)
               });
             }
           })();
@@ -746,7 +836,7 @@ if (typeof ctx.addEventListener === 'function') {
             activeSimulationMethod = null;
           }
         }
-      })();
+      });
       return;
     }
 
@@ -773,6 +863,7 @@ if (typeof ctx.addEventListener === 'function') {
           parameterChanges: (model.parameterChanges || []).map((c: any) => ({ ...c })),
         };
         cachedModels.set(modelId, stored);
+        expandedCachedModels.delete(modelId);
         // Enforce LRU eviction if we exceed the cache size
         try {
           if (cachedModels.size > MAX_CACHED_MODELS) {
@@ -780,6 +871,7 @@ if (typeof ctx.addEventListener === 'function') {
             const oldest = it.next().value as number | undefined;
             if (typeof oldest === 'number') {
               cachedModels.delete(oldest);
+              expandedCachedModels.delete(oldest);
               // best-effort notification
 
               workerVerboseLog('[Worker] Evicted cached model (LRU) id=', oldest);
@@ -807,6 +899,7 @@ if (typeof ctx.addEventListener === 'function') {
         const modelId = isReleaseModelPayload(p) ? p.modelId : undefined;
         if (typeof modelId !== 'number') throw new Error('release_model payload missing modelId');
         cachedModels.delete(modelId);
+        expandedCachedModels.delete(modelId);
         const response: WorkerResponse = { id, type: 'release_model_success', payload: { modelId } };
         safePostMessage(response);
       } catch (error) {
@@ -833,7 +926,8 @@ if (typeof ctx.addEventListener === 'function') {
           }
 
           const p = payload as { model: BNGLModel; options?: NetworkGeneratorOptions };
-          let { model, options } = p;
+          const model = p.model;
+          let options = p.options;
 
           if (!model) {
             throw new Error('Model missing in generate_network payload');

@@ -2,23 +2,33 @@
 // Prefer the real SDK when it is available in the environment, but keep a
 // lightweight fallback so local tests can run without the package installed.
 
-type Constructor<T = unknown> = new (...args: any[]) => T;
+type Constructor<T = unknown> = new (...args: unknown[]) => T;
 
-const dynamicImport = (specifier: string): Promise<any> => {
+interface RealServerInstance {
+  setRequestHandler?: (schema: unknown, handler: (req: unknown) => Promise<unknown> | unknown) => void;
+  connect?: (transport: unknown) => Promise<void> | void;
+  listen?: (transport: unknown) => Promise<void> | void;
+}
+
+interface RealTransportInstance {
+  impl?: unknown;
+}
+
+const dynamicImport = (specifier: string): Promise<Record<string, unknown>> => {
   switch (specifier) {
     case '@modelcontextprotocol/sdk/server/index.js':
-      return import('@modelcontextprotocol/sdk/server/index.js');
+      return import('@modelcontextprotocol/sdk/server/index.js') as Promise<Record<string, unknown>>;
     case '@modelcontextprotocol/sdk/server/stdio.js':
-      return import('@modelcontextprotocol/sdk/server/stdio.js');
+      return import('@modelcontextprotocol/sdk/server/stdio.js') as Promise<Record<string, unknown>>;
     case '@modelcontextprotocol/sdk/types.js':
-      return import('@modelcontextprotocol/sdk/types.js');
+      return import('@modelcontextprotocol/sdk/types.js') as Promise<Record<string, unknown>>;
     default:
       throw new Error(`Unauthorized import specifier: ${specifier}`);
   }
 };
 
-let RealServer: Constructor | undefined;
-let RealStdioServerTransport: Constructor | undefined;
+let RealServer: Constructor<RealServerInstance> | undefined;
+let RealStdioServerTransport: Constructor<RealTransportInstance> | undefined;
 let realListToolsRequestSchema: unknown;
 let realCallToolRequestSchema: unknown;
 
@@ -29,8 +39,8 @@ try {
     dynamicImport('@modelcontextprotocol/sdk/types.js'),
   ]);
 
-  RealServer = serverModule.Server;
-  RealStdioServerTransport = stdioModule.StdioServerTransport;
+  RealServer = serverModule.Server as Constructor<RealServerInstance>;
+  RealStdioServerTransport = stdioModule.StdioServerTransport as Constructor<RealTransportInstance>;
   realListToolsRequestSchema = typesModule.ListToolsRequestSchema;
   realCallToolRequestSchema = typesModule.CallToolRequestSchema;
 } catch {
@@ -38,24 +48,24 @@ try {
 }
 
 export class Server {
-  private handlers = new Map<unknown, (...args: any[]) => any>();
-  private impl?: any;
+  private handlers = new Map<unknown, (req: never) => Promise<unknown> | unknown>();
+  private impl?: RealServerInstance;
 
-  constructor(info: any, opts: any) {
+  constructor(info: unknown, opts?: unknown) {
     if (RealServer) {
       this.impl = new RealServer(info, opts);
     }
   }
 
-  setRequestHandler(schema: unknown, handler: (...args: any[]) => any) {
-    this.handlers.set(schema, handler);
-    this.impl?.setRequestHandler?.(schema, handler);
+  setRequestHandler<T>(schema: unknown, handler: (req: T) => Promise<unknown> | unknown) {
+    this.handlers.set(schema, handler as (req: never) => Promise<unknown> | unknown);
+    this.impl?.setRequestHandler?.(schema, handler as (req: unknown) => Promise<unknown> | unknown);
   }
 
-  async handle(schema: unknown, req: any) {
+  async handle(schema: unknown, req: unknown) {
     const handler = this.handlers.get(schema);
     if (!handler) throw new Error('No handler');
-    return handler(req);
+    return handler(req as never);
   }
 
   listen(transport?: StdioServerTransport) {
@@ -70,9 +80,9 @@ export class Server {
 }
 
 export class StdioServerTransport {
-  readonly impl?: any;
+  readonly impl?: unknown;
 
-  constructor(...args: any[]) {
+  constructor(...args: unknown[]) {
     if (RealStdioServerTransport) {
       this.impl = new RealStdioServerTransport(...args);
     }

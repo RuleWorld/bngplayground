@@ -38,7 +38,7 @@ export async function handleSuggestAnnotations(args: ToolArgs): Promise<ToolResu
             note: 'Annotations found via built-in dictionary and UniProt REST API.'
         });
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

@@ -168,6 +168,7 @@ export const ContactMapTab: React.FC<ContactMapTabProps> = ({ model, results, on
                         <>
                             <button
                                 onClick={handlePlayPause}
+                                aria-label={isPlaying ? 'Pause animation' : 'Play animation'}
                                 className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600"
                             >
                                 {isPlaying ? '⏸ Pause' : '▶ Play'}

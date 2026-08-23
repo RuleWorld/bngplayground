@@ -275,7 +275,10 @@ export class SpatialSimulation {
     return [...geom.center];
   }
 
-  async run(onSnapshot?: (snapshot: SpatialSnapshot) => void): Promise<SpatialSimulationResult> {
+  async run(
+    onSnapshot?: (snapshot: SpatialSnapshot) => void,
+    onProgress?: (step: number, totalSteps: number, time: number) => void
+  ): Promise<SpatialSimulationResult> {
     const totalSteps = Math.ceil(this.config.tEnd / this.config.dt);
     const outputInterval = Math.max(1, Math.floor(totalSteps / this.config.nOutput));
 
@@ -286,11 +289,17 @@ export class SpatialSimulation {
         const snap = this.getSnapshot();
         this.recordObservables(snap);
         if (onSnapshot) onSnapshot(snap);
+        if (onProgress) {
+          onProgress(step + 1, totalSteps, this.currentTime);
+        }
       }
     }
 
     const finalSnap = this.getSnapshot();
     this.recordObservables(finalSnap);
+    if (onProgress) {
+      onProgress(totalSteps, totalSteps, this.currentTime);
+    }
     return this.buildResult();
   }
 

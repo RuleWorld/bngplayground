@@ -1,7 +1,7 @@
 import { profileLikelihood, simulate, loadEvaluator } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { identifiabilityArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleIdentifiability(args: ToolArgs): Promise<ToolResult<any>> {
@@ -10,7 +10,7 @@ export async function handleIdentifiability(args: ToolArgs): Promise<ToolResult<
         const model = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
         const expandedModel = await expandModel(model);
 
-        const simOptions = buildSimulationOptions(parsedArgs);
+        const simOptions = withDataOnlySimulationOutput(buildSimulationOptions(parsedArgs));
         await loadEvaluator();
 
         const parameterNames = parsedArgs.parameters ?? Object.keys(model.parameters);
@@ -47,7 +47,7 @@ export async function handleIdentifiability(args: ToolArgs): Promise<ToolResult<
 
         return createToolResult(result);
     } catch (error) {
-        const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+        const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);
     }
 }

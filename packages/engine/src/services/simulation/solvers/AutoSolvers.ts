@@ -12,6 +12,7 @@ import { SparseODESolver } from '../../analysis/SparseODESolver';
 import { buildJacobianFunction, isPurelyMassAction } from '../AnalyticalJacobian';
 import type { JacobianReaction } from '../AnalyticalJacobian';
 import { CompositeAutoSolver } from '../StiffnessDetector';
+import type { Rxn } from '../../graph/core/Rxn';
 
 /**
  * Auto-switching solver: starts with RK45, switches to Rosenbrock23 if stiffness detected
@@ -43,44 +44,6 @@ export class AutoSolver {
     }
 
     if (result.errorMessage === SOLVER_ERROR_STIFF_DETECTED) {
-      this.useImplicit = true;
-      return this.rosenbrock.integrate(result.y, result.t, tEnd, checkCancelled);
-    }
-
-    return result;
-  }
-}
-
-/**
- * Smart auto-switching solver: starts with fast RK4, switches to Rosenbrock23 only if stiff
- */
-export class SmartAutoSolver {
-  private rk4: FastRK4Solver;
-  private rosenbrock: Rosenbrock23Solver;
-  private useImplicit: boolean = false;
-
-  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}) {
-    this.rk4 = new FastRK4Solver(n, f, options);
-    this.rosenbrock = new Rosenbrock23Solver(n, f, options);
-  }
-
-  integrate(
-    y0: Float64Array,
-    t0: number,
-    tEnd: number,
-    checkCancelled?: () => void
-  ): SolverResult {
-    if (this.useImplicit) {
-      return this.rosenbrock.integrate(y0, t0, tEnd, checkCancelled);
-    }
-
-    const result = this.rk4.integrate(y0, t0, tEnd, checkCancelled);
-
-    if (result.success) {
-      return result;
-    }
-
-    if (result.errorMessage === 'STIFF_DETECTED') {
       this.useImplicit = true;
       return this.rosenbrock.integrate(result.y, result.t, tEnd, checkCancelled);
     }
@@ -156,8 +119,8 @@ class SparseODESolverWrapper {
   private solver: SparseODESolver;
 
   constructor(n: number, f: DerivativeFunction, options: SolverOptions) {
-    const reactions = (options as any).reactions || [];
-    const speciesNames = (options as any).speciesNames || [];
+    const reactions = (options.reactions || []) as Rxn[];
+    const speciesNames = options.speciesNames || [];
     this.solver = new SparseODESolver(n, reactions, f, new Float64Array(n), speciesNames, options);
   }
 
@@ -189,7 +152,11 @@ export async function createSolver(
   n: number,
   f: DerivativeFunction,
   options: Partial<SolverOptions> = {}
-): Promise<{ integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult; destroy?: () => void }> {
+): Promise<{
+  integrate: (y0: Float64Array, t0: number, tEnd: number, checkCancelled?: () => void) => SolverResult;
+  destroy?: () => void;
+  composite?: CompositeAutoSolver;
+}> {
   const opts = { ...DEFAULT_OPTIONS, ...options };
 
   switch (opts.solver) {
@@ -201,11 +168,11 @@ export async function createSolver(
       return new CVODESolver(n, f, opts, true);
     case 'cvode_jac': {
       await CVODESolver.init();
-      let jacobian = (options as any).jacobian;
+      let jacobian = options.jacobian;
       // Auto-build analytical Jacobian from reaction data when no explicit Jacobian is provided
-      if (!jacobian && (options as any).reactions) {
-        const reactions = (options as any).reactions as JacobianReaction[];
-        const useAnalytical = (options as any).useAnalyticalJacobian !== false;
+      if (!jacobian && options.reactions) {
+        const reactions = options.reactions as JacobianReaction[];
+        const useAnalytical = options.useAnalyticalJacobian !== false;
         if (useAnalytical && isPurelyMassAction(reactions)) {
           jacobian = buildJacobianFunction(reactions, n);
           console.log('[createSolver] Auto-generated analytical Jacobian for', n, 'species,', reactions.length, 'mass-action reactions');
@@ -262,7 +229,7 @@ export async function createSolver(
         },
         /** Direct access to the underlying CompositeAutoSolver for async usage. */
         composite,
-      } as any;
+      };
     }
     case 'auto':
     default: {

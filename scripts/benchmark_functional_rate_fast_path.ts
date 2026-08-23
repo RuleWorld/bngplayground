@@ -38,11 +38,14 @@ interface BenchmarkReport {
 const RUNS_PER_MODE = Number(process.env.BENCH_RUNS_PER_MODE ?? 2);
 const OUTPUT_PATH = path.join(process.cwd(), 'artifacts', 'functional_rate_jit_benchmark.json');
 
-const FALLBACK_MODEL_PATHS = [
-  'C:/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/RuleHub/Published/Mitra2019/10-egfr/egfr_ode.bngl',
-  'C:/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/RuleHub/Published/CheemalavaguJAKSTAT/Cheemalavagu_JAK_STAT.bngl',
-  'C:/Users/Achyudhan/OneDrive - University of Pittsburgh/Desktop/Achyudhan/School/PhD/Research/BioNetGen/RuleHub/Published/Mallela2022_MSAs/College_Station-Bryan_TX_College_Station-Bryan_TX.bngl',
-];
+const RULEHUB_ROOT = process.env.RULEHUB_ROOT || '';
+const FALLBACK_MODEL_PATHS = RULEHUB_ROOT
+  ? [
+      `${RULEHUB_ROOT}/Published/Mitra2019/10-egfr/egfr_ode.bngl`,
+      `${RULEHUB_ROOT}/Published/CheemalavaguJAKSTAT/Cheemalavagu_JAK_STAT.bngl`,
+      `${RULEHUB_ROOT}/Published/Mallela2022_MSAs/College_Station-Bryan_TX_College_Station-Bryan_TX.bngl`,
+    ]
+  : [];
 
 function median(values: number[]): number {
   if (values.length === 0) return 0;

@@ -103,7 +103,9 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
         const simResults = await bnglService.simulateCached(modelId, overrides, {
           method: 'ode',
           t_end: Math.max(...parsedData.map(d => d.time)),
-          n_steps: 20 // The ABC algorithm will interpolate or we can just use enough steps
+          n_steps: 20, // The ABC algorithm will interpolate or we can just use enough steps
+          includeSpeciesData: false,
+          includeExpandedNetwork: false,
         });
         return { data: simResults.data };
       };

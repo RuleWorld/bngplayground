@@ -169,7 +169,7 @@ export const RuleCartoon = React.memo<RuleCartoonProps>(({
 }) => {
   const annotated = useMemo(() => annotateRule(rule), [rule]);
 
-  const containerClasses = `w-full rounded-lg border bg-slate-50 dark:bg-slate-900/50 p-4 text-left transition dark:bg-slate-900 ${
+  const containerClasses = `w-full rounded-lg border bg-slate-50 dark:bg-slate-900/50 p-4 text-left transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 dark:bg-slate-900 ${
     isSelected
       ? 'border-sky-500 ring-2 ring-offset-2 ring-sky-500 dark:border-sky-400 dark:ring-offset-slate-900'
       : 'border-stone-200 hover:border-slate-300 dark:border-slate-600 dark:border-slate-700 dark:hover:border-slate-600'

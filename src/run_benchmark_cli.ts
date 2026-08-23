@@ -7,6 +7,12 @@ import type { BNGLModel } from '../types';
 import modelsList from './gdat_models.json';
 import { collectBnglFilesRecursive, resolveRuleHubRoot } from '../tools/rulehubLocal';
 
+const BIONETGEN_WEB_ROOT = process.env.BIONETGEN_WEB_ROOT || path.resolve(__dirname, '..');
+const resolveGdatPath = (relativePath: string): string =>
+  path.isAbsolute(relativePath)
+    ? relativePath
+    : path.resolve(BIONETGEN_WEB_ROOT, relativePath);
+
 // Simple polyfill for worker environment if needed
 if (typeof global !== 'undefined') {
     (global as any).window = {};
@@ -539,7 +545,7 @@ async function runBenchmark() {
             };
 
             let runSteps = n_steps;
-            const bng2GdatPath = (modelConfig as any).bng2GdatPath;
+            const bng2GdatPath = resolveGdatPath((modelConfig as any).bng2GdatPath);
             let refData: any = null;
 
             // Pre-load GDAT to align steps

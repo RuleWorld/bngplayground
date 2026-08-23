@@ -141,6 +141,18 @@ EOF
 
 # --- Step 6: Install artifacts ---
 echo "Installing artifacts..."
+WASM_OPT="wasm-opt"
+if [ -f "/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt" ]; then
+  WASM_OPT="/opt/flutter/bin/cache/dart-sdk/bin/utils/wasm-opt"
+fi
+
+if command -v "$WASM_OPT" &> /dev/null; then
+  echo "Optimizing libbng_loader.wasm with wasm-opt..."
+  "$WASM_OPT" -Oz --enable-exception-handling --enable-sign-ext libbng_loader.wasm -o libbng_loader.wasm
+else
+  echo "wasm-opt not found, skipping optimization for libbng_loader.wasm."
+fi
+
 cp libbng_loader.js "$SCRIPT_DIR/../services/libbng_loader.js"
 cp libbng_loader.wasm "$SCRIPT_DIR/../public/libbng.wasm"
 

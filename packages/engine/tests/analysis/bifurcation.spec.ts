@@ -75,6 +75,59 @@ describe('SteadyStateFinder', () => {
   });
 });
 
+describe('runBifurcationAnalysis', () => {
+  it('correctly executes full bifurcation analysis pipeline with reduced conserved moieties', async () => {
+    const { parseBNGLStrict } = await import('../../src/parser/BNGLParserWrapper');
+    const { generateExpandedNetwork } = await import('../../src/services/simulation/NetworkExpansion');
+    const { runBifurcationAnalysis } = await import('../../src/services/analysis/ContinuationWithConservation');
+
+    const modelCode = `begin model
+begin parameters
+  a 1.0
+  b 2.0
+  k1 1.0
+  k2 1.0
+end parameters
+begin molecule types
+  X()
+  Y()
+end molecule types
+begin seed species
+  X() a
+  Y() b
+end seed species
+begin reaction rules
+  X() -> 0 1.0
+  Y() -> X() 1.0
+  X() + Y() -> Y() + Y() 1.0
+end reaction rules
+end model
+`;
+
+    const model = parseBNGLStrict(modelCode);
+    const expandedModel = await generateExpandedNetwork(model, () => {}, () => {});
+
+    const result = runBifurcationAnalysis({
+      model,
+      expandedModel,
+      parameter: 'b',
+      startValue: 0.5,
+      endValue: 3.0,
+      maxSteps: 50,
+    });
+
+    expect(result).toBeDefined();
+    expect(result.totalPoints).toBeGreaterThan(0);
+    expect(result.stablePoints).toBeGreaterThan(0);
+    expect(result.unstablePoints).toBeGreaterThanOrEqual(0);
+    expect(result.bifurcations).toBeDefined();
+    expect(result.technical).toContain('b');
+    expect(result.technical).toContain('0.5');
+    expect(result.technical).toContain('3');
+    expect(result.strategic).toContain('Bifurcation analysis reveals');
+  });
+});
+
 describe('Continuation', () => {
   it('follows steady-state branch of saddle-node', async () => {
     const { continuation } = await import('../../src/services/analysis/Continuation');

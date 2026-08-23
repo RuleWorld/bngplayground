@@ -46,7 +46,7 @@ export { evaluateFunctionalRate, evaluateExpressionOrParse, loadEvaluator, clear
 export { requiresCompartmentResolution, resolveCompartmentVolumes } from './services/simulation/CompartmentResolver';
 export { BNGXMLWriter } from './services/simulation/BNGXMLWriter';
 export { parseGdat } from './services/simulation/GdatParser';
-export { CVODESolver, Rosenbrock23Solver, RK45Solver, AutoSolver, FastRK4Solver, SmartAutoSolver, CVODEAutoSolver, createSolver } from './services/simulation/ODESolver';
+export { CVODESolver, Rosenbrock23Solver, RK45Solver, AutoSolver, FastRK4Solver, createSolver } from './services/simulation/ODESolver';
 export { PLASimulator, simulatePLA } from './services/simulation/PLASimulator';
 export type { PLAOptions } from './services/simulation/PLASimulator';
 export { PSASimulator, simulatePSA } from './services/simulation/PSASimulator';
@@ -97,10 +97,15 @@ export type { CSRMatrix } from './services/analysis/SparseLUSolver';
 export { JITCompiler, jitCompiler } from './services/analysis/JITCompiler';
 export { analyzeNetwork, checkDeficiencyZeroTheorem } from './services/analysis/NetworkAnalysis';
 export type { NetworkAnalysis } from './services/analysis/NetworkAnalysis';
-export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings } from './services/analysis/ParameterScan';
+export { roundForInput, DEFAULT_ZERO_DELTA, formatNumber, computeDefaultBounds, generateRange, validateScanSettings, runParameterScan } from './services/analysis/ParameterScan';
+export type { ParameterScanOptions, RunParameterScanResult } from './services/analysis/ParameterScan';
 export { fitParameters } from './services/analysis/paramFitter';
 export { MassBalance } from './services/analysis/MassBalance';
 export { findUnreachableRules } from './services/analysis/UnreachableRules';
+export { assessModelMaturity } from './services/analysis/ModelMaturity';
+export type { ModelMaturityInput, ModelMaturityResult, ModelMaturityHistoryEntry, ModelMaturityParameterSource } from './services/analysis/ModelMaturity';
+export { diagnoseModel } from './services/analysis/ModelDiagnostics';
+export type { ModelDiagnostics } from './services/analysis/ModelDiagnostics';
 export type { FitAlgorithm, ParamBounds, FitProgress, FitResult, FitConfig, ExperimentalDataPoint } from './services/analysis/paramFitter';
 export { parsePEtab, parsePEtabCombined } from './services/analysis/petabImport';
 export type { PEtabProblem, PEtabParameter, PEtabObservable } from './services/analysis/petabImport';
@@ -108,6 +113,8 @@ export { computeRegularizationPenalty, pruneModel } from './services/analysis/re
 export type { RegularizationType, RegularizationConfig, RegularizationPenalty, ModelReductionResult } from './services/analysis/regularization';
 export { parseBPSL, evaluateBPSL } from './services/analysis/bpsl';
 export type { BPSLConstraint, BPSLResult, BPSLConstraintResult, ConstraintType } from './services/analysis/bpsl';
+export { analyzeHysteresis } from './services/analysis/Hysteresis';
+export type { HysteresisConfig, HysteresisResult } from './services/analysis/Hysteresis';
 
 // ── Utils ───────────────────────────────────────────────────────────
 export { SafeExpressionEvaluator } from './utils/safeExpressionEvaluator';
@@ -116,12 +123,12 @@ export { SeededRandom } from './utils/random';
 export { resolveAutoMethod, getSimulationOptionsFromParsedModel } from './utils/simulationOptions';
 export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './utils/multiPhaseSimulation';
 export { formatBNGL } from './utils/formatBNGL';
-export { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from './utils/paramUtils';
+export { parseParametersFromCode, isNumericLiteral, stripParametersBlock, reevaluateSeedSpecies } from './utils/paramUtils';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
 export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
 export { normalizeFilterNames, safeModelName, executeMultiPhaseSimulation, runSingleBatchItem } from './utils/batchRunner';
-export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions } from './utils/batchRunner';
+export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions, BatchItemStatus } from './utils/batchRunner';
 
 // ── Optimization ────────────────────────────────────────────────────────
 export { nelderMead } from './services/optimization/nelderMead';
@@ -173,6 +180,7 @@ export type { MIRIAMAnnotation, IdentifierResolver } from './services/export/MIR
 
 // ── Math Utils ──────────────────────────────────────────────────────
 export { normInv, chi2Quantile, jacobiEigenDecomposition, matMul, matTranspose, invertSymmetricMatrix } from './utils/mathUtils';
+export { infixToMathML, infixToContentMathML } from './utils/infixToMathML';
 
 // ── ZIP Utils ───────────────────────────────────────────────────────
 export { createZip } from './utils/miniZip';
@@ -185,7 +193,7 @@ export * from './services/spatial';
 export { symConst, symVar, symAdd, symMul, symDiv, symPow, symNeg, simplify, evaluate, differentiate, exprToString, exprToLatex, expand, collectTerms, factor, isPolynomial, degree, freeVariables, substitute } from './services/symbolic/SymbolicExpr';
 export type { SymExpr } from './services/symbolic/SymbolicExpr';
 export { buildSymbolicODESystem, solveSymbolicSteadyState, symbolicSensitivity, symbolicBifurcationConditions } from './services/symbolic/SymbolicODE';
-export type { SymbolicODESystem, SymbolicSteadyState } from './services/symbolic/SymbolicODE';
+export type { SymbolicODESystem, SymbolicSteadyState, SymbolicSensitivityResult } from './services/symbolic/SymbolicODE';
 export { resultant, solvePolynomialSystem, symbolicGaussianElimination, symbolicDeterminant } from './services/symbolic/PolynomialSolver';
 
 // ── Verification ────────────────────────────────────────────────────
@@ -210,15 +218,20 @@ export type { SteadyState, SteadyStateConfig } from './services/analysis/SteadyS
 export { qrEigenvalues, arnoldiEigenvalues } from './services/analysis/EigenSolver';
 export { continuation, detectBifurcation } from './services/analysis/Continuation';
 export type { ContinuationConfig, ContinuationPoint, BifurcationPoint, ContinuationResult } from './services/analysis/Continuation';
-export { continuationWithConservation } from './services/analysis/ContinuationWithConservation';
-export type { ConservedContinuationConfig, ConservedContinuationResult } from './services/analysis/ContinuationWithConservation';
+export { continuationWithConservation, runBifurcationAnalysis } from './services/analysis/ContinuationWithConservation';
+export type { ConservedContinuationConfig, ConservedContinuationResult, RunBifurcationAnalysisConfig, RunBifurcationAnalysisResult } from './services/analysis/ContinuationWithConservation';
 export { attributeBifurcation, eigenvalueSensitivity } from './services/analysis/BifurcationAttribution';
 export type { AttributionResult as BifurcationAttributionResult } from './services/analysis/BifurcationAttribution';
 export { computeNullclines } from './services/analysis/Nullclines';
 export type { NullclineConfig, NullclineResult } from './services/analysis/Nullclines';
 
 // ── Temporal Information Theory ─────────────────────────────────────
-export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges } from './services/analysis/ReactionInformationTheory';
+export { analyzeReactionInformation, compareCausalGraphs, buildStructuralEdges, summarizeTemporalAnalysis } from './services/analysis/ReactionInformationTheory';
+export type { TemporalAnalysisSummary } from './services/analysis/ReactionInformationTheory';
+
+// ── Phase Handoff ───────────────────────────────────────────────────
+export { analyzePhaseHandoff } from './services/analysis/PhaseHandoff';
+export type { PhaseHandoffConfig, PhaseHandoffResult } from './services/analysis/PhaseHandoff';
 export {
     extractMoleculeNames,
     parseMoleculeTokens,
@@ -306,5 +319,5 @@ export { generateDosingSchedule, dosingToSimulationPhases } from './services/pkp
 export type { DosingEvent, DosingRegimen, StandardDosingConfig } from './services/pkpd/DosingSchedule';
 export { computePKMetrics, trapezoidalAUC, estimateTerminalHalfLife, nonCompartmentalAnalysis } from './services/pkpd/PKMetrics';
 export type { PKMetricsResult } from './services/pkpd/PKMetrics';
-export { generatePopulation, populationSimulation } from './services/pkpd/VirtualPopulation';
+export { generatePopulation, populationSimulation, summarizePopulationParameters } from './services/pkpd/VirtualPopulation';
 export type { PopulationParameter, VirtualPopulationConfig, VirtualPatient, PopulationSimulationResult } from './services/pkpd/VirtualPopulation';

@@ -1,5 +1,15 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { handleDoseResponse } from '../src/handlers/doseResponse.js';
+import * as engine from '@bngplayground/engine';
+
+vi.mock('@bngplayground/engine', async (importOriginal) => {
+  const original = await importOriginal<typeof import('@bngplayground/engine')>();
+  return {
+    ...original,
+    computeDoseResponse: vi.fn(original.computeDoseResponse),
+    computeDoseResponseBySimulation: vi.fn(original.computeDoseResponseBySimulation),
+  };
+});
 
 const SATURATION_MODEL = `begin model
 begin parameters
@@ -109,4 +119,44 @@ describe('dose_response handler', () => {
         expect(body.curves[0].doses.length).toBeGreaterThan(0);
         expect(body.curves[0].responses.length).toBe(body.curves[0].doses.length);
       }, 30000);
+
+    it('rejects empty or blank code input', async () => {
+        const result = await handleDoseResponse({
+            code: '   ',
+            input_parameter: 'L_total',
+            input_min: 0.1,
+            input_max: 10,
+            observables: ['Bound'],
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error).toMatch(/must be a non-empty string/i);
+    });
+
+    it('returns structured error when both root-finding and fallback simulation fail to produce points', async () => {
+        const spyRootfind = vi.mocked(engine.computeDoseResponse);
+        const spySim = vi.mocked(engine.computeDoseResponseBySimulation);
+
+        spyRootfind.mockResolvedValueOnce({
+            inputParameter: 'L_total',
+            failedDoses: [],
+            curves: [{ observable: 'Bound', doses: [], responses: [] }],
+        } as unknown as Awaited<ReturnType<typeof engine.computeDoseResponse>>);
+
+        spySim.mockResolvedValueOnce({
+            failedDoses: [],
+            curves: [{ observable: 'Bound', doses: [], responses: [] }],
+        });
+
+        const result = await handleDoseResponse({
+            code: SATURATION_MODEL,
+            input_parameter: 'L_total',
+            input_min: 0.1,
+            input_max: 10,
+            observables: ['Bound'],
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error).toMatch(/both steady-state root-finding and fallback simulation failed to converge/i);
+    });
 });

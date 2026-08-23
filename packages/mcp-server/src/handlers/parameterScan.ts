@@ -1,31 +1,10 @@
-import { generateRange, simulate, loadEvaluator, BNGLParser } from '@bngplayground/engine';
-import { ToolArgs, ToolResult } from '../types/index.js';
+import { runParameterScan } from '@bngplayground/engine';
+import { ToolArgs, ToolResult, ParameterScanResult, MCPErrorResult } from '../types/index.js';
 import { parameterScanArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, buildSimulationOptions, expandModel, assertScannableParameter, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, buildSimulationOptions, expandModel, assertScannableParameter } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
-function reevaluateSeedSpecies(model: any, seedExpressions: Map<string, string>): void {
-  const paramMap = new Map<string, number>(Object.entries(model.parameters ?? {}));
-  const functionMap = new Map<string, { args: string[]; expr: string }>(
-    (model.functions ?? []).map((fn: any) => [fn.name, { args: fn.args ?? [], expr: fn.expression ?? '' }]),
-  );
-
-  for (const species of model.species ?? []) {
-    const fallbackExpression = seedExpressions.get(species.name);
-    const expr = typeof species.initialExpression === 'string'
-      ? species.initialExpression.trim()
-      : typeof fallbackExpression === 'string'
-        ? fallbackExpression.trim()
-        : '';
-    if (!expr) continue;
-    const evaluated = BNGLParser.evaluateExpression(expr, paramMap, undefined, functionMap);
-    if (Number.isFinite(evaluated)) {
-      species.initialConcentration = evaluated;
-    }
-  }
-}
-
-export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<any>> {
+export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<ParameterScanResult | MCPErrorResult>> {
   try {
     const parsedArgs = parseArgs('parameter_scan', parameterScanArgsSchema, args);
     if (parsedArgs.parameter2 !== undefined) {
@@ -51,85 +30,28 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<an
     }
 
     const expandedModel = await expandModel(baseModel);
-    const xValues = generateRange(parsedArgs.start, parsedArgs.end, parsedArgs.steps, parsedArgs.logarithmic ?? false);
-    const yValues = parsedArgs.parameter2 !== undefined
-      ? generateRange(parsedArgs.start2!, parsedArgs.end2!, parsedArgs.steps2!, parsedArgs.logarithmic ?? false)
-      : [];
-
-    if (xValues.length * Math.max(1, yValues.length || 1) > 400) {
-      throw new Error('parameter_scan supports at most 400 simulation combinations per request.');
-    }
-
     const simulationOptions = buildSimulationOptions(parsedArgs);
 
-    if (parsedArgs.parameter2 === undefined) {
-      const observables: Record<string, number[]> = {};
-      expandedModel.observables.forEach((observable) => {
-        observables[observable.name] = [];
-      });
-
-      await loadEvaluator();
-      for (const value of xValues) {
-        const runModel = cloneExpandedModel(expandedModel);
-        runModel.parameters[parsedArgs.parameter] = value;
-        reevaluateSeedSpecies(runModel, seedExpressions);
-        updateMassActionRates(runModel);
-        const result = await simulate(0, runModel, simulationOptions, {
-          checkCancelled: () => { },
-          postMessage: () => { },
-        });
-        const lastPoint = result.data.at(-1) ?? {};
-        Object.keys(observables).forEach((observableName) => {
-          const rawValue = lastPoint[observableName as keyof typeof lastPoint];
-          const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? 0);
-          observables[observableName].push(Number.isFinite(numericValue) ? numericValue : 0);
-        });
-      }
-
-      return createToolResult({
-        mode: '1d',
+    const scanResult = await runParameterScan(
+      expandedModel,
+      {
         parameter: parsedArgs.parameter,
-        xValues,
-        observables,
-      });
-    }
+        start: parsedArgs.start,
+        end: parsedArgs.end,
+        steps: parsedArgs.steps,
+        logarithmic: parsedArgs.logarithmic,
+        parameter2: parsedArgs.parameter2,
+        start2: parsedArgs.start2,
+        end2: parsedArgs.end2,
+        steps2: parsedArgs.steps2,
+      },
+      simulationOptions,
+      seedExpressions
+    );
 
-    const observables: Record<string, number[][]> = {};
-    expandedModel.observables.forEach((observable) => {
-      observables[observable.name] = yValues.map(() => new Array(xValues.length).fill(0));
-    });
-
-    await loadEvaluator();
-    for (let yIndex = 0; yIndex < yValues.length; yIndex += 1) {
-      for (let xIndex = 0; xIndex < xValues.length; xIndex += 1) {
-        const runModel = cloneExpandedModel(expandedModel);
-        runModel.parameters[parsedArgs.parameter] = xValues[xIndex];
-        runModel.parameters[parsedArgs.parameter2] = yValues[yIndex];
-        reevaluateSeedSpecies(runModel, seedExpressions);
-        updateMassActionRates(runModel);
-        const result = await simulate(0, runModel, simulationOptions, {
-          checkCancelled: () => { },
-          postMessage: () => { },
-        });
-        const lastPoint = result.data.at(-1) ?? {};
-        Object.keys(observables).forEach((observableName) => {
-          const rawValue = lastPoint[observableName as keyof typeof lastPoint];
-          const numericValue = typeof rawValue === 'number' ? rawValue : Number(rawValue ?? 0);
-          observables[observableName][yIndex][xIndex] = Number.isFinite(numericValue) ? numericValue : 0;
-        });
-      }
-    }
-
-    return createToolResult({
-      mode: '2d',
-      parameter: parsedArgs.parameter,
-      parameter2: parsedArgs.parameter2,
-      xValues,
-      yValues,
-      observables,
-    });
+    return createToolResult(scanResult as any);
   } catch (error) {
-    const structured = structureError(error instanceof Error ? error : new Error(String(error)));
+    const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
     return createToolResult(structured);
   }
 }

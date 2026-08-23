@@ -73,6 +73,7 @@ gdat_comparison_output/
 *.net
 *.m
 *.xml
+!tests/fixtures/sbml/*.xml
 
 # Debug and trace output files (txt)
 *.txt
@@ -170,6 +171,7 @@ bng_exec_*/
 test-results/
 
 # Workspace repositories (Root-relative to avoid matching source)
+/RuleHub/
 /nfsim/
 /nfsim-src/
 /bionetgen/
@@ -254,5 +256,16 @@ wasm-sundials_deps/
 # Local npm tarballs
 three-*.tgz
 
+slurm/
+
+# Local build config
+run_build.bat
+
+# Fuzzer ephemeral output — regenerated each run, never committed (verified ignored)
+tests/fixtures/fuzzer/
+packages/engine/tests/fixtures/fuzzer/
+fuzzer_output*.txt
+
 # End of .gitignore
 coverage
+/RuleHub/

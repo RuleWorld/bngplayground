@@ -109,7 +109,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
       workerRef.current = worker;
 
       worker.onmessage = (event: MessageEvent<MultiscaleWorkerResponse>) => {
-        const msg = event.data;
+        const msg = event.data ?? { type: 'error', message: 'Empty or undefined worker response' };
 
         switch (msg.type) {
           case 'progress':
@@ -139,6 +139,10 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
           case 'error':
             setError(msg.message);
             setIsRunning(false);
+            if (workerRef.current) {
+              workerRef.current.terminate();
+              workerRef.current = null;
+            }
             break;
         }
       };
@@ -146,11 +150,29 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
       worker.onerror = (err) => {
         setError(err.message || 'Worker error');
         setIsRunning(false);
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
+      };
+
+      worker.onmessageerror = (event) => {
+        console.error('[MultiscaleTab] Worker failed to deserialize message:', event.data);
+        setError('Multiscale worker failed to deserialize message');
+        setIsRunning(false);
+        if (workerRef.current) {
+          workerRef.current.terminate();
+          workerRef.current = null;
+        }
       };
 
       const msg: MultiscaleWorkerRequest = { type: 'run_from_definition', definition: parsed };
       worker.postMessage(msg);
     } catch (err: any) {
+      if (workerRef.current) {
+        workerRef.current.terminate();
+        workerRef.current = null;
+      }
       setError(err.message || 'Failed to start simulation');
       setIsRunning(false);
     }
@@ -180,7 +202,9 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
       const parsed = JSON.parse(definition);
       maxX = parsed.domain?.size?.[0] || 200;
       maxY = parsed.domain?.size?.[1] || 200;
-    } catch {}
+    } catch {
+      // Ignore parse errors for sizing fallback
+    }
 
     const scaleX = w / maxX;
     const scaleY = h / maxY;

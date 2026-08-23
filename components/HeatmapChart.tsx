@@ -28,9 +28,6 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
 }) => {
   const [theme] = useTheme();
   const isDark = theme === 'dark';
-  if (!data || data.length === 0) {
-    return <div className="text-sm text-slate-500 dark:text-slate-400">No data to render</div>;
-  }
 
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [containerSize, setContainerSize] = useState<{ width: number; height: number } | null>(null);
@@ -66,16 +63,45 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
   const { xs, ys } = useMemo(() => {
     const xSet = new Set<number>();
     const ySet = new Set<number>();
-    for (let i = 0; i < data.length; i++) {
-      const d = data[i];
-      xSet.add(d.x);
-      ySet.add(d.y);
+    if (data) {
+      for (let i = 0; i < data.length; i++) {
+        const d = data[i];
+        xSet.add(d.x);
+        ySet.add(d.y);
+      }
     }
     return {
       xs: Array.from(xSet).sort((a, b) => a - b),
       ys: Array.from(ySet).sort((a, b) => a - b),
     };
   }, [data]);
+
+  type TooltipState = {
+    x: number;
+    y: number;
+    value: number;
+    left: number;
+    top: number;
+    pinned: boolean;
+  } | null;
+
+  const [tooltip, setTooltip] = useState<TooltipState>(null);
+
+  // Map x, y values to column/row indices
+  const xIndex = useMemo(() => {
+    const m = new Map<number, number>();
+    xs.forEach((v, i) => m.set(v, i));
+    return m;
+  }, [xs]);
+  const yIndex = useMemo(() => {
+    const m = new Map<number, number>();
+    ys.forEach((v, i) => m.set(v, i));
+    return m;
+  }, [ys]);
+
+  if (!data || data.length === 0) {
+    return <div className="text-sm text-slate-500 dark:text-slate-400">No data to render</div>;
+  }
 
   const cols = xs.length;
   const rows = ys.length;
@@ -134,29 +160,6 @@ export const HeatmapChart: React.FC<HeatmapChartProps> = ({
     const alpha = 0.15 + 0.8 * Math.min(Math.max(ratio, 0), 1);
     return `rgba(37, 99, 235, ${alpha.toFixed(2)})`;
   };
-
-  type TooltipState = {
-    x: number;
-    y: number;
-    value: number;
-    left: number;
-    top: number;
-    pinned: boolean;
-  } | null;
-
-  const [tooltip, setTooltip] = useState<TooltipState>(null);
-
-  // Map x, y values to column/row indices
-  const xIndex = useMemo(() => {
-    const m = new Map<number, number>();
-    xs.forEach((v, i) => m.set(v, i));
-    return m;
-  }, [xs]);
-  const yIndex = useMemo(() => {
-    const m = new Map<number, number>();
-    ys.forEach((v, i) => m.set(v, i));
-    return m;
-  }, [ys]);
 
   const setHoverTooltip = (d: HeatmapDatum, clientX: number, clientY: number) => {
     const container = containerRef.current;

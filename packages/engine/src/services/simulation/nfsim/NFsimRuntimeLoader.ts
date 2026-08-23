@@ -1,70 +1,118 @@
-export type NFsimModuleFactory = (options?: Record<string, unknown>) => Promise<any> | any;
+export interface NFsimModule {
+  run?: (xml: string, options?: Record<string, unknown>) => Promise<string> | string;
+  runNFsim?: (xml: string, options?: Record<string, unknown>) => string;
+  resetNFsim?: () => void;
+  reset?: () => void;
+  ABORT?: boolean;
+  EXITSTATUS?: number;
+  print?: (s: string) => void;
+  printErr?: (s: string) => void;
+  FS?: {
+    writeFile: (path: string, data: string | ArrayBufferView, opts?: Record<string, unknown>) => void;
+    readFile: (path: string, opts?: Record<string, unknown>) => string | Uint8Array;
+    unlink: (path: string) => void;
+  };
+  callMain?: (args: string[]) => void;
+}
+
+export type NFsimModuleFactory = (options?: Record<string, unknown>) => Promise<NFsimModule> | NFsimModule;
 
 export type NFsimRuntime = {
   run: (xml: string, options: Record<string, unknown>) => Promise<string> | string;
   reset?: () => void;
 };
 
+export interface NFsimOptions extends Record<string, unknown> {
+  progressCallback?: (msg: string) => void;
+  modelName?: string;
+  xmlPath?: string;
+  outputPath?: string;
+  t_end?: number;
+  n_steps?: number;
+  seed?: number;
+  cb?: boolean;
+  speciesPath?: string;
+  verbose?: boolean;
+}
+
+export interface NFsimModuleExports {
+  default?: NFsimModuleFactory;
+  createNFsimModule?: NFsimModuleFactory;
+  NFsimModule?: NFsimModuleFactory;
+}
+
+interface HTMLScriptElementLike {
+  src: string;
+  onload: (() => void) | null;
+  onerror: (() => void) | null;
+}
+
+interface DocumentLike {
+  createElement(tagName: 'script'): HTMLScriptElementLike;
+  head: {
+    appendChild(node: HTMLScriptElementLike): void;
+  };
+}
+
+declare global {
+  var __nfsimRuntime: NFsimRuntime | undefined;
+  var __nfsimModuleUrl: string | undefined;
+  var __nfsimWasmUrl: string | undefined;
+  var __nfsimModuleFactory: NFsimModuleFactory | undefined;
+  var createNFsimModule: NFsimModuleFactory | undefined;
+  var Module: Record<string, unknown> | undefined;
+}
+
 const getGlobalRuntime = (): NFsimRuntime | null => {
-  const globalAny = globalThis as unknown as { __nfsimRuntime?: NFsimRuntime };
-  return globalAny.__nfsimRuntime ?? null;
+  return globalThis.__nfsimRuntime ?? null;
 };
 
 const setGlobalRuntime = (runtime: NFsimRuntime): void => {
-  const globalAny = globalThis as unknown as { __nfsimRuntime?: NFsimRuntime };
-  globalAny.__nfsimRuntime = runtime;
+  globalThis.__nfsimRuntime = runtime;
 };
 
 const getRuntimeHints = () => {
-  const globalAny = globalThis as unknown as {
-    __nfsimModuleUrl?: string;
-    __nfsimWasmUrl?: string;
-    __nfsimModuleFactory?: NFsimModuleFactory;
-  };
   return {
-    moduleUrl: globalAny.__nfsimModuleUrl,
-    wasmUrl: globalAny.__nfsimWasmUrl,
-    factory: globalAny.__nfsimModuleFactory
+    moduleUrl: globalThis.__nfsimModuleUrl,
+    wasmUrl: globalThis.__nfsimWasmUrl,
+    factory: globalThis.__nfsimModuleFactory
   };
 };
 
-const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
+const createRuntimeFromModule = (module: NFsimModule | null | undefined): NFsimRuntime | null => {
   if (!module) return null;
 
   // Priority 1: runNFsim wrapper (provided by nfsim.js – includes all arg handling,
   // ExitStatus wrapping, -utl, error checks, etc.).  Use this before falling back to
   // raw FS + callMain so we don't re-implement the same logic with missing pieces.
-  if (typeof module.runNFsim === 'function') {
+  const runNFsimFn = module.runNFsim;
+  if (typeof runNFsimFn === 'function') {
     const run = (xml: string, options: Record<string, unknown> = {}) => {
       if (typeof xml !== 'string') {
         throw new Error('NFsim run expects XML text input.');
       }
-      const opts = options ?? {};
-      const progressCb = typeof (opts as any).progressCallback === 'function'
-        ? (opts as any).progressCallback as (msg: string) => void
-        : undefined;
+      const opts = options as NFsimOptions;
+      const progressCb = opts.progressCallback;
 
       // Wire module.print/printErr to the progress callback so NFsim stdout is forwarded.
       let oldPrint: ((s: string) => void) | undefined;
       let oldPrintErr: ((s: string) => void) | undefined;
-      if (progressCb && module) {
+      if (progressCb) {
         if (typeof module.print === 'function') {
           oldPrint = module.print.bind(module);
-          module.print = (s: any) => { try { progressCb(String(s)); } catch { /* ignore */ } try { oldPrint?.(s); } catch { /* ignore */ } };
+          module.print = (s: string) => { try { progressCb(String(s)); } catch { /* ignore */ } try { oldPrint?.(s); } catch { /* ignore */ } };
         }
         if (typeof module.printErr === 'function') {
           oldPrintErr = module.printErr.bind(module);
-          module.printErr = (s: any) => { try { progressCb(String(s)); } catch { /* ignore */ } try { oldPrintErr?.(s); } catch { /* ignore */ } };
+          module.printErr = (s: string) => { try { progressCb(String(s)); } catch { /* ignore */ } try { oldPrintErr?.(s); } catch { /* ignore */ } };
         }
       }
 
       try {
         // Reset ABORT/EXITSTATUS so the module can be reused across multiple simulations.
-        if (module) {
-          module.ABORT = false;
-          module.EXITSTATUS = 0;
-        }
-        return module.runNFsim(xml, opts);
+        module.ABORT = false;
+        module.EXITSTATUS = 0;
+        return runNFsimFn(xml, opts);
       } finally {
         if (progressCb) {
           if (oldPrint) module.print = oldPrint;
@@ -72,33 +120,37 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         }
       }
     };
-    const reset = typeof module.resetNFsim === 'function'
-      ? module.resetNFsim.bind(module)
-      : module.reset?.bind(module);
+    const resetNFsimFn = module.resetNFsim;
+    const resetFn = module.reset;
+    const reset = typeof resetNFsimFn === 'function'
+      ? resetNFsimFn.bind(module)
+      : (typeof resetFn === 'function' ? resetFn.bind(module) : undefined);
     return { run, reset };
   }
 
-  const hasFs = module.FS && typeof module.FS.writeFile === 'function' && typeof module.FS.readFile === 'function';
-  const hasCallMain = typeof module.callMain === 'function';
+  const fs = module.FS;
+  const callMain = module.callMain;
+  const hasFs = fs && typeof fs.writeFile === 'function' && typeof fs.readFile === 'function';
+  const hasCallMain = typeof callMain === 'function';
 
-  if (hasFs && hasCallMain) {
+  if (fs && hasFs && callMain && hasCallMain) {
     const run = (xml: string, options: Record<string, unknown> = {}) => {
       if (typeof xml !== 'string') {
         throw new Error('NFsim run expects XML text input.');
       }
-      const opts = options ?? {};
-      const progressCb = typeof (opts as any).progressCallback === 'function' ? (opts as any).progressCallback as (msg: string) => void : undefined;
-      const modelName = (opts as any).modelName || 'model';
-      const xmlPath = (opts as any).xmlPath || `/${modelName}.xml`;
-      const outPath = (opts as any).outputPath || `/${modelName}.gdat`;
+      const opts = options as NFsimOptions;
+      const progressCb = opts.progressCallback;
+      const modelName = opts.modelName || 'model';
+      const xmlPath = opts.xmlPath || `/${modelName}.xml`;
+      const outPath = opts.outputPath || `/${modelName}.gdat`;
 
       try {
-        module.FS.unlink(xmlPath);
+        fs.unlink(xmlPath);
       } catch {
         // ignore
       }
       try {
-        module.FS.unlink(outPath);
+        fs.unlink(outPath);
       } catch {
         // ignore
       }
@@ -110,9 +162,9 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
       let origConsoleError: typeof console.error | undefined;
 
       if (progressCb) {
-        if (module && typeof module.print === 'function') {
+        if (typeof module.print === 'function') {
           oldPrint = module.print.bind(module);
-          module.print = (s: any) => {
+          module.print = (s: string) => {
             try {
               progressCb(String(s));
             } catch {
@@ -125,9 +177,9 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
             }
           };
         }
-        if (module && typeof module.printErr === 'function') {
+        if (typeof module.printErr === 'function') {
           oldPrintErr = module.printErr.bind(module);
-          module.printErr = (s: any) => {
+          module.printErr = (s: string) => {
             try {
               progressCb(String(s));
             } catch {
@@ -144,7 +196,7 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         // Also wrap global console so modules that use console.log still emit progress
         origConsoleLog = console.log;
         origConsoleError = console.error;
-        console.log = (...args: any[]) => {
+        console.log = (...args: Parameters<typeof console.log>) => {
           try {
             progressCb(args.map(String).join(' '));
           } catch {
@@ -152,7 +204,7 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
           }
           origConsoleLog?.(...args);
         };
-        console.error = (...args: any[]) => {
+        console.error = (...args: Parameters<typeof console.error>) => {
           try {
             progressCb(args.map(String).join(' '));
           } catch {
@@ -162,53 +214,52 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         };
       }
 
-      module.FS.writeFile(xmlPath, xml);
+      fs.writeFile(xmlPath, xml);
 
       const args: string[] = ['-xml', xmlPath, '-o', outPath];
-      if ((opts as any).t_end !== undefined) {
-        args.push('-sim', String((opts as any).t_end));
+      if (opts.t_end !== undefined) {
+        args.push('-sim', String(opts.t_end));
       }
-      if ((opts as any).n_steps !== undefined) {
-        args.push('-oSteps', String((opts as any).n_steps));
+      if (opts.n_steps !== undefined) {
+        args.push('-oSteps', String(opts.n_steps));
       }
-      if ((opts as any).seed !== undefined) {
-        args.push('-seed', String((opts as any).seed));
+      if (opts.seed !== undefined) {
+        args.push('-seed', String(opts.seed));
       }
-      if ((opts as any).cb) {
+      if (opts.cb) {
         args.push('-cb');
       }
-      if ((opts as any).speciesPath) {
-        args.push('-ss', String((opts as any).speciesPath));
+      if (opts.speciesPath) {
+        args.push('-ss', String(opts.speciesPath));
       }
-      if ((opts as any).verbose) {
+      if (opts.verbose) {
         args.push('-v');
       }
 
       // Reset ABORT flag and EXITSTATUS before each callMain to allow reuse of the same Emscripten module
       // if it was previously halted or exited.
-      if (module) {
-        module.ABORT = false;
-        module.EXITSTATUS = 0;
-        // Some Emscripten versions use NO_EXIT_RUNTIME but may still set this
-        if (typeof module.reset === 'function') {
-          try {
-            module.reset();
-          } catch (e) {
-            console.warn('[NFsimRuntimeLoader] module.reset() failed', e);
-          }
+      module.ABORT = false;
+      module.EXITSTATUS = 0;
+      // Some Emscripten versions use NO_EXIT_RUNTIME but may still set this
+      const resetFn = module.reset;
+      if (typeof resetFn === 'function') {
+        try {
+          resetFn();
+        } catch (e) {
+          console.warn('[NFsimRuntimeLoader] module.reset() failed', e);
         }
       }
 
       let callMainError: unknown = null;
       try {
-        module.callMain(args);
+        callMain(args);
       } catch (e: unknown) {
         // Emscripten throws ExitStatus (an object with a `status` property) when the
         // process exits – even on clean exit (status 0).  Treat status-0 as success and
         // fall through so we can read the output file.  Any other value is a real error.
-        const isExitStatus = e != null && typeof (e as any).status === 'number';
+        const isExitStatus = e != null && typeof e === 'object' && 'status' in e && typeof (e as { status: unknown }).status === 'number';
         if (isExitStatus) {
-          const code = (e as any).status as number;
+          const code = (e as { status: number }).status;
           if (code !== 0) {
             callMainError = new Error(`NFsim exited with code ${code}`);
           }
@@ -230,33 +281,35 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         throw callMainError;
       }
 
-      const output = module.FS.readFile(outPath, { encoding: 'utf8' });
+      const output = fs.readFile(outPath, { encoding: 'utf8' });
       return typeof output === 'string' ? output : String(output);
     };
 
-    return { run, reset: module.reset?.bind(module) };
+    const resetFn = module.reset;
+    return { run, reset: typeof resetFn === 'function' ? resetFn.bind(module) : undefined };
   }
 
-  if (typeof module.run === 'function') {
+  const moduleRun = module.run;
+  if (typeof moduleRun === 'function') {
     const run = (xml: string, options: Record<string, unknown> = {}) => {
-      const opts = options ?? {};
-      const progressCb = typeof (opts as any).progressCallback === 'function' ? (opts as any).progressCallback as (msg: string) => void : undefined;
+      const opts = options as NFsimOptions;
+      const progressCb = opts.progressCallback;
       let origConsoleLog: typeof console.log | undefined;
       let origConsoleError: typeof console.error | undefined;
       if (progressCb) {
         origConsoleLog = console.log;
         origConsoleError = console.error;
-        console.log = (...args: any[]) => {
+        console.log = (...args: Parameters<typeof console.log>) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleLog?.(...args);
         };
-        console.error = (...args: any[]) => {
+        console.error = (...args: Parameters<typeof console.error>) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleError?.(...args);
         };
       }
       try {
-        return module.run(xml, options);
+        return moduleRun(xml, options);
       } finally {
         if (progressCb) {
           if (origConsoleLog) console.log = origConsoleLog;
@@ -264,29 +317,31 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         }
       }
     };
-    return { run, reset: module.reset?.bind(module) };
+    const resetFn = module.reset;
+    return { run, reset: typeof resetFn === 'function' ? resetFn.bind(module) : undefined };
   }
 
-  if (typeof module.runNFsim === 'function') {
+  const runNFsimFn2 = module.runNFsim;
+  if (typeof runNFsimFn2 === 'function') {
     const run = (xml: string, options: Record<string, unknown> = {}) => {
-      const opts = options ?? {};
-      const progressCb = typeof (opts as any).progressCallback === 'function' ? (opts as any).progressCallback as (msg: string) => void : undefined;
+      const opts = options as NFsimOptions;
+      const progressCb = opts.progressCallback;
       let origConsoleLog: typeof console.log | undefined;
       let origConsoleError: typeof console.error | undefined;
       if (progressCb) {
         origConsoleLog = console.log;
         origConsoleError = console.error;
-        console.log = (...args: any[]) => {
+        console.log = (...args: Parameters<typeof console.log>) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleLog?.(...args);
         };
-        console.error = (...args: any[]) => {
+        console.error = (...args: Parameters<typeof console.error>) => {
           try { progressCb(args.map(String).join(' ')); } catch { /* ignore */ }
           origConsoleError?.(...args);
         };
       }
       try {
-        return module.runNFsim(xml, options);
+        return runNFsimFn2(xml, options);
       } finally {
         if (progressCb) {
           if (origConsoleLog) console.log = origConsoleLog;
@@ -294,13 +349,14 @@ const createRuntimeFromModule = (module: any): NFsimRuntime | null => {
         }
       }
     };
-    return { run, reset: module.reset?.bind(module) };
+    const resetFn = module.reset;
+    return { run, reset: typeof resetFn === 'function' ? resetFn.bind(module) : undefined };
   }
 
   return null;
 };
 
-const importModuleFromUrl = async (url: string): Promise<any> => {
+const importModuleFromUrl = async (url: string): Promise<NFsimModuleExports> => {
   const response = await fetch(url);
   if (!response.ok) {
     throw new Error(
@@ -322,27 +378,32 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
   // Solution: indirect eval `(0, eval)(text)` evaluates in global scope. The var
   // createNFsimModule hoists to the worker's global scope. Append code to assign
   // it to self explicitly so we can retrieve it.
-  const globalAny = globalThis as any;
   const augmented = text + '\n;if(typeof createNFsimModule!=="undefined")self.createNFsimModule=createNFsimModule;\n';
 
   // Strategy 1: <script> tag in main thread (has document)
-  if (typeof globalThis !== 'undefined' && (globalThis as any).document) {
+  const hasDocument = typeof globalThis !== 'undefined' && 'document' in globalThis && (globalThis as { document?: unknown }).document;
+  if (hasDocument) {
     await new Promise<void>((resolve, reject) => {
       const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
-      const script = (globalThis as any).document.createElement('script');
-      script.src = blobUrl;
-      script.onload = () => { URL.revokeObjectURL(blobUrl); resolve(); };
-      script.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Failed to execute nfsim.js via script tag')); };
-      (globalThis as any).document.head.appendChild(script);
+      const doc = (globalThis as unknown as { document?: DocumentLike }).document;
+      if (doc) {
+        const script = doc.createElement('script');
+        script.src = blobUrl;
+        script.onload = () => { URL.revokeObjectURL(blobUrl); resolve(); };
+        script.onerror = () => { URL.revokeObjectURL(blobUrl); reject(new Error('Failed to execute nfsim.js via script tag')); };
+        doc.head.appendChild(script);
+      } else {
+        reject(new Error('Document not found'));
+      }
     });
   } else {
     // Strategy 2: Worker context (including module workers).
     // Try classic worker importScripts first (fast, synchronous).
     let loaded = false;
-    if (typeof (globalThis as any).importScripts === 'function') {
+    if (typeof (globalThis as unknown as { importScripts?: unknown }).importScripts === 'function') {
       const blobUrl = URL.createObjectURL(new Blob([augmented], { type: 'text/javascript' }));
       try {
-        (globalThis as any).importScripts(blobUrl);
+        (globalThis as unknown as { importScripts: (url: string) => void }).importScripts(blobUrl);
         loaded = true;
       } catch {
         // importScripts threw (e.g. module workers where it exists but is
@@ -356,11 +417,11 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
       const esmAugmented = text + '\n;export { createNFsimModule };\nexport default createNFsimModule;\n';
       const blobUrl = URL.createObjectURL(new Blob([esmAugmented], { type: 'application/javascript' }));
       try {
-        const mod = await import(/* @vite-ignore */ blobUrl);
+        const mod = await import(/* @vite-ignore */ blobUrl) as NFsimModuleExports;
         if (mod && mod.createNFsimModule) {
-          globalAny.createNFsimModule = mod.createNFsimModule;
+          globalThis.createNFsimModule = mod.createNFsimModule;
         } else if (mod && mod.default) {
-          globalAny.createNFsimModule = mod.default;
+          globalThis.createNFsimModule = mod.default;
         }
       } catch (err) {
         throw new Error('Failed to load nfsim.js via dynamic import in module worker', { cause: err });
@@ -371,14 +432,14 @@ const importModuleFromUrl = async (url: string): Promise<any> => {
   }
 
   // After evaluation, createNFsimModule should be on globalThis/self
-  if (typeof globalAny.createNFsimModule === 'function') {
-    return { default: globalAny.createNFsimModule, createNFsimModule: globalAny.createNFsimModule };
+  if (typeof globalThis.createNFsimModule === 'function') {
+    return { default: globalThis.createNFsimModule, createNFsimModule: globalThis.createNFsimModule };
   }
 
   // Last resort: try blob URL import (may work for true ESM nfsim builds)
   const blobUrl = URL.createObjectURL(new Blob([text], { type: 'text/javascript' }));
   try {
-    const mod = await import(/* @vite-ignore */ blobUrl);
+    const mod = await import(/* @vite-ignore */ blobUrl) as NFsimModuleExports;
     return mod;
   } finally {
     URL.revokeObjectURL(blobUrl);
@@ -395,19 +456,19 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
     initPromise = (async () => {
       const { moduleUrl, wasmUrl, factory } = getRuntimeHints();
 
-      const baseUrl = typeof import.meta !== 'undefined' && (import.meta as any).env?.BASE_URL
-        ? (import.meta as any).env.BASE_URL
+      const baseUrl = typeof import.meta !== 'undefined' && (import.meta as unknown as { env?: { BASE_URL?: string } }).env?.BASE_URL
+        ? (import.meta as unknown as { env: { BASE_URL: string } }).env.BASE_URL
         : '/';
       const normalizedBase = baseUrl.endsWith('/') ? baseUrl : `${baseUrl}/`;
       const resolvedWasmUrl = wasmUrl ?? `${normalizedBase}nfsim.wasm`;
 
       if (factory && typeof factory === 'function') {
-        const moduleArg = {
+        const moduleArg: Record<string, unknown> = {
           locateFile: (p: string) => (p.endsWith('.wasm') ? resolvedWasmUrl : p),
           print: (msg: string) => console.log(`[NFsim Out] ${msg}`),
           printErr: (msg: string) => console.error(`[NFsim Err] ${msg}`)
-        } as Record<string, unknown>;
-        (globalThis as unknown as { Module?: Record<string, unknown> }).Module = moduleArg;
+        };
+        globalThis.Module = moduleArg;
         const module = await factory(moduleArg);
         const runtime = createRuntimeFromModule(module);
         if (!runtime) {
@@ -425,16 +486,16 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
       console.log(`[NFsimRuntimeLoader] Loading NFsim from ${url}`);
       try {
         const mod = await importModuleFromUrl(url);
-        const factoryFn = (mod?.default ?? mod?.createNFsimModule ?? mod?.NFsimModule) as NFsimModuleFactory | undefined;
+        const factoryFn = (mod.default ?? mod.createNFsimModule ?? mod.NFsimModule);
         if (typeof factoryFn === 'function') {
-          const moduleArg = {
+          const moduleArg: Record<string, unknown> = {
             locateFile: (p: string) => (p.endsWith('.wasm') ? resolvedWasmUrl : p),
             print: (msg: string) => console.log(`[NFsim Out] ${msg}`),
             printErr: (msg: string) => console.error(`[NFsim Err] ${msg}`)
-          } as Record<string, unknown>;
-          (globalThis as unknown as { Module?: Record<string, unknown> }).Module = moduleArg;
+          };
+          globalThis.Module = moduleArg;
           const module = await factoryFn(moduleArg);
-          const runtime = createRuntimeFromModule(module) ?? createRuntimeFromModule(mod);
+          const runtime = createRuntimeFromModule(module) ?? createRuntimeFromModule(mod as unknown as NFsimModule);
           if (!runtime) {
             throw new Error(
               'NFsim JS module loaded and initialized, but the resulting object does not expose a compatible runtime. ' +
@@ -446,7 +507,7 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
           return runtime;
         }
 
-        const directRuntime = createRuntimeFromModule(mod);
+        const directRuntime = createRuntimeFromModule(mod as unknown as NFsimModule);
         if (directRuntime) {
           setGlobalRuntime(directRuntime);
           return directRuntime;
@@ -472,4 +533,3 @@ export async function ensureNFsimRuntime(): Promise<NFsimRuntime | null> {
 
   return initPromise;
 }
-
