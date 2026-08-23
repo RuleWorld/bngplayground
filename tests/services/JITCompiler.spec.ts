@@ -221,6 +221,51 @@ describe('JITCompiler Service', () => {
                expect(bytecode?.requiresParameterRebuild).toBe(true);
            });
 
+           it('keys functional bytecode cache entries by folded parameter values', () => {
+               jitCompiler.clearCache();
+               const reactions = [{
+                   reactantIndices: [0],
+                   reactantStoich: [1],
+                   productIndices: [1],
+                   productStoich: [1],
+                   rateConstant: 'k * A'
+               }];
+
+               const first = jitCompiler.compileToByteCode(
+                   reactions,
+                   2,
+                   { k: 1 },
+                   undefined,
+                   undefined,
+                   undefined,
+                   ['A', 'B']
+               );
+               const repeated = jitCompiler.compileToByteCode(
+                   reactions,
+                   2,
+                   { k: 1 },
+                   undefined,
+                   undefined,
+                   undefined,
+                   ['A', 'B']
+               );
+               const changed = jitCompiler.compileToByteCode(
+                   reactions,
+                   2,
+                   { k: 2 },
+                   undefined,
+                   undefined,
+                   undefined,
+                   ['A', 'B']
+               );
+
+               expect(first).not.toBeNull();
+               expect(repeated?.exprBytecode).toBe(first?.exprBytecode);
+               expect(Array.from(changed?.exprBytecode ?? [])).not.toEqual(
+                   Array.from(first?.exprBytecode ?? [])
+               );
+           });
+
            it('should keep JIT functional bytecode aligned with the shared opcode enum', () => {
                const expr = 'if(A > 1, max(A_total, 2), min(abs(-A), 3))';
                const bytecode = jitCompiler.compileToByteCode([

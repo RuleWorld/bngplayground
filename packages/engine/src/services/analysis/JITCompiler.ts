@@ -284,9 +284,16 @@ export class JITCompiler {
             indices: Int32Array | number[];
             coefficients: Float64Array | number[];
         }>,
-        functions?: JITFunctionDefinition[]
+        functions?: JITFunctionDefinition[],
+        parameters?: Record<string, number>
     ): string {
         const parts = [`n=${nSpecies}`];
+        if (parameters) {
+            const keys = Object.keys(parameters).sort();
+            for (const k of keys) {
+                parts.push(`p:${k}=${parameters[k]}`);
+            }
+        }
         const fnSig = this.functionSignature(functions);
         if (fnSig) parts.push(`f=${fnSig}`);
         if (constantSpeciesMask && constantSpeciesMask.length > 0) {
@@ -1433,7 +1440,7 @@ export class JITCompiler {
                 );
             }
 
-            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables, functions);
+            const signature = this.getBytecodeSignature(reactions, nSpecies, constantSpeciesMask, observables, functions, safeParameters);
             const cached = this.bytecodeCache.get(signature);
 
             if (cached) {
