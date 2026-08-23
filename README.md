@@ -42,7 +42,7 @@ npm run dev
 
 ## MCP Client Installation
 
-Installation instructions for MCP clients (Claude Desktop, Cursor, Copilot) are in the repository's [docs/mcp-server.md](docs/mcp-server.md).
+Cross-platform installation instructions for Claude Desktop, Claude Code, Codex, ChatGPT, Claude.ai, and Claude Cowork are in the [MCP server guide](packages/mcp-server/README.md).
 
 ### MCP Capabilities Snapshot
 
@@ -285,7 +285,7 @@ bionetgen-web-simulator/
 BNG Playground uses a monorepo architecture with clear separation of concerns:
 
 - **Engine** (`packages/engine`): Pure TypeScript, zero browser dependencies. Contains all core algorithms (parsing, simulation, analysis).
-- **MCP Server** (`packages/mcp-server`): 33 tool endpoints for programmatic access.
+- **MCP Server** (`packages/mcp-server`): 44 tool endpoints for programmatic access.
 - **App Root**: React UI with 27 analysis tabs, Web Worker orchestration, and WASM module loading.
 - **7 WASM Modules**: CVODE (SUNDIALS), NFsim, Nauty, and 4 additional solver modules for native-speed computation.
 

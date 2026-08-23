@@ -496,6 +496,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                           className="ml-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
                           value={nlpPolicy}
                           onChange={(event) => setNlpPolicy(event.target.value as AssemblyPolicy)}
+                          aria-label="Assembly policy for NLP"
                         >
                           <option value="one_step">one_step</option>
                           <option value="two_step">two_step</option>
@@ -582,6 +583,7 @@ export const DesignerPanel: React.FC<DesignerPanelProps> = ({
                           className="ml-2 rounded-md border border-slate-200 bg-white px-2 py-1 text-xs dark:border-slate-700 dark:bg-slate-800"
                           value={dbPolicy}
                           onChange={(event) => setDbPolicy(event.target.value as AssemblyPolicy)}
+                          aria-label="Assembly policy for Database query"
                         >
                           <option value="two_step">two_step</option>
                           <option value="one_step">one_step</option>

@@ -52,12 +52,14 @@ class SpatialService {
     };
 
     this.worker.onerror = (error) => {
+      this.cleanupWorker();
       this.setState('error');
       this.callbacks.onError?.(error.message);
     };
 
     this.worker.onmessageerror = (event) => {
       console.error('[SpatialService] Worker failed to deserialize message:', event.data);
+      this.cleanupWorker();
       this.setState('error');
       this.callbacks.onError?.('SpatialService worker failed to deserialize message');
     };
@@ -98,7 +100,11 @@ class SpatialService {
   cancel(): void {
     if (this.worker) {
       const request: SpatialWorkerRequest = { type: 'cancel' };
-      this.worker.postMessage(request);
+      try {
+        this.worker.postMessage(request);
+      } catch {
+        // ignore if worker is already dead or not accepting messages
+      }
     }
     this.setState('idle');
   }
@@ -107,13 +113,25 @@ class SpatialService {
    * Terminate the worker and clean up.
    */
   terminate(): void {
+    this.cleanupWorker();
+    this.worker = null;
+    this.setState('idle');
+  }
+
+  /**
+   * Cleans up the worker and prevents any background resource thread leaks.
+   */
+  private cleanupWorker(): void {
     if (this.worker) {
-      const request: SpatialWorkerRequest = { type: 'destroy' };
-      this.worker.postMessage(request);
+      try {
+        const request: SpatialWorkerRequest = { type: 'destroy' };
+        this.worker.postMessage(request);
+      } catch {
+        // ignore if worker is already dead or not accepting messages
+      }
       this.worker.terminate();
       this.worker = null;
     }
-    this.setState('idle');
   }
 
   getState(): SpatialSimulationState {
@@ -141,14 +159,27 @@ class SpatialService {
         break;
 
       case 'complete':
+        this.cleanupWorker();
         this.setState('complete');
         this.callbacks.onComplete?.(msg.result);
         break;
 
       case 'error':
+        this.cleanupWorker();
         this.setState('error');
         this.callbacks.onError?.(msg.message);
         break;
+
+      default: {
+        const unknownMsg = msg as { type?: unknown; message?: unknown };
+        console.warn('[SpatialService] Unhandled worker message type:', unknownMsg);
+        this.setState('error');
+        const errText = typeof unknownMsg.message === 'string'
+          ? unknownMsg.message
+          : `SpatialService received unhandled worker message type: ${String(unknownMsg.type)}`;
+        this.callbacks.onError?.(errText);
+        break;
+      }
     }
   }
 }
