@@ -43,11 +43,11 @@ export const computeFimArgsSchema = z.object({
 
 export const identifiabilityArgsSchema = z.object({
     code: z.string().describe('BNGL model code'),
-    parameters: z.array(z.string()).optional().describe('Parameters to profile (default: all)'),
+    parameters: z.array(z.string()).min(1).optional().describe('Parameters to profile (default: all)'),
     data: z.array(z.object({
         time: z.number(),
         observables: z.record(z.string(), z.number()),
-    })).describe('Experimental data for SSR computation'),
+    })).min(1).describe('Experimental data for SSR computation'),
     n_grid: positiveInt.optional().describe('Grid points per parameter (default: 20)'),
     range_factor: finiteNumber.positive().optional().describe('Grid range factor (default: 10)'),
     reoptimize: z.boolean().optional().describe('Re-optimize nuisance params (default: true)'),
