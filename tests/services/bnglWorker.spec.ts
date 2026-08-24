@@ -366,6 +366,52 @@ describe('bnglWorker - parse message', () => {
   });
 });
 
+describe('bnglWorker - unrecognized message type', () => {
+  let mockPostMessage: any;
+  let mockAddEventListener: any;
+
+  beforeEach(async () => {
+    vi.resetModules();
+    mockPostMessage = vi.fn();
+    mockAddEventListener = vi.fn();
+    (global as any).self = {
+      postMessage: mockPostMessage,
+      addEventListener: mockAddEventListener,
+      location: { origin: '' }
+    };
+  });
+
+  afterEach(() => {
+    vi.clearAllMocks();
+    delete (global as any).self;
+  });
+
+  it('should respond with worker_internal_error when an unrecognized message type is received', async () => {
+    await import('../../services/bnglWorker');
+
+    const messageListener = mockAddEventListener.mock.calls.find((c: any) => c[0] === 'message')[1];
+
+    const parsePromise = messageListener({
+      origin: '',
+      data: {
+        id: 99,
+        type: 'unrecognized_action_type',
+        payload: {}
+      }
+    });
+
+    await parsePromise;
+
+    expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({
+      id: 99,
+      type: 'worker_internal_error',
+      payload: expect.objectContaining({
+        message: expect.stringContaining('Worker received unrecognized message type: unrecognized_action_type')
+      })
+    }));
+  });
+});
+
 describe('bnglWorker - getCacheSizes', () => {
   it('should call getEvaluatorCacheSizes and return its value', async () => {
     // The worker imports getCacheSizes as getEvaluatorCacheSizes from @bngplayground/engine

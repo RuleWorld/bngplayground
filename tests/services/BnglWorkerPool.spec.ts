@@ -219,6 +219,44 @@ describe('BnglWorkerPool class', () => {
         expect(error.message).toContain('Worker internal error: Fatal out of memory');
     });
 
+    it('rejects only the matching request for an id-scoped worker_internal_error', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let firstError: Error | undefined;
+        let secondSettled = false;
+        const firstPromise = pool.simulate({} as any, {} as any).catch((err) => {
+            firstError = err;
+        });
+        const secondPromise = pool.simulate({} as any, {} as any).then((result) => {
+            secondSettled = true;
+            return result;
+        });
+
+        const worker = mockWorkerInsts[0];
+        await new Promise(r => setTimeout(r, 0));
+        const firstId = worker.postMessage.mock.calls[0][0].id;
+        const secondId = worker.postMessage.mock.calls[1][0].id;
+
+        worker.trigger({
+            id: firstId,
+            type: 'worker_internal_error',
+            payload: { message: 'Unsupported request type' },
+        });
+
+        await firstPromise;
+        await Promise.resolve();
+        expect(firstError?.message).toContain('Unsupported request type');
+        expect(secondSettled).toBe(false);
+
+        worker.trigger({
+            id: secondId,
+            type: 'simulate_success',
+            payload: { headers: [], data: [] },
+        });
+        await expect(secondPromise).resolves.toEqual({ headers: [], data: [] });
+    });
+
     it('retains rich error fields, stack, and location details on worker_internal_error', async () => {
         const pool = new BnglWorkerPool(1);
         await pool.initialize();

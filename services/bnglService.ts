@@ -90,12 +90,19 @@ class BnglService {
         return;
       }
 
-      if (id === -1 && type === 'worker_internal_error') {
+      if (type === 'worker_internal_error') {
         const err = toError('worker_internal_error', payload);
         if (err.stack) {
           console.error(`[Worker] ${err.message}\n${err.stack}`);
         } else {
           console.error(`[Worker] ${err.message}`);
+        }
+        if (typeof id === 'number' && id !== -1 && this.promises.has(id)) {
+          const pending = this.promises.get(id)!;
+          this.promises.delete(id);
+          pending.cleanup();
+          pending.reject(err);
+          return;
         }
         this.rejectAllPending(err);
         return;

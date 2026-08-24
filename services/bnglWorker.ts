@@ -1020,6 +1020,12 @@ if (typeof ctx.addEventListener === 'function') {
     }
 
     console.warn('[Worker] Unknown message type received:', type);
+    const response: WorkerResponse = {
+      id,
+      type: 'worker_internal_error',
+      payload: { message: `Worker received unrecognized message type: ${type}` },
+    };
+    safePostMessage(response);
   });
 }
 

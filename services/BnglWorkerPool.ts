@@ -187,6 +187,14 @@ export class BnglWorkerPool {
             } else {
                 console.error(`[Pool] Worker ${workerIdx} internal error reported: ${err.message}`);
             }
+            if (typeof id === 'number' && id !== -1) {
+                const req = this.pendingWorkerRequests.get(worker)?.get(id);
+                if (req) {
+                    this.removePendingRequest(worker, id);
+                    req.reject(err);
+                    return;
+                }
+            }
             this.rejectAllPendingOnWorker(worker, err);
             return;
         }
