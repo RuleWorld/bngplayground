@@ -213,30 +213,57 @@ function resolveObservable(
   model: BNGLModel,
   species: BNGLSpecies[],
 ): ObservableMapping | null {
-  // First check model observables for speciesIndices/coefficients.
-  // ⚡ Bolt: Replace .find with for loop
+  // 1. Check model.concreteObservables (if pre-computed during network generation)
+  const concreteObs = model.concreteObservables;
+  if (Array.isArray(concreteObs)) {
+    for (let i = 0; i < concreteObs.length; i++) {
+      const co = concreteObs[i];
+      if (co && co.name === obsName) {
+        const indices = co.indices;
+        if (Array.isArray(indices) && Array.isArray(co.coefficients)) {
+          return {
+            speciesIndices: indices,
+            coefficients: co.coefficients,
+          };
+        }
+      }
+    }
+  }
+
+  // 2. Check model.observables for speciesIndices/indices and coefficients
   let modelObs: typeof model.observables[0] | undefined;
-  for (let i = 0; i < model.observables.length; i++) {
-    if (model.observables[i].name === obsName) {
-      modelObs = model.observables[i];
-      break;
+  if (Array.isArray(model.observables)) {
+    for (let i = 0; i < model.observables.length; i++) {
+      if (model.observables[i].name === obsName) {
+        modelObs = model.observables[i];
+        break;
+      }
     }
   }
   if (modelObs) {
     const obs = modelObs as unknown as Record<string, unknown>;
+    const indices = obs["speciesIndices"] ?? obs["indices"];
     if (
-      Array.isArray(obs["speciesIndices"]) &&
+      Array.isArray(indices) &&
       Array.isArray(obs["coefficients"])
     ) {
       return {
-        speciesIndices: obs["speciesIndices"] as number[],
+        speciesIndices: indices as number[],
         coefficients: obs["coefficients"] as number[],
       };
     }
   }
 
-  // Fall back: match observable name to species name.
+  // 3. Fall back: match observable pattern to species name if modelObs exists
   const speciesIdx = buildSpeciesIndex(species);
+  if (modelObs && typeof modelObs.pattern === "string") {
+    const idx = speciesIdx.get(modelObs.pattern);
+    if (idx !== undefined) {
+      return { speciesIndices: [idx], coefficients: [1] };
+    }
+  }
+
+  // 4. Fall back: match observable name directly to species name.
   const idx = speciesIdx.get(obsName);
   if (idx !== undefined) {
     return { speciesIndices: [idx], coefficients: [1] };
@@ -516,12 +543,18 @@ export async function computeDoseResponse(
     detectBifurcations: detectBif = false,
   } = config;
 
+  const fullModel: BNGLModel = {
+    ...model,
+    reactions: reactions ?? model.reactions ?? [],
+    species: species ?? model.species ?? [],
+  };
+
   const n = species.length;
 
   if (config.method === 'simulate') {
     const tEnd = config.t_end ?? 1e4;
     const simulated = await computeDoseResponseBySimulation(
-        model,
+        fullModel,
         inputParameter,
         observables,
         inputRange.min,
@@ -686,7 +719,7 @@ export async function computeDoseResponse(
   const totalRootfindPoints = curves.reduce((acc, curve) => acc + curve.responses.length, 0);
   if (totalRootfindPoints === 0) {
       const simulated = await computeDoseResponseBySimulation(
-          model,
+          fullModel,
           inputParameter,
           observables,
           inputRange.min,

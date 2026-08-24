@@ -1,4 +1,4 @@
-import { computeDoseResponse, computeDoseResponseBySimulation, loadEvaluator } from '@bngplayground/engine';
+import { computeDoseResponse, loadEvaluator } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { doseResponseArgsSchema } from '../schemas/index.js';
 import {
@@ -19,8 +19,9 @@ import { structureError } from '../services/errors.js';
  * `packages/engine/src/services/analysis/DoseResponse.ts` (already exported
  * from the engine barrel at line 242 of packages/engine/src/index.ts).
  *
- * The engine function is synchronous and takes the expanded BNGLReaction and
- * BNGLSpecies arrays directly; we extract those from expandModel().
+ * The engine function handles parameter validation, observable resolution,
+ * simulation method execution, rootfind-to-simulate fallbacks, Hill fitting,
+ * and bifurcation detection directly.
  */
 export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any>> {
     try {
@@ -59,140 +60,39 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             ));
         }
 
-        const nPoints = parsedArgs.n_points ?? 50;
-        const logScale = parsedArgs.log_scale ?? true;
-        const tEnd = parsedArgs.t_end ?? 1e4;
-
-        if (parsedArgs.method === 'simulate') {
-            const simulated = await computeDoseResponseBySimulation(
-                expanded,
-                parsedArgs.input_parameter,
-                parsedArgs.observables,
-                parsedArgs.input_min,
-                parsedArgs.input_max,
-                nPoints,
-                logScale,
-                tEnd,
-            );
-
-            const totalPoints = simulated.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
-            if (totalPoints === 0) {
-                return createToolResult(structureError(
-                    new Error('dose_response produced no curve points using method="simulate". Try increasing t_end or checking model observables/parameter ranges.'),
-                ));
-            }
-
-            return createToolResult({
-                inputParameter: parsedArgs.input_parameter,
-                methodUsed: 'simulate',
-                failedDoses: simulated.failedDoses,
-                summary: {
-                    nCurves: simulated.curves.length,
-                    nFailed: simulated.failedDoses.length,
-                    nFitted: 0,
-                    nBifurcationPoints: 0,
-                },
-                curves: simulated.curves,
-            });
-        }
-
-        const requestedToEngineObservable = new Map<string, string>();
-        const modelObservables = model.observables ?? [];
-        const speciesNames = new Set((expanded.species ?? []).map((s) => s.name));
-        for (const observable of parsedArgs.observables) {
-            const modelObservable = modelObservables.find((o) => o.name === observable);
-            const pattern = modelObservable?.pattern;
-            // computeDoseResponse resolves by observable name only when speciesIndices are present;
-            // otherwise it falls back to exact species-name matches.
-            if (typeof pattern === 'string' && speciesNames.has(pattern)) {
-                requestedToEngineObservable.set(observable, pattern);
-            } else {
-                requestedToEngineObservable.set(observable, observable);
-            }
-        }
+        const fullModel = {
+            ...model,
+            reactions: expanded.reactions ?? [],
+            species: expanded.species ?? [],
+            ...(expanded.concreteObservables ? { concreteObservables: expanded.concreteObservables } : {}),
+        };
 
         const result = await computeDoseResponse({
-            model,
+            model: fullModel,
             reactions: expanded.reactions ?? [],
             species: expanded.species,
             inputParameter: parsedArgs.input_parameter,
             inputRange: { min: parsedArgs.input_min, max: parsedArgs.input_max },
             nPoints: parsedArgs.n_points,
             logScale: parsedArgs.log_scale,
-            observables: [...requestedToEngineObservable.values()],
+            observables: parsedArgs.observables,
             method: parsedArgs.method,
             t_end: parsedArgs.t_end,
             tolerance: parsedArgs.tolerance,
             detectBifurcations: parsedArgs.detect_bifurcations,
         });
 
-        const totalRootfindPoints = result.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
-        if (totalRootfindPoints === 0) {
-            const simulated = await computeDoseResponseBySimulation(
-                expanded,
-                parsedArgs.input_parameter,
-                parsedArgs.observables,
-                parsedArgs.input_min,
-                parsedArgs.input_max,
-                nPoints,
-                logScale,
-                tEnd,
-            );
-            const totalSimPoints = simulated.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
-
-            if (totalSimPoints === 0) {
-                return createToolResult(structureError(
-                    new Error(
-                        `dose_response analysis failed: both steady-state root-finding and fallback simulation failed to converge for input parameter '${parsedArgs.input_parameter}' over range [${parsedArgs.input_min}, ${parsedArgs.input_max}]. ` +
-                        'Check that your parameter ranges, rate constants, or initial species concentrations are physically reasonable.'
-                    )
-                ));
-            }
-
-            return createToolResult({
-                inputParameter: parsedArgs.input_parameter,
-                methodUsed: 'simulate',
-                fallbackUsed: 'rootfind_to_simulate',
-                warning: 'Root-finding produced no curve points; returned simulation-based fallback curves instead.',
-                failedDoses: simulated.failedDoses,
-                summary: {
-                    nCurves: simulated.curves.length,
-                    nFailed: simulated.failedDoses.length,
-                    nFitted: 0,
-                    nBifurcationPoints: 0,
-                },
-                curves: simulated.curves,
-            });
+        const totalPoints = result.curves.reduce((acc, curve) => acc + curve.responses.length, 0);
+        if (totalPoints === 0) {
+            return createToolResult(structureError(
+                new Error(
+                    `dose_response analysis failed: both steady-state root-finding and fallback simulation failed to converge for input parameter '${parsedArgs.input_parameter}' over range [${parsedArgs.input_min}, ${parsedArgs.input_max}]. ` +
+                    'Check that your parameter ranges, rate constants, or initial species concentrations are physically reasonable.'
+                )
+            ));
         }
 
-        const engineToRequestedObservable = new Map<string, string>();
-        for (const [requested, engineObservable] of requestedToEngineObservable.entries()) {
-            engineToRequestedObservable.set(engineObservable, requested);
-        }
-
-        return createToolResult({
-            inputParameter: result.inputParameter,
-            methodUsed: 'rootfind',
-            failedDoses: result.failedDoses,
-            summary: {
-                nCurves: result.curves.length,
-                nFailed: result.failedDoses.length,
-                nFitted: result.curves.filter((c) => c.hillFit !== undefined).length,
-                nBifurcationPoints: result.curves.reduce(
-                    (acc, c) => acc + (c.bifurcationPoints?.length ?? 0),
-                    0,
-                ),
-            },
-            curves: result.curves.map((c) => ({
-                observable: engineToRequestedObservable.get(c.observable) ?? c.observable,
-                doses: c.doses,
-                responses: c.responses,
-                ...(c.hillFit ? { hillFit: c.hillFit } : {}),
-                ...(c.bifurcationPoints && c.bifurcationPoints.length > 0
-                    ? { bifurcationPoints: c.bifurcationPoints }
-                    : {}),
-            })),
-        });
+        return createToolResult(result);
     } catch (error) {
         return createToolResult(structureError(error instanceof Error ? error : new Error(String(error), { cause: error })));
     }
