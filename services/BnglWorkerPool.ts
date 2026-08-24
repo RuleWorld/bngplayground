@@ -6,7 +6,7 @@
  */
 
 import { BNGLModel, SharedSimulationOutputDescriptor, SimulationOptions, SimulationResults, WorkerRequest, WorkerResponse } from '../types';
-import { extractErrorMessage, toError } from './workerErrorUtils';
+import { toError } from './workerErrorUtils';
 
 export interface SharedEnsembleResultsHandle {
     kind: 'shared';

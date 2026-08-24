@@ -25,7 +25,7 @@ type PendingRequest = {
 
 const DEFAULT_TIMEOUT_MS = 300_000;
 
-import { extractErrorMessage, toError } from './workerErrorUtils';
+import { toError } from './workerErrorUtils';
 
 class BnglService {
   private worker!: Worker;

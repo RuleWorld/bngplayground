@@ -1,7 +1,5 @@
 import {
     BNGLModel,
-    BNGLMoleculeType,
-    ReactionRule,
     BNGLParser,
     parseBNGLWithANTLR,
     generateExpandedNetwork,
@@ -16,12 +14,8 @@ import { z } from 'zod';
 import {
     ToolArgs,
     ToolResult,
-    ContactMap,
-    ContactNode,
-    ContactEdge,
     ValidateModelResult,
     ValidationMessage,
-    ParsedSpeciesGraph,
 } from '../types/index.js';
 
 /**
