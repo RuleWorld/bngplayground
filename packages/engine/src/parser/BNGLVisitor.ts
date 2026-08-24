@@ -183,6 +183,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
   private resolveParameters(): void {
     const maxPasses = 10;
     const resolvedParams: Record<string, number> = {};
+    const paramMap = new Map<string, number>();
 
     for (let pass = 0; pass < maxPasses; pass++) {
       let allResolved = true;
@@ -190,11 +191,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
         if (name in resolvedParams) continue;
 
         // Evaluate using current resolved params
-        const paramMap = new Map(Object.entries(resolvedParams));
         const val = CoreBNGLParser.evaluateExpression(expr, paramMap);
 
         if (!isNaN(val)) {
           resolvedParams[name] = val;
+          paramMap.set(name, val);
         } else {
           allResolved = false;
         }

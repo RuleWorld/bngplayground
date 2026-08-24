@@ -620,9 +620,11 @@ export async function generateExpandedNetwork(
 
     // BNG2 Logic: Identify Species and assign Initial Concentrations.
     // Unlike implicit simulation, we must map back to the input "seed" concentrations.
-    const generatedSpecies = result.species.map((s: Species) => {
+    const canonicalSpeciesNames = new Array<string>(result.species.length);
+    const generatedSpecies = result.species.map((s: Species, speciesIndex: number) => {
         // Canonicalize the graph representation for consistent string keys.
         const canonicalName = GraphCanonicalizer.canonicalize(s.graph);
+        canonicalSpeciesNames[speciesIndex] = canonicalName;
         let matchedSeedEntry = seedEntryMap.get(canonicalName);
 
         // Lookup exact match in the pre-calculated seed map.
@@ -717,8 +719,8 @@ export async function generateExpandedNetwork(
             const preservedRate = foldedRateExpression || extRxn.originalRate || String(extRxn.rate);
 
             const reaction = {
-                reactants: extRxn.reactants.map((ridx: number) => GraphCanonicalizer.canonicalize(result.species[ridx].graph)),
-                products: extRxn.products.map((pidx: number) => GraphCanonicalizer.canonicalize(result.species[pidx].graph)),
+                reactants: extRxn.reactants.map((ridx: number) => canonicalSpeciesNames[ridx]),
+                products: extRxn.products.map((pidx: number) => canonicalSpeciesNames[pidx]),
                 rate: preservedRate,
                 rateConstant: typeof extRxn.rate === 'number' ? extRxn.rate : 0,
                 isFunctionalRate,
@@ -755,51 +757,17 @@ export async function generateExpandedNetwork(
     // Optimized Approach: Filter candidate species by molecule content first.
     // Reduces complexity to O(O * Candidates), massive speedup for large networks.
     const molToSpecies = new Map<string, Set<number>>();
-    generatedSpecies.forEach((s, idx) => {
-        // Extract base molecule names from the string representation
-        // ⚡ Bolt Optimization: Use fast index-based parsing instead of chained array
-        // methods (.split.map) and regular expressions to avoid allocation overhead in hot loops.
-        const mols: string[] = [];
-        const name = s.name;
-        let start = 0;
-        while (start < name.length) {
-            let dotIdx = name.indexOf('.', start);
-            if (dotIdx === -1) dotIdx = name.length;
-
-            let mStart = start;
-            if (name.charCodeAt(mStart) === 64) { // '@'
-                const colonIdx = name.indexOf(':', mStart);
-                if (colonIdx > 0 && colonIdx < dotIdx) {
-                    if (name.charCodeAt(colonIdx + 1) === 58) { // ':'
-                        mStart = colonIdx + 2;
-                    } else {
-                        mStart = colonIdx + 1;
-                    }
-                }
+    result.species.forEach((species, idx) => {
+        // The generator already retains parsed species graphs. Index their
+        // molecule names directly instead of reparsing every canonical species
+        // string after expansion.
+        for (const molecule of species.graph.molecules) {
+            let indices = molToSpecies.get(molecule.name);
+            if (!indices) {
+                indices = new Set<number>();
+                molToSpecies.set(molecule.name, indices);
             }
-
-            const parenIdx = name.indexOf('(', mStart);
-            let mEnd = parenIdx !== -1 && parenIdx < dotIdx ? parenIdx : dotIdx;
-
-            let lastAtIdx = -1;
-            for (let i = mEnd - 1; i >= mStart; i--) {
-                if (name.charCodeAt(i) === 64) { // '@'
-                    lastAtIdx = i;
-                    break;
-                }
-            }
-            if (lastAtIdx !== -1) {
-                mEnd = lastAtIdx;
-            }
-
-            mols.push(name.substring(mStart, mEnd));
-            start = dotIdx + 1;
-        }
-
-        for (let i = 0; i < mols.length; i++) {
-            const m = mols[i];
-            if (!molToSpecies.has(m)) molToSpecies.set(m, new Set());
-            molToSpecies.get(m)!.add(idx);
+            indices.add(idx);
         }
     });
 

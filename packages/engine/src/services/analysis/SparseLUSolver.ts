@@ -63,21 +63,6 @@ export function denseToCSR(dense: Float64Array, n: number): CSRMatrix {
 }
 
 /**
- * Create CSR matrix from sparsity pattern and value function
- */
-export function createCSR(
-  n: number,
-  rowPtr: Int32Array,
-  colIdx: Int32Array,
-  computeValues: (values: Float64Array) => void
-): CSRMatrix {
-  const nnz = rowPtr[n];
-  const values = new Float64Array(nnz);
-  computeValues(values);
-  return { n, nnz, rowPtr, colIdx: colIdx.slice(), values };
-}
-
-/**
  * Cached symbolic ILU structure for reuse across factorizations.
  *
  * For biochemical networks, the sparsity pattern does not change between

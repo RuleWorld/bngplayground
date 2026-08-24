@@ -7,11 +7,12 @@ import { parseBNGL } from '../services/parseBNGL';
 import { findRuleHubModelPath } from './helpers/rulehub';
 
 const hasCvode = existsSync(join(process.cwd(), 'public', 'cvode.wasm'));
-const maybeIt = hasCvode ? it : it.skip;
+const abPath = findRuleHubModelPath('AB');
+const maybeIt = (hasCvode && abPath) ? it : it.skip;
 
 describe('native CVODE bytecode', () => {
   maybeIt('matches fallback CVODE on the AB tutorial', async () => {
-    const code = readFileSync(findRuleHubModelPath('AB')!, 'utf8');
+    const code = readFileSync(abPath!, 'utf8');
     const parsed = parseBNGL(code);
     const expanded = await generateExpandedNetwork(parsed as any, () => {}, () => {});
     const model = {

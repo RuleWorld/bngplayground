@@ -143,6 +143,8 @@ export function getSimulationOptionsFromParsedModel(
     ...(overrides?.steadyState ? { steadyState: overrides.steadyState } : {}),
     ...(overrides?.steadyStateTolerance ? { steadyStateTolerance: overrides.steadyStateTolerance } : {}),
     ...(overrides?.steadyStateWindow ? { steadyStateWindow: overrides.steadyStateWindow } : {}),
+    ...(overrides?.includeSpeciesData !== undefined ? { includeSpeciesData: overrides.includeSpeciesData } : {}),
+    ...(overrides?.includeExpandedNetwork !== undefined ? { includeExpandedNetwork: overrides.includeExpandedNetwork } : {}),
     ...(overrides?.strictFunctionalRates !== undefined ? { strictFunctionalRates: overrides.strictFunctionalRates } : {}),
   };
 

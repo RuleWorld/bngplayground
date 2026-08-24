@@ -242,11 +242,12 @@ export class GraphCanonicalizer {
       const placed = new Set<number>();
       const startIdx = 0; // sortedInfos is already sorted
       const queue: number[] = [startIdx];
+      let queueHead = 0;
       placed.add(startIdx);
       const sortedOrderVertices: number[] = [startIdx];
 
-      while (queue.length > 0) {
-        const current = queue.shift()!;
+      while (queueHead < queue.length) {
+        const current = queue[queueHead++];
         for (const edge of adjList.get(current)!) {
           if (!placed.has(edge.neighbor)) {
             placed.add(edge.neighbor);

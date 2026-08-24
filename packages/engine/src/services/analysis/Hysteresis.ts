@@ -75,6 +75,8 @@ export async function analyzeHysteresis(config: HysteresisConfig): Promise<Hyste
             method,
             t_end: tEnd,
             n_steps: 50,
+            includeSpeciesData: false,
+            includeExpandedNetwork: false,
         }, {
             checkCancelled: () => {},
             postMessage: () => {},
@@ -117,6 +119,8 @@ export async function analyzeHysteresis(config: HysteresisConfig): Promise<Hyste
             method,
             t_end: tEnd,
             n_steps: 50,
+            includeSpeciesData: false,
+            includeExpandedNetwork: false,
         }, {
             checkCancelled: () => {},
             postMessage: () => {},

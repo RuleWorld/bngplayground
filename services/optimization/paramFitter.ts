@@ -83,6 +83,8 @@ export async function fitParameters(cfg: FitConfig): Promise<FitResult> {
             n_steps: nSteps,
             atol: 1e-8,
             rtol: 1e-6,
+            includeSpeciesData: false,
+            includeExpandedNetwork: false,
         });
     };
 

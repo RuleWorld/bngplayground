@@ -1,7 +1,7 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
 import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
-import { simulate, loadEvaluator, computeFIM } from '@bngplayground/engine';
+import { loadEvaluator, analyzeOptimalExperiment } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
 
 const optimalExperimentArgsSchema = z.object({
@@ -18,7 +18,37 @@ type OptimalExperimentArgs = z.infer<typeof optimalExperimentArgsSchema>;
 export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResult<any>> {
     try {
         const parsedArgs = parseArgs('optimal_experiment', optimalExperimentArgsSchema, args) as OptimalExperimentArgs;
+
+        if (!parsedArgs.code || parsedArgs.code.trim() === '') {
+            return createToolResult(structureError(
+                new Error('Model code must be a non-empty string.'),
+            ));
+        }
+
+        if (parsedArgs.candidate_times && parsedArgs.candidate_times.some((t) => t <= 0 || !Number.isFinite(t))) {
+            return createToolResult(structureError(
+                new Error('candidate_times must contain only positive finite numbers.'),
+            ));
+        }
+
         const model = parseModelOrThrow(parsedArgs.code);
+
+        const modelObsNames = new Set((model.observables ?? []).map((o) => o.name));
+        if (parsedArgs.observables && parsedArgs.observables.length > 0) {
+            const missing = parsedArgs.observables.filter((o) => !modelObsNames.has(o));
+            if (missing.length > 0) {
+                return createToolResult(structureError(
+                    new Error(`observables references names not defined in model: ${missing.join(', ')}`),
+                ));
+            }
+        }
+
+        if (model.observables.length === 0 && (!parsedArgs.observables || parsedArgs.observables.length === 0)) {
+            return createToolResult(structureError(
+                new Error('Model does not define any observables to analyze for optimal design.'),
+            ));
+        }
+
         const expandedModel = await expandModel(model);
         
         const observables = parsedArgs.observables ?? model.observables.map(o => o.name);
@@ -28,85 +58,19 @@ export async function handleOptimalExperiment(args: ToolArgs): Promise<ToolResul
         
         await loadEvaluator();
         
-        const recommendations: Array<{
-            observable: string;
-            suggested_times: number[];
-            expected_identifiability: string;
-            rationale: string;
-        }> = [];
-        
-        for (const obs of observables) {
-            await simulate(0, expandedModel, {
-                method: parsedArgs.method ?? 'ode',
-                t_end: tEnd,
-                n_steps: nSamples,
-            }, {
-                checkCancelled: () => {},
-                postMessage: () => {},
-            });
-            
-            const paramNames = Object.keys(model.parameters).slice(0, 5);
-            const params: Record<string, number> = {};
-            for (const p of paramNames) {
-                params[p] = model.parameters[p] ?? 1;
-            }
-            
-            let identifiability = 'low';
-            let rationale = 'Limited identifiability - model may need redesign';
-            
-            try {
-                const fimResult = await computeFIM({
-                    simulate: async (overrides: Record<string, number>) => {
-                        const runModel = cloneExpandedModel(expandedModel);
-                        Object.entries(overrides).forEach(([k, v]) => {
-                            runModel.parameters[k] = v;
-                        });
-                        updateMassActionRates(runModel);
-                        return simulate(0, runModel, {
-                            method: parsedArgs.method ?? 'ode',
-                            t_end: tEnd,
-                            n_steps: nSamples,
-                        }, {
-                            checkCancelled: () => {},
-                            postMessage: () => {},
-                        });
-                    },
-                    parameters: params,
-                    parameterNames: paramNames,
-                    allTimepoints: true,
-                    logParameters: false,
-                    approxProfile: false,
-                });
-                
-                const eigenvalues = fimResult.eigenvalues ?? [];
-                const minEig = Math.min(...eigenvalues.filter(e => e > 0));
-                const maxEig = Math.max(...eigenvalues);
-                const conditionNumber = maxEig > 0 && minEig > 0 ? maxEig / minEig : Infinity;
-                
-                if (conditionNumber < 1000) {
-                    identifiability = 'high';
-                    rationale = 'Well-conditioned FIM - strong parameter identifiability expected';
-                } else if (conditionNumber < 1e6) {
-                    identifiability = 'moderate';
-                    rationale = 'Moderate conditioning - consider additional timepoints';
-                }
-            } catch {
-                // Keep default low identifiability
-            }
-            
-            recommendations.push({
-                observable: obs,
-                suggested_times: candidateTimes.slice(0, 3),
-                expected_identifiability: identifiability,
-                rationale,
-            });
-        }
-        
-        return createToolResult({
-            recommendations,
-            summary: `Analyzed ${observables.length} observables across ${candidateTimes.length} candidate timepoints`,
-            note: 'Results are approximate - actual identifiability depends on experimental noise',
+        const result = await analyzeOptimalExperiment({
+            model,
+            expandedModel,
+            observables,
+            candidateTimes,
+            nSamples,
+            method: parsedArgs.method ?? 'ode',
+            tEnd,
+            cloneExpandedModel,
+            updateMassActionRates,
         });
+
+        return createToolResult(result);
     } catch (error) {
         const structured = structureError(error instanceof Error ? error : new Error(String(error), { cause: error }));
         return createToolResult(structured);

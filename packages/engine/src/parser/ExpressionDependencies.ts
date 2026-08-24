@@ -1,5 +1,9 @@
 
 import { CharStreams, CommonTokenStream } from 'antlr4ts';
+import { PredictionMode } from 'antlr4ts/atn/PredictionMode';
+import { BailErrorStrategy } from 'antlr4ts/BailErrorStrategy';
+import { DefaultErrorStrategy } from 'antlr4ts/DefaultErrorStrategy';
+import { ParseCancellationException } from 'antlr4ts/misc/ParseCancellationException.js';
 import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
 import { BNGLexer } from './generated/BNGLexer.ts';
 import { BNGParser, Arg_nameContext, Observable_refContext, Function_callContext } from './generated/BNGParser.ts';
@@ -68,7 +72,26 @@ export function getExpressionDependencies(expression: string): Set<string> {
         // Turn off default error logging to avoid console spam on invalid fragments (if any)
         parser.removeErrorListeners(); 
         
-        const tree = parser.expression();
+        (parser.interpreter as unknown as { predictionMode: PredictionMode }).predictionMode = PredictionMode.SLL;
+        parser.errorHandler = new BailErrorStrategy();
+
+        let tree;
+        try {
+            tree = parser.expression();
+        } catch (e: unknown) {
+            if (
+                e instanceof ParseCancellationException ||
+                (e && typeof e === 'object' && 'name' in e && (e as { name?: string }).name === 'ParseCancellationException')
+            ) {
+                tokenStream.seek(0);
+                parser.reset();
+                parser.errorHandler = new DefaultErrorStrategy();
+                (parser.interpreter as unknown as { predictionMode: PredictionMode }).predictionMode = PredictionMode.LL;
+                tree = parser.expression();
+            } else {
+                throw e;
+            }
+        }
         const visitor = new DependencyVisitor();
         visitor.visit(tree);
 

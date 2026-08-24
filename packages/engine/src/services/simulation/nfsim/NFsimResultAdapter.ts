@@ -1,4 +1,4 @@
-import type { BNGLModel, SimulationResults } from '../../../types';
+import type { BNGLModel, SimulationOptions, SimulationResults } from '../../../types';
 import { parseGdat, type GdatData } from '../GdatParser';
 import { isSafeObjectKey, setSafeNumberField } from '../../../utils/safeObjectKey';
 
@@ -19,9 +19,15 @@ const normalizeHeaders = (headers: string[], model: BNGLModel): string[] => {
 };
 
 export class NFsimResultAdapter {
-  static adaptGdatToSimulationResults(gdat: string | GdatData, model: BNGLModel): SimulationResults {
+  static adaptGdatToSimulationResults(
+    gdat: string | GdatData,
+    model: BNGLModel,
+    options: Pick<SimulationOptions, 'includeSpeciesData' | 'includeExpandedNetwork'> = {}
+  ): SimulationResults {
     const parsed = typeof gdat === 'string' ? parseGdat(gdat) : gdat;
     const headers = normalizeHeaders(parsed.headers, model);
+    const includeSpeciesData = options.includeSpeciesData ?? true;
+    const includeExpandedNetwork = options.includeExpandedNetwork ?? true;
     const data = parsed.data.map((row) => {
       const mapped: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const header of headers) {
@@ -33,25 +39,28 @@ export class NFsimResultAdapter {
       return mapped;
     });
 
-    const speciesHeaders = model.species.map((s) => s.name);
-    const speciesData = data.map((row) => {
-      const sp: Record<string, number> = Object.create(null) as Record<string, number>;
-      sp.time = row.time ?? 0;
-      for (const name of speciesHeaders) {
-        const safeName = toSafeKey(name);
-        if (!safeName) continue;
-        setSafeNumberField(sp, safeName, row[safeName] ?? 0);
-      }
-      return sp;
-    });
+    const speciesHeaders = includeSpeciesData ? model.species.map((s) => s.name) : undefined;
+    const speciesData = includeSpeciesData && speciesHeaders
+      ? data.map((row) => {
+          const sp: Record<string, number> = Object.create(null) as Record<string, number>;
+          sp.time = row.time ?? 0;
+          for (const name of speciesHeaders) {
+            const safeName = toSafeKey(name);
+            if (!safeName) continue;
+            setSafeNumberField(sp, safeName, row[safeName] ?? 0);
+          }
+          return sp;
+        })
+      : undefined;
 
     return {
       headers,
       data,
-      speciesHeaders,
-      speciesData,
-      expandedReactions: model.reactions ?? [],
-      expandedSpecies: model.species ?? []
+      ...(includeSpeciesData ? { speciesHeaders, speciesData } : {}),
+      ...(includeExpandedNetwork ? {
+        expandedReactions: model.reactions ?? [],
+        expandedSpecies: model.species ?? []
+      } : {})
     };
   }
 

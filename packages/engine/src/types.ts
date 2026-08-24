@@ -316,6 +316,8 @@ export interface SimulationOptions {
     verbose?: boolean;
     includeInfluence?: boolean;
     includeSpeciesData?: boolean;
+    /** Include expanded reaction/species metadata in results (default: true). */
+    includeExpandedNetwork?: boolean;
     maxEvents?: number;
     /** Record individual reaction firing events for information-theoretic analysis */
     recordFirings?: boolean;
@@ -385,7 +387,7 @@ export type WorkerResponse =
     | { id: number; type: 'simulate_success'; payload: SimulationResults }
     | { id: number; type: 'simulate_shared_success'; payload: { slot: number } }
     | { id: number; type: 'cache_model_success'; payload: { modelId: number } }
-    | { id: -1; type: 'worker_internal_error'; payload: SerializedWorkerError }
+    | { id: number; type: 'worker_internal_error'; payload: SerializedWorkerError }
     | { id: number; type: 'cache_model_error'; payload: SerializedWorkerError }
     | { id: number; type: 'release_model_success'; payload: { modelId: number } }
     | { id: number; type: 'release_model_error'; payload: SerializedWorkerError }

@@ -79,62 +79,6 @@ function setSafeNumberArrayField(target: Record<string, number[]>, key: string, 
 }
 
 // ---------------------------------------------------------------------------
-// RK4 stepper – generic 4th-order Runge-Kutta
-// ---------------------------------------------------------------------------
-
-export function rk4Step(
-  rhsFn: (t: number, y: Float64Array, dydt: Float64Array) => void,
-  t: number,
-  y: Float64Array,
-  dt: number,
-): void {
-  const n = y.length;
-  const k1 = new Float64Array(n);
-  const k2 = new Float64Array(n);
-  const k3 = new Float64Array(n);
-  const k4 = new Float64Array(n);
-  const ytmp = new Float64Array(n);
-
-  // k1
-  rhsFn(t, y, k1);
-
-  // k2
-  for (let i = 0; i < n; i++) ytmp[i] = y[i] + 0.5 * dt * k1[i];
-  rhsFn(t + 0.5 * dt, ytmp, k2);
-
-  // k3
-  for (let i = 0; i < n; i++) ytmp[i] = y[i] + 0.5 * dt * k2[i];
-  rhsFn(t + 0.5 * dt, ytmp, k3);
-
-  // k4
-  for (let i = 0; i < n; i++) ytmp[i] = y[i] + dt * k3[i];
-  rhsFn(t + dt, ytmp, k4);
-
-  // combine
-  for (let i = 0; i < n; i++) {
-    y[i] += (dt / 6) * (k1[i] + 2 * k2[i] + 2 * k3[i] + k4[i]);
-  }
-}
-
-// ---------------------------------------------------------------------------
-// Simple mass-action RHS evaluator
-//
-// The intracellular state is a Float64Array where each element is the
-// concentration of one "observable" species.  For cells whose bnglModel
-// string encodes simple first-order decay / production we use a generic
-// linear RHS:  dy_i/dt = production_i - degradation_i * y_i
-//
-// Production and degradation rates are stored per cell type in a compact
-// format.  When the full JIT-compiled BNG network is unavailable this
-// provides a workable placeholder that still exercises the RK4 integrator.
-// ---------------------------------------------------------------------------
-
-export interface MassActionRates {
-  production: Float64Array;
-  degradation: Float64Array;
-}
-
-// ---------------------------------------------------------------------------
 // multiscaleSimulation – main entry point
 // ---------------------------------------------------------------------------
 

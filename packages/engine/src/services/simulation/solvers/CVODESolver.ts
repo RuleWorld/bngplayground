@@ -655,6 +655,13 @@ export class CVODESolver {
 
     if (this.options.numRoots) {
       this.rootsFoundPtr = m._malloc(this.options.numRoots * 4); // CVODE uses int* for rootsfound
+      if (!this.rootsFoundPtr) {
+        m._free(this.yPtr);
+        m._free(this.tretPtr);
+        this.yPtr = 0;
+        this.tretPtr = 0;
+        return { success: false as const, errorMessage: 'CVODE malloc failed for rootsFoundPtr' };
+      }
     }
 
     this.yOut = new Float64Array(y0.length);

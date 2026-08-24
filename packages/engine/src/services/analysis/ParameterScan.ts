@@ -147,6 +147,11 @@ export async function runParameterScan(
   }
 
   await loadEvaluator();
+  const leanSimulationOptions: SimulationOptions = {
+    ...simulationOptions,
+    includeSpeciesData: false,
+    includeExpandedNetwork: false,
+  };
 
   if (options.parameter2 === undefined) {
     const observables: Record<string, number[]> = {};
@@ -159,7 +164,7 @@ export async function runParameterScan(
       runModel.parameters[options.parameter] = value;
       reevaluateSeedSpecies(runModel, seedExpressions);
       updateMassActionRates(runModel);
-      const result = await simulate(0, runModel, simulationOptions, {
+      const result = await simulate(0, runModel, leanSimulationOptions, {
         checkCancelled: () => { },
         postMessage: () => { },
       });
@@ -191,7 +196,7 @@ export async function runParameterScan(
       runModel.parameters[options.parameter2] = yValues[yIndex];
       reevaluateSeedSpecies(runModel, seedExpressions);
       updateMassActionRates(runModel);
-      const result = await simulate(0, runModel, simulationOptions, {
+      const result = await simulate(0, runModel, leanSimulationOptions, {
         checkCancelled: () => { },
         postMessage: () => { },
       });
