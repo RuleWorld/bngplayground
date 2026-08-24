@@ -96,21 +96,6 @@ export function resetProfileData() {
   GraphMatcher.matchComponentsCount = 0;
 }
 
-export function printProfileData() {
-  // Sync GraphMatcher statics into PROFILE_DATA for unified reporting
-  PROFILE_DATA.matchComponents = GraphMatcher.matchComponentsTime;
-  PROFILE_DATA.matchComponentsCount = GraphMatcher.matchComponentsCount;
-  console.log('\n=== NetworkGenerator Profile ===');
-  console.log(`  canonicalize: ${(PROFILE_DATA.canonicalize / 1000).toFixed(3)}s (${PROFILE_DATA.canonicalizeCount} calls)`);
-  console.log(`  findAllMaps: ${(PROFILE_DATA.findAllMaps / 1000).toFixed(3)}s (${PROFILE_DATA.findAllMapsCount} calls)`);
-  console.log(`  applyTransformation: ${(PROFILE_DATA.applyTransformation / 1000).toFixed(3)}s (${PROFILE_DATA.applyTransformationCount} calls)`);
-  console.log(`  isDuplicateReaction: ${(PROFILE_DATA.isDuplicateReaction / 1000).toFixed(3)}s (${PROFILE_DATA.isDuplicateReactionCount} calls)`);
-  console.log(`  degeneracy: ${(PROFILE_DATA.degeneracy / 1000).toFixed(3)}s (${PROFILE_DATA.degeneracyCount} calls)`);
-  console.log(`  speciesDedup: ${(PROFILE_DATA.speciesDedup / 1000).toFixed(3)}s (${PROFILE_DATA.speciesDedupCount} calls)`);
-  console.log(`  matchComponents: ${(PROFILE_DATA.matchComponents / 1000).toFixed(3)}s (${PROFILE_DATA.matchComponentsCount} calls)`);
-  console.log('================================\n');
-}
-
 const shouldLogNetworkGenerator =
   typeof process !== 'undefined' &&
   typeof process.env !== 'undefined' &&

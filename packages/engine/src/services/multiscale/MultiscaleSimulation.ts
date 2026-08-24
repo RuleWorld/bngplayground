@@ -79,24 +79,6 @@ function setSafeNumberArrayField(target: Record<string, number[]>, key: string, 
 }
 
 // ---------------------------------------------------------------------------
-// Simple mass-action RHS evaluator
-//
-// The intracellular state is a Float64Array where each element is the
-// concentration of one "observable" species.  For cells whose bnglModel
-// string encodes simple first-order decay / production we use a generic
-// linear RHS:  dy_i/dt = production_i - degradation_i * y_i
-//
-// Production and degradation rates are stored per cell type in a compact
-// format.  When the full JIT-compiled BNG network is unavailable this
-// provides a workable placeholder that still exercises the RK4 integrator.
-// ---------------------------------------------------------------------------
-
-export interface MassActionRates {
-  production: Float64Array;
-  degradation: Float64Array;
-}
-
-// ---------------------------------------------------------------------------
 // multiscaleSimulation – main entry point
 // ---------------------------------------------------------------------------
 
