@@ -7,19 +7,14 @@ import { structureError } from '../services/errors.js';
 export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<ParameterScanResult | MCPErrorResult>> {
   try {
     const parsedArgs = parseArgs('parameter_scan', parameterScanArgsSchema, args);
-    if (parsedArgs.parameter2 !== undefined) {
-      if (parsedArgs.parameter2 === parsedArgs.parameter) {
-        throw new Error('parameter_scan requires two distinct parameters for 2D scans.');
-      }
-      if (parsedArgs.start2 === undefined || parsedArgs.end2 === undefined || parsedArgs.steps2 === undefined) {
-        throw new Error('parameter_scan requires start2, end2, and steps2 when parameter2 is provided.');
-      }
-    }
 
     const baseModel = applyNetworkOptions(parseModelOrThrow(parsedArgs.code), parsedArgs);
     assertScannableParameter(baseModel, parsedArgs.parameter);
     if (parsedArgs.parameter2 !== undefined) {
       assertScannableParameter(baseModel, parsedArgs.parameter2);
+    }
+    if (!Array.isArray(baseModel.observables) || baseModel.observables.length === 0) {
+      throw new Error('Model must define at least one observable for parameter_scan.');
     }
 
     const seedExpressions = new Map<string, string>();
