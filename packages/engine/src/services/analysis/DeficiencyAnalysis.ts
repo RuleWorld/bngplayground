@@ -264,7 +264,7 @@ export function isWeaklyReversible(
  * elimination with partial pivoting (exact for rational coefficients that
  * are integers, which stoichiometries always are).
  */
-export function computeStoichiometryRank(
+function computeStoichiometryRank(
     reactions: BNGLReaction[],
     speciesIndex: Map<string, number>,
 ): number {
