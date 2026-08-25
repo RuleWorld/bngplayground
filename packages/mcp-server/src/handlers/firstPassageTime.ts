@@ -62,15 +62,9 @@ export async function handleFirstPassageTime(args: ToolArgs): Promise<ToolResult
             ));
         }
 
-        const model = parseModelOrThrow(parsedArgs.code);
-        const expanded = await expandModel(model);
-
-        const requiredObs = new Set(parsedArgs.thresholds.map((t) => t.observable));
-        const modelObsNames = new Set((model.observables ?? []).map((o) => o.name));
-        const missing = [...requiredObs].filter((o) => !modelObsNames.has(o));
-        if (missing.length > 0) {
+        if (!parsedArgs.thresholds || parsedArgs.thresholds.length === 0) {
             return createToolResult(structureError(
-                new Error(`Thresholds reference observables not in model: ${missing.join(', ')}`),
+                new Error('thresholds must be a non-empty array.'),
             ));
         }
 
@@ -78,6 +72,25 @@ export async function handleFirstPassageTime(args: ToolArgs): Promise<ToolResult
             return createToolResult(structureError(
                 new Error('n_trajectories > 500 not supported by this handler (serial SSA). ' +
                           'Split the request or use the UI-side worker-pool path.'),
+            ));
+        }
+
+        const model = parseModelOrThrow(parsedArgs.code);
+        const expanded = await expandModel(model);
+
+        const reactions = expanded.reactions ?? [];
+        if (reactions.length === 0) {
+            return createToolResult(structureError(
+                new Error('Expanded model has no reactions — cannot run SSA simulation for first passage time'),
+            ));
+        }
+
+        const requiredObs = new Set(parsedArgs.thresholds.map((t) => t.observable));
+        const modelObsNames = new Set((model.observables ?? []).map((o) => o.name));
+        const missing = [...requiredObs].filter((o) => !modelObsNames.has(o));
+        if (missing.length > 0) {
+            return createToolResult(structureError(
+                new Error(`Thresholds reference observables not in model: ${missing.join(', ')}`),
             ));
         }
 
