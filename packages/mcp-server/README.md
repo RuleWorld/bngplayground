@@ -148,10 +148,14 @@ The hosted endpoint and its authentication policy are deployment concerns and ar
 
 ## Interactive result views (MCP Apps)
 
-The `simulate` and `get_contact_map` tools advertise MCP App resources. A host
+The `parse_bngl`, `simulate`, `parameter_scan`, `validate_model`, and
+`get_contact_map` tools advertise MCP App resources. A host
 that supports the official `io.modelcontextprotocol/ui` extension can render:
 
+- model summaries, reaction-rule inventories, regulatory graphs, and rule-influence maps;
 - simulation trajectories with series toggling, isolation, scaling, and zoom;
+- one-parameter response curves and two-parameter heatmaps;
+- grouped parser, model, observable, and NFsim validation diagnostics;
 - contact maps with the existing Cytoscape layouts and fit controls.
 
 Both views reuse the website's React components and are bundled into one

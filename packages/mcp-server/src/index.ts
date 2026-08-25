@@ -34,7 +34,10 @@ import {
 import {
   CONTACT_MAP_APP_URI,
   MCP_APPS_EXTENSION_ID,
+  MODEL_STRUCTURE_APP_URI,
+  PARAMETER_SCAN_APP_URI,
   SIMULATION_APP_URI,
+  VALIDATION_APP_URI,
   createAppToolMeta,
   listAppResources,
   readAppResource,
@@ -118,6 +121,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'parse_bngl',
         description: 'Parse BNGL (BioNetGen Language) code and return structured result',
+        _meta: createAppToolMeta(MODEL_STRUCTURE_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -247,6 +251,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'parameter_scan',
         description: 'Run a 1D or 2D parameter scan while reusing a single expanded network',
+        _meta: createAppToolMeta(PARAMETER_SCAN_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -271,6 +276,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'validate_model',
         description: 'Parse and validate BNGL structure, observables, and NFsim compatibility',
+        _meta: createAppToolMeta(VALIDATION_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {

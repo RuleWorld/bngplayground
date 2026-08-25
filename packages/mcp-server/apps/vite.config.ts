@@ -14,9 +14,9 @@ export default defineConfig({
   plugins: [react(), viteSingleFile()],
   resolve: {
     alias: {
-      // The reused contact-map component only needs escapeXml at runtime. Point
-      // its engine import at the narrow utility to avoid bundling the simulator.
-      '@bngplayground/engine': resolve(repositoryRoot, 'packages/engine/src/utils/xmlUtils.ts'),
+      // Reused graph components need a small parser/XML subset. Point their
+      // package import at an explicit bridge instead of bundling the simulator.
+      '@bngplayground/engine': resolve(appsDir, 'src/engineBridge.ts'),
       '@': repositoryRoot,
       fs: resolve(repositoryRoot, 'src/shims/fs-shim.js'),
     },

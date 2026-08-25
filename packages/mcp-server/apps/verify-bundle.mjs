@@ -12,6 +12,10 @@ if (/<link\b[^>]*\brel=["']stylesheet["'][^>]*\bhref\s*=/i.test(html)) {
 if (!html.includes('ui/initialize')) failures.push('does not include the MCP Apps bridge');
 if (!html.includes('Simulation trajectories')) failures.push('does not include the simulation view');
 if (!html.includes('Contact map')) failures.push('does not include the contact-map view');
+if (!html.includes('Regulatory graph')) failures.push('does not include the regulatory-graph view');
+if (!html.includes('Influence graph')) failures.push('does not include the influence-graph view');
+if (!html.includes('Parameter scan')) failures.push('does not include the parameter-scan view');
+if (!html.includes('Model is valid')) failures.push('does not include the validation view');
 
 if (failures.length > 0) {
   throw new Error(`Invalid MCP App bundle: ${failures.join('; ')}`);

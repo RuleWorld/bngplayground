@@ -3,7 +3,10 @@ import { describe, expect, it } from 'vitest';
 import {
   CONTACT_MAP_APP_URI,
   MCP_APP_MIME_TYPE,
+  MODEL_STRUCTURE_APP_URI,
+  PARAMETER_SCAN_APP_URI,
   SIMULATION_APP_URI,
+  VALIDATION_APP_URI,
   createAppResourceReadResult,
   createAppToolMeta,
   listAppResources,
@@ -13,6 +16,9 @@ import { ListResourcesRequestSchema, ListToolsRequestSchema } from '../src/sdk.j
 import {
   classifyResultPayload,
   extractResultPayload,
+  getParameterScanHeatmap,
+  getParameterScanRows,
+  getParameterScanSeries,
   getSimulationData,
   getSimulationSeries,
 } from '../apps/src/resultAdapters.js';
@@ -25,13 +31,16 @@ describe('MCP Apps server metadata', () => {
     });
   });
 
-  it('lists both self-contained UI resources with deny-by-default CSP', async () => {
+  it('lists all self-contained UI resources with deny-by-default CSP', async () => {
     const result = await server.handle(ListResourcesRequestSchema, {});
     const resources = (result as { resources: ReturnType<typeof listAppResources> }).resources;
 
     expect(resources.map((resource) => resource.uri)).toEqual([
+      MODEL_STRUCTURE_APP_URI,
       SIMULATION_APP_URI,
       CONTACT_MAP_APP_URI,
+      PARAMETER_SCAN_APP_URI,
+      VALIDATION_APP_URI,
     ]);
     expect(resources.every((resource) => resource.mimeType === MCP_APP_MIME_TYPE)).toBe(true);
     expect(resources[0]._meta.ui.csp).toEqual({
@@ -47,9 +56,15 @@ describe('MCP Apps server metadata', () => {
     const tools = (result as { tools: Array<{ name: string; description?: string; inputSchema?: { properties?: Record<string, { description?: string }> }; _meta?: Record<string, unknown> }> }).tools;
     const simulate = tools.find((tool) => tool.name === 'simulate');
     const contactMap = tools.find((tool) => tool.name === 'get_contact_map');
+    const parseBngl = tools.find((tool) => tool.name === 'parse_bngl');
+    const parameterScan = tools.find((tool) => tool.name === 'parameter_scan');
+    const validateModel = tools.find((tool) => tool.name === 'validate_model');
 
+    expect(parseBngl?._meta).toEqual(createAppToolMeta(MODEL_STRUCTURE_APP_URI));
     expect(simulate?._meta).toEqual(createAppToolMeta(SIMULATION_APP_URI));
     expect(contactMap?._meta).toEqual(createAppToolMeta(CONTACT_MAP_APP_URI));
+    expect(parameterScan?._meta).toEqual(createAppToolMeta(PARAMETER_SCAN_APP_URI));
+    expect(validateModel?._meta).toEqual(createAppToolMeta(VALIDATION_APP_URI));
     expect(simulate?.inputSchema?.properties?.solver?.description).toContain('Defaults to auto');
   });
 
@@ -105,6 +120,52 @@ describe('MCP App result adapters', () => {
       error: 'STIFF_DETECTED',
       partial_result: simulation,
     })).toBe('error');
+  });
+
+  it('classifies parsed models and validation reports', () => {
+    expect(classifyResultPayload({ success: true, model: { reactionRules: [] }, errors: [] })).toBe('model');
+    expect(classifyResultPayload({
+      valid: true,
+      parseSuccess: true,
+      summary: { errors: 0, warnings: 0, info: 1 },
+      errors: [],
+      warnings: [],
+      info: [],
+    })).toBe('validation');
+  });
+
+  it('adapts 1D parameter scans into chart rows', () => {
+    const scan = {
+      mode: '1d' as const,
+      parameter: 'kon',
+      xValues: [0.1, 1],
+      observables: { Bound: [2, 8], Free: [8, 2] },
+    };
+
+    expect(classifyResultPayload(scan)).toBe('parameter-scan');
+    expect(getParameterScanSeries(scan)).toEqual(['Bound', 'Free']);
+    expect(getParameterScanRows(scan)).toEqual([
+      { kon: 0.1, Bound: 2, Free: 8 },
+      { kon: 1, Bound: 8, Free: 2 },
+    ]);
+  });
+
+  it('adapts 2D parameter scans using the engine y-by-x matrix order', () => {
+    const scan = {
+      mode: '2d' as const,
+      parameter: 'kon',
+      parameter2: 'koff',
+      xValues: [1, 2],
+      yValues: [10, 20],
+      observables: { Bound: [[11, 12], [21, 22]] },
+    };
+
+    expect(getParameterScanHeatmap(scan, 'Bound')).toEqual([
+      { x: 1, y: 10, value: 11 },
+      { x: 2, y: 10, value: 12 },
+      { x: 1, y: 20, value: 21 },
+      { x: 2, y: 20, value: 22 },
+    ]);
   });
 
   it('does not treat invalid text as a result payload', () => {

@@ -8,6 +8,9 @@ export const MCP_APP_RESOURCE_URI_META_KEY = 'ui/resourceUri';
 
 export const SIMULATION_APP_URI = 'ui://bngplayground/simulation.html';
 export const CONTACT_MAP_APP_URI = 'ui://bngplayground/contact-map.html';
+export const MODEL_STRUCTURE_APP_URI = 'ui://bngplayground/model-structure.html';
+export const PARAMETER_SCAN_APP_URI = 'ui://bngplayground/parameter-scan.html';
+export const VALIDATION_APP_URI = 'ui://bngplayground/validation.html';
 
 const APP_BUNDLE_FILENAME = 'bng-results.html';
 const moduleDir = dirname(fileURLToPath(import.meta.url));
@@ -45,6 +48,14 @@ const APP_RESOURCE_META = {
 
 const APP_RESOURCES: AppResourceDescriptor[] = [
   {
+    uri: MODEL_STRUCTURE_APP_URI,
+    name: 'bngplayground-model-structure',
+    title: 'BioNetGen model structure',
+    description: 'Interactive regulatory graph, model inventory, and reaction-rule browser.',
+    mimeType: MCP_APP_MIME_TYPE,
+    _meta: APP_RESOURCE_META,
+  },
+  {
     uri: SIMULATION_APP_URI,
     name: 'bngplayground-simulation-results',
     title: 'BioNetGen simulation results',
@@ -57,6 +68,22 @@ const APP_RESOURCES: AppResourceDescriptor[] = [
     name: 'bngplayground-contact-map',
     title: 'BioNetGen contact map',
     description: 'Interactive contact-map viewer for BioNetGen models.',
+    mimeType: MCP_APP_MIME_TYPE,
+    _meta: APP_RESOURCE_META,
+  },
+  {
+    uri: PARAMETER_SCAN_APP_URI,
+    name: 'bngplayground-parameter-scan',
+    title: 'BioNetGen parameter scan',
+    description: 'Interactive response curves and two-parameter heatmaps.',
+    mimeType: MCP_APP_MIME_TYPE,
+    _meta: APP_RESOURCE_META,
+  },
+  {
+    uri: VALIDATION_APP_URI,
+    name: 'bngplayground-validation',
+    title: 'BioNetGen validation report',
+    description: 'Model validity, parser diagnostics, warnings, and NFsim compatibility.',
     mimeType: MCP_APP_MIME_TYPE,
     _meta: APP_RESOURCE_META,
   },
