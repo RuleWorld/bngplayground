@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { parseBNGL } from '../../services/parseBNGL';
 import { simulate } from '@bngplayground/engine';
 import { SimulationOptions } from '../../types';
@@ -6,8 +6,12 @@ import { describe, it, expect } from 'vitest';
 import { findRuleHubModelPath } from '../helpers/rulehub';
 
 describe('stat3-mediated-transcription simulation parity', () => {
-  it('should produce non-zero Total_pSTAT3 at early timepoints', async () => {
-    const file = findRuleHubModelPath('stat3-mediated-transcription')!;
+  it('should produce non-zero Total_pSTAT3 at early timepoints', async (ctx) => {
+    const file = findRuleHubModelPath('stat3-mediated-transcription');
+    if (!file || !existsSync(file)) {
+      ctx.skip();
+      return;
+    }
     const code = readFileSync(file, 'utf8');
     const model = parseBNGL(code);
 

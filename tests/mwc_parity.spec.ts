@@ -1,4 +1,3 @@
-
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
@@ -9,16 +8,22 @@ import { describe, test, expect, beforeAll } from 'vitest';
 import { findRuleHubModelPath } from './helpers/rulehub';
 
 describe('MWC Energy Model Parity', () => {
-  const mwcBnglPath = findRuleHubModelPath('mwc')!;
-  let mwcContent: string;
+  const mwcBnglPath = findRuleHubModelPath('mwc');
+  let mwcContent: string | null = null;
 
   beforeAll(() => {
-    mwcContent = fs.readFileSync(mwcBnglPath, 'utf-8');
-    // Sanitize: comment out setOption which might not be supported by current grammar in this position
-    mwcContent = mwcContent.replace(/setOption/g, '#setOption');
+    if (mwcBnglPath && fs.existsSync(mwcBnglPath)) {
+      mwcContent = fs.readFileSync(mwcBnglPath, 'utf-8');
+      // Sanitize: comment out setOption which might not be supported by current grammar in this position
+      mwcContent = mwcContent.replace(/setOption/g, '#setOption');
+    }
   });
 
-  test('Should parse MWC model with energy patterns', () => {
+  test('Should parse MWC model with energy patterns', (ctx) => {
+    if (!mwcContent) {
+      ctx.skip();
+      return;
+    }
     const model = parseBNGLStrict(mwcContent);
     expect(model.energyPatterns).toBeDefined();
     expect(model.energyPatterns?.length).toBeGreaterThan(0);
@@ -29,7 +34,11 @@ describe('MWC Energy Model Parity', () => {
     expect(htPattern?.expression).toContain('-ln(K_RT)');
   });
 
-  test('Should calculate correct species energies', () => {
+  test('Should calculate correct species energies', (ctx) => {
+    if (!mwcContent) {
+      ctx.skip();
+      return;
+    }
     const model = parseBNGLStrict(mwcContent);
     const energyService = new EnergyService(model.energyPatterns!);
     
@@ -50,7 +59,11 @@ describe('MWC Energy Model Parity', () => {
     expect(energyHR).toBeCloseTo(0, 4);
   });
 
-  test('Should generate correct Arrhenius rates for R_RT', async () => {
+  test('Should generate correct Arrhenius rates for R_RT', async (ctx) => {
+    if (!mwcContent) {
+      ctx.skip();
+      return;
+    }
     const model = parseBNGLStrict(mwcContent);
     
     // Resolve parameters

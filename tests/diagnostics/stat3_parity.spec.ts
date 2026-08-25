@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { parseBNGL } from '../../services/parseBNGL';
 import { describe, it, expect } from 'vitest';
 import { BNGLParser } from '@bngplayground/engine';
@@ -7,8 +7,12 @@ import { countPatternMatches } from '@bngplayground/engine';
 import { findRuleHubModelPath } from '../helpers/rulehub';
 
 describe('stat3-mediated-transcription parity diagnostic', () => {
-  it('should find embeddings for Active_Dimer and Total_pSTAT3 patterns', async () => {
-    const file = findRuleHubModelPath('stat3-mediated-transcription')!;
+  it('should find embeddings for Active_Dimer and Total_pSTAT3 patterns', async (ctx) => {
+    const file = findRuleHubModelPath('stat3-mediated-transcription');
+    if (!file || !existsSync(file)) {
+      ctx.skip();
+      return;
+    }
     const code = readFileSync(file, 'utf8');
 
     const model = parseBNGL(code);
