@@ -21,6 +21,7 @@ interface ContactMapViewerProps {
   onSelectRule?: (ruleId: string) => void;
   ruleOverlay?: RuleOverlay | null;
   dynamicSnapshot?: ContactMapSnapshot | null;
+  showExportControls?: boolean;
 }
 
 type LayoutType = 'hierarchical' | 'cose' | 'fcose' | 'grid' | 'concentric' | 'breadthfirst' | 'circle' | 'preset';
@@ -481,7 +482,13 @@ const forcePostLayoutRedraw = (cy: cytoscape.Core) => {
   });
 };
 
-export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, onSelectRule, ruleOverlay, dynamicSnapshot }) => {
+export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({
+  contactMap,
+  onSelectRule,
+  ruleOverlay,
+  dynamicSnapshot,
+  showExportControls = true,
+}) => {
   const [isLayoutRunning, setIsLayoutRunning] = useState(false);
   const [layoutDone, setLayoutDone] = useState(false);
   const [activeLayout, setActiveLayout] = useState<LayoutType>('fcose');
@@ -489,8 +496,11 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
   const cyRef = useRef<cytoscape.Core | null>(null);
   const layoutSequenceRef = useRef(0);
   const onSelectRuleRef = useRef(onSelectRule);
-  onSelectRuleRef.current = onSelectRule;
   const isDark = document.documentElement.classList.contains('dark');
+
+  useEffect(() => {
+    onSelectRuleRef.current = onSelectRule;
+  }, [onSelectRule]);
 
   useEffect(() => {
     if (!containerRef.current) return;
@@ -742,10 +752,14 @@ export const ContactMapViewer: React.FC<ContactMapViewerProps> = ({ contactMap, 
         <div className="flex items-center gap-1">
           <Button variant="subtle" onClick={handleFit} className="text-xs h-6 px-2">Fit</Button>
           <Button variant="subtle" onClick={() => runLayout()} disabled={isLayoutRunning} className="text-xs h-6 px-2">Redo</Button>
-          <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
-          <span className="text-xs text-slate-500 dark:text-slate-400">Export:</span>
-          <Button variant="subtle" onClick={handleExportPNG} className="text-xs h-6 px-2">PNG</Button>
-          <Button variant="subtle" onClick={handleExportGraphML} className="text-xs h-6 px-2" title="Export for yED Graph Editor">yED</Button>
+          {showExportControls && (
+            <>
+              <div className="w-px h-4 bg-slate-300 dark:bg-slate-600 mx-1" />
+              <span className="text-xs text-slate-500 dark:text-slate-400">Export:</span>
+              <Button variant="subtle" onClick={handleExportPNG} className="text-xs h-6 px-2">PNG</Button>
+              <Button variant="subtle" onClick={handleExportGraphML} className="text-xs h-6 px-2" title="Export for yED Graph Editor">yED</Button>
+            </>
+          )}
         </div>
       </div>
 

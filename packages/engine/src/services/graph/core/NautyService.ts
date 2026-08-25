@@ -83,7 +83,14 @@ export class NautyService {
 
     // Allocate memory in WASM heap
     const adjPtr = this.nautyModule._malloc(byteCount);
+    if (!adjPtr) {
+      throw new Error('Nauty WASM malloc failed for adjPtr');
+    }
     const orbitsPtr = this.nautyModule._malloc(n * 4);
+    if (!orbitsPtr) {
+      this.nautyModule._free(adjPtr);
+      throw new Error('Nauty WASM malloc failed for orbitsPtr');
+    }
 
     try {
       // Copy adjacency matrix to heap using setValue
@@ -125,12 +132,30 @@ export class NautyService {
     
     // Allocate memory in WASM heap
     const adjPtr = this.nautyModule._malloc(byteCount);
+    if (!adjPtr) {
+      throw new Error('Nauty WASM malloc failed for adjPtr');
+    }
     const labPtr = this.nautyModule._malloc(n * 4);
+    if (!labPtr) {
+      this.nautyModule._free(adjPtr);
+      throw new Error('Nauty WASM malloc failed for labPtr');
+    }
     const orbitsPtr = this.nautyModule._malloc(n * 4);
+    if (!orbitsPtr) {
+      this.nautyModule._free(adjPtr);
+      this.nautyModule._free(labPtr);
+      throw new Error('Nauty WASM malloc failed for orbitsPtr');
+    }
     let colorsPtr = 0;
 
     if (colors) {
-        colorsPtr = this.nautyModule._malloc(n * 4);
+      colorsPtr = this.nautyModule._malloc(n * 4);
+      if (!colorsPtr) {
+        this.nautyModule._free(adjPtr);
+        this.nautyModule._free(labPtr);
+        this.nautyModule._free(orbitsPtr);
+        throw new Error('Nauty WASM malloc failed for colorsPtr');
+      }
     }
 
     try {

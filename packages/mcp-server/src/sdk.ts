@@ -5,7 +5,10 @@
 type Constructor<T = unknown> = new (...args: unknown[]) => T;
 
 interface RealServerInstance {
-  setRequestHandler?: (schema: unknown, handler: (req: unknown) => Promise<unknown> | unknown) => void;
+  setRequestHandler?: (
+    schema: unknown,
+    handler: (req: unknown, extra: { signal: AbortSignal }) => Promise<unknown> | unknown,
+  ) => void;
   connect?: (transport: unknown) => Promise<void> | void;
   listen?: (transport: unknown) => Promise<void> | void;
 }
@@ -31,6 +34,8 @@ let RealServer: Constructor<RealServerInstance> | undefined;
 let RealStdioServerTransport: Constructor<RealTransportInstance> | undefined;
 let realListToolsRequestSchema: unknown;
 let realCallToolRequestSchema: unknown;
+let realListResourcesRequestSchema: unknown;
+let realReadResourceRequestSchema: unknown;
 
 try {
   const [serverModule, stdioModule, typesModule] = await Promise.all([
@@ -43,12 +48,14 @@ try {
   RealStdioServerTransport = stdioModule.StdioServerTransport as Constructor<RealTransportInstance>;
   realListToolsRequestSchema = typesModule.ListToolsRequestSchema;
   realCallToolRequestSchema = typesModule.CallToolRequestSchema;
+  realListResourcesRequestSchema = typesModule.ListResourcesRequestSchema;
+  realReadResourceRequestSchema = typesModule.ReadResourceRequestSchema;
 } catch {
   // Fall back to the local stub behavior.
 }
 
 export class Server {
-  private handlers = new Map<unknown, (req: never) => Promise<unknown> | unknown>();
+  private handlers = new Map<unknown, (req: never, extra?: { signal?: AbortSignal }) => Promise<unknown> | unknown>();
   private impl?: RealServerInstance;
 
   constructor(info: unknown, opts?: unknown) {
@@ -57,9 +64,15 @@ export class Server {
     }
   }
 
-  setRequestHandler<T>(schema: unknown, handler: (req: T) => Promise<unknown> | unknown) {
-    this.handlers.set(schema, handler as (req: never) => Promise<unknown> | unknown);
-    this.impl?.setRequestHandler?.(schema, handler as (req: unknown) => Promise<unknown> | unknown);
+  setRequestHandler<T>(
+    schema: unknown,
+    handler: (req: T, extra?: { signal?: AbortSignal }) => Promise<unknown> | unknown,
+  ) {
+    this.handlers.set(schema, handler as (req: never, extra?: { signal?: AbortSignal }) => Promise<unknown> | unknown);
+    this.impl?.setRequestHandler?.(
+      schema,
+      handler as (req: unknown, extra: { signal: AbortSignal }) => Promise<unknown> | unknown,
+    );
   }
 
   async handle(schema: unknown, req: unknown) {
@@ -91,3 +104,5 @@ export class StdioServerTransport {
 
 export const ListToolsRequestSchema = realListToolsRequestSchema ?? Symbol('ListToolsRequest');
 export const CallToolRequestSchema = realCallToolRequestSchema ?? Symbol('CallToolRequest');
+export const ListResourcesRequestSchema = realListResourcesRequestSchema ?? Symbol('ListResourcesRequest');
+export const ReadResourceRequestSchema = realReadResourceRequestSchema ?? Symbol('ReadResourceRequest');

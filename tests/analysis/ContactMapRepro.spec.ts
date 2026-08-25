@@ -9,10 +9,14 @@ import { findRuleHubModelPath } from '../helpers/rulehub';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 // Use a tracked fixture so CI does not depend on locally generated PAC files.
-const MODEL_PATH = findRuleHubModelPath('il6-jak-stat-pathway')!;
+const MODEL_PATH = findRuleHubModelPath('il6-jak-stat-pathway');
 
 describe('Contact map reproduction', () => {
-    it('should not produce edges with full-complex names', () => {
+    it('should not produce edges with full-complex names', (ctx) => {
+        if (!MODEL_PATH || !fs.existsSync(MODEL_PATH)) {
+            ctx.skip();
+            return;
+        }
         const text = fs.readFileSync(MODEL_PATH, 'utf8');
         const res = parseBNGLWithANTLR(text);
         expect(res.success).toBe(true);

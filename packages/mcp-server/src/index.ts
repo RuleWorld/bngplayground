@@ -22,7 +22,26 @@ if (isMain) {
   console.debug = (...args: unknown[]) => _write('[DEBUG] ' + args.map(String).join(' '));
 }
 
-import { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } from './sdk.js';
+import {
+  Server,
+  StdioServerTransport,
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from './sdk.js';
+
+import {
+  CONTACT_MAP_APP_URI,
+  MCP_APPS_EXTENSION_ID,
+  MODEL_STRUCTURE_APP_URI,
+  PARAMETER_SCAN_APP_URI,
+  SIMULATION_APP_URI,
+  VALIDATION_APP_URI,
+  createAppToolMeta,
+  listAppResources,
+  readAppResource,
+} from './apps.js';
 
 import { simulationMethods, solverValues } from './schemas/index.js';
 
@@ -79,8 +98,21 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {},
+      extensions: {
+        [MCP_APPS_EXTENSION_ID]: {},
+      },
     },
   }
+);
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: listAppResources(),
+}));
+
+server.setRequestHandler(
+  ReadResourceRequestSchema,
+  async (request: { params: { uri: string } }) => readAppResource(request.params.uri),
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -89,6 +121,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'parse_bngl',
         description: 'Parse BNGL (BioNetGen Language) code and return structured result',
+        _meta: createAppToolMeta(MODEL_STRUCTURE_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -133,6 +166,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'simulate',
         description: 'Run ODE/SSA simulation on BNGL model',
+        _meta: createAppToolMeta(SIMULATION_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -165,7 +199,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             solver: {
               type: 'string',
               enum: [...solverValues],
-              description: 'Optional ODE solver override. Defaults to rk4 for ODE requests.',
+              description: 'Optional ODE solver override. Defaults to auto (CVODE-family selection) for ODE requests.',
             },
             atol: {
               type: 'number',
@@ -217,6 +251,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'parameter_scan',
         description: 'Run a 1D or 2D parameter scan while reusing a single expanded network',
+        _meta: createAppToolMeta(PARAMETER_SCAN_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -241,6 +276,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'validate_model',
         description: 'Parse and validate BNGL structure, observables, and NFsim compatibility',
+        _meta: createAppToolMeta(VALIDATION_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -253,6 +289,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_contact_map',
         description: 'Build a static contact map from the parsed molecule types and reaction rules',
+        _meta: createAppToolMeta(CONTACT_MAP_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -884,7 +921,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name: string; arguments: Record<string, unknown> } }) => {
+server.setRequestHandler(CallToolRequestSchema, async (
+  request: { params: { name: string; arguments: Record<string, unknown> } },
+  extra?: { signal?: AbortSignal },
+) => {
   const { name, arguments: args } = request.params;
   switch (name) {
     case 'parse_bngl':
@@ -892,7 +932,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
     case 'generate_network':
       return handleGenerateNetwork(args);
     case 'simulate':
-      return handleSimulate(args);
+      return handleSimulate(args, extra?.signal);
     case 'parameter_scan':
       return handleParameterScan(args);
     case 'validate_model':

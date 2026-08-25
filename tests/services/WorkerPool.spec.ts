@@ -117,4 +117,66 @@ describe('WorkerPool batch method', () => {
 
         pool.terminate();
     });
+
+    it('rejects pending task when worker returns null or non-object message', async () => {
+        const pool = new WorkerPool('/dummy-worker.js', 1);
+        await pool.initialize();
+
+        mockWorkerInsts[0].postMessage = vi.fn((req) => {
+            const { id } = req;
+            setTimeout(() => {
+                mockWorkerInsts[0].trigger(null);
+            }, 0);
+        });
+
+        await expect(pool.submit('RUN_SIMULATION', {})).rejects.toThrow(
+            'Worker returned null or non-object result message'
+        );
+
+        pool.terminate();
+    });
+
+    it('rejects pending task when worker returns type ERROR', async () => {
+        const pool = new WorkerPool('/dummy-worker.js', 1);
+        await pool.initialize();
+
+        mockWorkerInsts[0].postMessage = vi.fn((req) => {
+            const { id } = req;
+            setTimeout(() => {
+                mockWorkerInsts[0].trigger({
+                    id,
+                    type: 'ERROR',
+                    error: 'Custom worker computational error'
+                });
+            }, 0);
+        });
+
+        await expect(pool.submit('RUN_SIMULATION', {})).rejects.toThrow(
+            'Custom worker computational error'
+        );
+
+        pool.terminate();
+    });
+
+    it('rejects pending task when worker returns an unrecognized message type', async () => {
+        const pool = new WorkerPool('/dummy-worker.js', 1);
+        await pool.initialize();
+
+        mockWorkerInsts[0].postMessage = vi.fn((req) => {
+            const { id } = req;
+            setTimeout(() => {
+                mockWorkerInsts[0].trigger({
+                    id,
+                    type: 'UNKNOWN_TYPE',
+                    data: 123
+                });
+            }, 0);
+        });
+
+        await expect(pool.submit('RUN_SIMULATION', {})).rejects.toThrow(
+            'Worker returned unrecognized message type: UNKNOWN_TYPE'
+        );
+
+        pool.terminate();
+    });
 });

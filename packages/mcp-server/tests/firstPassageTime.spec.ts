@@ -142,4 +142,44 @@ describe('first_passage_time handler', () => {
         const body = JSON.parse(result.content[0].text);
         expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/n_trajectories: Too small|expected number to be >0/i);
     });
+
+    it('rejects malformed or unparseable BNGL code', async () => {
+        const result = await handleFirstPassageTime({
+            code: 'begin model\nbegin parameters\n  kf === +++\nend parameters\nend model',
+            thresholds: [{ observable: 'Cplx', value: 5, direction: 'above' }],
+            n_trajectories: 5,
+            t_end: 10,
+            n_steps: 20,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        const errStr = body.error ?? body.message ?? JSON.stringify(body);
+        expect(String(errStr)).toMatch(/BNGL parse failed/i);
+    });
+
+    it('rejects model with no reactions', async () => {
+        const NO_REACTIONS_MODEL = `begin model
+begin molecule types
+  A()
+end molecule types
+begin seed species
+  A() 10
+end seed species
+begin observables
+  Molecules TotalA A()
+end observables
+end model`;
+
+        const result = await handleFirstPassageTime({
+            code: NO_REACTIONS_MODEL,
+            thresholds: [{ observable: 'TotalA', value: 5, direction: 'above' }],
+            n_trajectories: 5,
+            t_end: 10,
+            n_steps: 20,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        const errStr = body.error ?? body.message ?? JSON.stringify(body);
+        expect(String(errStr)).toMatch(/no reactions/i);
+    });
 });
