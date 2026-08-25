@@ -110,5 +110,64 @@ describe('Nauty canonicalization', () => {
     const result2 = GraphCanonicalizer.canonicalize(g2);
     expect(result2).toEqual(result);
   });
+
+  it('handles WASM malloc failure in getCanonicalOrbits and getCanonicalLabeling gracefully', () => {
+    const nauty = NautyService.getInstance();
+    if (!nauty.isInitialized) {
+      return;
+    }
+
+    const nautyModule = (nauty as any).nautyModule;
+    const originalMalloc = nautyModule._malloc;
+    const originalFree = nautyModule._free;
+
+    try {
+      // Test 1: Malloc fails for adjPtr in getCanonicalOrbits
+      nautyModule._malloc = () => 0;
+      expect(() => nauty.getCanonicalOrbits(3, [0, 1, 0, 1, 0, 0, 0, 0, 0])).toThrow(
+        'Nauty WASM malloc failed for adjPtr'
+      );
+
+      // Test 2: Malloc fails for orbitsPtr in getCanonicalOrbits
+      const freedPtrs: number[] = [];
+      nautyModule._free = (ptr: number) => { freedPtrs.push(ptr); };
+      let callCount = 0;
+      nautyModule._malloc = (size: number) => {
+        callCount++;
+        return callCount === 1 ? 1000 : 0;
+      };
+      expect(() => nauty.getCanonicalOrbits(3, [0, 1, 0, 1, 0, 0, 0, 0, 0])).toThrow(
+        'Nauty WASM malloc failed for orbitsPtr'
+      );
+      expect(freedPtrs).toContain(1000);
+
+      // Test 3: Malloc fails for labPtr in getCanonicalLabeling
+      freedPtrs.length = 0;
+      callCount = 0;
+      nautyModule._malloc = (size: number) => {
+        callCount++;
+        return callCount === 1 ? 1000 : 0;
+      };
+      expect(() => nauty.getCanonicalLabeling(3, [0, 1, 0, 1, 0, 0, 0, 0, 0])).toThrow(
+        'Nauty WASM malloc failed for labPtr'
+      );
+      expect(freedPtrs).toContain(1000);
+
+      // Test 4: Malloc fails for colorsPtr in getCanonicalLabeling
+      freedPtrs.length = 0;
+      callCount = 0;
+      nautyModule._malloc = (size: number) => {
+        callCount++;
+        return callCount <= 3 ? callCount * 1000 : 0;
+      };
+      expect(() => nauty.getCanonicalLabeling(3, [0, 1, 0, 1, 0, 0, 0, 0, 0], [1, 1, 2])).toThrow(
+        'Nauty WASM malloc failed for colorsPtr'
+      );
+      expect(freedPtrs).toEqual(expect.arrayContaining([1000, 2000, 3000]));
+    } finally {
+      nautyModule._malloc = originalMalloc;
+      nautyModule._free = originalFree;
+    }
+  });
 });
 
