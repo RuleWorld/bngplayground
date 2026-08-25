@@ -62,13 +62,13 @@ export function normalizeFilterNames(names?: string[]) {
 }
 
 /**
- * Sanitizes a model name or identifier into a filesystem- and JS-identifier-safe key.
+ * Normalizes a model name or identifier into a lowercase ASCII key.
  *
  * Replaces any non-alphanumeric ASCII character (`[^a-z0-9]`, case-insensitive)
  * with an underscore (`_`) and converts the resulting string to lowercase.
  *
  * @param name - The original raw model name or identifier to sanitize.
- * @return The sanitized, lowercase string suitable for filenames or map keys.
+ * @returns The normalized string used by batch-runner filename and map-key conventions.
  *
  * @invariant Pure function; browser-API-free.
  */
