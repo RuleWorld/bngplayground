@@ -37,8 +37,14 @@ describe('MCP App result integration', () => {
 
   it('recognizes the live validation payload as a validation result', async () => {
     const result = await handleValidateModel({ code: MODEL, include_nfsim: true });
-    expect(classifyResultPayload(result.structuredContent)).toBe('validation');
-    expect(result.structuredContent.parseSuccess).toBe(true);
+    const payload = result.structuredContent;
+
+    if ('error' in payload) {
+      throw new Error(`Unexpected MCP error: ${payload.error}`);
+    }
+
+    expect(classifyResultPayload(payload)).toBe('validation');
+    expect(payload.parseSuccess).toBe(true);
   });
 
   it('recognizes and charts the live parameter_scan payload', async () => {
@@ -52,8 +58,14 @@ describe('MCP App result integration', () => {
       n_steps: 2,
     });
 
-    expect(classifyResultPayload(result.structuredContent)).toBe('parameter-scan');
-    expect(getParameterScanRows(result.structuredContent)).toHaveLength(3);
+    const payload = result.structuredContent;
+
+    if ('error' in payload) {
+      throw new Error(`Unexpected MCP error: ${payload.error}`);
+    }
+
+    expect(classifyResultPayload(payload)).toBe('parameter-scan');
+    expect(getParameterScanRows(payload)).toHaveLength(3);
   });
 
   it('preserves x/y coordinates for a live 2D parameter-scan heatmap', async () => {
@@ -71,8 +83,15 @@ describe('MCP App result integration', () => {
       n_steps: 2,
     });
 
-    expect(result.structuredContent.mode).toBe('2d');
-    const heatmap = getParameterScanHeatmap(result.structuredContent, 'Bound');
+    const payload = result.structuredContent;
+
+    if ('error' in payload) {
+      throw new Error(`Unexpected MCP error: ${payload.error}`);
+    }
+
+    expect(payload.mode).toBe('2d');
+    const heatmap = getParameterScanHeatmap(payload, 'Bound');
+
     expect(heatmap).toHaveLength(6);
     expect(heatmap.map(({ x, y }) => [x, y])).toEqual([
       [0.005, 0.05],
