@@ -8,12 +8,18 @@ The server currently uses MCP's local `stdio` transport. It is intended for clie
 
 ## Prepare the repository
 
-Install dependencies and build the engine package from the repository root:
+Use Node.js 20 or newer. Install dependencies and build the engine and MCP
+server packages from the repository root:
 
 ```bash
 npm install
 npm run build -w @bngplayground/engine
+npm run build -w @bngplayground/mcp-server
 ```
+
+The MCP server build also creates the self-contained HTML bundle used by the
+interactive result views. Re-run it after changing files under
+`packages/mcp-server/apps/` or the reused chart/contact-map components.
 
 The most reliable local launch uses absolute paths to Node, the repository's `tsx` CLI, and the server source file. Find Node with `command -v node` on macOS/Linux or `where.exe node` on Windows.
 
@@ -140,6 +146,24 @@ The local commands above cannot be pasted into a remote connector form.
 
 The hosted endpoint and its authentication policy are deployment concerns and are not currently included in this package.
 
+## Interactive result views (MCP Apps)
+
+The `parse_bngl`, `simulate`, `parameter_scan`, `validate_model`, and
+`get_contact_map` tools advertise MCP App resources. A host
+that supports the official `io.modelcontextprotocol/ui` extension can render:
+
+- model summaries, reaction-rule inventories, regulatory graphs, and rule-influence maps;
+- simulation trajectories with series toggling, isolation, scaling, and zoom;
+- one-parameter response curves and two-parameter heatmaps;
+- grouped parser, model, observable, and NFsim validation diagnostics;
+- contact maps with the existing Cytoscape layouts and fit controls.
+
+Both views reuse the website's React components and are bundled into one
+self-contained, sandboxed HTML resource. The resource declares no network,
+frame, or external asset origins. Hosts without MCP Apps support continue to
+receive the same text and `structuredContent` tool results; the UI metadata is
+an optional enhancement rather than a new requirement.
+
 ## Capabilities (44 tools)
 
 The authoritative names, descriptions, and input schemas are registered in [`src/index.ts`](src/index.ts).
@@ -168,6 +192,7 @@ For token-efficient simulations, set `output_mode` to `observables_only`. The de
 - **The client cannot find Node or `tsx`:** use absolute paths. Confirm that the Node executable, `node_modules/tsx/dist/cli.mjs`, and `packages/mcp-server/src/index.ts` all exist.
 - **The server disconnects immediately:** run the exact command manually and inspect stderr. Check for malformed JSON, unescaped Windows backslashes, stale paths, or a missing engine build.
 - **The client still shows an old tool list:** fully restart Claude Desktop, or start a new Codex/Claude Code session after changing the MCP configuration.
+- **An interactive result says its bundle is unavailable:** run `npm run build -w @bngplayground/mcp-server` from the repository root, then restart the MCP client.
 - **Random timeouts from a cloud-synced checkout:** MCP startup reads many repository and dependency files. Keep the clone and `node_modules` fully downloaded, mark them “Always Keep on This Device,” or move the clone to a non-synced local directory. Cloud placeholders can cause intermittent startup and module-resolution failures.
 - **Claude Desktop logs:** use its Developer settings to open the MCP logs and inspect the `bngplayground` server's stderr output.
 

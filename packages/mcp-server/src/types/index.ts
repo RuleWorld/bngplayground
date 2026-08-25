@@ -10,6 +10,7 @@ export type ToolResult<T> = {
         text: string;
     }>;
     structuredContent: T;
+    isError?: boolean;
 };
 
 export type { ContactNode, ContactEdge, ContactMap, ValidationMessage, ValidateModelResult } from '@bngplayground/engine';

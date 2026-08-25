@@ -44,12 +44,12 @@
     "LICENSE"
   ],
   "engines": {
-    "node": ">=18.0.0"
+    "node": ">=20.0.0"
   },
   "scripts": {
     "start": "tsx src/index.ts",
     "dev": "tsx src/index.ts",
-    "build": "tsc",
+    "build": "tsc && vite build --config apps/vite.config.ts && node apps/verify-bundle.mjs",
     "test": "vitest run"
   },
   "dependencies": {
@@ -58,8 +58,10 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@types/node": "^26.1.2",
     "ts-node": "^10.9.2",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vite-plugin-singlefile": "^2.3.3"
   }
 }
