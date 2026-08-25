@@ -59,7 +59,7 @@ export class NetworkExporter {
       const reactantsKey = rxn.reactants.slice().sort((a, b) => a - b).join(',');
       const productsKey = rxn.products.slice().sort((a, b) => a - b).join(',');
       const rateExprKey = (rxn.rateExpression ?? '').replace(/\s+/g, ' ').trim();
-      const scaleKey = String((rxn as Rxn & { scalingVolume?: number }).scalingVolume ?? '');
+      const scaleKey = String(rxn.scalingVolume ?? '');
       const key = `${reactantsKey}|${productsKey}|${rateExprKey}|${rxn.rate}|${scaleKey}`;
 
       if (normalizedReverse.has(key)) {
@@ -176,7 +176,7 @@ export class NetworkExporter {
       if (forwardExpr && forwardExpr.trim().length > 0) {
         const normalized = normalizeRateExpr(forwardExpr);
         // TotalRate rules: BNG2 always creates a _rateLawN() function entry
-        const forceFunctionEntry = !!(rule as any).totalRate;
+        const forceFunctionEntry = !!rule.totalRate;
         entry.forward = { key: normalized.key, name: getRateLawName(forwardExpr, forceFunctionEntry) };
       }
 
@@ -264,7 +264,7 @@ export class NetworkExporter {
       // closer to BNG2 .net conventions (notably compartment prefixes).
       const rawName = GraphCanonicalizer.canonicalize(spec.graph);
       const conc = spec.concentration ?? spec.initialConcentration ?? 0;
-      const isConst = !!(spec as Species & { isConstant?: boolean }).isConstant;
+      const isConst = !!spec.isConstant;
       // BNG2 convention: $ goes AFTER the compartment prefix, e.g. @C::$ATP() not $@C::ATP()
       const compartmentPrefix = rawName.match(/^(@[^:]+::)/)?.[1] ?? '';
       const speciesBody = rawName.slice(compartmentPrefix.length);
@@ -286,7 +286,7 @@ export class NetworkExporter {
           parameterMap.set(rateLaw.name, directVal);
         } else {
           try {
-            const exprVal = BNGLParser.evaluateExpression(rateLaw.expr, parameterMap as any);
+            const exprVal = BNGLParser.evaluateExpression(rateLaw.expr, parameterMap);
             if (Number.isFinite(exprVal)) {
               parameterMap.set(rateLaw.name, exprVal);
             }
@@ -311,7 +311,7 @@ export class NetworkExporter {
       // BNG2 .net stores multiplicative coefficients in reaction coefficients.
       // Reconstruct numeric prefix as: statFactor * unitFactor.
       const reactantOrder = rxn.reactants.length;
-      const scalingVolume = (rxn as any).scalingVolume as number | undefined;
+      const scalingVolume = rxn.scalingVolume;
       const rateNameIsNumeric = Number.isFinite(Number(rateName));
 
       // Prefer deriving symbolic multiplicative factor directly from the
@@ -327,7 +327,7 @@ export class NetworkExporter {
 
         // Primary: evaluate rateName (the canonical rate identifier assigned by the exporter)
         try {
-          baseRateValue = BNGLParser.evaluateExpression(rateName, parameterMap as any);
+          baseRateValue = BNGLParser.evaluateExpression(rateName, parameterMap);
         } catch {
           baseRateValue = Number.NaN;
         }
@@ -335,7 +335,7 @@ export class NetworkExporter {
         // Fallback: evaluate baseRateExpr if rateName didn't resolve
         if (!Number.isFinite(baseRateValue) && baseRateExpr.length > 0) {
           try {
-            baseRateValue = BNGLParser.evaluateExpression(baseRateExpr, parameterMap as any);
+            baseRateValue = BNGLParser.evaluateExpression(baseRateExpr, parameterMap);
           } catch {
             baseRateValue = Number.NaN;
           }

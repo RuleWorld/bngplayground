@@ -7,6 +7,7 @@ export class Species {
   index: number;  // unique index in network
   concentration?: number;
   initialConcentration?: number; // Added to track initial values from seeds
+  isConstant?: boolean;
 
   constructor(graph: SpeciesGraph, index: number, concentration?: number) {
     this.graph = graph;
