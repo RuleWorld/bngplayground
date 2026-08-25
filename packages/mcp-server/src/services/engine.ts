@@ -41,6 +41,16 @@ export function createToolResult<T>(data: T): ToolResult<T> {
     };
 }
 
+/**
+ * Formats an MCP tool failure while preserving a structured diagnostic payload.
+ */
+export function createToolErrorResult<T>(data: T): ToolResult<T> {
+    return {
+        ...createToolResult(data),
+        isError: true,
+    };
+}
+
 function formatZodError(toolName: string, args: ToolArgs, error: z.ZodError): Error {
     const issues = error.issues.map((issue) => {
         const path = issue.path.length > 0 ? issue.path.join('.') : 'arguments';

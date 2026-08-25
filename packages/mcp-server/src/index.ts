@@ -22,7 +22,23 @@ if (isMain) {
   console.debug = (...args: unknown[]) => _write('[DEBUG] ' + args.map(String).join(' '));
 }
 
-import { Server, StdioServerTransport, CallToolRequestSchema, ListToolsRequestSchema } from './sdk.js';
+import {
+  Server,
+  StdioServerTransport,
+  CallToolRequestSchema,
+  ListToolsRequestSchema,
+  ListResourcesRequestSchema,
+  ReadResourceRequestSchema,
+} from './sdk.js';
+
+import {
+  CONTACT_MAP_APP_URI,
+  MCP_APPS_EXTENSION_ID,
+  SIMULATION_APP_URI,
+  createAppToolMeta,
+  listAppResources,
+  readAppResource,
+} from './apps.js';
 
 import { simulationMethods, solverValues } from './schemas/index.js';
 
@@ -79,8 +95,21 @@ const server = new Server(
   {
     capabilities: {
       tools: {},
+      resources: {},
+      extensions: {
+        [MCP_APPS_EXTENSION_ID]: {},
+      },
     },
   }
+);
+
+server.setRequestHandler(ListResourcesRequestSchema, async () => ({
+  resources: listAppResources(),
+}));
+
+server.setRequestHandler(
+  ReadResourceRequestSchema,
+  async (request: { params: { uri: string } }) => readAppResource(request.params.uri),
 );
 
 server.setRequestHandler(ListToolsRequestSchema, async () => {
@@ -133,6 +162,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'simulate',
         description: 'Run ODE/SSA simulation on BNGL model',
+        _meta: createAppToolMeta(SIMULATION_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -165,7 +195,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
             solver: {
               type: 'string',
               enum: [...solverValues],
-              description: 'Optional ODE solver override. Defaults to rk4 for ODE requests.',
+              description: 'Optional ODE solver override. Defaults to auto (CVODE-family selection) for ODE requests.',
             },
             atol: {
               type: 'number',
@@ -253,6 +283,7 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
       {
         name: 'get_contact_map',
         description: 'Build a static contact map from the parsed molecule types and reaction rules',
+        _meta: createAppToolMeta(CONTACT_MAP_APP_URI),
         inputSchema: {
           type: 'object',
           properties: {
@@ -884,7 +915,10 @@ server.setRequestHandler(ListToolsRequestSchema, async () => {
   };
 });
 
-server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name: string; arguments: Record<string, unknown> } }) => {
+server.setRequestHandler(CallToolRequestSchema, async (
+  request: { params: { name: string; arguments: Record<string, unknown> } },
+  extra?: { signal?: AbortSignal },
+) => {
   const { name, arguments: args } = request.params;
   switch (name) {
     case 'parse_bngl':
@@ -892,7 +926,7 @@ server.setRequestHandler(CallToolRequestSchema, async (request: { params: { name
     case 'generate_network':
       return handleGenerateNetwork(args);
     case 'simulate':
-      return handleSimulate(args);
+      return handleSimulate(args, extra?.signal);
     case 'parameter_scan':
       return handleParameterScan(args);
     case 'validate_model':
