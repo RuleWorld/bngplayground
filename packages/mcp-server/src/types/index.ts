@@ -1,5 +1,4 @@
 import {
-    validateModelForNFsim,
     BNGLParser
 } from '@bngplayground/engine';
 
@@ -13,15 +12,7 @@ export type ToolResult<T> = {
     structuredContent: T;
 };
 
-export type ValidationMessage = {
-    source: 'parse' | 'model' | 'observable' | 'nfsim';
-    code: string;
-    message: string;
-    severity: 'error' | 'warning' | 'info';
-    relatedElement?: string;
-};
-
-export type { ContactNode, ContactEdge, ContactMap } from '@bngplayground/engine';
+export type { ContactNode, ContactEdge, ContactMap, ValidationMessage, ValidateModelResult } from '@bngplayground/engine';
 
 export type ParameterScanResult = {
     mode: '1d' | '2d';
@@ -30,21 +21,6 @@ export type ParameterScanResult = {
     yValues?: number[];
     parameter: string;
     parameter2?: string;
-};
-
-export type ValidateModelResult = {
-    valid: boolean;
-    parseSuccess: boolean;
-    parseErrors: Array<{ line: number; column: number; message: string }>;
-    errors: ValidationMessage[];
-    warnings: ValidationMessage[];
-    info: ValidationMessage[];
-    summary: {
-        errors: number;
-        warnings: number;
-        info: number;
-    };
-    nfsim: ReturnType<typeof validateModelForNFsim> | null;
 };
 
 export type ParsedSpeciesGraph = ReturnType<typeof BNGLParser.parseSpeciesGraph>;

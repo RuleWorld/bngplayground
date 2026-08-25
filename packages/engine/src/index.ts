@@ -204,6 +204,8 @@ export { boundedReachabilityCheck, checkDeadlock, checkRuleFires } from './servi
 export { fullReachabilityCheck } from './services/verification/SymmetryReducedVerifier';
 export { buildContactMap } from './services/verification/ContactMapBuilder';
 export type { ContactNode, ContactEdge, ContactMap } from './services/verification/ContactMapBuilder';
+export { validateModel } from './services/verification/ValidateModel';
+export type { ValidationMessage, ValidateModelResult } from './services/verification/ValidateModel';
 
 // ── Structure Learning ──────────────────────────────────────────────
 export { enumerateRules, countCandidateRules } from './services/verification/RuleEnumerator';
