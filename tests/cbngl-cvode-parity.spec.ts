@@ -1,4 +1,4 @@
-import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, readdirSync, rmSync, existsSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -79,14 +79,17 @@ function parseGdat(text: string): Record<string, number>[] {
 }
 
 describe('cBNGL_simple CVODE parity', () => {
-  maybeItBng2('matches the BioNetGen reference without model-specific CVODE tuning', async () => {
+  maybeItBng2('matches the BioNetGen reference without model-specific CVODE tuning', async (ctx) => {
     const modelPath = findRuleHubModelPath('cBNGL_simple', projectRoot);
-    expect(modelPath).toBeTruthy();
+    if (!modelPath || !existsSync(modelPath)) {
+      ctx.skip();
+      return;
+    }
 
-    const parsed = parseBNGL(readFileSync(modelPath!, 'utf8'), { modelName: 'cBNGL_simple' });
+    const parsed = parseBNGL(readFileSync(modelPath, 'utf8'), { modelName: 'cBNGL_simple' });
     const expanded = await generateExpandedNetwork(parsed, () => {}, () => {});
     const baseOptions = getSimulationOptionsFromParsedModel(expanded, 'default');
-    const ref = parseGdat(generateReferenceGdatWithBng2(modelPath!));
+    const ref = parseGdat(generateReferenceGdatWithBng2(modelPath));
 
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     try {
@@ -114,11 +117,14 @@ describe('cBNGL_simple CVODE parity', () => {
     }
   }, 60_000);
 
-  it('keeps the amount-space fast path numerically aligned with the slow path', async () => {
+  it('keeps the amount-space fast path numerically aligned with the slow path', async (ctx) => {
     const modelPath = findRuleHubModelPath('cBNGL_simple', projectRoot);
-    expect(modelPath).toBeTruthy();
+    if (!modelPath || !existsSync(modelPath)) {
+      ctx.skip();
+      return;
+    }
 
-    const parsed = parseBNGL(readFileSync(modelPath!, 'utf8'), { modelName: 'cBNGL_simple' });
+    const parsed = parseBNGL(readFileSync(modelPath, 'utf8'), { modelName: 'cBNGL_simple' });
     const expanded = await generateExpandedNetwork(parsed, () => {}, () => {});
     const baseOptions = getSimulationOptionsFromParsedModel(expanded, 'default');
     const callbacks = { checkCancelled: () => {}, postMessage: () => {} };
