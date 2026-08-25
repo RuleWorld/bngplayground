@@ -121,9 +121,6 @@ importers:
       '@types/chai':
         specifier: ^5.2.3
         version: 5.2.3
-      '@types/decimal.js':
-        specifier: ^7.4.3
-        version: 7.4.3
       '@types/node':
         specifier: ^26.1.2
         version: 26.1.2
@@ -1169,10 +1166,6 @@ packages:
 
   '@types/debug@4.1.13':
     resolution: {integrity: sha512-KSVgmQmzMwPlmtljOomayoR89W4FynCAi3E8PPs7vmDVPe84hT+vGPKkJfThkmXs0x0jAaa9U8uW8bbfyS2fWw==}
-
-  '@types/decimal.js@7.4.3':
-    resolution: {integrity: sha512-7MpxcJPHqQ637FCZwJLtJMaDZkcD/iyUxj0m8A+m06slFeqRiK9QtgEyuocWNRbEtCrOZOEbZPTSSR88hMZVsg==}
-    deprecated: This is a stub types definition. decimal.js provides its own type definitions, so you do not need this installed.
 
   '@types/deep-eql@4.0.2':
     resolution: {integrity: sha512-c9h9dVVMigMPc4bwTvC5dxqtqJZwQPePsWjPlpSOnojbor6pGqdk541lfA7AqFQr5pB1BRdq0juY9db81BwyFw==}
@@ -4526,10 +4519,6 @@ snapshots:
   '@types/debug@4.1.13':
     dependencies:
       '@types/ms': 2.1.0
-
-  '@types/decimal.js@7.4.3':
-    dependencies:
-      decimal.js: 10.6.0
 
   '@types/deep-eql@4.0.2': {}
 
