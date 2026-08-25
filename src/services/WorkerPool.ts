@@ -163,11 +163,14 @@ export class WorkerPool {
     if (pending) {
       this.pendingTaskMap.delete(taskId);
 
-      const safeResult = result ?? ({} as WorkerResult);
-      if (safeResult.type === 'ERROR') {
-        pending.reject(new Error(safeResult.error || 'Unknown worker error'));
+      if (!result || typeof result !== 'object') {
+        pending.reject(new Error('Worker returned null or non-object result message'));
+      } else if (result.type === 'ERROR') {
+        pending.reject(new Error(result.error || 'Unknown worker error'));
+      } else if (result.type === 'RESULT') {
+        pending.resolve(result.data);
       } else {
-        pending.resolve(safeResult.data);
+        pending.reject(new Error(`Worker returned unrecognized message type: ${String((result as { type?: unknown }).type)}`));
       }
     }
 
