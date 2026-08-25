@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useRef, useEffect } from 'react';
+import React, { useState, useMemo, useRef } from 'react';
 import { UMAP } from 'umap-js';
 import {
     ScatterChart,
@@ -13,11 +13,15 @@ import { BNGLModel, SimulationResults, SimulationOptions } from '../../types';
 import { resolveSimulationControlDefaults } from '../SimulationControls';
 import {
     bnglWorkerPool,
-    getSharedEnsembleFeatureVector,
     isSharedEnsembleResultsHandle,
     materializeSharedSimulationResult,
     type SharedEnsembleResultsHandle,
 } from '../../services/BnglWorkerPool';
+import {
+    buildTrajectoryFeatureMatrix,
+    type TrajectoryNormalization,
+    type TrajectoryRun,
+} from '../../services/trajectoryEmbedding';
 import { CHART_COLORS } from '../../src/utils/chartColors';
 import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
@@ -30,8 +34,53 @@ interface TrajectoryExplorerTabProps {
 
 interface RunData {
     id: number;
-    embedding?: [number, number];
 }
+
+type EmbeddingSelectionMode = 'custom' | 'chart';
+
+const UMAP_RANDOM_SEED = 0x4d595df4;
+
+const createSeededRandom = (seed: number): (() => number) => {
+    let state = seed >>> 0;
+    return () => {
+        state = (1664525 * state + 1013904223) >>> 0;
+        return state / 0x100000000;
+    };
+};
+
+const getTrajectoryRuns = (
+    results: SimulationResults[] | SharedEnsembleResultsHandle | null,
+    observableNames: readonly string[]
+): TrajectoryRun[] => {
+    if (!results) return [];
+
+    if (isSharedEnsembleResultsHandle(results)) {
+        const columnIndices = new Map(results.headers.map((header, index) => [header, index]));
+        const runStride = results.rowCount * results.columnCount;
+
+        return Array.from({ length: results.runCount }, (_, runIndex) => {
+            const values: Record<string, number[]> = {};
+            const runOffset = runIndex * runStride;
+
+            for (const name of observableNames) {
+                const columnIndex = columnIndices.get(name);
+                values[name] = Array.from({ length: results.rowCount }, (_, rowIndex) => {
+                    if (columnIndex === undefined) return Number.NaN;
+                    return results.values[runOffset + rowIndex * results.columnCount + columnIndex];
+                });
+            }
+
+            return { observables: values };
+        });
+    }
+
+    return results.map(result => ({
+        observables: Object.fromEntries(observableNames.map(name => [
+            name,
+            result.data.map(row => typeof row[name] === 'number' ? row[name] : Number.NaN),
+        ])),
+    }));
+};
 
 export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ model }) => {
     const [ensembleSize, setEnsembleSize] = useState(50);
@@ -45,6 +94,10 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
     const [progress, setProgress] = useState(0);
     const [selectedRunIdx, setSelectedRunIdx] = useState<number | null>(null);
     const [visibleObservables, setVisibleObservables] = useState<Set<string>>(new Set());
+    const [embeddingObservables, setEmbeddingObservables] = useState<Set<string>>(new Set());
+    const [embeddingSelectionMode, setEmbeddingSelectionMode] = useState<EmbeddingSelectionMode>('custom');
+    const [observableWeights, setObservableWeights] = useState<Record<string, number>>({});
+    const [embeddingNormalization, setEmbeddingNormalization] = useState<TrajectoryNormalization>('robust');
     const [error, setError] = useState<string | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
@@ -60,6 +113,9 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         setSelectedRunIdx(null);
         setEnsembleResults(null);
         setRuns([]);
+        setVisibleObservables(new Set());
+        setEmbeddingObservables(new Set());
+        setObservableWeights({});
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -95,30 +151,16 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
             const results: RunData[] = Array.from({ length: runCount }, (_, i) => ({
                 id: i,
             }));
+            const resultObservables = (isSharedEnsembleResultsHandle(ensembleResults)
+                ? ensembleResults.headers
+                : (ensembleResults[0]?.headers ?? [])
+            ).filter(header => header !== 'time');
+
             setEnsembleResults(ensembleResults);
-
-            // 3. Compute UMAP if we have enough runs
-            if (results.length > 3) {
-                setProgress(100);
-                // Prepare data for UMAP: flatten all observables into one vector per run
-                const featureMatrix = isSharedEnsembleResultsHandle(ensembleResults)
-                    ? results.map((r) => getSharedEnsembleFeatureVector(ensembleResults, r.id))
-                    : ensembleResults.map((res) => {
-                        return res.data.flatMap(row => Object.values(row).filter(v => typeof v === 'number'));
-                    });
-
-                const umap = new UMAP({
-                    nComponents: 2,
-                    nNeighbors: Math.min(results.length - 1, 15),
-                    minDist: 0.1,
-                });
-
-                const embedding = umap.fit(featureMatrix);
-                results.forEach((r, i) => {
-                    r.embedding = [embedding[i][0], embedding[i][1]];
-                });
-            }
-
+            setProgress(100);
+            setVisibleObservables(new Set(resultObservables.slice(0, 10)));
+            setEmbeddingObservables(new Set(resultObservables));
+            setObservableWeights(Object.fromEntries(resultObservables.map(name => [name, 1])));
             setRuns(results);
         } catch (err: any) {
             if (err.name !== 'AbortError') {
@@ -177,24 +219,89 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         }));
     }, [observables]);
 
-    // Update visible observables when first runs arrive
-    useEffect(() => {
-        if (observables.length > 0 && visibleObservables.size === 0) {
-            setVisibleObservables(new Set(observables.slice(0, 10)));
+    const trajectoryRuns = useMemo(
+        () => getTrajectoryRuns(ensembleResults, observables),
+        [ensembleResults, observables]
+    );
+
+    const embeddingObservableNames = useMemo(() => {
+        if (embeddingSelectionMode === 'chart') {
+            return observables.filter(name => visibleObservables.has(name));
         }
-    }, [observables]);
+
+        return observables.filter(name => (
+            embeddingObservables.has(name) && (observableWeights[name] ?? 1) > 0
+        ));
+    }, [embeddingObservables, embeddingSelectionMode, observableWeights, observables, visibleObservables]);
+
+    const embeddingWeights = embeddingSelectionMode === 'chart' ? undefined : observableWeights;
+
+    const embeddingState = useMemo(() => {
+        const runCount = ensembleResults
+            ? (isSharedEnsembleResultsHandle(ensembleResults) ? ensembleResults.runCount : ensembleResults.length)
+            : 0;
+
+        if (runCount <= 3) return { coordinates: [] as Array<[number, number] | undefined>, error: null };
+
+        const featureResult = buildTrajectoryFeatureMatrix(trajectoryRuns, {
+            observableNames: embeddingObservableNames,
+            observableWeights: embeddingWeights,
+            normalization: embeddingNormalization,
+        });
+
+        if (featureResult.matrix.length === 0 || featureResult.matrix[0]?.length === 0) {
+            return { coordinates: [] as Array<[number, number] | undefined>, error: null };
+        }
+
+        try {
+            const umap = new UMAP({
+                nComponents: 2,
+                nNeighbors: Math.min(runCount - 1, 15),
+                minDist: 0.1,
+                random: createSeededRandom(UMAP_RANDOM_SEED),
+            });
+            const embedding = umap.fit(featureResult.matrix);
+            const coordinates: Array<[number, number] | undefined> = embedding.map(point => (
+                point ? [point[0], point[1]] : undefined
+            ));
+            return { coordinates, error: null };
+        } catch (err) {
+            return {
+                coordinates: [],
+                error: err instanceof Error ? err.message : String(err),
+            };
+        }
+    }, [
+        embeddingNormalization,
+        embeddingObservableNames,
+        embeddingWeights,
+        ensembleResults,
+        trajectoryRuns,
+    ]);
 
     const toggleObservable = (name: string) => {
-        setVisibleObservables(toggleSetMember(visibleObservables, name));
+        setVisibleObservables(current => toggleSetMember(current, name));
     };
 
     const isolateObservable = (name: string) => {
-        if (visibleObservables.size === 1 && visibleObservables.has(name)) {
-            setVisibleObservables(new Set(observables));
-        } else {
-            setVisibleObservables(new Set([name]));
-        }
+        setVisibleObservables(current => (
+            current.size === 1 && current.has(name)
+                ? new Set(observables)
+                : new Set([name])
+        ));
     };
+
+    const toggleEmbeddingObservable = (name: string) => {
+        setEmbeddingObservables(current => toggleSetMember(current, name));
+    };
+
+    const setObservableWeight = (name: string, value: number) => {
+        setObservableWeights(current => ({ ...current, [name]: value }));
+    };
+
+    const embeddingReady = runs.length > 3
+        && embeddingState.coordinates.length === runs.length
+        && embeddingState.coordinates.every(coordinate => coordinate !== undefined);
 
     return (
         <div className="h-full flex flex-col space-y-4">
@@ -351,6 +458,118 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                 </div>
             </Card>
 
+            {ensembleResults && observables.length > 0 && (
+                <Card className="p-4 bg-white dark:bg-slate-900/60 border-slate-200 dark:border-slate-800">
+                    <div className="flex flex-wrap items-start justify-between gap-4">
+                        <div>
+                            <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200">UMAP inputs</h4>
+                            <p className="mt-1 max-w-2xl text-xs text-slate-500 dark:text-slate-400">
+                                Choose which observables define similarity between runs. Time is used only to order each
+                                trajectory, never as a feature.
+                            </p>
+                        </div>
+                        <div className="flex flex-wrap items-center gap-3">
+                            <label htmlFor="te-embedding-source" className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                                Inputs
+                            </label>
+                            <select
+                                id="te-embedding-source"
+                                value={embeddingSelectionMode}
+                                onChange={(event) => setEmbeddingSelectionMode(event.target.value as EmbeddingSelectionMode)}
+                                className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                            >
+                                <option value="custom">Custom selection (recommended)</option>
+                                <option value="chart">Chart-visible observables (minimal correction)</option>
+                            </select>
+                            <label htmlFor="te-embedding-scaling" className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                                Scaling
+                            </label>
+                            <select
+                                id="te-embedding-scaling"
+                                value={embeddingNormalization}
+                                onChange={(event) => setEmbeddingNormalization(event.target.value as TrajectoryNormalization)}
+                                className="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-2 py-1 text-xs"
+                            >
+                                <option value="robust">Robust + balanced (recommended)</option>
+                                <option value="zscore">Z-score + balanced</option>
+                                <option value="raw">Raw values (legacy, scale-sensitive)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="mt-3 flex flex-wrap items-center gap-2">
+                        <Button
+                            variant="ghost"
+                            className="px-2 py-1 text-xs"
+                            onClick={() => embeddingSelectionMode === 'chart'
+                                ? setVisibleObservables(new Set(observables))
+                                : setEmbeddingObservables(new Set(observables))}
+                        >
+                            Select all
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            className="px-2 py-1 text-xs"
+                            onClick={() => embeddingSelectionMode === 'chart'
+                                ? setVisibleObservables(new Set())
+                                : setEmbeddingObservables(new Set())}
+                        >
+                            Clear all
+                        </Button>
+                        <span className="text-xs text-slate-500 dark:text-slate-400">
+                            {embeddingObservableNames.length} of {observables.length} observables active
+                            {embeddingState.error ? ' · map unavailable' : ''}
+                        </span>
+                    </div>
+
+                    <div className="mt-3 grid max-h-48 grid-cols-1 gap-1 overflow-y-auto rounded-md border border-slate-100 p-2 dark:border-slate-800 sm:grid-cols-2 lg:grid-cols-3">
+                        {observables.map(name => {
+                            const isSelected = embeddingSelectionMode === 'chart'
+                                ? visibleObservables.has(name)
+                                : embeddingObservables.has(name);
+                            const weight = observableWeights[name] ?? 1;
+
+                            return (
+                                <div key={name} className="flex min-w-0 items-center gap-2 rounded px-2 py-1 hover:bg-slate-50 dark:hover:bg-slate-800/70">
+                                    <label className="flex min-w-0 flex-1 items-center gap-2 text-xs text-slate-700 dark:text-slate-300">
+                                        <input
+                                            type="checkbox"
+                                            checked={isSelected}
+                                            disabled={embeddingSelectionMode === 'chart'}
+                                            onChange={() => toggleEmbeddingObservable(name)}
+                                            aria-label={`Use ${name} in UMAP`}
+                                            className="accent-indigo-600"
+                                        />
+                                        <span className="truncate" title={name}>{name}</span>
+                                    </label>
+                                    <label className="flex w-24 items-center gap-1 text-[10px] text-slate-500 dark:text-slate-400" title="Relative contribution of this observable">
+                                        <span aria-hidden="true">w</span>
+                                        <input
+                                            type="range"
+                                            min="0"
+                                            max="3"
+                                            step="0.25"
+                                            value={weight}
+                                            disabled={embeddingSelectionMode === 'chart'}
+                                            onChange={(event) => setObservableWeight(name, Number(event.target.value))}
+                                            aria-label={`Relative UMAP weight for ${name}`}
+                                            className="min-w-0 flex-1 accent-indigo-600"
+                                        />
+                                        <span className="w-6 text-right tabular-nums">{weight.toFixed(2)}</span>
+                                    </label>
+                                </div>
+                            );
+                        })}
+                    </div>
+
+                    <p className="mt-2 text-[10px] italic text-slate-500 dark:text-slate-400">
+                        Robust scaling uses the ensemble median and IQR, then gives each selected observable equal total
+                        contribution across sampled time points. In chart-visible mode, toggling the trajectory legend
+                        changes the map inputs.
+                    </p>
+                </Card>
+            )}
+
             {!runs.length && !isSimulating && (
                 <div className="flex-1 flex items-center justify-center p-12 text-center bg-slate-50 dark:bg-slate-900/50 dark:bg-slate-900/10 rounded-xl border border-dashed border-slate-200 dark:border-slate-800">
                     <div className="max-w-md space-y-4">
@@ -370,10 +589,12 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                     <Card className="p-6 flex flex-col min-h-[500px]">
                         <h4 className="text-sm font-bold text-slate-800 dark:text-slate-200 mb-6 flex items-center gap-2">
                             🛰️ Trajectory Clusters (UMAP)
-                            <span className="font-normal text-xs text-slate-500 dark:text-slate-400 ml-auto">Each point is one simulation run</span>
+                            <span className="font-normal text-xs text-slate-500 dark:text-slate-400 ml-auto">
+                                {embeddingObservableNames.length} input{embeddingObservableNames.length === 1 ? '' : 's'}
+                            </span>
                         </h4>
                         <div className="flex-1 min-h-0">
-                            <ResponsiveContainer width="100%" height="100%">
+                            {embeddingReady ? <ResponsiveContainer width="100%" height="100%">
                                 <ScatterChart 
                                     margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
                                     style={{ pointerEvents: 'auto' }}
@@ -398,7 +619,12 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                         }}
                                     />
                                     <Scatter
-                                        data={runs.map((r, i) => ({ id: r.id, x: r.embedding?.[0] ?? 0, y: r.embedding?.[1] ?? 0, index: i }))}
+                                        data={runs.map((run, i) => ({
+                                            id: run.id,
+                                            x: embeddingState.coordinates[i]?.[0] ?? 0,
+                                            y: embeddingState.coordinates[i]?.[1] ?? 0,
+                                            index: i,
+                                        }))}
                                         shape={(props: any) => {
                                             const { cx, cy, payload } = props;
                                             const isSelected = selectedRunIdx === payload.index;
@@ -438,11 +664,22 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                                         isAnimationActive={false}
                                     />
                                 </ScatterChart>
-                            </ResponsiveContainer>
+                            </ResponsiveContainer> : (
+                                <div className="h-full flex flex-col items-center justify-center px-8 text-center text-sm text-slate-500 dark:text-slate-400">
+                                    <div className="text-3xl mb-3">{embeddingState.error ? '⚠️' : '🧩'}</div>
+                                    <p>
+                                        {embeddingState.error
+                                            ? `Unable to build the trajectory map: ${embeddingState.error}`
+                                            : embeddingObservableNames.length === 0
+                                                ? 'Select at least one observable to build the map.'
+                                                : 'A trajectory map needs at least four completed runs.'}
+                                    </p>
+                                </div>
+                            )}
                         </div>
                         <div className="mt-3 px-1">
                             <p className="text-[10px] text-slate-500 dark:text-slate-400 italic">
-                                Distance represents similarity in time-series dynamics across all observables.
+                                Distance represents similarity in normalized time-series dynamics across the active inputs.
                             </p>
                         </div>
                     </Card>
