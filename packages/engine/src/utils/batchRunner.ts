@@ -61,6 +61,17 @@ export function normalizeFilterNames(names?: string[]) {
     return normalized.length ? normalized : null;
 }
 
+/**
+ * Sanitizes a model name or identifier into a filesystem- and JS-identifier-safe key.
+ *
+ * Replaces any non-alphanumeric ASCII character (`[^a-z0-9]`, case-insensitive)
+ * with an underscore (`_`) and converts the resulting string to lowercase.
+ *
+ * @param name - The original raw model name or identifier to sanitize.
+ * @return The sanitized, lowercase string suitable for filenames or map keys.
+ *
+ * @invariant Pure function; browser-API-free.
+ */
 export function safeModelName(name: string) {
     return name.replace(/[^a-z0-9]/gi, '_').toLowerCase();
 }
