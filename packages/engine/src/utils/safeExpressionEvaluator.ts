@@ -475,6 +475,20 @@ export function evaluateConstant(expr: string, fallbackNaN: boolean = false, sil
   }
 }
 
+/**
+ * Checks whether a mathematical or logical string expression is syntactically valid and safe to evaluate.
+ *
+ * Validates the expression against basic string constraints, parenthesis nesting depth limits,
+ * AST structure allowlists, and variable references. An expression is considered safe if all
+ * referenced identifiers are either present in the `paramNames` list or in `ALLOWED_CONSTS`.
+ *
+ * **Engine invariant:** Operates purely in memory using AST parsing without DOM or browser dependencies,
+ * ensuring safe execution across both browser and Node.js environments.
+ *
+ * @param expr - The mathematical or logical string expression to validate.
+ * @param paramNames - Optional array of parameter or variable names allowed within the expression. Default is `[]`.
+ * @returns `true` if the expression is syntactically valid and contains only allowed variables/constants; otherwise `false`.
+ */
 export function isSafe(expr: string, paramNames: string[] = []): boolean {
   try {
     validateExprBasics(expr);
@@ -488,6 +502,18 @@ export function isSafe(expr: string, paramNames: string[] = []): boolean {
   }
 }
 
+/**
+ * Extracts all unique variable and identifier names referenced within a mathematical or logical expression.
+ *
+ * Parses the expression into an AST, validates its structure against security limits, and traverses all node
+ * branches to collect variable names. Function names (e.g. `sin`, `abs`) and operators are excluded.
+ *
+ * **Engine invariant:** Operates purely in memory using AST parsing without DOM or browser dependencies.
+ *
+ * @param expr - The string expression from which to extract referenced variable names.
+ * @returns An array of unique variable names referenced in the expression.
+ * @throws {Error} If the expression is empty, non-string, exceeds size or nesting limits, or contains invalid syntax.
+ */
 export function getReferencedVariables(expr: string): string[] {
   validateExprBasics(expr);
   if (maxParenDepth(expr) > MAX_PAREN_DEPTH) throw new Error('Expression too deeply nested');
