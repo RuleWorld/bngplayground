@@ -153,6 +153,31 @@ describe('BnglWorkerPool class', () => {
         expect(resultData).toEqual(mockResults);
     });
 
+    it('ignores non-terminal progress and generate_network_progress messages without rejecting simulation', async () => {
+        const pool = new BnglWorkerPool(1);
+        await pool.initialize();
+
+        let resultData: any;
+        const simulatePromise = pool.simulate({} as any, {} as any).then(res => resultData = res);
+
+        const worker = mockWorkerInsts[0];
+        await new Promise(r => setTimeout(r, 0));
+
+        const postMessageCall = worker.postMessage.mock.calls[0];
+        const messageId = postMessageCall[0].id;
+
+        // Emit non-terminal progress and warning messages
+        worker.trigger({ id: messageId, type: 'generate_network_progress', payload: { species: 10, reactions: 20, iteration: 1, memoryUsed: 100, timeElapsed: 1 } });
+        worker.trigger({ id: messageId, type: 'progress', payload: { progress: 50 } });
+        worker.trigger({ id: messageId, type: 'warning', payload: { message: 'test warning' } });
+
+        const mockResults: SimulationResults = { headers: ['time', 'A'], data: [{ time: 0, A: 1 }] };
+        worker.trigger({ id: messageId, type: 'simulate_success', payload: mockResults });
+
+        await simulatePromise;
+        expect(resultData).toEqual(mockResults);
+    });
+
     it('uses one permanent message listener while dispatching concurrent replies by id', async () => {
         const pool = new BnglWorkerPool(1);
         await pool.initialize();

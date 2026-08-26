@@ -180,6 +180,10 @@ export class BnglWorkerPool {
     private dispatchWorkerResponse(worker: Worker, workerIdx: number, event: MessageEvent<WorkerResponse>): void {
         const { id, type, payload } = event.data ?? {};
 
+        if (type === 'progress' || type === 'generate_network_progress' || type === 'warning') {
+            return;
+        }
+
         if (type === 'worker_internal_error') {
             const err = toError('worker_internal_error', payload);
             if (err.stack) {
