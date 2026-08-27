@@ -1,8 +1,10 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import type { BNGLModel, SimulationResults } from '../../types';
 import { Button } from '../ui/Button';
 import { Select } from '../ui/Select';
 import { Input } from '../ui/Input';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 // Constraint operators
 type ConstraintOperator = '<' | '<=' | '>' | '>=' | '==' | 'constant';
@@ -25,6 +27,7 @@ interface ConstraintResult {
 interface VerificationTabProps {
     model: BNGLModel | null;
     results?: SimulationResults | null;
+    modelSource?: string | null;
 }
 
 const OPERATORS: { value: ConstraintOperator; label: string }[] = [
@@ -36,7 +39,7 @@ const OPERATORS: { value: ConstraintOperator; label: string }[] = [
     { value: 'constant', label: 'Constant (Mass Conservation)' },
 ];
 
-export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results }) => {
+export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results, modelSource }) => {
     const [constraints, setConstraints] = useState<Constraint[]>([]);
     const [verificationResults, setVerificationResults] = useState<ConstraintResult[]>([]);
     const [isVerifying, setIsVerifying] = useState(false);
@@ -180,6 +183,48 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
     const passedCount = verificationResults.filter(r => r.passed).length;
     const failedCount = verificationResults.filter(r => !r.passed).length;
 
+    const exportRows = constraints.map((constraint) => {
+        const result = verificationResults.find((candidate) => candidate.constraintId === constraint.id);
+        return {
+            constraint_id: constraint.id,
+            observable: constraint.observable,
+            operator: constraint.operator,
+            value: constraint.value,
+            tolerance: constraint.tolerance ?? 0.01,
+            passed: result?.passed ?? false,
+            failed_at: result?.failedAt ?? '',
+            message: result?.message ?? 'Not verified',
+        };
+    });
+    const exportDescriptor = useMemo(() => {
+        if (!results || verificationResults.length === 0 || exportRows.length === 0) return null;
+        const headers = ['constraint_id', 'observable', 'operator', 'value', 'tolerance', 'passed', 'failed_at', 'message'];
+        return createStructuredAnalysisResultsExportDescriptor({
+            analysisType: 'Model verification',
+            filenamePrefix: 'verification',
+            result: { constraints, verificationResults },
+            resultFileName: 'verification-result',
+            resultLabel: 'Constraint verification results',
+            resultDescription: 'Constraint definitions and pass/fail outcomes evaluated against the completed simulation.',
+            modelSource,
+            settings: { constraintCount: constraints.length },
+            fullTable: {
+                path: 'data/verification-results.csv',
+                label: 'All verification results',
+                description: 'Every defined constraint and its completed verification outcome.',
+                rows: exportRows,
+                headers,
+            },
+            currentTable: {
+                path: 'data/current-view.csv',
+                label: 'Current verification view',
+                description: 'The verification table currently displayed in the tab.',
+                rows: exportRows,
+                headers,
+            },
+        });
+    }, [constraints, exportRows, modelSource, verificationResults]);
+
     return (
         <div className="flex flex-col h-full gap-4 p-4">
             {/* Header */}
@@ -192,9 +237,12 @@ export const VerificationTab: React.FC<VerificationTabProps> = ({ model, results
                         Define constraints to verify model behavior (e.g., mass conservation).
                     </p>
                 </div>
-                <Button onClick={addConstraint} disabled={observableNames.length === 0}>
-                    + Add Constraint
-                </Button>
+                <div className="flex flex-wrap items-center justify-end gap-2">
+                    {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+                    <Button onClick={addConstraint} disabled={observableNames.length === 0}>
+                        + Add Constraint
+                    </Button>
+                </div>
             </div>
 
             {observableNames.length === 0 && (

@@ -27,9 +27,12 @@ import { Card } from '../ui/Card';
 import { Button } from '../ui/Button';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 import { toggleSetMember } from '../../services/collections';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createTrajectoryResultsExportDescriptor } from '../../services/resultsExport';
 
 interface TrajectoryExplorerTabProps {
     model: BNGLModel | null;
+    bnglText?: string;
 }
 
 interface RunData {
@@ -82,7 +85,7 @@ const getTrajectoryRuns = (
     }));
 };
 
-export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ model }) => {
+export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ model, bnglText }) => {
     const [ensembleSize, setEnsembleSize] = useState(50);
     const [method, setMethod] = useState<'ssa' | 'pla' | 'psa' | 'nf'>('ssa');
     const [seed, setSeed] = useState('');
@@ -99,6 +102,8 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
     const [observableWeights, setObservableWeights] = useState<Record<string, number>>({});
     const [embeddingNormalization, setEmbeddingNormalization] = useState<TrajectoryNormalization>('robust');
     const [error, setError] = useState<string | null>(null);
+    const [ensembleModelSource, setEnsembleModelSource] = useState<string | null>(null);
+    const [ensembleExportSettings, setEnsembleExportSettings] = useState<Record<string, unknown> | null>(null);
 
     const abortControllerRef = useRef<AbortController | null>(null);
 
@@ -116,6 +121,8 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         setVisibleObservables(new Set());
         setEmbeddingObservables(new Set());
         setObservableWeights({});
+        setEnsembleModelSource(null);
+        setEnsembleExportSettings(null);
 
         const controller = new AbortController();
         abortControllerRef.current = controller;
@@ -157,6 +164,15 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
             ).filter(header => header !== 'time');
 
             setEnsembleResults(ensembleResults);
+            setEnsembleModelSource(bnglText || null);
+            setEnsembleExportSettings({
+                method,
+                ensembleSize,
+                tEnd: options.t_end,
+                nSteps: options.n_steps,
+                ...(method === 'nf' && utl ? { utl: parseInt(utl) } : {}),
+                ...(method === 'psa' ? { poplevel: poplevel ? parseInt(poplevel) : 100 } : {}),
+            });
             setProgress(100);
             setVisibleObservables(new Set(resultObservables.slice(0, 10)));
             setEmbeddingObservables(new Set(resultObservables));
@@ -303,6 +319,45 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
         && embeddingState.coordinates.length === runs.length
         && embeddingState.coordinates.every(coordinate => coordinate !== undefined);
 
+    const trajectoryExportDescriptor = useMemo(() => {
+        if (!ensembleResults) return null;
+        const runCount = isSharedEnsembleResultsHandle(ensembleResults)
+            ? ensembleResults.runCount
+            : ensembleResults.length;
+        return createTrajectoryResultsExportDescriptor({
+            runCount,
+            getRun: (index) => isSharedEnsembleResultsHandle(ensembleResults)
+                ? materializeSharedSimulationResult(ensembleResults, index)
+                : ensembleResults[index],
+            modelSource: ensembleModelSource,
+            settings: {
+                ...(ensembleExportSettings ?? {}),
+                embeddingSelectionMode,
+                embeddingObservables: embeddingObservableNames,
+                embeddingWeights,
+                embeddingNormalization,
+            },
+            selectedRunIndex: selectedRunIdx,
+            embedding: {
+                coordinates: embeddingState.coordinates,
+                observableNames: embeddingObservableNames,
+                observableWeights: embeddingWeights,
+                normalization: embeddingNormalization,
+                selectionMode: embeddingSelectionMode,
+            },
+        });
+    }, [
+        embeddingNormalization,
+        embeddingObservableNames,
+        embeddingSelectionMode,
+        embeddingState.coordinates,
+        embeddingWeights,
+        ensembleExportSettings,
+        ensembleModelSource,
+        ensembleResults,
+        selectedRunIdx,
+    ]);
+
     return (
         <div className="h-full flex flex-col space-y-4">
             {/* Control Bar */}
@@ -440,6 +495,9 @@ export const TrajectoryExplorerTab: React.FC<TrajectoryExplorerTabProps> = ({ mo
                             >
                                 Stop ({progress}%)
                             </Button>
+                        )}
+                        {trajectoryExportDescriptor && (
+                            <ResultsExportControl descriptor={trajectoryExportDescriptor} className="min-w-[110px] px-3 py-2" />
                         )}
                     </div>
 

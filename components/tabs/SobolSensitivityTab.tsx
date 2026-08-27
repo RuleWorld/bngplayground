@@ -8,6 +8,8 @@ import { StatusMessage } from '../ui/StatusMessage';
 import { sobolSensitivity, SobolResult } from '@bngplayground/engine';
 import { bnglService } from '../../services/bnglService';
 import { formatValue } from '../../src/utils/formatValue';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 import {
   BarChart,
   Bar,
@@ -24,14 +26,16 @@ import {
 
 interface SobolSensitivityTabProps {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
-export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model }) => {
+export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model, bnglText }) => {
 
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [results, setResults] = useState<SobolResult[] | null>(null);
   const [progress, setProgress] = useState({ current: 0, total: 0 });
   const [error, setError] = useState<string | null>(null);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
 
   // Configuration
   const [nSamples, setNSamples] = useState(256);
@@ -43,6 +47,8 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
 
   // Initialize parameter bounds if not set
   React.useEffect(() => {
+    setResults(null);
+    setCompletedModelSource(null);
     if (model && Object.keys(paramBounds).length === 0) {
       const initial: typeof paramBounds = {};
       Object.entries(model.parameters).forEach(([name, value]) => {
@@ -71,6 +77,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
     setIsAnalyzing(true);
     setError(null);
     setResults(null);
+    setCompletedModelSource(null);
     setProgress({ current: 0, total: 0 });
 
     try {
@@ -101,6 +108,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
       });
 
       setResults(res);
+      setCompletedModelSource(bnglText || null);
       
       // Cleanup
       await bnglService.releaseModel(modelId).catch(() => {});
@@ -131,6 +139,55 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
       };
     });
   }, [results]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!results || results.length === 0) return null;
+    const rows = results.flatMap((result) => result.firstOrder.map((s1, index) => {
+      const st = result.totalOrder[index];
+      return {
+        observable: result.observable,
+        parameter: s1.name,
+        S1: s1.value,
+        S1_lower: s1.ci[0],
+        S1_upper: s1.ci[1],
+        ST: st?.value ?? 0,
+        ST_lower: st?.ci?.[0] ?? 0,
+        ST_upper: st?.ci?.[1] ?? 0,
+      };
+    }));
+    const headers = ['observable', 'parameter', 'S1', 'S1_lower', 'S1_upper', 'ST', 'ST_lower', 'ST_upper'];
+    const currentRows = rows.filter((row) => row.observable === selectedObs);
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Sobol sensitivity analysis',
+      filenamePrefix: 'sobol-sensitivity',
+      result: results,
+      resultFileName: 'sobol-indices',
+      resultLabel: 'Sobol indices and confidence intervals',
+      resultDescription: 'Raw first-order and total-order sensitivity indices with their confidence intervals.',
+      modelSource: completedModelSource,
+      settings: {
+        baseSamples: nSamples,
+        logUniformSampling: logScale,
+        focusObservable: selectedObs,
+        parameterBounds: paramBounds,
+      },
+      fullTable: {
+        path: 'data/sobol-indices.csv',
+        label: 'Complete Sobol index table',
+        description: 'CSV table preserving parameter labels and confidence-interval bounds.',
+        rows,
+        headers,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current Sobol view',
+        description: 'Sobol indices for the currently focused observable.',
+        rows: currentRows,
+        headers,
+      },
+    });
+  }, [completedModelSource, logScale, nSamples, paramBounds, results, selectedObs]);
 
   if (!model) return null;
 
@@ -298,7 +355,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
           <div className="space-y-6 pb-6">
             <Card className="p-6 shadow-xl border-t-4 border-t-amber-500 overflow-hidden relative">
               <div className="absolute -top-10 -right-10 w-40 h-40 bg-amber-500/5 rounded-full blur-3xl" />
-              <div className="flex items-center justify-between mb-8">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-8">
                 <div>
                   <h3 className="text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">Sobol Indices</h3>
                   <div className="flex items-center gap-2 mt-1">
@@ -309,6 +366,7 @@ export const SobolSensitivityTab: React.FC<SobolSensitivityTabProps> = ({ model 
                 <div className="text-[10px] font-bold bg-slate-100 dark:bg-slate-800/50 dark:bg-slate-800 px-3 py-1 rounded-full text-slate-500 dark:text-slate-400">
                   N = {formatValue(nSamples)} Samples
                 </div>
+                {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
               </div>
 
               <div className="h-[450px] w-full bg-slate-50 dark:bg-slate-900/50/50 dark:bg-slate-900/30 rounded-2xl p-6 border border-slate-100 dark:border-slate-800">

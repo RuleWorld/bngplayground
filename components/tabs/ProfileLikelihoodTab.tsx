@@ -22,9 +22,13 @@ import {
   ReferenceArea,
   ReferenceLine,
 } from 'recharts';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor, createTextArtifact } from '../../services/resultsExport';
+import { toCsvTable } from '../../src/utils/download';
 
 interface ProfileLikelihoodTabProps {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
 const DEFAULT_DATA = `# time, A, B
@@ -34,7 +38,7 @@ const DEFAULT_DATA = `# time, A, B
 30, 22, 78
 50, 8, 92`;
 
-export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ model }) => {
+export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ model, bnglText }) => {
   const [theme] = useTheme();
   const isDark = theme === 'dark';
 
@@ -49,9 +53,14 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
   const [reoptimize, setReoptimize] = useState(true);
   const [dataInput, setDataInput] = useState(DEFAULT_DATA);
   const [selectedParams, setSelectedParams] = useState<string[]>([]);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
+  const [completedExperimentalData, setCompletedExperimentalData] = useState<ExperimentalDataPoint[]>([]);
 
   // Initialize selected parameters
   React.useEffect(() => {
+    setResults(null);
+    setCompletedModelSource(null);
+    setCompletedExperimentalData([]);
     if (model && selectedParams.length === 0) {
       const names = Object.keys(model.parameters);
       setSelectedParams(names.slice(0, 2));
@@ -61,6 +70,8 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
   // Full reset so the user can start over with a fresh dataset.
   const handleStartOver = () => {
     setResults(null);
+    setCompletedModelSource(null);
+    setCompletedExperimentalData([]);
     setError(null);
     setProgress({ current: 0, total: 0 });
     setDataInput(DEFAULT_DATA);
@@ -85,6 +96,8 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
     setIsAnalyzing(true);
     setError(null);
     setResults(null);
+    setCompletedModelSource(null);
+    setCompletedExperimentalData([]);
     setProgress({ current: 0, total: 0 });
 
     try {
@@ -119,6 +132,8 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       });
 
       setResults(res);
+      setCompletedModelSource(bnglText || null);
+      setCompletedExperimentalData(parsedData);
       
       // Cleanup
       await bnglService.releaseModel(modelId).catch(() => {});
@@ -167,6 +182,68 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
     const timer = setTimeout(updatePreview, 500);
     return () => clearTimeout(timer);
   }, [dataInput, model]);
+
+  const exportDescriptor = React.useMemo(() => {
+    if (!results) return null;
+    const rows = Object.entries(results.profiles).flatMap(([parameter, profile]) => profile.grid.map((value, index) => ({
+      parameter,
+      parameter_value: value,
+      ssr: profile.ssr[index],
+      min_ssr: profile.minSSR,
+      ci_lower: profile.ci?.lower ?? '',
+      ci_upper: profile.ci?.upper ?? '',
+      flat: profile.flat,
+      identifiability: profile.identifiability,
+    })));
+    const headers = ['parameter', 'parameter_value', 'ssr', 'min_ssr', 'ci_lower', 'ci_upper', 'flat', 'identifiability'];
+    const inputHeaders = ['time', ...Array.from(new Set(completedExperimentalData.flatMap((point) => Object.keys(point.values))))];
+    const inputRows = completedExperimentalData.map((point) => ({ time: point.time, ...point.values }));
+    const fullAdditionalArtifacts = completedExperimentalData.length > 0
+      ? [createTextArtifact({
+        id: 'profile-input-data',
+        label: 'Experimental data used for profiling',
+        kind: 'data',
+        description: 'The parsed measurement table used by the completed profile-likelihood analysis.',
+        format: { value: 'csv', label: 'CSV' },
+        path: 'data/experimental-data.csv',
+        mimeType: 'text/csv',
+        selectedByDefault: true,
+        estimatedBytes: inputRows.length * Math.max(1, inputHeaders.length) * 18,
+        build: () => toCsvTable(inputRows, inputHeaders),
+      })]
+      : [];
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Profile likelihood',
+      filenamePrefix: 'profile-likelihood',
+      result: results,
+      resultFileName: 'profile-result',
+      resultLabel: 'Profile curves and identifiability results',
+      resultDescription: 'Evaluated profile curves, likelihood values, confidence intervals, and identifiability classifications.',
+      modelSource: completedModelSource,
+      settings: {
+        profiledParameters: selectedParams,
+        gridPoints: nGrid,
+        rangeFactor,
+        reoptimize,
+      },
+      fullTable: {
+        path: 'data/profile-curves.csv',
+        label: 'Profile curve table',
+        description: 'Long-form profile likelihood values for every evaluated parameter point.',
+        rows,
+        headers,
+      },
+      fullAdditionalArtifacts,
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current profile view',
+        description: 'The profile curves currently shown in the results panel.',
+        rows,
+        headers,
+      },
+    });
+  }, [completedExperimentalData, completedModelSource, nGrid, rangeFactor, reoptimize, results, selectedParams]);
 
   if (!model) return null;
 
@@ -404,7 +481,7 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                   </div>
                </div>
                
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 <div className="px-3 py-2 bg-slate-50 dark:bg-slate-800/60 rounded-lg border border-slate-200 dark:border-slate-700 text-center min-w-[96px]">
                      <div className="text-[9px] font-bold text-slate-400 uppercase">Identifiable</div>
                      <div className="text-xl font-black text-teal-600">
@@ -424,7 +501,8 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                 >
                   ↻ Start Over / Load New Data
                 </Button>
-               </div>
+                {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="h-8 px-3 text-xs self-center" />}
+              </div>
             </Card>
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

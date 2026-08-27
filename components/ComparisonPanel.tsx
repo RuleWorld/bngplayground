@@ -13,19 +13,29 @@ import { CHART_COLORS } from '../src/utils/chartColors';
 import { TimeSeriesChart, TimeSeriesSeries } from './charts/TimeSeriesChart';
 import { BNGLParser, getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 import { toggleSetMember } from '../services/collections';
+import { ResultsExportControl } from './ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor, createTextArtifact } from '../services/resultsExport';
+import { toCsvTable } from '../src/utils/download';
 
 interface ComparisonPanelProps {
   model: BNGLModel | null;
   baseResults: SimulationResults | null;
+  bnglText?: string;
 }
 
-export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseResults }) => {
+export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseResults, bnglText }) => {
   const [isComparing, setIsComparing] = useState(false);
   const [comparisonResults, setComparisonResults] = useState<SimulationResults | null>(null);
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [comparisonFactor, setComparisonFactor] = useState<number>(2);
   const [error, setError] = useState<string | null>(null);
   const [visibleObservables, setVisibleObservables] = useState<Set<string>>(new Set());
+  const [comparisonModelSource, setComparisonModelSource] = useState<string | null>(null);
+
+  useEffect(() => {
+    setComparisonResults(null);
+    setComparisonModelSource(null);
+  }, [baseResults]);
 
   // Convert parameters Record to array for easier UI handling
   const parameterEntries = model ? Object.entries(model.parameters) : [];
@@ -44,6 +54,8 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
     setIsComparing(true);
     setError(null);
+    setComparisonResults(null);
+    setComparisonModelSource(null);
 
     try {
       // Find the parameter value
@@ -136,13 +148,14 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
       );
 
       setComparisonResults(results);
+      setComparisonModelSource(bnglText || null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Comparison failed');
       setComparisonResults(null);
     } finally {
       setIsComparing(false);
     }
-  }, [model, selectedParam, comparisonFactor, defaultComparisonOptions]);
+  }, [bnglText, comparisonFactor, defaultComparisonOptions, model, selectedParam]);
 
   // Merge base and comparison results for plotting
   const mergedData = useMemo(() => {
@@ -214,6 +227,62 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
     });
   };
 
+  const exportDescriptor = useMemo(() => {
+    if (!baseResults || !comparisonResults || !mergedData || mergedData.length === 0) return null;
+    const allHeaders = Object.keys(mergedData[0] ?? {});
+    const currentHeaders = allHeaders.filter((header) => header === 'time' || visibleObservables.size === 0 || visibleObservables.has(header));
+    const currentRows = mergedData.map((row) => Object.fromEntries(currentHeaders.map((header) => [header, row[header]])));
+    const differenceRows = baseResults.data.map((point, index) => {
+      const modified = comparisonResults.data[index] ?? {};
+      return Object.fromEntries([
+        ['time', point.time],
+        ...observableNames.map((name) => [name, (modified[name] ?? 0) - (point[name] ?? 0)]),
+      ]);
+    });
+    const differenceHeaders = ['time', ...observableNames];
+    const differenceArtifact = createTextArtifact({
+      id: 'comparison-differences',
+      label: 'Derived differences',
+      kind: 'analysis',
+      description: 'Modified-scenario minus base-scenario values at each shared time point.',
+      format: { value: 'csv', label: 'CSV' },
+      path: 'analysis/differences.csv',
+      mimeType: 'text/csv',
+      selectedByDefault: true,
+      estimatedBytes: differenceRows.length * Math.max(1, differenceHeaders.length) * 18,
+      build: () => toCsvTable(differenceRows, differenceHeaders),
+    });
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'What-if comparison',
+      filenamePrefix: 'what-if-comparison',
+      result: { base: baseResults, modified: comparisonResults },
+      resultFileName: 'comparison-result',
+      resultLabel: 'Base and modified simulation results',
+      resultDescription: 'Both complete trajectories used in the comparison.',
+      modelSource: comparisonModelSource,
+      settings: {
+        parameter: selectedParam,
+        multiplier: comparisonFactor,
+      },
+      fullTable: {
+        path: 'data/comparison-trajectories.csv',
+        label: 'Complete comparison trajectories',
+        description: 'Base and modified observable values aligned by time.',
+        rows: mergedData,
+        headers: allHeaders,
+      },
+      fullAdditionalArtifacts: [differenceArtifact],
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current comparison view',
+        description: 'The currently visible base and modified series.',
+        rows: currentRows,
+        headers: currentHeaders,
+      },
+    });
+  }, [baseResults, comparisonFactor, comparisonModelSource, comparisonResults, mergedData, observableNames, selectedParam, visibleObservables]);
+
   useEffect(() => {
     if (chartSeries.length > 0) {
       setVisibleObservables(new Set(chartSeries.map(s => s.name)));
@@ -234,9 +303,12 @@ export const ComparisonPanel: React.FC<ComparisonPanelProps> = ({ model, baseRes
 
   return (
     <Card className="p-4">
-      <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100 mb-4">
-        What-If Comparison
-      </h3>
+      <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+          What-If Comparison
+        </h3>
+        {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+      </div>
 
       <p className="text-sm text-slate-600 dark:text-slate-300 mb-4">
         Compare simulation results with modified parameter values.

@@ -1,4 +1,4 @@
-import React, { useState, useCallback, useRef, useEffect } from 'react';
+import React, { useState, useCallback, useRef, useEffect, useMemo } from 'react';
 import { Button } from '../ui/Button';
 import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
@@ -9,6 +9,8 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend,
 } from 'recharts';
 import type { MultiscaleWorkerRequest, MultiscaleWorkerResponse } from '../../services/multiscaleWorker';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 interface MultiscaleTabProps {
   bnglCode: string;
@@ -255,6 +257,58 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
   // Redraw when snapshot changes
   React.useEffect(() => { drawCells(); }, [drawCells]);
 
+  const fullPopulationRows = useMemo(
+    () => populationTimeSeries.map((row) => ({ ...row })),
+    [populationTimeSeries],
+  );
+  const currentSnapshot = snapshots[currentSnapshotIdx];
+  const currentCellHeaders = useMemo(() => {
+    const observableHeaders = Array.from(new Set(snapshots.flatMap((snapshot) =>
+      snapshot.cells.flatMap((cell) => Object.keys(cell.observables)),
+    )));
+    return ['id', 'cell_type', 'x', 'y', 'z', 'radius', 'phase', ...observableHeaders];
+  }, [snapshots]);
+  const currentCellRows = useMemo(() => {
+    if (!currentSnapshot) return [] as Record<string, unknown>[];
+    return currentSnapshot.cells.map((cell) => ({
+      id: cell.id,
+      cell_type: cell.cellType,
+      x: cell.position[0],
+      y: cell.position[1],
+      z: cell.position[2],
+      radius: cell.radius,
+      phase: cell.phase,
+      ...cell.observables,
+    }));
+  }, [currentSnapshot]);
+  const exportDescriptor = useMemo(() => {
+    if (snapshots.length === 0 || fullPopulationRows.length === 0) return null;
+    const populationHeaders = Object.keys(fullPopulationRows[0]);
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Multiscale simulation',
+      filenamePrefix: 'multiscale',
+      result: { definition, snapshots, populationTimeSeries },
+      resultFileName: 'multiscale-result',
+      resultLabel: 'Complete multiscale simulation result',
+      resultDescription: 'Cell snapshots, lineage, intracellular observables, and extracellular population trajectories.',
+      settings: { definition },
+      fullTable: {
+        path: 'data/population-time-series.csv',
+        label: 'Complete population time series',
+        description: 'Cell counts for every output time and cell type.',
+        rows: fullPopulationRows,
+        headers: populationHeaders,
+      },
+      currentTable: {
+        path: 'data/current-snapshot-cells.csv',
+        label: 'Current cell snapshot',
+        description: 'The cells shown at the selected timeline position, with positions and observables.',
+        rows: currentCellRows,
+        headers: currentCellHeaders,
+      },
+    });
+  }, [currentCellHeaders, currentCellRows, definition, fullPopulationRows, populationTimeSeries, snapshots]);
+
   return (
     <div className="space-y-4 h-full flex flex-col overflow-auto p-2">
       <div className="p-3 rounded-md bg-purple-100 dark:bg-purple-900/50 text-purple-800 dark:text-purple-200 flex items-start gap-3 shrink-0">
@@ -306,9 +360,12 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
 
           {/* Cell view */}
           <Card className="flex-1 p-3 min-h-[250px]">
-            <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2">
-              Cell Population View
-            </h3>
+            <div className="flex items-center justify-between mb-2">
+              <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">
+                Cell Population View
+              </h3>
+              {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+            </div>
             <div className="relative">
               <canvas
                 ref={canvasRef}

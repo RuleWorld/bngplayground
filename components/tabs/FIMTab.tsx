@@ -18,12 +18,15 @@ import {
 import { FIMHeatmap } from '../../components/FIMHeatmap';
 import { formatValue } from '../../src/utils/formatValue';
 import { toggleArrayMember } from '../../services/collections';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 interface FIMTabProps {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
-export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
+export const FIMTab: React.FC<FIMTabProps> = ({ model, bnglText }) => {
   const parameterNames = useMemo(() => (model ? Object.keys(model.parameters) : []), [model]);
   const [selected, setSelected] = useState<string[]>(() => []);
   const [isComputing, setIsComputing] = useState(false);
@@ -36,6 +39,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
   const [showFIMHeatmap, setShowFIMHeatmap] = useState(false);
   const [showCorrelationHeatmap, setShowCorrelationHeatmap] = useState(false);
   const [showJacobianHeatmap, setShowJacobianHeatmap] = useState(false);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
   const [analysisConfig, setAnalysisConfig] = useState<{ method: 'ode' | 'ssa'; t_end: number; n_steps: number }>(() => {
     const simOpts = model?.simulationOptions;
     return {
@@ -93,6 +97,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       setSelected([]);
       setResult(null);
       setError(null);
+      setCompletedModelSource(null);
     } else {
       const simOpts = model.simulationOptions;
       const nextT = simOpts?.t_end ?? 100;
@@ -128,6 +133,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
 
     setError(null);
     setResult(null);
+    setCompletedModelSource(null);
     setIsComputing(true);
     setProgress({ current: 0, total: 0 });
     const c = new AbortController();
@@ -156,6 +162,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
           cachedModelIdRef.current = (res as any).benchmark.modelId as number;
         }
       setResult(res);
+      setCompletedModelSource(bnglText || null);
     } catch (err) {
       if (err instanceof DOMException && err.name === 'AbortError') {
         setError('Computation cancelled');
@@ -166,7 +173,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
       setIsComputing(false);
       setController(null);
     }
-  }, [analysisConfig, model, selected, useLogParams]);
+  }, [analysisConfig, bnglText, model, selected, useLogParams]);
 
   const handleCancel = useCallback(() => {
     if (controller) controller.abort();
@@ -271,6 +278,59 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
     a.click();
     URL.revokeObjectURL(url);
   };
+
+  const exportDescriptor = useMemo(() => {
+    if (!result) return null;
+    const matrixRows = result.fimMatrix?.flatMap((row, rowIndex) =>
+      row.map((value, columnIndex) => ({
+        row_parameter: result.paramNames[rowIndex],
+        column_parameter: result.paramNames[columnIndex],
+        value,
+      }))
+    ) ?? [];
+    const exportResult = {
+      ...exportFIM(result),
+      sensitivityProfiles: result.sensitivityProfiles,
+      identifiableParams: result.identifiableParams,
+      unidentifiableParams: result.unidentifiableParams,
+      vif: result.vif,
+      highVIFParams: result.highVIFParams,
+      nullspaceCombinations: result.nullspaceCombinations,
+      topCorrelatedPairs: result.topCorrelatedPairs,
+      profileApprox: result.profileApprox,
+      profileApproxExtended: result.profileApproxExtended,
+    };
+    const headers = ['row_parameter', 'column_parameter', 'value'];
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Fisher information matrix analysis',
+      filenamePrefix: 'fim',
+      result: exportResult,
+      resultFileName: 'fim-result',
+      resultLabel: 'FIM matrix and identifiability diagnostics',
+      resultDescription: 'Raw Fisher information values, sensitivities, eigen-analysis, correlations, and retained diagnostics.',
+      modelSource: completedModelSource,
+      settings: {
+        selectedParameters: selected,
+        simulation: analysisConfig,
+        logarithmicParameters: useLogParams,
+        allTimePoints: true,
+      },
+      fullTable: {
+        path: 'data/fim-matrix.csv',
+        label: 'Fisher information matrix',
+        description: 'Long-form matrix with explicit row and column parameter labels.',
+        rows: matrixRows,
+        headers,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current FIM matrix',
+        description: 'The matrix currently represented by the FIM view.',
+        rows: matrixRows,
+        headers,
+      },
+    });
+  }, [analysisConfig, completedModelSource, result, selected, useLogParams]);
 
   return (
     <div className="space-y-6">
@@ -405,23 +465,7 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
               </div>
             </div>
             <div className="flex items-center gap-2">
-              <Button onClick={() => {
-                try {
-                  const data = exportFIM(result);
-                  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                  const url = URL.createObjectURL(blob);
-                  const a = document.createElement('a');
-                  a.href = url;
-                  a.download = 'fim_analysis.json';
-                  document.body.appendChild(a);
-                  a.click();
-                  a.remove();
-                  URL.revokeObjectURL(url);
-                } catch (e) {
-                   
-                  console.warn('Failed to export FIM', e);
-                }
-              }}>Export JSON</Button>
+              {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
             </div>
           </div>
           {result.benchmark && (
@@ -1313,4 +1357,3 @@ export const FIMTab: React.FC<FIMTabProps> = ({ model }) => {
 };
 
 export default FIMTab;
-

@@ -69,6 +69,9 @@ function App() {
   const paramPatchTimerRef = useRef<number | null>(null);
   const [model, setModel] = useState<BNGLModel | null>(null);
   const [results, setResults] = useState<SimulationResults | null>(null);
+  // Keep the exact source used for the completed run; later editor edits must
+  // not change model provenance in a result export.
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
   const [status, setStatus] = useState<Status | null>(null);
 
   // Split Panel resizing state
@@ -232,6 +235,7 @@ function App() {
   // want to parse the new text without waiting for React state to propagate.
   const handleParse = useCallback(async (codeOverride?: any): Promise<BNGLModel | null> => {
     setResults(null);
+    setCompletedModelSource(null);
     if (parseAbortRef.current) {
       parseAbortRef.current.abort('Parse request replaced.');
     }
@@ -284,7 +288,11 @@ function App() {
     }
   }, []);
 
-  const handleSimulate = useCallback(async (options: SimulationOptions, modelOverride?: BNGLModel) => {
+  const handleSimulate = useCallback(async (
+    options: SimulationOptions,
+    modelOverride?: BNGLModel,
+    modelSourceOverride?: string,
+  ) => {
     let targetModel = modelOverride || model;
 
     // Auto-parse on run when no parsed model exists or editor code has changed.
@@ -334,6 +342,7 @@ function App() {
     const controller = new AbortController();
     simulateAbortRef.current = controller;
     simulationWarningRef.current = null;
+    const executionModelSource = modelSourceOverride ?? codeRef.current;
 
     // Resolve effective method (e.g. handle 'default' -> 'nf' if model has simulate_nf)
     const effectiveMethod = resolveAutoMethod(targetModel, options.method);
@@ -357,6 +366,7 @@ function App() {
         description: `Simulation (${effectiveMethod})`,
       });
       setResults(simResults);
+      setCompletedModelSource(executionModelSource || null);
       const simulationWarning = simulationWarningRef.current;
       if (simulationWarning) {
         setStatus({ type: 'warning', message: `Simulation (${effectiveMethod}) completed with warning: ${simulationWarning}` });
@@ -374,9 +384,11 @@ function App() {
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         setResults(null);
+        setCompletedModelSource(null);
         return;
       }
       setResults(null);
+      setCompletedModelSource(null);
       const message = error instanceof Error ? error.message : 'An unknown error occurred.';
       setStatus({ type: 'error', message: `Simulation failed: ${message}` });
     } finally {
@@ -496,6 +508,7 @@ function App() {
         description: 'Simulation (parameter update)',
       });
       setResults(simResults);
+      setCompletedModelSource(codeRef.current || null);
       setStatus({ type: 'success', message: 'Simulation updated for parameter change.' });
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
@@ -795,6 +808,8 @@ function App() {
           const simResults = await bnglService.simulate(parsedModel, opts, { description: 'Auto-simulation on first visit' });
 
           setResults(simResults);
+          setCompletedModelSource(code);
+          setSimOptions(opts);
           setStatus({
             type: 'success',
             message: '🎉 Welcome! The default model has been simulated. Try editing parameters and clicking Run!'
@@ -825,6 +840,7 @@ function App() {
     setCode(newCode);
     setModel(null);
     setResults(null);
+    setCompletedModelSource(null);
     setValidationWarnings([]);
     setEditorMarkers([]);
     setEditorResetKey((prev) => prev + 1);
@@ -1185,6 +1201,8 @@ function App() {
                   activeTabIndex={activeVizTab}
                   onActiveTabIndexChange={setActiveVizTab}
                   bnglCode={code}
+                  modelSource={completedModelSource}
+                  simulationOptions={simOptions}
                   onLoadModel={(modelCode, name, id) => {
                     setLoadedModelId(id);
                     setLoadedModelName(name);

@@ -18,11 +18,15 @@ import { bnglService } from '../../services/bnglService';
 import { formatValue } from '../../src/utils/formatValue';
 import { parsePEtab, parsePEtabCombined } from '@bngplayground/engine';
 import { toggleSetMember } from '../../services/collections';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor, createTextArtifact } from '../../services/resultsExport';
+import { toCsvTable } from '../../src/utils/download';
 
 type PetabFileKey = 'parameters' | 'measurements' | 'conditions' | 'observables' | 'problem';
 
 interface ParameterEstimationTabProps {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
 interface ParameterPrior {
@@ -68,7 +72,7 @@ const DEFAULT_TEST_DATA = `# Paste experimental data here (CSV format)
 # from the current model's time course with 5% noise.
 time`;
 
-export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ model }) => {
+export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ model, bnglText }) => {
   const [theme] = useTheme();
   const isDark = theme === 'dark';
 
@@ -98,6 +102,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
   const [progress, setProgress] = useState({ current: 0, total: 0, elbo: 0 });
   const [error, setError] = useState<string | null>(null);
   const [visibleFitSeries, setVisibleFitSeries] = useState<Set<string>>(new Set());
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
 
   // Refs
   const isMountedRef = useRef(true);
@@ -112,10 +117,12 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
       setSelectedParams([]);
       setPriors([]);
       setResult(null);
+      setCompletedModelSource(null);
       return;
     }
 
     setResult(null);
+    setCompletedModelSource(null);
     setError(null);
     setProgress({ current: 0, total: 0, elbo: 0 });
 
@@ -362,6 +369,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
 
     setError(null);
     setResult(null);
+    setCompletedModelSource(null);
     setIsRunning(true);
     setProgress({ current: 0, total: parseInt(nIterations), elbo: 0 });
 
@@ -437,6 +445,7 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
 
       if (isMountedRef.current) {
         setFitInputData(effectiveData);
+        setCompletedModelSource(bnglText || null);
         const credibleIntervals = fitResult.confidenceIntervals;
         const posteriorStd = credibleIntervals.map(ci =>
           (ci.upper - ci.lower) / 2
@@ -573,6 +582,79 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
       ];
     });
   }, [result]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!result) return null;
+
+    const currentHeaders = [
+      'time',
+      ...fitComparisonSeries
+        .map((series) => series.name)
+        .filter((name) => visibleFitSeries.size === 0 || visibleFitSeries.has(name)),
+    ];
+    const currentRows = fitComparisonData.map((row) => Object.fromEntries(
+      currentHeaders.map((header) => [header, row[header]]),
+    ));
+
+    const fitHeaders = ['time', ...Array.from(new Set(fitInputData.flatMap((point) => Object.keys(point.values))))];
+    const fitRows = fitInputData.map((point) => ({ time: point.time, ...point.values }));
+    const fullAdditionalArtifacts = fitInputData.length > 0
+      ? [createTextArtifact({
+        id: 'experimental-data',
+        label: 'Experimental data used for fitting',
+        kind: 'data' as const,
+        description: 'The parsed measurement table used by the completed optimizer run.',
+        format: { value: 'csv', label: 'CSV' },
+        path: 'data/experimental-data.csv',
+        mimeType: 'text/csv',
+        selectedByDefault: true,
+        estimatedBytes: fitRows.length * Math.max(1, fitHeaders.length) * 18,
+        build: () => toCsvTable(fitRows, fitHeaders),
+      })]
+      : [];
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Parameter estimation',
+      filenamePrefix: 'parameter-estimation',
+      result,
+      resultFileName: 'fit-result',
+      resultLabel: 'Fitted parameters and diagnostics',
+      resultDescription: 'Best-fit parameter values, uncertainty intervals, convergence history, and retained diagnostics.',
+      modelSource: completedModelSource,
+      settings: {
+        inputFormat: importMode,
+        selectedParameters: selectedParams,
+        priors,
+        iterations: nIterations,
+        algorithm,
+        regularization: { type: regType, lambda: regLambda },
+        bpslConstraints: bpslText,
+      },
+      fullAdditionalArtifacts,
+      currentTable: {
+        path: 'data/current-fit-view.csv',
+        label: 'Current fit view',
+        description: 'The currently visible experimental and fitted series.',
+        rows: currentRows,
+        headers: currentHeaders,
+      },
+    });
+  }, [
+    algorithm,
+    bpslText,
+    completedModelSource,
+    fitComparisonData,
+    fitComparisonSeries,
+    fitInputData,
+    importMode,
+    nIterations,
+    priors,
+    regLambda,
+    regType,
+    result,
+    selectedParams,
+    visibleFitSeries,
+  ]);
 
   if (!model) {
     return <EmptyState title="No Model Loaded" description="Parse a model to perform parameter estimation." />;
@@ -958,17 +1040,20 @@ export const ParameterEstimationTab: React.FC<ParameterEstimationTabProps> = ({ 
         {result && (
           <div className="space-y-6">
             {/* Results header with reset */}
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-2">
               <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 uppercase tracking-wider">
                 Estimation Results
               </h3>
-              <Button
-                variant="subtle"
-                className="h-7 px-3 text-xs"
-                onClick={handleStartOver}
-              >
-                ↻ Start Over / Load New Data
-              </Button>
+              <div className="flex flex-wrap items-center gap-2">
+                {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="h-7 px-3 text-xs" />}
+                <Button
+                  variant="subtle"
+                  className="h-7 px-3 text-xs"
+                  onClick={handleStartOver}
+                >
+                  ↻ Start Over / Load New Data
+                </Button>
+              </div>
             </div>
             {/* Summary Metrics */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">

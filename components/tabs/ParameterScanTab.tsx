@@ -20,9 +20,12 @@ import {
 } from '@bngplayground/engine';
 import { TimeSeriesChart, TimeSeriesSeries } from '../charts/TimeSeriesChart';
 import { toggleSetMember } from '../../services/collections';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 interface ParameterScanTabProps {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
 type ScanMode = '1d' | '2d';
@@ -45,7 +48,7 @@ interface TwoDResult {
 }
 
 
-export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => {
+export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglText }) => {
   const [scanType, setScanType] = useState<ScanMode>('1d');
   const [parameter1, setParameter1] = useState('');
   const [parameter2, setParameter2] = useState('');
@@ -69,6 +72,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
 
   // Series visibility for 1D chart
   const [visibleObservables, setVisibleObservables] = useState<Set<string>>(new Set());
+  const [scanModelSource, setScanModelSource] = useState<string | null>(null);
 
   // Neural ODE Surrogate state
   const [useSurrogate, setUseSurrogate] = useState(false);
@@ -153,6 +157,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
       setSelectedObservable('');
       setOneDResult(null);
       setTwoDResult(null);
+      setScanModelSource(null);
       setParam1Start('');
       setParam1End('');
       setParam2Start('');
@@ -678,6 +683,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
     setProgress({ current: 0, total: totalRuns });
     setOneDResult(null);
     setTwoDResult(null);
+    setScanModelSource(null);
 
     const simulationOptions = {
       method,
@@ -726,7 +732,10 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
           completed += 1;
           if (isMountedRef.current) setProgress({ current: completed, total: totalRuns });
         }
-        if (isMountedRef.current) setOneDResult(result);
+        if (isMountedRef.current) {
+          setOneDResult(result);
+          setScanModelSource(bnglText || null);
+        }
       } else {
         const grid: Record<string, number[][]> = {};
         observableNames.forEach((name) => {
@@ -757,12 +766,15 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
             if (isMountedRef.current) setProgress({ current: completed, total: totalRuns });
           }
         }
-        if (isMountedRef.current) setTwoDResult({
-          parameterNames: [parameter1, parameter2],
-          xValues: range1,
-          yValues: range2,
-          grid,
-        });
+        if (isMountedRef.current) {
+          setTwoDResult({
+            parameterNames: [parameter1, parameter2],
+            xValues: range1,
+            yValues: range2,
+            grid,
+          });
+          setScanModelSource(bnglText || null);
+        }
       }
     } catch (scanError) {
       if (scanError instanceof DOMException && scanError.name === 'AbortError') {
@@ -821,54 +833,109 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
     };
   }, [model]);
 
-  const downloadFile = (content: string, fileName: string, mime = 'text/csv') => {
-    const blob = new Blob([content], { type: mime });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = fileName;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    URL.revokeObjectURL(url);
-  };
+  const scanExportDescriptor = useMemo(() => {
+    const result = oneDResult ?? twoDResult;
+    if (!result) return null;
 
-  const handleExportCSV = () => {
-    // Long-form CSV: param1_name, param1_value, [param2_name, param2_value], observable_name, value
-    if (!oneDResult && !twoDResult) return;
-    const rows: string[] = [];
-    if (oneDResult) {
-      const p1Name = oneDResult.parameterName;
-      const header = ['param1_name', 'param1_value', 'observable', 'value'];
-      rows.push(header.join(','));
-      oneDResult.values.forEach((entry) => {
-        Object.entries(entry.observables).forEach(([obs, val]) => {
-          rows.push([p1Name, entry.parameterValue, obs, val].join(','));
-        });
-      });
-    } else if (twoDResult) {
-      const [p1Name, p2Name] = twoDResult.parameterNames;
-      const header = ['param1_name', 'param1_value', 'param2_name', 'param2_value', 'observable', 'value'];
-      rows.push(header.join(','));
-      // iterate y (rows) and x (cols)
-      twoDResult.yValues.forEach((yVal, yi) => {
-        twoDResult.xValues.forEach((xVal, xi) => {
-          Object.keys(twoDResult.grid).forEach((obs) => {
-            const val = twoDResult.grid[obs][yi][xi];
-            rows.push([p1Name, xVal, p2Name, yVal, obs, val].join(','));
-          });
-        });
-      });
-    }
+    const fullRows = oneDResult
+      ? oneDResult.values.flatMap((entry) => Object.entries(entry.observables).map(([observable, value]) => ({
+        parameter_name: oneDResult.parameterName,
+        parameter_value: entry.parameterValue,
+        observable,
+        value,
+      })))
+      : twoDResult!.yValues.flatMap((yValue, yIndex) => twoDResult!.xValues.flatMap((xValue, xIndex) =>
+        Object.keys(twoDResult!.grid).map((observable) => ({
+          parameter1_name: twoDResult!.parameterNames[0],
+          parameter1_value: xValue,
+          parameter2_name: twoDResult!.parameterNames[1],
+          parameter2_value: yValue,
+          observable,
+          value: twoDResult!.grid[observable][yIndex][xIndex],
+        }))
+      ));
 
-    downloadFile(rows.join('\n'), 'parameter_scan.csv', 'text/csv');
-  };
+    const currentRows = oneDResult
+      ? oneDResult.values.flatMap((entry) => Object.entries(entry.observables)
+        .filter(([observable]) => visibleObservables.size === 0 || visibleObservables.has(observable))
+        .map(([observable, value]) => ({
+          parameter_name: oneDResult.parameterName,
+          parameter_value: entry.parameterValue,
+          observable,
+          value,
+        })))
+      : selectedObservable && twoDResult
+        ? twoDResult.yValues.flatMap((yValue, yIndex) => twoDResult.xValues.map((xValue, xIndex) => ({
+          parameter1_name: twoDResult.parameterNames[0],
+          parameter1_value: xValue,
+          parameter2_name: twoDResult.parameterNames[1],
+          parameter2_value: yValue,
+          observable: selectedObservable,
+          value: twoDResult.grid[selectedObservable]?.[yIndex]?.[xIndex] ?? 0,
+        })))
+        : [];
 
-  const handleExportJSON = () => {
-    const exportObj = oneDResult ?? twoDResult ?? null;
-    if (!exportObj) return;
-    downloadFile(JSON.stringify(exportObj, null, 2), 'parameter_scan.json', 'application/json');
-  };
+    const fullHeaders = oneDResult
+      ? ['parameter_name', 'parameter_value', 'observable', 'value']
+      : ['parameter1_name', 'parameter1_value', 'parameter2_name', 'parameter2_value', 'observable', 'value'];
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Parameter scan',
+      filenamePrefix: 'parameter-scan',
+      result,
+      resultFileName: 'scan-result',
+      resultLabel: 'Complete scan result',
+      resultDescription: 'All computed parameter-scan values and the selected observable surface or curve.',
+      modelSource: scanModelSource,
+      settings: {
+        scanType,
+        parameter1,
+        parameter2: scanType === '2d' ? parameter2 : undefined,
+        parameter1Range: { start: effectiveParam1Start, end: effectiveParam1End, steps: param1Steps },
+        parameter2Range: scanType === '2d' ? { start: effectiveParam2Start, end: effectiveParam2End, steps: param2Steps } : undefined,
+        method,
+        solver: method === 'ode' ? solver : undefined,
+        tEnd,
+        nSteps,
+        logarithmicScale: isLogScale,
+        selectedObservable,
+      },
+      fullTable: {
+        path: 'data/scan-values.csv',
+        label: 'Complete scan table',
+        description: 'Long-form table containing every computed parameter combination, observable, and value.',
+        rows: fullRows,
+        headers: fullHeaders,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current scan view',
+        description: 'The currently selected observable or visible-observable subset.',
+        rows: currentRows,
+        headers: fullHeaders,
+      },
+    });
+  }, [
+    effectiveParam1End,
+    effectiveParam1Start,
+    effectiveParam2End,
+    effectiveParam2Start,
+    isLogScale,
+    method,
+    nSteps,
+    oneDResult,
+    param1Steps,
+    param2Steps,
+    parameter1,
+    parameter2,
+    scanModelSource,
+    scanType,
+    selectedObservable,
+    solver,
+    tEnd,
+    twoDResult,
+    visibleObservables,
+  ]);
 
   const guardMessage = !model
     ? 'Parse a model to set up a parameter scan.'
@@ -1290,8 +1357,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
             ])}
           />
           <div className="flex gap-2 justify-end">
-            <Button variant="subtle" onClick={handleExportCSV}>Export CSV</Button>
-            <Button variant="subtle" onClick={handleExportJSON}>Export JSON</Button>
+            {scanExportDescriptor && <ResultsExportControl descriptor={scanExportDescriptor} className="px-3 py-1.5 text-xs" />}
             <Button
               variant="subtle"
               onClick={() => {
@@ -1322,8 +1388,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model }) => 
             Range: {formatNumber(heatmapData.min)} – {formatNumber(heatmapData.max)} ({selectedObservable})
           </div>
           <div className="flex gap-2 justify-end">
-            <Button variant="subtle" onClick={handleExportCSV}>Export CSV</Button>
-            <Button variant="subtle" onClick={handleExportJSON}>Export JSON</Button>
+            {scanExportDescriptor && <ResultsExportControl descriptor={scanExportDescriptor} className="px-3 py-1.5 text-xs" />}
           </div>
         </Card>
       )}

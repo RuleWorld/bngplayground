@@ -35,19 +35,22 @@ const TemporalAnalysisTab = lazy(() => import('./tabs/TemporalAnalysisTab').then
 const VersionHistoryTab = lazy(() => import('./tabs/VersionHistoryTab').then((module) => ({ default: module.VersionHistoryTab })));
 const MultiscaleTab = lazy(() => import('./tabs/MultiscaleTab').then((module) => ({ default: module.MultiscaleTab })));
 const PKPDTab = lazy(() => import('./tabs/PKPDTab').then((module) => ({ default: module.PKPDTab })));
+const RobustnessTab = lazy(() => import('./tabs/RobustnessTab').then((module) => ({ default: module.RobustnessTab })));
 
 
 
 interface VisualizationPanelProps {
   model: BNGLModel | null;
   results: SimulationResults | null;
-  onSimulate: (options: SimulationOptions) => void;
+  onSimulate: (options: SimulationOptions, modelOverride?: BNGLModel, modelSourceOverride?: string) => void;
   isSimulating: boolean;
   onCancelSimulation: () => void;
   simulationMethod?: 'ode' | 'ssa' | 'pla' | 'psa' | 'nf' | 'nfsim';
   activeTabIndex?: number;
   onActiveTabIndexChange?: (idx: number) => void;
   bnglCode?: string;
+  modelSource?: string | null;
+  simulationOptions?: SimulationOptions | null;
   onLoadModel?: (code: string, name: string, id: string) => void;
 }
 
@@ -84,6 +87,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   activeTabIndex,
   onActiveTabIndexChange,
   bnglCode,
+  modelSource,
+  simulationOptions,
   onLoadModel,
 }) => {
   const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
@@ -232,6 +237,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   <DropdownItem onClick={() => setActiveTab(18)}>🔀 Bifurcation Analysis</DropdownItem>
                   <DropdownItem onClick={() => setActiveTab(19)}>🎵 Temporal Info Theory</DropdownItem>
                   <DropdownItem onClick={() => setActiveTab(22)}>💊 PK/PD Framework</DropdownItem>
+                  <DropdownItem onClick={() => setActiveTab(23)}>🛡️ Robustness Analysis</DropdownItem>
                 </div>
                 {/* Right column */}
                 <div>
@@ -350,6 +356,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   visibleSpecies={visibleSpecies}
                   onVisibleSpeciesChange={setVisibleSpecies}
                   expressions={expressions}
+                  modelSource={modelSource}
+                  simulationOptions={simulationOptions}
                 />
               </div>
               <div className="mt-4 shrink-0">
@@ -471,7 +479,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:parameter-scan">
               <div className="flex-1 min-h-0">
-                <ParameterScanTab model={model} />
+                <ParameterScanTab model={model} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -497,6 +505,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                 onSimulate={onSimulate}
                 onCancelSimulation={onCancelSimulation}
                 isSimulating={isSimulating}
+                modelSource={modelSource}
+                simulationOptions={simulationOptions}
               />
             </ErrorBoundary>
           </div>
@@ -517,7 +527,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:fim">
               <div className="flex-1 min-h-0">
-                <FIMTab model={model} />
+                <FIMTab model={model} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -538,7 +548,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:parameter-estimation">
               <div className="flex-1 min-h-0">
-                <ParameterEstimationTab model={model} />
+                <ParameterEstimationTab model={model} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -559,7 +569,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:flux-analysis">
               <div className="flex-1 min-h-0">
-                <FluxAnalysisTab model={model} results={results} />
+                <FluxAnalysisTab model={model} results={results} modelSource={modelSource} />
               </div>
             </ErrorBoundary>
           </div>
@@ -580,7 +590,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:verification">
               <div className="flex-1 min-h-0">
-                <VerificationTab model={model} results={results} />
+              <VerificationTab model={model} results={results} modelSource={modelSource} />
               </div>
             </ErrorBoundary>
           </div>
@@ -601,7 +611,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:comparison">
               <div className="flex-1 min-h-0">
-                <ComparisonPanel model={model} baseResults={results} />
+                <ComparisonPanel model={model} baseResults={results} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -661,7 +671,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               plotDescription="The UMAP map on the left shows how different stochastic runs cluster together. Selecting a run displays its specific observable trajectory on the right."
             />
             <ErrorBoundary label="tab:trajectory-explorer">
-              <TrajectoryExplorerTab model={model} />
+              <TrajectoryExplorerTab model={model} bnglText={bnglCode} />
             </ErrorBoundary>
           </div>
         )}
@@ -699,7 +709,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               plotDescription="Nodes are colored by community and sized by PageRank. The degree distribution chart shows connectivity across the network."
             />
             <ErrorBoundary label="tab:network-analysis">
-              <NetworkAnalysisTab model={model} />
+              <NetworkAnalysisTab model={model} bnglText={bnglCode} />
             </ErrorBoundary>
           </div>
         )}
@@ -734,7 +744,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:sobol-sensitivity">
               <div className="flex-1 min-h-0">
-                <SobolSensitivityTab model={model} />
+                <SobolSensitivityTab model={model} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -755,7 +765,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:profile-likelihood">
               <div className="flex-1 min-h-0 overflow-hidden">
-                <ProfileLikelihoodTab model={model} />
+                <ProfileLikelihoodTab model={model} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -776,7 +786,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
             <ErrorBoundary label="tab:abc-smc">
               <div className="flex-1 min-h-0">
-                <ABCSMCTab model={model} />
+                <ABCSMCTab model={model} bnglText={bnglCode} />
               </div>
             </ErrorBoundary>
           </div>
@@ -810,6 +820,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onSimulate={onSimulate}
               onCancelSimulation={onCancelSimulation}
               isSimulating={isSimulating}
+              bnglText={bnglCode}
             />
           </div>
         )}
@@ -821,6 +832,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onSimulate={onSimulate}
               onCancelSimulation={onCancelSimulation}
               isSimulating={isSimulating}
+              modelSource={modelSource}
             />
           </div>
         )}
@@ -849,7 +861,16 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
               onSimulate={onSimulate}
               onCodeChange={(code: string) => onLoadModel?.(code, 'PK Model', '')}
               isSimulating={isSimulating}
+              modelSource={modelSource}
             />
+          </div>
+        )}
+
+        {activeTab === 23 && (
+          <div role="tabpanel" id="viz-tabpanel-23" aria-labelledby="viz-tab-23" aria-label="Robustness analysis" className="flex-1 min-h-0 flex flex-col overflow-hidden">
+            <ErrorBoundary label="tab:robustness">
+              <RobustnessTab model={model} bnglText={bnglCode} />
+            </ErrorBoundary>
           </div>
         )}
 

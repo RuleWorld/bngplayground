@@ -54,6 +54,7 @@ export class SpatialSimulation {
   private timePoints: number[] = [];
   private observableTimeSeries: Map<string, number[]> = new Map();
   private perCompartmentTimeSeries: Record<string, Record<string, number>>[] = [];
+  private snapshots: SpatialSnapshot[] = [];
 
   private gridCellSize = 0;
   private grid: Map<string, number[]> = new Map();
@@ -489,12 +490,22 @@ export class SpatialSimulation {
     const { global, perCompartment } = this.calculateObservables(positions);
     this.perCompartmentTimeSeries.push(perCompartment);
 
-    return {
+    const snapshot: SpatialSnapshot = {
       time: this.currentTime,
       moleculeCount: count,
       positions,
       observables: global,
     };
+
+    // Keep an independent copy for the completed result. The browser worker
+    // transfers the live positions buffer to the viewer, which detaches that
+    // buffer in the worker after the callback returns.
+    this.snapshots.push({
+      ...snapshot,
+      positions: positions.slice(),
+    });
+
+    return snapshot;
   }
 
   private calculateObservables(positions: Float32Array): {
@@ -572,6 +583,7 @@ export class SpatialSimulation {
       observables,
       finalSpeciesCounts,
       perCompartmentCounts: perCompartmentResults,
+      snapshots: this.snapshots,
     };
   }
 
@@ -586,6 +598,7 @@ export class SpatialSimulation {
   destroy(): void {
     this.model = null;
     this.molecules = [];
+    this.snapshots = [];
   }
 }
 

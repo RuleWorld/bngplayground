@@ -8,6 +8,11 @@ export function downloadTextFile(content: string, filename: string, mimeType: st
   URL.revokeObjectURL(url);
 }
 
+function escapeCsvValue(value: string): string {
+  if (!/[",\r\n]/.test(value)) return value;
+  return `"${value.replace(/"/g, '""')}"`;
+}
+
 /**
  * Format a number to BNG2-compatible scientific notation with 12 decimal digits.
  * Uses "round half down" for tie-breaker cases to match observed BNG2 printf behavior.
@@ -101,12 +106,30 @@ function formatCsvValue(value: unknown, header: string): string {
   return String(value);
 }
 
+/**
+ * Serialize a table with an explicit column order as interoperable CSV.
+ * Unlike `toCsv`, this function does not force a `time` column and preserves
+ * the header row when the table has no data rows.
+ */
+export function toCsvTable(data: Record<string, unknown>[], headers: string[]): string {
+  if (headers.length === 0) return '';
+
+  const csvHeaders = headers.map((header) => escapeCsvValue(header));
+  const csvRows = data.map((row) => headers
+    .map((header) => escapeCsvValue(formatCsvValue(row[header], header)))
+    .join(','));
+
+  return [csvHeaders.join(','), ...csvRows].join('\n');
+}
+
 export function toCsv(data: Record<string, any>[], headers: string[]): string {
   if (!data || data.length === 0) return '';
 
   const csvHeaders = ['time', ...headers.filter((h) => h !== 'time')];
-  const csvRows = data.map((row) => csvHeaders.map((h) => formatCsvValue(row[h], h)).join(','));
-  return [csvHeaders.join(','), ...csvRows].join('\n');
+  const csvRows = data.map((row) => csvHeaders
+    .map((header) => escapeCsvValue(formatCsvValue(row[header], header)))
+    .join(','));
+  return [csvHeaders.map((header) => escapeCsvValue(header)).join(','), ...csvRows].join('\n');
 }
 
 export function downloadCsv(data: Record<string, any>[], headers: string[], filename: string): void {
