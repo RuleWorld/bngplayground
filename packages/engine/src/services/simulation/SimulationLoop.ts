@@ -979,6 +979,15 @@ export async function simulate(
       }
     }
 
+    const safeSpeciesHeaders: string[] = [];
+    const safeSpeciesIndices: number[] = [];
+    for (let i = 0; i < numSpecies; i++) {
+      if (isSafeObjectKey(speciesHeaders[i])) {
+        safeSpeciesHeaders.push(speciesHeaders[i]);
+        safeSpeciesIndices.push(i);
+      }
+    }
+
     // --- Observable evaluation strategy selection ---
     // For large models (100+ observables), use CSR sparse evaluation to avoid
     // V8 JIT deoptimization that occurs with a single massive compiled function.
@@ -1878,7 +1887,9 @@ export async function simulate(
           pushDataRow(phase.suffix, outT0, state as Float64Array);
           if (includeSpeciesData) {
             const speciesPoint0: Record<string, number> = { time: outT0 };
-            for (let i = 0; i < numSpecies; i++) setSafeNumberField(speciesPoint0, speciesHeaders[i], state[i]);
+            for (let i = 0; i < safeSpeciesHeaders.length; i++) {
+              setSafeNumberField(speciesPoint0, safeSpeciesHeaders[i], state[safeSpeciesIndices[i]]);
+            }
             appendSpeciesSnapshot(phase.suffix, speciesPoint0);
           }
         }
@@ -1897,11 +1908,13 @@ export async function simulate(
           if (compiledSSAPropensities) {
             aTotal = compiledSSAPropensities(state, propensities);
             aTotalC = 0;
-            for (let i = 0; i < numReactions; i++) {
-              const a = propensities[i];
-              if (isNaN(a) || !isFinite(a)) {
-                console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): JIT calculated a=${a}`);
-                throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
+            if (!Number.isFinite(aTotal)) {
+              for (let i = 0; i < numReactions; i++) {
+                const a = propensities[i];
+                if (isNaN(a) || !isFinite(a)) {
+                  console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): JIT calculated a=${a}`);
+                  throw new Error(`NaN/Inf propensity JIT-calculated for reaction index ${i} (${ruleNames[i]}).`);
+                }
               }
             }
             if (useFenwick) fenwickBuild(propensities);
@@ -1912,10 +1925,14 @@ export async function simulate(
               const a = calcPropensity(i);
               propensities[i] = a;
               aTotal += a;
-
-              if (isNaN(a) || !isFinite(a)) {
-                console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): n=${concreteReactions[i].reactants.length}`);
-                throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
+            }
+            if (!Number.isFinite(aTotal)) {
+              for (let i = 0; i < numReactions; i++) {
+                const a = propensities[i];
+                if (isNaN(a) || !isFinite(a)) {
+                  console.error(`[Worker] Propensity Error for Rxn ${i} (${ruleNames[i]}): n=${concreteReactions[i].reactants.length}`);
+                  throw new Error(`NaN/Inf propensity calculated for reaction index ${i} (${ruleNames[i]}). This is usually caused by an undefined parameter or volume scaling error.`);
+                }
               }
             }
             if (useFenwick) fenwickBuild(propensities);
@@ -1978,10 +1995,20 @@ export async function simulate(
             }
             reactionIndex = idx < numReactions ? idx : 0;
           } else {
-            reactionIndex = selectLinear(r2);
+            const p = propensities;
+            const n = numReactions;
+            let sum = 0;
+            let idx = n - 1;
+            for (let i = 0; i < n; i++) {
+              sum += p[i];
+              if (r2 <= sum) {
+                idx = i;
+                break;
+              }
+            }
+            reactionIndex = idx;
           }
 
-          const firedRxn = concreteReactions[reactionIndex];
           totalEvents++;
           nEventsThisPhase++;
 
@@ -1996,6 +2023,7 @@ export async function simulate(
           // === DIN INFLUENCE TRACKING: Capture old propensities BEFORE state change ===
           let numAffected = 0;
           if (includeInfluence && ruleFirings && windowRuleFirings && affectedReactionIndices && oldPropensityValues) {
+            const firedRxn = concreteReactions[reactionIndex];
             ruleFirings[reactionIndex]++;
             windowRuleFirings[reactionIndex]++;
 
@@ -2161,8 +2189,8 @@ export async function simulate(
                 pushDataRow(phase.suffix, outT, state as Float64Array);
                 if (includeSpeciesData) {
                   const sp: Record<string, number> = { time: outT };
-                  for (let k = 0; k < numSpecies; k++) {
-                    setSafeNumberField(sp, speciesHeaders[k], state[k]);
+                  for (let k = 0; k < safeSpeciesHeaders.length; k++) {
+                    setSafeNumberField(sp, safeSpeciesHeaders[k], state[safeSpeciesIndices[k]]);
                   }
                   appendSpeciesSnapshot(phase.suffix, sp);
                 }
@@ -2188,7 +2216,9 @@ export async function simulate(
             pushDataRow(phase.suffix, outT, state as Float64Array);
             if (includeSpeciesData) {
               const sp: Record<string, number> = { time: outT };
-              for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], state[k]);
+              for (let k = 0; k < safeSpeciesHeaders.length; k++) {
+                setSafeNumberField(sp, safeSpeciesHeaders[k], state[safeSpeciesIndices[k]]);
+              }
               appendSpeciesSnapshot(phase.suffix, sp);
             }
             nextOutIdx++;
