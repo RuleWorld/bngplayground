@@ -65,6 +65,30 @@ end reaction rules
 end model
 `;
 
+function makeRuleCountModel(ruleCount: number): string {
+    const rules = Array.from({ length: ruleCount }, (_, i) => `r${i}: A(s) -> B(s) kf`).join('\n');
+    return `begin model
+begin parameters
+  kf 0.1
+end parameters
+begin molecule types
+  A(s)
+  B(s)
+end molecule types
+begin seed species
+  A(s) 100
+  B(s) 0
+end seed species
+begin observables
+  Molecules FreeA A(s)
+end observables
+begin reaction rules
+${rules}
+end reaction rules
+end model
+`;
+}
+
 describe('perturbation_screen handler', () => {
     // -------------------------------------------------------------------------
     // 1. Happy path & Optional fields fallback
@@ -179,27 +203,7 @@ describe('perturbation_screen handler', () => {
     });
 
     it('rejects very large expected simulation counts', async () => {
-        const rules = Array.from({ length: 301 }, (_, i) => `r${i}: A(s) -> B(s) kf`).join('\n');
-        const largeModel = `begin model
-begin parameters
-  kf 0.1
-end parameters
-begin molecule types
-  A(s)
-  B(s)
-end molecule types
-begin seed species
-  A(s) 100
-  B(s) 0
-end seed species
-begin observables
-  Molecules FreeA A(s)
-end observables
-begin reaction rules
-${rules}
-end reaction rules
-end model
-`;
+        const largeModel = makeRuleCountModel(301);
         const result = await handlePerturbationScreen({
             code: largeModel,
             observables: ['FreeA'],
@@ -210,6 +214,21 @@ end model
 
         const body = JSON.parse(result.content[0].text);
         expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/exceeds the limit of 300/i);
+    });
+
+    it('includes individual knockouts when enforcing the pairwise simulation limit', async () => {
+        // 24 rules require 1 WT + 24 individual knockouts + 276 pairs = 301.
+        const result = await handlePerturbationScreen({
+            code: makeRuleCountModel(24),
+            observables: ['FreeA'],
+            perturbations: ['pairwise_rules'],
+            max_pairwise: 276,
+            t_end: 1,
+            n_steps: 2,
+        });
+
+        const body = JSON.parse(result.content[0].text);
+        expect(body.error ?? body.message ?? JSON.stringify(body)).toMatch(/requires 301 simulations/i);
     });
 
     it('rejects gracefully when zero matching elements are found to perturb', async () => {

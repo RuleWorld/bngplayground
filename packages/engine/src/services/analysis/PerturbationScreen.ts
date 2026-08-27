@@ -69,6 +69,48 @@ export interface PerturbationScreenResult {
 // ---------------------------------------------------------------------------
 
 /**
+ * Estimate the total number of simulations required for a perturbation screen config.
+ */
+export function estimatePerturbationSimulations(
+  code: string,
+  perturbations: Array<
+    'rule_knockout' | 'species_knockdown' | 'molecule_knockout' | 'pairwise_rules'
+  >,
+  maxPairwise = 500,
+): number {
+  const uniquePerturbations = Array.from(new Set(perturbations));
+  const ruleLines = parseBlock(code, 'reaction rules');
+  const speciesLines = [
+    ...parseBlock(code, 'seed species'),
+    ...parseBlock(code, 'species'),
+  ];
+  const moleculeTypeLines = parseBlock(code, 'molecule types');
+
+  let expectedSimulations = 1; // wild-type
+  // Pairwise screens first run every individual rule knockout to rank the
+  // candidate rules before applying the pairwise cap.
+  if (
+    uniquePerturbations.includes('rule_knockout') ||
+    uniquePerturbations.includes('pairwise_rules')
+  ) {
+    expectedSimulations += ruleLines.length;
+  }
+  if (uniquePerturbations.includes('species_knockdown')) {
+    expectedSimulations += speciesLines.length;
+  }
+  if (uniquePerturbations.includes('molecule_knockout')) {
+    expectedSimulations += moleculeTypeLines.length;
+  }
+  if (uniquePerturbations.includes('pairwise_rules')) {
+    const nRuleResults = ruleLines.length;
+    const expectedPairs = (nRuleResults * (nRuleResults - 1)) / 2;
+    expectedSimulations += Math.min(expectedPairs, maxPairwise);
+  }
+
+  return expectedSimulations;
+}
+
+/**
  * Parse a named BNGL block and return its non-empty, non-comment lines.
  */
 function parseBlock(code: string, blockName: string): string[] {
