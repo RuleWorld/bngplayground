@@ -1,0 +1,22 @@
+[
+  { "query": "EGFR signaling", "expected_any": ["egfr", "egfr-signaling-pathway", "10_egfr_egfr_ode"], "top_k": 5, "filters": { "bng2_compatible": true } },
+  { "query": "T cell receptor signaling", "expected_any": ["tcr", "t-cell-activation", "12_TCR_tcr"], "top_k": 5, "filters": { "tags": ["immunology"] } },
+  { "query": "Fc epsilon receptor", "expected_any": ["03_fcerig_fceri_gamma2", "fceri_fyn", "BaruaFceRI_2012"], "top_k": 5, "filters": { "bng2_compatible": true } },
+  { "query": "bistable toggle switch", "expected_any": ["bistable-toggle-switch", "gene-expression-toggle", "toggle"], "top_k": 5 },
+  { "query": "circadian oscillator", "expected_any": ["circadian-oscillator", "CircadianOscillator", "clock-bmal1-gene-circuit"], "top_k": 5 },
+  { "query": "brusselator oscillator", "expected_any": ["brusselator-oscillator"], "top_k": 5 },
+  { "query": "NFsim polymer ring closure", "expected_any": ["nfsim_ring_closure_polymer", "polymer", "polymer_fixed"], "top_k": 5, "filters": { "nfsim_compatible": true } },
+  { "query": "functional rates volume", "expected_any": ["feature_functional_rates_volume", "feature_local_functions_explicit"], "top_k": 5 },
+  { "query": "nuclear transport compartment", "expected_any": ["compartment_nuclear_transport", "Rule_based_egfr_comp"], "top_k": 5 },
+  { "query": "Michaelis Menten kinetics", "expected_any": ["michaelis-menten-kinetics", "michment", "energy_catalysis_mm"], "top_k": 5 },
+  { "query": "MAPK signaling cascade", "expected_any": ["mapk-signaling-cascade", "erk-nuclear-translocation", "jnk-mapk-signaling"], "top_k": 5 },
+  { "query": "JAK STAT cytokine signaling", "expected_any": ["jak-stat-cytokine-signaling", "il6-jak-stat-pathway", "Cheemalavagu_JAK_STAT"], "top_k": 5 },
+  { "query": "calcium spike", "expected_any": ["calcium-spike-signaling", "CaOscillate_Func", "CaOscillate_Sat"], "top_k": 5 },
+  { "query": "apoptosis cascade", "expected_any": ["apoptosis-cascade", "dr5-apoptosis-signaling", "caspase-activation-loop"], "top_k": 5 },
+  { "query": "gene expression", "expected_any": ["gene-expression-toggle", "genetic_translation_kinetics", "clock-bmal1-gene-circuit"], "top_k": 5 },
+  { "query": "quorum sensing", "expected_any": ["quorum-sensing-circuit", "process_quorum_sensing_switch"], "top_k": 5 },
+  { "query": "predator prey dynamics", "expected_any": ["predator-prey-dynamics", "eco_lotka_volterra_grid"], "top_k": 5 },
+  { "query": "SBML import", "expected_any": ["simple_sbml_import", "translateSBML"], "top_k": 5 },
+  { "query": "parameter scan", "expected_any": ["ABC_scan", "BAB_scan", "feature_global_functions_scan"], "top_k": 5 },
+  { "query": "validation BNGL errors", "expected_any": ["bng_error", "check_scaling", "test_network_gen"], "top_k": 5 }
+]

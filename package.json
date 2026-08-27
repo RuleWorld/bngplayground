@@ -41,10 +41,11 @@
     "parity:targeted:det-rates": "node scripts/run_parity_targeted.mjs bab bab_coop haugh2b process_cell_adhesion_strength --out artifacts/parity_layer_report.targeted_det_rates.json",
     "parity:targeted:det-params": "node scripts/run_parity_targeted.mjs cs_pagerank eco_coevolution_host_parasite hif1a_degradation_loop lrr_comp repressilator synbio_band_pass_filter synbio_oscillator_synchronization --out artifacts/parity_layer_report.targeted_det_params.json",
     "type-check": "tsc --noEmit",
+    "test:mcp-conformance": "node scripts/run-mcp-conformance.mjs",
+    "test:mcp-inspector": "node scripts/mcp-inspector-smoke.mjs",
     "lint": "eslint ."
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.30.0",
     "@monaco-editor/react": "^4.7.0",
     "@tensorflow/tfjs": "^4.22.0",
     "@xenova/transformers": "^2.17.2",
@@ -82,6 +83,9 @@
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "@types/three": "^0.185.1",
+    "@google/jules-sdk": "0.2.0",
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/conformance": "0.2.0-alpha.11",
     "@vitejs/plugin-react": "^6.1.0",
     "@vitest/coverage-v8": "^4.1.9",
     "@webgpu/types": "^0.1.72",

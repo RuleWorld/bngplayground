@@ -80,6 +80,7 @@ export default defineConfig(() => {
       alias: {
         '@': path.resolve(__dirname, '.'),
         '@bngplayground/engine': path.resolve(__dirname, 'packages/engine/src'),
+        '@bngplayground/rulehub': path.resolve(__dirname, 'packages/rulehub/src'),
         // Polyfill Node.js modules for ANTLR4 browser compatibility
         'util': 'util',
         'assert': 'assert',

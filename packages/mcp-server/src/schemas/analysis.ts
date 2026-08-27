@@ -224,3 +224,33 @@ export const bifurcationAnalysisArgsSchema = z.object({
     end_value: finiteNumber.optional().describe('Ending parameter value'),
     max_steps: positiveInt.optional().describe('Maximum continuation steps (default 500)'),
 }).strict();
+
+export const optimalExperimentArgsSchema = z.object({
+    code: z.string().describe('BNGL model code'),
+    observables: z.array(z.string()).optional().describe('Observables to measure (default: all)'),
+    candidate_times: z.array(finiteNumber).optional().describe('Candidate time points to sample'),
+    n_samples: positiveInt.optional().describe('Number of samples per experiment (default: 10)'),
+    method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
+    t_end: finiteNumber.positive().optional().describe('End time (default: 100)'),
+}).strict();
+
+export const checkHysteresisArgsSchema = z.object({
+    code: z.string().describe('BNGL model code'),
+    parameter: z.string().describe('Parameter to vary'),
+    sweep_range: z.array(finiteNumber).length(2).describe('Min and max values for parameter sweep'),
+    steps: z.number().int().min(2).optional().describe('Number of sweep steps (default: 20)'),
+    observable: z.string().optional().describe('Observable to analyze (default: first)'),
+    method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
+    t_end: finiteNumber.positive().optional().describe('End time (default: 50)'),
+}).strict();
+
+export const checkPhaseHandoffArgsSchema = z.object({
+    code: z.string().describe('BNGL model code'),
+    parameter: z.string().describe('Parameter to change for phase transition'),
+    initial_value: finiteNumber.describe('Initial parameter value'),
+    final_value: finiteNumber.describe('Final parameter value after transition'),
+    transition_time: finiteNumber.positive().describe('Time for phase 1 (equilibration)'),
+    observable: z.string().optional().describe('Observable to track (default: first)'),
+    method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
+    t_end: finiteNumber.positive().optional().describe('End time for each phase (default: transition_time)'),
+}).strict();

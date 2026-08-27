@@ -1,8 +1,8 @@
 # BioNetGen Playground MCP Server
 
-This package exposes the BioNetGen Playground engine as a Model Context Protocol (MCP) server with 44 tools for constructing, validating, simulating, calibrating, analyzing, and exporting BNGL models.
+This package exposes the BioNetGen Playground engine as a Model Context Protocol (MCP) server for constructing, validating, simulating, calibrating, analyzing, and exporting BNGL models. The default `stable` profile has 36 task-oriented tools; the opt-in `full` profile has 45 tools including legacy compatibility aliases.
 
-The server currently uses MCP's local `stdio` transport. It is intended for clients that can start a local process, including Claude Desktop, Claude Code, and Codex. ChatGPT chats, Claude.ai, and Claude Cowork use remote MCP connections instead; see [Remote clients](#remote-clients-chatgpt-claudeai-and-cowork).
+The server uses the MCP TypeScript SDK v2 and advertises protocol version `2026-07-28`. It supports local `stdio` and Streamable HTTP through the exported `serveMcpStdio` and `createHttpHandler` entry points. The default profile is intentionally compact and keeps legacy aliases out of ordinary tool discovery.
 
 > **Repository-only package:** `@bngplayground/mcp-server` is not currently published to npm. Do not configure a client with `npx @bngplayground/mcp-server`; launch it from a local clone as described below.
 
@@ -16,6 +16,9 @@ npm install
 npm run build -w @bngplayground/engine
 npm run build -w @bngplayground/mcp-server
 ```
+
+Set `BNG_MCP_PROFILE=full` only when a client still needs the legacy aliases.
+The server defaults to `BNG_MCP_PROFILE=stable`.
 
 The MCP server build also creates the self-contained HTML bundle used by the
 interactive result views. Re-run it after changing files under
@@ -46,6 +49,20 @@ To smoke-test the launch, run the corresponding command in a terminal:
 ```
 
 A healthy `stdio` server waits for MCP input and may appear silent. Press Ctrl+C to stop the smoke test. Do not add ordinary logging to stdout because it corrupts the MCP protocol; diagnostics must go to stderr.
+
+For a remote deployment, adapt the exported HTTP handler to the host's server
+runtime:
+
+```ts
+import { createHttpHandler } from '@bngplayground/mcp-server';
+
+const handler = createHttpHandler();
+// Pass each Fetch API Request to handler.fetch(request, { ... }) in the host.
+```
+
+The HTTP adapter validates Host and Origin headers for localhost deployments,
+supports MCP session requests, and keeps the legacy stateless compatibility
+mode enabled for clients that do not send a session header.
 
 ## Claude Desktop
 
@@ -141,10 +158,10 @@ Verify it with `codex mcp get bngplayground`. Start a new Codex task or restart 
 
 The local commands above cannot be pasted into a remote connector form.
 
-- **ChatGPT chats/custom MCP apps:** deploy the server behind a public HTTPS **Streamable HTTP** MCP endpoint, or expose it with OpenAI's Secure MCP Tunnel. Enable developer mode, create the app/plugin, and enter that endpoint URL. The present repository server only implements `stdio`, so direct ChatGPT connection requires a transport/deployment adapter first. See OpenAI's [connect and test guide](https://developers.openai.com/plugins/deploy/connect-chatgpt/).
+- **ChatGPT chats/custom MCP apps:** deploy `createHttpHandler()` behind a public HTTPS **Streamable HTTP** MCP endpoint, or expose it with OpenAI's Secure MCP Tunnel. Enable developer mode, create the app/plugin, and enter that endpoint URL. See OpenAI's [connect and test guide](https://developers.openai.com/plugins/deploy/connect-chatgpt/).
 - **Claude.ai and Claude Cowork:** add a remote custom connector URL under Customize > Connectors. A local Claude Desktop `claude_desktop_config.json` entry is not available to these products. The present `stdio` server must likewise be hosted behind a supported remote MCP endpoint. See Anthropic's [remote MCP connector guide](https://support.claude.com/en/articles/11175166-get-started-with-custom-connectors-using-remote-mcp).
 
-The hosted endpoint and its authentication policy are deployment concerns and are not currently included in this package.
+The hosted endpoint and its authentication policy are deployment concerns and are not currently included in this package. Add authentication at the deployment boundary; do not put credentials in BNGL, RuleHub model IDs, or tool arguments.
 
 ## Interactive result views (MCP Apps)
 
@@ -164,17 +181,26 @@ frame, or external asset origins. Hosts without MCP Apps support continue to
 receive the same text and `structuredContent` tool results; the UI metadata is
 an optional enhancement rather than a new requirement.
 
-## Capabilities (44 tools)
+## Capabilities and profiles
 
-The authoritative names, descriptions, and input schemas are registered in [`src/index.ts`](src/index.ts).
+The authoritative names, contrastive routing descriptions, schemas, handlers,
+and profile membership are registered in [`src/toolRegistry.ts`](src/toolRegistry.ts).
 
-- Core lifecycle (6): `parse_bngl`, `generate_network`, `simulate`, `parameter_scan`, `validate_model`, `get_contact_map`
-- Calibration and reduction (4): `fit_parameters`, `import_petab`, `reduce_model`, `qssa_reduction`
-- Sensitivity, inference, and design (5): `sobol_sensitivity`, `identifiability_analysis`, `bayesian_inference`, `optimal_experiment`, `compute_fim`
-- Intelligence and diagnostics (8): `compose_model`, `edit_model`, `diagnose_model`, `explain_model`, `suggest_fix`, `diagnose`, `analyze_residuals`, `assess_model_maturity`
-- Verification and dynamics (8): `verify_model`, `bifurcation_analysis`, `temporal_analysis`, `symbolic_steady_state`, `compare_models`, `search_structure`, `check_hysteresis`, `check_phase_handoff`
-- Applied analysis (7): `pkpd`, `multiscale_simulation`, `perturbation_screen`, `dose_response`, `first_passage_time`, `lna_analysis`, `reaction_information_flow`
-- Export and integration (6): `export_model`, `export_omex`, `export_sbml`, `export_sedml`, `suggest_annotations`, `query_pathway_commons`
+Stable tools (36): `parse_bngl`, `generate_network`, `simulate`,
+`parameter_scan`, `validate_model`, `get_contact_map`, `fit_parameters`,
+`import_petab`, `reduce_model`, `qssa_reduction`, `sobol_sensitivity`,
+`identifiability_analysis`, `bayesian_inference`, `optimal_experiment`,
+`compute_fim`, `edit_model`, `diagnose_model`, `explain_model`, `verify_model`,
+`bifurcation_analysis`, `temporal_analysis`, `symbolic_steady_state`,
+`compare_models`, `search_structure`, `check_hysteresis`, `check_phase_handoff`,
+`pkpd`, `multiscale_simulation`, `perturbation_screen`, `dose_response`,
+`first_passage_time`, `lna_analysis`, `reaction_information_flow`,
+`export_model`, `query_pathway_commons`, and `search_models`.
+
+Full-only legacy aliases (9): `compose_model`, `suggest_fix`, `diagnose`,
+`analyze_residuals`, `assess_model_maturity`, `export_omex`, `export_sbml`,
+`export_sedml`, and `suggest_annotations`. Prefer direct BNGL authoring plus
+`edit_model` for new models, and prefer `export_model` for interchange formats.
 
 Example requests to an MCP-enabled assistant include:
 
@@ -184,6 +210,32 @@ Example requests to an MCP-enabled assistant include:
 - “Export this model as SBML and suggest appropriate annotations.”
 
 For token-efficient simulations, set `output_mode` to `observables_only`. The default `full` mode also returns expanded network and species trajectory data.
+
+## RuleHub discovery and exact model reads
+
+`search_models` queries the canonical RuleWorld/RuleHub manifest and returns
+metadata, scores, and read-only `rulehub://model/{id}` resource links. Read the
+returned resource when exact BNGL source and provenance are needed. The shared
+`@bngplayground/rulehub` package provides manifest normalization, compatibility
+filters, lexical fallback search, and safe model-path resolution; ordinary
+simulation tools do not fetch arbitrary URLs.
+
+## Verification and autoresearch
+
+From the repository root, run the protocol smoke checks with:
+
+```bash
+npm run test:mcp-inspector
+npm run test:mcp-conformance
+```
+
+The conformance harness is pinned to the reviewed MCP requirements package and
+uses the `2026-07-28` requirement set. The Jules autoresearch workflow performs
+deterministic target selection, multistart sessions with `autoPr: false`, patch
+extraction, locked-path checks, fresh-base worktree evaluation, deterministic
+ranking, and artifact-first promotion. A pull request is opened only by the
+explicit promotion job after a winner passes all hard guards; no autoresearch
+job auto-merges.
 
 ## Troubleshooting
 

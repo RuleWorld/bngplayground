@@ -27,6 +27,9 @@ export {
     temporalAnalysisArgsSchema,
     symbolicSteadyStateArgsSchema,
     bifurcationAnalysisArgsSchema,
+    optimalExperimentArgsSchema,
+    checkHysteresisArgsSchema,
+    checkPhaseHandoffArgsSchema,
 } from './analysis.js';
 
 export {
@@ -52,3 +55,5 @@ export {
     reduceModelArgsSchema,
     pkpdArgsSchema,
 } from './advanced.js';
+
+export { searchModelsArgsSchema } from './rulehub.js';

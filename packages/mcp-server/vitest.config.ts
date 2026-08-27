@@ -5,6 +5,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@bngplayground/engine': resolve(__dirname, '../engine/src'),
+      '@bngplayground/rulehub': resolve(__dirname, '../rulehub/src'),
     },
   },
   test: {

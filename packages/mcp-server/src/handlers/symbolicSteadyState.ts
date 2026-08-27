@@ -21,6 +21,7 @@ export async function handleSymbolicSteadyState(
     if (nSpecies > 15) {
       const errorMsg = `System has ${nSpecies} species. Symbolic solution is only feasible for ≤15 species.`;
       const errRes: MCPErrorResult = {
+        code: 'SYMBOLIC_SYSTEM_TOO_LARGE',
         error: errorMsg,
         diagnosis: 'Symbolic elimination / solving complexity scales exponentially with species count.',
         recovery: 'Use numerical steady-state analysis or dose sweep instead.',

@@ -25,6 +25,8 @@
     "paths": {
       "@bngplayground/engine": ["../../packages/engine/src/index.ts"],
       "@bngplayground/engine/*": ["../../packages/engine/src/*"],
+      "@bngplayground/rulehub": ["../../packages/rulehub/src/index.ts"],
+      "@bngplayground/rulehub/*": ["../../packages/rulehub/src/*"],
       "@grammar/*": ["../../services/grammar/*"]
     }
   },

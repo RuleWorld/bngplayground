@@ -34,6 +34,7 @@ export async function handleTemporalAnalysis(args: ToolArgs): Promise<ToolResult
 
     if (!results.firingLog || results.firingLog.length === 0) {
       const errRes: MCPErrorResult = {
+        code: 'NO_FIRING_EVENTS',
         error: 'No firing events recorded. The model may not have stochastic reactions or the simulation may be too short.',
         diagnosis: 'SSA simulation completed but no reactions were fired.',
         recovery: 'Increase t_end, check that the model has valid reaction rules with non-zero rate constants, and verify that seed species concentrations are positive.',

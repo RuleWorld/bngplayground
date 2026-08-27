@@ -1,18 +1,9 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
+import { checkHysteresisArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { loadEvaluator, analyzeHysteresis } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
-
-const checkHysteresisArgsSchema = z.object({
-    code: z.string().describe('BNGL model code'),
-    parameter: z.string().describe('Parameter to vary'),
-    sweep_range: z.array(z.number()).length(2).describe('Min and max values for parameter sweep'),
-    steps: z.number().int().min(2).optional().describe('Number of sweep steps (default: 20)'),
-    observable: z.string().optional().describe('Observable to analyze (default: first)'),
-    method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
-    t_end: z.number().positive().optional().describe('End time (default: 50)'),
-}).strict();
 
 type CheckHysteresisArgs = z.infer<typeof checkHysteresisArgsSchema>;
 

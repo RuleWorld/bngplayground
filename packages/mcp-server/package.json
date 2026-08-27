@@ -1,7 +1,7 @@
 {
   "name": "@bngplayground/mcp-server",
   "version": "1.0.0",
-  "description": "MCP server for BioNetGen Language modeling with 44 tools for modeling, simulation, calibration, verification, analysis, and export",
+  "description": "MCP server for BioNetGen Language modeling with stable and full tool profiles, RuleHub grounding, and MCP Apps",
   "license": "MIT",
   "author": "RuleWorld <https://github.com/RuleWorld>",
   "repository": {
@@ -47,17 +47,24 @@
     "node": ">=20.0.0"
   },
   "scripts": {
+    "prestart": "npm run build --workspace @bngplayground/rulehub",
     "start": "tsx src/index.ts",
+    "predev": "npm run build --workspace @bngplayground/rulehub",
     "dev": "tsx src/index.ts",
+    "prebuild": "npm run build --workspace @bngplayground/rulehub",
     "build": "tsc && vite build --config apps/vite.config.ts && node apps/verify-bundle.mjs",
     "test": "vitest run"
   },
   "dependencies": {
     "@bngplayground/engine": "file:../engine",
-    "@modelcontextprotocol/sdk": "^1.0.0",
+    "@bngplayground/rulehub": "file:../rulehub",
+    "@modelcontextprotocol/server": "2.0.0",
+    "@xenova/transformers": "^2.17.2",
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/conformance": "0.2.0-alpha.11",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@types/node": "^26.1.2",
     "ts-node": "^10.9.2",

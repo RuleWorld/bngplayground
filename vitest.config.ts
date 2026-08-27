@@ -6,6 +6,7 @@ export default defineConfig({
     alias: {
       '@': resolve(__dirname, './'),
       '@bngplayground/engine': resolve(__dirname, 'packages/engine/src'),
+      '@bngplayground/rulehub': resolve(__dirname, 'packages/rulehub/src'),
     },
   },
   test: {

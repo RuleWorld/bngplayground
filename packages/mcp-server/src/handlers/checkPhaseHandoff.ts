@@ -1,19 +1,9 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
+import { checkPhaseHandoffArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { loadEvaluator, analyzePhaseHandoff } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
-
-const checkPhaseHandoffArgsSchema = z.object({
-    code: z.string().describe('BNGL model code'),
-    parameter: z.string().describe('Parameter to change for phase transition'),
-    initial_value: z.number().describe('Initial parameter value'),
-    final_value: z.number().describe('Final parameter value after transition'),
-    transition_time: z.number().positive().describe('Time for phase 1 (equilibration)'),
-    observable: z.string().optional().describe('Observable to track (default: first)'),
-    method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
-    t_end: z.number().positive().optional().describe('End time for each phase (default: transition_time)'),
-}).strict();
 
 type CheckPhaseHandoffArgs = z.infer<typeof checkPhaseHandoffArgsSchema>;
 

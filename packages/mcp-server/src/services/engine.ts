@@ -30,7 +30,7 @@ import {
  * or BNGL logic. Handlers should use engine functions to perform calculations and pass the result here.
  */
 export function createToolResult<T>(data: T): ToolResult<T> {
-    return {
+    const result: ToolResult<T> = {
         content: [
             {
                 type: 'text',
@@ -39,6 +39,19 @@ export function createToolResult<T>(data: T): ToolResult<T> {
         ],
         structuredContent: data,
     };
+    if (isStructuredError(data)) {
+        return { ...result, isError: true };
+    }
+    return result;
+}
+
+function isStructuredError(value: unknown): value is { code: string; error: string; diagnosis: string; recovery: string } {
+    if (typeof value !== 'object' || value === null) return false;
+    const candidate = value as Record<string, unknown>;
+    return typeof candidate.code === 'string'
+        && typeof candidate.error === 'string'
+        && typeof candidate.diagnosis === 'string'
+        && typeof candidate.recovery === 'string';
 }
 
 /**

@@ -1,17 +1,9 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
+import { optimalExperimentArgsSchema } from '../schemas/index.js';
 import { createToolResult, parseArgs, parseModelOrThrow, expandModel, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
 import { loadEvaluator, analyzeOptimalExperiment } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
-
-const optimalExperimentArgsSchema = z.object({
-    code: z.string().describe('BNGL model code'),
-    observables: z.array(z.string()).optional().describe('Observables to measure (default: all)'),
-    candidate_times: z.array(z.number()).optional().describe('Candidate time points to sample'),
-    n_samples: z.number().int().positive().optional().describe('Number of samples per experiment (default: 10)'),
-    method: z.enum(['ode', 'ssa']).default('ode').describe('Simulation method'),
-    t_end: z.number().positive().optional().describe('End time (default: 100)'),
-}).strict();
 
 type OptimalExperimentArgs = z.infer<typeof optimalExperimentArgsSchema>;
 
