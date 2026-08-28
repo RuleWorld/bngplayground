@@ -3,6 +3,8 @@ import {
   forwardSensitivity,
   adjointSensitivity,
   computeObjectiveGradient,
+  setCVodeSensModule,
+  resetCVodeSensModule,
 } from '../../src/services/analysis/DifferentiableSolver';
 import type { SensitivityConfig } from '../../src/services/analysis/DifferentiableSolver';
 import {
@@ -119,6 +121,90 @@ describe('DifferentiableSolver', () => {
   });
 
   // ── 7. Adjoint / finite-difference gradient fallback ───────────────
+
+  describe('cvodesForwardSensitivity resilience & error handling', () => {
+    it('should handle partial or full WASM heap allocation failure gracefully', () => {
+      const k = 0.5;
+      const y0 = 1.0;
+      const tEnd = 2.0;
+      const nPoints = 10;
+      const { config } = exponentialDecayConfig(k, y0, tEnd, nPoints);
+
+      const freedPtrs: number[] = [];
+      let mallocCallCount = 0;
+
+      const mockModule = {
+        _malloc: (size: number) => {
+          mallocCallCount++;
+          // Fail on 3rd allocation (e.g. yOutPtr)
+          if (mallocCallCount === 3) return 0;
+          return mallocCallCount * 100;
+        },
+        _free: (ptr: number) => {
+          freedPtrs.push(ptr);
+        },
+        _sens_init_forward: () => 1234,
+        _sens_solve_step: () => 0,
+        _sens_get_y: () => {},
+        _sens_get_s: () => {},
+        _sens_get_all: () => {},
+        _sens_destroy: () => {},
+        HEAPF64: new Float64Array(10000),
+      };
+
+      setCVodeSensModule(mockModule);
+
+      try {
+        const result = forwardSensitivity(config);
+        // Should fall back to finite_difference without throwing
+        expect(result.method).toBe('finite_difference');
+        // Check that any non-zero allocated pointers prior to failure were freed
+        expect(freedPtrs).toContain(100);
+        expect(freedPtrs).toContain(200);
+      } finally {
+        resetCVodeSensModule();
+      }
+    });
+
+    it('should handle _sens_init_forward failure and free heap pointers', () => {
+      const k = 0.5;
+      const y0 = 1.0;
+      const tEnd = 2.0;
+      const nPoints = 10;
+      const { config } = exponentialDecayConfig(k, y0, tEnd, nPoints);
+
+      const freedPtrs: number[] = [];
+      let mallocCallCount = 0;
+
+      const mockModule = {
+        _malloc: (_size: number) => {
+          mallocCallCount++;
+          return mallocCallCount * 100;
+        },
+        _free: (ptr: number) => {
+          freedPtrs.push(ptr);
+        },
+        _sens_init_forward: () => 0, // Initialization fails (returns 0/null)
+        _sens_solve_step: () => 0,
+        _sens_get_y: () => {},
+        _sens_get_s: () => {},
+        _sens_get_all: () => {},
+        _sens_destroy: () => {},
+        HEAPF64: new Float64Array(10000),
+      };
+
+      setCVodeSensModule(mockModule);
+
+      try {
+        const result = forwardSensitivity(config);
+        expect(result.method).toBe('finite_difference');
+        // Verify all 5 pointers allocated before init were freed
+        expect(freedPtrs).toEqual([100, 200, 300, 400, 500]);
+      } finally {
+        resetCVodeSensModule();
+      }
+    });
+  });
 
   describe('adjointSensitivity', () => {
     it('should produce gradient in same direction as forward sensitivity gradient', () => {

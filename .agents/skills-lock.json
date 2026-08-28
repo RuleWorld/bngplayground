@@ -1,0 +1,62 @@
+{
+  "generated_at": "2026-08-26",
+  "repository": "akutuva21/julesplayground",
+  "sources": {
+    "rulehub-model-search": {
+      "source_repository": "akutuva21/julesplayground",
+      "source_paths": [".agents/skills/rulehub-model-search/"],
+      "source_commit": "98daff62e29a4b7de5843fc16b61f1b67841e7bb",
+      "license": "MIT",
+      "adapted": false
+    },
+    "bionetgen-authoring": {
+      "source_repository": "wshlavacek/BNGL-Models",
+      "source_paths": ["skills/bngl/skill.md"],
+      "source_commit": "15f5a9962af657ecb6084cef5ef3a025120bc1a3",
+      "license": "CC-BY-4.0",
+      "adapted": true
+    },
+    "bionetgen-nfsim": {
+      "source_repository": "wshlavacek/BNGL-Models",
+      "source_paths": ["skills/nfsim/SKILL.md", "skills/nfsim/references/*"],
+      "source_commit": "15f5a9962af657ecb6084cef5ef3a025120bc1a3",
+      "license": "CC-BY-4.0",
+      "adapted": true
+    },
+    "bionetgen-analysis-routing": {
+      "source_repository": "akutuva21/julesplayground",
+      "source_paths": [".agents/skills/bionetgen-analysis-routing/"],
+      "source_commit": "98daff62e29a4b7de5843fc16b61f1b67841e7bb",
+      "license": "MIT",
+      "adapted": false
+    },
+    "bngplayground-mcp-development": {
+      "source_repository": "akutuva21/julesplayground",
+      "source_paths": [".agents/skills/bngplayground-mcp-development/"],
+      "source_commit": "98daff62e29a4b7de5843fc16b61f1b67841e7bb",
+      "license": "MIT",
+      "adapted": false
+    },
+    "systematic-debugging": {
+      "source_repository": "obra/superpowers",
+      "source_paths": ["skills/systematic-debugging/*"],
+      "source_commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+      "license": "MIT",
+      "adapted": true
+    },
+    "verification-before-completion": {
+      "source_repository": "obra/superpowers",
+      "source_paths": ["skills/verification-before-completion/*"],
+      "source_commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+      "license": "MIT",
+      "adapted": true
+    },
+    "writing-skills": {
+      "source_repository": "obra/superpowers",
+      "source_paths": ["skills/writing-skills/SKILL.md"],
+      "source_commit": "b36e0829c6d0140e93cfef2ca599b1b07d4a7797",
+      "license": "MIT",
+      "adapted": true
+    }
+  }
+}

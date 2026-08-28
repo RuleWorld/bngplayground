@@ -1,14 +1,14 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ReferenceArea } from 'recharts';
-import { BNGLModel, SimulationResults } from '../types';
+import { BNGLModel, SimulationOptions, SimulationResults } from '../types';
 import { CHART_COLORS } from '../src/utils/chartColors';
 import { Card } from './ui/Card';
 import { CustomExpression, evaluateExpression } from './ExpressionInputPanel';
 import { computeDynamicObservable } from '@bngplayground/engine';
 
-import { Dropdown, DropdownItem } from './ui/Dropdown';
-import { ChevronDownIcon } from './icons/ChevronDownIcon';
 import { InlineLegend } from './charts/InteractiveLegend';
+import { ResultsExportControl } from './ResultsExportDialog';
+import { createSimulationResultsExportDescriptor } from '../services/resultsExport';
 
 interface ResultsChartProps {
   results: SimulationResults | null;
@@ -188,92 +188,11 @@ const CustomLegend = (props: any) => {
   );
 };
 
-// Helper: Export chart data as CSV
-import { downloadCsv } from '../src/utils/download';
 import { toggleSetMember } from '../services/collections';
-
-function exportAsCSV(data: Record<string, any>[], headers: string[], suffixName?: string) {
-  const sfx = !suffixName || suffixName === '__default__' || suffixName === MERGED_PHASE_SUFFIX ? '' : `_${suffixName}`;
-  const filename = `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.csv`;
-  downloadCsv(data, headers, filename);
-}
-
-// Helper: Export chart data as GDAT (BioNetGen format - observables)
-function exportAsGDAT(results: SimulationResults | null) {
-  if (!results) return;
-  const dataMap = (results.dataBySuffix && Object.keys(results.dataBySuffix).length > 0)
-    ? results.dataBySuffix
-    : { '__default__': results.data };
-  
-  const headers = results.headers || [];
-  const gdatHeaders = ['time', ...headers.filter(h => h !== 'time')];
-  const headerLine = '#' + gdatHeaders.map(h => h.padStart(20)).join('');
-
-  for (const [suffix, data] of Object.entries(dataMap)) {
-    if (!data || data.length === 0) continue;
-
-    const dataRows = data.map(row =>
-      gdatHeaders.map(h => {
-        const val = row[h] ?? 0;
-        return typeof val === 'number' ? val.toExponential(12).padStart(22) : String(val).padStart(22);
-      }).join('')
-    );
-
-    const gdat = [headerLine, ...dataRows].join('\n');
-    const blob = new Blob([gdat], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const sfx = suffix === '__default__' ? '' : `_${suffix}`;
-    a.download = `simulation_results_${new Date().toISOString().slice(0, 10)}${sfx}.gdat`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-}
-
-// Helper: Export species concentration data as CDAT (BioNetGen format - all species)
-function exportAsCDAT(results: SimulationResults | null) {
-  if (!results || !results.speciesHeaders) {
-    alert('Species concentration data not available. CDAT export requires species-level simulation data.');
-    return;
-  }
-  const speciesDataMap = (results.speciesDataBySuffix && Object.keys(results.speciesDataBySuffix).length > 0)
-    ? results.speciesDataBySuffix
-    : { '__default__': results.speciesData };
-  const timeDataMap = (results.dataBySuffix && Object.keys(results.dataBySuffix).length > 0)
-    ? results.dataBySuffix
-    : { '__default__': results.data };
-
-  const cdatHeaders = ['time', ...results.speciesHeaders];
-  const headerLine = '#' + cdatHeaders.map((h, i) => i === 0 ? h.padStart(20) : `S${i}`.padStart(20)).join('');
-
-  for (const [suffix, speciesData] of Object.entries(speciesDataMap)) {
-    if (!speciesData || speciesData.length === 0) continue;
-    const timeData = timeDataMap[suffix] || timeDataMap['__default__'] || [];
-
-    const dataRows = speciesData.map((row, idx) => {
-      const time = timeData[idx]?.time ?? (idx * (timeData[1]?.time ?? 1));
-      const timeStr = (typeof time === 'number' ? time.toExponential(12) : String(time)).padStart(22);
-      const speciesStr = results.speciesHeaders!.map(name => {
-        const val = row[name] ?? 0;
-        return typeof val === 'number' ? val.toExponential(12).padStart(22) : String(val).padStart(22);
-      }).join('');
-      return timeStr + speciesStr;
-    });
-
-    const cdat = [headerLine, ...dataRows].join('\n');
-    const blob = new Blob([cdat], { type: 'text/plain' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    const sfx = suffix === '__default__' ? '' : `_${suffix}`;
-    a.download = `simulation_species_${new Date().toISOString().slice(0, 10)}${sfx}.cdat`;
-    a.click();
-    URL.revokeObjectURL(url);
-  }
-}
-
-export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNFsim, visibleSpecies, onVisibleSpeciesChange, highlightedSeries = [], expressions = [] }) => {
+export const ResultsChart: React.FC<ResultsChartProps & {
+  modelSource?: string | null;
+  simulationOptions?: SimulationOptions | null;
+}> = ({ results, model, isNFsim, visibleSpecies, onVisibleSpeciesChange, highlightedSeries = [], expressions = [], modelSource, simulationOptions }) => {
   const [zoomHistory, setZoomHistory] = useState<ZoomDomain[]>([]);
   const [selection, setSelection] = useState<ZoomDomain | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'search'>('all');
@@ -479,14 +398,6 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       });
   }, [chartData, plotSeriesKeys, xAxisScale, yAxisScale]);
 
-  if (!results || sourceData.length === 0) {
-    return (
-      <Card className="flex h-96 max-w-full items-center justify-center overflow-hidden">
-        <p className="text-slate-500 dark:text-slate-400">Run a simulation to see the results.</p>
-      </Card>
-    );
-  }
-
   const handleLegendClick = (data: any) => {
     // dataKey is for default legend, value is for custom legend payload
     const dataKey = data.dataKey || data.value;
@@ -527,11 +438,11 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
   const handleDoubleClick = () => {
     setZoomHistory([]);
   };
-  const filterVisibleSpecies = (name: string) => {
+  const filterVisibleSpecies = useCallback((name: string) => {
     if (filterMode === 'all') return true;
     if (filterMode === 'search') return searchTerm.trim() === '' ? true : name.toLowerCase().includes(searchTerm.toLowerCase());
     return true;
-  };
+  }, [filterMode, searchTerm]);
   const currentDomain = zoomHistory.length > 0 ? zoomHistory[zoomHistory.length - 1] : undefined;
   const highlightSet = new Set(highlightedSeries);
 
@@ -554,6 +465,45 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
       onVisibleSpeciesChange(new Set([name]));
     }
   };
+
+  const currentViewSeries = useMemo(
+    () => plotSeriesKeys.filter((name) =>
+      (visibleSpecies.size === 0 || visibleSpecies.has(name)) && filterVisibleSpecies(name)),
+    [filterVisibleSpecies, plotSeriesKeys, visibleSpecies],
+  );
+  const currentViewHeaders = useMemo(() => ['time', ...currentViewSeries], [currentViewSeries]);
+  const currentViewRows = useMemo(() => {
+    const visibleRows = chartData.filter((row) => {
+      if (!currentDomain) return true;
+      const time = typeof row.time === 'number' ? row.time : Number(row.time);
+      const xValue = xAxisScale === 'log' && time > 0 ? Math.log10(time) : time;
+      return Number.isFinite(xValue)
+        && typeof currentDomain.x1 === 'number'
+        && typeof currentDomain.x2 === 'number'
+        && xValue >= currentDomain.x1
+        && xValue <= currentDomain.x2;
+    });
+    return visibleRows.map((row) => Object.fromEntries(currentViewHeaders.map((header) => [header, row[header]])));
+  }, [chartData, currentDomain, currentViewHeaders, xAxisScale]);
+  const exportDescriptor = useMemo(() => {
+    if (!results) return null;
+    return createSimulationResultsExportDescriptor({
+      results,
+      modelSource,
+      simulationOptions,
+      currentRows: currentViewRows,
+      currentHeaders: currentViewHeaders,
+      currentFigureSvg: () => wrapperRef?.querySelector('svg')?.outerHTML ?? null,
+    });
+  }, [currentViewHeaders, currentViewRows, modelSource, results, simulationOptions, wrapperRef]);
+
+  if (!results || sourceData.length === 0) {
+    return (
+      <Card className="flex h-96 max-w-full items-center justify-center overflow-hidden">
+        <p className="text-slate-500 dark:text-slate-400">Run a simulation to see the results.</p>
+      </Card>
+    );
+  }
 
 
 
@@ -872,27 +822,7 @@ export const ResultsChart: React.FC<ResultsChartProps> = ({ results, model, isNF
             Reset View
           </button>
 
-          {/* Export Dropdown */}
-          <Dropdown
-            direction="up"
-            trigger={
-              <button aria-label="Export options" className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-900 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 dark:border-slate-700 rounded-md shadow-sm text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:bg-slate-900/50 dark:hover:bg-slate-700 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-blue-500 dark:focus-visible:ring-blue-400">
-                <span>📥 Export</span>
-                <ChevronDownIcon className="w-3 h-3 text-slate-400" />
-              </button>
-            }
-          >
-            <div className="px-2 py-1 text-xs font-semibold text-slate-400 uppercase tracking-wider">Download Data</div>
-            <DropdownItem onClick={() => exportAsCSV(chartData, speciesToPlot, selectedSuffix)}>
-              Export as CSV (Current Plot)
-            </DropdownItem>
-            <DropdownItem onClick={() => exportAsCDAT(results)}>
-              Export as CDAT (Species)
-            </DropdownItem>
-            <DropdownItem onClick={() => exportAsGDAT(results)}>
-              Export as GDAT (Observables)
-            </DropdownItem>
-          </Dropdown>
+          {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
         </div>
       </div>
     </Card>

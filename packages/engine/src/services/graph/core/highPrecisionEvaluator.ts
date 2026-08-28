@@ -477,18 +477,8 @@ export function evaluateAllParametersHighPrecision(
   return resolved;
 }
 
-export function comparePrecision(
-  expr: string,
-  parameters: Map<string, number>
-): { standard: number; highPrecision: number; relativeError: number } {
-  // Keep implementation (mocked or full)
-  const hp = evaluateExpressionHighPrecision(expr, parameters);
-  return { standard: 0, highPrecision: hp, relativeError: 0 };
-}
-
 export default {
   needsHighPrecision,
   evaluateExpressionHighPrecision,
   evaluateAllParametersHighPrecision,
-  comparePrecision,
 };

@@ -32,8 +32,14 @@
         "packages/engine/src/index.ts"
       ],
       "@bngplayground/engine/*": [
-        "packages/engine/src/*"
-      ]
+      "packages/engine/src/*"
+    ],
+    "@bngplayground/rulehub": [
+      "packages/rulehub/src/index.ts"
+    ],
+    "@bngplayground/rulehub/*": [
+      "packages/rulehub/src/*"
+    ]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,

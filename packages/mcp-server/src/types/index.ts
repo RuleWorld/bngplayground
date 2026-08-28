@@ -27,6 +27,7 @@ export type ParameterScanResult = {
 export type ParsedSpeciesGraph = ReturnType<typeof BNGLParser.parseSpeciesGraph>;
 
 export interface MCPErrorResult {
+    code: string;
     error: string;
     diagnosis: string;
     recovery: string;

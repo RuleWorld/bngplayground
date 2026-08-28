@@ -42,6 +42,22 @@ export interface SparseODEOptions {
   parameters?: Map<string, number>;
 }
 
+export interface StepResult {
+  accepted: boolean;
+  hNew: number;
+  yNew: Float64Array;
+  errNorm: number;
+  rootFound?: boolean;
+}
+
+export interface SparseODEIntegrationResult {
+  success: boolean;
+  steps: number;
+  y: Float64Array;
+  t: number;
+  errorMessage?: string;
+}
+
 const DEFAULT_OPTIONS: SparseODEOptions = {
   atol: 1e-8,
   rtol: 1e-6,
@@ -70,6 +86,7 @@ export class SparseODESolver {
   private jacobianEvaluator?: (y: Float64Array, J: Float64Array) => void;
   private iluFactors?: ILU0Factors;
   private iluSymbolicCache?: ILU0SymbolicCache;
+  private systemMatrix?: CSRMatrix;
 
   // Conservation law system reduction
   private conservation?: ConservationAnalysis;
@@ -227,7 +244,7 @@ export class SparseODESolver {
 
     // Cache the system matrix for use in linear solves
     // (M and the ILU factors must correspond to the same matrix)
-    (this as any).systemMatrix = M;
+    this.systemMatrix = M;
 
     // ILU(0) factorization with cached symbolic structure
     // For biochemical networks, the sparsity pattern is fixed across steps,
@@ -242,7 +259,7 @@ export class SparseODESolver {
           // Subsequent factorizations: reuse symbolic structure, update numerics only
           this.iluFactors = ilu0NumericalFactorize(M, this.iluSymbolicCache);
         }
-      } catch (e) {
+      } catch {
         console.warn('[SparseODE] ILU factorization failed, using unpreconditioned GMRES');
         this.iluFactors = undefined;
       }
@@ -259,7 +276,7 @@ export class SparseODESolver {
     }
 
     // Use the system matrix M = I - γ*J built in buildAndFactorizeMatrix
-    const M = (this as any).systemMatrix as CSRMatrix | undefined;
+    const M = this.systemMatrix;
     if (!M) {
       // Fallback: behave as before but this should not happen if buildAndFactorizeMatrix was called
       const fallbackM: CSRMatrix = {
@@ -295,12 +312,7 @@ export class SparseODESolver {
   /**
    * Take one step using implicit Euler (Rosenbrock-W deferred)
    */
-  step(y: Float64Array, _t: number, h: number): {
-    accepted: boolean;
-    hNew: number;
-    yNew: Float64Array;
-    errNorm: number;
-  } {
+  step(y: Float64Array, _t: number, h: number): StepResult {
     const n = this.n;
     const deriv = this.reducedDerivatives || this.derivatives;
     const { atol, rtol } = this.options;
@@ -392,7 +404,7 @@ export class SparseODESolver {
 
       if (rootFound) {
         // Signal root found. Solver will return this state and SimulationLoop can re-evaluate conditions.
-        return { accepted: true, hNew: h, yNew: this.yNew, errNorm, rootFound: true } as any;
+        return { accepted: true, hNew: h, yNew: this.yNew, errNorm, rootFound: true };
       }
     }
 
@@ -408,7 +420,7 @@ export class SparseODESolver {
     tEnd: number,
     outputTimes: number[],
     output: (t: number, y: Float64Array) => void
-  ): { success: boolean; steps: number; y: Float64Array; t: number } {
+  ): SparseODEIntegrationResult {
 
 
     // Get initial state (reduced if conservation laws used)
@@ -463,8 +475,8 @@ export class SparseODESolver {
           outputIdx++;
         }
 
-        if ((result as any).rootFound) {
-          return { success: true, steps, errorMessage: "ROOT_FOUND", t, y: this.reducedSystem ? this.reducedSystem.expand(y) : y } as any;
+        if (result.rootFound) {
+          return { success: true, steps, errorMessage: "ROOT_FOUND", t, y: this.reducedSystem ? this.reducedSystem.expand(y) : y };
         }
 
         h = result.hNew;

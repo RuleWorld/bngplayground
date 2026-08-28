@@ -8,6 +8,8 @@ import { CHART_COLORS } from '../../src/utils/chartColors';
 import { formatYAxisTick } from '../charts/InteractiveLegend';
 import { formatValue } from '../../src/utils/formatValue';
 import { Card } from '../ui/Card';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createSimulationResultsExportDescriptor } from '../../services/resultsExport';
 
 interface SteadyStateTabProps {
   model: BNGLModel | null;
@@ -15,9 +17,11 @@ interface SteadyStateTabProps {
   onSimulate: (options: SimulationOptions) => void;
   onCancelSimulation: () => void;
   isSimulating: boolean;
+  modelSource?: string | null;
+  simulationOptions?: SimulationOptions | null;
 }
 
-export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, onSimulate, onCancelSimulation, isSimulating }) => {
+export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, onSimulate, onCancelSimulation, isSimulating, modelSource, simulationOptions }) => {
 
   const finalStateData = useMemo(() => {
     if (!results || !results.data || results.data.length === 0) return null;
@@ -37,6 +41,19 @@ export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, 
       data: speciesData
     };
   }, [results]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!results || !finalStateData) return null;
+    return createSimulationResultsExportDescriptor({
+      results,
+      modelSource,
+      simulationOptions,
+      analysisType: 'Steady-state analysis',
+      filenamePrefix: 'steady-state',
+      currentRows: finalStateData.data.map(({ name, value }) => ({ species: name, value })),
+      currentHeaders: ['species', 'value'],
+    });
+  }, [finalStateData, modelSource, results, simulationOptions]);
 
   if (!model) {
     return <div className="text-slate-500 dark:text-slate-400">Parse a model to run a steady-state analysis.</div>;
@@ -77,10 +94,15 @@ export const SteadyStateTab: React.FC<SteadyStateTabProps> = ({ model, results, 
       {finalStateData && (
         <Card className="flex-1 min-h-0 flex flex-col p-4">
           <div className="mb-4">
-            <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Final Concentrations</h3>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              System equilibrated at t = {formatValue(finalStateData.time)}
-            </p>
+            <div className="flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">Final Concentrations</h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  System equilibrated at t = {formatValue(finalStateData.time)}
+                </p>
+              </div>
+              {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+            </div>
           </div>
 
           <div className="h-[500px] w-full">

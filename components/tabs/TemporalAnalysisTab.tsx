@@ -5,6 +5,8 @@ import { Card } from '../ui/Card';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
 import { InfoIcon } from '../icons/InfoIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 
 interface TemporalAnalysisTabProps {
@@ -13,6 +15,7 @@ interface TemporalAnalysisTabProps {
   onSimulate: (options: SimulationOptions) => void;
   onCancelSimulation: () => void;
   isSimulating: boolean;
+  modelSource?: string | null;
 }
 
 interface MutualInformationUI {
@@ -60,7 +63,7 @@ interface ITResultUI {
 }
 
 export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
-  model, results, onSimulate, onCancelSimulation, isSimulating,
+  model, results, onSimulate, onCancelSimulation, isSimulating, modelSource,
 }) => {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [itResult, setItResult] = useState<ITResultUI | null>(null);
@@ -71,6 +74,12 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
   const svgRef = useRef<SVGSVGElement>(null);
 
   const firingLog = results?.firingLog;
+
+  React.useEffect(() => {
+    setItResult(null);
+    setCausalComparison(null);
+    setZoom(null);
+  }, [results]);
 
   const handleRunSSA = useCallback(() => {
     if (!model) return;
@@ -157,6 +166,74 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
     return { reactionNames, reactionTimes };
   }, [firingLog]);
 
+  const exportDescriptor = useMemo(() => {
+    if (!firingLog || firingLog.length === 0) return null;
+    const firingRows = firingLog.map((event) => ({
+      time: event.time,
+      reaction_index: event.reactionIndex,
+      reaction: event.ruleName ?? `R${event.reactionIndex + 1}`,
+      propensity: event.propensity,
+    }));
+    const firingHeaders = ['time', 'reaction_index', 'reaction', 'propensity'];
+    let currentRows: Record<string, unknown>[] = firingRows;
+    let currentHeaders: string[] = firingHeaders;
+
+    if (viewMode === 'mutual_info' && itResult) {
+      currentRows = itResult.mutualInformation.map((entry) => ({
+        reaction_1: entry.pair.reaction1Name ?? `R${entry.pair.reaction1 + 1}`,
+        reaction_2: entry.pair.reaction2Name ?? `R${entry.pair.reaction2 + 1}`,
+        mutual_information: entry.mutualInformation,
+        normalized_mi: entry.normalizedMI,
+        p_value: entry.pValue,
+      }));
+      currentHeaders = ['reaction_1', 'reaction_2', 'mutual_information', 'normalized_mi', 'p_value'];
+    } else if (viewMode === 'transfer_entropy' && itResult) {
+      currentRows = itResult.transferEntropy.map((entry) => ({
+        source: entry.sourceName ?? `R${entry.source + 1}`,
+        target: entry.targetName ?? `R${entry.target + 1}`,
+        transfer_entropy: entry.transferEntropy,
+        reverse_transfer_entropy: entry.reverseTE,
+        net_information_flow: entry.netInformationFlow,
+        p_value: entry.pValue,
+      }));
+      currentHeaders = ['source', 'target', 'transfer_entropy', 'reverse_transfer_entropy', 'net_information_flow', 'p_value'];
+    } else if (viewMode === 'causal' && causalComparison) {
+      currentRows = [
+        ...causalComparison.concordant.map((entry) => ({ category: 'concordant', source: entry.source, target: entry.target, weight: entry.empiricalWeight })),
+        ...causalComparison.structuralOnly.map((entry) => ({ category: 'structural_only', source: entry.source, target: entry.target, weight: '' })),
+        ...causalComparison.emergent.map((entry) => ({ category: 'emergent', source: entry.source, target: entry.target, weight: entry.empiricalWeight })),
+      ];
+      currentHeaders = ['category', 'source', 'target', 'weight'];
+    } else if (zoom) {
+      currentRows = firingRows.filter((row) => row.time >= zoom.min && row.time <= zoom.max);
+    }
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Temporal information analysis',
+      filenamePrefix: 'temporal-analysis',
+      result: { firingLog, information: itResult, causalComparison },
+      resultFileName: 'temporal-result',
+      resultLabel: 'Firing events and information-flow analysis',
+      resultDescription: 'Reaction-firing events and any completed mutual-information, transfer-entropy, or causal-comparison results.',
+      modelSource,
+      settings: { recordedFiringEvents: firingLog.length },
+      fullTable: {
+        path: 'data/firing-log.csv',
+        label: 'Complete reaction firing log',
+        description: 'All recorded firing events from the completed SSA simulation.',
+        rows: firingRows,
+        headers: firingHeaders,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current temporal view',
+        description: 'The currently selected temporal analysis table or firing-log window.',
+        rows: currentRows,
+        headers: currentHeaders,
+      },
+    });
+  }, [causalComparison, firingLog, itResult, modelSource, viewMode, zoom]);
+
   if (!model) {
     return (
       <div className="text-slate-500 dark:text-slate-300 p-4">
@@ -200,6 +277,7 @@ export const TemporalAnalysisTab: React.FC<TemporalAnalysisTabProps> = ({
               {firingLog.length.toLocaleString()} firing events recorded
             </span>
           )}
+          {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
         </div>
       </Card>
 

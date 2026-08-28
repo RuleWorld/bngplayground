@@ -12,13 +12,16 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   ReferenceLine, ReferenceArea
 } from 'recharts';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 interface PKPDTabProps {
   model: BNGLModel | null;
   results: SimulationResults | null;
-  onSimulate: (options: SimulationOptions, modelOverride?: BNGLModel) => void;
+  onSimulate: (options: SimulationOptions, modelOverride?: BNGLModel, modelSourceOverride?: string) => void;
   onCodeChange: (code: string) => void;
   isSimulating: boolean;
+  modelSource?: string | null;
 }
 
 type PKModelType = 'one_compartment_iv' | 'one_compartment_oral' | 'two_compartment_iv' | 'two_compartment_oral' | 'tmdd';
@@ -65,7 +68,7 @@ const DOSING_PRESETS = [
 ];
 
 export const PKPDTab: React.FC<PKPDTabProps> = ({
-  model: _model, results, onSimulate, onCodeChange, isSimulating: _isSimulating,
+  model: _model, results, onSimulate, onCodeChange, isSimulating: _isSimulating, modelSource,
 }) => {
   const [modelType, setModelType] = useState<PKModelType>('one_compartment_iv');
   const [route, setRoute] = useState<RouteType>('iv_bolus');
@@ -123,7 +126,7 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
         const tEnd = dosingEvents.length > 1
           ? dosingEvents[dosingEvents.length - 1].time + (dosingInterval || 24) * 2
           : 48;
-        onSimulate({ method: 'ode', t_end: tEnd, n_steps: 500 }, parsedModel);
+        onSimulate({ method: 'ode', t_end: tEnd, n_steps: 500 }, parsedModel, result.bnglCode);
       }
     } catch (err: any) {
       setError(err.message || 'Model generation failed');
@@ -203,6 +206,49 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
 
   const observableNames = useMemo(() =>
     results?.headers?.filter(h => h !== 'time') || [], [results]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!results || results.data.length === 0) return null;
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'PK/PD analysis',
+      filenamePrefix: 'pkpd-analysis',
+      result: {
+        simulation: results,
+        pkMetrics,
+        dosingEvents,
+        modelType,
+        route,
+        dose,
+        therapeuticWindow: { min: therapeutic_min, max: therapeutic_max },
+      },
+      resultFileName: 'pkpd-result',
+      resultLabel: 'Simulation and pharmacokinetic result',
+      resultDescription: 'Completed concentration trajectories, computed PK metrics, and dosing configuration.',
+      modelSource,
+      settings: {
+        modelType,
+        route,
+        dose,
+        dosingInterval,
+        infusionDuration,
+        logScale,
+      },
+      fullTable: {
+        path: 'data/concentration-time.csv',
+        label: 'Complete concentration-time data',
+        description: 'All completed simulation rows and observable columns used by the PK/PD analysis.',
+        rows: results.data,
+        headers: results.headers,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current concentration-time view',
+        description: 'The concentration-time data currently displayed in the PK/PD chart.',
+        rows: results.data,
+        headers: results.headers,
+      },
+    });
+  }, [dose, dosingEvents, dosingInterval, infusionDuration, logScale, modelSource, modelType, pkMetrics, results, route, therapeutic_max, therapeutic_min]);
 
   return (
     <div className="space-y-4 h-full flex flex-col overflow-auto p-2">
@@ -293,10 +339,13 @@ export const PKPDTab: React.FC<PKPDTabProps> = ({
               <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300">
                 Concentration-Time Curve
               </h3>
-              <button onClick={() => setLogScale(!logScale)}
-                className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
-                {logScale ? 'Semi-Log' : 'Linear'}
-              </button>
+              <div className="flex items-center gap-2">
+                {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+                <button onClick={() => setLogScale(!logScale)}
+                  className="text-xs px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300">
+                  {logScale ? 'Semi-Log' : 'Linear'}
+                </button>
+              </div>
             </div>
             {chartData.length > 0 ? (
               <div className="h-full min-h-0 flex flex-col">

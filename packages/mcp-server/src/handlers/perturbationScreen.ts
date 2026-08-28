@@ -1,4 +1,4 @@
-import { perturbationScreen, simulate, loadEvaluator } from '@bngplayground/engine';
+import { perturbationScreen, estimatePerturbationSimulations, simulate, loadEvaluator } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { perturbationScreenArgsSchema } from '../schemas/index.js';
 import {
@@ -10,19 +10,6 @@ import {
     updateMassActionRates,
 } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
-
-function parseBlock(code: string, blockName: string): string[] {
-    const regex = new RegExp(
-        `begin\\s+${blockName}\\s*\\n([\\s\\S]*?)\\nend\\s+${blockName}`,
-        'i',
-    );
-    const match = code.match(regex);
-    if (!match) return [];
-    return match[1]
-        .split('\n')
-        .map((l) => l.trim())
-        .filter((l) => l && !l.startsWith('#'));
-}
 
 /**
  * perturbation_screen
@@ -39,7 +26,7 @@ function parseBlock(code: string, blockName: string): string[] {
  * to edit raw source (commenting out lines in `begin reaction rules`, etc.) —
  * it cannot operate on an already-expanded model.
  */
-export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResult<any>> {
+export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResult<unknown>> {
     try {
         const parsedArgs = parseArgs('perturbation_screen', perturbationScreenArgsSchema, args);
 
@@ -74,29 +61,11 @@ export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResu
         }
 
         // Pre-estimate the number of simulations to prevent excessive resource utilization / timeout
-        const ruleLines = parseBlock(parsedArgs.code, 'reaction rules');
-        const speciesLines = [
-            ...parseBlock(parsedArgs.code, 'seed species'),
-            ...parseBlock(parsedArgs.code, 'species'),
-        ];
-        const moleculeTypeLines = parseBlock(parsedArgs.code, 'molecule types');
-
-        let expectedSimulations = 1; // wild-type
-        if (uniquePerturbations.includes('rule_knockout')) {
-            expectedSimulations += ruleLines.length;
-        }
-        if (uniquePerturbations.includes('species_knockdown')) {
-            expectedSimulations += speciesLines.length;
-        }
-        if (uniquePerturbations.includes('molecule_knockout')) {
-            expectedSimulations += moleculeTypeLines.length;
-        }
-        if (uniquePerturbations.includes('pairwise_rules')) {
-            const nRuleResults = ruleLines.length;
-            const maxPairwise = parsedArgs.max_pairwise ?? 500;
-            const expectedPairs = (nRuleResults * (nRuleResults - 1)) / 2;
-            expectedSimulations += Math.min(expectedPairs, maxPairwise);
-        }
+        const expectedSimulations = estimatePerturbationSimulations(
+            parsedArgs.code,
+            uniquePerturbations,
+            parsedArgs.max_pairwise,
+        );
 
         if (expectedSimulations > 300) {
             return createToolResult(structureError(
@@ -109,7 +78,7 @@ export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResu
             t_end: parsedArgs.t_end,
             n_steps: parsedArgs.n_steps,
             observables: uniqueObservables,
-            perturbations: uniquePerturbations as any,
+            perturbations: uniquePerturbations,
             knockdownFraction: parsedArgs.knockdown_fraction,
             metric: parsedArgs.metric,
             maxPairwise: parsedArgs.max_pairwise,
@@ -126,7 +95,7 @@ export async function handlePerturbationScreen(args: ToolArgs): Promise<ToolResu
                     n_steps,
                     strictFunctionalRates: true,
                     ...(parsedArgs.solver ? { solver: parsedArgs.solver } : {}),
-                } as any, { checkCancelled: () => {}, postMessage: () => {} });
+                }, { checkCancelled: () => {}, postMessage: () => {} });
             },
         });
 

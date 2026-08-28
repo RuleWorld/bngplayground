@@ -134,6 +134,12 @@ export interface SpatialSimulationResult {
     std: Record<string, number[]>;
     ci95: Record<string, [number, number][]>;
   };
+  /**
+   * Completed spatial snapshots, including packed coordinates and species /
+   * compartment identifiers. Coordinates are retained for scientific export;
+   * the worker may still transfer live rendering snapshots independently.
+   */
+  snapshots?: SpatialSnapshot[];
 }
 
 /** Default spatial simulation configuration */

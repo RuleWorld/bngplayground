@@ -53,6 +53,13 @@ export async function handleLnaAnalysis(args: ToolArgs): Promise<ToolResult<any>
             ));
         }
 
+        const species = expanded.species ?? [];
+        if (species.length === 0) {
+            return createToolResult(structureError(
+                new Error('Expanded model has no species — cannot compute LNA'),
+            ));
+        }
+
         const reactions = expanded.reactions ?? [];
         if (reactions.length === 0) {
             return createToolResult(structureError(

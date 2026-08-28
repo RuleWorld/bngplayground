@@ -3,6 +3,8 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { BNGLModel, SimulationResults } from '../../types';
 import { Card } from '../ui/Card';
 import { Select } from '../ui/Select';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 const FLUX_COLORS = {
   production: '#22c55e',
@@ -13,6 +15,7 @@ const FLUX_COLORS = {
 interface FluxAnalysisTabProps {
   model: BNGLModel | null;
   results: SimulationResults | null;
+  modelSource?: string | null;
 }
 
 interface FluxData {
@@ -91,7 +94,7 @@ function computeFluxes(
   return fluxes;
 }
 
-export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results }) => {
+export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results, modelSource }) => {
   const [selectedTimeIndex, setSelectedTimeIndex] = useState(0);
   const [selectedSpecies, setSelectedSpecies] = useState<string | null>(null);
   const [topN, setTopN] = useState(10);
@@ -128,6 +131,55 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
       tooltip: `${f.reactants.join(' + ')} → ${f.products.join(' + ')}`,
     }));
   }, [topFluxes]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!results || fluxData.length === 0) return null;
+    const currentTimeIndex = Math.min(selectedTimeIndex, Math.max(0, results.data.length - 1));
+    const rows = (values: FluxData[]) => values.map((flux) => ({
+      reaction: flux.reactionName,
+      reactants: flux.reactants.join(' + '),
+      products: flux.products.join(' + '),
+      rate_constant: flux.rateConstant,
+      rate: flux.rate,
+      flux: flux.flux,
+      direction: flux.direction,
+    }));
+    const headers = ['reaction', 'reactants', 'products', 'rate_constant', 'rate', 'flux', 'direction'];
+    const allRows = rows(fluxData);
+    const visibleRows = rows(topFluxes);
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Reaction flux analysis',
+      filenamePrefix: 'flux-analysis',
+      result: {
+        time: results.data[currentTimeIndex]?.time ?? currentTimeIndex,
+        selectedSpecies,
+        fluxes: fluxData,
+      },
+      resultFileName: 'flux-result',
+      resultLabel: 'Reaction flux values',
+      resultDescription: 'Computed reaction rates and directional fluxes at the selected simulation time.',
+      modelSource,
+      settings: {
+        timePointIndex: currentTimeIndex,
+        selectedSpecies: selectedSpecies ?? undefined,
+        topN,
+      },
+      fullTable: {
+        path: 'data/all-reaction-fluxes.csv',
+        label: 'All reaction fluxes',
+        description: 'Complete reaction-flux table at the selected time point.',
+        rows: allRows,
+        headers,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current flux view',
+        description: 'The currently displayed top-N fluxes.',
+        rows: visibleRows,
+        headers,
+      },
+    });
+  }, [fluxData, modelSource, results, selectedSpecies, selectedTimeIndex, topFluxes, topN]);
 
   if (!model || !results || !results.data || results.data.length === 0) {
     return (
@@ -171,9 +223,12 @@ export const FluxAnalysisTab: React.FC<FluxAnalysisTabProps> = ({ model, results
   return (
     <div className="space-y-6">
       <Card className="space-y-4">
-        <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
-          Reaction Flux Analysis
-        </h3>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">
+            Reaction Flux Analysis
+          </h3>
+          {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+        </div>
         <p className="text-sm text-slate-500 dark:text-slate-400">
           Analyze which reactions contribute most to species dynamics. Flux = rate constant × reactant concentrations.
         </p>

@@ -1,6 +1,7 @@
 // @ts-nocheck
 import { describe, expect, it } from 'vitest';
 import { GraphMatcher, clearMatchCache } from '../packages/engine/src/services/graph/core/Matcher';
+import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser';
 import { disableProfiling, enableProfiling, resetProfileData } from '../packages/engine/src/services/graph/NetworkGenerator';
 import { SpeciesGraph } from '../packages/engine/src/services/graph/core/SpeciesGraph';
 import { Molecule } from '../packages/engine/src/services/graph/core/Molecule';
@@ -67,6 +68,25 @@ describe('GraphMatcher VF2++ integration', () => {
     const matches = GraphMatcher.findAllMaps(pattern, target);
     expect(matches.length).toBe(1);
     expect(matches[0].moleculeMap.get(0)).toBe(0);
+  });
+
+  it('invalidates cached prefilter lists after a pattern graph mutation', () => {
+    const pattern = BNGLParser.parseSpeciesGraph('A(b!1).B(x!1)');
+    pattern.molecules[0].components[0].wildcard = '+';
+    pattern.molecules[1].components[0].wildcard = '+';
+
+    const target = BNGLParser.parseSpeciesGraph(
+      'A(b!2).C(c!2).B(x!3).D(d!3)',
+    );
+
+    clearMatchCache();
+    expect(GraphMatcher.canPossiblyMatch(pattern, target)).toBe(false);
+
+    pattern.deleteBond(0, 0);
+    clearMatchCache();
+
+    expect(GraphMatcher.canPossiblyMatch(pattern, target)).toBe(true);
+    expect(GraphMatcher.findAllMaps(pattern, target)).toHaveLength(1);
   });
 
   it('rejects mappings when bonded partners have incompatible molecule names', () => {

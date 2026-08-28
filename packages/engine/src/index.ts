@@ -129,6 +129,7 @@ export { splitObservablePatterns } from './utils/observableUtils';
 export type { DynamicObservableDefinition, ComputedObservableResult } from './utils/dynamicObservable';
 export { normalizeFilterNames, safeModelName, executeMultiPhaseSimulation, runSingleBatchItem } from './utils/batchRunner';
 export type { BatchModelDef, BatchSimulator, BatchReporter, BatchRunnerOptions, BatchItemStatus } from './utils/batchRunner';
+export { gdatFromResults } from './utils/gdatWriter';
 
 // ── Optimization ────────────────────────────────────────────────────────
 export { nelderMead } from './services/optimization/nelderMead';
@@ -313,7 +314,7 @@ export { analyzeOptimalExperiment } from './services/analysis/OptimalExperiment'
 export type { OptimalExperimentConfig, OptimalExperimentRecommendation, OptimalExperimentResult } from './services/analysis/OptimalExperiment';
 
 // ── Perturbation Screen ────────────────────────────────────────────
-export { perturbationScreen } from './services/analysis/PerturbationScreen';
+export { perturbationScreen, estimatePerturbationSimulations } from './services/analysis/PerturbationScreen';
 export type { PerturbationScreenConfig, PerturbationScreenResult, PerturbationResult, SyntheticLethalPair } from './services/analysis/PerturbationScreen';
 
 // ── Posterior Predictive ───────────────────────────────────────────

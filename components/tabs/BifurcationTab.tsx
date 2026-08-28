@@ -11,6 +11,9 @@ import { formatValue } from '../../src/utils/formatValue';
 import {
   ScatterChart, Scatter, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
 } from 'recharts';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor, createTextArtifact } from '../../services/resultsExport';
+import { toCsvTable } from '../../src/utils/download';
 
 interface BifurcationTabProps {
   model: BNGLModel | null;
@@ -18,6 +21,7 @@ interface BifurcationTabProps {
   onSimulate: (options: SimulationOptions) => void;
   onCancelSimulation: () => void;
   isSimulating: boolean;
+  bnglText?: string;
 }
 
 interface ContinuationPointUI {
@@ -65,7 +69,7 @@ interface NullclineResultUI {
 }
 
 export const BifurcationTab: React.FC<BifurcationTabProps> = ({
-  model, results: _results, onSimulate, onCancelSimulation, isSimulating: _isSimulating,
+  model, results: _results, onSimulate, onCancelSimulation, isSimulating: _isSimulating, bnglText,
 }) => {
   const [selectedParam, setSelectedParam] = useState<string>('');
   const [selectedSpecies1, setSelectedSpecies1] = useState<string>('');
@@ -78,6 +82,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
   const [nullclineResult, setNullclineResult] = useState<NullclineResultUI | null>(null);
   const [selectedBifurcation, setSelectedBifurcation] = useState<BifurcationPointUI | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
 
   // Reset state when model changes to prevent stale selection/pollution and crashes
   useEffect(() => {
@@ -95,6 +100,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
     setContinuationResult(null);
     setNullclineResult(null);
     setSelectedBifurcation(null);
+    setCompletedModelSource(null);
     setError(null);
   }, [model]);
   const parameterOptions = useMemo(() => {
@@ -279,6 +285,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       };
 
       setContinuationResult(result);
+      setCompletedModelSource(bnglText || null);
 
       // Compute nullclines if two species are selected
       if (selectedSpecies1 && selectedSpecies2 && engine.computeNullclines) {
@@ -339,7 +346,7 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
     } finally {
       setIsRunning(false);
     }
-  }, [model, selectedParam, selectedSpecies1, selectedSpecies2, startValue, endValue, maxSteps]);
+  }, [bnglText, model, selectedParam, selectedSpecies1, selectedSpecies2, startValue, endValue, maxSteps]);
 
   const stablePoints = useMemo(() =>
     continuationResult?.points.filter(p => p.stable) ?? [], [continuationResult]);
@@ -356,6 +363,69 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
         : 0,
       type: b.type,
     })) ?? [], [continuationResult, stablePoints]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!continuationResult) return null;
+    const branchRows = continuationResult.points.map((point) => ({
+      parameter: point.parameterValue,
+      steady_state: point.steadyState,
+      stable: point.stable,
+      branch: point.branchId,
+    }));
+    const bifurcationRows = continuationResult.bifurcations.map((point) => ({
+      parameter: point.parameterValue,
+      type: point.type,
+      frequency: point.frequency ?? '',
+    }));
+    const fullAdditionalArtifacts = bifurcationRows.length > 0
+      ? [createTextArtifact({
+        id: 'bifurcation-points',
+        label: 'Detected bifurcation points',
+        kind: 'analysis',
+        description: 'Special parameter values detected during continuation.',
+        format: { value: 'csv', label: 'CSV' },
+        path: 'analysis/bifurcation-points.csv',
+        mimeType: 'text/csv',
+        selectedByDefault: true,
+        estimatedBytes: bifurcationRows.length * 64,
+        build: () => toCsvTable(bifurcationRows, ['parameter', 'type', 'frequency']),
+      })]
+      : [];
+
+    const headers = ['parameter', 'steady_state', 'stable', 'branch'];
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Bifurcation analysis',
+      filenamePrefix: 'bifurcation',
+      result: { continuation: continuationResult, nullclines: nullclineResult },
+      resultFileName: 'bifurcation-result',
+      resultLabel: 'Continuation and phase-plane result',
+      resultDescription: 'Numerical continuation branch values, detected special points, and optional nullcline data.',
+      modelSource: completedModelSource,
+      settings: {
+        continuationParameter: selectedParam,
+        species1: selectedSpecies1,
+        species2: selectedSpecies2 || undefined,
+        startValue,
+        endValue,
+        maxSteps,
+      },
+      fullTable: {
+        path: 'data/continuation-branches.csv',
+        label: 'Continuation branch table',
+        description: 'Steady-state values and stability for every evaluated continuation point.',
+        rows: branchRows,
+        headers,
+      },
+      fullAdditionalArtifacts,
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current continuation view',
+        description: 'The branch values currently displayed in the bifurcation diagram.',
+        rows: branchRows,
+        headers,
+      },
+    });
+  }, [completedModelSource, continuationResult, endValue, maxSteps, nullclineResult, selectedParam, selectedSpecies1, selectedSpecies2, startValue]);
 
   if (!model) {
     return (
@@ -481,14 +551,17 @@ export const BifurcationTab: React.FC<BifurcationTabProps> = ({
       {/* Bifurcation Diagram */}
       {continuationResult && continuationResult.points.length > 0 && (
         <Card className="p-4 flex flex-col overflow-hidden">
-          <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100 mb-2 shrink-0">
-            Bifurcation Diagram — {continuationResult.parameterName}
-            {continuationResult.bifurcations.length > 0 && (
-              <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
-                {continuationResult.bifurcations.length} bifurcation(s) detected
-              </span>
-            )}
-          </h3>
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2 shrink-0">
+            <h3 className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+              Bifurcation Diagram — {continuationResult.parameterName}
+              {continuationResult.bifurcations.length > 0 && (
+                <span className="ml-2 text-xs font-normal text-amber-600 dark:text-amber-400">
+                  {continuationResult.bifurcations.length} bifurcation(s) detected
+                </span>
+              )}
+            </h3>
+            {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+          </div>
           <div className="w-full" style={{ height: 300 }}>
             <ResponsiveContainer width="100%" height="100%">
               <ScatterChart margin={{ top: 5, right: 20, bottom: 30, left: 20 }}>

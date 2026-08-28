@@ -175,19 +175,24 @@ function cvodesForwardSensitivity(config: SensitivityConfig): SensitivityResult 
   const atol = config.tolerances?.atol ?? 1e-10;
   const nPts = nOutputPoints;
 
-  // Allocate WASM heap memory
-  const y0Ptr = mod._malloc(nSpecies * 8);
-  const pPtr = mod._malloc(nParameters * 8);
-  const yOutPtr = mod._malloc(nSpecies * 8);
-  const sOutPtr = mod._malloc(nParameters * nSpecies * 8);
-  const tretPtr = mod._malloc(8);
-
-  if (!y0Ptr || !pPtr || !yOutPtr || !sOutPtr || !tretPtr) {
-    [y0Ptr, pPtr, yOutPtr, sOutPtr, tretPtr].forEach(p => { if (p) mod._free(p); });
-    return null;
-  }
+  let y0Ptr = 0;
+  let pPtr = 0;
+  let yOutPtr = 0;
+  let sOutPtr = 0;
+  let tretPtr = 0;
 
   try {
+    // Allocate WASM heap memory
+    y0Ptr = mod._malloc(nSpecies * 8);
+    pPtr = mod._malloc(nParameters * 8);
+    yOutPtr = mod._malloc(nSpecies * 8);
+    sOutPtr = mod._malloc(nParameters * nSpecies * 8);
+    tretPtr = mod._malloc(8);
+
+    if (!y0Ptr || !pPtr || !yOutPtr || !sOutPtr || !tretPtr) {
+      return null;
+    }
+
     // Copy initial state and parameters to WASM heap
     mod.HEAPF64.set(initialState, y0Ptr >> 3);
     mod.HEAPF64.set(parameterValues, pPtr >> 3);
@@ -250,12 +255,11 @@ function cvodesForwardSensitivity(config: SensitivityConfig): SensitivityResult 
     } finally {
       mod._sens_destroy(sensMem);
     }
+  } catch (err) {
+    console.warn('[DifferentiableSolver] CVODES WASM error, falling back to finite difference:', err);
+    return null;
   } finally {
-    mod._free(y0Ptr);
-    mod._free(pPtr);
-    mod._free(yOutPtr);
-    mod._free(sOutPtr);
-    mod._free(tretPtr);
+    [y0Ptr, pPtr, yOutPtr, sOutPtr, tretPtr].forEach(p => { if (p) mod._free(p); });
   }
 }
 

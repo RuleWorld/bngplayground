@@ -9,12 +9,15 @@ import { SettingsIcon } from '../icons/SettingsIcon';
 import { CHART_COLORS } from '../../src/utils/chartColors';
 import { ExternalLegend, formatTooltipNumber, formatYAxisTick } from '../charts/InteractiveLegend';
 import { toggleSetMember } from '../../services/collections';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 interface RobustnessTabProps {
     model: BNGLModel | null;
+    bnglText?: string;
 }
 
-export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
+export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model, bnglText }) => {
     const { runRobustness, cancelRobustness, isRunning, progress, result, error } = useRobustness();
 
     const [iterations, setIterations] = useState(20);
@@ -22,6 +25,7 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
     const [isConfigOpen, setIsConfigOpen] = useState(true);
     const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
     const [lastMultiSelection, setLastMultiSelection] = useState<Set<string>>(new Set());
+    const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
 
     const allSpecies = useMemo(() => {
         if (!result) return [] as string[];
@@ -59,6 +63,9 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
 
     const handleRun = () => {
         if (!model) return;
+        setCompletedModelSource(null);
+        const executionModelSource = bnglText || null;
+        setCompletedModelSource(executionModelSource);
         runRobustness(
             model,
             // Default standard simulation options (could expose these too ideally)
@@ -83,6 +90,53 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
             return row;
         });
     }, [result, visibleSpecies]);
+
+    const fullRows = useMemo(() => {
+        if (!result) return [] as Record<string, unknown>[];
+        return result.time.flatMap((time, timeIndex) => allSpecies.map((species) => {
+            const data = result.speciesData[species];
+            return {
+                time,
+                species,
+                mean: data?.mean[timeIndex] ?? '',
+                std_dev: data?.stdDev[timeIndex] ?? '',
+                min: data?.min[timeIndex] ?? '',
+                max: data?.max[timeIndex] ?? '',
+            };
+        }));
+    }, [allSpecies, result]);
+    const currentRows = useMemo(
+        () => fullRows.filter((row) => visibleSpecies.has(String(row.species))),
+        [fullRows, visibleSpecies],
+    );
+    const exportDescriptor = useMemo(() => {
+        if (!result || fullRows.length === 0) return null;
+        const headers = ['time', 'species', 'mean', 'std_dev', 'min', 'max'];
+        return createStructuredAnalysisResultsExportDescriptor({
+            analysisType: 'Robustness analysis',
+            filenamePrefix: 'robustness',
+            result,
+            resultFileName: 'robustness-result',
+            resultLabel: 'Robustness summary',
+            resultDescription: 'Monte Carlo mean, spread, minimum, and maximum trajectories for every analyzed species.',
+            modelSource: completedModelSource,
+            settings: { iterations, variationPercent: variation, method: 'ode', t_end: 100, n_steps: 100 },
+            fullTable: {
+                path: 'data/robustness-trajectories.csv',
+                label: 'Complete robustness trajectories',
+                description: 'All species and output times, including mean, standard deviation, minimum, and maximum.',
+                rows: fullRows,
+                headers,
+            },
+            currentTable: {
+                path: 'data/current-view.csv',
+                label: 'Current sensitivity cloud',
+                description: 'The currently selected species in the robustness chart.',
+                rows: currentRows,
+                headers,
+            },
+        });
+    }, [completedModelSource, currentRows, fullRows, iterations, result, variation]);
 
     return (
         <div className="flex flex-col h-full bg-white dark:bg-slate-900">
@@ -171,6 +225,7 @@ export const RobustnessTab: React.FC<RobustnessTabProps> = ({ model }) => {
                     <Card className="flex-1 min-h-0 flex flex-col p-4">
                         <div className="flex justify-between items-center mb-2">
                             <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Sensitivity Cloud</h3>
+                            {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
                         </div>
 
                         <div className="flex-1 min-h-[450px]">

@@ -1,0 +1,37 @@
+[
+  {
+    "prompt": "Write a BNGL model with receptor dimerization and phosphorylation",
+    "expect": ["bionetgen-authoring"],
+    "avoid": ["bionetgen-analysis-routing"]
+  },
+  {
+    "prompt": "Find a published BNGL example of Fc epsilon receptor signaling",
+    "expect": ["rulehub-model-search"],
+    "allow": ["bionetgen-authoring"]
+  },
+  {
+    "prompt": "Why does my NFsim complex binding rule overcount same-complex binding?",
+    "expect": ["bionetgen-nfsim", "systematic-debugging"]
+  },
+  {
+    "prompt": "Are k_on and k_off locally distinguishable near this fitted parameter set?",
+    "expect": ["bionetgen-analysis-routing"],
+    "avoid": ["bionetgen-authoring"]
+  },
+  {
+    "prompt": "Add a stable MCP tool with an output schema and an MCP App resource",
+    "expect": ["bngplayground-mcp-development", "verification-before-completion"]
+  },
+  {
+    "prompt": "The MCP server returns invalid structured output; reproduce it and find the root cause",
+    "expect": ["systematic-debugging", "bngplayground-mcp-development"]
+  },
+  {
+    "prompt": "Can I say this migration is complete after the typecheck passed?",
+    "expect": ["verification-before-completion"]
+  },
+  {
+    "prompt": "Create a new repository skill for reviewing RuleHub provenance",
+    "expect": ["writing-skills"]
+  }
+]

@@ -336,7 +336,7 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
   }
 
   return (
-    <div className="flex flex-col h-full min-h-0 gap-2 overflow-auto">
+    <div className="flex flex-col h-full gap-2">
       {/* Toolbar */}
       <div role="toolbar" aria-label="Influence graph controls" className="flex flex-col gap-1 bg-white dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700">
         {/* Row 1: Layout Buttons */}
@@ -412,12 +412,12 @@ export const InfluenceGraphViewer: React.FC<InfluenceGraphViewerProps> = ({ grap
       </div>
 
       {/* Graph Container */}
-      <div role="img" aria-label="Influence graph" className="relative w-full flex-1 min-h-0 rounded-lg border border-stone-200 bg-white dark:bg-slate-900 dark:border-slate-700 overflow-auto">
-        <div
-          ref={containerRef}
-          className="h-full w-full rounded-lg transition-opacity duration-300"
-        />
-      </div>
+      <div
+        ref={containerRef}
+        role="img"
+        aria-label="Influence graph"
+        className="h-[600px] shrink-0 w-full rounded-lg border border-stone-200 bg-white dark:bg-slate-900 dark:border-slate-700"
+      />
 
       {/* Legend */}
       <div className="flex items-center gap-4 bg-white dark:bg-slate-900 dark:bg-slate-900 p-2 rounded-md border border-slate-200 dark:border-slate-700 dark:border-slate-700">

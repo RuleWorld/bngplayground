@@ -19,9 +19,13 @@ import {
   ResponsiveContainer
 } from 'recharts';
 import { formatValue } from '../../src/utils/formatValue';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor, createTextArtifact } from '../../services/resultsExport';
+import { toCsvTable } from '../../src/utils/download';
 
 interface ABCSMCTabProps {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
 const DEFAULT_DATA = `time, A, B
@@ -31,11 +35,13 @@ const DEFAULT_DATA = `time, A, B
 30, 22, 78
 50, 8, 92`;
 
-export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
+export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model, bnglText }) => {
   const [isRunning, setIsRunning] = useState(false);
   const [result, setResult] = useState<any>(null);
   const [progress, setProgress] = useState<ABCSMCProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
+  const [completedExperimentalData, setCompletedExperimentalData] = useState<Array<{ time: number; values: Record<string, number> }>>([]);
 
   // Configuration
   const [nParticles, setNParticles] = useState(200);
@@ -45,6 +51,9 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
 
   // Initialize priors from model parameters
   React.useEffect(() => {
+    setResult(null);
+    setCompletedModelSource(null);
+    setCompletedExperimentalData([]);
     if (model && Object.keys(priors).length === 0) {
       const initial: Record<string, { min: number, max: number, active: boolean }> = {};
       Object.entries(model.parameters).forEach(([name, value]) => {
@@ -90,6 +99,8 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
     setIsRunning(true);
     setError(null);
     setResult(null);
+    setCompletedModelSource(null);
+    setCompletedExperimentalData([]);
     setProgress(null);
 
     try {
@@ -121,6 +132,8 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
       });
 
       setResult(res);
+      setCompletedModelSource(bnglText || null);
+      setCompletedExperimentalData(parsedData);
       await bnglService.releaseModel(modelId).catch(() => {});
     } catch (err: any) {
       if (err.name !== 'AbortError') {
@@ -164,6 +177,72 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
       setVisibleParam(activePriors[0]?.name);
     }
   }, [result, activePriors, visibleParam]);
+
+  const exportDescriptor = useMemo(() => {
+    if (!result) return null;
+    const posteriorRows = Object.entries(result.posteriorSummary as Record<string, {
+      mean: number;
+      median: number;
+      std: number;
+      ci95: [number, number];
+      mode: number;
+    }>).map(([parameter, stats]) => ({
+      parameter,
+      mean: stats.mean,
+      median: stats.median,
+      std: stats.std,
+      ci95_lower: stats.ci95[0],
+      ci95_upper: stats.ci95[1],
+      mode: stats.mode,
+    }));
+    const posteriorHeaders = ['parameter', 'mean', 'median', 'std', 'ci95_lower', 'ci95_upper', 'mode'];
+    const inputHeaders = ['time', ...Array.from(new Set(completedExperimentalData.flatMap((point) => Object.keys(point.values))))];
+    const inputRows = completedExperimentalData.map((point) => ({ time: point.time, ...point.values }));
+    const fullAdditionalArtifacts = completedExperimentalData.length > 0
+      ? [createTextArtifact({
+        id: 'abc-input-data',
+        label: 'Experimental data used for inference',
+        kind: 'data',
+        description: 'The parsed measurement table used by the completed ABC-SMC run.',
+        format: { value: 'csv', label: 'CSV' },
+        path: 'data/experimental-data.csv',
+        mimeType: 'text/csv',
+        selectedByDefault: true,
+        estimatedBytes: inputRows.length * Math.max(1, inputHeaders.length) * 18,
+        build: () => toCsvTable(inputRows, inputHeaders),
+      })]
+      : [];
+
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'ABC-SMC inference',
+      filenamePrefix: 'abc-smc',
+      result,
+      resultFileName: 'posterior-result',
+      resultLabel: 'Posterior populations and diagnostics',
+      resultDescription: 'Final particles, all retained SMC populations, posterior summaries, and pairwise correlations.',
+      modelSource: completedModelSource,
+      settings: {
+        particles: nParticles,
+        populations: nPopulations,
+        activePriors,
+      },
+      fullTable: {
+        path: 'data/posterior-summary.csv',
+        label: 'Posterior summary table',
+        description: 'Posterior parameter summaries and 95% credible intervals.',
+        rows: posteriorRows,
+        headers: posteriorHeaders,
+      },
+      fullAdditionalArtifacts,
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current posterior summary',
+        description: 'Posterior summary values shown for the current inference result.',
+        rows: posteriorRows,
+        headers: posteriorHeaders,
+      },
+    });
+  }, [activePriors, completedExperimentalData, completedModelSource, nParticles, nPopulations, result]);
 
   if (!model) return null;
 
@@ -412,7 +491,10 @@ export const ABCSMCTab: React.FC<ABCSMCTabProps> = ({ model }) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                  <Card className="p-6 shadow-lg border-t-4 border-t-indigo-500">
                     <div className="flex items-center justify-between mb-6">
-                      <h4 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Posterior Distribution</h4>
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        <h4 className="text-lg font-black text-slate-800 dark:text-white uppercase tracking-tight">Posterior Distribution</h4>
+                        {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+                      </div>
                       <div className="flex items-center gap-2">
                          <label className="text-xs font-bold text-slate-400">View Parameter:</label>
                          <select 

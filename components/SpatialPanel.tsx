@@ -16,6 +16,8 @@ import type {
   CompartmentGeometry,
 } from '@bngplayground/engine';
 import { DEFAULT_SPATIAL_CONFIG } from '@bngplayground/engine';
+import { ResultsExportControl } from './ResultsExportDialog';
+import { createSpatialResultsExportDescriptor } from '../services/resultsExport';
 
 interface SpatialPanelProps {
   /** Current BNGL model text from the editor */
@@ -26,6 +28,8 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
   const [state, setState] = useState<SpatialSimulationState>('idle');
   const [snapshot, setSnapshot] = useState<SpatialSnapshot | null>(null);
   const [result, setResult] = useState<SpatialSimulationResult | null>(null);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
+  const [completedConfig, setCompletedConfig] = useState<Partial<SpatialSimulationConfig> | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [geometries, setGeometries] = useState<CompartmentGeometry[]>([]);
@@ -62,6 +66,8 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
     setError(null);
     setValidationError(null);
     setResult(null);
+    setCompletedModelSource(null);
+    setCompletedConfig(null);
     setSnapshot(null);
 
     const tEndRaw = parseFloat(tEndRef.current?.value ?? '');
@@ -80,6 +86,7 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
     }
 
     const runConfig = { ...config, tEnd, dt };
+    const executionModelSource = bnglText;
 
     await spatialService.init(bnglText, runConfig, {
       onStateChange: (s) => setState(s),
@@ -90,6 +97,8 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
       onSnapshot: (snap) => setSnapshot(snap),
       onComplete: (res) => {
         setResult(res);
+        setCompletedModelSource(executionModelSource || null);
+        setCompletedConfig(runConfig);
       },
       onError: (msg) => {
         setError(msg);
@@ -110,6 +119,15 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
   }, []);
 
   const isRunning = state === 'running' || state === 'initializing';
+  const exportDescriptor = result
+    ? createSpatialResultsExportDescriptor({
+      result,
+      speciesNames,
+      modelSource: completedModelSource,
+      config: completedConfig ?? config,
+      currentSnapshot: snapshot,
+    })
+    : null;
 
   return (
     <div ref={containerRef} className="flex flex-col w-full h-full bg-gray-950 text-gray-200">
@@ -187,6 +205,7 @@ export const SpatialPanel: React.FC<SpatialPanelProps> = ({ bnglText }) => {
               {snapshot.moleculeCount} molecules
             </span>
           )}
+          {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
         </div>
       </div>
 

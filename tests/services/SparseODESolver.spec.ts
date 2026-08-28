@@ -1,11 +1,9 @@
 
 import { describe, it, expect } from 'vitest';
-import { SparseODESolver } from '@bngplayground/engine';
+import { Rxn, SparseODESolver } from '@bngplayground/engine';
 
-// Mock Rxn
-interface MockRxn {
-    reactants: number[];
-    products: number[];
+interface InternalSparseODESolver {
+    n: number;
 }
 
 describe('SparseODESolver Service', () => {
@@ -13,7 +11,7 @@ describe('SparseODESolver Service', () => {
     it('should integrate simple A -> B', () => {
         // A -> B, k=1
         const nSpecies = 2;
-        const reactions: MockRxn[] = [{ reactants: [0], products: [1] }];
+        const reactions: Rxn[] = [new Rxn([0], [1], 1.0)];
         
         // Derivatives: dA/dt = -A, dB/dt = A
         const derivatives = (y: Float64Array, dydt: Float64Array) => {
@@ -32,7 +30,7 @@ describe('SparseODESolver Service', () => {
         
         const solver = new SparseODESolver(
             nSpecies,
-            reactions as any,
+            reactions,
             derivatives,
             y0,
             ['A', 'B'],
@@ -54,9 +52,9 @@ describe('SparseODESolver Service', () => {
         // A <-> B. Total = 10.
         // Reduced system should have size 1.
         const nSpecies = 2;
-        const reactions: MockRxn[] = [
-            { reactants: [0], products: [1] },
-            { reactants: [1], products: [0] }
+        const reactions: Rxn[] = [
+            new Rxn([0], [1], 1.0),
+            new Rxn([1], [0], 1.0),
         ];
         
         const derivatives = (y: Float64Array, dydt: Float64Array) => {
@@ -70,7 +68,7 @@ describe('SparseODESolver Service', () => {
         const y0 = new Float64Array([10, 0]);
         const solver = new SparseODESolver(
             nSpecies,
-            reactions as any,
+            reactions,
             derivatives,
             y0,
             ['A', 'B'],
@@ -78,18 +76,18 @@ describe('SparseODESolver Service', () => {
         );
         
         // Internal check: reduced size
-        // @ts-expect-error
-        expect(solver.n).toBe(1);
+        const internal = solver as unknown as InternalSparseODESolver;
+        expect(internal.n).toBe(1);
     });
 
     it('should fall back if linear solve fails', () => {
         // This is hard to trigger without bad matrix, but we verify it runs
         const nSpecies = 1;
-        const reactions: MockRxn[] = [];
-        const derivatives = (y: Float64Array, dydt: Float64Array) => { dydt[0] = 0; };
+        const reactions: Rxn[] = [];
+        const derivatives = (_y: Float64Array, dydt: Float64Array) => { dydt[0] = 0; };
         const y0 = new Float64Array([1]);
         
-        const solver = new SparseODESolver(nSpecies, reactions as any, derivatives, y0);
+        const solver = new SparseODESolver(nSpecies, reactions, derivatives, y0);
         const res = solver.integrate(y0, 0, 1, [0, 1], () => {});
         expect(res.success).toBe(true);
     });

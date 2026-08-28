@@ -21,6 +21,8 @@ import { tsAnalyseGraph } from '../../services/tsNetworkAnalysis';
 import { bnglService } from '../../services/bnglService';
 import { Button } from '../ui/Button';
 import { LoadingSpinner } from '../ui/LoadingSpinner';
+import { ResultsExportControl } from '../ResultsExportDialog';
+import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
 
 // Register layout plugins (idempotent — same pattern as ARGraphViewer)
 cytoscape.use(dagre);
@@ -96,6 +98,7 @@ type SortKey = 'degree' | 'betweenness' | 'closeness' | 'pagerank' | 'localClust
 
 interface Props {
   model: BNGLModel | null;
+  bnglText?: string;
 }
 
 // ---- Helpers ---------------------------------------------------------------
@@ -124,7 +127,7 @@ function fmt(n: number): string {
 
 // ---- Component -------------------------------------------------------------
 
-export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
+export const NetworkAnalysisTab: React.FC<Props> = ({ model, bnglText }) => {
   // Analysis state
   const [graphType, setGraphType] = useState<GraphType>('molecular');
   const [result, setResult] = useState<IgraphAnalysisResult | null>(null);
@@ -134,6 +137,7 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
   const [isExpandingNetwork, setIsExpandingNetwork] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [wasmMissing, setWasmMissing] = useState(false);
+  const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
 
   // Table state
   const [sortKey, setSortKey] = useState<SortKey>('pagerank');
@@ -159,6 +163,9 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
   // tied to the previous model object.
   useEffect(() => {
     setExpandedReactionModel(null);
+    setResult(null);
+    setCurrentPayload(null);
+    setCompletedModelSource(null);
   }, [model]);
 
   // Auto-select best available graph type when model changes.
@@ -233,13 +240,14 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
       }
       setCurrentPayload(payload);
       setResult(analysisResult);
+      setCompletedModelSource(bnglText || null);
     } catch (err: unknown) {
       const msg = err instanceof Error ? err.message : String(err);
       setError(msg);
     } finally {
       setIsLoading(false);
     }
-  }, [model, graphType, expandedReactionModel]);
+  }, [bnglText, model, graphType, expandedReactionModel]);
 
   // Always keep the ref pointing at the latest version of runAnalysis.
   useEffect(() => { runAnalysisRef.current = runAnalysis; });
@@ -424,6 +432,46 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
 
   const degreeHistogram = useMemo(() => (result ? buildDegreeHistogram(result.degree) : []), [result]);
 
+  const exportDescriptor = useMemo(() => {
+    if (!result || !currentPayload) return null;
+    const rows = result.nodeLabels.map((label, index) => ({
+      node: label,
+      degree: result.degree[index] ?? 0,
+      in_degree: result.inDegree[index] ?? 0,
+      out_degree: result.outDegree[index] ?? 0,
+      betweenness: result.betweenness[index] ?? 0,
+      closeness: result.closeness[index] ?? 0,
+      pagerank: result.pagerank[index] ?? 0,
+      local_clustering: result.localClustering[index] ?? 0,
+      community: result.communityIds[index] ?? 0,
+    }));
+    const headers = ['node', 'degree', 'in_degree', 'out_degree', 'betweenness', 'closeness', 'pagerank', 'local_clustering', 'community'];
+    return createStructuredAnalysisResultsExportDescriptor({
+      analysisType: 'Network analysis',
+      filenamePrefix: 'network-analysis',
+      result: { metrics: result, edges: currentPayload.edges },
+      resultFileName: 'network-analysis-result',
+      resultLabel: 'Network metrics and graph result',
+      resultDescription: 'Node and graph-level metrics, community assignments, and the analyzed edge list.',
+      modelSource: completedModelSource,
+      settings: { graphType: result.graphType },
+      fullTable: {
+        path: 'data/node-metrics.csv',
+        label: 'Complete node metrics',
+        description: 'Centrality, degree, clustering, and community metrics for every analyzed node.',
+        rows,
+        headers,
+      },
+      currentTable: {
+        path: 'data/current-view.csv',
+        label: 'Current node metrics',
+        description: 'The currently displayed sorted node-metric rows.',
+        rows: sortedRows.slice(0, 200),
+        headers: ['label', 'degree', 'inDegree', 'outDegree', 'betweenness', 'closeness', 'pagerank', 'localClustering', 'communityIds'],
+      },
+    });
+  }, [completedModelSource, currentPayload, result, sortedRows]);
+
   const handleSortClick = (key: SortKey) => {
     if (sortKey === key) setSortAsc(!sortAsc);
     else { setSortKey(key); setSortAsc(false); }
@@ -531,6 +579,9 @@ export const NetworkAnalysisTab: React.FC<Props> = ({ model }) => {
       {/* Results */}
       {result && !isLoading && (
         <>
+          <div className="flex justify-end">
+            {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
+          </div>
           {/* Summary stats */}
           <div className="grid grid-cols-3 sm:grid-cols-5 lg:grid-cols-9 gap-2">
             {[

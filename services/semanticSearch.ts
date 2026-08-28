@@ -6,6 +6,8 @@
  * No external API calls - runs entirely in the browser.
  */
 
+import { cosineSimilarity as sharedCosineSimilarity } from '@bngplayground/rulehub';
+
 // Dynamic import to avoid type issues until package is installed
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type Pipeline = any;
@@ -109,17 +111,7 @@ async function getEmbeddingsIndex(): Promise<EmbeddingsIndex> {
  * Compute cosine similarity between two vectors.
  */
 export function cosineSimilarity(a: number[], b: number[]): number {
-  let dotProduct = 0;
-  let normA = 0;
-  let normB = 0;
-
-  for (let i = 0; i < a.length; i++) {
-    dotProduct += a[i] * b[i];
-    normA += a[i] * a[i];
-    normB += b[i] * b[i];
-  }
-
-  return dotProduct / (Math.sqrt(normA) * Math.sqrt(normB));
+  return sharedCosineSimilarity(a, b);
 }
 
 /**

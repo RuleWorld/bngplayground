@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { toCsv } from '../../src/utils/download';
+import { toCsv, toCsvTable } from '../../src/utils/download';
 
 describe('toCsv', () => {
   it('should handle empty or null data', () => {
@@ -57,5 +57,14 @@ describe('toCsv', () => {
     ].join('\n');
 
     expect(csv).toBe(expected);
+  });
+});
+
+describe('toCsvTable', () => {
+  it('uses explicit headers, escapes cells, and retains headers for empty tables', () => {
+    expect(toCsvTable([], ['time', 'label'])).toBe('time,label');
+    expect(toCsvTable([
+      { time: 1, label: 'A, "quoted"\nvalue' },
+    ], ['time', 'label'])).toBe('time,label\n1.000000000000e+00,"A, ""quoted""\nvalue"');
   });
 });

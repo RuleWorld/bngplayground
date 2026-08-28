@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   perturbationScreen,
+  estimatePerturbationSimulations,
   PerturbationScreenConfig,
 } from '../../src/services/analysis/PerturbationScreen';
 import type { SimulationResults } from '../../src/types';
@@ -144,6 +145,14 @@ function createMockRunSimulation() {
 // ---------------------------------------------------------------------------
 
 describe('PerturbationScreen', () => {
+  it('counts individual rule knockouts required by pairwise screens', () => {
+    // Pairwise analysis ranks individual rule effects before running pairs:
+    // 1 wild type + 2 individual knockouts + 1 pairwise knockout.
+    expect(
+      estimatePerturbationSimulations(MODEL_CODE, ['pairwise_rules'], 100),
+    ).toBe(4);
+  });
+
   // ---- Test 1: Essential rule knockout ------------------------------------
 
   it('should detect deviation when an essential rule is knocked out', async () => {
