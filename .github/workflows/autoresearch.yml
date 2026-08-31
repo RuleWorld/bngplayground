@@ -125,7 +125,7 @@ jobs:
           fetch-depth: 0
 
       - name: Download evaluated board
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           name: autoresearch-${{ github.run_id }}
           path: artifacts
