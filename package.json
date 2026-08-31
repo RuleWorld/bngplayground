@@ -121,7 +121,7 @@
     "hono": "^4.12.34",
     "@hono/node-server": "^2.0.5",
     "jose": "^6.2.2",
-    "esbuild": "^0.28.1",
+    "esbuild": "^0.28.2",
     "flatted": "^3.4.0",
     "css-tree": "^3.2.1",
     "@csstools/css-syntax-patches-for-csstree": "^1.1.0",
