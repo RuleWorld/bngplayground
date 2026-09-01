@@ -46,6 +46,7 @@ permissions:
 
 jobs:
   run:
+    if: github.repository == 'akutuva21/julesplayground'
     runs-on: ubuntu-latest
     timeout-minutes: 240
     outputs:
@@ -59,8 +60,21 @@ jobs:
       AUTORESEARCH_REFINEMENT: ${{ inputs.refinement }}
       AUTORESEARCH_DRY_RUN: ${{ inputs.dry_run || false }}
       AUTORESEARCH_PROMOTION_MODE: ${{ inputs.promotion_mode || 'artifact' }}
-      JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
     steps:
+      - name: Verify fork-only Jules configuration
+        shell: bash
+        env:
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
+        run: |
+          if [[ "${GITHUB_REPOSITORY}" != "akutuva21/julesplayground" ]]; then
+            echo "::error::Autoresearch is restricted to akutuva21/julesplayground."
+            exit 1
+          fi
+          if [[ "${AUTORESEARCH_DRY_RUN:-false}" != "true" && -z "${JULES_API_KEY:-}" ]]; then
+            echo "::error::Missing Actions repository secret JULES_API_KEY in akutuva21/julesplayground."
+            exit 1
+          fi
+
       - name: Checkout repository
         uses: actions/checkout@v7
         with:
@@ -87,6 +101,7 @@ jobs:
         env:
           AUTORESEARCH_GENERATION1_STARTS: ${{ inputs.generation1_starts }}
           AUTORESEARCH_BASE_SHA: ${{ inputs.base_sha }}
+          JULES_API_KEY: ${{ secrets.JULES_API_KEY }}
         run: node --import tsx scripts/autoresearch/controller.ts
 
       - name: Upload autoresearch artifacts
@@ -108,6 +123,7 @@ jobs:
 
   promote:
     if: >-
+      github.repository == 'akutuva21/julesplayground' &&
       needs.run.result == 'success' &&
       needs.run.outputs.winner_exists == 'true' &&
       github.event_name == 'workflow_dispatch' &&
