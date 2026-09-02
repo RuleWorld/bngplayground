@@ -207,6 +207,20 @@ describe('data-only simulation options', () => {
         });
     }
 
+    it('exposes the profile optimizer evaluation bound to the engine', async () => {
+        await handleIdentifiability({
+            code: 'model',
+            parameters: ['k'],
+            data: DATA,
+            n_grid: 2,
+            max_reopt_eval: 7,
+        });
+
+        expect(engineMocks.profileLikelihood).toHaveBeenCalledWith(expect.objectContaining({
+            maxReoptEval: 7,
+        }));
+    });
+
     it('deep diagnosis uses lean output for Sobol and FIM simulations', async () => {
         engineMocks.sobolSensitivity.mockImplementationOnce(async (config) => {
             await config.simulate({ k: 1.1 });

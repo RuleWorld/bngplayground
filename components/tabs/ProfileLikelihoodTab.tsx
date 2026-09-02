@@ -192,10 +192,13 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
       min_ssr: profile.minSSR,
       ci_lower: profile.ci?.lower ?? '',
       ci_upper: profile.ci?.upper ?? '',
+      ci_grid_lower: profile.ciGridRange?.lower ?? '',
+      ci_grid_upper: profile.ciGridRange?.upper ?? '',
+      ci_status: profile.ciStatus,
       flat: profile.flat,
       identifiability: profile.identifiability,
     })));
-    const headers = ['parameter', 'parameter_value', 'ssr', 'min_ssr', 'ci_lower', 'ci_upper', 'flat', 'identifiability'];
+    const headers = ['parameter', 'parameter_value', 'ssr', 'min_ssr', 'ci_lower', 'ci_upper', 'ci_grid_lower', 'ci_grid_upper', 'ci_status', 'flat', 'identifiability'];
     const inputHeaders = ['time', ...Array.from(new Set(completedExperimentalData.flatMap((point) => Object.keys(point.values))))];
     const inputRows = completedExperimentalData.map((point) => ({ time: point.time, ...point.values }));
     const fullAdditionalArtifacts = completedExperimentalData.length > 0
@@ -529,10 +532,16 @@ export const ProfileLikelihoodTab: React.FC<ProfileLikelihoodTabProps> = ({ mode
                          </span>
                       </h4>
                       <div className="flex items-center gap-2 mt-1">
-                         <span className="text-[10px] font-bold text-slate-400">95% Confidence:</span>
-                         <span className={`text-[10px] font-mono font-bold ${isIdentifiable ? 'text-teal-600' : 'text-slate-500 dark:text-slate-400 italic'}`}>
-                           {profile.ci ? `[${formatValue(profile.ci.lower)} — ${formatValue(profile.ci.upper)}]` : 'Indeterminate'}
-                         </span>
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {profile.ciStatus === 'bounded' ? '95% Confidence:' : 'Threshold-compatible range:'}
+                        </span>
+                        <span className={`text-[10px] font-mono font-bold ${isIdentifiable ? 'text-teal-600' : 'text-slate-500 dark:text-slate-400 italic'}`}>
+                          {profile.ci
+                            ? `[${formatValue(profile.ci.lower)} — ${formatValue(profile.ci.upper)}]`
+                            : profile.ciGridRange
+                              ? `[${formatValue(profile.ciGridRange.lower)} — ${formatValue(profile.ciGridRange.upper)}] (${profile.ciStatus.replaceAll('_', ' ')})`
+                              : 'No scanned point below threshold'}
+                        </span>
                       </div>
                     </div>
                   </div>
