@@ -5,8 +5,9 @@
  * callback-based simulate pattern (no browser dependencies).
  */
 
-import { jacobiEigenDecomposition, invertSymmetricMatrix, matMul, matTranspose } from '../../utils/mathUtils';
+import { chi2Quantile, jacobiEigenDecomposition, invertSymmetricMatrix, matMul, matTranspose } from '../../utils/mathUtils';
 import { nelderMead } from '../optimization/nelderMead';
+import { AnalysisDataError } from './AnalysisErrors';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -85,6 +86,107 @@ export interface CollinearityResult {
 
 // ── Main FIM computation ─────────────────────────────────────────────
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+function isAbortError(error: unknown): boolean {
+  return error instanceof Error && error.name === 'AbortError';
+}
+
+function validateSimulationData(
+  data: unknown,
+  label: string,
+  expectedObservableNames?: string[],
+  expectedLength?: number,
+): Array<Record<string, number>> {
+  if (!Array.isArray(data) || data.length === 0) {
+    throw new AnalysisDataError(`FIM ${label} simulation returned no trajectory data.`);
+  }
+  if (expectedLength !== undefined && data.length !== expectedLength) {
+    throw new AnalysisDataError(
+      `FIM ${label} simulation returned ${data.length} time points; expected ${expectedLength}.`,
+    );
+  }
+
+  const firstRow = data[0];
+  if (!firstRow || typeof firstRow !== 'object') {
+    throw new AnalysisDataError(`FIM ${label} simulation returned an invalid first row.`);
+  }
+  const firstRecord = firstRow as Record<string, unknown>;
+  const observableNames = expectedObservableNames ?? Object.keys(firstRecord).filter((name) => name !== 'time');
+  if (observableNames.length === 0) {
+    throw new AnalysisDataError(`FIM ${label} simulation returned no observable columns.`);
+  }
+
+  let previousTime = -Infinity;
+  for (const [index, rawRow] of data.entries()) {
+    if (!rawRow || typeof rawRow !== 'object') {
+      throw new AnalysisDataError(`FIM ${label} simulation returned an invalid row at index ${index}.`);
+    }
+    const row = rawRow as Record<string, unknown>;
+    const time = row.time;
+    if (typeof time !== 'number' || !Number.isFinite(time)) {
+      throw new AnalysisDataError(`FIM ${label} simulation returned a non-finite time at row ${index}.`);
+    }
+    if (time < previousTime) {
+      throw new AnalysisDataError(`FIM ${label} simulation returned unsorted time points.`);
+    }
+    previousTime = time;
+    for (const observable of observableNames) {
+      if (!Object.prototype.hasOwnProperty.call(row, observable)) {
+        throw new AnalysisDataError(`FIM ${label} simulation is missing observable "${observable}".`);
+      }
+      const value = row[observable];
+      if (typeof value !== 'number' || !Number.isFinite(value)) {
+        throw new AnalysisDataError(`FIM ${label} simulation returned a non-finite value for "${observable}".`);
+      }
+    }
+  }
+  return data as Array<Record<string, number>>;
+}
+
+async function simulateValidated(
+  simulate: FIMConfig['simulate'],
+  overrides: Record<string, number>,
+  label: string,
+  expectedObservableNames?: string[],
+  expectedLength?: number,
+): Promise<Array<Record<string, number>>> {
+  let result: { data: Array<Record<string, number>> };
+  try {
+    result = await simulate(overrides);
+  } catch (error) {
+    if (isAbortError(error)) throw error;
+    throw new AnalysisDataError(`FIM ${label} simulation failed: ${errorMessage(error)}`);
+  }
+  return validateSimulationData(result?.data, label, expectedObservableNames, expectedLength);
+}
+
+function validateConfiguration(
+  parameters: Record<string, number>,
+  parameterNames: string[],
+  defaultStep: number,
+): void {
+  if (!Array.isArray(parameterNames) || parameterNames.length === 0) {
+    throw new AnalysisDataError('FIM requires at least one parameter.');
+  }
+  if (new Set(parameterNames).size !== parameterNames.length) {
+    throw new AnalysisDataError('FIM parameter names must be unique.');
+  }
+  if (!Number.isFinite(defaultStep) || defaultStep <= 0) {
+    throw new AnalysisDataError('FIM defaultStep must be finite and positive.');
+  }
+  for (const name of parameterNames) {
+    if (!Object.prototype.hasOwnProperty.call(parameters, name)) {
+      throw new AnalysisDataError(`FIM parameter "${name}" is not present in the baseline parameter set.`);
+    }
+    if (!Number.isFinite(parameters[name])) {
+      throw new AnalysisDataError(`FIM parameter "${name}" is non-finite.`);
+    }
+  }
+}
+
 /**
  * Computes the Fisher Information Matrix (FIM) and related local sensitivity metrics.
  *
@@ -110,11 +212,11 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
   } = config;
 
   const d = parameterNames.length;
+  validateConfiguration(parameters, parameterNames, defaultStep);
   const paramValues = parameterNames.map((n) => parameters[n]);
 
   // 1. Baseline simulation
-  const baseResult = await simulate(parameters);
-  const baseData = baseResult.data;
+  const baseData = await simulateValidated(simulate, parameters, 'baseline');
   const obsNames = Object.keys(baseData[0]).filter((k) => k !== 'time');
   const nT = allTimepoints ? baseData.length : 1;
   const nObs = obsNames.length;
@@ -142,19 +244,31 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
     // Forward
     const overridesPlus = { ...parameters };
     overridesPlus[parameterNames[j]] = pj + delta;
-    const resultPlus = await simulate(overridesPlus);
+    const dataPlus = await simulateValidated(
+      simulate,
+      overridesPlus,
+      `forward sensitivity for "${parameterNames[j]}"`,
+      obsNames,
+      allTimepoints ? baseData.length : undefined,
+    );
     completed++;
     onProgress?.(completed, total);
 
     // Backward
     const overridesMinus = { ...parameters };
     overridesMinus[parameterNames[j]] = pj - delta;
-    const resultMinus = await simulate(overridesMinus);
+    const dataMinus = await simulateValidated(
+      simulate,
+      overridesMinus,
+      `backward sensitivity for "${parameterNames[j]}"`,
+      obsNames,
+      allTimepoints ? baseData.length : undefined,
+    );
     completed++;
     onProgress?.(completed, total);
 
-    const yPlus = extractValues(resultPlus.data, obsNames, allTimepoints);
-    const yMinus = extractValues(resultMinus.data, obsNames, allTimepoints);
+    const yPlus = extractValues(dataPlus, obsNames, allTimepoints);
+    const yMinus = extractValues(dataMinus, obsNames, allTimepoints);
 
     // Central difference
     const sensitivity: number[] = [];
@@ -203,6 +317,9 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
   const sortedEigenvectors = eigenvectors.map((row) =>
     sortedIndices.map((i) => row[i]),
   );
+  if (!sortedEigenvalues.every(Number.isFinite)) {
+    throw new AnalysisDataError('FIM eigendecomposition returned non-finite eigenvalues.');
+  }
 
   // 5. Condition number
   const maxEig = Math.max(...sortedEigenvalues.map(Math.abs));
@@ -210,9 +327,11 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
   const conditionNumber = minEig > 1e-30 ? maxEig / minEig : Infinity;
 
   // Regularized condition number (Tikhonov)
-  const lambda = maxEig * 1e-6;
+  const lambda = maxEig > 0 && Number.isFinite(maxEig) ? maxEig * 1e-6 : 0;
   const regEigenvalues = sortedEigenvalues.map((e) => e + lambda);
-  const regCondNumber = Math.max(...regEigenvalues) / Math.min(...regEigenvalues);
+  const regMaxEig = Math.max(...regEigenvalues.map(Math.abs));
+  const regMinEig = Math.min(...regEigenvalues.map(Math.abs));
+  const regCondNumber = regMinEig > 1e-30 ? regMaxEig / regMinEig : Infinity;
 
   // 6. Covariance matrix (pseudo-inverse of FIM)
   let covarianceMatrix: number[][] = Array.from({ length: d }, () => new Array(d).fill(0));
@@ -229,7 +348,8 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
   for (let i = 0; i < d; i++) {
     for (let j = 0; j < d; j++) {
       const denom = Math.sqrt(Math.abs(covarianceMatrix[i][i]) * Math.abs(covarianceMatrix[j][j]));
-      correlations[i][j] = denom > 0 ? covarianceMatrix[i][j] / denom : (i === j ? 1 : 0);
+      const correlation = denom > 0 ? covarianceMatrix[i][j] / denom : (i === j ? 1 : 0);
+      correlations[i][j] = Number.isFinite(correlation) ? correlation : (i === j ? 1 : 0);
     }
   }
 
@@ -347,8 +467,14 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
               otherNames.forEach((name, idx) => {
                 overrides[name] = Math.exp(x[idx]);
               });
-              const res = await simulate(overrides);
-              const y = extractValues(res.data, obsNames, allTimepoints);
+              const res = await simulateValidated(
+                simulate,
+                overrides,
+                `approximate profile for "${parameterNames[j]}"`,
+                obsNames,
+                allTimepoints ? baseData.length : undefined,
+              );
+              const y = extractValues(res, obsNames, allTimepoints);
               let s = 0;
               for (let i = 0; i < totalObs; i++) {
                 const diff = y[i] - yBase[i];
@@ -361,8 +487,14 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
           } else {
             const overrides = { ...parameters };
             overrides[parameterNames[j]] = gridVal;
-            const result = await simulate(overrides);
-            const yGrid = extractValues(result.data, obsNames, allTimepoints);
+            const result = await simulateValidated(
+              simulate,
+              overrides,
+              `approximate profile for "${parameterNames[j]}"`,
+              obsNames,
+              allTimepoints ? baseData.length : undefined,
+            );
+            const yGrid = extractValues(result, obsNames, allTimepoints);
             let s = 0;
             for (let i = 0; i < totalObs; i++) {
               const diff = yGrid[i] - yBase[i];
@@ -378,9 +510,14 @@ export async function computeFIM(config: FIMConfig): Promise<FIMResult> {
         onProgress?.(completed, total);
       }
 
-      const minSSR = Math.min(...ssr.filter(isFinite));
-      const maxSSR = Math.max(...ssr.filter(isFinite));
-      const flat = (maxSSR - minSSR) / Math.max(minSSR, 1e-30) < 0.01;
+      const finiteProfile = ssr.filter(Number.isFinite);
+      if (finiteProfile.length === 0) {
+        throw new AnalysisDataError(`FIM approximate profile for "${parameterNames[j]}" produced no finite SSR values.`);
+      }
+      const minSSR = Math.min(...finiteProfile);
+      const maxSSR = Math.max(...finiteProfile);
+      const flatTolerance = Math.max(chi2Quantile(0.95, 1) * 0.01, 1e-12);
+      const flat = maxSSR - minSSR <= flatTolerance;
 
       profileApprox[parameterNames[j]] = {
         grid,
@@ -432,7 +569,24 @@ export function computeCollinearity(
   paramNames: string[],
   subsetSize = 2,
 ): CollinearityResult {
+  if (!Array.isArray(paramNames) || paramNames.length === 0) {
+    throw new AnalysisDataError('Collinearity analysis requires at least one parameter name.');
+  }
   const d = paramNames.length;
+  if (!Array.isArray(jacobian) || jacobian.length === 0) {
+    throw new AnalysisDataError('Collinearity analysis requires a non-empty sensitivity Jacobian.');
+  }
+  if (!Number.isInteger(subsetSize) || subsetSize < 1 || subsetSize > d) {
+    throw new AnalysisDataError(`Collinearity subsetSize must be an integer between 1 and ${d}.`);
+  }
+  if (new Set(paramNames).size !== d) {
+    throw new AnalysisDataError('Collinearity parameter names must be unique.');
+  }
+  for (const [rowIndex, row] of jacobian.entries()) {
+    if (!Array.isArray(row) || row.length < d || row.some((value) => !Number.isFinite(value))) {
+      throw new AnalysisDataError(`Collinearity Jacobian row ${rowIndex} is invalid.`);
+    }
+  }
   const subsets: CollinearityResult['subsets'] = [];
   let maxCollinearity = 0;
 
@@ -460,7 +614,7 @@ export function computeCollinearity(
       isCollinear: collinearityIndex > 20,
     });
 
-    maxCollinearity = Math.max(maxCollinearity, isFinite(collinearityIndex) ? collinearityIndex : 0);
+    maxCollinearity = Math.max(maxCollinearity, collinearityIndex);
   }
 
   return { subsets, maxCollinearity };
@@ -477,13 +631,13 @@ function extractValues(
   if (allTimepoints) {
     for (const obs of obsNames) {
       for (const row of data) {
-        values.push(row[obs] ?? 0);
+        values.push(row[obs]);
       }
     }
   } else {
     const lastRow = data[data.length - 1];
     for (const obs of obsNames) {
-      values.push(lastRow?.[obs] ?? 0);
+      values.push(lastRow[obs]);
     }
   }
   return values;

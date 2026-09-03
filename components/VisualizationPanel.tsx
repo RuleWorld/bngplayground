@@ -35,7 +35,6 @@ const TemporalAnalysisTab = lazy(() => import('./tabs/TemporalAnalysisTab').then
 const VersionHistoryTab = lazy(() => import('./tabs/VersionHistoryTab').then((module) => ({ default: module.VersionHistoryTab })));
 const MultiscaleTab = lazy(() => import('./tabs/MultiscaleTab').then((module) => ({ default: module.MultiscaleTab })));
 const PKPDTab = lazy(() => import('./tabs/PKPDTab').then((module) => ({ default: module.PKPDTab })));
-const RobustnessTab = lazy(() => import('./tabs/RobustnessTab').then((module) => ({ default: module.RobustnessTab })));
 
 
 
@@ -237,7 +236,6 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   <DropdownItem onClick={() => setActiveTab(18)}>🔀 Bifurcation Analysis</DropdownItem>
                   <DropdownItem onClick={() => setActiveTab(19)}>🎵 Temporal Info Theory</DropdownItem>
                   <DropdownItem onClick={() => setActiveTab(22)}>💊 PK/PD Framework</DropdownItem>
-                  <DropdownItem onClick={() => setActiveTab(23)}>🛡️ Robustness Analysis</DropdownItem>
                 </div>
                 {/* Right column */}
                 <div>
@@ -865,15 +863,6 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
             />
           </div>
         )}
-
-        {activeTab === 23 && (
-          <div role="tabpanel" id="viz-tabpanel-23" aria-labelledby="viz-tab-23" aria-label="Robustness analysis" className="flex-1 min-h-0 flex flex-col overflow-hidden">
-            <ErrorBoundary label="tab:robustness">
-              <RobustnessTab model={model} bnglText={bnglCode} />
-            </ErrorBoundary>
-          </div>
-        )}
-
 
         </Suspense>
       </div>

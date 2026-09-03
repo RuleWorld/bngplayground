@@ -77,6 +77,7 @@ export async function handleIdentifiability(args: ToolArgs): Promise<ToolResult<
             rangeFactor: parsedArgs.range_factor ?? 10,
             reoptimize: parsedArgs.reoptimize ?? true,
             alpha: parsedArgs.alpha ?? 0.95,
+            maxReoptEval: parsedArgs.max_reopt_eval ?? 50,
         });
 
         return createToolResult(result);

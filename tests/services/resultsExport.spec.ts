@@ -29,7 +29,7 @@ describe('result export serialization', () => {
       method: 'ode',
       t_end: 1,
       n_steps: 2,
-      seed: 42,
+      seed: 999888777,
       softwareVersion: 'must-not-export',
     } as SimulationOptions & Record<string, unknown>;
     const descriptor = createSimulationResultsExportDescriptor({
@@ -64,7 +64,8 @@ describe('result export serialization', () => {
     expect(await readZipEntry(full.blob, `${root}/model.bngl`)).toBe('begin model\nend model\n');
 
     const manifestText = await readZipEntry(full.blob, `${root}/manifest.json`);
-    expect(manifestText).not.toContain('42');
+    expect(manifestText).not.toContain('999888777');
+    expect(manifestText).not.toContain('"seed"');
     expect(manifestText).not.toContain('softwareVersion');
     expect(manifestText).not.toContain('environment');
     const settings = JSON.parse(await readZipEntry(full.blob, `${root}/analysis/settings.json`)) as Record<string, unknown>;
