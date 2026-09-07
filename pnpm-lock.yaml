@@ -37,17 +37,17 @@ importers:
         specifier: ^2.17.2
         version: 2.17.2(@types/node@26.2.0)
       cytoscape:
-        specifier: ^3.34.1
-        version: 3.34.1
+        specifier: ^3.34.2
+        version: 3.34.2
       cytoscape-dagre:
         specifier: ^4.0.0
-        version: 4.0.0(cytoscape@3.34.1)
+        version: 4.0.0(cytoscape@3.34.2)
       cytoscape-fcose:
         specifier: ^2.2.0
-        version: 2.2.0(cytoscape@3.34.1)
+        version: 2.2.0(cytoscape@3.34.2)
       cytoscape-svg:
         specifier: ^0.4.0
-        version: 0.4.0(cytoscape@3.34.1)
+        version: 0.4.0(cytoscape@3.34.2)
       decimal.js:
         specifier: ^10.6.0
         version: 10.6.0
@@ -1752,8 +1752,8 @@ packages:
     peerDependencies:
       cytoscape: ^3.2.0
 
-  cytoscape@3.34.1:
-    resolution: {integrity: sha512-Lr0RvH9H75y9ar8h9Toy6u4lxRSCcxUq+hHcQ26sVWo6BnaQp1gwEZOYqwuYTZhyW7npyKnNLP8oJ2p1/3OZ7g==}
+  cytoscape@3.34.2:
+    resolution: {integrity: sha512-Cm2jaj1X/PBNlzV9yH8zcfGOxO7U+CJ/+mxSBVPSchLaugdp4jtlGx5qaHtPRZ6tgiZ5P+o1XoRfJA+ba6KM3g==}
     engines: {node: '>=0.10'}
 
   d3-array@3.2.4:
@@ -5265,20 +5265,20 @@ snapshots:
 
   csstype@3.2.3: {}
 
-  cytoscape-dagre@4.0.0(cytoscape@3.34.1):
+  cytoscape-dagre@4.0.0(cytoscape@3.34.2):
     dependencies:
-      cytoscape: 3.34.1
+      cytoscape: 3.34.2
 
-  cytoscape-fcose@2.2.0(cytoscape@3.34.1):
+  cytoscape-fcose@2.2.0(cytoscape@3.34.2):
     dependencies:
       cose-base: 2.2.0
-      cytoscape: 3.34.1
+      cytoscape: 3.34.2
 
-  cytoscape-svg@0.4.0(cytoscape@3.34.1):
+  cytoscape-svg@0.4.0(cytoscape@3.34.2):
     dependencies:
-      cytoscape: 3.34.1
+      cytoscape: 3.34.2
 
-  cytoscape@3.34.1: {}
+  cytoscape@3.34.2: {}
 
   d3-array@3.2.4:
     dependencies:
