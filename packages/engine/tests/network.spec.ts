@@ -153,6 +153,27 @@ end model
     }
   });
 
+  it('preserves the specific broken bond with repeated wildcard components', async () => {
+    const seed = BNGLParser.parseSpeciesGraph(
+      'Rec(a!2,b~Y,g~Y).Lig(l!1,l!2).Rec(a!1,b~Y,g~Y)'
+    );
+    const rule = BNGLParser.parseRxnRule(
+      'Rec(a!2).Lig(l!2,l!+) -> Rec(a) + Lig(l,l!+)'
+    );
+
+    const result = await new NetworkGenerator({ maxSpecies: 50, maxReactions: 50, maxIterations: 20 }).generate(
+      [seed],
+      [rule]
+    );
+    const products = result.reactions[0].products.map(index =>
+      GraphCanonicalizer.canonicalize(result.species[index].graph)
+    );
+
+    expect(products).toContain('Rec(a,b~Y,g~Y)');
+    const boundProduct = products.find(product => product.startsWith('Lig('));
+    expect(boundProduct).toMatch(/^Lig\([^)]*!1[^)]*\)\.Rec\(a!1,b~Y,g~Y\)$/);
+  });
+
   it('should parse seed species with mathematical expressions', () => {
     const bnglCode = `
 begin model

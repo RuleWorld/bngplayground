@@ -70,6 +70,23 @@ end model
     expect(result.model?.moleculeTypes[0].name).toBe('A');
   });
 
+  it('handles the legacy "begin molecular types" spelling', () => {
+    const legacyBNGL = `
+begin model
+begin molecular types
+  A(s~0~1)
+end molecular types
+begin seed species
+  A(s~0) 10
+end seed species
+end model
+    `;
+
+    const result = parseBNGLWithANTLR(legacyBNGL);
+    expect(result.success).toBe(true);
+    expect(result.model?.moleculeTypes[0].name).toBe('A');
+  });
+
   it('handles line continuations in reaction rules', () => {
     const continuedBNGL = `
 begin model
