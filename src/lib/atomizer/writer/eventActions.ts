@@ -187,6 +187,8 @@ export interface EventTranslationContext {
   resolveSpeciesPattern: (sbmlId: string) => string | null;
   /** Resolve a parameter/compartment id to its numeric value, else undefined. */
   resolveParam: (id: string) => number | undefined;
+  /** True only for identifiers whose value cannot change during the simulation. */
+  isCompileTimeConstant: (id: string) => boolean;
   /** True if the id names a global parameter or compartment (a valid setParameter target). */
   isParam: (id: string) => boolean;
   /** Simulation method for the synthesized phases. */
@@ -213,7 +215,12 @@ export function synthesizeEventActions(
   const untranslated: Array<{ event: SBMLEvent; reason: string }> = [];
   const scheduled: Array<{ time: number; sets: EventSet[]; priority: number }> = [];
 
-  const fold = (e: string) => foldNumeric(e, ctx.resolveParam);
+  // Only bake identifiers that SBML guarantees are immutable. Folding a mutable parameter to its
+  // initial value changes event assignment-time semantics (for example q := p + 1 after p := 3).
+  const fold = (e: string) => foldNumeric(
+    e,
+    (id) => ctx.isCompileTimeConstant(id) ? ctx.resolveParam(id) : undefined,
+  );
 
   for (const ev of events) {
     const threshold = parseTimeThreshold(ev.trigger);
@@ -263,7 +270,11 @@ export function synthesizeEventActions(
     let priority = 0;
     if (ev.priority) {
       const p = fold(ev.priority);
-      if (p !== null) priority = p;
+      if (p === null) {
+        untranslated.push({ event: ev, reason: `priority "${ev.priority}" is not compile-time constant` });
+        continue;
+      }
+      priority = p;
     }
     scheduled.push({ time, sets, priority });
   }
