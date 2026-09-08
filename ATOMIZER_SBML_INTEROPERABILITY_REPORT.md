@@ -131,7 +131,7 @@ Commands run on the final working tree:
 | `npm run type-check -- --pretty false` | Passed |
 | Focused Atomizer/expression suite (5 files) | 58 passed |
 | `npm run test:atomizer-roundtrip` | Passed: 13/13 SBML trajectories; 10/10 BNGL structural, state-trajectory, observable, and SBML-trajectory comparisons; BNG2 native 9/10 |
-| `npm run test:fast` | 274 files passed, 6 skipped; 6,344 tests passed, 56 skipped |
+| `npm run test:fast` | 274 files passed, 6 skipped; 6,346 tests passed, 56 skipped |
 | `npm run build:quick` | Passed; existing bundler/externalization/chunk-size warnings only |
 | `npm run test:full:safe` | 133 files passed, 8 skipped; 4,587 tests passed, 73 skipped; 3 unrelated failures |
 | `git diff --check` | Passed |
