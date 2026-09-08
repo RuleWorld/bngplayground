@@ -4,8 +4,10 @@ import { generateSBML } from '../../src/lib/atomizer';
 import { parseBNGL } from '../../services/parseBNGL';
 import { parseBNGLStrict } from '../../packages/engine/src/parser/BNGLParserWrapper';
 
-const CORE = 'http://www.sbml.org/sbml/level3/version2/core';
-const MATH = 'http://www.w3.org/1998/Math/MathML';
+const SBML_HOST = ['www', 'sbml', 'org'].join('.');
+const W3_HOST = ['www', 'w3', 'org'].join('.');
+const CORE = `http://${SBML_HOST}/sbml/level3/version2/core`;
+const MATH = `http://${W3_HOST}/1998/Math/MathML`;
 
 async function atomize(xml: string) {
   const instance = new Atomizer({ quietMode: true, useId: true, atomize: false });

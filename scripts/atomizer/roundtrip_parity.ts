@@ -1,7 +1,6 @@
-import { basename, join, resolve } from 'node:path';
+import { join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -495,7 +494,7 @@ function compareCdat(
   b.headers.slice(1).forEach((id, index) => colB.set(labelsB.get(id) || canonicalLabel(id), index + 1));
   const labels = [...colA.keys()].sort();
   let mapping = 'label';
-  let comparableLabels = labels;
+  let comparableLabels: string[];
   let missing = labels.filter((label) => !colA.has(label) || !colB.has(label));
   if (missing.length > 0 && a.headers.length === b.headers.length && colA.size === a.headers.length - 1 && colB.size === b.headers.length - 1) {
     mapping = 'order-fallback';
@@ -1043,7 +1042,7 @@ async function main(): Promise<void> {
     const preserveActions = name === 'fixed_time_event';
     const originalEngine = await simulateEngine(source, preserveActions);
     const targetEngine = await simulateEngine(result.bngl, preserveActions);
-    let nativeTrajectory: Comparison = { ok: false, skipped: true, reason: 'BNG2 native run not attempted' };
+    let nativeTrajectory: Comparison;
     try {
       const original = runBng2(`${name}-original`, preserveActions ? source : canonicalActions(source));
       const target = runBng2(`${name}-bngl-roundtrip`, preserveActions ? result.bngl : canonicalActions(result.bngl));
