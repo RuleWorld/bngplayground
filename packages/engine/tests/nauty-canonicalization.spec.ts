@@ -3,6 +3,7 @@ import { beforeAll, describe, expect, it } from 'vitest';
 
 import { GraphCanonicalizer } from '../src/services/graph/core/Canonical';
 import { Component } from '../src/services/graph/core/Component';
+import { BNGLParser } from '../src/services/graph/core/BNGLParser';
 import { Molecule } from '../src/services/graph/core/Molecule';
 import { NautyService } from '../src/services/graph/core/NautyService';
 import { SpeciesGraph } from '../src/services/graph/core/SpeciesGraph';
@@ -48,6 +49,17 @@ describe('Nauty canonicalization', () => {
     const c2 = GraphCanonicalizer.canonicalize(g2);
 
     expect(c2).toEqual(c1);
+  });
+
+  it('is invariant under swapping repeated receptor branches', () => {
+    const g1 = BNGLParser.parseSpeciesGraph(
+      'Lig(l!1,l!2).Lyn(SH2!3,U).Lyn(SH2!4,U).Rec(a!2,b~pY!3,g~Y).Rec(a!1,b~pY!4,g~Y)'
+    );
+    const g2 = BNGLParser.parseSpeciesGraph(
+      'Lig(l!1,l!2).Lyn(SH2!3,U).Lyn(SH2!4,U).Rec(a!1,b~pY!3,g~Y).Rec(a!2,b~pY!4,g~Y)'
+    );
+
+    expect(GraphCanonicalizer.canonicalize(g2)).toEqual(GraphCanonicalizer.canonicalize(g1));
   });
 
   it('is deterministic across repeated constructions', () => {
@@ -170,4 +182,3 @@ describe('Nauty canonicalization', () => {
     }
   });
 });
-

@@ -5,6 +5,19 @@ import { spawnSync } from 'node:child_process';
 const root = process.cwd();
 const webOutputDir = path.join(root, 'web_output');
 
+// These fixtures are valid BNG2 models but their combinatorial network
+// expansion is not a bounded browser-engine parity check. Keep this list in
+// sync with tests/massive-parity.spec.ts so manifest changes cannot turn a
+// deterministic CI shard into an unbounded network-generation job.
+const KNOWN_HEAVY_MODELS = new Set([
+  'Lin_Prion_2019',
+  '10_egfr_egfr_ode',
+  'egfr_ode',
+  'example1',
+  'example1_BNFfiles_example1',
+  'example1_fit',
+]);
+
 function resolveRuleHubRoot() {
   const fromEnv = process.env.RULEHUB_ROOT?.trim();
   if (fromEnv) {
@@ -73,10 +86,21 @@ function extractDeterministicModelList() {
     die('RuleHub manifest not found. Set RULEHUB_ROOT to a local RuleHub checkout before running this script.');
   }
   const manifest = JSON.parse(fs.readFileSync(ruleHubManifestPath, 'utf8'));
+  const skippedHeavy = [];
   const models = (Array.isArray(manifest) ? manifest : manifest.models)
     .filter((entry) => entry?.bng2_compatible || entry?.compatibility?.bng2)
+    .filter((entry) => {
+      if (KNOWN_HEAVY_MODELS.has(entry?.id)) {
+        skippedHeavy.push(entry.id);
+        return false;
+      }
+      return true;
+    })
     .map((entry) => entry.id)
     .filter(Boolean);
+  if (skippedHeavy.length > 0) {
+    console.log(`[det-parity] Skipped known-heavy models: ${skippedHeavy.sort().join(', ')}`);
+  }
   return [...new Set(models)].sort((a, b) => a.localeCompare(b, undefined, { sensitivity: 'base' }));
 }
 
