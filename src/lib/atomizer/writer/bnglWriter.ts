@@ -1804,9 +1804,11 @@ export function writeReactionRulesFlat(
       totalStoichiometry += stoich;
     }
 
-    const ruleCompId = rxn.compartment || (rxn.reactants[0]?.species ? sbmlSpecies.get(rxn.reactants[0].species)?.compartment : rxn.products[0]?.species ? sbmlSpecies.get(rxn.products[0].species)?.compartment : '');
-    // Standard scaling: Restore one factor of V that was removed from the rate expression
-    const vScale = (useCompartments && ruleCompId && totalStoichiometry > 0) ? `(__compartment_${standardizeName(ruleCompId)}__)` : '1';
+    // The Playground simulation engine applies the reacting-compartment anchor volume when it
+    // converts BNGL rate constants to amount-space velocities.  Reintroducing V here would make
+    // an SBML concentration law receive the volume factor twice after an SBML -> BNGL -> SBML
+    // roundtrip. Keep the BNGL law in the engine's concentration-space convention.
+    const vScale = '1';
 
     let finalRate: string;
 
@@ -2862,6 +2864,46 @@ export function generateBNGL(
     sections.push('end actions');
   }
 
+  // BNGL has no native general event block. Preserve every original SBML event in a
+  // machine-readable comment so SBML -> BNGL -> SBML remains lossless even when the
+  // executable BNGL subset cannot express a state-triggered event. The optional BNGL
+  // projections are used by the Playground engine; the original fields remain authoritative
+  // for the SBML writer.
+  if (model.events && model.events.length > 0) {
+    const eventSpeciesIds = new Set(model.species.keys());
+    const eventExpression = (expr: string | undefined): string | undefined => {
+      if (!expr) return expr;
+      let out = expr;
+      const ids = [...eventSpeciesIds].sort((a, b) => b.length - a.length);
+      for (const id of ids) {
+        const safe = standardizeName(id);
+        out = out.replace(new RegExp(`\\b${escapeRegExp(id)}\\b`, 'g'), `${safe}_amt`);
+      }
+      return out;
+    };
+    const eventMetadata = model.events.map((event) => ({
+      ...event,
+      bnglTrigger: eventExpression(event.trigger),
+      bnglDelay: eventExpression(event.delay),
+      bnglPriority: eventExpression(event.priority),
+      assignments: event.assignments.map((assignment) => {
+        const bnglId = sbmlToBnglId.get(assignment.variable) || sbmlToBnglId.get(standardizeName(assignment.variable));
+        const bnglTarget = bnglId ? idToPattern.get(bnglId) : undefined;
+        return {
+          ...assignment,
+          bnglVariable: standardizeName(assignment.variable),
+          bnglTarget,
+          bnglMath: eventExpression(assignment.math),
+        };
+      }),
+    }));
+    sections.push('# ==== SBML EVENT METADATA ====');
+    for (const event of eventMetadata) {
+      sections.push(`# @sbml-event ${encodeURIComponent(JSON.stringify(event))}`);
+    }
+    sections.push('# ==============================');
+  }
+
   const bngl = sections.join('\n');
 
   return { bngl, observableMap, warnings };
@@ -3465,16 +3507,10 @@ export function processReactionRate(
     totalProductStoichiometry += stoich;
   }
 
-  const ruleCompId = rxn.compartment
-    || (rxn.reactants[0]?.species
-      ? speciesToCompartment.get(rxn.reactants[0].species) || ''
-      : rxn.products[0]?.species
-        ? speciesToCompartment.get(rxn.products[0].species) || ''
-        : '');
-
-  const vScaleName = (useCompartments && ruleCompId)
-    ? `__compartment_${standardizeName(ruleCompId)}__`
-    : '1';
+  // Volume scaling is applied by the Playground simulation engine's reaction anchor. Embedding
+  // the same synthetic factor in the BNGL rate would double-scale non-unit compartments during
+  // a subsequent simulation or roundtrip.
+  const vScaleName = '1';
 
   // -- Step 6: If reversible, try to split (FIX 2) --
   if (rxn.reversible) {
@@ -3561,6 +3597,20 @@ function processOneDirection(
   ) => number | null,
   skipMassActionCheck: boolean,
 ): DirectionResult {
+
+  // Relational/piecewise/time-dependent laws are state-dependent functional rates. Their
+  // reactant symbols may be part of a condition rather than a mass-action factor; neutralizing
+  // those symbols to 1 would silently change the branch logic (for example, if(A > threshold,...)).
+  // Preserve the branch logic and let the engine evaluate it against the live observables. The
+  // SBML kinetic law is a complete flux, however, while BNGL's rule rate is a rate coefficient
+  // that the engine multiplies by the reactant pattern. Remove only explicit top-level reactant
+  // factors from the converted flux; never remove symbols nested inside a condition or function.
+  if (/\b(?:if|piecewise)\s*\(|(?:>=|<=|==|!=|>|<)/i.test(rateExpr)) {
+    return {
+      rateString: stripExplicitReactantFactors(rateExpr, speciesCounts),
+      isSplitRxn: true,
+    };
+  }
 
   // Build divisor expression: product of (speciesName_amt^stoich / stoich!)
   const divisorParts: string[] = [];
@@ -3655,6 +3705,73 @@ function processOneDirection(
   }
 
   return { rateString: finalRate, isSplitRxn: false };
+}
+
+function stripExplicitReactantFactors(
+  rateExpr: string,
+  speciesCounts: Map<string, number>,
+): string {
+  const stripEnclosingParens = (value: string): string => {
+    let result = value.trim();
+    while (result.startsWith('(') && result.endsWith(')')) {
+      let depth = 0;
+      let enclosesAll = true;
+      for (let index = 0; index < result.length; index++) {
+        if (result[index] === '(') depth++;
+        else if (result[index] === ')') {
+          depth--;
+          if (depth === 0 && index < result.length - 1) {
+            enclosesAll = false;
+            break;
+          }
+        }
+      }
+      if (!enclosesAll) break;
+      result = result.slice(1, -1).trim();
+    }
+    return result;
+  };
+
+  const factors: string[] = [];
+  let depth = 0;
+  let currentStart = 0;
+  const expression = stripEnclosingParens(rateExpr);
+  for (let index = 0; index < expression.length; index++) {
+    const character = expression[index];
+    if (character === '(' || character === '[') depth++;
+    else if (character === ')' || character === ']') depth--;
+    else if (character === '*' && depth === 0) {
+      factors.push(expression.slice(currentStart, index).trim());
+      currentStart = index + 1;
+    }
+  }
+  factors.push(expression.slice(currentStart).trim());
+
+  const removable = new Map<string, number>();
+  for (const [speciesId, stoich] of speciesCounts) {
+    const name = standardizeName(speciesId);
+    for (const factor of [
+      name,
+      `${name}_amt`,
+      `_c_${name}()`,
+    ]) {
+      removable.set(factor.toLowerCase(), (removable.get(factor.toLowerCase()) || 0) + stoich);
+    }
+  }
+
+  const kept: string[] = [];
+  for (const factor of factors) {
+    const normalized = stripEnclosingParens(factor).toLowerCase();
+    const count = removable.get(normalized) || 0;
+    if (count > 0) {
+      removable.set(normalized, count - 1);
+    } else {
+      kept.push(factor);
+    }
+  }
+
+  if (kept.length === 0) return '1';
+  return kept.join(' * ');
 }
 
 function hasDenominatorIssue(

@@ -183,6 +183,10 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
     })),
     compartments: inputModel.compartments?.map((compartment) => ({ ...compartment })),
     functions: inputModel.functions?.map((fn) => ({ ...fn, args: [...fn.args] })),
+    events: inputModel.events?.map((event) => ({
+      ...event,
+      assignments: event.assignments.map((assignment) => ({ ...assignment })),
+    })),
     networkOptions: inputModel.networkOptions
       ? {
         ...inputModel.networkOptions,
