@@ -382,7 +382,11 @@ function inlineZeroArgumentFunctions(
       const expression = replaceSpeciesInFormula(String(fn.expression || '0'));
       // BNGL accepts zero-argument functions both as f() and as bare f in
       // expressions. Accept both spellings at this serialization boundary.
-      const pattern = new RegExp(`\\b${escapeRegExp(name)}(?:\\s*\\(\\s*\\))?\\b`, 'g');
+      // Do not leave the call parentheses behind when the optional group is
+      // present. A trailing word-boundary after `()` can backtrack and match
+      // only the bare name, producing invalid `(expr)()` MathML and a fallback
+      // callee named `f`.
+      const pattern = new RegExp(`\\b${escapeRegExp(name)}(?:\\s*\\(\\s*\\))?(?![A-Za-z0-9_])`, 'g');
       const next = expanded.replace(pattern, `(${expression})`);
       if (next !== expanded) {
         expanded = next;
@@ -879,6 +883,96 @@ type ReconstructedRule = {
   formula: string;
 };
 
+type ReconstructedEvent = {
+  time: number;
+  assignments: Array<{ variable: string; value: number }>;
+};
+
+/**
+ * Recover the fixed-time event subset that the BNGL writer encodes as
+ * multi-phase setConcentration/setParameter actions.  BNGL has no general
+ * trigger/event object, so only numeric `set` changes at phase boundaries are
+ * reconstructible here.  Other action modes are intentionally omitted rather
+ * than exported with altered semantics.
+ */
+function reconstructScheduledEvents(
+  model: BNGLModel,
+  speciesIdByName: Map<string, string>,
+): ReconstructedEvent[] {
+  const runtimeModel = model as BNGLModel & {
+    simulationPhases?: Array<{ t_end?: unknown }>;
+    concentrationChanges?: Array<{
+      species: string;
+      value: unknown;
+      mode?: string;
+      afterPhaseIndex: number;
+    }>;
+    parameterChanges?: Array<{
+      parameter: string;
+      value: unknown;
+      mode?: string;
+      afterPhaseIndex: number;
+    }>;
+  };
+
+  const phases = runtimeModel.simulationPhases || [];
+  const speciesAliases = buildSpeciesAliasMap(model, speciesIdByName);
+  const resolveSpecies = (raw: string): string | undefined => {
+    const text = String(raw || '').trim();
+    return speciesAliases.get(text)
+      || speciesAliases.get(normalizeSpeciesAlias(text))
+      || speciesAliases.get(toAltCompartmentNotation(text) || '');
+  };
+  const numericValue = (value: unknown): number | null => {
+    if (typeof value === 'number') return Number.isFinite(value) ? value : null;
+    const parsed = Number(String(value ?? '').trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  };
+  const timeForPhase = (afterPhaseIndex: number): number | null => {
+    if (afterPhaseIndex < 0) return 0;
+    const raw = phases[afterPhaseIndex]?.t_end;
+    const parsed = numericValue(raw);
+    return parsed === null || parsed < 0 ? null : parsed;
+  };
+
+  const grouped = new Map<string, ReconstructedEvent>();
+  const add = (time: number, variable: string, value: unknown): void => {
+    const numeric = numericValue(value);
+    if (numeric === null || !variable) return;
+    const key = Number(time).toPrecision(15);
+    const event = grouped.get(key) || { time, assignments: [] };
+    event.assignments.push({ variable, value: numeric });
+    grouped.set(key, event);
+  };
+
+  for (const change of runtimeModel.concentrationChanges || []) {
+    if ((change.mode || 'set') !== 'set') continue;
+    const time = timeForPhase(change.afterPhaseIndex);
+    const speciesId = resolveSpecies(change.species);
+    if (time !== null && speciesId) add(time, speciesId, change.value);
+  }
+  for (const change of runtimeModel.parameterChanges || []) {
+    if ((change.mode || 'set') !== 'set') continue;
+    const time = timeForPhase(change.afterPhaseIndex);
+    const parameter = String(change.parameter || '').trim();
+    if (time !== null && parameter) add(time, parameter, change.value);
+  }
+
+  return Array.from(grouped.values())
+    .filter((event) => event.assignments.length > 0)
+    .sort((a, b) => a.time - b.time);
+}
+
+function scheduledEventTriggerMathML(time: number): string {
+  const value = Number.isInteger(time) ? String(time) : String(Number(time.toPrecision(15)));
+  return `<math xmlns="http://www.w3.org/1998/Math/MathML"><apply><geq/><csymbol encoding="text" definitionURL="http://www.sbml.org/sbml/symbols/time">time</csymbol><cn>${value}</cn></apply></math>`;
+}
+
+function scheduledEventAssignmentMathML(value: number): string {
+  const text = Number.isInteger(value) ? String(value) : String(Number(value.toPrecision(15)));
+  return `<math xmlns="http://www.w3.org/1998/Math/MathML"><cn>${text}</cn></math>`;
+}
+
 function buildSpeciesAliasMap(model: BNGLModel, speciesIdByName: Map<string, string>): Map<string, string> {
   const aliasToSpeciesId = new Map<string, string>();
   const speciesResolver = buildSpeciesNameResolver(Array.from(speciesIdByName.keys()));
@@ -1157,6 +1251,28 @@ function buildSpeciesIdLookup(speciesList: Array<{ name: string }>): Map<string,
   return byAlias;
 }
 
+function isFunctionalRateText(rate: string, model: BNGLModel): boolean {
+  const text = String(rate || '').trim();
+  if (!text) return false;
+  if (/[()<>!=]|\b(?:if|piecewise)\b/i.test(text)) return true;
+
+  const knownParameters = new Set(Object.keys(model.parameters || {}));
+  const knownFunctions = new Set((model.functions || []).map((fn) => String(fn?.name || '')));
+  const knownObservables = new Set((model.observables || []).map((obs) => String(obs?.name || '')));
+  const knownSpecies = new Set((model.species || []).map((species) => String(species?.name || '')));
+  const identifiers = text.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [];
+  return identifiers.some((identifier) =>
+    knownFunctions.has(identifier) ||
+    knownObservables.has(identifier) ||
+    knownSpecies.has(identifier) ||
+    // S#_amt is the parser's indexed observable placeholder. It is rewritten to the
+    // concrete SBML species id later, so it already denotes a complete flux factor rather
+    // than a functional rate-law dependency.
+    (!/^S\d+_amt$/i.test(identifier) &&
+      !knownParameters.has(identifier) && identifier !== 'time' && identifier !== 'Na')
+  );
+}
+
 function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
   const speciesResolver = buildSpeciesNameResolver((model.species || []).map((s: any) => String(s.name)));
   const resolveTerms = (terms: string[]): string[] | null => {
@@ -1204,6 +1320,10 @@ function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
         ...rxn,
         reactants,
         products,
+        isFunctionalRate: rxn.isFunctionalRate === true || isFunctionalRateText(
+          String(rxn.rateExpression ?? rxn.rate ?? ''),
+          model,
+        ),
         reversible: Boolean((rxn as any)?.reversible),
         reverseRate: typeof (rxn as any)?.reverseRate === 'string' ? String((rxn as any).reverseRate) : undefined,
       });
@@ -1246,6 +1366,8 @@ function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
       // dynamics for reversible rules).
       rate: forwardRate || '0',
       rateConstant: 0,
+      isFunctionalRate: isFunctionalRateText(forwardRate || '', model),
+      rateExpression: forwardRate || '0',
       reversible: Boolean(rule?.isBidirectional),
       reverseRate: rule?.isBidirectional ? reverseRate : undefined,
     });
@@ -1499,6 +1621,29 @@ function generateSBMLPureXml(model: BNGLModel): string {
     logWriterTiming('pureXml.rules', rulesStarted, `count=${reconstructedRules.length}`);
   }
 
+  const scheduledEvents = reconstructScheduledEvents(model, speciesIdByName);
+  if (scheduledEvents.length > 0) {
+    lines.push('    <listOfEvents>');
+    scheduledEvents.forEach((event, index) => {
+      lines.push(`      <event id="event_${index}" useValuesFromTriggerTime="true">`);
+      lines.push('        <trigger initialValue="true" persistent="true">');
+      lines.push(`          ${scheduledEventTriggerMathML(event.time)}`);
+      lines.push('        </trigger>');
+      // The bundled libSBML parser requires an explicit delay element for
+      // events; zero preserves the BNGL phase-boundary semantics.
+      lines.push('        <delay><math xmlns="http://www.w3.org/1998/Math/MathML"><cn>0</cn></math></delay>');
+      lines.push('        <listOfEventAssignments>');
+      for (const assignment of event.assignments) {
+        lines.push(`          <eventAssignment variable="${xmlEscape(assignment.variable)}">`);
+        lines.push(`            ${scheduledEventAssignmentMathML(assignment.value)}`);
+        lines.push('          </eventAssignment>');
+      }
+      lines.push('        </listOfEventAssignments>');
+      lines.push('      </event>');
+    });
+    lines.push('    </listOfEvents>');
+  }
+
   lines.push('  </model>');
   lines.push('</sbml>');
   const xml = lines.join('\n');
@@ -1713,6 +1858,9 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
 
   // 5. Rules
   addRulesToSBML(sbmlModelAny, reconstructedRules, lib);
+
+  // 6. Fixed-time events represented by BNGL multi-phase set actions.
+  addScheduledEventsToSBML(sbmlModelAny, model, speciesIdByName, lib);
 
   logger.info('SBMW017', 'generateSBML writing XML string');
   let result = '';
@@ -1968,6 +2116,58 @@ function addReactionsToSBML(
       formula = replaceSpeciesInFormula(formula);
       kl.setFormula(formula);
     });
+  }
+}
+
+function addScheduledEventsToSBML(
+  sbmlModelAny: any,
+  model: BNGLModel,
+  speciesIdByName: Map<string, string>,
+  lib: any,
+): void {
+  const scheduledEvents = reconstructScheduledEvents(model, speciesIdByName);
+  if (scheduledEvents.length === 0 || typeof sbmlModelAny.createEvent !== 'function') return;
+
+  for (const [index, scheduled] of scheduledEvents.entries()) {
+    const event = sbmlModelAny.createEvent();
+    event.setId?.(`event_${index}`);
+    event.setUseValuesFromTriggerTime?.(true);
+
+    const trigger = event.createTrigger?.();
+    if (!trigger) {
+      logger.warning('SBMW017E', `Could not create trigger for reconstructed event ${index}`);
+      continue;
+    }
+    const triggerFormula = `time >= ${scheduled.time}`;
+    if (typeof trigger.setFormula === 'function') {
+      trigger.setFormula(triggerFormula);
+    } else if (typeof trigger.setMath === 'function' && typeof lib?.parseL3Formula === 'function') {
+      const math = lib.parseL3Formula(triggerFormula);
+      if (math) trigger.setMath(math);
+    }
+
+    const delay = event.createDelay?.();
+    if (delay) {
+      if (typeof delay.setFormula === 'function') {
+        delay.setFormula('0');
+      } else if (typeof delay.setMath === 'function' && typeof lib?.parseL3Formula === 'function') {
+        const math = lib.parseL3Formula('0');
+        if (math) delay.setMath(math);
+      }
+    }
+
+    for (const assignment of scheduled.assignments) {
+      const eventAssignment = event.createEventAssignment?.();
+      if (!eventAssignment) continue;
+      eventAssignment.setVariable?.(assignment.variable);
+      const value = String(assignment.value);
+      if (typeof eventAssignment.setFormula === 'function') {
+        eventAssignment.setFormula(value);
+      } else if (typeof eventAssignment.setMath === 'function' && typeof lib?.parseL3Formula === 'function') {
+        const math = lib.parseL3Formula(value);
+        if (math) eventAssignment.setMath(math);
+      }
+    }
   }
 }
 

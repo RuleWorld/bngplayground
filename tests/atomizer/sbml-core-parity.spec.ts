@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { Atomizer } from '../../src/lib/atomizer/index';
+import { generateSBML } from '../../src/lib/atomizer';
+import { parseBNGL } from '../../services/parseBNGL';
 import { parseBNGLStrict } from '../../packages/engine/src/parser/BNGLParserWrapper';
 
 const CORE = 'http://www.sbml.org/sbml/level3/version2/core';
@@ -114,5 +116,71 @@ describe('Atomizer SBML Core parity regressions', () => {
 
     expect(result.success).toBe(true);
     expect(instance.getModel()?.importWarnings.some(warning => warning.category === 'package:req')).toBe(true);
+  });
+
+  it('exports BNGL phase changes as zero-delay SBML events', async () => {
+    const model = parseBNGL(`
+      begin model
+      begin parameters
+      k 0.2
+      end parameters
+      begin molecule types
+      A()
+      B()
+      end molecule types
+      begin species
+      A() 10
+      B() 0
+      end species
+      begin reaction rules
+      A() -> B() k
+      end reaction rules
+      begin actions
+      simulate({method=>"ode",t_end=>0.5,n_steps=>50})
+      setConcentration("A()", 5)
+      simulate({continue=>1,method=>"ode",t_end=>1,n_steps=>50})
+      end actions
+      end model
+    `);
+
+    const sbml = await generateSBML(model as any);
+    expect(sbml).toContain('<listOfEvents>');
+    expect(sbml).toContain('<eventAssignment variable="s0"');
+    expect(sbml).toMatch(/<geq\/>[\s\S]*<cn>0\.5<\/cn>/);
+    expect(sbml).toMatch(/<delay>[\s\S]*<cn>0<\/cn>/);
+  });
+
+  it('keeps piecewise conditions while removing the explicit SBML flux reactant factor', async () => {
+    const { result } = await atomize(`
+      <sbml xmlns="${CORE}" level="3" version="2">
+        <model id="piecewiseFlux">
+          <listOfCompartments><compartment id="c" size="1"/></listOfCompartments>
+          <listOfSpecies>
+            <species id="A" compartment="c" initialAmount="10"/>
+            <species id="B" compartment="c" initialAmount="0"/>
+          </listOfSpecies>
+          <listOfParameters>
+            <parameter id="fast" value="0.8"/>
+            <parameter id="slow" value="0.1"/>
+            <parameter id="threshold" value="5"/>
+          </listOfParameters>
+          <listOfReactions>
+            <reaction id="r">
+              <listOfReactants><speciesReference species="A"/></listOfReactants>
+              <listOfProducts><speciesReference species="B"/></listOfProducts>
+              <kineticLaw><math xmlns="${MATH}"><apply><times/>
+                <piecewise><piece><ci>fast</ci><apply><gt/><ci>A</ci><ci>threshold</ci></apply></piece><otherwise><ci>slow</ci></otherwise></piecewise>
+                <ci>A</ci>
+              </apply></math></kineticLaw>
+            </reaction>
+          </listOfReactions>
+        </model>
+      </sbml>`);
+
+    expect(result.success).toBe(true);
+    expect(result.bngl).toContain('if(');
+    expect(result.bngl).toContain('_c_A() > threshold');
+    expect(result.bngl).not.toMatch(/if\([^\n]*\)\s*\*\s*_c_A\(\)/);
+    expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
   });
 });

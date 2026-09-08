@@ -48,6 +48,14 @@ const SBML_FIXTURES: Record<string, string> = {
 <sbml xmlns="${CORE}" level="3" version="2"><model id="assignment_rule"><listOfCompartments><compartment id="cell" size="1" constant="true"/></listOfCompartments><listOfSpecies><species id="A" compartment="cell" initialConcentration="10" constant="false" boundaryCondition="false"/><species id="B" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/></listOfSpecies><listOfParameters><parameter id="k" value="0.2" constant="true"/><parameter id="v" value="0" constant="false"/></listOfParameters><listOfRules><assignmentRule variable="v"><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><ci>k</ci><cn>2</cn></apply></math></assignmentRule></listOfRules><listOfReactions><reaction id="r" reversible="false"><listOfReactants><speciesReference species="A" constant="true"/></listOfReactants><listOfProducts><speciesReference species="B" constant="true"/></listOfProducts><kineticLaw><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><ci>v</ci><ci>A</ci></apply></math></kineticLaw></reaction></listOfReactions></model></sbml>`,
   piecewise: `<?xml version="1.0"?>
 <sbml xmlns="${CORE}" level="3" version="2"><model id="piecewise"><listOfCompartments><compartment id="cell" size="1" constant="true"/></listOfCompartments><listOfSpecies><species id="A" compartment="cell" initialConcentration="10" constant="false" boundaryCondition="false"/><species id="B" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/></listOfSpecies><listOfParameters><parameter id="k_fast" value="0.8" constant="true"/><parameter id="k_slow" value="0.1" constant="true"/><parameter id="threshold" value="5" constant="true"/></listOfParameters><listOfReactions><reaction id="r" reversible="false"><listOfReactants><speciesReference species="A" constant="true"/></listOfReactants><listOfProducts><speciesReference species="B" constant="true"/></listOfProducts><kineticLaw><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><piecewise><piece><ci>k_fast</ci><apply><gt/><ci>A</ci><ci>threshold</ci></apply></piece><otherwise><ci>k_slow</ci></otherwise></piecewise><ci>A</ci></apply></math></kineticLaw></reaction></listOfReactions></model></sbml>`,
+  fixed_time_event: `<?xml version="1.0"?>
+<sbml xmlns="${CORE}" level="3" version="2"><model id="fixed_time_event"><listOfCompartments><compartment id="cell" size="1" constant="true"/></listOfCompartments><listOfSpecies><species id="A" compartment="cell" initialConcentration="10" constant="false" boundaryCondition="false"/><species id="B" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/></listOfSpecies><listOfParameters><parameter id="k" value="0.2" constant="true"/></listOfParameters><listOfReactions><reaction id="r" reversible="false"><listOfReactants><speciesReference species="A" constant="true"/></listOfReactants><listOfProducts><speciesReference species="B" constant="true"/></listOfProducts><kineticLaw><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><ci>k</ci><ci>A</ci></apply></math></kineticLaw></reaction></listOfReactions><listOfEvents><event id="e"><trigger initialValue="true" persistent="true"><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><geq/><csymbol encoding="text" definitionURL="http://www.sbml.org/sbml/symbols/time">time</csymbol><cn>0.5</cn></apply></math></trigger><delay><math xmlns="http://www.w3.org/1998/Math/MathML"><cn>0</cn></math></delay><listOfEventAssignments><eventAssignment variable="A"><math xmlns="http://www.w3.org/1998/Math/MathML"><cn>5</cn></math></eventAssignment></listOfEventAssignments></event></listOfEvents></model></sbml>`,
+  rate_rule: `<?xml version="1.0"?>
+<sbml xmlns="${CORE}" level="3" version="2"><model id="rate_rule"><listOfCompartments><compartment id="cell" size="1" constant="true"/></listOfCompartments><listOfSpecies><species id="A" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/><species id="B" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/></listOfSpecies><listOfParameters><parameter id="k" value="0.5" constant="true"/></listOfParameters><listOfRules><rateRule variable="A"><math xmlns="http://www.w3.org/1998/Math/MathML"><ci>k</ci></math></rateRule></listOfRules></model></sbml>`,
+  initial_assignment: `<?xml version="1.0"?>
+<sbml xmlns="${CORE}" level="3" version="2"><model id="initial_assignment"><listOfCompartments><compartment id="cell" size="1" constant="true"/></listOfCompartments><listOfSpecies><species id="A" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/><species id="B" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/></listOfSpecies><listOfParameters><parameter id="init" value="4" constant="true"/><parameter id="k" value="0.2" constant="true"/></listOfParameters><listOfInitialAssignments><initialAssignment symbol="A"><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><ci>init</ci><cn>2</cn></apply></math></initialAssignment></listOfInitialAssignments><listOfReactions><reaction id="r" reversible="false"><listOfReactants><speciesReference species="A" constant="true"/></listOfReactants><listOfProducts><speciesReference species="B" constant="true"/></listOfProducts><kineticLaw><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><ci>k</ci><ci>A</ci></apply></math></kineticLaw></reaction></listOfReactions></model></sbml>`,
+  state_assignment_rule: `<?xml version="1.0"?>
+<sbml xmlns="${CORE}" level="3" version="2"><model id="state_assignment_rule"><listOfCompartments><compartment id="cell" size="1" constant="true"/></listOfCompartments><listOfSpecies><species id="A" compartment="cell" initialConcentration="10" constant="false" boundaryCondition="false"/><species id="B" compartment="cell" initialConcentration="0" constant="false" boundaryCondition="false"/></listOfSpecies><listOfParameters><parameter id="v" value="0" constant="false"/></listOfParameters><listOfRules><assignmentRule variable="v"><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><divide/><ci>A</ci><cn>10</cn></apply></math></assignmentRule></listOfRules><listOfReactions><reaction id="r" reversible="false"><listOfReactants><speciesReference species="A" constant="true"/></listOfReactants><listOfProducts><speciesReference species="B" constant="true"/></listOfProducts><kineticLaw><math xmlns="http://www.w3.org/1998/Math/MathML"><apply><times/><ci>v</ci><ci>A</ci></apply></math></kineticLaw></reaction></listOfReactions></model></sbml>`,
 };
 
 const BNGL_FIXTURES: Record<string, string> = {
@@ -289,6 +297,33 @@ simulate({method=>"ode",t_end=>1,n_steps=>100,max_num_steps=>1e8})
 end actions
 end model
 `,
+  fixed_time_event: `begin model
+begin parameters
+k 0.2
+end parameters
+begin molecule types
+A()
+B()
+end molecule types
+begin species
+A() 10
+B() 0
+end species
+begin observables
+Species s0_amt A()
+Species s1_amt B()
+end observables
+begin reaction rules
+A() -> B() k
+end reaction rules
+begin actions
+generate_network({overwrite=>1})
+simulate({method=>"ode",t_end=>0.5,n_steps=>50,max_num_steps=>1e8})
+setConcentration("A()", 5)
+simulate({continue=>1,method=>"ode",t_end=>1,n_steps=>50,max_num_steps=>1e8})
+end actions
+end model
+`,
 };
 
 function canonicalLabel(value: string): string {
@@ -373,8 +408,8 @@ function compareCdat(
   return { ok, mapping, points: count, sourceRows: a.rows.length, targetRows: b.rows.length, maxAbs, maxRel, missing, extra, worst };
 }
 
-async function simulateEngine(bngl: string): Promise<EngineTrajectory> {
-  const model = parseBNGL(canonicalActions(bngl));
+async function simulateEngine(bngl: string, preserveActions = false): Promise<EngineTrajectory> {
+  const model = parseBNGL(preserveActions ? bngl : canonicalActions(bngl));
   const result = await simulate(1, model as any, {
     method: 'ode',
     t_end: tEnd,
@@ -494,7 +529,12 @@ function writeJson(name: string, value: unknown): string {
 
 async function main(): Promise<void> {
   mkdirSync(outputDir, { recursive: true });
-  const atomizer = new Atomizer({ quietMode: true, useId: true, atomize: false });
+  const atomizer = new Atomizer({
+    quietMode: true,
+    useId: true,
+    atomize: false,
+    actions: `simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps}})`,
+  });
   await atomizer.initialize();
   const report: Record<string, unknown> = {
     generatedAt: new Date().toISOString(),
@@ -507,7 +547,9 @@ async function main(): Promise<void> {
     const result = await atomizer.atomize(source);
     if (!result.success) throw new Error(`SBML fixture ${name} did not atomize: ${result.error}`);
     const strict = parseBNGL(result.bngl);
-    const targetModel = parseBNGL(canonicalActions(result.bngl));
+    // Preserve the Atomizer-generated action phases here: fixed-time SBML events
+    // are encoded as BNGL set actions and must survive the SBML writer roundtrip.
+    const targetModel = parseBNGL(result.bngl);
     const targetXml = await generateSBML(targetModel as any);
     const targetDir = mkdtempSync(join(tmpdir(), `atomizer-sbml-roundtrip-${name}-`));
     const targetPath = join(targetDir, `${name}-target.xml`);
@@ -533,17 +575,18 @@ async function main(): Promise<void> {
     const result = await atomizer.atomize(generated);
     if (!result.success) throw new Error(`BNGL fixture ${name} exported SBML did not atomize: ${result.error}`);
     const strict = parseBNGL(result.bngl);
-    const originalEngine = await simulateEngine(source);
-    const targetEngine = await simulateEngine(result.bngl);
+    const preserveActions = name === 'fixed_time_event';
+    const originalEngine = await simulateEngine(source, preserveActions);
+    const targetEngine = await simulateEngine(result.bngl, preserveActions);
     let nativeTrajectory: Comparison = { ok: false, skipped: true, reason: 'BNG2 native run not attempted' };
     try {
-      const original = runBng2(`${name}-original`, canonicalActions(source));
-      const target = runBng2(`${name}-bngl-roundtrip`, canonicalActions(result.bngl));
+      const original = runBng2(`${name}-original`, preserveActions ? source : canonicalActions(source));
+      const target = runBng2(`${name}-bngl-roundtrip`, preserveActions ? result.bngl : canonicalActions(result.bngl));
       nativeTrajectory = compareCdat(original, target);
     } catch (error) {
       nativeTrajectory = { ok: false, skipped: true, reason: String(error) };
     }
-    const targetModel = parseBNGL(canonicalActions(result.bngl));
+    const targetModel = parseBNGL(result.bngl);
     const targetXml = await generateSBML(targetModel as any);
     const targetDir = mkdtempSync(join(tmpdir(), `atomizer-bngl-roundtrip-${name}-`));
     const targetXmlPath = join(targetDir, `${name}-target.xml`);

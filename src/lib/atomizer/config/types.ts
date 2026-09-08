@@ -73,6 +73,20 @@ export interface BNGLModel {
   reactionRules: ReactionRule[];
   compartments?: BNGLCompartment[];
   functions?: BNGLFunction[];
+  /** Parsed multi-phase actions used to preserve fixed-time SBML events on export. */
+  simulationPhases?: Array<{ t_end?: number }>;
+  concentrationChanges?: Array<{
+    species: string;
+    value: number | string;
+    mode?: string;
+    afterPhaseIndex: number;
+  }>;
+  parameterChanges?: Array<{
+    parameter: string;
+    value: number | string;
+    mode?: string;
+    afterPhaseIndex: number;
+  }>;
 }
 
 export interface SeedSpeciesEntry {

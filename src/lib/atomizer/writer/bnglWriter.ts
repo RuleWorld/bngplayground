@@ -3561,9 +3561,15 @@ function processOneDirection(
   // Relational/piecewise/time-dependent laws are state-dependent functional rates. Their
   // reactant symbols may be part of a condition rather than a mass-action factor; neutralizing
   // those symbols to 1 would silently change the branch logic (for example, if(A > threshold,...)).
-  // Preserve the complete expression and let the engine evaluate it against the live observables.
+  // Preserve the branch logic and let the engine evaluate it against the live observables. The
+  // SBML kinetic law is a complete flux, however, while BNGL's rule rate is a rate coefficient
+  // that the engine multiplies by the reactant pattern. Remove only explicit top-level reactant
+  // factors from the converted flux; never remove symbols nested inside a condition or function.
   if (/\b(?:if|piecewise)\s*\(|(?:>=|<=|==|!=|>|<)/i.test(rateExpr)) {
-    return { rateString: rateExpr, isSplitRxn: true };
+    return {
+      rateString: stripExplicitReactantFactors(rateExpr, speciesCounts),
+      isSplitRxn: true,
+    };
   }
 
   // Build divisor expression: product of (speciesName_amt^stoich / stoich!)
@@ -3659,6 +3665,73 @@ function processOneDirection(
   }
 
   return { rateString: finalRate, isSplitRxn: false };
+}
+
+function stripExplicitReactantFactors(
+  rateExpr: string,
+  speciesCounts: Map<string, number>,
+): string {
+  const stripEnclosingParens = (value: string): string => {
+    let result = value.trim();
+    while (result.startsWith('(') && result.endsWith(')')) {
+      let depth = 0;
+      let enclosesAll = true;
+      for (let index = 0; index < result.length; index++) {
+        if (result[index] === '(') depth++;
+        else if (result[index] === ')') {
+          depth--;
+          if (depth === 0 && index < result.length - 1) {
+            enclosesAll = false;
+            break;
+          }
+        }
+      }
+      if (!enclosesAll) break;
+      result = result.slice(1, -1).trim();
+    }
+    return result;
+  };
+
+  const factors: string[] = [];
+  let depth = 0;
+  let currentStart = 0;
+  const expression = stripEnclosingParens(rateExpr);
+  for (let index = 0; index < expression.length; index++) {
+    const character = expression[index];
+    if (character === '(' || character === '[') depth++;
+    else if (character === ')' || character === ']') depth--;
+    else if (character === '*' && depth === 0) {
+      factors.push(expression.slice(currentStart, index).trim());
+      currentStart = index + 1;
+    }
+  }
+  factors.push(expression.slice(currentStart).trim());
+
+  const removable = new Map<string, number>();
+  for (const [speciesId, stoich] of speciesCounts) {
+    const name = standardizeName(speciesId);
+    for (const factor of [
+      name,
+      `${name}_amt`,
+      `_c_${name}()`,
+    ]) {
+      removable.set(factor.toLowerCase(), (removable.get(factor.toLowerCase()) || 0) + stoich);
+    }
+  }
+
+  const kept: string[] = [];
+  for (const factor of factors) {
+    const normalized = stripEnclosingParens(factor).toLowerCase();
+    const count = removable.get(normalized) || 0;
+    if (count > 0) {
+      removable.set(normalized, count - 1);
+    } else {
+      kept.push(factor);
+    }
+  }
+
+  if (kept.length === 0) return '1';
+  return kept.join(' * ');
 }
 
 function hasDenominatorIssue(
