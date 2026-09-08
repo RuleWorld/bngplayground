@@ -4739,25 +4739,6 @@ export class NetworkGenerator {
           }
 
           if (!bondPreserved) {
-            // For repeated same-name components, occurrence-based matching can be ambiguous.
-            // Re-check all same-name product components before concluding this bond is broken.
-            for (const ppComp of pMol.components) {
-              if (ppComp.name !== rpComp.name) continue;
-              if (ppComp.wildcard === '+' || ppComp.wildcard === '?') {
-                bondPreserved = true;
-                break;
-              }
-              for (const [ppBondLabel] of ppComp.edges) {
-                if (ppBondLabel === bondLabel) {
-                  bondPreserved = true;
-                  break;
-                }
-              }
-              if (bondPreserved) break;
-            }
-          }
-
-          if (!bondPreserved) {
             // This bond is broken - mark only the specific bond pair(s) for this label.
             const componentKey = `${reactantPatternMolIdx}.${rpCompIdx}`;
             const targetCompKey = match.componentMap.get(componentKey);
