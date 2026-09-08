@@ -397,6 +397,20 @@ export class GraphCanonicalizer {
       return (canonicalRank.get(a) || 0) - (canonicalRank.get(b) || 0);
     });
 
+    // WL/Nauty refinement identifies equivalent molecule classes, but neither
+    // result is sufficient on its own to choose a stable orientation for a
+    // graph with several interchangeable branches.  In that case two
+    // isomorphic species can otherwise receive different bond labels and enter
+    // the network as separate species.  Resolve the small ambiguous cases by
+    // minimizing the complete serialized graph over the refined permutations.
+    // Large highly symmetric graphs retain the existing bounded fallback so
+    // canonicalization remains safe for arbitrary polymers.
+    const symmetryCanonical = this.tryCanonicalizeByPermutation(graph, moleculeInfos, finalOrder);
+    if (symmetryCanonical !== undefined) {
+      graph.cachedCanonical = symmetryCanonical;
+      return symmetryCanonical;
+    }
+
 
 
     // 4. Construct Mapping Maps
@@ -506,6 +520,208 @@ export class GraphCanonicalizer {
     const finalResult = graph.compartment ? `@${graph.compartment}::${canonicalMolecules}` : canonicalMolecules;
     graph.cachedCanonical = finalResult;
     return finalResult;
+  }
+
+  private static tryCanonicalizeByPermutation(
+    graph: SpeciesGraph,
+    moleculeInfos: MoleculeInfo[],
+    baseOrder: number[],
+  ): string | undefined {
+    const MAX_PERMUTATIONS = 100_000;
+    const factorial = (n: number): number => {
+      let value = 1;
+      for (let i = 2; i <= n; i++) {
+        value *= i;
+        if (value > MAX_PERMUTATIONS) return MAX_PERMUTATIONS + 1;
+      }
+      return value;
+    };
+
+    const moleculeGroups = new Map<string, number[]>();
+    for (const info of moleculeInfos) {
+      // Refined color IDs depend on the order in which component names are
+      // discovered, so they are not a safe part of an isomorphism key.  Local
+      // molecule signatures are invariant; any additional structural
+      // distinction is resolved by the permutation minimization itself.
+      const key = info.localSignature;
+      const members = moleculeGroups.get(key) ?? [];
+      members.push(info.originalIndex);
+      moleculeGroups.set(key, members);
+    }
+
+    const moleculePermutationCount = [...moleculeGroups.values()]
+      .reduce((count, members) => count * factorial(members.length), 1);
+
+    const componentOptions = new Map<number, number[][]>();
+    let componentPermutationCount = 1;
+    for (let molIdx = 0; molIdx < graph.molecules.length; molIdx++) {
+      const molecule = graph.molecules[molIdx];
+      const groups = new Map<string, number[]>();
+      for (let compIdx = 0; compIdx < molecule.components.length; compIdx++) {
+        const component = molecule.components[compIdx];
+        const base = `${component.name}~${component.state ?? ''}\u0000${component.wildcard ?? ''}`;
+        const members = groups.get(base) ?? [];
+        members.push(compIdx);
+        groups.set(base, members);
+      }
+      const options: number[][] = [[]];
+      for (const key of [...groups.keys()].sort()) {
+        const members = groups.get(key)!;
+        const permutations = this.permutations(members);
+        const next: number[][] = [];
+        for (const prefix of options) {
+          for (const permutation of permutations) {
+            next.push([...prefix, ...permutation]);
+          }
+        }
+        options.splice(0, options.length, ...next);
+        componentPermutationCount *= factorial(members.length);
+      }
+      componentOptions.set(molIdx, options);
+    }
+
+    const totalPermutations = moleculePermutationCount * componentPermutationCount;
+    if (totalPermutations <= 1 || totalPermutations > MAX_PERMUTATIONS) {
+      return undefined;
+    }
+
+    const orderByGroup = new Map<string, number[]>();
+    const positionsByGroup = new Map<string, number[]>();
+    for (const [key, members] of moleculeGroups) {
+      const orderedMembers = members.slice().sort((a, b) => baseOrder.indexOf(a) - baseOrder.indexOf(b));
+      orderByGroup.set(key, orderedMembers);
+      positionsByGroup.set(key, orderedMembers.map(molIdx => baseOrder.indexOf(molIdx)).sort((a, b) => a - b));
+    }
+    const orderedGroups = [...moleculeGroups.keys()]
+      .sort((a, b) => {
+        const aPos = Math.min(...(orderByGroup.get(a) ?? []).map(m => baseOrder.indexOf(m)));
+        const bPos = Math.min(...(orderByGroup.get(b) ?? []).map(m => baseOrder.indexOf(m)));
+        return aPos - bPos;
+      });
+
+    let best: string | undefined;
+    const moleculeOrder = new Array<number>(baseOrder.length);
+    const componentOrder = new Map<number, number[]>();
+
+    const visitComponents = (index: number): void => {
+      if (index === baseOrder.length) {
+        const candidate = this.serializeCanonicalOrder(graph, moleculeOrder, componentOrder);
+        if (best === undefined || candidate < best) best = candidate;
+        return;
+      }
+      const molIdx = moleculeOrder[index];
+      const options = componentOptions.get(molIdx) ?? [[...graph.molecules[molIdx].components.keys()]];
+      for (const option of options) {
+        componentOrder.set(molIdx, option);
+        visitComponents(index + 1);
+      }
+    };
+
+    const visitMolecules = (groupIndex: number): void => {
+      if (groupIndex === orderedGroups.length) {
+        visitComponents(0);
+        return;
+      }
+      const key = orderedGroups[groupIndex];
+      const members = orderByGroup.get(key) ?? [];
+      const positions = positionsByGroup.get(key) ?? [];
+      for (const permutation of this.permutations(members)) {
+        permutation.forEach((molIdx, offset) => {
+          moleculeOrder[positions[offset]] = molIdx;
+        });
+        visitMolecules(groupIndex + 1);
+      }
+    };
+
+    visitMolecules(0);
+    return best;
+  }
+
+  private static permutations(values: number[]): number[][] {
+    if (values.length <= 1) return [values.slice()];
+    const result: number[][] = [];
+    for (let i = 0; i < values.length; i++) {
+      const rest = values.slice(0, i).concat(values.slice(i + 1));
+      for (const suffix of this.permutations(rest)) {
+        result.push([values[i], ...suffix]);
+      }
+    }
+    return result;
+  }
+
+  private static serializeCanonicalOrder(
+    graph: SpeciesGraph,
+    moleculeOrder: number[],
+    componentOrder: Map<number, number[]>,
+  ): string {
+    const moleculePosition = new Map<number, number>();
+    moleculeOrder.forEach((molIdx, position) => moleculePosition.set(molIdx, position));
+    const componentPosition = new Map<string, number>();
+    for (const [molIdx, order] of componentOrder) {
+      order.forEach((compIdx, position) => componentPosition.set(`${molIdx}.${compIdx}`, position));
+    }
+
+    const bonds: Array<{
+      leftMol: number;
+      leftComp: number;
+      rightMol: number;
+      rightComp: number;
+    }> = [];
+    for (let i = 0; i < graph.bondList.length; i += 4) {
+      const m1 = graph.bondList[i];
+      const c1 = graph.bondList[i + 1];
+      const m2 = graph.bondList[i + 2];
+      const c2 = graph.bondList[i + 3];
+      const p1 = moleculePosition.get(m1)!;
+      const p2 = moleculePosition.get(m2)!;
+      const q1 = componentPosition.get(`${m1}.${c1}`)!;
+      const q2 = componentPosition.get(`${m2}.${c2}`)!;
+      if (p1 < p2 || (p1 === p2 && q1 <= q2)) {
+        bonds.push({ leftMol: p1, leftComp: q1, rightMol: p2, rightComp: q2 });
+      } else {
+        bonds.push({ leftMol: p2, leftComp: q2, rightMol: p1, rightComp: q1 });
+      }
+    }
+    bonds.sort((a, b) =>
+      a.leftMol - b.leftMol ||
+      a.leftComp - b.leftComp ||
+      a.rightMol - b.rightMol ||
+      a.rightComp - b.rightComp
+    );
+    const bondIds = new Map<string, number>();
+    bonds.forEach((bond, index) => {
+      bondIds.set(`${bond.leftMol}.${bond.leftComp}-${bond.rightMol}.${bond.rightComp}`, index + 1);
+    });
+
+    const molecules = moleculeOrder.map((molIdx, molPosition) => {
+      const molecule = graph.molecules[molIdx];
+      const order = componentOrder.get(molIdx) ?? molecule.components.map((_component, index) => index);
+      const components = order.map(compIdx => {
+        const component = molecule.components[compIdx];
+        let text = component.name;
+        if (component.state && component.state !== '?') text += `~${component.state}`;
+        const labels: number[] = [];
+        for (const bond of bonds) {
+          if (bond.leftMol === molPosition && bond.leftComp === componentPosition.get(`${molIdx}.${compIdx}`)) {
+            labels.push(bondIds.get(`${bond.leftMol}.${bond.leftComp}-${bond.rightMol}.${bond.rightComp}`)!);
+          } else if (bond.rightMol === molPosition && bond.rightComp === componentPosition.get(`${molIdx}.${compIdx}`)) {
+            labels.push(bondIds.get(`${bond.leftMol}.${bond.leftComp}-${bond.rightMol}.${bond.rightComp}`)!);
+          }
+        }
+        if (labels.length > 0) {
+          labels.sort((a, b) => a - b);
+          text += labels.map(id => `!${id}`).join('');
+        } else if (component.wildcard) {
+          text += `!${component.wildcard}`;
+        }
+        return text;
+      });
+      const compartment = molecule.compartment && molecule.compartment !== graph.compartment
+        ? `@${molecule.compartment}`
+        : '';
+      return `${molecule.name}(${components.join(',')})${compartment}`;
+    }).join('.');
+    return graph.compartment ? `@${graph.compartment}::${molecules}` : molecules;
   }
 
   /**
