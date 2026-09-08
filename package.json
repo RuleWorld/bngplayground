@@ -23,6 +23,7 @@
     "test:full:safe": "node scripts/run_full_tests.mjs --config vitest.full.config.ts",
     "test:reference": "tsx tools/validation/compare_outputs.ts",
     "test:native-parity": "vitest --run --config vitest.reference.config.ts",
+    "test:atomizer-roundtrip": "node --import tsx scripts/atomizer/roundtrip_parity.ts",
     "test:deterministic:parity": "node scripts/run_deterministic_parity_ci.mjs",
     "test:file": "vitest --run",
     "generate:gdat": "node tools/build/generateGdat.mjs",

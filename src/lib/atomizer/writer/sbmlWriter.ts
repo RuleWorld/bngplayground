@@ -299,7 +299,7 @@ function astToMathML(node: any): string {
     const args: any[] = Array.isArray(node.arguments) ? node.arguments : [];
 
     if (lowerName === 'if' && args.length >= 3) {
-      return `<piecewise><piece>${astToMathML(args[1])}<condition>${astToMathML(args[0])}</condition></piece><otherwise>${astToMathML(args[2])}</otherwise></piecewise>`;
+      return `<piecewise><piece>${astToMathML(args[1])}${astToMathML(args[0])}</piece><otherwise>${astToMathML(args[2])}</otherwise></piecewise>`;
     }
 
     if (lowerName === 'pow' && args.length >= 2) {
@@ -329,7 +329,7 @@ function astToMathML(node: any): string {
   }
 
   if (t === 'ConditionalExpression') {
-    return `<piecewise><piece>${astToMathML(node.consequent)}<condition>${astToMathML(node.test)}</condition></piece><otherwise>${astToMathML(node.alternate)}</otherwise></piecewise>`;
+  return `<piecewise><piece>${astToMathML(node.consequent)}${astToMathML(node.test)}</piece><otherwise>${astToMathML(node.alternate)}</otherwise></piecewise>`;
   }
 
   return '<cn>0</cn>';
@@ -346,6 +346,56 @@ function formulaToMathML(formula: string): string {
     }
     return `<math xmlns="http://www.w3.org/1998/Math/MathML"><ci>${xmlEscape(expr)}</ci></math>`;
   }
+}
+
+function stripMathWrapper(math: string): string {
+  return math
+    .replace(/^\s*<math\b[^>]*>/i, '')
+    .replace(/<\/math>\s*$/i, '')
+    .trim();
+}
+
+function customFunctionMathML(
+  fn: { args?: string[]; expression?: string },
+  replaceSpeciesInFormula: (formula: string) => string,
+): string {
+  const args = Array.isArray(fn.args) ? fn.args.filter((arg) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(arg)) : [];
+  const expression = replaceIndexedAmountRefsWithSpeciesIds(
+    replaceSpeciesInFormula(String(fn.expression || '0'))
+  );
+  const body = stripMathWrapper(formulaToMathML(expression));
+  const bvars = args.map((arg) => `<bvar><ci>${xmlEscape(arg)}</ci></bvar>`).join('');
+  return `<math xmlns="http://www.w3.org/1998/Math/MathML"><lambda>${bvars}${body}</lambda></math>`;
+}
+
+function inlineZeroArgumentFunctions(
+  formula: string,
+  functions: Array<{ name?: string; args?: string[]; expression?: string }>,
+  replaceSpeciesInFormula: (formula: string) => string,
+): string {
+  let expanded = String(formula || '');
+  for (let pass = 0; pass < 10; pass++) {
+    let changed = false;
+    for (const fn of functions) {
+      const name = String(fn?.name || '').trim();
+      if (!name || (fn.args || []).length > 0 || isMetadataFunctionName(name)) continue;
+      const expression = replaceSpeciesInFormula(String(fn.expression || '0'));
+      // BNGL accepts zero-argument functions both as f() and as bare f in
+      // expressions. Accept both spellings at this serialization boundary.
+      const pattern = new RegExp(`\\b${escapeRegExp(name)}(?:\\s*\\(\\s*\\))?\\b`, 'g');
+      const next = expanded.replace(pattern, `(${expression})`);
+      if (next !== expanded) {
+        expanded = next;
+        changed = true;
+      }
+    }
+    if (!changed) break;
+  }
+  return expanded;
+}
+
+function isMetadataFunctionName(name: string): boolean {
+  return name.startsWith(ASSIGN_RULE_META_PREFIX) || name.startsWith(RATE_RULE_META_PREFIX);
 }
 
 function toFiniteNumber(value: unknown): number | null {
@@ -628,6 +678,23 @@ function isVolumeNormalizedConcentrationExpression(expression: string, symbol: s
   return new RegExp(`^${escapedSymbol}/__compartment_[A-Za-z_][A-Za-z0-9_]*__$`).test(expression);
 }
 
+function stripSyntheticCompartmentFactors(expression: string): string {
+  let normalized = String(expression || '').trim();
+  if (!normalized) return normalized;
+
+  // Atomizer's BNGL representation restores a compartment-volume factor for
+  // concentration-based SBML laws.  SBML species with hasOnlySubstanceUnits=false
+  // are exported as concentrations, so carrying that synthetic factor into the
+  // SBML kinetic law would apply the volume twice on re-simulation.
+  normalized = normalized
+    .replace(/\s*\*\s*__compartment_[A-Za-z0-9_]+__\b/g, '')
+    .replace(/\b__compartment_[A-Za-z0-9_]+__\s*\*\s*/g, '')
+    .replace(/\s*\/\s*__compartment_[A-Za-z0-9_]+__\b/g, '')
+    .replace(/^\s*\(?\s*__compartment_[A-Za-z0-9_]+__\s*\)?\s*$/, '1')
+    .replace(/\(\s*\)/g, '');
+  return normalized.trim() || '1';
+}
+
 function normalizeSpeciesPatternForLookup(value: string): string {
   const raw = String(value || '')
     .trim()
@@ -759,6 +826,28 @@ function buildSeedExportSemantics(model: BNGLModel): {
   }
 
   const preferInitialAmountSpeciesNames = new Set<string>();
+  const hasExplicitNumberConversion = Object.keys(model.parameters || {}).some((name) =>
+    name === 'Na' || name === '__Avogadro__' || name === 'quantity_to_number_factor'
+  );
+
+  // A plain BNGL model uses compartmental species values as amounts.  Atomizer-
+  // generated models carry an explicit _c_<species>() = species / V function;
+  // those are handled above as concentration-valued SBML species.  Preserve the
+  // amount convention when no such concentration function is present.
+  for (const species of model.species || []) {
+    const speciesName = String(species?.name || '');
+    if (!inferSpeciesCompartmentName(speciesName)) continue;
+    const symbol = extractSpeciesSymbolFromName(speciesName);
+    if (!symbol) continue;
+    const hasConcentrationFunction = (model.functions || []).some((fn) => {
+      const name = String(fn?.name || '').trim();
+      return name === `_c_${symbol}`;
+    });
+    if (!hasExplicitNumberConversion && !hasConcentrationFunction && !preferInitialAmountSpeciesNames.has(speciesName)) {
+      amountOnlySpeciesNames.add(speciesName);
+    }
+  }
+
   for (const symbol of concentrationSymbolsWithVolumeDivision) {
     const names = resolveSpeciesNamesForSeedSymbol(symbolToSpeciesNames, symbol);
     for (const speciesName of names) {
@@ -946,6 +1035,69 @@ function replaceIndexedAmountRefsWithSpeciesIds(formula: string): string {
   });
 }
 
+function containsIdentifier(formula: string, identifier: string): boolean {
+  if (!formula || !identifier) return false;
+  return new RegExp(`\\b${escapeRegExp(identifier)}\\b`).test(formula);
+}
+
+/**
+ * Build the SBML kinetic-law flux for an engine reaction.
+ *
+ * Engine network reactions store the rate law (for example `k` or a Hill expression), while
+ * SBML kinetic laws store the complete reaction flux.  A few imported/hand-built fixtures already
+ * carry a full flux such as `k * S1_amt`; preserve those rather than multiplying twice. Functional
+ * rates are always multiplied by the reactant factors because that is the engine simulation
+ * contract and a substrate can legitimately also occur inside a rate law (e.g. Hill kinetics).
+ */
+function buildFluxFormula(
+  rate: string,
+  terms: string[],
+  speciesIdByName: Map<string, string>,
+  replaceSpeciesInFormula: (formula: string) => string,
+  isFunctionalRate = false,
+): string {
+  let formula = stripSyntheticCompartmentFactors(String(rate || '').trim() || '0');
+  formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
+  formula = replaceSpeciesInFormula(formula);
+
+  const ids = terms
+    .map((name) => speciesIdByName.get(name))
+    .filter((id): id is string => !!id);
+  const alreadyFullFlux = !isFunctionalRate && ids.some((id) => containsIdentifier(formula, id));
+  if (ids.length === 0 || alreadyFullFlux) return formula;
+  return `(${formula}) * ${ids.join(' * ')}`;
+}
+
+function buildReactionFluxFormula(
+  reaction: BNGLReaction,
+  speciesIdByName: Map<string, string>,
+  replaceSpeciesInFormula: (formula: string) => string,
+): string {
+  const forwardRate = reaction.rate !== undefined && reaction.rate !== null && String(reaction.rate).trim().length > 0
+    ? String(reaction.rate).trim()
+    : String(reaction.rateConstant ?? 0);
+  const forward = buildFluxFormula(
+    forwardRate,
+    reaction.reactants,
+    speciesIdByName,
+    replaceSpeciesInFormula,
+    reaction.isFunctionalRate === true,
+  );
+
+  if (!reaction.reversible || reaction.reverseRate === undefined || reaction.reverseRate === null) {
+    return forward;
+  }
+
+  const reverse = buildFluxFormula(
+    String(reaction.reverseRate).trim() || '0',
+    reaction.products,
+    speciesIdByName,
+    replaceSpeciesInFormula,
+    reaction.isFunctionalRate === true,
+  );
+  return `((${forward}) - (${reverse}))`;
+}
+
 function normalizeSpeciesAlias(name: string): string {
   return name.replace(/\s+/g, '').replace(/\(\)/g, '');
 }
@@ -1085,14 +1237,14 @@ function buildExportableReactions(model: BNGLModel): BNGLReaction[] {
 
     const forwardRate = ruleRateToFormula(rule, false);
     const reverseRate = ruleRateToFormula(rule, true);
-    const netRate = rule?.isBidirectional
-      ? `((${forwardRate || '0'}) - (${reverseRate || '0'}))`
-      : (forwardRate || '0');
-
     derived.push({
       reactants: [...resolvedReactants],
       products: [...resolvedProducts],
-      rate: netRate,
+      // Keep forward and reverse laws separate.  SBML's kinetic law is a complete flux, so the
+      // writer below supplies the reactant/product factors for each direction.  Storing a net
+      // law here would lose the reverse species dependence (and previously exported the wrong
+      // dynamics for reversible rules).
+      rate: forwardRate || '0',
       rateConstant: 0,
       reversible: Boolean(rule?.isBidirectional),
       reverseRate: rule?.isBidirectional ? reverseRate : undefined,
@@ -1150,12 +1302,19 @@ function generateSBMLPureXml(model: BNGLModel): string {
     (species) => !isSyntheticRateRuleSpeciesName(species.name)
   );
   const speciesIdByName = buildSpeciesIdLookup(speciesList as Array<{ name: string }>);
-  const replaceSpeciesInFormula = createNameReplacer(speciesIdByName);
+  const formulaSpeciesIdMap = new Map(speciesIdByName);
+  for (const [alias, speciesId] of buildSpeciesAliasMap(model, speciesIdByName)) {
+    formulaSpeciesIdMap.set(alias, speciesId);
+  }
+  const replaceSpeciesInFormula = createNameReplacer(formulaSpeciesIdMap);
+  const replaceReactionSpeciesInFormula = (formula: string): string =>
+    replaceSpeciesInFormula(inlineZeroArgumentFunctions(formula, model.functions || [], replaceSpeciesInFormula));
   const reconstructedRules = reconstructRules(model, speciesIdByName);
   const exportableReactions = buildExportableReactions(model);
   const referenceText = [
     ...exportableReactions.map((r) => r.rate || ''),
     ...reconstructedRules.map((r) => r.formula || ''),
+    ...(model.functions || []).map((fn) => String(fn?.expression || '')),
   ].join('\n');
   const speciesIds = new Set(Array.from(speciesIdByName.values()));
   const effectiveParameters = new Map<string, number>();
@@ -1197,7 +1356,10 @@ function generateSBMLPureXml(model: BNGLModel): string {
 
   const lines: string[] = [];
   lines.push('<?xml version="1.0" encoding="UTF-8"?>');
-  lines.push('<sbml xmlns="http://www.sbml.org/sbml/level2/version4" level="2" version="4">');
+  // SBML Level 3 Version 2 Core is the current core specification.  Keep the Node/pure-XML
+  // writer on the same target as the browser/libSBML writer so roundtrips do not silently downgrade
+  // the exported document to the legacy Level 2 formula-attribute dialect.
+  lines.push('<sbml xmlns="http://www.sbml.org/sbml/level3/version2/core" level="3" version="2">');
   lines.push(`  <model id="${xmlEscape(modelId)}" name="${modelName}">`);
 
   const compartmentsStarted = Date.now();
@@ -1225,6 +1387,17 @@ function generateSBMLPureXml(model: BNGLModel): string {
     lines.push('    </listOfParameters>');
   }
   logWriterTiming('pureXml.parameters', parametersStarted, `count=${params.length}`);
+
+  const customFunctions = (model.functions || []).filter(
+    (fn) => !!fn?.name && !isMetadataFunctionName(String(fn.name))
+  );
+  if (customFunctions.length > 0) {
+    lines.push('    <listOfFunctionDefinitions>');
+    for (const fn of customFunctions) {
+      lines.push(`      <functionDefinition id="${xmlEscape(String(fn.name))}">${customFunctionMathML(fn, replaceSpeciesInFormula)}</functionDefinition>`);
+    }
+    lines.push('    </listOfFunctionDefinitions>');
+  }
 
   const speciesStarted = Date.now();
   lines.push('    <listOfSpecies>');
@@ -1295,18 +1468,9 @@ function generateSBMLPureXml(model: BNGLModel): string {
       });
       lines.push('        </listOfProducts>');
 
-      const rateStr = r.rate;
-      let formula: string;
-      if (rateStr !== undefined && rateStr !== null && String(rateStr).trim().length > 0) {
-        formula = String(rateStr).trim();
-      } else {
-        formula = String(r.rateConstant ?? 0);
-      }
-      formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
-      formula = replaceSpeciesInFormula(formula);
-      formula = expandRateMacroForSBML(formula, null);
-      formula = replaceSpeciesInFormula(formula);
-      lines.push(`        <kineticLaw formula="${xmlEscape(formula)}"/>`);
+      const formula = buildReactionFluxFormula(r, speciesIdByName, replaceReactionSpeciesInFormula);
+      const expandedFormula = replaceReactionSpeciesInFormula(expandRateMacroForSBML(formula, null));
+      lines.push(`        <kineticLaw>${formulaToMathML(expandedFormula)}</kineticLaw>`);
       lines.push('      </reaction>');
       if (SBML_WRITER_DEBUG_TIMINGS && i > 0 && i % 500 === 0) {
         logWriterTiming('pureXml.reactions.progress', reactionsStarted, `processed=${i}/${reactions.length}`);
@@ -1323,11 +1487,11 @@ function generateSBMLPureXml(model: BNGLModel): string {
       if (!rule.variable) continue;
       if (rule.type === 'assignment') {
         lines.push(`      <assignmentRule variable="${xmlEscape(rule.variable)}">`);
-        lines.push(`        ${formulaToMathML(rule.formula || '0')}`);
+        lines.push(`        ${formulaToMathML(replaceReactionSpeciesInFormula(rule.formula || '0'))}`);
         lines.push('      </assignmentRule>');
       } else {
         lines.push(`      <rateRule variable="${xmlEscape(rule.variable)}">`);
-        lines.push(`        ${formulaToMathML(rule.formula || '0')}`);
+        lines.push(`        ${formulaToMathML(replaceReactionSpeciesInFormula(rule.formula || '0'))}`);
         lines.push('      </rateRule>');
       }
     }
@@ -1473,12 +1637,19 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
     (species) => !isSyntheticRateRuleSpeciesName(species.name)
   );
   const speciesIdByName = buildSpeciesIdLookup(speciesList as Array<{ name: string }>);
-  const replaceSpeciesInFormula = createNameReplacer(speciesIdByName);
+  const formulaSpeciesIdMap = new Map(speciesIdByName);
+  for (const [alias, speciesId] of buildSpeciesAliasMap(model, speciesIdByName)) {
+    formulaSpeciesIdMap.set(alias, speciesId);
+  }
+  const replaceSpeciesInFormula = createNameReplacer(formulaSpeciesIdMap);
+  const replaceReactionSpeciesInFormula = (formula: string): string =>
+    replaceSpeciesInFormula(inlineZeroArgumentFunctions(formula, model.functions || [], replaceSpeciesInFormula));
   const reconstructedRules = reconstructRules(model, speciesIdByName);
   const exportableReactions = buildExportableReactions(model);
   const referenceText = [
     ...exportableReactions.map((r) => r.rate || ''),
     ...reconstructedRules.map((r) => r.formula || ''),
+    ...(model.functions || []).map((fn) => String(fn?.expression || '')),
   ].join('\n');
   const speciesIds = new Set(Array.from(speciesIdByName.values()));
   const effectiveParameters = new Map<string, number>();
@@ -1529,11 +1700,16 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   // 2. Parameters
   addParametersToSBML(sbmlModel, effectiveParameters, parameterRuleTargets);
 
+  // 2b. User-defined BNGL functions.  SBML represents these as lambda function definitions;
+  // preserving them is required for libRoadRunner and for downstream SBML consumers to evaluate
+  // functional reaction laws instead of seeing an undefined symbol.
+  addFunctionDefinitionsToSBML(sbmlModel, model, speciesIdByName, replaceSpeciesInFormula, lib);
+
   // 3. Species
   addSpeciesToSBML(sbmlModel, model, speciesList, speciesIdByName, availableCompartmentNames, speciesRuleTargets, amountOnlySpeciesNames, preferInitialAmountSpeciesNames, initialExpressionSymbols, effectiveParameters);
 
   // 4. Reactions
-  addReactionsToSBML(sbmlModel, exportableReactions, speciesIdByName, replaceSpeciesInFormula);
+  addReactionsToSBML(sbmlModel, exportableReactions, speciesIdByName, replaceReactionSpeciesInFormula);
 
   // 5. Rules
   addRulesToSBML(sbmlModelAny, reconstructedRules, lib);
@@ -1589,6 +1765,55 @@ function addCompartmentsToSBML(
     comp.setSpatialDimensions(3);
     comp.setSize(1.0);
     comp.setConstant(true);
+  }
+}
+
+function addFunctionDefinitionsToSBML(
+  sbmlModel: any,
+  model: BNGLModel,
+  _speciesIdByName: Map<string, string>,
+  replaceSpeciesInFormula: (formula: string) => string,
+  lib: any,
+): void {
+  const customFunctions = (model.functions || []).filter(
+    (fn) => !!fn?.name && !isMetadataFunctionName(String(fn.name))
+  );
+  if (customFunctions.length === 0 || typeof sbmlModel.createFunctionDefinition !== 'function') return;
+
+  let parser: any = null;
+  try {
+    parser = typeof lib?.SBMLFormulaParser === 'function' ? new lib.SBMLFormulaParser() : null;
+    for (const fn of customFunctions) {
+      const id = String(fn.name);
+      const expression = replaceIndexedAmountRefsWithSpeciesIds(
+        replaceSpeciesInFormula(String(fn.expression || '0'))
+      );
+      const body = parser?.parseL3Formula?.(expression);
+      if (!body || typeof lib?.ASTNode !== 'function') {
+        logger.warning('SBMW015F', `Skipping function definition ${id}: libSBML Math AST parser unavailable`);
+        continue;
+      }
+
+      const lambda = new lib.ASTNode(lib.AST_LAMBDA);
+      const args = Array.isArray(fn.args)
+        ? fn.args.filter((arg) => /^[A-Za-z_][A-Za-z0-9_]*$/.test(String(arg)))
+        : [];
+      for (const arg of args) {
+        const bvar = new lib.ASTNode(lib.AST_QUALIFIER_BVAR);
+        const argNode = new lib.ASTNode(lib.AST_NAME);
+        argNode.setName(String(arg));
+        bvar.addChild(argNode);
+        lambda.addChild(bvar);
+      }
+      lambda.addChild(body);
+      const definition = sbmlModel.createFunctionDefinition();
+      definition.setId(id);
+      definition.setMath(lambda);
+    }
+  } catch (error) {
+    logger.warning('SBMW015F', `Failed to emit one or more function definitions: ${String(error)}`);
+  } finally {
+    if (parser && typeof parser.delete === 'function') parser.delete();
   }
 }
 
@@ -1734,19 +1959,11 @@ function addReactionsToSBML(
         ref.setConstant(true);
       });
 
-      // Kinetic Law. The atomizer writer uses `r.rate` as the full rate expression
-      // (already containing the rate law). Fix falsy-zero: use explicit undefined/null
-      // check instead of `||` so a legitimate empty rate falls through correctly.
+      // Kinetic law. Engine reactions store the rate law, while SBML requires the complete flux;
+      // buildReactionFluxFormula adds the directional reactant/product factors and preserves
+      // explicitly full-flux fixtures. Fix falsy-zero by using explicit undefined/null checks.
       const kl = rxn.createKineticLaw();
-      const rateStr = r.rate;
-      let formula: string;
-      if (rateStr !== undefined && rateStr !== null && String(rateStr).trim().length > 0) {
-        formula = String(rateStr).trim();
-      } else {
-        formula = String(r.rateConstant ?? 0);
-      }
-      formula = replaceIndexedAmountRefsWithSpeciesIds(formula);
-      formula = replaceSpeciesInFormula(formula);
+      let formula = buildReactionFluxFormula(r, speciesIdByName, replaceSpeciesInFormula);
       formula = expandRateMacroForSBML(formula, substrateId);
       formula = replaceSpeciesInFormula(formula);
       kl.setFormula(formula);

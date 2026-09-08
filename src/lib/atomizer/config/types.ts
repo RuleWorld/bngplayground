@@ -42,6 +42,9 @@ export interface BNGLReaction {
   products: string[];
   rate: string;
   rateConstant: number;
+  /** Engine reaction metadata used to reconstruct the complete SBML flux. */
+  isFunctionalRate?: boolean;
+  rateExpression?: string;
   reversible?: boolean;
   reverseRate?: string;
 }

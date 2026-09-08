@@ -69,6 +69,19 @@ describe('ExpressionEvaluator Service', () => {
             expect(mockEvaluator.compile).toHaveBeenCalledWith(expect.stringContaining('(10)'), ['bar']);
         });
 
+        it('should expand function calls with arguments', () => {
+            const expr = 'double(k) + offset';
+            const functions = [{ name: 'double', args: ['x'], expression: 'x * 2' }];
+            const params = { k: 5, offset: 1 };
+
+            mockEvaluator.getReferencedVariables.mockReturnValue(['k', 'offset']);
+            mockEvaluator.compile.mockReturnValue((ctx: any) => 2 * ctx.k + ctx.offset);
+
+            const res = evaluateFunctionalRate(expr, params, {}, functions);
+            expect(res).toBe(11);
+            expect(mockEvaluator.compile).toHaveBeenCalledWith(expect.stringContaining('((k) * 2)'), ['k', 'offset']);
+        });
+
         it('should handle evaluation errors gracefully (return 0)', () => {
             const expr = 'invalid';
             mockEvaluator.getReferencedVariables.mockReturnValue([]);

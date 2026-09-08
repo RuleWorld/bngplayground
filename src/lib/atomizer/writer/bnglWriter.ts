@@ -1804,9 +1804,11 @@ export function writeReactionRulesFlat(
       totalStoichiometry += stoich;
     }
 
-    const ruleCompId = rxn.compartment || (rxn.reactants[0]?.species ? sbmlSpecies.get(rxn.reactants[0].species)?.compartment : rxn.products[0]?.species ? sbmlSpecies.get(rxn.products[0].species)?.compartment : '');
-    // Standard scaling: Restore one factor of V that was removed from the rate expression
-    const vScale = (useCompartments && ruleCompId && totalStoichiometry > 0) ? `(__compartment_${standardizeName(ruleCompId)}__)` : '1';
+    // The Playground simulation engine applies the reacting-compartment anchor volume when it
+    // converts BNGL rate constants to amount-space velocities.  Reintroducing V here would make
+    // an SBML concentration law receive the volume factor twice after an SBML -> BNGL -> SBML
+    // roundtrip. Keep the BNGL law in the engine's concentration-space convention.
+    const vScale = '1';
 
     let finalRate: string;
 
@@ -3465,16 +3467,10 @@ export function processReactionRate(
     totalProductStoichiometry += stoich;
   }
 
-  const ruleCompId = rxn.compartment
-    || (rxn.reactants[0]?.species
-      ? speciesToCompartment.get(rxn.reactants[0].species) || ''
-      : rxn.products[0]?.species
-        ? speciesToCompartment.get(rxn.products[0].species) || ''
-        : '');
-
-  const vScaleName = (useCompartments && ruleCompId)
-    ? `__compartment_${standardizeName(ruleCompId)}__`
-    : '1';
+  // Volume scaling is applied by the Playground simulation engine's reaction anchor. Embedding
+  // the same synthetic factor in the BNGL rate would double-scale non-unit compartments during
+  // a subsequent simulation or roundtrip.
+  const vScaleName = '1';
 
   // -- Step 6: If reversible, try to split (FIX 2) --
   if (rxn.reversible) {
@@ -3561,6 +3557,14 @@ function processOneDirection(
   ) => number | null,
   skipMassActionCheck: boolean,
 ): DirectionResult {
+
+  // Relational/piecewise/time-dependent laws are state-dependent functional rates. Their
+  // reactant symbols may be part of a condition rather than a mass-action factor; neutralizing
+  // those symbols to 1 would silently change the branch logic (for example, if(A > threshold,...)).
+  // Preserve the complete expression and let the engine evaluate it against the live observables.
+  if (/\b(?:if|piecewise)\s*\(|(?:>=|<=|==|!=|>|<)/i.test(rateExpr)) {
+    return { rateString: rateExpr, isSplitRxn: true };
+  }
 
   // Build divisor expression: product of (speciesName_amt^stoich / stoich!)
   const divisorParts: string[] = [];

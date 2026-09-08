@@ -101,7 +101,7 @@ describe('Atomizer SBML Core parity regressions', () => {
 
     expect(result.success).toBe(true);
     expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
-    expect(result.bngl).toMatch(/2\s*\*\s*\(\(/);
+    expect(result.bngl).toMatch(/2\s*\*\s*\(k\)/);
   });
 
   it('reports the retired requirements package as informational metadata', async () => {
