@@ -99,6 +99,28 @@ describe('parameterScanArgsSchema', () => {
     })).toThrow(/positive start2 and end2 bounds/);
   });
 
+  it('allows the two axes to use different spacing modes', () => {
+    const parsed = parameterScanArgsSchema.parse({
+      ...validArgs,
+      logarithmic: true,
+      parameter2: 'k2',
+      start2: -1,
+      end2: 1,
+      steps2: 3,
+      logarithmic2: false,
+    });
+
+    expect(parsed.logarithmic).toBe(true);
+    expect(parsed.logarithmic2).toBe(false);
+  });
+
+  it('requires a 2D scan when logarithmic2 is supplied', () => {
+    expect(() => parameterScanArgsSchema.parse({
+      ...validArgs,
+      logarithmic2: true,
+    })).toThrow(/logarithmic2 is only valid for a 2D parameter scan/);
+  });
+
   it('rejects scans larger than 400 simulation combinations', () => {
     expect(() => parameterScanArgsSchema.parse({
       ...validArgs,

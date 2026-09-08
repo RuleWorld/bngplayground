@@ -35,6 +35,7 @@ export async function handleParameterScan(args: ToolArgs): Promise<ToolResult<Pa
         end: parsedArgs.end,
         steps: parsedArgs.steps,
         logarithmic: parsedArgs.logarithmic,
+        logarithmic2: parsedArgs.logarithmic2,
         parameter2: parsedArgs.parameter2,
         start2: parsedArgs.start2,
         end2: parsedArgs.end2,

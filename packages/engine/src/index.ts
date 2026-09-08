@@ -156,8 +156,9 @@ export { sobolSensitivity, generateSaltelliSamples } from './services/analysis/S
 export type { SobolResult, SobolAnalysisConfig, SobolSampleSet, SobolSamplingOptions } from './services/analysis/SobolSensitivity';
 export { computeFIM, computeCollinearity } from './services/analysis/FisherInformationMatrix';
 export type { FIMConfig, FIMResult, CollinearityResult } from './services/analysis/FisherInformationMatrix';
-export { profileLikelihood } from './services/analysis/ProfileLikelihood';
-export type { ProfileLikelihoodConfig, ProfileLikelihoodResult } from './services/analysis/ProfileLikelihood';
+export { MAX_PROFILE_SIMULATIONS, profileLikelihood } from './services/analysis/ProfileLikelihood';
+export type { ProfileCIStatus, ProfileLikelihoodConfig, ProfileLikelihoodResult } from './services/analysis/ProfileLikelihood';
+export { AnalysisDataError } from './services/analysis/AnalysisErrors';
 
 // ── Bayesian Inference (Track G) ────────────────────────────────────
 export { abcSMC } from './services/inference/ABCSMC';

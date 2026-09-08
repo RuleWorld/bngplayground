@@ -15,6 +15,16 @@ import { MCPErrorResult } from '../types/index.js';
  */
 export function structureError(error: Error): MCPErrorResult {
     const msg = error.message;
+    if (error.name === 'AnalysisDataError') {
+        return {
+            code: 'INVALID_ANALYSIS_RESULT',
+            error: msg,
+            diagnosis: 'The analysis received an empty, malformed, non-finite, or structurally incompatible simulation trajectory.',
+            recovery: 'Run simulate first and ensure it returns sorted time points, at least one observable column, and finite numeric values at every reported time point.',
+            severity: 'recoverable',
+            relatedTools: ['simulate', 'validate_model'],
+        };
+    }
     if (msg.includes('Invalid arguments for')) {
         return {
             code: 'INVALID_ARGUMENTS',

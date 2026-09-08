@@ -71,7 +71,7 @@ export async function diagnoseModelDeep(args: {
     fim?: { conditionNumber: number; identifiableParams: string[]; unidentifiableParams: string[] };
     ruleAttribution?: RuleAttributionEntry[];
     parameterSelection?: { strategy: string; candidates: number; analyzed: number; selectedParameters: string[] };
-    profileLikelihood?: { profiles: Record<string, { identifiability: string; ci: { lower: number; upper: number } | null; flat: boolean }>; threshold: number; baselineSSR: number };
+    profileLikelihood?: { profiles: Record<string, { identifiability: string; ci: { lower: number; upper: number } | null; ciGridRange: { lower: number; upper: number } | null; ciStatus: string; flat: boolean }>; threshold: number; baselineSSR: number };
     summary: { technical: string; biological: string; strategic: string };
     compilationSurprise?: { numRules: number; numGeneratedSpecies: number; numGeneratedReactions: number; surpriseLevel: 'high' | 'moderate' | 'none'; warning?: string };
     irreversibleSteps?: Array<{ rule: string; type: string; controllingParameters: string[]; note: string }>;

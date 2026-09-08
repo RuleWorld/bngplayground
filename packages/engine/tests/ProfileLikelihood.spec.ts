@@ -79,4 +79,85 @@ describe('profileLikelihood', () => {
     expect(result.baselineSSR).toBeCloseTo(0, 6);
     expect(result.threshold).toBeGreaterThan(0); // chi2 threshold > 0
   });
+
+  it('uses chi-square scale for flatness near a perfect fit', async () => {
+    const result = await profileLikelihood({
+      simulate: async (overrides) => ({
+        data: [{ time: 0, Y: 1 + 1e-4 * overrides.a }],
+      }),
+      parameters: { a: 1 },
+      parameterNames: ['a'],
+      experimentalData: [{ time: 0, values: { Y: 1 } }],
+      nGrid: 5,
+      rangeFactor: 10,
+      reoptimize: false,
+    });
+
+    expect(result.profiles.a.flat).toBe(true);
+    expect(result.profiles.a.identifiability).toBe('structurally_unidentifiable');
+  });
+
+  it('marks confidence intervals limited by the scan window', async () => {
+    const result = await profileLikelihood({
+      simulate: async (overrides) => ({
+        data: [{ time: 0, Y: 1 + 0.1 * overrides.a }],
+      }),
+      parameters: { a: 1 },
+      parameterNames: ['a'],
+      experimentalData: [{ time: 0, values: { Y: 1 } }],
+      nGrid: 5,
+      rangeFactor: 10,
+      reoptimize: false,
+    });
+
+    expect(result.profiles.a.flat).toBe(false);
+    expect(result.profiles.a.ci).toBeNull();
+    expect(result.profiles.a.ciGridRange).not.toBeNull();
+    expect(result.profiles.a.ciStatus).toBe('both_grid_limited');
+    expect(result.profiles.a.identifiability).toBe('practically_unidentifiable');
+  });
+
+  it('rejects an empty baseline trajectory with an analysis error', async () => {
+    await expect(profileLikelihood({
+      simulate: async () => ({ data: [] }),
+      parameters: { a: 1 },
+      parameterNames: ['a'],
+      experimentalData: [{ time: 0, values: { Y: 1 } }],
+      nGrid: 3,
+      reoptimize: false,
+    })).rejects.toThrow(/baseline simulation returned no trajectory data/);
+  });
+
+  it('re-optimizes omitted model parameters when profiling a subset', async () => {
+    const calls: Array<Record<string, number>> = [];
+    const result = await profileLikelihood({
+      simulate: async (overrides) => {
+        calls.push({ ...overrides });
+        const nuisanceResidual = (overrides.k2 - 7) ** 2 + (overrides.k3 - 11) ** 2;
+        return { data: [{ time: 0, Y: nuisanceResidual }] };
+      },
+      parameters: { k1: 1, k2: 2, k3: 3 },
+      parameterNames: ['k1'],
+      experimentalData: [{ time: 0, values: { Y: 0 } }],
+      nGrid: 3,
+      rangeFactor: 2,
+      reoptimize: true,
+      maxReoptEval: 20,
+    });
+
+    expect(result.profiles.k1).toBeDefined();
+    expect(calls.some((overrides) => overrides.k2 !== 2 || overrides.k3 !== 3)).toBe(true);
+  });
+
+  it('rejects profile requests whose re-optimization budget is too large', async () => {
+    await expect(profileLikelihood({
+      simulate: async () => ({ data: [{ time: 0, Y: 0 }] }),
+      parameters: { a: 1, b: 1, c: 1 },
+      parameterNames: ['a', 'b', 'c'],
+      experimentalData: [{ time: 0, values: { Y: 0 } }],
+      nGrid: 100,
+      maxReoptEval: 100,
+      reoptimize: true,
+    })).rejects.toThrow(/could require .* simulations/);
+  });
 });

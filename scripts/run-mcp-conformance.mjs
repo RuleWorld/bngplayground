@@ -1,11 +1,12 @@
 import { execFileSync, spawn } from 'node:child_process';
 import { mkdtemp, mkdir, readFile, readdir, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import process from 'node:process';
 import { fileURLToPath } from 'node:url';
 
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const tempRoot = await mkdtemp('/private/tmp/bng-mcp-conformance-');
+const tempRoot = await mkdtemp(join(tmpdir(), 'bng-mcp-conformance-'));
 const outputDirectory = join(tempRoot, 'results');
 await mkdir(outputDirectory, { recursive: true });
 

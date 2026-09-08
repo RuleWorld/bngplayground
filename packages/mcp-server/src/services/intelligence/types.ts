@@ -89,6 +89,8 @@ export type ProfileLikelihoodResult = {
     profiles: Record<string, {
         identifiability: 'identifiable' | 'practically_unidentifiable' | 'structurally_unidentifiable';
         ci: { lower: number; upper: number } | null;
+        ciGridRange: { lower: number; upper: number } | null;
+        ciStatus: 'bounded' | 'lower_grid_limited' | 'upper_grid_limited' | 'both_grid_limited' | 'no_threshold_crossing';
         flat: boolean;
     }>;
     threshold: number;

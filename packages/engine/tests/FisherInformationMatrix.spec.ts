@@ -87,6 +87,36 @@ describe('computeFIM', () => {
     expect(result.sensitivityProfiles.length).toBe(1);
     expect(result.sensitivityProfiles[0].timeProfile.length).toBe(nT);
   });
+
+  it('rejects an empty baseline trajectory with an analysis error', async () => {
+    await expect(computeFIM({
+      simulate: async () => ({ data: [] }),
+      parameters: { k: 1 },
+      parameterNames: ['k'],
+    })).rejects.toThrow(/FIM baseline simulation returned no trajectory data/);
+  });
+
+  it('rejects a trajectory without observable columns', async () => {
+    await expect(computeFIM({
+      simulate: async () => ({ data: [{ time: 0 }, { time: 1 }] }),
+      parameters: { k: 1 },
+      parameterNames: ['k'],
+    })).rejects.toThrow(/FIM baseline simulation returned no observable columns/);
+  });
+
+  it('reports a singular zero-sensitivity system without producing NaN', async () => {
+    const result = await computeFIM({
+      simulate: async () => ({
+        data: [{ time: 0, Y: 1 }, { time: 1, Y: 1 }],
+      }),
+      parameters: { k: 1 },
+      parameterNames: ['k'],
+    });
+
+    expect(result.conditionNumber).toBe(Infinity);
+    expect(result.regularizedConditionNumber).toBe(Infinity);
+    expect(Number.isNaN(result.regularizedConditionNumber)).toBe(false);
+  });
 });
 
 describe('computeCollinearity', () => {
@@ -113,5 +143,19 @@ describe('computeCollinearity', () => {
     const result = computeCollinearity(J, ['a', 'b'], 2);
     expect(result.subsets[0].collinearityIndex).toBeGreaterThan(10);
     expect(result.subsets[0].isCollinear).toBe(true);
+  });
+
+  it('rejects an empty Jacobian explicitly', () => {
+    expect(() => computeCollinearity([], ['a', 'b'], 2)).toThrow(/non-empty sensitivity Jacobian/);
+  });
+
+  it('preserves infinite collinearity in the aggregate metric', () => {
+    const result = computeCollinearity([
+      [0, 0],
+      [0, 0],
+    ], ['a', 'b'], 2);
+
+    expect(result.subsets[0].collinearityIndex).toBe(Infinity);
+    expect(result.maxCollinearity).toBe(Infinity);
   });
 });

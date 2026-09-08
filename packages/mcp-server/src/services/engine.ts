@@ -30,19 +30,45 @@ import {
  * or BNGL logic. Handlers should use engine functions to perform calculations and pass the result here.
  */
 export function createToolResult<T>(data: T): ToolResult<T> {
+    const safeData = sanitizeForMcp(data) as T;
+    const serialized = JSON.stringify(safeData, null, 2) ?? 'null';
     const result: ToolResult<T> = {
         content: [
             {
                 type: 'text',
-                text: JSON.stringify(data, null, 2),
+                text: serialized,
             },
         ],
-        structuredContent: data,
+        structuredContent: safeData,
     };
-    if (isStructuredError(data)) {
+    if (isStructuredError(safeData)) {
         return { ...result, isError: true };
     }
     return result;
+}
+
+/**
+ * JSON-RPC cannot carry NaN or infinities. Preserve their meaning at the MCP
+ * boundary instead of allowing JSON.stringify to silently turn them into
+ * null, which looks like a missing measurement or metric.
+ */
+export function sanitizeForMcp(value: unknown): unknown {
+    if (typeof value === 'number') {
+        if (Number.isFinite(value)) return value;
+        if (Number.isNaN(value)) return 'NaN';
+        return value > 0 ? 'Infinity' : '-Infinity';
+    }
+    if (Array.isArray(value)) {
+        return value.map((entry) => sanitizeForMcp(entry));
+    }
+    if (value !== null && typeof value === 'object') {
+        const sanitized: Record<string, unknown> = {};
+        for (const [key, entry] of Object.entries(value)) {
+            sanitized[key] = sanitizeForMcp(entry);
+        }
+        return sanitized;
+    }
+    return value;
 }
 
 function isStructuredError(value: unknown): value is { code: string; error: string; diagnosis: string; recovery: string } {

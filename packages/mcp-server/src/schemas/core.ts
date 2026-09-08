@@ -61,6 +61,8 @@ export const parameterScanArgsSchema = z.object({
     end2: finiteNumber.optional(),
     steps2: positiveInt.optional(),
     logarithmic: z.boolean().optional(),
+    logarithmic2: z.boolean().optional()
+        .describe('Use logarithmic spacing on the second axis; defaults to logarithmic for backward compatibility'),
     method: z.enum(simulationMethods).optional(),
     t_end: finiteNumber.nonnegative().optional(),
     n_steps: positiveInt.optional(),
@@ -102,6 +104,14 @@ export const parameterScanArgsSchema = z.object({
         });
     }
 
+    if (value.logarithmic2 !== undefined && !hasParameter2) {
+        context.addIssue({
+            code: 'custom',
+            path: ['logarithmic2'],
+            message: 'logarithmic2 is only valid for a 2D parameter scan',
+        });
+    }
+
     if (value.logarithmic === true) {
         if (value.start <= 0 || value.end <= 0) {
             context.addIssue({
@@ -110,7 +120,7 @@ export const parameterScanArgsSchema = z.object({
                 message: 'Logarithmic parameter scans require positive start and end bounds',
             });
         }
-        if (hasParameter2 && (
+        if (hasParameter2 && value.logarithmic2 !== false && value.logarithmic2 !== true && (
             value.start2 === undefined || value.end2 === undefined ||
             value.start2 <= 0 || value.end2 <= 0
         )) {
@@ -120,6 +130,17 @@ export const parameterScanArgsSchema = z.object({
                 message: 'Logarithmic 2D parameter scans require positive start2 and end2 bounds',
             });
         }
+    }
+
+    if (value.logarithmic2 === true && hasParameter2 && (
+        value.start2 === undefined || value.end2 === undefined ||
+        value.start2 <= 0 || value.end2 <= 0
+    )) {
+        context.addIssue({
+            code: 'custom',
+            path: ['logarithmic2'],
+            message: 'Logarithmic second-axis scans require positive start2 and end2 bounds',
+        });
     }
 
     const combinations = value.steps * (hasParameter2 && value.steps2 !== undefined ? value.steps2 : 1);

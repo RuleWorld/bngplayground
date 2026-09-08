@@ -11,6 +11,8 @@ export interface ParameterScanOptions {
   end: number;
   steps: number;
   logarithmic?: boolean;
+  /** Use logarithmic spacing on the second axis; defaults to logarithmic. */
+  logarithmic2?: boolean;
   parameter2?: string;
   start2?: number;
   end2?: number;
@@ -129,6 +131,7 @@ export async function runParameterScan(
     end: number;
     steps: number;
     logarithmic?: boolean;
+    logarithmic2?: boolean;
     parameter2?: string;
     start2?: number;
     end2?: number;
@@ -139,7 +142,7 @@ export async function runParameterScan(
 ): Promise<RunParameterScanResult> {
   const xValues = generateRange(options.start, options.end, options.steps, options.logarithmic ?? false);
   const yValues = options.parameter2 !== undefined
-    ? generateRange(options.start2!, options.end2!, options.steps2!, options.logarithmic ?? false)
+    ? generateRange(options.start2!, options.end2!, options.steps2!, options.logarithmic2 ?? options.logarithmic ?? false)
     : [];
 
   if (xValues.length * Math.max(1, yValues.length || 1) > 400) {
