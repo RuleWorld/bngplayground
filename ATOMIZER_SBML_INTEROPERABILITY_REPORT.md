@@ -45,6 +45,11 @@ The checked-in harness is [`scripts/atomizer/roundtrip_parity.ts`](scripts/atomi
 ```bash
 conda run -n atomizer-sbml-roundtrip python --version
 npm run test:atomizer-roundtrip
+
+# Structural SBML Test Suite gate; requires the pinned external suite checkout.
+SBML_TEST_SUITE_DIR=/path/to/sbml-test-suite \
+SBML_SUITE_EXPECTED_COUNT=1692 \
+npm run test:atomizer-sbml-suite
 ```
 
 The environment used for this report is `atomizer-sbml-roundtrip`, containing Python 3.11, `python-libsbml 5.21.1`, and `libroadrunner 2.10.0`. Native BNGL checks use BioNetGen 2.9.3 from the installed PyBioNetGen distribution.
@@ -77,7 +82,7 @@ The custom argument-taking-function fixture is numerically exact in the Playgrou
 
 ## Existing broad Core baseline
 
-The companion [`ATOMIZER_SBML_COVERAGE_AUDIT.md`](ATOMIZER_SBML_COVERAGE_AUDIT.md) records the broader SBML Test Suite audit. Its pinned SBML Level 3 Version 2 Core baseline contained 1,692/1,692 successful Atomizer conversions with strict BNGL parsing and no strict-output failures. That baseline is a structural/translation gate, not a trajectory-equivalence claim. It also recorded 200 event-bearing cases, of which 2 translated and 198 remained untranslated, plus 13 missing-Math diagnostics.
+The companion [`ATOMIZER_SBML_COVERAGE_AUDIT.md`](ATOMIZER_SBML_COVERAGE_AUDIT.md) records the broader SBML Test Suite audit. Its pinned SBML Level 3 Version 2 Core snapshot contained 1,692/1,692 successful Atomizer conversions with strict BNGL parsing and no strict-output failures. That baseline is a structural/translation gate, not a trajectory-equivalence claim. It also recorded 200 event-bearing cases, of which 2 translated and 198 remained untranslated, plus 13 missing-Math diagnostics. The repository now includes the runner used to reproduce this gate; the external suite checkout is intentionally not vendored.
 
 The new harness is intentionally smaller and semantic: it compares trajectories, not only parseability. Both artifacts must be used together.
 

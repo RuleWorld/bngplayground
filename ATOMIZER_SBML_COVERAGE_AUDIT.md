@@ -3,7 +3,7 @@
 **Audit date:** 2026-09-08
 **Audited component:** `src/lib/atomizer` in `julesplayground`
 **Baseline repository commit:** `d9226a164df335ab5ece8c3b091c0c1a235e1b98`
-**Assessment status:** baseline audit plus post-fix validation on branch `codex/atomizer-sbml-parity`.
+**Assessment status:** baseline audit plus post-fix validation recorded from the pinned suite snapshot; the checked-in runner is `scripts/atomizer/sbml_suite_audit.ts`.
 
 ## Executive conclusion
 
@@ -26,7 +26,7 @@ The importer usually returns `success: true` while reporting dropped or approxim
 
 ### Post-fix validation on this branch
 
-The same pinned 1,692-file semantic harness was rerun after the changes in this branch:
+The same pinned 1,692-file semantic harness was rerun after the earlier fixes. The result is retained below as an auditable snapshot record; the current repository now provides `npm run test:atomizer-sbml-suite` to reproduce it when the external suite checkout is supplied.
 
 | Gate | Baseline | Post-fix |
 | --- | ---: | ---: |
@@ -66,7 +66,7 @@ Additional read-only source snapshots:
 | [SBML Test Suite](https://github.com/sbmlteam/sbml-test-suite) | `473e119dd57226c3a7a729d598f9007f06f781c3`, `VERSION.txt = 3.3.0` | 1,692 `*-sbml-l3v2.xml` semantic cases |
 | [libSBML](https://github.com/sbmlteam/libsbml) | `6d26cef5f2557f13f59c9e2d6ef063a3de300d75` | Official package sample models |
 
-The suite harness ran every one of the 1,692 L3V2 semantic XML files through Atomizer, then passed generated BNGL through the playground's strict BNGL parser. It also recorded warnings, model counts, package namespaces, and event conversion status. Package samples were checked in the same way.
+The suite harness ran every one of the 1,692 L3V2 semantic XML files through Atomizer, then passed generated BNGL through the playground's strict BNGL parser. It also recorded warnings, model counts, package namespaces, and event conversion status. Package samples were checked in the same way. The suite checkout is external and is not committed into this application repository; use the checked-in runner with `SBML_TEST_SUITE_DIR` to reproduce the snapshot.
 
 This is a structural and translation audit. It is not a claim that every accepted output reproduces the SBML trajectory. Full trajectory equivalence needs a model-by-model oracle and careful handling of solver tolerances, events, units, and rule semantics.
 
@@ -154,7 +154,7 @@ Tests       6339 passed | 55 skipped (6394)
 
 The full scientific suite was run with the required safe harness at the final working tree. It completed with 133 files passing, 8 skipped, and 2 failing files (3 tests). The remaining failures were `parity-polymer` and `parity-zap`, both failing before simulation because their RuleHub model lookup returned a null path; none were Atomizer-specific suite failures. Because the run did not produce a clean terminal pass, it is not evidence for a globally green repository.
 
-The post-fix branch-specific gates are the focused Atomizer suite, `tests/atomizer/sbml-core-parity.spec.ts` (5 tests), the full `npm run test:fast` gate, and the pinned 1,692-case semantic harness. The full scientific suite remains a separate repository baseline gate; its final result is recorded above.
+The post-fix branch-specific gates are the focused Atomizer suite, `tests/atomizer/sbml-core-parity.spec.ts`, the full `npm run test:fast` gate, and the checked-in `npm run test:atomizer-sbml-suite` runner against the pinned 1,692-case snapshot. The full scientific suite remains a separate repository baseline gate; its final result is recorded above.
 
 ## Core SBML coverage matrix
 

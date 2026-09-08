@@ -1,0 +1,121 @@
+/**
+ * Run the Atomizer structural/translation gate against an existing SBML Test Suite checkout.
+ *
+ * Required:
+ *   SBML_TEST_SUITE_DIR=/path/to/sbml-test-suite
+ * Optional:
+ *   SBML_SUITE_EXPECTED_COUNT=1692
+ *   SBML_SUITE_OUT=artifacts/atomizer-roundtrip/sbml-suite-audit.json
+ */
+
+import { readFileSync, readdirSync, statSync, writeFileSync, mkdirSync } from 'node:fs';
+import { dirname, join, relative, resolve } from 'node:path';
+
+import { parseBNGLStrict } from '@bngplayground/engine';
+import { Atomizer } from '../../src/lib/atomizer';
+
+type SuiteResult = {
+  file: string;
+  success: boolean;
+  strictParse: boolean;
+  warningCategories: string[];
+  eventConverted: boolean;
+  eventUntranslated: boolean;
+  error?: string;
+};
+
+function findSemanticL3V2Files(root: string): string[] {
+  const files: string[] = [];
+  const visit = (directory: string): void => {
+    for (const entry of readdirSync(directory)) {
+      const path = join(directory, entry);
+      if (statSync(path).isDirectory()) {
+        visit(path);
+      } else if (/-sbml-l3v2\.xml$/i.test(entry) && /(?:^|[/\\])semantic(?:[/\\])/i.test(relative(root, path))) {
+        files.push(path);
+      }
+    }
+  };
+  visit(root);
+  return files.sort();
+}
+
+async function main(): Promise<void> {
+  const suiteRoot = process.env.SBML_TEST_SUITE_DIR;
+  if (!suiteRoot) {
+    throw new Error('Set SBML_TEST_SUITE_DIR to a checked-out SBML Test Suite repository.');
+  }
+  const root = resolve(suiteRoot);
+  const files = findSemanticL3V2Files(root);
+  if (files.length === 0) {
+    throw new Error(`No semantic *-sbml-l3v2.xml files found under ${root}`);
+  }
+
+  const atomizer = new Atomizer({ quietMode: true, useId: true, atomize: false });
+  await atomizer.initialize();
+  const results: SuiteResult[] = [];
+  for (const file of files) {
+    const result: SuiteResult = {
+      file: relative(root, file),
+      success: false,
+      strictParse: false,
+      warningCategories: [],
+      eventConverted: false,
+      eventUntranslated: false,
+    };
+    try {
+      const atomized = await atomizer.atomize(readFileSync(file, 'utf8'));
+      result.success = atomized.success;
+      result.warningCategories = [...new Set(
+        (atomizer.getModel()?.importWarnings || []).map((warning) => warning.category),
+      )].sort();
+      result.eventConverted = /time-triggered event\(s\) converted/i.test(atomized.bngl);
+      result.eventUntranslated = /Events NOT simulated/i.test(atomized.bngl);
+      if (!atomized.success) {
+        result.error = atomized.error || 'Atomizer returned success=false';
+      } else {
+        try {
+          parseBNGLStrict(atomized.bngl);
+          result.strictParse = true;
+        } catch (error) {
+          result.error = `strict BNGL parse failed: ${String(error)}`;
+        }
+      }
+    } catch (error) {
+      result.error = String(error);
+    }
+    results.push(result);
+  }
+
+  const summary = {
+    generatedAt: new Date().toISOString(),
+    suiteRoot: root,
+    filePattern: '**/semantic/**/*-sbml-l3v2.xml',
+    totalFiles: results.length,
+    success: results.filter((result) => result.success).length,
+    strictParse: results.filter((result) => result.strictParse).length,
+    strictFailures: results.filter((result) => !result.strictParse).length,
+    eventModels: results.filter((result) => result.warningCategories.includes('event')).length,
+    eventConverted: results.filter((result) => result.eventConverted).length,
+    eventUntranslated: results.filter((result) => result.eventUntranslated).length,
+    warningCategories: [...new Set(results.flatMap((result) => result.warningCategories))].sort(),
+    results,
+  };
+
+  const expectedCount = Number(process.env.SBML_SUITE_EXPECTED_COUNT || '0');
+  if (expectedCount > 0 && summary.totalFiles !== expectedCount) {
+    throw new Error(`Expected ${expectedCount} suite files, found ${summary.totalFiles}`);
+  }
+  const output = resolve(process.env.SBML_SUITE_OUT || 'artifacts/atomizer-roundtrip/sbml-suite-audit.json');
+  mkdirSync(dirname(output), { recursive: true });
+  writeFileSync(output, `${JSON.stringify(summary, null, 2)}\n`);
+  console.log(JSON.stringify({ output, ...summary, results: undefined }, null, 2));
+  if (summary.strictFailures > 0 || summary.success !== summary.totalFiles) {
+    process.exitCode = 1;
+  }
+}
+
+main().catch((error) => {
+  console.error(error);
+  process.exitCode = 1;
+});
