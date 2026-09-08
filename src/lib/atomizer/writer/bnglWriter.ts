@@ -2585,6 +2585,11 @@ export function generateBNGL(
     return Number.isFinite(v) ? v : def;
   };
   const eventMethod = /simulate_ssa|method\s*=>\s*["']?ssa/i.test(options.actions || '') ? 'ssa' : 'ode';
+  const mutableEventIds = new Set<string>([
+    ...(model.rules || []).map(rule => rule.variable).filter((id): id is string => !!id),
+    ...(model.initialAssignments || []).map(assignment => assignment.symbol).filter((id): id is string => !!id),
+    ...(model.events || []).flatMap(event => event.assignments.map(assignment => assignment.variable)),
+  ]);
   const eventCtx: EventTranslationContext = {
     resolveSpeciesPattern: (sbmlId: string) => {
       const b = sbmlToBnglId.get(sbmlId);
@@ -2599,6 +2604,12 @@ export function generateBNGL(
       return undefined;
     },
     isParam: (id: string) => model.parameters.has(id) || model.compartments.has(id),
+    isCompileTimeConstant: (id: string) => {
+      const parameter = model.parameters.get(id);
+      if (parameter) return parameter.constant && !mutableEventIds.has(id);
+      const compartment = model.compartments.get(id);
+      return !!compartment && compartment.constant && !mutableEventIds.has(id);
+    },
     method: eventMethod,
     baseTEnd: parseNum(/t_end\s*=>\s*([0-9.eE+-]+)/, 100),
     baseSteps: parseNum(/n_steps\s*=>\s*([0-9]+)/, 100),

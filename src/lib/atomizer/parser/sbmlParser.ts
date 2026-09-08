@@ -834,6 +834,7 @@ export class SBMLParser {
       layout: 'diagram layout',
       render: 'diagram rendering',
       groups: 'element grouping',
+      req: 'requirements metadata (retired package)',
     };
 
     const nsRe = /xmlns:([A-Za-z0-9_]+)\s*=\s*["']http:\/\/www\.sbml\.org\/sbml\/level3\/version\d+\/([a-z]+)\/version\d+["']/gi;
@@ -1944,6 +1945,15 @@ export class SBMLParser {
       case 'math':
       case 'semantics':
       case 'annotation-xml':
+      case 'lambda': {
+        // Function definitions wrap their body in lambda(bvar..., body).  The bound-variable
+        // declarations are metadata for the writer; the last non-bvar child is the expression.
+        if (node.name === 'lambda') {
+          const body = elementChildren.filter((child) => child.name !== 'bvar').pop();
+          return body ? this.mathMlNodeToFormula(body) : '';
+        }
+        return firstChildExpr();
+      }
       case 'condition':
       case 'piece':
       case 'otherwise':
@@ -2099,6 +2109,11 @@ export class SBMLParser {
           case 'or':
           case 'xor':
           case 'not':
+            // SBML defines the n-ary Boolean identities: and() is true, or() and xor() are
+            // false.  Keeping these as empty calls produces invalid BNGL and loses the identity.
+            if (opName === 'and' && a.length === 0) return '1';
+            if ((opName === 'or' || opName === 'xor') && a.length === 0) return '0';
+            if (opName === 'not' && a.length === 0) return '1';
             return `${opName}(${a.join(', ')})`;
           case 'piecewise':
             return `piecewise(${a.join(', ')})`;
@@ -2126,7 +2141,7 @@ export class SBMLParser {
     if (!rxnBlock) return null;
     const kl = rxnBlock[0].match(/<kineticLaw\b[\s\S]*?<\/kineticLaw>/i);
     const scope = kl ? kl[0] : rxnBlock[0];
-    const math = scope.match(/<math\b[\s\S]*?<\/math>/i);
+    const math = scope.match(/<math\b[\s\S]*?<\/math>/i) || scope.match(/<math\b[^>]*\/\s*>/i);
     return math ? math[0] : null;
   }
 
@@ -2143,7 +2158,30 @@ export class SBMLParser {
       block = this.currentSbml.match(new RegExp(`<${tag}\\b[\\s\\S]*?</${tag}>`, 'i'));
     }
     if (!block) return null;
-    const math = block[0].match(/<math\b[\s\S]*?<\/math>/i);
+    const math = block[0].match(/<math\b[\s\S]*?<\/math>/i) || block[0].match(/<math\b[^>]*\/\s*>/i);
+    return math ? math[0] : null;
+  }
+
+  /** Pull a functionDefinition's raw MathML so empty/n-ary operators do not pass through lossy
+   * libSBML formulaToString output. */
+  private rawMathForFunctionDefinition(functionId: string): string | null {
+    if (!this.currentSbml || !functionId) return null;
+    const id = functionId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const block = this.currentSbml.match(
+      new RegExp(`<functionDefinition\\b[^>]*\\bid\\s*=\\s*["']${id}["'][\\s\\S]*?</functionDefinition>`, 'i'));
+    if (!block) return null;
+    const math = block[0].match(/<math\b[\s\S]*?<\/math>/i) || block[0].match(/<math\b[^>]*\/\s*>/i);
+    return math ? math[0] : null;
+  }
+
+  /** Pull an initialAssignment's raw MathML, including self-closing empty math elements. */
+  private rawMathForInitialAssignment(symbol: string): string | null {
+    if (!this.currentSbml || !symbol) return null;
+    const id = symbol.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const block = this.currentSbml.match(
+      new RegExp(`<initialAssignment\\b[^>]*\\bsymbol\\s*=\\s*["']${id}["'][\\s\\S]*?</initialAssignment>`, 'i'));
+    if (!block) return null;
+    const math = block[0].match(/<math\b[\s\S]*?<\/math>/i) || block[0].match(/<math\b[^>]*\/\s*>/i);
     return math ? math[0] : null;
   }
 
@@ -2155,7 +2193,7 @@ export class SBMLParser {
     // literal text (models write it as "Time", "t", " Time ", ...); the writer only rewrites a
     // lowercase `\btime\b` into `time()`, so "Time"/"t" leaked and BNG2 aborted with
     // "Parameter 'Time' referenced but not defined".
-    return /<piecewise\b|<(?:lt|gt|leq|geq|eq|neq|and|or|not|xor)\b|definitionURL\s*=\s*["'][^"']*(?:delay|rateOf|avogadro|time)/i.test(mathXml);
+    return /<piecewise\b|<(?:lt|gt|leq|geq|eq|neq|and|or|not|xor)\b|definitionURL\s*=\s*["'][^"']*(?:delay|rateOf|avogadro|time)|<apply\b[^>]*>\s*<(?:plus|times|minus|divide|power|root|log|quotient|rem|factorial|and|or|xor|not|eq|neq|gt|lt|geq|leq)\b[^>]*\/\s*>\s*<\/apply>/i.test(mathXml);
   }
 
   private safeFormulaToString(math: any): string {
@@ -2479,11 +2517,6 @@ export class SBMLParser {
 
     const rxnAttrs = this.rawElementAttrs('reaction', reactionId);
     const convFactor = this.getXmlAttribute(rxnAttrs, 'conversionFactor') || undefined;
-    if (convFactor) {
-      this.recordWarning('conversionFactor',
-        `Reaction "${reactionId}" declares conversionFactor="${convFactor}"; captured but not yet applied to the rate law.`,
-        'approximated');
-    }
 
     return {
       id: reactionId,
@@ -2543,7 +2576,9 @@ export class SBMLParser {
       }
     }
 
-    // Same lossy-math guard as kinetic laws (see extractReaction).
+    // Prefer the raw MathML whenever the bundled libSBML formula printer is lossy. This includes
+    // empty n-ary operators: formulaToString renders them as `()`/bare names, while the raw reader
+    // can apply SBML's operator identities.
     const rawRuleMath = this.rawMathForRule(ruleType, variable);
     if (this.mathHasLossyConstructs(rawRuleMath)) {
       const fromMathMl = this.mathMlToFormula(rawRuleMath!);
@@ -2556,6 +2591,16 @@ export class SBMLParser {
     }
 
     formula = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(formula));
+
+    // An empty rule body is not executable BNGL. Dropping it is safer than emitting a blank
+    // function that makes the entire generated model unparsable; the warning keeps the source
+    // defect visible to callers.
+    if (!formula.trim()) {
+      this.recordWarning('missingMath',
+        `${ruleType} rule${variable ? ` for "${variable}"` : ''} has no MathML expression; rule was omitted from the executable BNGL.`,
+        'dropped');
+      return null;
+    }
 
     if (ruleType === 'algebraic') {
       return {
@@ -2632,7 +2677,19 @@ export class SBMLParser {
         }
       }
     }
+    const rawFunctionMath = this.rawMathForFunctionDefinition(func.getId());
+    if (rawFunctionMath) {
+      const fromMathMl = this.mathMlToFormula(rawFunctionMath);
+      if (fromMathMl.trim()) mathStr = fromMathMl;
+    }
     mathStr = this.sanitizeMathExpression(this.normalizeFormulaIdentifiers(mathStr));
+
+    if (!mathStr.trim()) {
+      this.recordWarning('missingMath',
+        `Function definition "${func.getId()}" has no MathML expression; emitted as the constant zero function.`,
+        'approximated');
+      mathStr = '0';
+    }
 
     return {
       id: func.getId(),
@@ -2674,7 +2731,16 @@ export class SBMLParser {
       name: event.getName() || eventId,
       trigger: triggerMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(triggerMath)) : '',
       delay: delayMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(delayMath)) : undefined,
-      useValuesFromTriggerTime: event.getUseValuesFromTriggerTime?.() || true,
+      // SBML defaults this attribute to true when it is absent. Do not use `|| true`: that turns
+      // an explicit false into true and changes assignment-time event semantics.
+      useValuesFromTriggerTime: (() => {
+        try {
+          const value = event.getUseValuesFromTriggerTime?.();
+          return typeof value === 'boolean' ? value : true;
+        } catch {
+          return true;
+        }
+      })(),
       assignments,
       triggerInitialValue: initValAttr === null ? undefined : /true|1/i.test(initValAttr),
       triggerPersistent: persistAttr === null ? undefined : /true|1/i.test(persistAttr),
@@ -2683,12 +2749,32 @@ export class SBMLParser {
   }
 
   private extractInitialAssignment(ia: any): SBMLInitialAssignment | null {
+    const symbol = ia.getSymbol();
     const math = ia.getMath();
-    if (!math) return null;
+    if (!math) {
+      this.recordWarning('missingMath',
+        `Initial assignment "${symbol}" has no MathML expression; assignment was omitted.`,
+        'dropped');
+      return null;
+    }
+
+    let formula = this.safeFormulaToString(math);
+    const rawMath = this.rawMathForInitialAssignment(symbol);
+    if (this.mathHasLossyConstructs(rawMath)) {
+      const fromMathMl = this.mathMlToFormula(rawMath!);
+      if (fromMathMl.trim()) formula = fromMathMl;
+    }
+    formula = this.normalizeFormulaIdentifiers(formula);
+    if (!formula.trim()) {
+      this.recordWarning('missingMath',
+        `Initial assignment "${symbol}" has an empty MathML expression; assignment was omitted.`,
+        'dropped');
+      return null;
+    }
 
     return {
-      symbol: ia.getSymbol(),
-      math: this.normalizeFormulaIdentifiers(this.safeFormulaToString(math)),
+      symbol,
+      math: formula,
     };
   }
 }
