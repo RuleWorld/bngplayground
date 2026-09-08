@@ -16,7 +16,7 @@ It is not a general SBML importer. The correct product claim is:
 It should not currently claim complete SBML coverage or semantic round-trip fidelity. The baseline audit found these highest-risk findings; the first two have now been fixed or made fail-closed on this branch:
 
 1. **Baseline: twelve of 1,692 official L3V2 semantic cases generated invalid BNGL.** Empty MathML operands and rules with missing MathML were the cause. The current pinned-suite rerun on this branch fixes these cases: 0 strict-output failures.
-2. **Events are mostly diagnostic-only:** the baseline translated 3 of 200 event-bearing suite models, including an unsafe mutable-parameter fold. The branch now translates only compile-time-constant event expressions; post-fix results are 2 converted and 198 explicitly untranslated.
+2. **Events are not native BNGL constructs:** the baseline translated 3 of 200 event-bearing suite models, including an unsafe mutable-parameter fold. The branch now translates only compile-time-constant fixed-time events and preserves every event-bearing model losslessly in an `@sbml-event` BNGL metadata record. Post-fix results are 2 executable conversions and 198 diagnostic/non-executable event models; the 198 are no longer silently dropped, but they still require a runtime event executor for trajectory parity.
 3. **Algebraic rules are dropped**, not solved as implicit DAE constraints: 101 suite files carried them in the fresh rerun.
 4. **Variable or non-integer stoichiometry is approximated as fixed integer stoichiometry:** 98 suite files carried a stoichiometry warning, with 810 warning records in the fresh rerun.
 5. **Model-changing Level 3 packages are not imported:** `comp`, `multi`, `fbc`, `qual`, `spatial`, `arrays`, `distrib`, and `dyn`. Some are intentionally outside the requested kinetic scope, but the resulting output must be treated as incomplete.
@@ -28,15 +28,17 @@ The importer usually returns `success: true` while reporting dropped or approxim
 
 The same pinned 1,692-file semantic harness was rerun after the earlier fixes. The result is retained below as an auditable snapshot record; the current repository now provides `npm run test:atomizer-sbml-suite` to reproduce it when the external suite checkout is supplied.
 
-Fresh reproduction on 2026-09-08 at 13:20 UTC, using suite commit `473e119dd57226c3a7a729d598f9007f06f781c3`, produced 1,692 successful conversions, 1,692 strict parses, 0 strict failures, 200 event-bearing models, 2 converted events, 198 untranslated events, and warning-record totals of algebraicRule 101, constraint 1, event 200, mathml 392, missingMath 13, package:comp 125, package:fbc 34, and stoichiometry 810.
+Fresh reproduction on 2026-09-08 at 13:50 UTC, using suite commit `473e119dd57226c3a7a729d598f9007f06f781c3`, produced 1,692 successful conversions, 1,692 strict parses, 0 strict failures, 200 event-bearing models, 2 executable event conversions, 200 event metadata preservations, 0 silently untranslated event outputs, and warning-record totals of algebraicRule 101, constraint 1, event 200, mathml 392, missingMath 13, package:comp 125, package:fbc 34, and stoichiometry 810. Of the 200 preserved event models, 198 remain diagnostic/non-executable because their trigger, delay, or assignment semantics cannot be represented by native BNGL phase actions.
 
 | Gate | Baseline | Post-fix |
 | --- | ---: | ---: |
 | Atomizer returned success | 1,692 / 1,692 | 1,692 / 1,692 |
 | Generated BNGL passed strict parser | 1,680 / 1,692 | **1,692 / 1,692** |
 | Strict-output failures | 12 | **0** |
-| Event models converted | 3 | 2 (safe constant-only subset) |
-| Event models explicitly untranslated | 197 | 198 |
+| Event models converted to executable actions | 3 | 2 (safe constant-only subset) |
+| Event models with lossless `@sbml-event` metadata | not measured | **200 / 200** |
+| Event models silently untranslated | 197 | **0** |
+| Event models preserved but still non-executable | not measured | **198** |
 
 The post-fix run also recorded 13 `missingMath` diagnostics rather than emitting blank executable functions. Explicit `useValuesFromTriggerTime="false"` is now preserved, and mutable event assignments are left annotated rather than folded to initial parameter values.
 
@@ -68,7 +70,7 @@ Additional read-only source snapshots:
 | [SBML Test Suite](https://github.com/sbmlteam/sbml-test-suite) | `473e119dd57226c3a7a729d598f9007f06f781c3`, `VERSION.txt = 3.3.0` | 1,692 `*-sbml-l3v2.xml` semantic cases |
 | [libSBML](https://github.com/sbmlteam/libsbml) | `6d26cef5f2557f13f59c9e2d6ef063a3de300d75` | Official package sample models |
 
-The suite harness ran every one of the 1,692 L3V2 semantic XML files through Atomizer, then passed generated BNGL through the playground's strict BNGL parser. It also recorded warnings, model counts, package namespaces, and event conversion status. Package samples were checked in the same way. The suite checkout is external and is not committed into this application repository; use the checked-in runner with `SBML_TEST_SUITE_DIR` to reproduce the snapshot.
+The suite harness ran every one of the 1,692 L3V2 semantic XML files through Atomizer, then passed generated BNGL through the playground's strict BNGL parser. It also recorded warnings, model counts, package namespaces, executable event conversion, event metadata preservation, and silent-untranslation status. Package samples were checked in the same way. The suite checkout is external and is not committed into this application repository; use the checked-in runner with `SBML_TEST_SUITE_DIR` to reproduce the snapshot.
 
 This is a structural and translation audit. It is not a claim that every accepted output reproduces the SBML trajectory. Full trajectory equivalence needs a model-by-model oracle and careful handling of solver tolerances, events, units, and rule semantics.
 
@@ -83,8 +85,10 @@ This is a structural and translation audit. It is not a claim that every accepte
 | Generated BNGL passed strict parser | 1,680 / 1,692 (99.29%) | Useful syntax gate, not semantic equivalence |
 | Generated BNGL failed strict parser | 12 / 1,692 (0.71%) | Concrete correctness failures; listed below |
 | Files with event diagnostics | 200 | Event behavior is common enough to require first-class support |
-| Events converted to scheduled actions | 3 / 200 models | Only simple fixed-time, constant-foldable cases |
-| Events left untranslated | 197 / 200 models | Emitted as diagnostics/comments rather than executable dynamics |
+| Events converted to scheduled actions | 2 / 200 models | Only simple fixed-time, constant-foldable cases are executable |
+| Events preserved as `@sbml-event` metadata | 200 / 200 models | Original trigger/delay/assignment formulas survive BNGL parse and SBML export |
+| Events silently untranslated | 0 / 200 models | The audit treats metadata-preserved events as translated structurally, not executable |
+| Events preserved but non-executable | 198 / 200 models | State triggers, dynamic assignments, or dynamic delays still need runtime event support |
 | Files with algebraic-rule diagnostics | 101 | Algebraic rules are not represented as DAE constraints |
 | Files with stoichiometry diagnostics | 98 | Variable/non-integer stoichiometry is approximated |
 | Stoichiometry warning records | 810 | Variable/StoichiometryMath and non-integer records are approximated |
@@ -126,7 +130,7 @@ These were not merely unsupported-feature warnings: the output itself was invali
 
 ### Event behavior
 
-The baseline converted suite models were `00980`, `01119`, and `01287`. After the safety fix, only the two constant-only cases remain executable; the mutable assignment-time case `00980` is correctly left untranslated. The supported coverage is narrow:
+The baseline converted suite models were `00980`, `01119`, and `01287`. After the safety fix, only the two constant-only cases remain executable; the mutable assignment-time case `00980` is preserved but correctly remains non-executable. All 200 event-bearing outputs now carry the source event in a structured `# @sbml-event` comment that the BNGL parser restores into `BNGLModel.events`. The supported executable coverage is narrow:
 
 - trigger must reduce to a simple time threshold;
 - delay must be constant;
@@ -134,7 +138,7 @@ The baseline converted suite models were `00980`, `01119`, and `01287`. After th
 - targets must be recognized species or parameters;
 - event priority is folded to a constant and used to order same-time writes.
 
-This can be useful for fixed calibration pulses, but it is not general SBML event support. State-triggered events, species-dependent assignments, function-dependent assignments, non-constant delays, repeated firing semantics, and general event scheduling remain untranslated.
+This can be useful for fixed calibration pulses, but it is not general SBML event execution. State-triggered events, species-dependent assignments, function-dependent assignments, non-constant delays, repeated firing semantics, and general event scheduling remain non-executable. They are preserved for roundtrip/export and reported with diagnostics rather than being approximated as incorrect phase actions. The metadata is a Playground extension and is ignored by native BNG2 unless a caller supplies a separate event executor.
 
 The branch fixes the parser defect in [`sbmlParser.ts`](src/lib/atomizer/parser/sbmlParser.ts): explicit `useValuesFromTriggerTime="false"` is preserved. The event translator also refuses to fold mutable parameters, rules, initial-assignment targets, or event-assignment targets. In case `00980`, the generated BNGL now keeps the event in the diagnostic block instead of producing incorrect constant writes such as `p = 3` and `q = 1`.
 
@@ -181,7 +185,7 @@ Status meanings:
 | Algebraic rules | Diagnostic only | Counted and reported; not solved as implicit constraints. |
 | Initial assignments | Partial | Common constant expressions are imported. Empty/missing MathML is omitted with a diagnostic. Ordering and dependency semantics need explicit validation. |
 | Function definitions | Partial | Common functions are emitted. Empty bodies now become a diagnostic zero function, and empty n-ary operators follow SBML identities; full SBML function-definition semantics are not established. |
-| Events | Partial, narrow | Only fixed-time, constant-foldable cases are executable; mutable or state-dependent cases remain untranslated. Explicit trigger-time flags are preserved in the parsed model, but general event scheduling semantics are not supported. |
+| Events | Partial, lossless structural preservation; narrow execution | Two fixed-time constant cases are executable as BNGL phase actions. All 200 audited event models preserve trigger/delay/priority/assignment metadata through BNGL comments and SBML export; 198 remain non-executable because native BNGL has no general event syntax or trigger scheduler. |
 | Constraints | Diagnostic only | Constraint presence is recorded; constraint math is not enforced during BNGL simulation. |
 | Unit definitions and conversion factors | Partial/strong | Unit definitions and SI-scale factors are extracted and applied in several paths. No complete dimensional-analysis proof or universal unit-equivalence guarantee was established. |
 | Annotations and SBO terms | Metadata only | Read where available; do not change kinetic translation or guarantee semantic interpretation of annotations. |
@@ -247,7 +251,7 @@ Important limits:
 
 ### P1: semantic correctness — remaining gaps
 
-- Replace the narrow event constant-folding path with a runtime-preserving representation, or continue rejecting all events outside the proven fixed-time subset.
+- Add a runtime event executor for the preserved `BNGLModel.events` representation: state-trigger root detection, trigger persistence, delayed/simultaneous assignments, priority ordering, and `useValuesFromTriggerTime` snapshots. Until then, keep the metadata-preserving fail-closed path and do not claim trajectory parity for the 198 non-executable cases.
 - Preserve `useValuesFromTriggerTime`, `initialValue`, `persistent`, priorities, simultaneous assignment semantics, delayed assignments, and repeated firing.
 - Decide whether assignment/rate rules are supported semantically or are only a convenient approximation for a BNGL-compatible subset.
 - Reject or explicitly mark variable and non-integer stoichiometry instead of silently treating it as fixed integer stoichiometry when the result can change dynamics.
@@ -298,4 +302,4 @@ The exhaustive suite pass used the Atomizer API with `quietMode: true`, `useId: 
 
 ## Bottom line
 
-The Atomizer is already credible for a common BioModels-like kinetic subset. The audit also found clear, reproducible boundaries outside that subset. The most important engineering result is a safer boundary: unsupported and approximate translations are easier to detect, the 12 invalid-output cases are fixed, and the event semantic defect is fail-closed for mutable expressions. Package-by-package and trajectory-level expansion can now proceed without weakening correctness claims.
+The Atomizer is already credible for a common BioModels-like kinetic subset. The audit also found clear, reproducible boundaries outside that subset. The most important engineering result is a safer boundary: unsupported and approximate translations are easier to detect, the 12 invalid-output cases are fixed, argument-taking custom functions no longer block the native BNG2 oracle, and all audited SBML events survive structurally without being falsely advertised as executable. Package-by-package and runtime-event expansion can now proceed without weakening correctness claims.

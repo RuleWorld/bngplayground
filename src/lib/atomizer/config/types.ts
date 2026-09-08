@@ -63,6 +63,29 @@ export interface BNGLFunction {
   expression: string;
 }
 
+export interface BNGLEventAssignment {
+  variable: string;
+  math: string;
+  bnglVariable?: string;
+  bnglTarget?: string;
+  bnglMath?: string;
+}
+
+export interface BNGLEvent {
+  id: string;
+  name: string;
+  trigger: string;
+  delay?: string;
+  useValuesFromTriggerTime: boolean;
+  assignments: BNGLEventAssignment[];
+  triggerInitialValue?: boolean;
+  triggerPersistent?: boolean;
+  priority?: string;
+  bnglTrigger?: string;
+  bnglDelay?: string;
+  bnglPriority?: string;
+}
+
 export interface BNGLModel {
   name?: string;
   parameters: Record<string, number>;
@@ -73,6 +96,8 @@ export interface BNGLModel {
   reactionRules: ReactionRule[];
   compartments?: BNGLCompartment[];
   functions?: BNGLFunction[];
+  /** Lossless SBML event metadata carried through Atomizer BNGL comments. */
+  events?: BNGLEvent[];
   /** Parsed multi-phase actions used to preserve fixed-time SBML events on export. */
   simulationPhases?: Array<{ t_end?: number }>;
   concentrationChanges?: Array<{

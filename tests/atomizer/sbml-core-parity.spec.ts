@@ -72,8 +72,15 @@ describe('Atomizer SBML Core parity regressions', () => {
     expect(result.success).toBe(true);
     expect(instance.getModel()?.events[0]?.useValuesFromTriggerTime).toBe(false);
     expect(result.bngl).toContain('Events NOT simulated');
+    expect(result.bngl).toContain('@sbml-event');
     expect(result.bngl).not.toContain('time-triggered event(s) converted');
     expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
+
+    const roundTripped = await generateSBML(parseBNGL(result.bngl) as any);
+    expect(roundTripped).toContain('<listOfEvents>');
+    expect(roundTripped).toContain('useValuesFromTriggerTime="false"');
+    expect(roundTripped).toContain('variable="y"');
+    expect(roundTripped).toContain('<geq/>');
   });
 
   it('applies a model conversionFactor to the generated reaction rule', async () => {

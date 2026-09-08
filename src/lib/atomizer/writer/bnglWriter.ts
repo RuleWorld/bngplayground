@@ -2864,6 +2864,46 @@ export function generateBNGL(
     sections.push('end actions');
   }
 
+  // BNGL has no native general event block. Preserve every original SBML event in a
+  // machine-readable comment so SBML -> BNGL -> SBML remains lossless even when the
+  // executable BNGL subset cannot express a state-triggered event. The optional BNGL
+  // projections are used by the Playground engine; the original fields remain authoritative
+  // for the SBML writer.
+  if (model.events && model.events.length > 0) {
+    const eventSpeciesIds = new Set(model.species.keys());
+    const eventExpression = (expr: string | undefined): string | undefined => {
+      if (!expr) return expr;
+      let out = expr;
+      const ids = [...eventSpeciesIds].sort((a, b) => b.length - a.length);
+      for (const id of ids) {
+        const safe = standardizeName(id);
+        out = out.replace(new RegExp(`\\b${escapeRegExp(id)}\\b`, 'g'), `${safe}_amt`);
+      }
+      return out;
+    };
+    const eventMetadata = model.events.map((event) => ({
+      ...event,
+      bnglTrigger: eventExpression(event.trigger),
+      bnglDelay: eventExpression(event.delay),
+      bnglPriority: eventExpression(event.priority),
+      assignments: event.assignments.map((assignment) => {
+        const bnglId = sbmlToBnglId.get(assignment.variable) || sbmlToBnglId.get(standardizeName(assignment.variable));
+        const bnglTarget = bnglId ? idToPattern.get(bnglId) : undefined;
+        return {
+          ...assignment,
+          bnglVariable: standardizeName(assignment.variable),
+          bnglTarget,
+          bnglMath: eventExpression(assignment.math),
+        };
+      }),
+    }));
+    sections.push('# ==== SBML EVENT METADATA ====');
+    for (const event of eventMetadata) {
+      sections.push(`# @sbml-event ${encodeURIComponent(JSON.stringify(event))}`);
+    }
+    sections.push('# ==============================');
+  }
+
   const bngl = sections.join('\n');
 
   return { bngl, observableMap, warnings };

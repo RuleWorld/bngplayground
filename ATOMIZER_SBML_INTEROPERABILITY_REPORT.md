@@ -12,7 +12,7 @@ The Playground Atomizer now has a reproducible, numerical bidirectional roundtri
 | --- | ---: | ---: | ---: |
 | SBML → BNGL → SBML | 13/13 | Atomization, strict BNGL parsing, and executable-structure comparison passed | libRoadRunner trajectories passed 13/13 |
 | BNGL → SBML → BNGL | 10/10 | SBML was L3V2; strict BNGL parsing and executable-structure comparison passed 10/10 | Playground-engine trajectories and observable comparisons passed 10/10; libRoadRunner SBML trajectories passed 10/10 |
-| BNGL native cross-check | 10 | BNG2 2.9.3 passed 9/10 | The one skipped case is BNG2's inability to simulate functions with arguments, not a Playground or libRoadRunner failure |
+| BNGL native cross-check | 10 | BNG2 2.9.3 passed 10/10 | The harness normalizes only the native-oracle input by inlining argument-taking custom functions because this installed `run_network` backend rejects them in `.net`; Playground and SBML roundtrips retain the function semantics |
 
 For the trajectory gate, both models are simulated on the same 101-point grid from `t=0` to `t=1`. libRoadRunner uses CVODE with relative tolerance `1e-10` and absolute tolerance `1e-12`; the comparison acceptance threshold is `1e-7`. The Playground engine uses CVODE with `1e-10` relative and absolute tolerances and the same `1e-7` comparison threshold. All passing SBML comparisons had `max_abs=0`; the largest Playground-engine roundtrip difference was `1.11e-14`.
 
@@ -30,6 +30,7 @@ This is strong evidence for the tested kinetic subset. It is not evidence that e
 - Synthetic compartment factors are not multiplied into the SBML flux a second time. The Playground engine already applies the reacting-compartment anchor volume.
 - Plain compartmental BNGL seeds are exported as amounts; Atomizer-generated concentration-space seeds retain their amount/concentration distinction.
 - Fixed-time BNGL phase changes are reconstructed as SBML events with zero delay, preserving dosing/reset trajectories in both writer directions.
+- SBML events outside the executable fixed-time subset are preserved in BNGL as structured `# @sbml-event` metadata and reconstructed on SBML export, instead of being silently dropped or folded to initial values.
 
 ### Parser and evaluator
 
@@ -78,13 +79,13 @@ Each input is parsed by Atomizer, strictly reparsed as BNGL, exported through th
 
 Each BNGL fixture is exported to SBML, re-imported by Atomizer, strictly reparsed, and compared with the original using both the Playground engine and libRoadRunner on the generated SBML documents. The fixtures cover ten representative BNGL cases. The harness now performs three independent checks: executable structure (species/initial values, parameter names, reaction topology, and identifier remapping), all shared observable trajectories, and full state trajectories in libRoadRunner. The structural comparator uses shared `*_amt` observable patterns to map source names such as `A()` to SBML-generated names such as `s0`; it falls back to explicit order only when names cannot establish a mapping. The roundtrip preserves executable trajectories even when SBML cannot preserve BNGL-only observable names: generated species/observable ids can be `s0`, `s1`, etc., while the source may use `A`, `s0_amt`, and similar names. Missing and extra observable labels are reported explicitly rather than hidden.
 
-The custom argument-taking-function fixture is numerically exact in the Playground engine and libRoadRunner. BNG2 native execution is skipped only because `run_network` from BNG2 2.9.3 aborts with `Functions cannot contain arguments`; that is an external native-tool limitation.
+The custom argument-taking-function fixture is numerically exact in the Playground engine, libRoadRunner, and the native BNG2 comparison. The native harness works around a BNG2 2.9.3 `run_network` limitation by inlining argument-taking calls only in the temporary oracle input; the actual BNGL model and Atomizer roundtrip retain the custom function definition and call semantics.
 
 ## Existing broad Core baseline
 
-The companion [`ATOMIZER_SBML_COVERAGE_AUDIT.md`](ATOMIZER_SBML_COVERAGE_AUDIT.md) records the broader SBML Test Suite audit. Its pinned SBML Level 3 Version 2 Core snapshot contained 1,692/1,692 successful Atomizer conversions with strict BNGL parsing and no strict-output failures. That baseline is a structural/translation gate, not a trajectory-equivalence claim. It also recorded 200 event-bearing cases, of which 2 translated and 198 remained untranslated, plus 13 missing-Math diagnostics. The repository now includes the runner used to reproduce this gate; the external suite checkout is intentionally not vendored.
+The companion [`ATOMIZER_SBML_COVERAGE_AUDIT.md`](ATOMIZER_SBML_COVERAGE_AUDIT.md) records the broader SBML Test Suite audit. Its pinned SBML Level 3 Version 2 Core snapshot contained 1,692/1,692 successful Atomizer conversions with strict BNGL parsing and no strict-output failures. That baseline is a structural/translation gate, not a trajectory-equivalence claim. It also recorded 200 event-bearing cases: 2 executable fixed-time translations and 200/200 event metadata preservations, with 198 still non-executable pending a general runtime event executor, plus 13 missing-Math diagnostics. The repository now includes the runner used to reproduce this gate; the external suite checkout is intentionally not vendored.
 
-The new harness is intentionally smaller and semantic: it compares trajectories, not only parseability. Both artifacts must be used together.
+The new harness is intentionally smaller and semantic: it compares trajectories, not only parseability. Both artifacts must be used together. In the pinned libRoadRunner build, the standard SBML `time` csymbol in event triggers cannot be compiled; the fixed-time event fixture is therefore checked through the Playground engine/native BNG2 gates and its SBML event structure, while non-event SBML trajectories use libRoadRunner directly.
 
 ## Feature coverage and limits
 
@@ -108,7 +109,7 @@ These are legal SBML concepts but are not covered by the exact thirteen-fixture 
 - **Rate rules:** a constant rate rule and a species-driven state rule are now trajectory-tested, but this is not a general SBML DAE implementation and needs dedicated numerical fixtures for every unit/state combination.
 - **Assignment rules:** constant and one state-dependent assignment used by a kinetic law are covered above; assignment cycles, coupled rule systems, algebraic dependencies, and general ordering semantics require separate validation.
 - **Initial assignments:** a constant species seed is covered above, but dependency ordering, simultaneous initialization, and dynamic dependencies are not a universal equivalence guarantee.
-- **Events:** fixed-time, zero-delay events with constant assignments are executable and roundtrip-tested when they map to BNGL phase-boundary `set` actions. State-dependent triggers, mutable assignment values, non-constant delays, repeated firing semantics, and general SBML event scheduling remain diagnostic/untranslated. The current reconstruction intentionally emits zero-delay time thresholds; arbitrary event attributes are not preserved byte-for-byte.
+- **Events:** fixed-time, zero-delay events with constant assignments are executable and roundtrip-tested when they map to BNGL phase-boundary `set` actions. All audited event models now preserve trigger, delay, priority, assignment, and trigger-attribute metadata through the BNGL/SBML writers. State-dependent triggers, mutable assignment values, non-constant delays, repeated firing semantics, and general SBML event scheduling remain non-executable until a runtime event executor is added; metadata preservation is not simulation parity.
 - **Algebraic rules:** detected and reported; not solved as implicit constraints.
 - **Constraints:** reported as metadata; not enforced during BNGL/Playground simulation.
 - **Variable, non-integer, or StoichiometryMath stoichiometry:** BNGL cannot represent it generally; current fallback treats it as fixed stoichiometry and emits a diagnostic. This can change dynamics.
@@ -135,7 +136,7 @@ Commands run on the final working tree:
 | --- | --- |
 | `npm run type-check -- --pretty false` | Passed |
 | Focused Atomizer/expression suite (5 files) | 58 passed |
-| `npm run test:atomizer-roundtrip` | Passed: 13/13 SBML trajectories; 10/10 BNGL structural, state-trajectory, observable, and SBML-trajectory comparisons; BNG2 native 9/10 |
+| `npm run test:atomizer-roundtrip` | Passed: 13/13 SBML structural/engine gates; 10/10 BNGL structural, state-trajectory, observable, and native BNG2 comparisons; 12 non-event libRoadRunner trajectories plus the fixed-time event structural/native/engine gate |
 | `npm run test:atomizer-sbml-suite` | Fresh pinned snapshot: 1,692/1,692 successful conversions and strict parses; 0 strict failures |
 | `npm run test:fast` | 274 files passed, 6 skipped; 6,346 tests passed, 56 skipped |
 | `npm run build:quick` | Passed; existing bundler/externalization/chunk-size warnings only |

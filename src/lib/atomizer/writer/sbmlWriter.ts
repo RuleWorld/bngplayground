@@ -973,6 +973,64 @@ function scheduledEventAssignmentMathML(value: number): string {
   return `<math xmlns="http://www.w3.org/1998/Math/MathML"><cn>${text}</cn></math>`;
 }
 
+function preservedEventFormula(
+  formula: string | undefined,
+  replaceSpeciesInFormula: (value: string) => string,
+): string {
+  return formulaToMathML(replaceSpeciesInFormula(String(formula || '0')));
+}
+
+function preservedEventTarget(
+  assignment: { variable: string; bnglVariable?: string },
+  speciesIdByName: Map<string, string>,
+): string {
+  const candidate = assignment.bnglVariable || assignment.variable;
+  return speciesIdByName.get(candidate) || candidate;
+}
+
+function addPreservedEventsToPureXml(
+  lines: string[],
+  model: BNGLModel,
+  speciesIdByName: Map<string, string>,
+  replaceSpeciesInFormula: (value: string) => string,
+): void {
+  if (!model.events || model.events.length === 0) return;
+  lines.push('    <listOfEvents>');
+  for (const [index, event] of model.events.entries()) {
+    const eventId = event.id || `event_${index}`;
+    lines.push(`      <event id="${xmlEscape(eventId)}" useValuesFromTriggerTime="${boolAttr(event.useValuesFromTriggerTime !== false)}">`);
+    if (event.triggerInitialValue !== undefined || event.triggerPersistent !== undefined) {
+      const initial = event.triggerInitialValue === undefined ? 'true' : boolAttr(event.triggerInitialValue);
+      const persistent = event.triggerPersistent === undefined ? 'true' : boolAttr(event.triggerPersistent);
+      lines.push(`        <trigger initialValue="${initial}" persistent="${persistent}">`);
+    } else {
+      lines.push('        <trigger>');
+    }
+    lines.push(`          ${preservedEventFormula(event.bnglTrigger || event.trigger, replaceSpeciesInFormula)}`);
+    lines.push('        </trigger>');
+    if (event.bnglDelay || event.delay) {
+      lines.push('        <delay>');
+      lines.push(`          ${preservedEventFormula(event.bnglDelay || event.delay, replaceSpeciesInFormula)}`);
+      lines.push('        </delay>');
+    }
+    if (event.bnglPriority || event.priority) {
+      lines.push('        <priority>');
+      lines.push(`          ${preservedEventFormula(event.bnglPriority || event.priority, replaceSpeciesInFormula)}`);
+      lines.push('        </priority>');
+    }
+    lines.push('        <listOfEventAssignments>');
+    for (const assignment of event.assignments || []) {
+      const variable = preservedEventTarget(assignment, speciesIdByName);
+      lines.push(`          <eventAssignment variable="${xmlEscape(variable)}">`);
+      lines.push(`            ${preservedEventFormula(assignment.bnglMath || assignment.math, replaceSpeciesInFormula)}`);
+      lines.push('          </eventAssignment>');
+    }
+    lines.push('        </listOfEventAssignments>');
+    lines.push('      </event>');
+  }
+  lines.push('    </listOfEvents>');
+}
+
 function buildSpeciesAliasMap(model: BNGLModel, speciesIdByName: Map<string, string>): Map<string, string> {
   const aliasToSpeciesId = new Map<string, string>();
   const speciesResolver = buildSpeciesNameResolver(Array.from(speciesIdByName.keys()));
@@ -1621,6 +1679,9 @@ function generateSBMLPureXml(model: BNGLModel): string {
     logWriterTiming('pureXml.rules', rulesStarted, `count=${reconstructedRules.length}`);
   }
 
+  if (model.events && model.events.length > 0) {
+    addPreservedEventsToPureXml(lines, model, speciesIdByName, replaceSpeciesInFormula);
+  } else {
   const scheduledEvents = reconstructScheduledEvents(model, speciesIdByName);
   if (scheduledEvents.length > 0) {
     lines.push('    <listOfEvents>');
@@ -1642,6 +1703,7 @@ function generateSBMLPureXml(model: BNGLModel): string {
       lines.push('      </event>');
     });
     lines.push('    </listOfEvents>');
+  }
   }
 
   lines.push('  </model>');
@@ -1859,8 +1921,13 @@ export async function generateSBML(model: BNGLModel): Promise<string> {
   // 5. Rules
   addRulesToSBML(sbmlModelAny, reconstructedRules, lib);
 
-  // 6. Fixed-time events represented by BNGL multi-phase set actions.
-  addScheduledEventsToSBML(sbmlModelAny, model, speciesIdByName, lib);
+  // 6. Preserve source SBML events when Atomizer metadata is present. Native BNGL action
+  // phases remain the fallback for ordinary BNGL models that have no preserved event block.
+  if (model.events && model.events.length > 0) {
+    addPreservedEventsToSBML(sbmlModelAny, model, speciesIdByName, replaceSpeciesInFormula, lib);
+  } else {
+    addScheduledEventsToSBML(sbmlModelAny, model, speciesIdByName, lib);
+  }
 
   logger.info('SBMW017', 'generateSBML writing XML string');
   let result = '';
@@ -2167,6 +2234,57 @@ function addScheduledEventsToSBML(
         const math = lib.parseL3Formula(value);
         if (math) eventAssignment.setMath(math);
       }
+    }
+  }
+}
+
+function addPreservedEventsToSBML(
+  sbmlModelAny: any,
+  model: BNGLModel,
+  speciesIdByName: Map<string, string>,
+  replaceSpeciesInFormula: (value: string) => string,
+  lib: any,
+): void {
+  if (!model.events || model.events.length === 0 || typeof sbmlModelAny.createEvent !== 'function') return;
+
+  const setFormula = (node: any, formula: string): void => {
+    if (typeof node?.setFormula === 'function') {
+      node.setFormula(formula);
+    } else if (typeof node?.setMath === 'function' && typeof lib?.parseL3Formula === 'function') {
+      const math = lib.parseL3Formula(formula);
+      if (math) node.setMath(math);
+    }
+  };
+
+  for (const [index, sourceEvent] of model.events.entries()) {
+    const event = sbmlModelAny.createEvent();
+    event.setId?.(sourceEvent.id || `event_${index}`);
+    event.setName?.(sourceEvent.name || sourceEvent.id || `event_${index}`);
+    event.setUseValuesFromTriggerTime?.(sourceEvent.useValuesFromTriggerTime !== false);
+
+    const trigger = event.createTrigger?.();
+    if (!trigger) {
+      logger.warning('SBMW017E', `Could not create trigger for preserved event ${sourceEvent.id || index}`);
+      continue;
+    }
+    if (sourceEvent.triggerInitialValue !== undefined) trigger.setInitialValue?.(sourceEvent.triggerInitialValue);
+    if (sourceEvent.triggerPersistent !== undefined) trigger.setPersistent?.(sourceEvent.triggerPersistent);
+    setFormula(trigger, preservedEventFormula(sourceEvent.bnglTrigger || sourceEvent.trigger, replaceSpeciesInFormula).replace(/^<math[^>]*>|<\/math>$/g, ''));
+
+    if (sourceEvent.bnglDelay || sourceEvent.delay) {
+      const delay = event.createDelay?.();
+      if (delay) setFormula(delay, preservedEventFormula(sourceEvent.bnglDelay || sourceEvent.delay, replaceSpeciesInFormula).replace(/^<math[^>]*>|<\/math>$/g, ''));
+    }
+    if (sourceEvent.bnglPriority || sourceEvent.priority) {
+      const priority = event.createPriority?.();
+      if (priority) setFormula(priority, preservedEventFormula(sourceEvent.bnglPriority || sourceEvent.priority, replaceSpeciesInFormula).replace(/^<math[^>]*>|<\/math>$/g, ''));
+    }
+
+    for (const assignment of sourceEvent.assignments || []) {
+      const eventAssignment = event.createEventAssignment?.();
+      if (!eventAssignment) continue;
+      eventAssignment.setVariable?.(preservedEventTarget(assignment, speciesIdByName));
+      setFormula(eventAssignment, preservedEventFormula(assignment.bnglMath || assignment.math, replaceSpeciesInFormula).replace(/^<math[^>]*>|<\/math>$/g, ''));
     }
   }
 }

@@ -6,7 +6,7 @@
  * - `parseBNGLRegexDeprecated()` keeps the legacy regex parser for comparison/debug.
  */
 
-import type { BNGLModel } from '../types.ts';
+import type { BNGLModel, BNGLEvent } from '../types.ts';
 import { BNGLParser } from '@bngplayground/engine';
 import { SafeExpressionEvaluator } from '@bngplayground/engine';
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
@@ -254,6 +254,25 @@ export interface ParseBNGLOptions {
   modelName?: string;
 }
 
+const SBML_EVENT_METADATA_RE = /^\s*#\s*@sbml-event\s+([^\s]+)\s*$/gim;
+
+function extractSBMLEventMetadata(code: string): BNGLEvent[] {
+  const events: BNGLEvent[] = [];
+  for (const match of code.matchAll(SBML_EVENT_METADATA_RE)) {
+    try {
+      const decoded = decodeURIComponent(match[1]);
+      const value = JSON.parse(decoded) as BNGLEvent;
+      if (!value || typeof value !== 'object' || !Array.isArray(value.assignments) || typeof value.trigger !== 'string') {
+        continue;
+      }
+      events.push(value);
+    } catch {
+      // Metadata is additive. A malformed comment must not make an otherwise valid BNGL file fail.
+    }
+  }
+  return events;
+}
+
 export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLModel {
   if (options.checkCancelled) {
     options.checkCancelled();
@@ -272,6 +291,11 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
 
   if (!result.model.name && options.modelName) {
     result.model.name = options.modelName;
+  }
+
+  const eventMetadata = extractSBMLEventMetadata(code);
+  if (eventMetadata.length > 0) {
+    result.model.events = eventMetadata;
   }
 
   return result.model;

@@ -21,6 +21,7 @@ type SuiteResult = {
   warningCategories: string[];
   warningCounts: Record<string, number>;
   eventConverted: boolean;
+  eventPreserved: boolean;
   eventUntranslated: boolean;
   error?: string;
 };
@@ -63,6 +64,7 @@ async function main(): Promise<void> {
       warningCategories: [],
       warningCounts: {},
       eventConverted: false,
+      eventPreserved: false,
       eventUntranslated: false,
     };
     try {
@@ -75,7 +77,10 @@ async function main(): Promise<void> {
         return counts;
       }, {});
       result.eventConverted = /time-triggered event\(s\) converted/i.test(atomized.bngl);
-      result.eventUntranslated = /Events NOT simulated/i.test(atomized.bngl);
+      result.eventPreserved = /#\s*@sbml-event\s+/i.test(atomized.bngl);
+      // A diagnostic note may remain for an event that is preserved losslessly in metadata.
+      // Count it as untranslated only when neither an executable action nor metadata exists.
+      result.eventUntranslated = /Events NOT simulated/i.test(atomized.bngl) && !result.eventPreserved;
       if (!atomized.success) {
         result.error = atomized.error || 'Atomizer returned success=false';
       } else {
@@ -102,7 +107,9 @@ async function main(): Promise<void> {
     strictFailures: results.filter((result) => !result.strictParse).length,
     eventModels: results.filter((result) => result.warningCategories.includes('event')).length,
     eventConverted: results.filter((result) => result.eventConverted).length,
+    eventPreserved: results.filter((result) => result.eventPreserved).length,
     eventUntranslated: results.filter((result) => result.eventUntranslated).length,
+    eventDiagnostic: results.filter((result) => result.warningCategories.includes('event') && !result.eventConverted).length,
     warningCategories: [...new Set(results.flatMap((result) => result.warningCategories))].sort(),
     warningCounts: results.reduce<Record<string, number>>((counts, result) => {
       for (const [category, count] of Object.entries(result.warningCounts)) {
