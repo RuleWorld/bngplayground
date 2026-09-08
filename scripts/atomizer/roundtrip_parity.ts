@@ -553,7 +553,7 @@ function compareEngineTrajectories(left: EngineTrajectory, right: EngineTrajecto
   right.headers.slice(1).forEach((header, index) => rightCols.set(canonicalLabel(header), index + 1));
   const labels = [...leftCols.keys()].sort();
   let mapping = 'label';
-  let comparableLabels = labels;
+  let comparableLabels: string[];
   let missing = labels.filter((label) => !leftCols.has(label) || !rightCols.has(label));
   const ignoredMissing = missing.filter((label) => !/_amt$/i.test(label));
   const requiredMissing = missing.filter((label) => /_amt$/i.test(label));
