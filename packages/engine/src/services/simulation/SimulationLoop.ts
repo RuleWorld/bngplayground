@@ -183,6 +183,10 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
     })),
     compartments: inputModel.compartments?.map((compartment) => ({ ...compartment })),
     functions: inputModel.functions?.map((fn) => ({ ...fn, args: [...fn.args] })),
+    events: inputModel.events?.map((event) => ({
+      ...event,
+      assignments: event.assignments.map((assignment) => ({ ...assignment })),
+    })),
     networkOptions: inputModel.networkOptions
       ? {
         ...inputModel.networkOptions,
@@ -2887,7 +2891,9 @@ export async function simulate(
       numSpecies > 0 && couplingUpperBound < JAC_DENSE_FRACTION_MAX * numSpecies * numSpecies;
     // Large + genuinely sparse => KLU sparse; otherwise dense analytical.
     const autoSolver =
-      (numSpecies >= SPARSE_MIN_SPECIES && jacobianLikelySparse) ? 'cvode_sparse' : 'cvode_jac';
+      numSpecies >= 200
+        ? 'cvode_spgmr'
+        : ((numSpecies >= SPARSE_MIN_SPECIES && jacobianLikelySparse) ? 'cvode_sparse' : 'cvode_jac');
 
     if (solverType === 'auto') {
       if (useAdaptiveCvodeTuning) {

@@ -27,7 +27,10 @@ const loaderPath = resolve(root, 'services', 'cvode_loader.js');
 
 let cachedLoader: CvodeLoader | null = null;
 
-const ALLOWED_MODULES = new Set(['path', 'fs', 'crypto', 'url']);
+const ALLOWED_MODULES = new Set([
+  'path', 'fs', 'crypto', 'url',
+  'node:path', 'node:fs', 'node:crypto', 'node:url',
+]);
 
 function safeRequire(id: string) {
   if (ALLOWED_MODULES.has(id)) {

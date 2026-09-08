@@ -478,7 +478,7 @@ describe('SBML writer seed concentration resolution', () => {
       };
 
       const sbml = await generateSBML(model as any);
-      expect(sbml).toContain('<kineticLaw formula="k * s0"/>');
+      expect(sbml).toMatch(/<kineticLaw>\s*<math[^>]*>\s*<apply>\s*<times\/>\s*<ci>k<\/ci>\s*<ci>s0<\/ci>\s*<\/apply>\s*<\/math>\s*<\/kineticLaw>/);
       expect(sbml).not.toContain('S1_amt');
     },
     30000

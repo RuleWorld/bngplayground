@@ -87,6 +87,7 @@ static int configure_sparse_spgmr_solver(CvodeWrapper* mem);
 static int configure_klu_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc);
 static int configure_spgmr_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc);
 static int configure_sparse_jacobian_solver(CvodeWrapper* mem, NetworkByteCode* bc);
+void destroy_solver(void* ptr);
 
 // RHS function that bridges CVODE -> JS or Bytecode
 int f_bridge(realtype t, N_Vector y, N_Vector ydot, void *user_data) {
@@ -345,6 +346,10 @@ static int configure_sparse_spgmr_solver(CvodeWrapper* mem) {
     if (mem->LS) {
         SUNLinSolFree(mem->LS);
         mem->LS = NULL;
+    }
+    if (mem->A) {
+        SUNMatDestroy(mem->A);
+        mem->A = NULL;
     }
 
     mem->LS = SUNLinSol_SPGMR(mem->y, SUN_PREC_NONE, 0, mem->sunctx);
@@ -723,6 +728,20 @@ void* init_solver_sparse(int neq, double t0, double* y0_data, double reltol, dou
     return (void*)mem;
 }
 
+// Matrix-free SPGMR path used by upstream BioNetGen for large networks.
+// The native bytecode RHS remains available, but no dense/KLU Jacobian is attached.
+void* init_solver_spgmr(int neq, double t0, double* y0_data, double reltol, double abstol, int max_steps) {
+    void* ptr = init_solver_sparse(neq, t0, y0_data, reltol, abstol, max_steps);
+    if (!ptr) return NULL;
+    CvodeWrapper* mem = (CvodeWrapper*)ptr;
+    mem->use_sparse = 2;
+    if (configure_sparse_spgmr_solver(mem) != 0) {
+        destroy_solver(ptr);
+        return NULL;
+    }
+    return ptr;
+}
+
 int solve_step(void* ptr, double tout, double* tret) {
     CvodeWrapper* mem = (CvodeWrapper*)ptr;
     realtype t_reached;
@@ -1045,7 +1064,7 @@ void bind_network(uintptr_t solver_ptr, uintptr_t network_ptr) {
     // Set CVODE User Data explicitly 
     CVodeSetUserData(mem->cvode_mem, mem);
 
-    if (mem->use_sparse && bc->jacRowPtr) {
+    if (mem->use_sparse == 1 && bc->jacRowPtr) {
         if (configure_sparse_jacobian_solver(mem, bc) != 0) {
             if (mem->A) {
                 SUNMatDestroy(mem->A);

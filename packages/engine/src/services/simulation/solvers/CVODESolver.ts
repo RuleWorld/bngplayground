@@ -62,6 +62,7 @@ export interface CVodeModule {
   _init_solver(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
   _init_solver_adams?(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
   _init_solver_sparse(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
+  _init_solver_spgmr?(neq: number, t0: number, y0: number, rtol: number, atol: number, max_steps: number): number;
   _solve_step(mem: number, tout: number, tret: number): number;
   _get_y(mem: number, dest: number): void;
   _destroy_solver(mem: number): void;
@@ -143,6 +144,7 @@ export class CVODESolver {
   private options: SolverOptions;
   private useSparse: boolean;
   private useAdams: boolean;
+  private useSpgmr: boolean;
   private jacobian?: JacobianFunction;
   private networkByteCode?: NetworkByteCode;
   private networkHandle: number = 0;
@@ -256,13 +258,14 @@ export class CVODESolver {
     }
   }
 
-  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false, jacobian?: JacobianFunction, useAdams: boolean = false) {
+  constructor(n: number, f: DerivativeFunction, options: Partial<SolverOptions> = {}, useSparse: boolean = false, jacobian?: JacobianFunction, useAdams: boolean = false, useSpgmr: boolean = false) {
     this.n = n;
     this.f = f;
     this.options = { ...DEFAULT_OPTIONS, ...options };
     this.useSparse = useSparse;
     this.jacobian = jacobian;
     this.useAdams = useAdams;
+    this.useSpgmr = useSpgmr;
     this.networkByteCode = this.options.networkByteCode;
   }
 
@@ -695,6 +698,8 @@ export class CVODESolver {
     } else if (this.useAdams && m._init_solver_adams) {
       // Adams-Moulton for non-stiff systems (requires WASM rebuild to activate)
       solverMem = m._init_solver_adams(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
+    } else if (this.useSpgmr && m._init_solver_spgmr) {
+      solverMem = m._init_solver_spgmr(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
     } else if (this.useSparse || hasNativeSparseJacobian) {
       solverMem = m._init_solver_sparse(neq, t0, this.yPtr, rtol, atol, this.options.maxSteps);
     } else {

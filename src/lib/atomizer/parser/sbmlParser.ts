@@ -2003,8 +2003,14 @@ export class SBMLParser {
         for (const child of elementChildren) {
           if (child.name === 'piece') {
             const pieceChildren = child.children.filter((c) => c.name !== '#text');
-            const conditionNode = pieceChildren.find((c) => c.name === 'condition') || null;
-            const valueNode = pieceChildren.find((c) => c.name !== 'condition') || null;
+            // SBML MathML uses the value and condition as the two direct children of
+            // <piece>.  Some producers add a non-standard <condition> wrapper, so accept
+            // both forms without confusing the otherwise value for the condition.
+            const wrappedCondition = pieceChildren.find((c) => c.name === 'condition') || null;
+            const conditionNode = wrappedCondition || pieceChildren[1] || null;
+            const valueNode = wrappedCondition
+              ? (pieceChildren.find((c) => c.name !== 'condition') || null)
+              : (pieceChildren[0] || null);
             const valueExpr = this.mathMlNodeToFormula(valueNode);
             const conditionExpr = this.mathMlNodeToFormula(conditionNode);
             if (valueExpr && conditionExpr) {

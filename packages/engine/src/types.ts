@@ -93,6 +93,38 @@ export interface BNGLFunction {
     expression: string;
 }
 
+/**
+ * SBML event metadata preserved in BNGL comments by the Atomizer.
+ *
+ * BioNetGen's native language has no general trigger/event block, so the
+ * importer carries the original event definition losslessly alongside the
+ * executable BNGL model. The optional BNGL fields let the Playground engine
+ * evaluate the event without changing the SBML identifiers or formulas that
+ * are written back out.
+ */
+export interface BNGLEventAssignment {
+    variable: string;
+    math: string;
+    bnglVariable?: string;
+    bnglTarget?: string;
+    bnglMath?: string;
+}
+
+export interface BNGLEvent {
+    id: string;
+    name: string;
+    trigger: string;
+    delay?: string;
+    useValuesFromTriggerTime: boolean;
+    assignments: BNGLEventAssignment[];
+    triggerInitialValue?: boolean;
+    triggerPersistent?: boolean;
+    priority?: string;
+    bnglTrigger?: string;
+    bnglDelay?: string;
+    bnglPriority?: string;
+}
+
 export interface ReactionRule {
     name?: string;
     reactants: string[];
@@ -151,6 +183,8 @@ export interface BNGLModel {
     reactionRules: ReactionRule[];
     compartments?: BNGLCompartment[];
     functions?: BNGLFunction[];
+    /** Lossless SBML event metadata carried through Atomizer BNGL comments. */
+    events?: BNGLEvent[];
     networkOptions?: {
         maxSpecies?: number;
         maxReactions?: number;
@@ -289,7 +323,7 @@ export interface SimulationOptions {
     rtol?: number;
     // `cvode` uses CVODE as the primary solver and automatically falls back to
     // Rosenbrock23 on hard CVODE failures (convergence/invalid-state guard).
-    solver?: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'webgpu_rk4';
+    solver?: 'auto' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_spgmr' | 'cvode_jac' | 'rosenbrock23' | 'rk45' | 'rk4' | 'webgpu_rk4';
     maxSteps?: number;
     maxStep?: number;
     steadyState?: boolean;

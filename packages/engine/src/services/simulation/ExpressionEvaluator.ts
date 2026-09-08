@@ -341,13 +341,21 @@ function preExpandExpression(
     for (let pass = 0; pass < 10; pass++) {
       let foundFunction = false;
       for (const func of functions) {
-        const funcCallWithParens = new RegExp(`\\b${func.name}\\s*\\(\\s*\\)`, 'g');
-        if (funcCallWithParens.test(expandedExpr)) {
-          foundFunction = true;
-          expandedExpr = expandedExpr.replace(funcCallWithParens, `(${func.expression})`);
+        if (func.args.length > 0) {
+          const expanded = expandFunctionCalls(expandedExpr, func);
+          if (expanded.changed) {
+            foundFunction = true;
+            expandedExpr = expanded.expression;
+          }
+        } else {
+          const funcCallWithParens = new RegExp(`\\b${escapeRegExpForExpression(func.name)}\\s*\\(\\s*\\)`, 'g');
+          if (funcCallWithParens.test(expandedExpr)) {
+            foundFunction = true;
+            expandedExpr = expandedExpr.replace(funcCallWithParens, `(${func.expression})`);
+          }
         }
         if (func.args.length === 0) {
-          const funcCallNoParens = new RegExp(`\\b${func.name}\\b(?!\\s*\\()`, 'g');
+          const funcCallNoParens = new RegExp(`\\b${escapeRegExpForExpression(func.name)}\\b(?!\\s*\\()`, 'g');
           if (funcCallNoParens.test(expandedExpr)) {
             foundFunction = true;
             expandedExpr = expandedExpr.replace(funcCallNoParens, `(${func.expression})`);
@@ -360,6 +368,73 @@ function preExpandExpression(
 
   setBoundedCache(expandedExpressionCache, cacheKey, expandedExpr, MAX_EXPANDED_EXPRESSION_CACHE);
   return expandedExpr;
+}
+
+function escapeRegExpForExpression(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function splitFunctionArguments(value: string): string[] | null {
+  const args: string[] = [];
+  let start = 0;
+  let depth = 0;
+  for (let i = 0; i < value.length; i++) {
+    const ch = value[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      args.push(value.slice(start, i).trim());
+      start = i + 1;
+    }
+  }
+  if (depth !== 0) return null;
+  const last = value.slice(start).trim();
+  if (last || value.trim() !== '') args.push(last);
+  return args;
+}
+
+function expandFunctionCalls(
+  expression: string,
+  func: { name: string; args: string[]; expression: string },
+): { expression: string; changed: boolean } {
+  const callPattern = new RegExp(`\\b${escapeRegExpForExpression(func.name)}\\s*\\(`, 'g');
+  let cursor = 0;
+  let changed = false;
+  let output = '';
+  let match: RegExpExecArray | null;
+
+  while ((match = callPattern.exec(expression)) !== null) {
+    const open = expression.indexOf('(', match.index);
+    let depth = 1;
+    let close = open + 1;
+    for (; close < expression.length && depth > 0; close++) {
+      if (expression[close] === '(') depth++;
+      else if (expression[close] === ')') depth--;
+    }
+    if (depth !== 0) break;
+
+    const args = splitFunctionArguments(expression.slice(open + 1, close - 1));
+    if (!args || args.length !== func.args.length) {
+      callPattern.lastIndex = close;
+      continue;
+    }
+
+    let body = func.expression;
+    for (let i = 0; i < func.args.length; i++) {
+      const parameter = func.args[i];
+      const replacement = `(${args[i]})`;
+      body = body.replace(new RegExp(`\\b${escapeRegExpForExpression(parameter)}\\b`, 'g'), replacement);
+    }
+    output += expression.slice(cursor, match.index);
+    output += `(${body})`;
+    cursor = close;
+    changed = true;
+    callPattern.lastIndex = close;
+  }
+
+  if (!changed) return { expression, changed: false };
+  output += expression.slice(cursor);
+  return { expression: output, changed: true };
 }
 
 
