@@ -351,6 +351,129 @@ function speciesLabels(xmlPath: string): Map<string, string> {
   return labels;
 }
 
+function xmlBlocks(xml: string, tag: string): string[] {
+  return [...xml.matchAll(new RegExp(`<${tag}\\b[\\s\\S]*?<\\/${tag}>`, 'gi'))].map((match) => match[0]);
+}
+
+function xmlCompartmentSizes(xmlPath: string): Map<string, number> {
+  const xml = readFileSync(xmlPath, 'utf8');
+  const sizes = new Map<string, number>();
+  for (const match of xml.matchAll(/<compartment\b([^>]*)>/gi)) {
+    const attrs = match[1] || '';
+    const id = xmlAttr(attrs, 'id');
+    const size = Number(xmlAttr(attrs, 'size'));
+    if (id && Number.isFinite(size)) sizes.set(id, size);
+  }
+  return sizes;
+}
+
+function xmlSpeciesInitials(xmlPath: string): Map<string, number> {
+  const xml = readFileSync(xmlPath, 'utf8');
+  const compartmentSizes = xmlCompartmentSizes(xmlPath);
+  const initials = new Map<string, number>();
+  for (const match of xml.matchAll(/<species\b([^>]*)>/gi)) {
+    const attrs = match[1] || '';
+    const id = xmlAttr(attrs, 'id');
+    if (!id) continue;
+    const amount = xmlAttr(attrs, 'initialAmount');
+    const concentration = xmlAttr(attrs, 'initialConcentration');
+    const value = amount ? Number(amount) : Number(concentration) * (compartmentSizes.get(xmlAttr(attrs, 'compartment')) || 1);
+    if (Number.isFinite(value)) initials.set(id, value);
+  }
+  return initials;
+}
+
+function xmlReactionSignatures(xmlPath: string, labels: Map<string, string>): string[] {
+  const xml = readFileSync(xmlPath, 'utf8');
+  const signatureFor = (block: string, section: string): string[] => {
+    const content = block.match(new RegExp(`<listOf${section}\\b[\\s\\S]*?<\\/listOf${section}>`, 'i'))?.[0] || '';
+    return [...content.matchAll(/<speciesReference\b([^>]*)>/gi)]
+      .map((match) => canonicalLabel(labels.get(xmlAttr(match[1] || '', 'species')) || xmlAttr(match[1] || '', 'species')))
+      .filter(Boolean)
+      .sort();
+  };
+  return xmlBlocks(xml, 'reaction').map((block) =>
+    `${signatureFor(block, 'Reactants').join('+')}->${signatureFor(block, 'Products').join('+')}`
+  ).sort();
+}
+
+function xmlParameterIds(xmlPath: string): string[] {
+  const xml = readFileSync(xmlPath, 'utf8');
+  return [...xml.matchAll(/<parameter\b([^>]*)>/gi)]
+    .map((match) => xmlAttr(match[1] || '', 'id'))
+    .filter((id) => id && !/^__compartment_|^__avogadro__/i.test(id))
+    .sort();
+}
+
+function compareSBMLStructure(leftPath: string, rightPath: string): Comparison {
+  const leftLabels = speciesLabels(leftPath);
+  const rightLabels = speciesLabels(rightPath);
+  const leftInitials = xmlSpeciesInitials(leftPath);
+  const rightInitials = xmlSpeciesInitials(rightPath);
+  const leftByLabel = new Map([...leftLabels].map(([id, label]) => [label, leftInitials.get(id) ?? null]));
+  const rightByLabel = new Map([...rightLabels].map(([id, label]) => [label, rightInitials.get(id) ?? null]));
+  const sharedLabels = [...leftByLabel.keys()].filter((label) => rightByLabel.has(label));
+  const mapping = new Map<string, string>();
+  for (const label of sharedLabels) mapping.set(label, label);
+  const leftIds = [...leftLabels.keys()];
+  const rightIds = [...rightLabels.keys()];
+  let mappingMethod = 'label';
+  if (sharedLabels.length !== leftByLabel.size || sharedLabels.length !== rightByLabel.size) {
+    if (leftIds.length === rightIds.length) {
+      mappingMethod = 'order-fallback';
+      for (let index = 0; index < leftIds.length; index++) {
+        mapping.set(leftLabels.get(leftIds[index])!, rightLabels.get(rightIds[index])!);
+      }
+    } else {
+      mappingMethod = 'unmapped';
+    }
+  }
+  const missing = [...leftByLabel.keys()].filter((label) => !mapping.has(label) || !rightByLabel.has(mapping.get(label)!)).sort();
+  const mappedRight = new Set(mapping.values());
+  const extra = [...rightByLabel.keys()].filter((label) => !mappedRight.has(label)).sort();
+  let maxInitialAbs = 0;
+  for (const [leftLabel, initial] of leftByLabel) {
+    const rightLabel = mapping.get(leftLabel);
+    const target = rightLabel ? rightByLabel.get(rightLabel) : undefined;
+    if (initial !== null && target !== undefined && target !== null) {
+      maxInitialAbs = Math.max(maxInitialAbs, Math.abs(initial - target));
+    }
+  }
+  const leftReactions = xmlReactionSignatures(leftPath, leftLabels);
+  const rightReactions = xmlReactionSignatures(rightPath, rightLabels);
+  const inverse = new Map([...mapping].map(([left, right]) => [right, left]));
+  const translatedRightReactions = rightReactions.map((signature) => {
+    const [reactants, products] = signature.split('->');
+    const translate = (value: string): string => inverse.get(value) || value;
+    return `${reactants.split('+').filter(Boolean).map(translate).sort().join('+')}->${products.split('+').filter(Boolean).map(translate).sort().join('+')}`;
+  }).sort();
+  const leftXml = readFileSync(leftPath, 'utf8');
+  const rightXml = readFileSync(rightPath, 'utf8');
+  const eventCount = xmlBlocks(leftXml, 'event').length;
+  const targetEventCount = xmlBlocks(rightXml, 'event').length;
+  const initialAssignmentCount = xmlBlocks(leftXml, 'initialAssignment').length;
+  const targetInitialAssignmentCount = xmlBlocks(rightXml, 'initialAssignment').length;
+  const sourceParameters = xmlParameterIds(leftPath);
+  const targetParameters = xmlParameterIds(rightPath);
+  const missingParameters = sourceParameters.filter((id) => !targetParameters.includes(id));
+  return {
+    ok: missing.length === 0 && extra.length === 0 &&
+      (initialAssignmentCount > 0 || maxInitialAbs <= 1e-7) &&
+      leftReactions.length === translatedRightReactions.length &&
+      leftReactions.every((signature, index) => signature === translatedRightReactions[index]) &&
+      eventCount === targetEventCount && missingParameters.length === 0,
+    species: { mapping: Object.fromEntries(mapping), mappingMethod, missing, extra, maxInitialAbs },
+    reactions: { source: leftReactions, target: translatedRightReactions, sameTopology: leftReactions.length === translatedRightReactions.length && leftReactions.every((signature, index) => signature === translatedRightReactions[index]) },
+    parameters: { source: sourceParameters, target: targetParameters, missing: missingParameters },
+    events: { source: eventCount, target: targetEventCount },
+    initialAssignments: {
+      source: initialAssignmentCount,
+      target: targetInitialAssignmentCount,
+      initialValuesChecked: initialAssignmentCount === 0,
+    },
+  };
+}
+
 function parseCdat(path: string): Cdat {
   const lines = readFileSync(path, 'utf8').split(/\r?\n/).filter((line) => line.trim());
   const header = lines.find((line) => line.trim().startsWith('#'))?.replace(/^\s*#\s*/, '').trim().split(/\s+/) || [];
@@ -478,6 +601,241 @@ function compareEngineTrajectories(left: EngineTrajectory, right: EngineTrajecto
   };
 }
 
+function compareObservableTrajectories(left: EngineTrajectory, right: EngineTrajectory): Comparison {
+  const leftCols = new Map<string, number>();
+  const rightCols = new Map<string, number>();
+  // The Playground simulation table is observable-based: amount observables (the usual
+  // *_amt columns) and named species observables are both executable outputs. Compare all
+  // non-time columns here, while retaining missing/extra names for SBML's weaker naming model.
+  left.headers.slice(1).forEach((header, index) => leftCols.set(canonicalLabel(header), index + 1));
+  right.headers.slice(1).forEach((header, index) => rightCols.set(canonicalLabel(header), index + 1));
+
+  const shared = [...leftCols.keys()].filter((label) => rightCols.has(label)).sort();
+  const missing = [...leftCols.keys()].filter((label) => !rightCols.has(label)).sort();
+  const extra = [...rightCols.keys()].filter((label) => !leftCols.has(label)).sort();
+  if (shared.length === 0) {
+    return {
+      comparable: false,
+      status: 'no-shared-observable-labels',
+      shared,
+      missing,
+      extra,
+      points: Math.min(left.rows.length, right.rows.length),
+    };
+  }
+
+  const points = Math.min(left.rows.length, right.rows.length);
+  let maxAbs = 0;
+  let maxRel = 0;
+  let worst: Record<string, unknown> | null = null;
+  for (let row = 0; row < points; row++) {
+    for (const label of shared) {
+      const source = left.rows[row][leftCols.get(label)!];
+      const target = right.rows[row][rightCols.get(label)!];
+      const abs = Math.abs(source - target);
+      const rel = abs / Math.max(Math.abs(source), Math.abs(target), 1e-300);
+      if (abs > maxAbs) {
+        maxAbs = abs;
+        worst = { observable: label, row, source, target };
+      }
+      maxRel = Math.max(maxRel, rel);
+    }
+  }
+  return {
+    comparable: true,
+    status: maxAbs <= 1e-7 && left.rows.length === right.rows.length ? 'passed' : 'failed',
+    shared,
+    missing,
+    extra,
+    points,
+    sourceRows: left.rows.length,
+    targetRows: right.rows.length,
+    maxAbs,
+    maxRel,
+    worst,
+  };
+}
+
+function normalizedTerms(terms: unknown): string[] {
+  const counts = new Map<string, number>();
+  for (const raw of Array.isArray(terms) ? terms : []) {
+    const label = canonicalLabel(String(raw ?? ''));
+    if (!label || /^__rate_rule__/i.test(label)) continue;
+    counts.set(label, (counts.get(label) || 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .flatMap(([label, count]) => Array.from({ length: count }, () => label));
+}
+
+function normalizedBnglStructure(model: any): {
+  species: Array<{ label: string; initial: number | null }>;
+  parameters: string[];
+  rules: string[];
+  observables: string[];
+  compartments: string[];
+} {
+  const species = (Array.isArray(model?.species) ? model.species : [])
+    .map((entry: any) => ({
+      label: canonicalLabel(String(entry?.name || '')),
+      initial: Number.isFinite(Number(entry?.initialConcentration))
+        ? Number(entry.initialConcentration)
+        : Number.isFinite(Number(entry?.initialAmount))
+          ? Number(entry.initialAmount)
+          : null,
+    }))
+    .filter((entry: { label: string }) => entry.label && !/^__rate_rule__/i.test(entry.label))
+    .sort((left: { label: string }, right: { label: string }) => left.label.localeCompare(right.label));
+
+  const parameters = Object.keys(model?.parameters || {})
+    .filter((name) => !/^__compartment_|^__rate_rule__|^__avogadro__|^quantity_to_number_factor$/i.test(name))
+    .sort();
+
+  const executableRules = Array.isArray(model?.reactionRules) && model.reactionRules.length > 0
+    ? model.reactionRules
+    : (Array.isArray(model?.reactions) ? model.reactions : []);
+  const rules = executableRules.map((rule: any) => {
+    const reactants = normalizedTerms(rule?.reactants);
+    const products = normalizedTerms(rule?.products);
+    const reversible = Boolean(rule?.isBidirectional ?? rule?.reversible);
+    return `${reactants.join('+')}->${products.join('+')}|reversible=${reversible}`;
+  }).sort();
+
+  const observables = (Array.isArray(model?.observables) ? model.observables : [])
+    .map((entry: any) => canonicalLabel(String(entry?.name || '')))
+    .filter(Boolean)
+    .sort();
+  const compartments = (Array.isArray(model?.compartments) ? model.compartments : [])
+    .map((entry: any) => canonicalLabel(String(entry?.name || '')))
+    .filter(Boolean)
+    .sort();
+  return { species, parameters, rules, observables, compartments };
+}
+
+function amountObservablePatterns(model: any): Map<string, string> {
+  const result = new Map<string, string>();
+  for (const observable of Array.isArray(model?.observables) ? model.observables : []) {
+    const name = String(observable?.name || '').trim();
+    if (!/_amt$/i.test(name)) continue;
+    const pattern = String(observable?.pattern || '').split(',')[0].trim();
+    const label = canonicalLabel(pattern);
+    if (name && label) result.set(name, label);
+  }
+  return result;
+}
+
+function executableBnglRules(model: any): any[] {
+  if (Array.isArray(model?.reactionRules) && model.reactionRules.length > 0) {
+    return model.reactionRules;
+  }
+  return Array.isArray(model?.reactions) ? model.reactions : [];
+}
+
+function buildSpeciesMapping(
+  leftModel: any,
+  rightModel: any,
+  leftSpecies: Array<{ label: string; initial: number | null }>,
+  rightSpecies: Array<{ label: string; initial: number | null }>,
+): { sourceToTarget: Map<string, string>; method: string } {
+  const sourceToTarget = new Map<string, string>();
+  const leftByAmountObservable = amountObservablePatterns(leftModel);
+  const rightByAmountObservable = amountObservablePatterns(rightModel);
+  for (const [name, leftLabel] of leftByAmountObservable) {
+    const rightLabel = rightByAmountObservable.get(name);
+    if (!rightLabel) continue;
+    if (leftSpecies.some((entry) => entry.label === leftLabel) && rightSpecies.some((entry) => entry.label === rightLabel)) {
+      sourceToTarget.set(leftLabel, rightLabel);
+    }
+  }
+  if (sourceToTarget.size > 0) {
+    return { sourceToTarget, method: 'shared-amount-observable' };
+  }
+
+  const rightLabels = new Set(rightSpecies.map((entry) => entry.label));
+  for (const entry of leftSpecies) {
+    if (rightLabels.has(entry.label)) sourceToTarget.set(entry.label, entry.label);
+  }
+  if (sourceToTarget.size === leftSpecies.length && leftSpecies.length === rightSpecies.length) {
+    return { sourceToTarget, method: 'label' };
+  }
+
+  if (leftSpecies.length === rightSpecies.length) {
+    leftSpecies.forEach((entry, index) => sourceToTarget.set(entry.label, rightSpecies[index].label));
+    return { sourceToTarget, method: 'order-fallback' };
+  }
+  return { sourceToTarget, method: 'unmapped' };
+}
+
+function ruleSignatures(model: any, translate: (label: string) => string): string[] {
+  return executableBnglRules(model).map((rule: any) => {
+    const reactants = normalizedTerms(rule?.reactants).map(translate).sort();
+    const products = normalizedTerms(rule?.products).map(translate).sort();
+    const reversible = Boolean(rule?.isBidirectional ?? rule?.reversible);
+    return `${reactants.join('+')}->${products.join('+')}|reversible=${reversible}`;
+  }).sort();
+}
+
+function compareBNGLStructure(leftModel: any, rightModel: any): Comparison {
+  const left = normalizedBnglStructure(leftModel);
+  const right = normalizedBnglStructure(rightModel);
+  const mapping = buildSpeciesMapping(leftModel, rightModel, left.species, right.species);
+  const inverseMapping = new Map([...mapping.sourceToTarget].map(([source, target]) => [target, source]));
+  const leftSpecies = new Map(left.species.map((entry) => [entry.label, entry.initial]));
+  const rightSpecies = new Map(right.species.map((entry) => [entry.label, entry.initial]));
+  const missingSpecies = [...leftSpecies.keys()].filter((label) => !mapping.sourceToTarget.has(label) || !rightSpecies.has(mapping.sourceToTarget.get(label)!)).sort();
+  const mappedRightSpecies = new Set(mapping.sourceToTarget.values());
+  const extraSpecies = [...rightSpecies.keys()].filter((label) => !mappedRightSpecies.has(label)).sort();
+  let maxInitialAbs = 0;
+  for (const [label, initial] of leftSpecies) {
+    const target = rightSpecies.get(mapping.sourceToTarget.get(label) || '');
+    if (initial !== null && target !== undefined && target !== null) {
+      maxInitialAbs = Math.max(maxInitialAbs, Math.abs(initial - target));
+    }
+  }
+  const missingParameters = left.parameters.filter((name) => !right.parameters.includes(name));
+  const extraParameters = right.parameters.filter((name) => !left.parameters.includes(name));
+  const sourceRules = ruleSignatures(leftModel, (label) => label);
+  const targetRules = ruleSignatures(rightModel, (label) => inverseMapping.get(label) || label);
+  const ok = missingSpecies.length === 0 && extraSpecies.length === 0 &&
+    sourceRules.length === targetRules.length &&
+    sourceRules.every((rule, index) => rule === targetRules[index]) &&
+    maxInitialAbs <= 1e-7 && missingParameters.length === 0;
+  return {
+    ok,
+    species: {
+      source: [...leftSpecies.keys()].sort(),
+      target: [...rightSpecies.keys()].sort(),
+      mapping: Object.fromEntries(mapping.sourceToTarget),
+      mappingMethod: mapping.method,
+      missing: missingSpecies,
+      extra: extraSpecies,
+      maxInitialAbs,
+    },
+    parameters: {
+      source: left.parameters,
+      target: right.parameters,
+      missing: missingParameters,
+      extra: extraParameters,
+    },
+    reactionRules: {
+      source: sourceRules,
+      target: targetRules,
+      sameTopology: sourceRules.length === targetRules.length && sourceRules.every((rule, index) => rule === targetRules[index]),
+    },
+    observables: {
+      source: left.observables,
+      target: right.observables,
+      shared: left.observables.filter((name) => right.observables.includes(name)),
+      missing: left.observables.filter((name) => !right.observables.includes(name)),
+      extra: right.observables.filter((name) => !left.observables.includes(name)),
+    },
+    compartments: {
+      source: left.compartments,
+      target: right.compartments,
+    },
+  };
+}
+
 function canonicalActions(bngl: string, writeInitial = false): string {
   const write = writeInitial ? '    writeSBML({suffix=>"initial"})\n' : '';
   const block = `begin actions\n    generate_network({overwrite=>1})\n${write}    simulate({method=>"ode",t_end=>${tEnd},n_steps=>${nSteps},max_num_steps=>1e8})\nend actions`;
@@ -560,6 +918,7 @@ async function main(): Promise<void> {
       atomized: true,
       strictParse: !!strict,
       bnglChars: result.bngl.length,
+      structural: compareSBMLStructure(sourceFile, targetPath),
       diagnostics: result.log.filter((entry) => /SBM0(2|1|22)|ATM/.test(entry.code || '')).slice(-20),
       trajectory: compareRoadRunner(sourceFile, targetPath),
       targetXml: targetPath,
@@ -588,6 +947,8 @@ async function main(): Promise<void> {
     }
     const targetModel = parseBNGL(result.bngl);
     const targetXml = await generateSBML(targetModel as any);
+    const structural = compareBNGLStructure(parsed, targetModel);
+    const observableTrajectory = compareObservableTrajectories(originalEngine, targetEngine);
     const targetDir = mkdtempSync(join(tmpdir(), `atomizer-bngl-roundtrip-${name}-`));
     const targetXmlPath = join(targetDir, `${name}-target.xml`);
     writeFileSync(targetXmlPath, targetXml);
@@ -595,7 +956,9 @@ async function main(): Promise<void> {
       generatedSbmlL3V2: generated.includes('level3/version2/core'),
       strictParse: !!strict,
       bnglChars: result.bngl.length,
+      structural,
       trajectory: compareEngineTrajectories(originalEngine, targetEngine),
+      observableTrajectory,
       nativeBng2Trajectory: nativeTrajectory,
       sbmlTrajectory: compareRoadRunner(generatedPath, targetXmlPath),
       generatedXml: generatedPath,
@@ -606,7 +969,10 @@ async function main(): Promise<void> {
   const path = writeJson('roundtrip-parity.json', report);
   console.log(JSON.stringify({ report: path, reportData: report }, null, 2));
   const failures = [...Object.values(report.sbmlToBnglToSbml as Record<string, any>), ...Object.values(report.bnglToSbmlToBngl as Record<string, any>)]
-    .filter((entry: any) => !entry.strictParse || !entry.trajectory?.ok || (entry.sbmlTrajectory && !entry.sbmlTrajectory.ok));
+    .filter((entry: any) => !entry.strictParse || !entry.trajectory?.ok ||
+      (entry.structural && !entry.structural.ok) ||
+      (entry.observableTrajectory?.comparable && entry.observableTrajectory.status !== 'passed') ||
+      (entry.sbmlTrajectory && !entry.sbmlTrajectory.ok));
   if (failures.length > 0) process.exitCode = 1;
 }
 

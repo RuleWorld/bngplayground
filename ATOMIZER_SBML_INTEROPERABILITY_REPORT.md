@@ -10,8 +10,8 @@ The Playground Atomizer now has a reproducible, numerical bidirectional roundtri
 
 | Direction | Fixtures | Structural result | Simulation result |
 | --- | ---: | ---: | ---: |
-| SBML → BNGL → SBML | 13/13 | Atomization and strict BNGL parsing passed | libRoadRunner trajectories passed 13/13 |
-| BNGL → SBML → BNGL | 10/10 | SBML was L3V2; strict BNGL parsing passed 10/10 | Playground-engine trajectories passed 10/10; libRoadRunner SBML trajectories passed 10/10 |
+| SBML → BNGL → SBML | 13/13 | Atomization, strict BNGL parsing, and executable-structure comparison passed | libRoadRunner trajectories passed 13/13 |
+| BNGL → SBML → BNGL | 10/10 | SBML was L3V2; strict BNGL parsing and executable-structure comparison passed 10/10 | Playground-engine trajectories and observable comparisons passed 10/10; libRoadRunner SBML trajectories passed 10/10 |
 | BNGL native cross-check | 10 | BNG2 2.9.3 passed 9/10 | The one skipped case is BNG2's inability to simulate functions with arguments, not a Playground or libRoadRunner failure |
 
 For the trajectory gate, both models are simulated on the same 101-point grid from `t=0` to `t=1`. libRoadRunner uses CVODE with relative tolerance `1e-10` and absolute tolerance `1e-12`; the comparison acceptance threshold is `1e-7`. The Playground engine uses CVODE with `1e-10` relative and absolute tolerances and the same `1e-7` comparison threshold. All passing SBML comparisons had `max_abs=0`; the largest Playground-engine roundtrip difference was `1.11e-14`.
@@ -40,7 +40,7 @@ This is strong evidence for the tested kinetic subset. It is not evidence that e
 
 ## Numerical fixture coverage
 
-The checked-in harness is [`scripts/atomizer/roundtrip_parity.ts`](scripts/atomizer/roundtrip_parity.ts), with the pinned external comparator in [`scripts/atomizer/compare_sbml_trajectories.py`](scripts/atomizer/compare_sbml_trajectories.py). Run it with:
+The checked-in harness is [`scripts/atomizer/roundtrip_parity.ts`](scripts/atomizer/roundtrip_parity.ts), with the pinned external comparator in [`scripts/atomizer/compare_sbml_trajectories.py`](scripts/atomizer/compare_sbml_trajectories.py). It reports XML executable structure, state trajectories, and observable trajectories separately. Run it with:
 
 ```bash
 conda run -n atomizer-sbml-roundtrip python --version
@@ -71,7 +71,7 @@ Each input is parsed by Atomizer, strictly reparsed as BNGL, exported through th
 
 ### BNGL → SBML → BNGL
 
-Each BNGL fixture is exported to SBML, re-imported by Atomizer, strictly reparsed, and compared with the original using both the Playground engine and libRoadRunner on the generated SBML documents. The fixtures cover ten representative BNGL cases. The roundtrip preserves executable trajectories even when SBML cannot preserve BNGL-only observable names: generated species/observable ids can be `s0`, `s1`, etc., while the source may use `A`, `s0_amt`, and similar names. The harness reports label matches, ordered fallbacks, ignored non-amount observables, and extra target observables explicitly.
+Each BNGL fixture is exported to SBML, re-imported by Atomizer, strictly reparsed, and compared with the original using both the Playground engine and libRoadRunner on the generated SBML documents. The fixtures cover ten representative BNGL cases. The harness now performs three independent checks: executable structure (species/initial values, parameter names, reaction topology, and identifier remapping), all shared observable trajectories, and full state trajectories in libRoadRunner. The structural comparator uses shared `*_amt` observable patterns to map source names such as `A()` to SBML-generated names such as `s0`; it falls back to explicit order only when names cannot establish a mapping. The roundtrip preserves executable trajectories even when SBML cannot preserve BNGL-only observable names: generated species/observable ids can be `s0`, `s1`, etc., while the source may use `A`, `s0_amt`, and similar names. Missing and extra observable labels are reported explicitly rather than hidden.
 
 The custom argument-taking-function fixture is numerically exact in the Playground engine and libRoadRunner. BNG2 native execution is skipped only because `run_network` from BNG2 2.9.3 aborts with `Functions cannot contain arguments`; that is an external native-tool limitation.
 
@@ -94,7 +94,7 @@ The new harness is intentionally smaller and semantic: it compares trajectories,
 - User-defined functions with and without arguments in the Playground evaluator and SBML writer path.
 - Constant parameter assignment rules used by kinetic laws.
 - Fixed-time, zero-delay events with constant species/parameter assignments and phase-boundary trajectories.
-- BNGL ordinary reaction rules, generated-network simulation, observables, and roundtrip SBML export.
+- BNGL ordinary reaction rules, generated-network simulation, executable species/reaction topology, amount and named observables, and roundtrip SBML export.
 
 ### Partial or diagnostic-only semantics
 
@@ -130,7 +130,7 @@ Commands run on the final working tree:
 | --- | --- |
 | `npm run type-check -- --pretty false` | Passed |
 | Focused Atomizer/expression suite (5 files) | 58 passed |
-| `npm run test:atomizer-roundtrip` | Passed: 13 SBML and 10 BNGL fixture directions, including rules, initial assignments, and fixed-time events |
+| `npm run test:atomizer-roundtrip` | Passed: 13/13 SBML trajectories; 10/10 BNGL structural, state-trajectory, observable, and SBML-trajectory comparisons; BNG2 native 9/10 |
 | `npm run test:fast` | 274 files passed, 6 skipped; 6,344 tests passed, 56 skipped |
 | `npm run build:quick` | Passed; existing bundler/externalization/chunk-size warnings only |
 | `npm run test:full:safe` | 133 files passed, 8 skipped; 4,587 tests passed, 73 skipped; 3 unrelated failures |
@@ -144,8 +144,9 @@ For a new model, passing strict BNGL parsing is only the first gate. The recomme
 
 1. Atomize SBML and inspect diagnostics for dropped/approximated semantics.
 2. Strictly parse the BNGL output.
-3. Simulate the original SBML and the exported/re-imported SBML with matched solver settings.
-4. Simulate the original and re-imported BNGL with the same Playground method and grid.
-5. Compare shared executable observables, while reviewing any reported name remapping or ignored extras.
+3. Compare executable structure, including species/reaction topology, initial values, parameters, and event counts, while reviewing any identifier mapping or deferred initial-assignment checks.
+4. Simulate the original SBML and the exported/re-imported SBML with matched solver settings.
+5. Simulate the original and re-imported BNGL with the same Playground method and grid.
+6. Compare all shared executable observables, while reviewing any reported name remapping or ignored extras.
 
 The defensible public claim is therefore: **the Playground Atomizer supports a broad flat SBML Core kinetic subset with demonstrated bidirectional numerical parity for the covered forms; unsupported packages and partial Core semantics must be reviewed from diagnostics.**
