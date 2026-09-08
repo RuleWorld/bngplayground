@@ -19,6 +19,7 @@ type SuiteResult = {
   success: boolean;
   strictParse: boolean;
   warningCategories: string[];
+  warningCounts: Record<string, number>;
   eventConverted: boolean;
   eventUntranslated: boolean;
   error?: string;
@@ -60,15 +61,19 @@ async function main(): Promise<void> {
       success: false,
       strictParse: false,
       warningCategories: [],
+      warningCounts: {},
       eventConverted: false,
       eventUntranslated: false,
     };
     try {
       const atomized = await atomizer.atomize(readFileSync(file, 'utf8'));
       result.success = atomized.success;
-      result.warningCategories = [...new Set(
-        (atomizer.getModel()?.importWarnings || []).map((warning) => warning.category),
-      )].sort();
+      const warnings = atomizer.getModel()?.importWarnings || [];
+      result.warningCategories = [...new Set(warnings.map((warning) => warning.category))].sort();
+      result.warningCounts = warnings.reduce<Record<string, number>>((counts, warning) => {
+        counts[warning.category] = (counts[warning.category] || 0) + (warning.count || 1);
+        return counts;
+      }, {});
       result.eventConverted = /time-triggered event\(s\) converted/i.test(atomized.bngl);
       result.eventUntranslated = /Events NOT simulated/i.test(atomized.bngl);
       if (!atomized.success) {
@@ -99,6 +104,12 @@ async function main(): Promise<void> {
     eventConverted: results.filter((result) => result.eventConverted).length,
     eventUntranslated: results.filter((result) => result.eventUntranslated).length,
     warningCategories: [...new Set(results.flatMap((result) => result.warningCategories))].sort(),
+    warningCounts: results.reduce<Record<string, number>>((counts, result) => {
+      for (const [category, count] of Object.entries(result.warningCounts)) {
+        counts[category] = (counts[category] || 0) + count;
+      }
+      return counts;
+    }, {}),
     results,
   };
 

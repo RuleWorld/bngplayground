@@ -15,10 +15,10 @@ It is not a general SBML importer. The correct product claim is:
 
 It should not currently claim complete SBML coverage or semantic round-trip fidelity. The baseline audit found these highest-risk findings; the first two have now been fixed or made fail-closed on this branch:
 
-1. **Baseline: twelve of 1,692 official L3V2 semantic cases generated invalid BNGL.** Empty MathML operands and rules with missing MathML were the cause. The branch fixes these cases: the post-fix suite has 0 strict-output failures.
+1. **Baseline: twelve of 1,692 official L3V2 semantic cases generated invalid BNGL.** Empty MathML operands and rules with missing MathML were the cause. The current pinned-suite rerun on this branch fixes these cases: 0 strict-output failures.
 2. **Events are mostly diagnostic-only:** the baseline translated 3 of 200 event-bearing suite models, including an unsafe mutable-parameter fold. The branch now translates only compile-time-constant event expressions; post-fix results are 2 converted and 198 explicitly untranslated.
-3. **Algebraic rules are dropped**, not solved as implicit DAE constraints: 102 suite files carried them.
-4. **Variable or non-integer stoichiometry is approximated as fixed integer stoichiometry:** 98 suite files carried a stoichiometry warning, with 809 warning records.
+3. **Algebraic rules are dropped**, not solved as implicit DAE constraints: 101 suite files carried them in the fresh rerun.
+4. **Variable or non-integer stoichiometry is approximated as fixed integer stoichiometry:** 98 suite files carried a stoichiometry warning, with 810 warning records in the fresh rerun.
 5. **Model-changing Level 3 packages are not imported:** `comp`, `multi`, `fbc`, `qual`, `spatial`, `arrays`, `distrib`, and `dyn`. Some are intentionally outside the requested kinetic scope, but the resulting output must be treated as incomplete.
 6. **`multi` has a useful structural prototype, but its reconstructed molecule types and complexes are emitted only as comments and are not connected to the simulated network.**
 
@@ -27,6 +27,8 @@ The importer usually returns `success: true` while reporting dropped or approxim
 ### Post-fix validation on this branch
 
 The same pinned 1,692-file semantic harness was rerun after the earlier fixes. The result is retained below as an auditable snapshot record; the current repository now provides `npm run test:atomizer-sbml-suite` to reproduce it when the external suite checkout is supplied.
+
+Fresh reproduction on 2026-09-08 at 13:20 UTC, using suite commit `473e119dd57226c3a7a729d598f9007f06f781c3`, produced 1,692 successful conversions, 1,692 strict parses, 0 strict failures, 200 event-bearing models, 2 converted events, 198 untranslated events, and warning-record totals of algebraicRule 101, constraint 1, event 200, mathml 392, missingMath 13, package:comp 125, package:fbc 34, and stoichiometry 810.
 
 | Gate | Baseline | Post-fix |
 | --- | ---: | ---: |
@@ -83,9 +85,9 @@ This is a structural and translation audit. It is not a claim that every accepte
 | Files with event diagnostics | 200 | Event behavior is common enough to require first-class support |
 | Events converted to scheduled actions | 3 / 200 models | Only simple fixed-time, constant-foldable cases |
 | Events left untranslated | 197 / 200 models | Emitted as diagnostics/comments rather than executable dynamics |
-| Files with algebraic-rule diagnostics | 102 | Algebraic rules are not represented as DAE constraints |
+| Files with algebraic-rule diagnostics | 101 | Algebraic rules are not represented as DAE constraints |
 | Files with stoichiometry diagnostics | 98 | Variable/non-integer stoichiometry is approximated |
-| Stoichiometry warning records | 809 | 773 variable/StoichiometryMath and 36 non-integer records |
+| Stoichiometry warning records | 810 | Variable/StoichiometryMath and non-integer records are approximated |
 | Files with constraints | 1 | Constraint is counted/diagnosed, not enforced |
 | Files with `comp` namespace | 125 | Detected and dropped in this bundled build |
 | Files with `fbc` namespace | 34 | Detected and dropped; outside kinetic scope |
@@ -94,13 +96,14 @@ Warning records in the suite were:
 
 | Warning category | Records | Severity |
 | --- | ---: | --- |
-| `algebraicRule` | 102 | dropped |
+| `algebraicRule` | 101 | dropped |
 | `constraint` | 1 | info |
 | `event` | 200 | dropped |
-| `mathml` | 376 | info/approximated |
+| `mathml` | 392 | info/approximated |
 | `package:comp` | 125 | dropped |
 | `package:fbc` | 34 | dropped |
-| `stoichiometry` | 809 | approximated |
+| `missingMath` | 13 | dropped/diagnostic |
+| `stoichiometry` | 810 | approximated |
 
 ### The 12 baseline strict-output failures (now fixed)
 
