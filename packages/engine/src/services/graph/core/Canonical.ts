@@ -73,6 +73,8 @@ export class GraphCanonicalizer {
     // 2. Try Nauty Canonical Labeling
     const nauty = NautyService.getInstance();
     let finalOrder: number[] = [];
+    const componentCanonicalRanks = new Map<string, number>();
+    const bondCanonicalRanks = new Map<string, number>();
 
     let usedNauty = false;
 
@@ -166,6 +168,29 @@ export class GraphCanonicalizer {
 
         const result = nauty.getCanonicalLabeling(n, flatAdj, colors);
         const labeling = Array.from(result.labeling);
+        const canonicalVertexRank = new Map<number, number>();
+        labeling.forEach((vertex, rank) => canonicalVertexRank.set(vertex, rank));
+
+        for (let molIdx = 0; molIdx < componentVertexIds.length; molIdx++) {
+          for (let compIdx = 0; compIdx < componentVertexIds[molIdx].length; compIdx++) {
+            const componentVertex = componentVertexIds[molIdx][compIdx];
+            componentCanonicalRanks.set(
+              `${molIdx}.${compIdx}`,
+              canonicalVertexRank.get(componentVertex) ?? Number.MAX_SAFE_INTEGER,
+            );
+          }
+        }
+        for (let bondIdx = 0; bondIdx < bondEndpoints.length; bondIdx++) {
+          const { bondV } = bondEndpoints[bondIdx];
+          const bondRank = canonicalVertexRank.get(bondV) ?? Number.MAX_SAFE_INTEGER;
+          const offset = bondIdx * 4;
+          const m1 = bondList[offset];
+          const c1 = bondList[offset + 1];
+          const m2 = bondList[offset + 2];
+          const c2 = bondList[offset + 3];
+          bondCanonicalRanks.set(`${m1}.${c1}-${m2}.${c2}`, bondRank);
+          bondCanonicalRanks.set(`${m2}.${c2}-${m1}.${c1}`, bondRank);
+        }
 
         // Extract molecule ordering from full canonical vertex ordering
         for (const v of labeling) {
@@ -288,7 +313,7 @@ export class GraphCanonicalizer {
       canonicalRank.set(nodeIdx, rank);
     });
 
-    finalOrder.sort((a, b) => {
+    if (!usedNauty) finalOrder.sort((a, b) => {
       // Primary Sort: Molecule Name
       const nameA = graph.molecules[a].name;
       const nameB = graph.molecules[b].name;
@@ -455,7 +480,7 @@ export class GraphCanonicalizer {
     // 5. Collect bonds and assign IDs (via bondList — no dedup needed)
     const allBonds: Array<{
       canIdx1: number, ci1: number, canIdx2: number, ci2: number,
-      compName1: string, compName2: string
+      compName1: string, compName2: string, bondRank?: number
     }> = [];
     const bondList = graph.bondList;
     for (let b = 0; b < bondList.length; b += 4) {
@@ -470,16 +495,20 @@ export class GraphCanonicalizer {
       const mol2 = graph.molecules[m2];
       const compName1 = mol1.components[c1]?.name || '';
       const compName2 = mol2.components[c2]?.name || '';
+      const bondRank = bondCanonicalRanks.get(`${m1}.${c1}-${m2}.${c2}`);
 
       if (canIdx1 < canIdx2 || (canIdx1 === canIdx2 && c1 < c2)) {
-        allBonds.push({ canIdx1, ci1: c1, canIdx2, ci2: c2, compName1, compName2 });
+        allBonds.push({ canIdx1, ci1: c1, canIdx2, ci2: c2, compName1, compName2, bondRank });
       } else {
-        allBonds.push({ canIdx1: canIdx2, ci1: c2, canIdx2: canIdx1, ci2: c1, compName1: compName2, compName2: compName1 });
+        allBonds.push({ canIdx1: canIdx2, ci1: c2, canIdx2: canIdx1, ci2: c1, compName1: compName2, compName2: compName1, bondRank });
       }
     }
 
     // Sort bonds deterministically
     allBonds.sort((a, b) => {
+      if (a.bondRank !== undefined && b.bondRank !== undefined && a.bondRank !== b.bondRank) {
+        return a.bondRank - b.bondRank;
+      }
       if (a.canIdx1 !== b.canIdx1) return a.canIdx1 - b.canIdx1;
       if (a.compName1 !== b.compName1) return a.compName1 < b.compName1 ? -1 : 1;
       if (a.ci1 !== b.ci1) return a.ci1 - b.ci1; // Component index tie-breaker
@@ -509,7 +538,8 @@ export class GraphCanonicalizer {
         graph,
         sourceIdx, // Original index is sourceIdx for Nauty path
         originalToSortedVector,
-        sortedToCanonicalVector
+        sortedToCanonicalVector,
+        componentCanonicalRanks
       );
     });
 
@@ -844,7 +874,8 @@ export class GraphCanonicalizer {
     graph: SpeciesGraph,
     molOrigIdx: number,
     originalToSorted: Map<number, number>,
-    sortedToCanonical: Map<number, number>
+    sortedToCanonical: Map<number, number>,
+    componentCanonicalRanks: Map<string, number>
   ): string {
     const mySortedIdx = originalToSorted.get(molOrigIdx)!;
     const myCanIdx = sortedToCanonical.get(mySortedIdx)!;
@@ -905,7 +936,9 @@ export class GraphCanonicalizer {
       // Deterministic tie-breaker across multiple bonds
       if (a.bondStr !== b.bondStr) return a.bondStr < b.bondStr ? -1 : 1;
 
-      // Final deterministic tie-breaker
+      const rankA = componentCanonicalRanks.get(`${molOrigIdx}.${a.compIdx}`) ?? Number.MAX_SAFE_INTEGER;
+      const rankB = componentCanonicalRanks.get(`${molOrigIdx}.${b.compIdx}`) ?? Number.MAX_SAFE_INTEGER;
+      if (rankA !== rankB) return rankA - rankB;
       return a.compIdx - b.compIdx;
     });
 

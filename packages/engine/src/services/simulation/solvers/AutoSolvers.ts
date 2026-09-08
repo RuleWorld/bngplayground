@@ -166,6 +166,9 @@ export async function createSolver(
     case 'cvode_sparse':
       await CVODESolver.init();
       return new CVODESolver(n, f, opts, true);
+    case 'cvode_spgmr':
+      await CVODESolver.init();
+      return new CVODESolver(n, f, opts, false, undefined, false, true);
     case 'cvode_jac': {
       await CVODESolver.init();
       let jacobian = options.jacobian;

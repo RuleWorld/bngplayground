@@ -60,7 +60,7 @@ export interface SolverOptions {
   minStep: number;
   maxStep: number;
   initialStep?: number;
-  solver: 'auto' | 'auto_detect' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse' | 'sparse_implicit' | 'webgpu_rk4';
+  solver: 'auto' | 'auto_detect' | 'cvode' | 'cvode_auto' | 'cvode_sparse' | 'cvode_spgmr' | 'cvode_jac' | 'cvode_adams' | 'rosenbrock23' | 'rk45' | 'rk4' | 'sparse' | 'sparse_implicit' | 'webgpu_rk4';
   jacobianRowMajor?: (y: Float64Array, J: Float64Array) => void;
   jacobian?: (y: Float64Array, J: Float64Array) => void;
   speciesNames?: string[];

@@ -2887,7 +2887,9 @@ export async function simulate(
       numSpecies > 0 && couplingUpperBound < JAC_DENSE_FRACTION_MAX * numSpecies * numSpecies;
     // Large + genuinely sparse => KLU sparse; otherwise dense analytical.
     const autoSolver =
-      (numSpecies >= SPARSE_MIN_SPECIES && jacobianLikelySparse) ? 'cvode_sparse' : 'cvode_jac';
+      numSpecies >= 200
+        ? 'cvode_spgmr'
+        : ((numSpecies >= SPARSE_MIN_SPECIES && jacobianLikelySparse) ? 'cvode_sparse' : 'cvode_jac');
 
     if (solverType === 'auto') {
       if (useAdaptiveCvodeTuning) {

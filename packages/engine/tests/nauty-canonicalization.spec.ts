@@ -30,6 +30,30 @@ function buildDoubleBondWithTail(order: 'order1' | 'order2'): SpeciesGraph {
   return g;
 }
 
+function buildRenumberedComponents(order: 'order1' | 'order2'): SpeciesGraph {
+  const makeR = (renumbered: boolean): Molecule => new Molecule(
+    'R',
+    renumbered
+      ? [new Component('c'), new Component('a'), new Component('b')]
+      : [new Component('a'), new Component('b'), new Component('c')],
+  );
+  const makeS = (): Molecule => new Molecule('S', [new Component('s')]);
+
+  if (order === 'order1') {
+    const g = new SpeciesGraph([makeR(false), makeR(false), makeS()]);
+    g.addBond(0, 0, 1, 0, 1);
+    g.addBond(0, 1, 1, 1, 2);
+    g.addBond(0, 2, 2, 0, 3);
+    return g;
+  }
+
+  const g = new SpeciesGraph([makeS(), makeR(true), makeR(true)]);
+  g.addBond(2, 1, 1, 1, 1);
+  g.addBond(2, 2, 1, 2, 2);
+  g.addBond(2, 0, 0, 0, 3);
+  return g;
+}
+
 describe('Nauty canonicalization', () => {
   beforeAll(async () => {
     await NautyService.getInstance().init();
@@ -60,6 +84,18 @@ describe('Nauty canonicalization', () => {
     );
 
     expect(GraphCanonicalizer.canonicalize(g2)).toEqual(GraphCanonicalizer.canonicalize(g1));
+  });
+
+  it('is invariant under component renumbering in repeated branches', () => {
+    const nauty = NautyService.getInstance();
+    if (!nauty.isInitialized) {
+      return;
+    }
+
+    const c1 = GraphCanonicalizer.canonicalize(buildRenumberedComponents('order1'));
+    const c2 = GraphCanonicalizer.canonicalize(buildRenumberedComponents('order2'));
+
+    expect(c2).toEqual(c1);
   });
 
   it('is deterministic across repeated constructions', () => {
