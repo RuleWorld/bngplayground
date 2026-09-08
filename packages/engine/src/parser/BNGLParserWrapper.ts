@@ -27,11 +27,11 @@ export interface ParseResult {
   errors: ParseError[];
 }
 
-const MOLECULES_CHECK_RE = /molecules/i;
-const BEGIN_MOLECULES_RE = /^[^\S\r\n]*(?!#)begin\s+molecules\b/im;
-const END_MOLECULES_RE = /^[^\S\r\n]*(?!#)end\s+molecules\b/im;
-const BEGIN_MOLECULES_REPLACE_RE = /(^[^\S\r\n]*(?!#)begin\s+)molecules\b/gim;
-const END_MOLECULES_REPLACE_RE = /(^[^\S\r\n]*(?!#)end\s+)molecules\b/gim;
+const MOLECULES_CHECK_RE = /(?:molecules|molecular\s+types)/i;
+const BEGIN_MOLECULES_RE = /^[^\S\r\n]*(?!#)begin\s+(?:molecules|molecular\s+types)\b/im;
+const END_MOLECULES_RE = /^[^\S\r\n]*(?!#)end\s+(?:molecules|molecular\s+types)\b/im;
+const BEGIN_MOLECULES_REPLACE_RE = /(^[^\S\r\n]*(?!#)begin\s+)(?:molecules|molecular\s+types)\b/gim;
+const END_MOLECULES_REPLACE_RE = /(^[^\S\r\n]*(?!#)end\s+)(?:molecules|molecular\s+types)\b/gim;
 
 const LOCAL_CONTEXT_MATCH_RE = /%([A-Za-z_][A-Za-z0-9_]*)::/g;
 const LOCAL_CONTEXT_STRIP_RE = /%[A-Za-z_][A-Za-z0-9_]*::/g;
@@ -164,7 +164,8 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       sanitizedInput = input.substring(1);
     }
 
-    // Normalize legacy 'begin molecules' / 'end molecules' blocks to
+    // Normalize legacy molecule block aliases ('molecules' and
+    // 'molecular types') to
     // the preferred 'begin molecule types' / 'end molecule types' form.
     // We do this as a pre-parse normalization to preserve repository files
     // but remain compatible with BNG2.pl. We skip lines that are comments.
@@ -522,7 +523,7 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     const { normalized: legacyBlockNormalized, warned } = normalizeLegacyBlocks(sanitizedInput);
     sanitizedInput = legacyBlockNormalized;
     if (warned) {
-      console.warn('[BNGL parser] Rewrote legacy "begin molecules"/"end molecules" to "begin molecule types" for parsing. Consider updating the model file.');
+      console.warn('[BNGL parser] Rewrote legacy molecule block alias ("molecules"/"molecular types") to "molecule types" for parsing. Consider updating the model file.');
     }
 
     const { normalized: legacySyntaxNormalized, warnings: legacyWarnings } = normalizeLegacySyntax(sanitizedInput);
