@@ -210,8 +210,10 @@ export function divideCell(
     if (total <= 0) {
       parentState[i] = 0;
       daughter.intracellularState[i] = 0;
-    } else if (Number.isInteger(total) && total <= 100) {
-      // Discrete count small enough for exact binomial
+    } else if (Number.isInteger(total) && total <= 30) {
+      // Discrete count small enough for exact binomial sampling, O(n) draws.
+      // Larger counts use the near-equal split below (O(1)); the threshold
+      // keeps exactness where the loop is cheap and the distribution discrete.
       const daughterCount = rng.binomial(total, 0.5);
       daughter.intracellularState[i] = daughterCount;
       parentState[i] = total - daughterCount;

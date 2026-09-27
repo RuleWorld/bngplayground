@@ -546,6 +546,20 @@ export class ExtracellularGrid {
       const wx = fx - ix0;
       const wy = fy - iy0;
 
+      // Fast path: all four corners strictly interior — direct reads with
+      // no boundary handling. Covers the vast majority of cell samples.
+      if (ix0 >= 0 && iy0 >= 0 && ix0 + 1 < this.nx && iy0 + 1 < this.ny) {
+        const r0 = iy0 * this.nx;
+        const r1 = r0 + this.nx;
+        const v00 = grid[ix0 + r0];
+        const v10 = grid[ix0 + 1 + r0];
+        const v01 = grid[ix0 + r1];
+        const v11 = grid[ix0 + 1 + r1];
+        const top = v00 * (1 - wx) + v10 * wx;
+        const bottom = v01 * (1 - wx) + v11 * wx;
+        return top * (1 - wy) + bottom * wy;
+      }
+
       const v00 = this.getVal2D(grid, ix0, iy0);
       const v10 = this.getVal2D(grid, ix0 + 1, iy0);
       const v01 = this.getVal2D(grid, ix0, iy0 + 1);
@@ -568,6 +582,25 @@ export class ExtracellularGrid {
     const wx = fx - ix0;
     const wy = fy - iy0;
     const wz = fz - iz0;
+
+    // Fast path: all eight corners strictly interior — direct reads.
+    if (ix0 >= 0 && iy0 >= 0 && iz0 >= 0 &&
+        ix0 + 1 < this.nx && iy0 + 1 < this.ny && iz0 + 1 < this.nz) {
+      const nx = this.nx;
+      const nxy = nx * this.ny;
+      const b000 = ix0 + nx * iy0 + nxy * iz0;
+      const wx1 = 1 - wx, wy1 = 1 - wy, wz1 = 1 - wz;
+      return (
+        grid[b000] * (wx1 * wy1 * wz1) +
+        grid[b000 + 1] * (wx * wy1 * wz1) +
+        grid[b000 + nx] * (wx1 * wy * wz1) +
+        grid[b000 + nx + 1] * (wx * wy * wz1) +
+        grid[b000 + nxy] * (wx1 * wy1 * wz) +
+        grid[b000 + nxy + 1] * (wx * wy1 * wz) +
+        grid[b000 + nxy + nx] * (wx1 * wy * wz) +
+        grid[b000 + nxy + nx + 1] * (wx * wy * wz)
+      );
+    }
 
     let result = 0;
     for (let dz = 0; dz <= 1; dz++) {

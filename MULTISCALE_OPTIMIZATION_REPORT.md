@@ -222,7 +222,49 @@ with `Cannot find package '@modelcontextprotocol/server/stdio'` — a
 pre-existing missing-dependency issue unrelated to this change (verified via
 `git stash`).
 
-## 5. Remaining bottlenecks
+## 5. Round 2 — measured micro-optimizations (and one reverted experiment)
+
+With correctness and accuracy settled, component attribution was measured
+directly (cold vs warm runs, motility on/off, coupling on/off):
+
+- One-time JIT/RHS compile dominates cold start (~80 ms of the first run;
+  warm steady-state of the default demo is ~8 ms for 500 cell-integrates).
+- Per-cell motility (seeded RNG + 2 trig calls) is ~40% of agent-step cost
+  at scale (~250 ns/cell/decision); left exact — the walk distribution is
+  model semantics.
+- `CVODESolver.integrate` warm path is already minimal (one `ReInit` + one
+  `_solve_step` per cell, ~13 µs); engine-wide internals were deliberately
+  not touched (blast radius).
+
+Changes made (all semantics-preserving, all tests green):
+
+- **Fused decision pass** (`MultiscaleSimulation`): couple → evaluate →
+  execute → motility → source registration in a single traversal instead of
+  4–5 full-population passes; eliminates the per-decision `actions` array
+  and repeated `Object.entries` allocs (for-in on null-prototype rate maps).
+  D-1000 bench: 21.3 → 18.8 ms. Note: RNG draws now interleave per cell
+  rather than phase-by-phase, so stochastic trajectories differ from the
+  pre-fusion version while remaining fully deterministic per seed.
+- **Interpolation fast paths** (`getConcentration` 2D/3D): interior
+  samples skip all BC handling via direct reads (micro-measured 16 ns vs
+  21 ns per call; matters at 10k+ cell scales).
+- **Exact-binomial threshold 100 → 30** (`divideCell`): partitioning is
+  O(n) draws per species; above 30 counts the existing near-equal
+  O(1) split applies (mass still conserved exactly). No formula changed.
+
+**Reverted experiment (documented negative result):** precomputed neighbor
+  index tables (`Int32Array` xL/xR/yD/yU/zB/zF) were built to make the
+  stencil branch-free. A/B measurement showed a **regression**
+  (100×100: 5.4 → 8.8 ms per 20 steps): data-dependent indices defeat V8
+  bounds-check elimination (6 checks/voxel), which costs more than the
+  predictable branches it replaced. Reverted; the branched kernel
+  (~4 ns/voxel-update) stands.
+
+## 6. Remaining bottlenecks
+
+Measured floors on this hardware (single-threaded JS): PDE ~4 ns/voxel,
+  agent pass ~0.4 µs/cell/decision, CVODE ~13 µs/cell/event, interpolation
+  ~16 ns/call. Beyond these, only architectural moves help:
 
 - **CVODE per-cell integration** dominates for large populations with rich
   intracellular models (one solver per cell type, one `integrate` call per

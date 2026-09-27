@@ -392,8 +392,10 @@ export async function multiscaleSimulation(
         stepExtra++;
       }
 
-      // 3. COUPLING between extracellular field and cell observables/rates
-      if (needsIntra || needsExtra || isDecisionTarget) {
+      // 3. COUPLING between extracellular field and cell observables/rates.
+      // On decision steps this runs inside the fused decision pass below, so
+      // it is skipped here to avoid doing the work twice.
+      if ((needsIntra || needsExtra) && !isDecisionTarget) {
         for (let i = 0; i < cells.length; i++) {
           const cell = cells[i];
           if (cell.phase === 'dead') continue;
@@ -418,164 +420,174 @@ export async function multiscaleSimulation(
         }
       }
 
-      // 4. DECISION EVALUATION & ACTION EXECUTION
+      // 4. FUSED DECISION PASS: couple -> evaluate -> execute -> motility ->
+      // register sources, all in one traversal. Per-cell steps are mutually
+      // independent (each reads only its own state plus the frozen grid),
+      // and grid accumulation is order-independent addition, so this is
+      // equivalent to the old evaluate-all/execute-all/motility/refresh
+      // passes at a fraction of the memory traffic. Note: RNG draws now
+      // interleave per cell rather than phase-by-phase, so stochastic
+      // trajectories differ from the pre-fusion version (still fully
+      // deterministic per seed).
       if (isDecisionTarget) {
         stepDecision++;
+        grid.clearSourcesSinks();
 
-        const actions: Array<{ cell: CellState; action: CellAction }> = [];
-
-        // Evaluate decision rules
-        for (let i = 0; i < cells.length; i++) {
+        const newCells: CellState[] = [];
+        const initialLen = cells.length;
+        for (let i = 0; i < initialLen; i++) {
           const cell = cells[i];
           if (cell.phase === 'dead') continue;
           const typeDef = cellTypeDefs.get(cell.cellType);
           if (!typeDef) continue;
 
+          // (a) Coupling: extracellular -> observables -> secretion rates
+          if (typeDef.uptake) {
+            for (const u of typeDef.uptake) {
+              const conc = grid.getConcentration(cell.position, u.species);
+              setSafeNumberField(cell.observables, u.intracellularParameter, conc * u.scalingFactor);
+            }
+          }
+          if (typeDef.secretion) {
+            for (const s of typeDef.secretion) {
+              const obsVal = cell.observables[s.intracellularObservable] ?? 0;
+              setSafeNumberField(cell.secretionRates, s.species, obsVal * s.scalingFactor);
+            }
+          }
+
+          // (b) Evaluate: first matching rule wins
+          let action: CellAction | null = null;
           for (const rule of typeDef.decisionRules) {
-            // Check refractory period
             if (rule.refractoryPeriod && rule.refractoryPeriod > 0) {
               const cd = cell.ruleCooldowns?.[rule.name];
               if (cd !== undefined && cd > tNext + 1e-12) {
-                continue; // rule in refractory period
+                continue;
               }
             }
-
             if (evaluateCondition(cell, rule.condition)) {
-              // Stochastic gating
               const prob = rule.probability ?? 1;
               if (rng.next() < prob) {
-                // Set refractory cooldown
                 if (rule.refractoryPeriod && rule.refractoryPeriod > 0) {
                   if (!cell.ruleCooldowns) cell.ruleCooldowns = Object.create(null) as Record<string, number>;
                   cell.ruleCooldowns[rule.name] = tNext + rule.refractoryPeriod;
                 }
-                actions.push({ cell, action: rule.action });
-                break; // first matching rule fires
+                action = rule.action;
+                break;
               }
             }
           }
-        }
 
-        // Execute actions with O(1) bookkeeping
-        const newCells: CellState[] = [];
-        for (const { cell, action } of actions) {
-          switch (action.type) {
-            case 'divide': {
-              if (activeCellCount >= maxCells) {
-                if (!maxCellsReachedLogged) {
-                  maxCellsReachedLogged = true;
-                  console.warn(`[MultiscaleSimulation] maxCells limit (${maxCells}) reached at t=${tNext.toFixed(2)}; suppressing further cell divisions.`);
+          // (c) Execute
+          if (action !== null) {
+            switch (action.type) {
+              case 'divide': {
+                if (activeCellCount >= maxCells) {
+                  if (!maxCellsReachedLogged) {
+                    maxCellsReachedLogged = true;
+                    console.warn(`[MultiscaleSimulation] maxCells limit (${maxCells}) reached at t=${tNext.toFixed(2)}; suppressing further cell divisions.`);
+                  }
+                  break;
                 }
+                cell.phase = 'dividing';
+                const daughter = divideCell(cell, nextCellId, rng, dims);
+                cell.phase = 'active';
+                daughter.phase = 'active';
+                applyCellBoundary(cell, config.domain.size, config.domain.boundaryCondition, dims);
+                applyCellBoundary(daughter, config.domain.size, config.domain.boundaryCondition, dims);
+                // Daughter gets this step's default motility immediately,
+                // matching the old post-push motility sweep.
+                const daughterDef = cellTypeDefs.get(daughter.cellType);
+                if (daughterDef && daughterDef.motility > 0) {
+                  moveCell(daughter, 'random', daughterDef.motility * dtDecision, undefined, rng, dims);
+                  applyCellBoundary(daughter, config.domain.size, config.domain.boundaryCondition, dims);
+                }
+                newCells.push(daughter);
+                activeCellCount++;
+                const linRec: LineageRecord = {
+                  cellId: nextCellId,
+                  parentId: cell.id,
+                  cellType: cell.cellType,
+                  birthTime: tNext,
+                  deathTime: null,
+                  divisionTimes: [],
+                };
+                lineage.push(linRec);
+                lineageByCellId.set(nextCellId, linRec);
+                const parentLin = lineageByCellId.get(cell.id);
+                if (parentLin) {
+                  parentLin.divisionTimes.push(tNext);
+                }
+                nextCellId++;
                 break;
               }
-
-              cell.phase = 'dividing';
-              const daughter = divideCell(cell, nextCellId, rng, dims);
-              cell.phase = 'active';
-              daughter.phase = 'active';
-              applyCellBoundary(cell, config.domain.size, config.domain.boundaryCondition, dims);
-              applyCellBoundary(daughter, config.domain.size, config.domain.boundaryCondition, dims);
-
-              newCells.push(daughter);
-              activeCellCount++;
-
-              // Lineage O(1)
-              const linRec: LineageRecord = {
-                cellId: nextCellId,
-                parentId: cell.id,
-                cellType: cell.cellType,
-                birthTime: tNext,
-                deathTime: null,
-                divisionTimes: [],
-              };
-              lineage.push(linRec);
-              lineageByCellId.set(nextCellId, linRec);
-
-              const parentLin = lineageByCellId.get(cell.id);
-              if (parentLin) {
-                parentLin.divisionTimes.push(tNext);
-              }
-              nextCellId++;
-              break;
-            }
-
-            case 'die': {
-              if (cell.phase !== 'dead') {
+              case 'die': {
+                // Fused pass visits each live cell once, so the cell is alive here.
                 cell.phase = 'dead';
                 activeCellCount--;
                 const lin = lineageByCellId.get(cell.id);
                 if (lin) lin.deathTime = tNext;
+                break;
               }
-              break;
-            }
-
-            case 'migrate': {
-              const speed = action.speed * dtDecision;
-              if (action.direction === 'chemotaxis' && action.chemotaxisTarget) {
-                const grad = grid.getGradient(cell.position, action.chemotaxisTarget);
-                moveCell(cell, 'chemotaxis', speed, grad, rng, dims);
-              } else {
-                moveCell(cell, 'random', speed, undefined, rng, dims);
+              case 'migrate': {
+                const speed = action.speed * dtDecision;
+                if (action.direction === 'chemotaxis' && action.chemotaxisTarget) {
+                  const grad = grid.getGradient(cell.position, action.chemotaxisTarget);
+                  moveCell(cell, 'chemotaxis', speed, grad, rng, dims);
+                } else {
+                  moveCell(cell, 'random', speed, undefined, rng, dims);
+                }
+                applyCellBoundary(cell, config.domain.size, config.domain.boundaryCondition, dims);
+                break;
               }
-              applyCellBoundary(cell, config.domain.size, config.domain.boundaryCondition, dims);
-              break;
-            }
-
-            case 'secrete': {
-              setSafeNumberField(cell.secretionRates, action.species, action.rate);
-              break;
-            }
-
-            case 'stop_secrete': {
-              if (isSafeObjectKey(action.species)) {
-                setSafeNumberField(cell.secretionRates, action.species, 0);
+              case 'secrete': {
+                setSafeNumberField(cell.secretionRates, action.species, action.rate);
+                break;
               }
-              break;
-            }
-
-            case 'change_type': {
-              cell.cellType = action.newType;
-              const newEngine = engines.get(action.newType);
-              if (newEngine) {
-                cell.intracellularState = newEngine.newState();
-                newEngine.computeObservables(cell.intracellularState, cell.observables);
+              case 'stop_secrete': {
+                if (isSafeObjectKey(action.species)) {
+                  setSafeNumberField(cell.secretionRates, action.species, 0);
+                }
+                break;
               }
-              break;
+              case 'change_type': {
+                cell.cellType = action.newType;
+                const newEngine = engines.get(action.newType);
+                if (newEngine) {
+                  cell.intracellularState = newEngine.newState();
+                  newEngine.computeObservables(cell.intracellularState, cell.observables);
+                }
+                break;
+              }
+              case 'set_parameter': {
+                setSafeNumberField(cell.observables, action.parameter, action.value);
+                break;
+              }
             }
+          }
 
-            case 'set_parameter': {
-              setSafeNumberField(cell.observables, action.parameter, action.value);
-              break;
-            }
+          if (cell.phase === 'dead') continue;
+
+          // (d) Default motility (uses the cell's current type, so a
+          // change_type action takes effect immediately, as before).
+          const motDef = cellTypeDefs.get(cell.cellType);
+          if (motDef && motDef.motility > 0) {
+            moveCell(cell, 'random', motDef.motility * dtDecision, undefined, rng, dims);
+            applyCellBoundary(cell, config.domain.size, config.domain.boundaryCondition, dims);
+          }
+
+          // (e) Register sources and sinks (for-in avoids per-cell array allocs)
+          for (const species in cell.secretionRates) {
+            const rate = cell.secretionRates[species];
+            if (rate > 0) grid.addSource(cell.position, species, rate);
+          }
+          for (const species in cell.uptakeRates) {
+            const rate = cell.uptakeRates[species];
+            if (rate > 0) grid.addSink(cell.position, species, rate);
           }
         }
 
         if (newCells.length > 0) {
           cells.push(...newCells);
-        }
-
-        // Apply default motility to all active cells
-        for (let i = 0; i < cells.length; i++) {
-          const cell = cells[i];
-          if (cell.phase === 'dead') continue;
-          const typeDef = cellTypeDefs.get(cell.cellType);
-          if (typeDef && typeDef.motility > 0) {
-            moveCell(cell, 'random', typeDef.motility * dtDecision, undefined, rng, dims);
-            applyCellBoundary(cell, config.domain.size, config.domain.boundaryCondition, dims);
-          }
-        }
-
-        // Refresh grid sources and sinks
-        grid.clearSourcesSinks();
-        for (let i = 0; i < cells.length; i++) {
-          const cell = cells[i];
-          if (cell.phase === 'dead') continue;
-          for (const [species, rate] of Object.entries(cell.secretionRates)) {
-            if (rate > 0) grid.addSource(cell.position, species, rate);
-          }
-          for (const [species, rate] of Object.entries(cell.uptakeRates)) {
-            if (rate > 0) grid.addSink(cell.position, species, rate);
-          }
         }
 
         // Prune dead cells periodically if they exceed 25% of population and > 50 dead cells
@@ -598,7 +610,8 @@ export async function multiscaleSimulation(
           onProgress(Math.min(1, Math.max(0, tNext / config.tEnd)));
         }
         // Yield execution to worker event loop so cancellation can be processed
-        await new Promise((resolve) => setTimeout(resolve, 0));
+        // (executor form required: tsconfig lib is ES2023, no Promise.withResolvers).
+        await new Promise<void>((resolve) => setTimeout(resolve, 0));
       }
     }
 
