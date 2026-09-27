@@ -41,7 +41,8 @@ export interface MultiscaleModelDefinition {
   domain: {
     dimensions: 2 | 3;
     size: [number, number, number];
-    boundary: 'reflective' | 'periodic';
+    boundary: 'reflective' | 'periodic' | 'absorbing';
+    resolution?: [number, number, number] | [number, number];
   };
   population: Array<{
     cellType: string;
@@ -55,6 +56,8 @@ export interface MultiscaleModelDefinition {
     dtDecision: number;
     outputs: number;
   };
+  maxCells?: number;
+  seed?: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -67,9 +70,8 @@ function parseCondition(when: string): CellDecisionRule['condition'] {
   const match = when.trim().match(OPERATOR_RE);
   if (!match) {
     throw new Error(
-      `Cannot parse multiscale decision condition: "${when}". ` +
-      'Expected format: "observable operator threshold" (e.g., "pERK > 0.5"). ' +
-      'Supported operators: >, <, >=, <=, ==, !=.'
+      `Cannot parse condition: "${when}". Expected format: "<observable> <op> <number>", e.g. "pERK > 0.5". ` +
+      'Supported operators: >, <, >=, <=, ==, !=',
     );
   }
   return {
@@ -159,10 +161,57 @@ function parseAction(then: string): CellAction {
 export function parseMultiscaleModel(
   definition: MultiscaleModelDefinition,
 ): MultiscaleConfig {
+  if (!definition || typeof definition !== 'object') {
+    throw new Error('Multiscale model definition must be a valid non-null object');
+  }
+
+  if (!definition.cellTypes || typeof definition.cellTypes !== 'object' || Object.keys(definition.cellTypes).length === 0) {
+    throw new Error('Multiscale model definition must define at least one cell type');
+  }
+
+  if (!definition.domain || typeof definition.domain !== 'object') {
+    throw new Error('Multiscale model definition must include domain configuration');
+  }
+
+  const dims = definition.domain.dimensions;
+  if (dims !== 2 && dims !== 3) {
+    throw new Error(`Invalid domain dimensions: ${String(dims)}. Must be 2 or 3.`);
+  }
+
+  const dSize = definition.domain.size;
+  if (!Array.isArray(dSize) || dSize.length < 2 || dSize[0] <= 0 || dSize[1] <= 0 || (dims === 3 && (dSize[2] ?? 0) <= 0)) {
+    throw new Error('Multiscale model domain.size must have positive dimensions');
+  }
+
+  const time = definition.time;
+  if (!time || typeof time !== 'object') {
+    throw new Error('Multiscale model definition must include time configuration');
+  }
+
+  if (time.end <= 0 || !Number.isFinite(time.end)) {
+    throw new Error(`Invalid simulation end time: ${time.end}. Must be > 0.`);
+  }
+  if (time.dtIntra <= 0 || !Number.isFinite(time.dtIntra)) {
+    throw new Error(`Invalid dtIntra: ${time.dtIntra}. Must be > 0.`);
+  }
+  if (time.dtExtra <= 0 || !Number.isFinite(time.dtExtra)) {
+    throw new Error(`Invalid dtExtra: ${time.dtExtra}. Must be > 0.`);
+  }
+  if (time.dtDecision <= 0 || !Number.isFinite(time.dtDecision)) {
+    throw new Error(`Invalid dtDecision: ${time.dtDecision}. Must be > 0.`);
+  }
+  if (time.outputs <= 0 || !Number.isFinite(time.outputs)) {
+    throw new Error(`Invalid outputs count: ${time.outputs}. Must be > 0.`);
+  }
+
   const cellTypes: CellTypeDefinition[] = [];
 
   for (const [name, ct] of Object.entries(definition.cellTypes)) {
-    const rules: CellDecisionRule[] = ct.decisions.map((d) => ({
+    if (!ct || typeof ct !== 'object') {
+      throw new Error(`Cell type "${name}" definition is invalid`);
+    }
+
+    const rules: CellDecisionRule[] = (ct.decisions ?? []).map((d) => ({
       name: d.name,
       condition: parseCondition(d.when),
       action: parseAction(d.then),
@@ -172,12 +221,12 @@ export function parseMultiscaleModel(
 
     cellTypes.push({
       name,
-      bnglModel: ct.model,
-      initialRadius: ct.radius,
+      bnglModel: ct.model ?? '',
+      initialRadius: ct.radius ?? 5.0,
       doublingVolume: ct.doublingVolume,
       volumeGrowthRate: ct.volumeGrowthRate,
       decisionRules: rules,
-      motility: ct.motility,
+      motility: ct.motility ?? 0,
       secretion: ct.secretes?.map((s) => ({
         species: s.species,
         intracellularObservable: s.driven_by,
@@ -195,10 +244,11 @@ export function parseMultiscaleModel(
   const domainCentre: [number, number, number] = [
     definition.domain.size[0] / 2,
     definition.domain.size[1] / 2,
-    definition.domain.size[2] / 2,
+    dims === 3 ? (definition.domain.size[2] ?? 1) / 2 : 0,
   ];
 
-  const initialCells: MultiscaleConfig['initialCells'] = definition.population.map(
+  const population = definition.population ?? [];
+  const initialCells: MultiscaleConfig['initialCells'] = population.map(
     (p) => ({
       cellType: p.cellType,
       position: domainCentre,
@@ -206,24 +256,38 @@ export function parseMultiscaleModel(
     }),
   );
 
-  return {
-    cellTypes,
-    initialCells,
-    extracellularSpecies: definition.extracellular.species.map((s) => ({
+  const extraSpecies = (definition.extracellular?.species ?? []).map((s) => {
+    if (s.D < 0) {
+      throw new Error(`Extracellular species "${s.name}" cannot have negative diffusion constant: ${s.D}`);
+    }
+    return {
       name: s.name,
       diffusionConstant: s.D,
       initialConcentration: s.initial ?? 0,
       degradationRate: s.degradation ?? 0,
-    })),
+    };
+  });
+
+  return {
+    cellTypes,
+    initialCells,
+    extracellularSpecies: extraSpecies,
     domain: {
-      dimensions: definition.domain.dimensions,
-      size: definition.domain.size,
-      boundaryCondition: definition.domain.boundary,
+      dimensions: dims,
+      size: [
+        definition.domain.size[0],
+        definition.domain.size[1],
+        dims === 3 ? (definition.domain.size[2] ?? 1) : 1,
+      ],
+      boundaryCondition: definition.domain.boundary ?? 'reflective',
+      resolution: definition.domain.resolution,
     },
     tEnd: definition.time.end,
     dtIntracellular: definition.time.dtIntra,
     dtExtracellular: definition.time.dtExtra,
     dtDecision: definition.time.dtDecision,
     nOutput: definition.time.outputs,
+    maxCells: definition.maxCells,
+    seed: definition.seed,
   };
 }

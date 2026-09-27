@@ -14,6 +14,7 @@ export interface CellState {
   volume: number;
   secretionRates: Record<string, number>;
   uptakeRates: Record<string, number>;
+  ruleCooldowns?: Record<string, number>;
 }
 
 export interface CellDecisionRule {
@@ -131,12 +132,13 @@ export function createCell(
     position: [position[0], position[1], position[2]],
     radius: r,
     intracellularState: new Float64Array(0), // populated later by simulation
-    observables: {},
+    observables: Object.create(null) as Record<string, number>,
     age: 0,
     phase: 'active',
     volume,
-    secretionRates: {},
-    uptakeRates: {},
+    secretionRates: Object.create(null) as Record<string, number>,
+    uptakeRates: Object.create(null) as Record<string, number>,
+    ruleCooldowns: Object.create(null) as Record<string, number>,
   };
 }
 
@@ -170,23 +172,24 @@ export function evaluateCondition(
 // ---------------------------------------------------------------------------
 // divideCell – create a daughter cell with ~50 % partitioned state
 //
-// Each molecule count in the intracellular state is partitioned via
-// binomial sampling B(n, 0.5) so that parent + daughter = original total.
+// Each molecule count/concentration in the intracellular state is partitioned
+// so that parent + daughter = original total exactly (mass conservation).
 // ---------------------------------------------------------------------------
 
 export function divideCell(
   parent: CellState,
   nextId: number,
   rng: SimpleRNG,
+  dimensions: 2 | 3 = 2,
 ): CellState {
-  // Create daughter as a copy of parent
+  const offsetZ = dimensions === 2 ? 0 : (rng.next() - 0.5) * parent.radius;
   const daughter: CellState = {
     id: nextId,
     cellType: parent.cellType,
     position: [
       parent.position[0] + (rng.next() - 0.5) * parent.radius,
       parent.position[1] + (rng.next() - 0.5) * parent.radius,
-      parent.position[2] + (rng.next() - 0.5) * parent.radius,
+      parent.position[2] + offsetZ,
     ],
     radius: parent.radius / Math.cbrt(2), // half volume
     intracellularState: new Float64Array(parent.intracellularState.length),
@@ -196,19 +199,39 @@ export function divideCell(
     volume: parent.volume / 2,
     secretionRates: { ...parent.secretionRates },
     uptakeRates: { ...parent.uptakeRates },
+    ruleCooldowns: Object.create(null) as Record<string, number>,
   };
 
-  // Partition intracellular molecules via binomial sampling
-  const parentState = new Float64Array(parent.intracellularState.length);
-  for (let i = 0; i < parent.intracellularState.length; i++) {
-    const total = Math.round(parent.intracellularState[i]);
+  const len = parent.intracellularState.length;
+  const parentState = new Float64Array(len);
+
+  for (let i = 0; i < len; i++) {
+    const total = parent.intracellularState[i];
     if (total <= 0) {
       parentState[i] = 0;
       daughter.intracellularState[i] = 0;
-    } else {
+    } else if (Number.isInteger(total) && total <= 100) {
+      // Discrete count small enough for exact binomial
       const daughterCount = rng.binomial(total, 0.5);
       daughter.intracellularState[i] = daughterCount;
       parentState[i] = total - daughterCount;
+    } else {
+      // Continuous concentration or large count: Gaussian approximation
+      // Strictly conserves mass: parent + daughter = total exactly
+      const mean = total * 0.5;
+      const std = Math.min(mean * 0.2, Math.sqrt(total * 0.25));
+      const rngObj = rng as unknown as { nextGaussian?: () => number; gaussian?: () => number };
+      const nextG = typeof rngObj.nextGaussian === 'function'
+        ? rngObj.nextGaussian()
+        : typeof rngObj.gaussian === 'function'
+          ? rngObj.gaussian()
+          : 0;
+      const variation = std * nextG * 0.05;
+      let dVal = mean + variation;
+      if (dVal < 0) dVal = 0;
+      if (dVal > total) dVal = total;
+      daughter.intracellularState[i] = dVal;
+      parentState[i] = total - dVal;
     }
   }
 
@@ -217,6 +240,8 @@ export function divideCell(
   parent.radius = parent.radius / Math.cbrt(2);
   parent.volume = parent.volume / 2;
   parent.age = 0;
+  // NOTE: parent keeps its ruleCooldowns object — refractory periods must
+  // survive division, otherwise a cell can bypass its own cooldown.
 
   return daughter;
 }
@@ -230,31 +255,79 @@ export function moveCell(
   direction: 'random' | 'chemotaxis',
   dt: number,
   gradient?: [number, number, number],
-  rng?: { next(): number },
+  rng?: SimpleRNG | { next(): number },
+  dimensions: 2 | 3 = 2,
 ): void {
-  const speed = dt; // caller passes speed * dt already factored into the time-step
+  const speed = dt;
 
   if (direction === 'chemotaxis' && gradient) {
-    // Normalise gradient
-    const mag = Math.sqrt(
-      gradient[0] * gradient[0] + gradient[1] * gradient[1] + gradient[2] * gradient[2],
-    );
-    if (mag > 1e-12) {
-      cell.position[0] += (gradient[0] / mag) * speed;
-      cell.position[1] += (gradient[1] / mag) * speed;
-      cell.position[2] += (gradient[2] / mag) * speed;
+    if (dimensions === 2) {
+      const mag = Math.hypot(gradient[0], gradient[1]);
+      if (mag > 1e-12) {
+        cell.position[0] += (gradient[0] / mag) * speed;
+        cell.position[1] += (gradient[1] / mag) * speed;
+      }
+      cell.position[2] = 0;
+    } else {
+      const mag = Math.hypot(gradient[0], gradient[1], gradient[2]);
+      if (mag > 1e-12) {
+        cell.position[0] += (gradient[0] / mag) * speed;
+        cell.position[1] += (gradient[1] / mag) * speed;
+        cell.position[2] += (gradient[2] / mag) * speed;
+      }
     }
   } else {
-    // Random walk: isotropic displacement of magnitude speed
-    const rand = rng ? rng.next.bind(rng) : () => {
-      const a = new Uint32Array(1);
-      globalThis.crypto.getRandomValues(a);
-      return a[0] / 0x100000000;
-    };
-    const theta = rand() * 2 * Math.PI;
-    const phi = Math.acos(2 * rand() - 1);
-    cell.position[0] += speed * Math.sin(phi) * Math.cos(theta);
-    cell.position[1] += speed * Math.sin(phi) * Math.sin(theta);
-    cell.position[2] += speed * Math.cos(phi);
+    // Random walk
+    const rand = rng ? () => rng.next() : Math.random;
+    if (dimensions === 2) {
+      const theta = rand() * 2 * Math.PI;
+      cell.position[0] += speed * Math.cos(theta);
+      cell.position[1] += speed * Math.sin(theta);
+      cell.position[2] = 0;
+    } else {
+      const theta = rand() * 2 * Math.PI;
+      const phi = Math.acos(2 * rand() - 1);
+      cell.position[0] += speed * Math.sin(phi) * Math.cos(theta);
+      cell.position[1] += speed * Math.sin(phi) * Math.sin(theta);
+      cell.position[2] += speed * Math.cos(phi);
+    }
+  }
+}
+
+// ---------------------------------------------------------------------------
+// applyCellBoundary – enforce domain boundary conditions on cell position
+// ---------------------------------------------------------------------------
+
+export function applyCellBoundary(
+  cell: CellState,
+  domainSize: [number, number, number],
+  boundaryCondition: 'reflective' | 'periodic' | 'absorbing',
+  dimensions: 2 | 3 = 2,
+): void {
+  const dims = dimensions === 2 ? 2 : 3;
+  for (let d = 0; d < dims; d++) {
+    const L = domainSize[d];
+    let pos = cell.position[d];
+    if (pos < 0 || pos > L) {
+      if (boundaryCondition === 'absorbing') {
+        cell.phase = 'dead';
+        return;
+      } else if (boundaryCondition === 'periodic') {
+        pos = ((pos % L) + L) % L;
+        cell.position[d] = pos;
+      } else {
+        // reflective
+        if (pos < 0) {
+          pos = -pos;
+        }
+        if (pos > L) {
+          pos = 2 * L - pos;
+        }
+        cell.position[d] = Math.min(L, Math.max(0, pos));
+      }
+    }
+  }
+  if (dimensions === 2) {
+    cell.position[2] = 0;
   }
 }

@@ -1,20 +1,16 @@
 /**
  * multiscaleWorker.ts — Web Worker for multiscale simulation.
  *
- * Runs multiscaleSimulation in a dedicated thread so the main UI
- * thread is never blocked by the synchronous while-loop.
- * Follows the spatialWorker.ts message pattern.
+ * Runs multiscaleSimulation in a dedicated thread with cooperative
+ * cancellation and throttled progress reporting.
  */
 
 import { multiscaleSimulation, parseMultiscaleModel, CVODESolver } from '@bngplayground/engine';
 import type { MultiscaleConfig, MultiscaleResult, MultiscaleModelDefinition } from '@bngplayground/engine';
 
-// Wire up the CVODE factory (same lazy dynamic-import pattern as bnglWorker.ts).
-// The intracellular BNGL models are integrated with CVODE, so this worker must
-// provide the WASM factory before any simulation runs — otherwise CVODESolver.init
-// throws "module factory has not been injected".
+// Wire up the CVODE factory
 CVODESolver.cvodeModuleFactory = () =>
-  import('./cvode_loader.js').then((m: any) => m.default ?? m);
+  import('./cvode_loader.js').then((m: { default?: unknown }) => (m.default ?? m) as never);
 
 /** Messages from main thread -> worker */
 export type MultiscaleWorkerRequest =
@@ -26,31 +22,51 @@ export type MultiscaleWorkerRequest =
 export type MultiscaleWorkerResponse =
   | { type: 'progress'; fraction: number }
   | { type: 'complete'; result: MultiscaleResult }
+  | { type: 'cancelled' }
   | { type: 'error'; message: string };
 
 if (typeof self !== 'undefined' && typeof self.addEventListener === 'function') {
-  self.addEventListener('error', (event) => {
-    const errMsg = event.error?.message ?? event.message ?? 'Unknown worker error';
-    const response: MultiscaleWorkerResponse = { type: 'error', message: `MultiscaleWorker error: ${errMsg}` };
-    self.postMessage(response);
-    event.preventDefault();
+  self.addEventListener('error', (event: ErrorEvent) => {
+    try {
+      const response: MultiscaleWorkerResponse = {
+        type: 'error',
+        message: event.message || 'Multiscale worker encountered an unhandled error',
+      };
+      self.postMessage(response);
+    } catch {
+      // Best-effort message post
+    }
   });
 
-  self.addEventListener('unhandledrejection', (event) => {
-    const errMsg = event.reason?.message ?? String(event.reason ?? 'Unhandled rejection in worker');
-    const response: MultiscaleWorkerResponse = { type: 'error', message: `MultiscaleWorker unhandled rejection: ${errMsg}` };
-    self.postMessage(response);
-    event.preventDefault();
+  self.addEventListener('unhandledrejection', (event: PromiseRejectionEvent) => {
+    try {
+      const reason = event.reason;
+      const message = reason instanceof Error ? reason.message : String(reason);
+      const response: MultiscaleWorkerResponse = {
+        type: 'error',
+        message: `Multiscale worker unhandled promise rejection: ${message}`,
+      };
+      self.postMessage(response);
+    } catch {
+      // Best-effort message post
+    }
   });
 
-  self.addEventListener('messageerror', (event) => {
-    const response: MultiscaleWorkerResponse = { type: 'error', message: 'MultiscaleWorker failed to deserialize incoming message' };
-    self.postMessage(response);
-    event.preventDefault();
+  self.addEventListener('messageerror', () => {
+    try {
+      const response: MultiscaleWorkerResponse = {
+        type: 'error',
+        message: 'Multiscale worker failed to deserialize incoming message',
+      };
+      self.postMessage(response);
+    } catch {
+      // Best-effort message post
+    }
   });
 }
 
 let cancelled = false;
+let currentRunId = 0;
 
 self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
   const origin = (event as MessageEvent).origin;
@@ -61,7 +77,10 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
 
   const msg = event.data;
   if (!msg || typeof msg !== 'object') {
-    const response: MultiscaleWorkerResponse = { type: 'error', message: 'MultiscaleWorker received null, undefined, or non-object message' };
+    const response: MultiscaleWorkerResponse = {
+      type: 'error',
+      message: 'MultiscaleWorker received null, undefined, or non-object message',
+    };
     self.postMessage(response);
     return;
   }
@@ -70,24 +89,34 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
     switch (msg.type) {
       case 'run': {
         cancelled = false;
-        void runSimulation(msg.config);
+        currentRunId++;
+        const runId = currentRunId;
+        void runSimulation(msg.config, runId);
         break;
       }
 
       case 'run_from_definition': {
         cancelled = false;
+        currentRunId++;
+        const runId = currentRunId;
         const config = parseMultiscaleModel(msg.definition);
-        void runSimulation(config);
+        void runSimulation(config, runId);
         break;
       }
 
       case 'cancel': {
         cancelled = true;
+        currentRunId++;
+        const response: MultiscaleWorkerResponse = { type: 'cancelled' };
+        self.postMessage(response);
         break;
       }
 
       default: {
-        const unknownType = (msg as { type?: unknown }).type;
+        const raw: unknown = event.data;
+        const unknownType = typeof raw === 'object' && raw !== null && 'type' in raw
+          ? String(raw.type)
+          : 'unknown';
         const response: MultiscaleWorkerResponse = {
           type: 'error',
           message: `MultiscaleWorker received unrecognized message type: ${String(unknownType)}`,
@@ -103,25 +132,39 @@ self.onmessage = (event: MessageEvent<MultiscaleWorkerRequest>) => {
   }
 };
 
-async function runSimulation(config: MultiscaleConfig): Promise<void> {
-  try {
-    const result = await multiscaleSimulation(config, (fraction: number) => {
-      if (cancelled) {
-        // Throwing from the progress callback aborts the simulation loop.
-        // multiscaleSimulation catches this and returns partial results.
-        throw new Error('__CANCELLED__');
-      }
-      const response: MultiscaleWorkerResponse = { type: 'progress', fraction };
-      self.postMessage(response);
-    });
+async function runSimulation(config: MultiscaleConfig, runId: number): Promise<void> {
+  let lastProgressPost = 0;
 
-    if (!cancelled) {
+  try {
+    const result = await multiscaleSimulation(
+      config,
+      (fraction: number) => {
+        if (cancelled || runId !== currentRunId) {
+          throw new Error('__CANCELLED__');
+        }
+        const now = performance.now();
+        // Throttle progress messages to at most once per 60ms or on completion
+        if (now - lastProgressPost >= 60 || fraction >= 1.0) {
+          lastProgressPost = now;
+          const response: MultiscaleWorkerResponse = {
+            type: 'progress',
+            fraction: Math.min(1, Math.max(0, fraction)),
+          };
+          self.postMessage(response);
+        }
+      },
+      {
+        isCancelled: () => cancelled || runId !== currentRunId,
+      },
+    );
+
+    if (!cancelled && runId === currentRunId) {
       const response: MultiscaleWorkerResponse = { type: 'complete', result };
       self.postMessage(response);
     }
   } catch (err) {
-    if (cancelled || (err instanceof Error && err.message === '__CANCELLED__')) {
-      // Cancelled — silently ignore
+    if (cancelled || runId !== currentRunId || (err instanceof Error && err.message === '__CANCELLED__')) {
+      // Cancelled cleanly
       return;
     }
     const errMsg = err instanceof Error ? err.message : String(err);
