@@ -205,6 +205,140 @@ describe('ExtracellularGrid diffusion', () => {
 });
 
 // ---------------------------------------------------------------------------
+// ExtracellularGrid: analytic accuracy (VCell-style analytic verification)
+//
+// VCell validates PDE solvers against closed-form solutions
+// (cbit.vcell.solver.test.MathTestingUtilities). The solver-agnostic
+// accuracy standard for a diffusion kernel is the Gaussian heat kernel:
+// initial delta of mass M spreads as
+//   2D: c(r, T) = M / (4 pi D T) * exp(-r^2 / (4 D T))
+//   3D: c(r, T) = M / ((4 pi D T)^(3/2)) * exp(-r^2 / (4 D T))
+// far from boundaries.
+// ---------------------------------------------------------------------------
+
+describe('ExtracellularGrid analytic accuracy', () => {
+  const SP = 'heat';
+
+  it('2D profile matches the Gaussian heat kernel', () => {
+    // Large domain so boundary influence is negligible over the simulated time
+    const D = 20;
+    const grid = new ExtracellularGrid({
+      dimensions: 2,
+      domainSize: [200, 200, 1],
+      resolution: [101, 101, 1],
+      species: [{ name: SP, diffusionConstant: D, degradationRate: 0, initialConcentration: 0 }],
+      boundaryCondition: 'neumann',
+    });
+    const n = 101;
+    const dx = 200 / n;
+    const mass = 100 / (dx * dx); // delta of total mass 100 units placed at center
+    const g = grid.getGrid(SP)!;
+    g[50 + 50 * n] = mass;
+
+    const T = 1.0;
+    // Substep to total T with safe explicit steps
+    const dt = 0.9 / (4 * D) / (1 / (dx * dx));
+    const nSteps = Math.ceil(T / dt);
+    for (let s = 0; s < nSteps; s++) grid.step(T / nSteps);
+
+    const gg = grid.getGrid(SP)!;
+    const at = (ix: number, iy: number) => gg[ix + iy * n];
+    const totalMass = gg.reduce((a, b) => a + b, 0) * dx * dx;
+
+    // Mass conserved
+    expect(totalMass).toBeCloseTo(100, 4);
+
+    // Analytic center and ring values (grid stores continuum concentration)
+    const cCenter = 100 / (4 * Math.PI * D * T);
+    const atOffset = (off: number) => 100 / (4 * Math.PI * D * T) * Math.exp((-((off * dx) ** 2)) / (4 * D * T));
+
+    expect(at(50, 50) / cCenter).toBeCloseTo(1, 1);
+    expect(at(55, 50) / atOffset(5)).toBeCloseTo(1, 1);
+    expect(at(58, 50) / atOffset(8)).toBeCloseTo(1, 1);
+    expect(at(50, 55) / atOffset(5)).toBeCloseTo(1, 1);
+    // Isotropy
+    expect(at(55, 50)).toBeCloseTo(at(45, 50), 6);
+    expect(at(50, 55)).toBeCloseTo(at(50, 45), 6);
+  });
+
+  it('3D profile matches the Gaussian heat kernel', () => {
+    const D = 10;
+    const grid = new ExtracellularGrid({
+      dimensions: 3,
+      domainSize: [150, 150, 150],
+      resolution: [51, 51, 51],
+      species: [{ name: SP, diffusionConstant: D, degradationRate: 0, initialConcentration: 0 }],
+      boundaryCondition: 'neumann',
+    });
+    const n = 51;
+    const dx = 150 / n;
+    const c = 25;
+    // Initialize from the smooth analytic Gaussian at T0 (a resolved field,
+    // so the comparison tests the evolution operator rather than a
+    // delta-initialized lattice artifact), then evolve to T1.
+    const T0 = 0.5, T1 = 1.5;
+    const analyticAt = (t: number, r2: number) =>
+      50 / ((4 * Math.PI * D * t) ** 1.5) * Math.exp(-r2 / (4 * D * t));
+    const g = grid.getGrid(SP)!;
+    for (let iz = 0; iz < n; iz++) {
+      for (let iy = 0; iy < n; iy++) {
+        for (let ix = 0; ix < n; ix++) {
+          const r2 = ((ix - c) ** 2 + (iy - c) ** 2 + (iz - c) ** 2) * dx * dx;
+          g[ix + n * (iy + n * iz)] = analyticAt(T0, r2);
+        }
+      }
+    }
+    grid.step(T1 - T0);
+    const gg = grid.getGrid(SP)!;
+    const at = (ix: number, iy: number, iz: number) => gg[ix + n * (iy + n * iz)];
+    const ana = (off: number) => analyticAt(T1, (off * dx) ** 2);
+    expect(at(25, 25, 25) / ana(0)).toBeCloseTo(1, 1);
+    expect(at(27, 25, 25) / ana(2)).toBeCloseTo(1, 1);
+    expect(at(25, 27, 25) / ana(2)).toBeCloseTo(1, 1);
+    expect(at(25, 25, 27) / ana(2)).toBeCloseTo(1, 1);
+    expect(at(29, 25, 25) / ana(4)).toBeCloseTo(1, 0);
+  });
+
+  it('pure decay is exactly exponential (c = c0 * exp(-k*t))', () => {
+    const k = 0.5;
+    const grid = new ExtracellularGrid({
+      dimensions: 2,
+      domainSize: [100, 100, 1],
+      resolution: [10, 10, 1],
+      species: [{ name: SP, diffusionConstant: 0, degradationRate: k, initialConcentration: 2.0 }],
+      boundaryCondition: 'neumann',
+    });
+    grid.step(1.0);
+    grid.step(1.0);
+    const expected = 2.0 * Math.exp(-2.0 * k);
+    const g = grid.getGrid(SP)!;
+    for (let i = 0; i < g.length; i++) {
+      expect(g[i]).toBeCloseTo(expected, 8);
+    }
+  });
+
+  it('dirichlet (absorbing) boundary leaks mass; neumann does not', () => {
+    function massAfter(bc: 'neumann' | 'dirichlet'): number {
+      const grid = new ExtracellularGrid({
+        dimensions: 2,
+        domainSize: [40, 40, 1],
+        resolution: [20, 20, 1],
+        species: [{ name: SP, diffusionConstant: 5, degradationRate: 0, initialConcentration: 0 }],
+        boundaryCondition: bc,
+      });
+      const g = grid.getGrid(SP)!;
+      g[0] = 100; // corner cell touches both absorbing walls
+      for (let s = 0; s < 20; s++) grid.step(0.1);
+      return grid.getGrid(SP)!.reduce((a, b) => a + b, 0);
+    }
+    const neumann = massAfter('neumann');
+    const dirichlet = massAfter('dirichlet');
+    expect(neumann).toBeCloseTo(100, 3);
+    expect(dirichlet).toBeLessThan(60);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // CellAgent: movement, boundaries, division
 // ---------------------------------------------------------------------------
 

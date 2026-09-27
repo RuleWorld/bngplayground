@@ -148,12 +148,12 @@ export class ExtracellularGrid {
       const D = sp.diffusionConstant;
       const decay = sp.degradationRate;
 
-      // 2D explicit stability: dt < 1 / (2 * D * (1/dx^2 + 1/dy^2))
+      // 2D explicit stability: dt < 1 / (2 * D * (1/dx^2 + 1/dy^2)).
+      // Degradation is applied as an exact exponential factor per substep
+      // (operator splitting), so it never destabilizes the explicit step.
       let dtMax: number;
       if (D > 0) {
         dtMax = 0.9 / (2 * D * sumInvD2);
-      } else if (decay > 0) {
-        dtMax = 0.5 / decay;
       } else {
         dtMax = dt;
       }
@@ -175,6 +175,32 @@ export class ExtracellularGrid {
       const activeSources = this.activeSourceIndices.get(sp.name)!;
       const activeSinks = this.activeSinkIndices.get(sp.name)!;
       const hasSourcesOrSinks = activeSources.length > 0 || activeSinks.length > 0;
+      if (D === 0 && decay === 0 && !hasSourcesOrSinks) continue; // nothing changes
+
+      if (D === 0) {
+        // Pure reaction: exact exponential decay over the whole dt; sources
+        // and sinks applied once with the full dt (no diffusion substepping).
+        const reactionFactor = decay > 0 ? Math.exp(-decay * dt) : 1;
+        if (reactionFactor !== 1) {
+          for (let i = 0; i < current.length; i++) {
+            current[i] *= reactionFactor;
+          }
+        }
+        for (let k = 0; k < activeSources.length; k++) {
+          const i = activeSources[k];
+          current[i] += sourceField[i] * dt;
+        }
+        for (let k = 0; k < activeSinks.length; k++) {
+          const i = activeSinks[k];
+          const val = current[i] - sinkField[i] * dt;
+          current[i] = val > 0 ? val : 0;
+        }
+        continue;
+      }
+
+      // Exact exponential decay per substep (operator splitting): keeps the
+      // scheme positive and exact for pure decay, independent of step size.
+      const decayFactor = decay > 0 ? Math.exp(-decay * subDt) : 1;
 
       for (let sub = 0; sub < nSub; sub++) {
         // Interior and boundary updates
@@ -206,10 +232,14 @@ export class ExtracellularGrid {
               cDown = current[yDownIdx + ix];
               cUp = current[yUpIdx + ix];
             } else if (bc === 'dirichlet') {
-              xLeft = ix > 0 ? current[row + ix - 1] : 0;
-              xRight = ix < nx - 1 ? current[row + ix + 1] : 0;
-              cDown = iy > 0 ? current[yDownIdx + ix] : 0;
-              cUp = iy < ny - 1 ? current[yUpIdx + ix] : 0;
+              // Face-consistent Dirichlet (VCell VALUE convention): the fixed
+              // boundary value sits on the cell face (dx/2 away), so the ghost
+              // cell center must mirror-interpolate to it: ghost = 2*V - c.
+              // With V = 0 this gives ghost = -c.
+              xLeft = ix > 0 ? current[row + ix - 1] : -c;
+              xRight = ix < nx - 1 ? current[row + ix + 1] : -c;
+              cDown = iy > 0 ? current[yDownIdx + ix] : -c;
+              cUp = iy < ny - 1 ? current[yUpIdx + ix] : -c;
             } else {
               // Neumann (zero-flux)
               xLeft = ix > 0 ? current[row + ix - 1] : c;
@@ -222,7 +252,7 @@ export class ExtracellularGrid {
               (xRight + xLeft - 2 * c) * invDx2 +
               (cUp + cDown - 2 * c) * invDy2;
 
-            const nextVal = c + subDt * (D * laplacian - decay * c);
+            const nextVal = (c + subDt * (D * laplacian)) * decayFactor;
             next[idx] = nextVal > 0 ? nextVal : 0;
           }
         }
@@ -268,12 +298,12 @@ export class ExtracellularGrid {
       const D = sp.diffusionConstant;
       const decay = sp.degradationRate;
 
-      // 3D explicit stability: dt < 1 / (2 * D * (1/dx^2 + 1/dy^2 + 1/dz^2))
+      // 3D explicit stability: dt < 1 / (2 * D * (1/dx^2 + 1/dy^2 + 1/dz^2)).
+      // Degradation is applied as an exact exponential factor per substep
+      // (operator splitting), so it never destabilizes the explicit step.
       let dtMax: number;
       if (D > 0) {
         dtMax = 0.9 / (2 * D * sumInvD2);
-      } else if (decay > 0) {
-        dtMax = 0.5 / decay;
       } else {
         dtMax = dt;
       }
@@ -294,7 +324,31 @@ export class ExtracellularGrid {
       const activeSources = this.activeSourceIndices.get(sp.name)!;
       const activeSinks = this.activeSinkIndices.get(sp.name)!;
       const hasSourcesOrSinks = activeSources.length > 0 || activeSinks.length > 0;
+      if (D === 0 && decay === 0 && !hasSourcesOrSinks) continue; // nothing changes
+      if (D === 0) {
+        // Pure reaction: exact exponential decay over the whole dt; sources
+        // and sinks applied once with the full dt (no diffusion substepping).
+        const reactionFactor = decay > 0 ? Math.exp(-decay * dt) : 1;
+        if (reactionFactor !== 1) {
+          for (let i = 0; i < current.length; i++) {
+            current[i] *= reactionFactor;
+          }
+        }
+        for (let k = 0; k < activeSources.length; k++) {
+          const i = activeSources[k];
+          current[i] += sourceField[i] * dt;
+        }
+        for (let k = 0; k < activeSinks.length; k++) {
+          const i = activeSinks[k];
+          const val = current[i] - sinkField[i] * dt;
+          current[i] = val > 0 ? val : 0;
+        }
+        continue;
+      }
 
+      // Exact exponential decay per substep (operator splitting): keeps the
+      // scheme positive and exact for pure decay, independent of step size.
+      const decayFactor = decay > 0 ? Math.exp(-decay * subDt) : 1;
       for (let sub = 0; sub < nSub; sub++) {
         for (let iz = 0; iz < nz; iz++) {
           const zBase = iz * strideZ;
@@ -342,12 +396,14 @@ export class ExtracellularGrid {
                 cBack = current[zBackBase + yOffset + ix];
                 cFront = current[zFrontBase + yOffset + ix];
               } else if (bc === 'dirichlet') {
-                xLeft = ix > 0 ? current[idxBase + ix - 1] : 0;
-                xRight = ix < nx - 1 ? current[idxBase + ix + 1] : 0;
-                cDown = iy > 0 ? current[yDownBase + ix] : 0;
-                cUp = iy < ny - 1 ? current[yUpBase + ix] : 0;
-                cBack = iz > 0 ? current[zBackBase + yOffset + ix] : 0;
-                cFront = iz < nz - 1 ? current[zFrontBase + yOffset + ix] : 0;
+                // Face-consistent Dirichlet (VCell VALUE convention): ghost
+                // cell mirrors the fixed face value: ghost = 2*V - c = -c.
+                xLeft = ix > 0 ? current[idxBase + ix - 1] : -c;
+                xRight = ix < nx - 1 ? current[idxBase + ix + 1] : -c;
+                cDown = iy > 0 ? current[yDownBase + ix] : -c;
+                cUp = iy < ny - 1 ? current[yUpBase + ix] : -c;
+                cBack = iz > 0 ? current[zBackBase + yOffset + ix] : -c;
+                cFront = iz < nz - 1 ? current[zFrontBase + yOffset + ix] : -c;
               } else {
                 // Neumann
                 xLeft = ix > 0 ? current[idxBase + ix - 1] : c;
@@ -363,7 +419,7 @@ export class ExtracellularGrid {
                 (cUp + cDown - 2 * c) * invDy2 +
                 (cFront + cBack - 2 * c) * invDz2;
 
-              const nextVal = c + subDt * (D * laplacian - decay * c);
+              const nextVal = (c + subDt * (D * laplacian)) * decayFactor;
               next[idx] = nextVal > 0 ? nextVal : 0;
             }
           }

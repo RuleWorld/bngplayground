@@ -46,18 +46,18 @@ Measured with the old implementation (default demo geometry):
 
 | Benchmark | Before | After | Speedup |
 |---|---|---|---|
-| A — default demo (5 cells, D=100, tEnd=10, CVODE) | > 10 min (timeout, frozen UI) | **51.5 ms** | > 10,000× |
-| B — no intracellular (agent + PDE) | n/a (same PDE blowup) | **1.1 ms** | — |
-| C — no extracellular species (cell decisions only) | ~ms scale | **0.2 ms** | — |
-| D — 10 initial cells | — | **1.8 ms** | — |
-| D — 100 initial cells | — | **3.6 ms** | — |
-| D — 1000 initial cells | O(N²) scans, grew unbounded | **22.6 ms** | — |
-| E — PDE 2D 20×20 (tEnd=2) | — | **0.4 ms** | — |
-| E — PDE 2D 50×50 | — | **0.6 ms** | — |
-| E — PDE 2D 100×100 | — | **4.2 ms** | — |
-| E — PDE 2D 200×200 | — | **64.6 ms** | — |
-| E — PDE 3D 20×20×10 | — | **2.2 ms** | — |
-| F — 1 / 4 / 8 extracellular species | — | **0.3 / 0.4 / 0.4 ms** | — |
+  | A — default demo (5 cells, D=100, tEnd=10, CVODE) | > 10 min (timeout, frozen UI) | **49.4 ms** | > 10,000× |
+  | B — no intracellular (agent + PDE) | n/a (same PDE blowup) | **1.2 ms** | — |
+  | C — no extracellular species (cell decisions only) | ~ms scale | **0.2 ms** | — |
+  | D — 10 initial cells | — | **2.0 ms** | — |
+  | D — 100 initial cells | — | **3.5 ms** | — |
+  | D — 1000 initial cells | O(N²) scans, grew unbounded | **21.3 ms** | — |
+  | E — PDE 2D 20×20 (tEnd=2) | — | **0.4 ms** | — |
+  | E — PDE 2D 50×50 | — | **0.5 ms** | — |
+  | E — PDE 2D 100×100 | — | **4.2 ms** | — |
+  | E — PDE 2D 200×200 | — | **63.3 ms** | — |
+  | E — PDE 3D 20×20×10 | — | **3.1 ms** | — |
+  | F — 1 / 4 / 8 extracellular species | — | **0.2 / 0.2 / 0.3 ms** | — |
 
 Correctness spot-check: the default demo's intracellular decay
 (`A() -> 0, k=0.01`) integrates to `A_count(10) = 10·e^(-0.1) = 9.048…`
@@ -97,6 +97,39 @@ via CVODE — exact.
 - Non-negativity clamp; validation of resolution/domain/D/decay.
 - Bilinear interpolation + zero-z gradient in 2D; trilinear in 3D;
   BC-aware `exportSlice` (full-plane in 2D).
+- **VCell-conformant Dirichlet (VALUE) boundaries**: the fixed boundary value
+  sits on the cell *face* (ghost = 2V − c, i.e. −c for V=0), not at the ghost
+  cell center. The old off-by-half-cell placement under-leaked by up to ~2×.
+- **Exact degradation via operator splitting**: decay applied as
+  `exp(−k·dt)` per substep (D=0 species solved in a single exact pass), so
+  pure decay is exact at any step size and can never destabilize the
+  explicit stencil. This removes the main source of clamp-induced mass error.
+
+## 3b. Accuracy verification against VCell conventions
+
+The VCell codebase (`github.com/virtualcell/vcell`) was fetched and reviewed.
+Its production kernel is semi-implicit finite-volume (C binaries not in the
+repo), but its math-model semantics (`PdeEquation`: VALUE=Dirichlet at the
+face, FLUX=Neumann) and analytic-validation workflow
+(`MathTestingUtilities`, "verify with analytic") define the accuracy bar the
+kernel above is held to. Findings and fixes:
+
+- Dirichlet face-offset error (above) — fixed; verified by a new
+  absorbing-vs-reflective leakage ordering test.
+- Forward-Euler decay was inaccurate at large steps (k=0.5, dt=1 gave 0.5
+  vs analytic 0.736) — fixed with exact exponential splitting; the decay
+  test now asserts `c = c0·e^(−kt)` to 8 digits.
+- `multiscale-optimization.spec.ts` now checks the kernel against the
+  Gaussian heat kernel like VCell's analytic validation:
+  - 2D delta spread: mass conserved, center and ring values match
+    `M/(4πDT)·exp(−r²/4DT)` to 1 digit, `var(r²) = 4DT` exactly.
+  - 3D smooth-Gaussian evolution (init from analytic at T0=0.5, evolve to
+    T1=1.5): matches `M/(4πDT)^1.5·exp(−r²/4DT)` at center and rings.
+  - A convergence study (n=31→91) confirmed delta-peak oscillations are a
+    lattice-initial-condition artifact (variance exact at every resolution),
+    which is why the 3D test initializes from the smooth field.
+- Intracellular: `A() -> 0` at k=0.01 integrates to `10·e^(−0.1)` exactly
+  via CVODE.
 
 ### `packages/engine/src/services/multiscale/MultiscaleSimulation.ts`
 - **Multirate event scheduler**: independent clocks for intracellular,
@@ -164,12 +197,14 @@ via CVODE — exact.
 
 `npx vitest run packages/engine/tests/multiscale/ tests/services/multiscaleWorker.spec.ts`
 
-- **45 passed, 0 failed, 0 skipped** (3 files):
+  - **49 passed, 0 failed, 0 skipped** (3 files):
   - `multiscale.spec.ts` — 8 passed (existing, unchanged semantics)
-  - `multiscale-optimization.spec.ts` — 35 passed (new): dimensionality
+  - `multiscale-optimization.spec.ts` — 39 passed (new): dimensionality
     (2D grid is Nx×Ny; 3D is Nx×Ny×Nz), mass conservation under Neumann
     (2D & 3D), uniform-field invariance, symmetric point-source spreading,
     degradation decay, zero-z gradient in 2D, periodic wrapping,
+    Gaussian heat-kernel match (2D delta + 3D smooth-field evolution),
+    exact exponential decay to 8 digits, Dirichlet/Neumann leakage ordering,
     seeded-RNG determinism, planar 2D movement, chemotaxis in-plane,
     reflective/periodic/absorbing cell BCs, exact division conservation
     (integer & continuous), non-commensurate clocks, refractory enforcement
