@@ -108,7 +108,7 @@
     "jsdom": "^30.0.1",
     "playwright": "^1.61.1",
     "postcss": "^8.5.26",
-    "react-is": "^19.2.4",
+    "react-is": "^19.3.0",
     "tailwindcss": "^4.2.0",
     "ts-node": "^10.9.2",
     "tsconfig-paths": "^4.2.0",
