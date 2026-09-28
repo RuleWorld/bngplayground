@@ -13,7 +13,7 @@ import type { MultiscaleConfig } from '../packages/engine/src/services/multiscal
 async function timeRun(name: string, fn: () => Promise<unknown>, budgetMs = 120_000): Promise<{ name: string; ms: number | 'timeout' }> {
   const start = performance.now();
   try {
-    const result = await Promise.race([
+    await Promise.race([
       fn(),
       new Promise((_, reject) => setTimeout(() => reject(new Error('BENCH_TIMEOUT')), budgetMs)),
     ]);
