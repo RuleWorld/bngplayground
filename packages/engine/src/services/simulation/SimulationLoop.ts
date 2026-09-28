@@ -1034,27 +1034,37 @@ export async function simulate(
 
     reactionReactingVolumes[idx] = vAnchor;
   });
-  // The generated reaction table may already contain integer species indices
-  // while its string form omits compartment decoration. Recompute anchors from
-  // the resolved species-to-compartment map so dynamic compartment events can
-  // refresh the same volume used by the derivative evaluator.
-  concreteReactions.forEach((reaction, reactionIndex) => {
-    const candidates = reaction.reactants.length > 0 ? reaction.reactants : reaction.products;
-    let minDim = Number.POSITIVE_INFINITY;
-    let anchor: string | undefined;
-    let volume = 1;
-    for (const speciesIndex of candidates) {
-      const compartmentName = speciesCompartmentNames[speciesIndex];
-      const compartment = compartmentName ? compartmentMapForDim.get(compartmentName) : undefined;
-      if (compartment && compartmentName && (compartment.dimension ?? 3) < minDim) {
-        minDim = compartment.dimension ?? 3;
-        anchor = compartmentName;
-        volume = compartmentMap.get(compartmentName) ?? 1;
+  const hasDynamicCompartmentVolumes = eventAssignedCompartmentNames.size > 0
+    || (model.compartments || []).some((compartment) =>
+      rateRuleDefinitions.has(compartment.name)
+      || (model.functions || []).some((fn) => fn.name === `__assign_rule__${compartment.name}`));
+  // Only resolve index-based anchors when a run can change compartment sizes.
+  // Static models must retain their declared scalingVolume and the existing
+  // string-based anchor calculation above.
+  if (hasDynamicCompartmentVolumes) {
+    concreteReactions.forEach((reaction, reactionIndex) => {
+      const declaredScalingVolume = reactions[reactionIndex]?.scalingVolume;
+      if (typeof declaredScalingVolume === 'number' && Number.isFinite(declaredScalingVolume) && declaredScalingVolume > 0) {
+        return;
       }
-    }
-    reactionAnchorCompartments[reactionIndex] = anchor;
-    reactionReactingVolumes[reactionIndex] = volume;
-  });
+
+      const candidates = reaction.reactants.length > 0 ? reaction.reactants : reaction.products;
+      let minDim = Number.POSITIVE_INFINITY;
+      let anchor: string | undefined;
+      let volume = 1;
+      for (const speciesIndex of candidates) {
+        const compartmentName = speciesCompartmentNames[speciesIndex];
+        const compartment = compartmentName ? compartmentMapForDim.get(compartmentName) : undefined;
+        if (compartment && compartmentName && (compartment.dimension ?? 3) < minDim) {
+          minDim = compartment.dimension ?? 3;
+          anchor = compartmentName;
+          volume = compartmentMap.get(compartmentName) ?? 1;
+        }
+      }
+      reactionAnchorCompartments[reactionIndex] = anchor;
+      reactionReactingVolumes[reactionIndex] = volume;
+    });
+  }
 
   const buildParamMap = (parameters: Record<string, unknown> | undefined): Map<string, number> => {
     const paramMap = new Map<string, number>();
