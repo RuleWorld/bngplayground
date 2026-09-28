@@ -1,12 +1,10 @@
 /**
- * Translate SBML events into BNGL multi-phase action blocks.
+ * Legacy helper for translating a narrow SBML event subset into BNGL multi-phase action blocks.
  *
- * The engine has no general trigger-based event executor, but it fully supports the BNG2 idiom of
- * chaining simulate() phases with setConcentration/setParameter between them (see ActionDispatcher
- * and BNGLVisitor: setConcentration/setParameter/addConcentration + continue=>1). That covers the
- * common and important class of events: a change applied at a fixed time (dosing, wash-out, a
- * parameter step). We translate exactly that class and leave anything state-dependent to the
- * diagnostic block, so nothing is silently mis-simulated.
+ * The Atomizer writer now carries all imported events as structured metadata so the Playground
+ * event runtime owns execution and native BNG2 cannot accidentally execute a second approximation.
+ * This module remains available for explicit legacy callers that intentionally request the narrow
+ * fixed-time action transformation.
  *
  * Translatable event = time-threshold trigger (time >= T / geq(time,T) / ...) with a constant
  * (parameter-foldable) trigger time, a constant delay, and assignment right-hand sides that reduce

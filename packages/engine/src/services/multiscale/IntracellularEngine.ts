@@ -115,7 +115,7 @@ export class IntracellularEngine {
       n_steps: 1,
       solver: 'cvode',
     });
-
+    await CVODESolver.init();
     return new IntracellularEngine(cellType, handle, options);
   }
 

@@ -1,5 +1,6 @@
 import type { BNGLModel, SimulationOptions } from '../types';
 import { bnglService } from './bnglService';
+import { bnglWorkerPool } from './BnglWorkerPool';
 import { EigenvalueDecomposition, Matrix } from 'ml-matrix';
 import { jacobiEigenDecomposition, chi2Quantile } from './math/fimUtils';
 
@@ -167,11 +168,23 @@ export async function computeFIM(
 
     // Execute all perturbation simulations in parallel (limited by worker pool)
     const simStartTime = performance.now();
-    const perturbResults = await Promise.all(
-      perturbJobs.map(job =>
-        bnglService.simulateCached(preparedModelId, { [job.param]: job.val as number } as Record<string, number>, leanSimulationOptions, { signal })
+    const perturbOverrides = perturbJobs.map((job) => ({ [job.param]: job.val }));
+    const perturbResults = typeof Worker !== 'undefined'
+      ? await bnglWorkerPool.runParameterSweep(
+        model,
+        perturbOverrides,
+        leanSimulationOptions,
+        signal,
+        (completed) => progress?.(completed + 1, totalRuns),
       )
-    );
+      : await Promise.all(perturbOverrides.map((overrides, index) =>
+        recordSim(() => bnglService.simulateCached(
+          preparedModelId,
+          overrides,
+          leanSimulationOptions,
+          { signal, description: `FIM perturbation ${index + 1}` },
+        )),
+      ));
     totalSimMs = performance.now() - simStartTime;
 
     // Build results map: paramIdx -> { plus, minus }

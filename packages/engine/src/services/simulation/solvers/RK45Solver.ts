@@ -2,7 +2,7 @@ import { errorNorm, hasInvalidValues, SOLVER_ERROR_STIFF_DETECTED } from '../../
 import type { SolverOptions, SolverResult } from '../../../utils/solverUtils';
 import { DEFAULT_SOLVER_OPTIONS } from '../../../utils/solverUtils';
 
-type DerivativeFunction = (y: Float64Array, dydt: Float64Array) => void;
+type DerivativeFunction = (y: Float64Array, dydt: Float64Array, time?: number) => void;
 
 /**
  * Dormand-Prince RK45 solver with adaptive step size

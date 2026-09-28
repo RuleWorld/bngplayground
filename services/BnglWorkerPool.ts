@@ -7,6 +7,7 @@
 
 import { BNGLModel, SharedSimulationOutputDescriptor, SimulationOptions, SimulationResults, WorkerRequest, WorkerResponse } from '../types';
 import { toError } from './workerErrorUtils';
+import { materializeSimulationResult, type SimulationResultPayload } from './workerResultTransport';
 
 export interface SharedEnsembleResultsHandle {
     kind: 'shared';
@@ -28,6 +29,22 @@ export const canUseSharedArrayBuffer = (): boolean => {
     } catch {
         return false;
     }
+};
+
+/**
+ * Conservative retained-model memory proxy used before the network is expanded.
+ * Concrete species/reactions are weighted by their approximate object footprint;
+ * each rule receives a larger allowance because it can expand combinatorially.
+ */
+export const estimateSimulationWorkerCount = (model: BNGLModel, maxWorkers: number): number => {
+    const estimatedBytes = (model.species?.length ?? 0) * 192
+        + (model.reactions?.length ?? 0) * 256
+        + (model.reactionRules?.length ?? 0) * 2 * 1024 * 1024;
+    const memoryBound = estimatedBytes < 4 * 1024 * 1024 ? 8
+        : estimatedBytes < 16 * 1024 * 1024 ? 4
+        : estimatedBytes < 64 * 1024 * 1024 ? 2
+        : 1;
+    return Math.max(1, Math.min(maxWorkers, memoryBound));
 };
 
 /**
@@ -149,9 +166,9 @@ export class BnglWorkerPool {
     private workerResponseHandlers = new Map<Worker, (event: MessageEvent<WorkerResponse>) => void>();
 
     constructor(poolSize?: number) {
-        // Default to hardware concurrency - 1 (leave one for UI)
+        // Cap the default: each worker can retain an expanded network and WASM state.
         const hardwareConcurrency = typeof navigator !== 'undefined' ? (navigator.hardwareConcurrency || 4) : 4;
-        this.poolSize = poolSize ?? Math.max(1, hardwareConcurrency - 1);
+        this.poolSize = poolSize ?? Math.max(1, Math.min(hardwareConcurrency - 1, 8));
     }
 
     private registerPendingRequest(worker: Worker, req: PendingPoolRequest) {
@@ -232,7 +249,8 @@ export class BnglWorkerPool {
         errorType: WorkerResponse['type'],
         defaultErrorMessage: string,
         mapPayload: (payload: unknown) => T,
-        errorLogLabel?: string
+        errorLogLabel?: string,
+        signal?: AbortSignal,
     ): Promise<T> {
         return new Promise((resolve, reject) => {
             const requests = this.pendingWorkerRequests.get(worker);
@@ -246,6 +264,24 @@ export class BnglWorkerPool {
                 messageId = generateSecureMessageId();
             }
 
+            const cleanupAbort = () => signal?.removeEventListener('abort', abortHandler!);
+            const abortHandler = () => {
+                this.removePendingRequest(worker, messageId);
+                cleanupAbort();
+                try {
+                    worker.postMessage({
+                        id: generateSecureMessageId(),
+                        type: 'cancel',
+                        payload: { targetId: messageId },
+                    });
+                } catch { /* worker may already be terminating */ }
+                reject(new DOMException(signal?.reason ?? 'The operation was aborted.', 'AbortError'));
+            };
+            if (signal?.aborted) {
+                reject(new DOMException(signal.reason ?? 'The operation was aborted.', 'AbortError'));
+                return;
+            }
+
             const req: PendingPoolRequest = {
                 messageId,
                 successType,
@@ -253,29 +289,36 @@ export class BnglWorkerPool {
                 defaultErrorMessage,
                 errorLogLabel,
                 resolvePayload: (payload) => {
+                    cleanupAbort();
                     try {
                         resolve(mapPayload(payload));
                     } catch (error) {
                         reject(error instanceof Error ? error : new Error(String(error)));
                     }
                 },
-                reject
+                reject: (error) => {
+                    cleanupAbort();
+                    reject(error);
+                }
             };
             this.registerPendingRequest(worker, req);
+            signal?.addEventListener('abort', abortHandler, { once: true });
 
             try {
                 worker.postMessage(createRequest(messageId));
             } catch (error) {
                 this.removePendingRequest(worker, messageId);
+                cleanupAbort();
                 reject(error instanceof Error ? error : new Error(String(error)));
             }
         });
     }
 
-    async initialize(): Promise<void> {
-        if (this.isInitialized) return;
+    async initialize(workerCount = this.poolSize): Promise<void> {
+        const targetWorkerCount = Math.max(1, Math.min(this.poolSize, Math.floor(workerCount)));
+        if (this.workers.length >= targetWorkerCount) return;
 
-        for (let i = 0; i < this.poolSize; i++) {
+        for (let i = this.workers.length; i < targetWorkerCount; i++) {
             // Use the same worker as BnglService
             const worker = new Worker(new URL('./bnglWorker.ts', import.meta.url), { type: 'module' });
             this.pendingWorkerRequests.set(worker, new Map());
@@ -307,9 +350,9 @@ export class BnglWorkerPool {
      * Run a single simulation on a specific worker or the next available one.
      */
     async simulate(model: BNGLModel, options: SimulationOptions, workerIdx?: number): Promise<SimulationResults> {
-        if (!this.isInitialized) await this.initialize();
+        if (!this.isInitialized) await this.initialize(1);
 
-        const idx = workerIdx ?? (this.nextWorkerIdx++ % this.poolSize);
+        const idx = workerIdx ?? (this.nextWorkerIdx++ % this.workers.length);
         const worker = this.workers[idx];
         return this.requestOnWorker(
             worker,
@@ -321,7 +364,7 @@ export class BnglWorkerPool {
             'simulate_success',
             'simulate_error',
             'Simulation failed',
-            (payload) => payload as SimulationResults,
+            (payload) => materializeSimulationResult(payload as SimulationResultPayload),
             'simulate_error'
         );
     }
@@ -335,11 +378,13 @@ export class BnglWorkerPool {
         count: number,
         onProgress?: (index: number) => void
     ): Promise<SimulationResults[] | SharedEnsembleResultsHandle> {
-        if (!this.isInitialized) await this.initialize();
+        const desiredWorkers = Math.min(count, estimateSimulationWorkerCount(model, this.poolSize));
+        if (this.workers.length < desiredWorkers) await this.initialize(desiredWorkers);
+        const workers = this.workers.slice(0, desiredWorkers);
 
         // Prepare model on ALL workers for cached simulation using Promise.allSettled to avoid leaking on partial failures
         const preparationResults = await Promise.allSettled(
-            this.workers.map(w => this.prepareModelOnWorker(w, model))
+            workers.map(w => this.prepareModelOnWorker(w, model))
         );
 
         const failures = preparationResults.filter((r) => r.status === 'rejected') as PromiseRejectedResult[];
@@ -348,7 +393,7 @@ export class BnglWorkerPool {
             await Promise.all(
                 preparationResults.map((res, i) => {
                     if (res.status === 'fulfilled') {
-                        return this.releaseModelOnWorker(this.workers[i], res.value).catch(() => {});
+                        return this.releaseModelOnWorker(workers[i], res.value).catch(() => {});
                     }
                     return Promise.resolve();
                 })
@@ -358,13 +403,13 @@ export class BnglWorkerPool {
 
         const modelIds = preparationResults.map((r) => (r as PromiseFulfilledResult<number>).value);
         try {
-            const initialWaveCount = Math.min(count, this.workers.length);
+            const initialWaveCount = Math.min(count, workers.length);
             const initialResults: SimulationResults[] = new Array(initialWaveCount);
             let completed = 0;
             const initialWave = await Promise.allSettled(
                 Array.from({ length: initialWaveCount }, async (_, taskIdx) => {
                     const result = await this.simulateCachedOnWorker(
-                        this.workers[taskIdx],
+                        workers[taskIdx],
                         modelIds[taskIdx],
                         { ...options, seed: taskIdx }
                     );
@@ -402,8 +447,8 @@ export class BnglWorkerPool {
                     writeSimulationResultsToShared(shared, taskIdx, initialResults[taskIdx]);
                 }
 
-                await this.runBoundedEnsembleTasks(count, initialWaveCount, async (workerIdx, taskIdx) => {
-                    const worker = this.workers[workerIdx];
+                await this.runBoundedEnsembleTasks(workers, count, initialWaveCount, async (workerIdx, taskIdx) => {
+                    const worker = workers[workerIdx];
                     const modelId = modelIds[workerIdx];
                     await this.simulateCachedOnWorkerShared(worker, modelId, { ...options, seed: taskIdx }, {
                         slot: taskIdx,
@@ -426,8 +471,8 @@ export class BnglWorkerPool {
                 results[taskIdx] = initialResults[taskIdx];
             }
 
-            await this.runBoundedEnsembleTasks(count, initialWaveCount, async (workerIdx, taskIdx) => {
-                const worker = this.workers[workerIdx];
+            await this.runBoundedEnsembleTasks(workers, count, initialWaveCount, async (workerIdx, taskIdx) => {
+                const worker = workers[workerIdx];
                 const modelId = modelIds[workerIdx];
 
                 const res = await this.simulateCachedOnWorker(worker, modelId, { ...options, seed: taskIdx });
@@ -438,17 +483,67 @@ export class BnglWorkerPool {
 
             return results;
         } finally {
-            await Promise.all(this.workers.map((w, i) => this.releaseModelOnWorker(w, modelIds[i])));
+            await Promise.all(workers.map((w, i) => this.releaseModelOnWorker(w, modelIds[i])));
+        }
+    }
+
+    /** Run parameter perturbations across a bounded set of prepared workers. */
+    async runParameterSweep(
+        model: BNGLModel,
+        overrides: Array<Record<string, number>>,
+        options: SimulationOptions,
+        signal?: AbortSignal,
+        onProgress?: (completed: number) => void,
+    ): Promise<SimulationResults[]> {
+        if (overrides.length === 0) return [];
+        const workerCount = Math.min(overrides.length, estimateSimulationWorkerCount(model, this.poolSize));
+        if (this.workers.length < workerCount) await this.initialize(workerCount);
+        const workers = this.workers.slice(0, workerCount);
+        const preparation = await Promise.allSettled(workers.map((worker) => this.prepareModelOnWorker(worker, model)));
+        const failedPreparation = preparation.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+        if (failedPreparation) {
+            await Promise.all(preparation.map((result, index) => result.status === 'fulfilled'
+                ? this.releaseModelOnWorker(workers[index], result.value).catch(() => undefined)
+                : Promise.resolve()));
+            throw failedPreparation.reason;
+        }
+
+        const modelIds = preparation.map((result) => (result as PromiseFulfilledResult<number>).value);
+        const results = new Array<SimulationResults>(overrides.length);
+        let nextIndex = 0;
+        let completed = 0;
+        try {
+            const settled = await Promise.allSettled(workers.map(async (worker, workerIndex) => {
+                while (nextIndex < overrides.length) {
+                    const jobIndex = nextIndex++;
+                    results[jobIndex] = await this.simulateCachedOnWorker(
+                        worker,
+                        modelIds[workerIndex],
+                        options,
+                        overrides[jobIndex],
+                        signal,
+                    );
+                    onProgress?.(++completed);
+                }
+            }));
+            const failure = settled.find((result): result is PromiseRejectedResult => result.status === 'rejected');
+            if (failure) throw failure.reason;
+            return results;
+        } finally {
+            await Promise.all(workers.map((worker, index) =>
+                this.releaseModelOnWorker(worker, modelIds[index]).catch(() => undefined),
+            ));
         }
     }
 
     private async runBoundedEnsembleTasks(
+        workers: Worker[],
         count: number,
         initialWaveCount: number,
         runTask: (workerIdx: number, taskIdx: number) => Promise<void>
     ): Promise<void> {
-        const workerCount = this.workers.length;
-        const workerLoops = this.workers.map(async (_worker, workerIdx) => {
+        const workerCount = workers.length;
+        const workerLoops = workers.map(async (_worker, workerIdx) => {
             // Each worker already completed its corresponding initial-wave task.
             // Continue the same modulo assignment while awaiting every request
             // before posting that worker's next simulation.
@@ -480,15 +575,22 @@ export class BnglWorkerPool {
         );
     }
 
-    private simulateCachedOnWorker(worker: Worker, modelId: number, options: SimulationOptions): Promise<SimulationResults> {
+    private simulateCachedOnWorker(
+        worker: Worker,
+        modelId: number,
+        options: SimulationOptions,
+        parameterOverrides?: Record<string, number>,
+        signal?: AbortSignal,
+    ): Promise<SimulationResults> {
         return this.requestOnWorker(
             worker,
-            (messageId) => ({ id: messageId, type: 'simulate', payload: { modelId, options } }),
+            (messageId) => ({ id: messageId, type: 'simulate', payload: { modelId, parameterOverrides, options } }),
             'simulate_success',
             'simulate_error',
             'Simulation failed',
-            (payload) => payload as SimulationResults,
-            'simulate_error'
+            (payload) => materializeSimulationResult(payload as SimulationResultPayload),
+            'simulate_error',
+            signal,
         );
     }
 

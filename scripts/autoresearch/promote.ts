@@ -2,6 +2,7 @@ import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile } from 'node:fs/promises';
 import { execFile } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import { promisify } from 'node:util';
 import { dirname, join, resolve } from 'node:path';
 
@@ -66,7 +67,7 @@ function record(options: PromotionOptions, status: PromotionRecord['status'], no
 
 async function openPullRequest(options: PromotionOptions): Promise<PromotionRecord> {
   const branch = `autoresearch/${options.target.campaign}/${options.runId}/${options.target.target_id.replace(/[^A-Za-z0-9._/-]+/g, '-').replace(/^\/+|\/+$/g, '')}`;
-  const worktree = join('/private/tmp', 'bng-autoresearch-promote', options.runId, options.target.campaign);
+  const worktree = join(tmpdir(), 'bng-autoresearch-promote', options.runId, options.target.campaign);
   try {
     await mkdir(dirname(worktree), { recursive: true });
     await runGit(options.repositoryRoot, ['worktree', 'add', '-b', branch, worktree, options.baseSha]);

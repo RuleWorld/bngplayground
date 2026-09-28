@@ -2,7 +2,7 @@ import { sobolSensitivity, simulate, loadEvaluator } from '@bngplayground/engine
 import type { SobolResult } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult, MCPErrorResult } from '../types/index.js';
 import { sobolSensitivityArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, applyPreparedModelOverrides } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult<SobolResult[] | MCPErrorResult>> {
@@ -57,11 +57,7 @@ export async function handleSobolSensitivity(args: ToolArgs): Promise<ToolResult
 
         const results = await sobolSensitivity({
             simulate: async (overrides) => {
-                const runModel = cloneExpandedModel(expandedModel);
-                Object.entries(overrides).forEach(([k, v]) => {
-                    runModel.parameters[k] = v;
-                });
-                updateMassActionRates(runModel);
+                const runModel = applyPreparedModelOverrides(expandedModel, overrides);
                 return simulate(0, runModel, simOptions, {
                     checkCancelled: () => { },
                     postMessage: () => { },

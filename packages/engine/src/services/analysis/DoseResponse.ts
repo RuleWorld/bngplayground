@@ -18,8 +18,10 @@
 
 import { findSteadyState } from "./SteadyStateFinder";
 import type { SteadyStateConfig, SteadyState } from "./SteadyStateFinder";
-import { nelderMead } from "../optimization/nelderMead";
 import type { BNGLModel, BNGLReaction, BNGLSpecies } from "../../types";
+import { buildOdeSystem } from "../simulation/SimulationLoop";
+import { forkPreparedModel, updatePreparedModel } from "../../utils/preparedModel";
+import { buildStoichiometryMatrix } from "../../utils/stoichiometry";
 
 // ── Public interfaces ──────────────────────────────────────────────
 
@@ -45,6 +47,8 @@ export interface DoseResponseConfig {
   tolerance?: number;
   /** Detect bifurcation points (default false). */
   detectBifurcations?: boolean;
+  /** Original source seed expressions, captured before network expansion. */
+  seedExpressions?: Map<string, string>;
 }
 
 export interface HillFit {
@@ -95,82 +99,23 @@ function buildSpeciesIndex(species: BNGLSpecies[]): Map<string, number> {
   return map;
 }
 
-/**
- * Build the stoichiometry matrix S[species][reaction].
- */
-function buildStoichiometryMatrix(
-  species: BNGLSpecies[],
-  reactions: BNGLReaction[],
-): number[][] {
-  const speciesIdx = buildSpeciesIndex(species);
-  return buildStoichiometry(reactions, species.length, (name) => speciesIdx.get(name));
-}
-
-/**
- * Compute propensity vector for given concentrations and parameters.
- * Propensity = rateConstant * product(y[j]^count[j]) for each reactant j.
- */
-function computePropensities(
-  y: Float64Array,
-  reactions: BNGLReaction[],
-  species: BNGLSpecies[],
-  params: Record<string, number>,
-): number[] {
-  const speciesIdx = buildSpeciesIndex(species);
-  const m = reactions.length;
-  const a = new Array<number>(m);
-
-  for (let r = 0; r < m; r++) {
-    const rxn = reactions[r];
-    // Use parameter-resolved rate constant if it matches a parameter name,
-    // otherwise fall back to the numeric rateConstant.
-    let rate = rxn.rateConstant;
-    if (rxn.rate && params[rxn.rate] !== undefined) {
-      rate = params[rxn.rate];
+/** Build an orthonormal basis for the reaction subspace, removing conserved directions. */
+function buildStoichiometricBasis(species: BNGLSpecies[], reactions: BNGLReaction[]): number[][] {
+  const speciesIndex = buildSpeciesIndex(species);
+  const matrix = buildStoichiometryMatrix(reactions, species.length, (name) => speciesIndex.get(name));
+  const basis: number[][] = [];
+  for (let reaction = 0; reaction < reactions.length; reaction++) {
+    const vector = matrix.map((row) => row[reaction]);
+    for (const axis of basis) {
+      let projection = 0;
+      for (let i = 0; i < vector.length; i++) projection += vector[i] * axis[i];
+      for (let i = 0; i < vector.length; i++) vector[i] -= projection * axis[i];
     }
-
-    let prop = rate;
-
-    // Count reactant multiplicities.
-    const reactantCounts = new Map<string, number>();
-    for (const name of rxn.reactants) {
-      reactantCounts.set(name, (reactantCounts.get(name) ?? 0) + 1);
-    }
-
-    reactantCounts.forEach((count, name) => {
-      const idx = speciesIdx.get(name);
-      if (idx !== undefined) {
-        const conc = Math.max(y[idx], 0);
-        prop *= Math.pow(conc, count);
-      }
-    });
-    a[r] = prop;
+    const norm = Math.sqrt(vector.reduce((sum, value) => sum + value * value, 0));
+    if (norm <= 1e-10) continue;
+    basis.push(vector.map((value) => value / norm));
   }
-  return a;
-}
-
-/**
- * Build the RHS function: dydt[i] = sum_r S[i][r] * a_r(y, params).
- */
-function buildRhsFn(
-  species: BNGLSpecies[],
-  reactions: BNGLReaction[],
-  S: number[][],
-  params: Record<string, number>,
-): (y: Float64Array, dydt: Float64Array) => void {
-  const n = species.length;
-  const m = reactions.length;
-
-  return (y: Float64Array, dydt: Float64Array): void => {
-    const a = computePropensities(y, reactions, species, params);
-    for (let i = 0; i < n; i++) {
-      let sum = 0;
-      for (let r = 0; r < m; r++) {
-        sum += S[i][r] * a[r];
-      }
-      dydt[i] = sum;
-    }
-  };
+  return basis;
 }
 
 /**
@@ -287,63 +232,6 @@ function evaluateObservable(
 }
 
 /**
- * Fit Hill equation to dose-response data using Nelder-Mead.
- *
- *   response(dose) = baseline + (maximum - baseline) * dose^n / (ec50^n + dose^n)
- *
- * Parameters fitted: [n, ec50, baseline, maximum]
- */
-async function fitHillEquation(
-  doses: number[],
-  responses: number[],
-): Promise<HillFit> {
-  const nData = doses.length;
-  if (nData < 2) {
-    return { n: 1, ec50: 1, baseline: 0, maximum: 0, r2: 0 };
-  }
-
-  const { baseline0, maximum0, ec50Guess } = getInitialHillGuesses(
-    doses,
-    responses,
-    nData,
-  );
-
-  const x0 = [1, ec50Guess, baseline0, maximum0];
-  const syncObjectiveFn = createHillObjective(doses, responses, nData);
-  const objectiveFn = async (x: number[]): Promise<number> =>
-    syncObjectiveFn(x);
-
-  const result = await nelderMead(objectiveFn, x0, {
-    maxEval: 5000,
-    ftol: 1e-10,
-    xtol: 1e-10,
-  });
-
-  const fittedN = result.x[0];
-  const fittedEC50 = Math.abs(result.x[1]);
-  const fittedBaseline = result.x[2];
-  const fittedMaximum = result.x[3];
-
-  const r2 = calculateHillR2(
-    fittedN,
-    fittedEC50,
-    fittedBaseline,
-    fittedMaximum,
-    doses,
-    responses,
-    nData,
-  );
-
-  return {
-    n: fittedN,
-    ec50: fittedEC50,
-    baseline: fittedBaseline,
-    maximum: fittedMaximum,
-    r2,
-  };
-}
-
-/**
  * Detect bifurcation points between successive dose steps by monitoring
  * eigenvalue real parts.  A saddle-node bifurcation occurs when a real
  * eigenvalue crosses zero.  A Hopf bifurcation occurs when a complex-
@@ -408,11 +296,9 @@ function detectBifurcationPoints(
  * steady state at each dose.
  */
 import { simulate } from "../simulation/SimulationLoop";
-import { evaluateFunctionalRate, clearAllEvaluatorCaches } from "../simulation/ExpressionEvaluator";
-import { buildStoichiometryMatrix as buildStoichiometry } from '../../utils/stoichiometry';
-
+import { clearAllEvaluatorCaches } from "../simulation/ExpressionEvaluator";
 function cloneExpandedModel(model: BNGLModel): BNGLModel {
-    return structuredClone(model);
+  return forkPreparedModel(model);
 }
 
 /**
@@ -441,19 +327,7 @@ function cloneExpandedModel(model: BNGLModel): BNGLModel {
  *   of implementing parameter evaluation inline.
  */
 export function updateMassActionRates(model: BNGLModel): void {
-    const context = model.parameters ?? {};
-    for (const reaction of model.reactions ?? []) {
-        if (!reaction.isFunctionalRate && reaction.rate && typeof reaction.rate === 'string') {
-            try {
-                const updatedRate = evaluateFunctionalRate(reaction.rate, context, {}, model.functions);
-                if (Number.isFinite(updatedRate)) {
-                    reaction.rateConstant = updatedRate;
-                }
-            } catch {
-                // Keep the existing concrete rate when a symbolic update fails.
-            }
-        }
-    }
+    updatePreparedModel(model, {}, { mutate: true, refreshInitialState: false });
     clearAllEvaluatorCaches();
 }
 
@@ -466,6 +340,7 @@ export async function computeDoseResponseBySimulation(
     nPoints: number,
     logScale: boolean,
     tEnd: number,
+    seedExpressions: Map<string, string> = new Map(),
 ): Promise<{ curves: Array<{ observable: string; doses: number[]; responses: number[] }>; failedDoses: number[] }> {
     const doses = generateDosePoints(inputMin, inputMax, nPoints, logScale);
     const failedDoses: number[] = [];
@@ -475,6 +350,8 @@ export async function computeDoseResponseBySimulation(
     observables.forEach((obs) => {
         responsesByObservable.set(obs, []);
     });
+
+    const runModel = cloneExpandedModel(expandedModel);
 
     const simOptions = {
         method: 'ode',
@@ -487,9 +364,7 @@ export async function computeDoseResponseBySimulation(
 
     for (const dose of doses) {
         try {
-            const runModel = cloneExpandedModel(expandedModel);
-            runModel.parameters[inputParameter] = dose;
-            updateMassActionRates(runModel);
+            updatePreparedModel(runModel, { [inputParameter]: dose }, { mutate: true, seedExpressions });
 
             const simResult = await simulate(0, runModel, simOptions, {
                 checkCancelled: () => { },
@@ -530,7 +405,7 @@ export async function computeDoseResponseBySimulation(
 export async function computeDoseResponse(
   config: DoseResponseConfig,
 ): Promise<DoseResponseResult> {
-  const {
+    const {
     model,
     reactions,
     species,
@@ -541,6 +416,7 @@ export async function computeDoseResponse(
     observables,
     tolerance = 1e-6,
     detectBifurcations: detectBif = false,
+    seedExpressions = new Map<string, string>(),
   } = config;
 
   const fullModel: BNGLModel = {
@@ -550,6 +426,7 @@ export async function computeDoseResponse(
   };
 
   const n = species.length;
+  const stoichiometricBasis = buildStoichiometricBasis(species, reactions);
 
   if (config.method === 'simulate') {
     const tEnd = config.t_end ?? 1e4;
@@ -562,6 +439,7 @@ export async function computeDoseResponse(
         nPoints,
         logScale,
         tEnd,
+        seedExpressions,
     );
     return {
         inputParameter,
@@ -576,8 +454,10 @@ export async function computeDoseResponse(
         curves: simulated.curves,
     } as DoseResponseResult;
   }
-  // Build stoichiometry matrix (constant across doses).
-  const S = buildStoichiometryMatrix(species, reactions);
+  // Prepare the simulator's exact RHS once. Parameter updates refresh the
+  // same mass-action JIT and functional-rate context used by simulation.
+  const preparedModel = cloneExpandedModel(fullModel);
+  const odeSystem = await buildOdeSystem(preparedModel, { solver: 'auto' });
 
   // Generate dose points.
   const doses = generateDosePoints(
@@ -607,38 +487,68 @@ export async function computeDoseResponse(
   const failedDoses: number[] = [];
   const steadyStates: Array<SteadyState | null> = [];
 
-  // Initial guess from species initial concentrations.
-  let currentGuess = new Float64Array(n);
-  for (let i = 0; i < n; i++) {
-    currentGuess[i] = species[i].initialConcentration;
-  }
-
   // Sweep through each dose.
   for (let d = 0; d < doses.length; d++) {
     const dose = doses[d];
 
-    // Clone parameters and set the input parameter to the current dose.
-    const params: Record<string, number> = { ...model.parameters };
-    params[inputParameter] = dose;
+    // Re-evaluate all source seed expressions for each dose. This updates
+    // initial pools and conserved totals as well as the parameter table.
+    updatePreparedModel(preparedModel, { [inputParameter]: dose }, { mutate: true, seedExpressions });
+    const params: Record<string, number> = { ...preparedModel.parameters };
+    odeSystem.updateParameters?.(params);
 
-    // Build RHS with updated parameters.
-    const rhsFn = buildRhsFn(species, reactions, S, params);
-
-    // Build steady-state config.
-    const ssConfig: SteadyStateConfig = {
-      nSpecies: n,
-      parameters: params,
-      rhsFn,
-      tolerance,
-      maxIterations: 500,
-    };
+    const doseInitialState = new Float64Array(n);
+    const preparedSpeciesByName = buildSpeciesIndex(preparedModel.species ?? []);
+    for (let i = 0; i < n; i++) {
+      const preparedIndex = preparedSpeciesByName.get(odeSystem.speciesNames[i]);
+      doseInitialState[i] = preparedIndex === undefined
+        ? odeSystem.y0[i]
+        : preparedModel.species![preparedIndex].initialConcentration;
+    }
 
     try {
-      const ss = findSteadyState(ssConfig, currentGuess);
+      let ss: SteadyState;
+      if (stoichiometricBasis.length === 0) {
+        ss = { y: doseInitialState, stable: false, converged: true, eigenvalues: [], parameterValue: dose };
+      } else {
+        const reducedRhs = (coordinates: Float64Array, derivative: Float64Array): void => {
+          const state = new Float64Array(doseInitialState);
+          for (let axis = 0; axis < stoichiometricBasis.length; axis++) {
+            const amount = coordinates[axis];
+            for (let i = 0; i < n; i++) state[i] += stoichiometricBasis[axis][i] * amount;
+          }
+          const fullDerivative = new Float64Array(n);
+          odeSystem.rhs(state, fullDerivative);
+          for (let axis = 0; axis < stoichiometricBasis.length; axis++) {
+            let projection = 0;
+            for (let i = 0; i < n; i++) projection += stoichiometricBasis[axis][i] * fullDerivative[i];
+            derivative[axis] = projection;
+          }
+        };
+        const reducedConfig: SteadyStateConfig = {
+          nSpecies: stoichiometricBasis.length,
+          parameters: params,
+          rhsFn: reducedRhs,
+          tolerance,
+          maxIterations: 500,
+          enforceNonnegative: false,
+          isStateValid: (coordinates) => {
+            const state = new Float64Array(doseInitialState);
+            for (let axis = 0; axis < stoichiometricBasis.length; axis++) {
+              for (let i = 0; i < n; i++) state[i] += stoichiometricBasis[axis][i] * coordinates[axis];
+            }
+            return state.every((value) => value >= -1e-10);
+          },
+        };
+        const reduced = findSteadyState(reducedConfig, new Float64Array(stoichiometricBasis.length));
+        const state = new Float64Array(doseInitialState);
+        for (let axis = 0; axis < stoichiometricBasis.length; axis++) {
+          for (let i = 0; i < n; i++) state[i] += stoichiometricBasis[axis][i] * reduced.y[axis];
+        }
+        ss = { ...reduced, y: state, parameterValue: dose };
+      }
 
       if (ss.converged) {
-        // Warm start: use this result as initial guess for next dose.
-        currentGuess = new Float64Array(ss.y);
         steadyStates.push(ss);
 
         // Evaluate each observable.
@@ -683,35 +593,8 @@ export async function computeDoseResponse(
     curves.push(curve);
   }
 
-  // Fit Hill equations synchronously by running the async nelderMead
-  // in a blocking fashion.  Since nelderMead's objective is purely
-  // computational (no I/O), we build the fits eagerly here.
-  // We attach them after construction.
-  const fitPromises: Array<Promise<void>> = [];
   for (const curve of curves) {
     if (curve.doses.length >= 4) {
-      const promise = fitHillEquation(curve.doses, curve.responses).then(
-        (fit) => {
-          curve.hillFit = fit;
-        },
-      );
-      fitPromises.push(promise);
-    }
-  }
-
-  // Since nelderMead is async but purely CPU-bound, we need to resolve
-  // the promises.  In a synchronous context we cannot truly await, so
-  // we run the fits via a micro-task drain.  However, the cleaner
-  // approach for this codebase is to make the fits resolve immediately
-  // since the objective function returns a plain number wrapped in a
-  // Promise that resolves on the same tick.
-  //
-  // We drain the micro-task queue by returning the result immediately
-  // and letting the caller know fits may be pending.  But to keep the
-  // API truly synchronous and simple, we use a synchronous Hill fit
-  // implementation as a fallback.
-  for (const curve of curves) {
-    if (curve.doses.length >= 4 && !curve.hillFit) {
       curve.hillFit = fitHillEquationSync(curve.doses, curve.responses);
     }
   }
@@ -727,6 +610,7 @@ export async function computeDoseResponse(
           nPoints,
           logScale,
           config.t_end ?? 1e4,
+          seedExpressions,
       );
 
       return {

@@ -1,7 +1,7 @@
 import { parsePEtab, fitParameters, simulate, loadEvaluator } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { importPetabArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel, withDataOnlySimulationOutput, applyPreparedModelOverrides } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleImportPetab(args: ToolArgs): Promise<ToolResult<any>> {
@@ -27,11 +27,7 @@ export async function handleImportPetab(args: ToolArgs): Promise<ToolResult<any>
             paramBounds: petab.paramBounds,
             experimentalData: petab.measurements,
             simulate: async (overrides, options) => {
-                const runModel = cloneExpandedModel(expandedModel);
-                Object.entries(overrides).forEach(([k, v]) => {
-                    runModel.parameters[k] = v;
-                });
-                updateMassActionRates(runModel);
+                const runModel = applyPreparedModelOverrides(expandedModel, overrides);
                 return simulate(0, runModel, withDataOnlySimulationOutput({ ...options, method: 'ode', t_end: tEnd, n_steps: 100 }), {
                     checkCancelled: () => { },
                     postMessage: () => { },

@@ -1,6 +1,6 @@
 import { ToolArgs, ToolResult } from '../types/index.js';
 import { z } from 'zod';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel, applyPreparedModelOverrides } from '../services/engine.js';
 import { simulate, loadEvaluator, analyzeResiduals } from '@bngplayground/engine';
 import { structureError } from '../services/errors.js';
 
@@ -22,20 +22,15 @@ export async function handleAnalyzeResiduals(args: ToolArgs): Promise<ToolResult
         const parsedArgs = parseArgs('analyze_residuals', analyzeResidualsArgsSchema, args) as AnalyzeResidualsArgs;
         const model = parseModelOrThrow(parsedArgs.code);
         const expandedModel = await expandModel(model);
-        
-        // Override parameters if provided
-        if (parsedArgs.parameters) {
-            for (const [name, value] of Object.entries(parsedArgs.parameters)) {
-                expandedModel.parameters[name] = value;
-            }
-            updateMassActionRates(expandedModel);
-        }
+        const simulationModel = parsedArgs.parameters
+            ? applyPreparedModelOverrides(expandedModel, parsedArgs.parameters)
+            : expandedModel;
         
         const tEnd = parsedArgs.t_end ?? Math.max(...parsedArgs.experimental_data.map(d => d.time));
         
         await loadEvaluator();
         
-        const simResult = await simulate(0, expandedModel, {
+        const simResult = await simulate(0, simulationModel, {
             method: parsedArgs.method ?? 'ode',
             t_end: tEnd,
             n_steps: Math.max(100, parsedArgs.experimental_data.length * 2),

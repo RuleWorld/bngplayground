@@ -1,7 +1,7 @@
 import { computeFIM, computeCollinearity, simulate, loadEvaluator } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { computeFimArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, applyPreparedModelOverrides } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleComputeFim(args: ToolArgs): Promise<ToolResult<any>> {
@@ -25,11 +25,7 @@ export async function handleComputeFim(args: ToolArgs): Promise<ToolResult<any>>
 
         const result = await computeFIM({
             simulate: async (overrides) => {
-                const runModel = cloneExpandedModel(expandedModel);
-                Object.entries(overrides).forEach(([k, v]) => {
-                    runModel.parameters[k] = v;
-                });
-                updateMassActionRates(runModel);
+                const runModel = applyPreparedModelOverrides(expandedModel, overrides);
                 return simulate(0, runModel, simOptions, {
                     checkCancelled: () => { },
                     postMessage: () => { },

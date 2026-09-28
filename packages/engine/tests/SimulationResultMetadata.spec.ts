@@ -34,28 +34,32 @@ function createExpandedModel(): BNGLModel {
 }
 
 describe.each(['ssa', 'ode'] as const)('SimulationLoop %s result metadata', (method) => {
-  it('keeps expanded metadata by default and can omit it without changing headers or data', async () => {
+  it('omits expanded metadata by default and returns it only when requested', async () => {
     const model = createExpandedModel();
     const options: SimulationOptions = {
       method,
       t_end: 1,
       n_steps: 4,
       seed: 12345,
-      includeSpeciesData: false,
       ...(method === 'ode' ? { solver: 'rk4' as const } : {}),
     };
 
     const defaultResult = await simulate(1, model, options, callbacks);
-    const leanResult = await simulate(2, model, {
+    const richResult = await simulate(2, model, {
       ...options,
-      includeExpandedNetwork: false,
+      includeSpeciesData: true,
+      includeExpandedNetwork: true,
     }, callbacks);
 
-    expect(defaultResult.expandedReactions).toEqual(model.reactions);
-    expect(defaultResult.expandedSpecies).toEqual(model.species);
-    expect(leanResult).not.toHaveProperty('expandedReactions');
-    expect(leanResult).not.toHaveProperty('expandedSpecies');
-    expect(leanResult.headers).toEqual(defaultResult.headers);
-    expect(leanResult.data).toEqual(defaultResult.data);
+    expect(defaultResult).not.toHaveProperty('speciesHeaders');
+    expect(defaultResult).not.toHaveProperty('speciesData');
+    expect(defaultResult).not.toHaveProperty('speciesDataBySuffix');
+    expect(defaultResult).not.toHaveProperty('expandedReactions');
+    expect(defaultResult).not.toHaveProperty('expandedSpecies');
+    expect(richResult.speciesData).toBeDefined();
+    expect(richResult.expandedReactions).toEqual(model.reactions);
+    expect(richResult.expandedSpecies).toEqual(model.species);
+    expect(richResult.headers).toEqual(defaultResult.headers);
+    expect(richResult.data).toEqual(defaultResult.data);
   });
 });

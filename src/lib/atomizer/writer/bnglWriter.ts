@@ -25,7 +25,7 @@ import {
 import { SCTEntry, SpeciesCompositionTable } from '../config/types';
 import { SafeExpressionEvaluator } from '@bngplayground/engine';
 import { RATE_RULE_META_PREFIX, SYNTH_RATE_RULE_SPECIES_PREFIX } from './rateRuleConstants';
-import { synthesizeEventActions, type EventTranslationContext } from './eventActions';
+import { synthesizeEventActions, type EventActionsResult, type EventTranslationContext } from './eventActions';
 
 // Bare identifiers that are legitimate operands in a BNGL expression and must NOT be
 // renamed when referenced: the built-in constants and the simulation-time variable.
@@ -261,6 +261,16 @@ export function bnglFunction(
       // the label AND the lookup by the same name so the emitted BNGL binds AND is numerically
       // correct.
       const obsName = standardizeName(match);
+      if (
+        (assignmentRuleVariables.has(match) || assignmentRuleVariables.has(obsName)) &&
+        !observableConvertedRules.has(match) &&
+        !observableConvertedRules.has(obsName)
+      ) {
+        // A non-observable assignment-rule species is emitted as a zero-argument
+        // BNGL function. Refer to that function directly instead of inventing the
+        // missing `${obsName}_amt` observable.
+        return `${obsName}()`;
+      }
       if (isSaturationRate && speciesWithConcFunctions.has(obsName)) {
         return `${obsName}_amt`;
       } else if (speciesWithConcFunctions.has(obsName)) {
@@ -1098,6 +1108,7 @@ export function writeObservables(
   const writtenRules = new Set<string>();
   const speciesAmts = new Set<string>();
   const assignmentRuleCompartments = new Map<string, string>();
+  const assignmentRuleTargets = new Set(assignmentRules.map(rule => rule.variable));
 
   // First pass: Define direct observables for each species
   // These are used for concentration scaling functions (_c_S1) and rates (S1_amt)
@@ -1113,12 +1124,20 @@ export function writeObservables(
       if (bnglId) {
         const pattern = idToPattern.get(bnglId);
         if (pattern) {
+          // Assignment-rule species are represented below either as a derived
+          // Molecules observable or as an executable function. Emitting direct
+          // Species observables here would collide with the latter in BNG2.
+          if (assignmentRuleTargets.has(id)) continue;
           // Use the actual pattern instead of the ID label (S1, S2...)
           // This avoids BioNetGen interpreting S1 as a molecule type
           lines.push(`Species ${name}_amt ${pattern}`);
           lines.push(`Species ${name} ${pattern}`);
           speciesAmts.add(name);
-          writtenRules.add(id); // Use original ID for tracking rules
+          // A species may also be the target of a non-observable assignment rule.
+          // Keep that target available to writeFunctions so its executable rule is
+          // preserved; simple sum rules are marked below when represented directly
+          // as a BNGL Molecules observable.
+          if (!assignmentRuleTargets.has(id)) writtenRules.add(id);
         }
       }
     }
@@ -1155,6 +1174,14 @@ export function writeObservables(
       // Skip numeric constants like "0" - they don't contribute to the pattern
       if (/^\d+$/.test(spId)) {
         continue;
+      }
+
+      // Molecules observables represent amounts. A rule over a concentration
+      // species (hasOnlySubstanceUnits=false) must remain an executable
+      // function so the compartment volume is not silently discarded.
+      if (sbmlSpecies.has(spId) && _speciesToHasOnlySubstanceUnits.get(spId) !== true) {
+        patternCounts.clear();
+        break;
       }
 
       const bnglId = sbmlToBnglId.get(spId);
@@ -1395,6 +1422,7 @@ export function writeFunctions(
   }
 
   // Species scaling functions
+  const dynamicRateRuleTargets = new Set(rateRules.map(rule => standardizeName(rule.variable)));
   for (const name of speciesAmts) {
     let compId: string | undefined = standardizedSpeciesInfo.get(name)?.compId;
     const isAmountOnly = standardizedSpeciesInfo.get(name)?.isAmountOnly || false;
@@ -1406,8 +1434,13 @@ export function writeFunctions(
 
     const bnglName = `_c_${name}`;
     if (!isAmountOnly && compId) {
-      const volParam = `__compartment_${standardizeName(compId)}__`;
-      lines.push(`${bnglName}() = ${name} / ${volParam}`);
+      // A compartment controlled by an SBML rate rule is a live state, not a
+      // fixed BNGL parameter. Use its synthetic amount observable so dynamic
+      // volumes affect concentration and assignment-rule evaluation.
+      const denominator = dynamicRateRuleTargets.has(standardizeName(compId))
+        ? `${standardizeName(compId)}_amt`
+        : `__compartment_${standardizeName(compId)}__`;
+      lines.push(`${bnglName}() = ${name} / ${denominator}`);
     } else {
       lines.push(`${bnglName}() = ${name}`);
     }
@@ -1564,9 +1597,6 @@ export function writeFunctions(
     if (!rule.variable || skipRules.has(rule.variable)) continue;
     const ruleId = rule.variable;
     const name = standardizeName(ruleId);
-
-    // If it's observable-compatible, it was already handled in writeObservables
-    if (!/[*/^()]/.test(rule.math) && /\bS\d+\b/.test(rule.math)) continue;
 
     const inlinedMath = inlineSBMLFunctions(rule.math, functions);
     const body = bnglFunction(
@@ -2098,7 +2128,7 @@ export function writeReactionRulesAtomized(
 
     const reactants = reactantStrs.length > 0 ? reactantStrs.join(' + ') : '0';
     const products = productStrs.length > 0 ? productStrs.join(' + ') : '0';
-    lines.push(`${uniqueRuleLabel(standardizeName(rxn.name || rxnId), usedLabels)}: ${reactants} ${arrow} ${products} ${finalRate}`);
+    lines.push(`${uniqueRuleLabel(standardizeName(rxn.name || rxnId), usedLabels)}: ${reactants} ${arrow} ${products} ${finalRate}${processed.totalRate ? ' TotalRate' : ''}`);
   }
 
   if (syntheticRateRuleLines.length > 0) {
@@ -2253,6 +2283,7 @@ export function generateBNGL(
       const initialValue =
         model.parameters.get(variable)?.value ??
         model.parameters.get(target)?.value ??
+        model.compartments.get(variable)?.size ??
         0;
       const initial = Number.isFinite(Number(initialValue))
         ? Number(initialValue)
@@ -2498,6 +2529,11 @@ export function generateBNGL(
   // effective factor; a reaction whose species carry different factors cannot be represented and is
   // left unscaled with a warning. The factor is emitted as its (constant) numeric value.
   const cfByReaction = new Map<string, string | null>();
+  const mixedConversionFactors: Array<{
+    ruleName: string;
+    bnglPattern: string;
+    factor: string;
+  }> = [];
   const modelCfId = model.conversionFactor && model.parameters.has(model.conversionFactor)
     ? model.conversionFactor : null;
   const numericParams = new Map<string, number>(
@@ -2524,6 +2560,28 @@ export function generateBNGL(
     } else {
       cfByReaction.set(rxnId, null); // mixed factors within one reaction: not representable
       warnings.push(`Reaction "${rxnId}" has species with differing conversionFactors; a single BNGL rule cannot apply different scalars per species, so the factor was not applied.`);
+      const baseRuleName = standardizeName(rxn.name || rxnId);
+      const patternForSpecies = (speciesId: string): string => {
+        const bnglId = sbmlToBnglId.get(speciesId);
+        const rawPattern = bnglId ? idToPattern.get(bnglId) : undefined;
+        const compartment = speciesToCompartment.get(speciesId) || rxn.compartment || '';
+        const suffix = compartment ? `@${standardizeName(compartment)}` : '';
+        if (!rawPattern) return `M_${standardizeName(speciesId)}${suffix}`;
+        return rawPattern.split('.').map((molecule) => {
+          const prefixed = molecule.startsWith('M_') ? molecule : molecule.replace(/^(\w+)/, 'M_$1');
+          return prefixed.includes('@') ? prefixed : `${prefixed}${suffix}`;
+        }).join('.');
+      };
+      for (const ref of involved) {
+        const species = model.species.get(ref.species);
+        const factorId = species?.conversionFactor || modelCfId;
+        const factor = factorId ? cfValueOf(factorId) || factorId : '1';
+        mixedConversionFactors.push({
+          ruleName: baseRuleName,
+          bnglPattern: patternForSpecies(ref.species),
+          factor,
+        });
+      }
     }
   }
 
@@ -2567,6 +2625,40 @@ export function generateBNGL(
   }
   mark('writeReactionRules', t);
 
+  // A BNGL rule has one flux scalar, whereas SBML Level 3 permits conversionFactor
+  // overrides per species. Preserve the exact per-pattern factors as executable metadata;
+  // the Playground runtime applies them to each stoichiometric contribution.
+  for (const metadata of mixedConversionFactors) {
+    sections.push(`# @sbml-reaction-conversion-factor ${encodeURIComponent(JSON.stringify(metadata))}`);
+  }
+  // BNGL cannot vary pattern multiplicity. Preserve each variable
+  // speciesReference as executable metadata so the Playground can use its live
+  // parameter/rule/event value for the reaction's net stoichiometric delta.
+  for (const [rxnId, rxn] of model.reactions) {
+    const ruleName = standardizeName(rxn.name || rxnId);
+    for (const [side, refs] of [['reactant', rxn.reactants], ['product', rxn.products] ] as const) {
+      for (const ref of refs) {
+        if (!ref.variableStoichiometry || !ref.id) continue;
+        const bnglId = sbmlToBnglId.get(ref.species) || sbmlToBnglId.get(standardizeName(ref.species));
+        const bnglPattern = (bnglId && idToPattern.get(bnglId)) || bnglId || `M_${standardizeName(ref.species)}`;
+        const metadata = {
+          ruleName,
+          bnglPattern,
+          variable: standardizeName(ref.id),
+          side,
+          fixedStoichiometry: Number.isFinite(ref.stoichiometry) ? ref.stoichiometry : 1,
+        };
+        sections.push(`# @sbml-variable-stoichiometry ${encodeURIComponent(JSON.stringify(metadata))}`);
+      }
+    }
+  }
+  for (const [speciesId, species] of model.species) {
+    sections.push(`# @sbml-species-value-type ${encodeURIComponent(JSON.stringify({
+      name: standardizeName(speciesId),
+      type: species.hasOnlySubstanceUnits ? 'amount' : 'concentration',
+    }))}`);
+  }
+
   // Inject any time-dependent rate functions the reaction writer produced into the functions
   // section (they must live in `begin functions`, but the section was emitted before the reaction
   // rules ran). Insert before the closing `end functions`.
@@ -2579,8 +2671,9 @@ export function generateBNGL(
     }
   }
 
-  // Translate time-triggered SBML events into scheduled BNGL actions (setConcentration/
-  // setParameter across simulate phases). Anything state-dependent stays in the notes below.
+  // Keep native BNGL phase actions for the narrow fixed-time constant subset so BNG2 retains
+  // compatibility. Mark those metadata records as native-executed; the Playground runtime skips
+  // them to prevent duplicate writes. All other events remain in the general Playground runtime.
   const parseNum = (re: RegExp, def: number): number => {
     const m = (options.actions || '').match(re);
     const v = m ? Number(m[1]) : NaN;
@@ -2616,12 +2709,13 @@ export function generateBNGL(
     baseTEnd: parseNum(/t_end\s*=>\s*([0-9.eE+-]+)/, 100),
     baseSteps: parseNum(/n_steps\s*=>\s*([0-9]+)/, 100),
   };
-  const eventTranslation = (model.events && model.events.length > 0)
+  const eventTranslation: EventActionsResult = (model.events && model.events.length > 0)
     ? synthesizeEventActions(model.events, eventCtx)
     : { actionsBlock: null, converted: 0, untranslated: [] };
+  const untranslatedEventRefs = new Set(eventTranslation.untranslated.map(({ event }) => event));
 
-  // Events and algebraic rules that could not be translated: emit as a structured note so nothing
-  // is silently lost.
+  // Events and algebraic rules that cannot be represented by native BNGL are emitted as a
+  // structured note so nothing is silently lost.
   const algebraicRules = (model.rules || []).filter(r => r.type === 'algebraic');
   const untranslatedEvents = eventTranslation.untranslated;
   const hasMulti = !!(
@@ -2636,7 +2730,7 @@ export function generateBNGL(
       sections.push(`# ${eventTranslation.converted} time-triggered event(s) converted to scheduled actions (see simulation commands below).`);
     }
     if (untranslatedEvents.length > 0) {
-      sections.push('# Events NOT simulated (state-dependent or non-constant); listed for reference:');
+      sections.push('# SBML events require the Playground event runtime; native BNGL cannot execute general triggers:');
       for (const { event: ev, reason } of untranslatedEvents) {
         const label = ev.id || ev.name || 'event';
         sections.push(`#   event ${label}: ${reason}`);
@@ -2679,7 +2773,7 @@ export function generateBNGL(
     sections.push('begin actions');
     sections.push(eventTranslation.actionsBlock
       .split('\n')
-      .map(l => (l.trim().startsWith('#') || l.trim() === '') ? l : '    ' + l)
+      .map((line: string) => (line.trim().startsWith('#') || line.trim() === '') ? line : '    ' + line)
       .join('\n'));
     sections.push('end actions');
   } else if (options.actions) {
@@ -2869,23 +2963,38 @@ export function generateBNGL(
   // executable BNGL subset cannot express a state-triggered event. The optional BNGL
   // projections are used by the Playground engine; the original fields remain authoritative
   // for the SBML writer.
+  const sbmlRuntimeExpression = (expr: string | undefined): string | undefined => {
+    if (!expr) return expr;
+    // Keep the same SBML-to-Playground projection used by event metadata for
+    // algebraic constraints: species symbols become amount or concentration
+    // observables, while parameterized SBML functions are inlined.
+    let out = inlineSBMLFunctions(expr, model.functionDefinitions);
+    const ids = [...model.species.keys()].sort((a, b) => b.length - a.length);
+    for (const id of ids) {
+      const safe = standardizeName(id);
+      const eventValueName = speciesToHasOnlySubstanceUnits.get(id) === true
+        ? `${safe}_amt`
+        : `${safe}_conc`;
+      out = out.replace(new RegExp(`\\b${escapeRegExp(id)}\\b`, 'g'), eventValueName);
+    }
+    for (const id of model.compartments.keys()) {
+      const safe = standardizeName(id);
+      out = out.replace(new RegExp(`\\b${escapeRegExp(id)}\\b`, 'g'), `__compartment_${safe}__`);
+    }
+    // SBML's built-in avogadro symbol is the physical constant, whereas
+    // __Avogadro__ is deliberately normalized to 1 in emitted BNGL amount
+    // conversions. Keep event/rule expressions on the SBML value.
+    out = out.replace(/(?:\bavogadro\b|__Avogadro__)/gi, '6.02214076e23');
+    return out;
+  };
+
   if (model.events && model.events.length > 0) {
-    const eventSpeciesIds = new Set(model.species.keys());
-    const eventExpression = (expr: string | undefined): string | undefined => {
-      if (!expr) return expr;
-      let out = expr;
-      const ids = [...eventSpeciesIds].sort((a, b) => b.length - a.length);
-      for (const id of ids) {
-        const safe = standardizeName(id);
-        out = out.replace(new RegExp(`\\b${escapeRegExp(id)}\\b`, 'g'), `${safe}_amt`);
-      }
-      return out;
-    };
     const eventMetadata = model.events.map((event) => ({
       ...event,
-      bnglTrigger: eventExpression(event.trigger),
-      bnglDelay: eventExpression(event.delay),
-      bnglPriority: eventExpression(event.priority),
+      bnglTrigger: sbmlRuntimeExpression(event.trigger),
+      bnglDelay: sbmlRuntimeExpression(event.delay),
+      bnglPriority: sbmlRuntimeExpression(event.priority),
+      bnglExecution: untranslatedEventRefs.has(event) ? 'playground' : 'native',
       assignments: event.assignments.map((assignment) => {
         const bnglId = sbmlToBnglId.get(assignment.variable) || sbmlToBnglId.get(standardizeName(assignment.variable));
         const bnglTarget = bnglId ? idToPattern.get(bnglId) : undefined;
@@ -2893,7 +3002,10 @@ export function generateBNGL(
           ...assignment,
           bnglVariable: standardizeName(assignment.variable),
           bnglTarget,
-          bnglMath: eventExpression(assignment.math),
+          bnglMath: sbmlRuntimeExpression(assignment.math),
+          bnglValueType: model.species.has(assignment.variable)
+            ? (speciesToHasOnlySubstanceUnits.get(assignment.variable) === true ? 'amount' : 'concentration')
+            : undefined,
         };
       }),
     }));
@@ -2902,6 +3014,16 @@ export function generateBNGL(
       sections.push(`# @sbml-event ${encodeURIComponent(JSON.stringify(event))}`);
     }
     sections.push('# ==============================');
+  }
+  const runtimeAlgebraicRules = (model.rules || [])
+    .filter(rule => rule.type === 'algebraic')
+    .map(rule => ({ math: sbmlRuntimeExpression(rule.math) || rule.math }));
+  if (runtimeAlgebraicRules.length > 0) {
+    sections.push('# ==== SBML ALGEBRAIC METADATA ====');
+    for (const rule of runtimeAlgebraicRules) {
+      sections.push(`# @sbml-algebraic ${encodeURIComponent(JSON.stringify(rule))}`);
+    }
+    sections.push('# ==================================');
   }
 
   const bngl = sections.join('\n');
@@ -3290,7 +3412,25 @@ export function splitReversibleRate(rateExpr: string): ReversibleRateSplit {
     return e;
   };
 
-  const terms = extractTopLevelAdditiveTerms(stripEnclosingParens(rateExpr.trim()));
+  let normalizedRate = normalizeAdditiveSigns(stripEnclosingParens(rateExpr.trim()));
+  const leadingNegation = normalizedRate.match(/^\s*-\s*\(/);
+  if (leadingNegation) {
+    const open = normalizedRate.indexOf('(', leadingNegation.index ?? 0);
+    if (open >= 0 && matchingParenAtEnd(normalizedRate, open)) {
+      // The prefix volume cleanup can leave an extra pair of parentheses in
+      // `-((forward - reverse))`; remove all enclosing pairs before looking for
+      // top-level additive terms.
+      const inner = stripEnclosingParens(normalizedRate.slice(open + 1, -1));
+      const innerTerms = extractTopLevelAdditiveTerms(normalizeAdditiveSigns(inner));
+      normalizedRate = innerTerms.map((term) => {
+        const trimmed = term.trim();
+        if (trimmed.startsWith('-')) return trimmed.slice(1).trim();
+        if (trimmed.startsWith('+')) return `-${trimmed.slice(1).trim()}`;
+        return `-${trimmed}`;
+      }).join(' + ');
+    }
+  }
+  const terms = extractTopLevelAdditiveTerms(normalizedRate);
 
   if (terms.length < 2) {
     return { success: false, forwardRate: rateExpr, reverseRate: '0' };
@@ -3330,6 +3470,24 @@ export function splitReversibleRate(rateExpr: string): ReversibleRateSplit {
     : negativeTerms.map(t => `(${t})`).join(' + ');
 
   return { success: true, forwardRate, reverseRate };
+}
+
+function normalizeAdditiveSigns(expr: string): string {
+  return expr
+    .replace(/\+\s*-/g, '-')
+    .replace(/-\s*-/g, '+');
+}
+
+function matchingParenAtEnd(expr: string, open: number): boolean {
+  let depth = 0;
+  for (let i = open; i < expr.length; i++) {
+    if (expr[i] === '(') depth++;
+    else if (expr[i] === ')') {
+      depth--;
+      if (depth === 0) return i === expr.length - 1;
+    }
+  }
+  return false;
 }
 
 function extractTopLevelAdditiveTerms(expr: string): string[] {
@@ -3378,6 +3536,8 @@ export interface ProcessedRate {
   rateString: string;
   forceIrreversible: boolean;
   isSplitRxn: boolean;
+  /** The SBML kinetic law is already a complete flux and must not be multiplied by BNGL reactants. */
+  totalRate?: boolean;
 }
 
 export function processReactionRate(
@@ -3454,6 +3614,15 @@ export function processReactionRate(
       for (const pat of patterns) {
         rate = rate.replace(pat, ' ');
       }
+      // A common reversible SBML encoding wraps the whole net flux in a leading
+      // negation, e.g. `-(compartment * (forward - reverse))`.  The ordinary
+      // `* compartment` patterns above cannot see this prefix because the
+      // compartment is on the left of the multiplication.  Remove that volume
+      // factor while preserving the enclosing expression so reversible-rate
+      // splitting can still see both directional terms.
+      rate = rate
+        .replace(new RegExp(`(\\(\\s*)__compartment_${esc}__\\s*\\*\\s*`, 'g'), '$1')
+        .replace(new RegExp(`(\\(\\s*)${esc}\\b\\s*\\*\\s*`, 'g'), '$1');
       // Strip a LEADING whole-rate compartment volume factor ("comp * ..."). SBML often
       // writes the rate as `compartment * kineticLaw`; the volume is reapplied separately
       // via vScaleName, so leaving it here double-counts the compartment AND hides the
@@ -3487,6 +3656,60 @@ export function processReactionRate(
     options.speciesAmts || new Set(),
     sbmlToBnglId,
   );
+
+  // A variable speciesReference stoichiometry changes the net amount moved by
+  // the reaction while the kinetic law remains a complete SBML flux. Preserve
+  // the flux as TotalRate; machine-readable coefficient metadata emitted with
+  // the model lets the Playground runtime replace fixed pattern deltas.
+  const variableStoichRefs = [...rxn.reactants, ...rxn.products]
+    .filter((ref) => ref.variableStoichiometry && typeof ref.id === 'string' && ref.id.length > 0);
+  if (variableStoichRefs.length > 0) {
+    return {
+      rateString: wrapCf(convertedRate),
+      forceIrreversible: true,
+      isSplitRxn: true,
+      totalRate: true,
+    };
+  }
+
+  // SBML stores a complete reaction flux, while an ordinary BNGL rule stores a rate coefficient
+  // that the engine multiplies by every reactant pattern. Most mass-action laws contain exactly
+  // one factor per unit of reactant stoichiometry and can be reduced to a coefficient. When the
+  // law intentionally contains fewer factors (for example S1 + 2 S2 with flux k*S1*S2), reducing
+  // it to k changes the SBML model. Preserve the complete converted flux and mark the rule
+  // TotalRate so the simulator does not multiply the reactant population a second time.
+  const countSpeciesFactors = (expression: string, species: string): number => {
+    const name = standardizeName(species);
+    const escaped = escapeRegExp(name);
+    const patterns = [
+      new RegExp(`_c_${escaped}\\s*\\(\\s*\\)`, 'g'),
+      new RegExp(`\\b${escaped}_amt\\b`, 'g'),
+      new RegExp(`\\b${escaped}\\s*\\(`, 'g'),
+      new RegExp(`\\b${escaped}\\b`, 'g'),
+    ];
+    return patterns.reduce((count, pattern) => count + (expression.match(pattern)?.length ?? 0), 0);
+  };
+  const hasIncompleteReactantFlux = rxn.reactants.some((ref) => {
+    if (ref.species === 'EmptySet') return false;
+    const stoich = Math.max(0, Math.round(ref.stoichiometry || 1));
+    return stoich > 0 && countSpeciesFactors(convertedRate, ref.species) < stoich;
+  });
+  const realReactants = rxn.reactants.filter((ref) => ref.species !== 'EmptySet');
+  const realProducts = rxn.products.filter((ref) => ref.species !== 'EmptySet');
+  // With hasOnlySubstanceUnits=true, an SBML zero-order kinetic law is an
+  // amount/time flux. Ordinary BNGL zero-order rules scale by compartment
+  // volume, so preserve the source units with TotalRate.
+  const hasSubstanceOnlyZeroOrderFlux = realReactants.length === 0
+    && realProducts.length > 0
+    && realProducts.every((ref) => speciesToHasOnlySubstanceUnits.get(ref.species) === true);
+  if (hasIncompleteReactantFlux || hasSubstanceOnlyZeroOrderFlux) {
+    return {
+      rateString: wrapCf(convertedRate),
+      forceIrreversible: !!rxn.reversible,
+      isSplitRxn: true,
+      totalRate: true,
+    };
+  }
 
   // -- Step 5: Build reactant counts and volume scale --
   const reactantCounts = new Map<string, number>();
@@ -3981,7 +4204,7 @@ export function writeReactionRulesFlat_V2(
       timeRateFns.push(`  ${fnName}() = ${finalRate}`);
       rateOut = `${fnName}()`;
     }
-    lines.push(`${uniqueRuleLabel(standardizeName(rxn.name || rxnId), usedLabels)}: ${reactants} ${arrow} ${products} ${rateOut}`);
+    lines.push(`${uniqueRuleLabel(standardizeName(rxn.name || rxnId), usedLabels)}: ${reactants} ${arrow} ${products} ${rateOut}${processed.totalRate ? ' TotalRate' : ''}`);
   }
 
   if (syntheticRateRuleLines.length > 0) {

@@ -77,6 +77,7 @@ const ssaOptions: SimulationOptions = {
   n_steps: 8,
   seed: 24680,
   includeSpeciesData: true,
+  includeExpandedNetwork: true,
 };
 
 describe('SimulationLoop expanded reaction sharing', () => {
@@ -175,6 +176,7 @@ describe('SimulationLoop expanded reaction sharing', () => {
       t_end: 1,
       n_steps: 1,
       includeSpeciesData: true,
+      includeExpandedNetwork: true,
     }, callbacks);
 
     expect(runNFsimSimulationMock).toHaveBeenCalledOnce();

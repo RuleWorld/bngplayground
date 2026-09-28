@@ -306,6 +306,29 @@ function astToMathML(node: any): string {
       return `<apply><power/>${astToMathML(args[0])}${astToMathML(args[1])}</apply>`;
     }
 
+    const relationTag: Record<string, string> = {
+      eq: 'eq',
+      equal: 'eq',
+      neq: 'neq',
+      notequal: 'neq',
+      gt: 'gt',
+      greaterthan: 'gt',
+      geq: 'geq',
+      greaterthanorequal: 'geq',
+      lt: 'lt',
+      lessthan: 'lt',
+      leq: 'leq',
+      lessthanorequal: 'leq',
+      and: 'and',
+      or: 'or',
+      xor: 'xor',
+      not: 'not',
+    };
+    const relation = relationTag[lowerName];
+    if (relation) {
+      return `<apply><${relation}/>${args.map(astToMathML).join('')}</apply>`;
+    }
+
     const fnMap: Record<string, string> = {
       exp: 'exp',
       ln: 'ln',

@@ -26,6 +26,10 @@ export interface SteadyStateConfig {
   tolerance?: number;
   /** Maximum Newton iterations (default 200) */
   maxIterations?: number;
+  /** Optional domain check for reduced-coordinate solves. */
+  isStateValid?: (state: Float64Array) => boolean;
+  /** Whether to clamp state entries to zero after a Newton step (default true). */
+  enforceNonnegative?: boolean;
 }
 
 export interface SteadyState {
@@ -92,9 +96,15 @@ export function findSteadyState(
     const yTrial = new Float64Array(nSpecies);
     const fTrial = new Float64Array(nSpecies);
 
+    let accepted = false;
     for (let ls = 0; ls < 20; ls++) {
       for (let i = 0; i < nSpecies; i++) {
         yTrial[i] = y[i] + alpha * delta[i];
+      }
+
+      if (config.isStateValid && !config.isStateValid(yTrial)) {
+        alpha *= 0.5;
+        continue;
       }
 
       rhsFn(yTrial, fTrial);
@@ -104,16 +114,19 @@ export function findSteadyState(
       trialNorm = Math.sqrt(trialNorm);
 
       if (trialNorm < residualNorm || alpha < 1e-4) {
+        accepted = true;
         break;
       }
       alpha *= 0.5;
     }
 
+    if (!accepted) break;
+
     // Update y
     for (let i = 0; i < nSpecies; i++) {
       y[i] += alpha * delta[i];
       // Enforce non-negativity for concentrations
-      if (y[i] < 0) y[i] = 0;
+      if (config.enforceNonnegative !== false && y[i] < 0) y[i] = 0;
     }
   }
 

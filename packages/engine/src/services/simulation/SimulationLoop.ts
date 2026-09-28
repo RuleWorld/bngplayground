@@ -10,7 +10,7 @@
  * Reference: bionetgen/bng2/Network3/src/run_network.cpp
  */
 
-import { BNGLFunction, BNGLModel, BNGLReaction, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries, OdeSystemHandle } from '../../types';
+import { BNGLFunction, BNGLModel, BNGLReaction, BNGLVariableStoichiometry, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries, OdeSystemHandle } from '../../types';
 import type { SolverResult } from './ODESolver';
 
 import { BNGLParser } from '../graph/core/BNGLParser';
@@ -25,6 +25,7 @@ import { buildCSRStoichiometry, sparseCSRDgemv, shouldUseSparse } from './Sparse
 import { buildCSRObservableMatrix, evaluateObservablesCSR, shouldUseCSRObservables, type CSRObservableMatrix } from './CSRObservableEvaluator';
 import { DenseOutputBuffer } from './DenseOutput';
 import { generateExpandedNetwork } from './NetworkExpansion';
+import { SBMLEventRuntime, type SBMLEventAssignmentTarget } from './SBMLEventRuntime';
 import { isSafeObjectKey, setSafeNumberField } from '../../utils/safeObjectKey';
 // import * as fs from 'node:fs';
 
@@ -42,6 +43,8 @@ interface ConcreteReaction {
   statFactor: number;
   totalRate?: boolean;
   ruleName?: string;
+  conversionFactorBySpecies?: Map<number, number>;
+  dynamicStoichiometries?: BNGLVariableStoichiometry[];
 }
 
 interface ConcreteObservable {
@@ -58,6 +61,46 @@ function setSafeArrayField<T>(target: Record<string, T[]>, key: string, value: T
   if (isSafeObjectKey(key)) {
     Reflect.set(target, key, value);
   }
+}
+
+function removeParenthesizedSegments(value: string): string {
+  const parts: string[] = [];
+  let segmentStart = 0;
+  let groupStart = -1;
+
+  for (let index = 0; index < value.length; index++) {
+    const character = value[index];
+    if (groupStart < 0 && character === '(') {
+      parts.push(value.slice(segmentStart, index));
+      groupStart = index;
+    } else if (groupStart >= 0 && character === ')') {
+      groupStart = -1;
+      segmentStart = index + 1;
+    }
+  }
+
+  parts.push(value.slice(groupStart >= 0 ? groupStart : segmentStart));
+  return parts.join('');
+}
+
+function removeTrailingParenthesizedSuffix(value: string): string {
+  if (!value.endsWith(')')) return value;
+  const groupStart = value.lastIndexOf('(');
+  if (groupStart < 0 || value.slice(groupStart + 1, -1).includes(')')) return value;
+  return value.slice(0, groupStart);
+}
+
+function removeAtSuffix(value: string): string {
+  const suffixStart = value.indexOf('@');
+  return suffixStart < 0 ? value : value.slice(0, suffixStart);
+}
+
+function rateRuleStateNameFromPattern(value: string): string | undefined {
+  const normalized = removeTrailingParenthesizedSuffix(value.trim().replace(/^@[A-Za-z0-9_]+::/, ''));
+  const prefix = 'M___rate_rule_state__';
+  if (!normalized.startsWith(prefix)) return undefined;
+  const name = normalized.slice(prefix.length).split('@', 1)[0];
+  return name.length > 0 ? name : undefined;
 }
 
 function extractIfConditions(expression: string): string[] {
@@ -179,9 +222,13 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
       ...rule,
       reactants: [...rule.reactants],
       products: [...rule.products],
-      constraints: rule.constraints ? [...rule.constraints] : undefined
+      constraints: rule.constraints ? [...rule.constraints] : undefined,
+      dynamicStoichiometries: rule.dynamicStoichiometries
+        ? rule.dynamicStoichiometries.map((entry) => ({ ...entry }))
+        : undefined,
     })),
     compartments: inputModel.compartments?.map((compartment) => ({ ...compartment })),
+    variableStoichiometries: inputModel.variableStoichiometries?.map((entry) => ({ ...entry })),
     functions: inputModel.functions?.map((fn) => ({ ...fn, args: [...fn.args] })),
     events: inputModel.events?.map((event) => ({
       ...event,
@@ -204,6 +251,56 @@ function cloneModelForSimulation(inputModel: BNGLModel): BNGLModel {
   };
 }
 
+function buildDirectVariableStoichiometryModel(inputModel: BNGLModel): BNGLModel {
+  const rules = inputModel.reactionRules || [];
+  if (!rules.some((rule) => (rule.dynamicStoichiometries?.length ?? 0) > 0)) return inputModel;
+  const speciesNames = new Set((inputModel.species || []).map((species) => species.name));
+  const parameterMap = new Map(Object.entries(inputModel.parameters || {}));
+  const observableNames = new Set((inputModel.observables || []).map((observable) => observable.name));
+  const makeReaction = (
+    rule: typeof rules[number],
+    rateExpression: string,
+    dynamicStoichiometries: typeof rule.dynamicStoichiometries,
+    reverse = false,
+  ): BNGLReaction | undefined => {
+    const reactants = reverse ? rule.products : rule.reactants;
+    const products = reverse ? rule.reactants : rule.products;
+    if (![...reactants, ...products].every((pattern) => speciesNames.has(pattern))) return undefined;
+    let rateConstant = 0;
+    let isFunctionalRate = false;
+    try {
+      rateConstant = BNGLParser.evaluateExpression(rateExpression, parameterMap, observableNames);
+      isFunctionalRate = !Number.isFinite(rateConstant);
+    } catch {
+      isFunctionalRate = true;
+    }
+    const entries = dynamicStoichiometries?.map((entry) => reverse
+      ? ({ ...entry, side: entry.side === 'reactant' ? 'product' as const : 'reactant' as const })
+      : ({ ...entry }));
+    return {
+      reactants: [...reactants],
+      products: [...products],
+      rate: rateExpression,
+      rateConstant: Number.isFinite(rateConstant) ? rateConstant : 0,
+      name: reverse ? `${rule.name}_rev` : rule.name,
+      rateExpression: isFunctionalRate ? rateExpression : undefined,
+      isFunctionalRate,
+      totalRate: entries && entries.length > 0 ? true : rule.totalRate,
+      dynamicStoichiometries: entries,
+    };
+  };
+  const reactions: BNGLReaction[] = [];
+  for (const rule of rules) {
+    const forward = makeReaction(rule, rule.rate, rule.dynamicStoichiometries, false);
+    if (forward) reactions.push(forward);
+    if (rule.isBidirectional && rule.reverseRate) {
+      const reverse = makeReaction(rule, rule.reverseRate, rule.dynamicStoichiometries, true);
+      if (reverse) reactions.push(reverse);
+    }
+  }
+  return reactions.length > 0 ? { ...inputModel, reactions } : inputModel;
+}
+
 function cloneReactionsForResult(
   reactions: BNGLReaction[] | undefined
 ): BNGLReaction[] | undefined {
@@ -213,6 +310,9 @@ function cloneReactionsForResult(
     products: [...reaction.products],
     productStoichiometries: reaction.productStoichiometries
       ? [...reaction.productStoichiometries]
+      : undefined,
+    dynamicStoichiometries: reaction.dynamicStoichiometries
+      ? reaction.dynamicStoichiometries.map((entry) => ({ ...entry }))
       : undefined,
   }));
 }
@@ -303,9 +403,11 @@ export async function buildOdeSystem(
   let handle: OdeSystemHandle | undefined;
   const hasRules = (model.reactionRules?.length ?? 0) > 0;
   const hasReactions = (model.reactions?.length ?? 0) > 0;
-  const expandedModel = hasRules && !hasReactions
+  const hasVariableStoichiometryRules = (model.reactionRules || []).some((rule) => (rule.dynamicStoichiometries?.length ?? 0) > 0);
+  const directVariableModel = hasVariableStoichiometryRules ? buildDirectVariableStoichiometryModel(model) : model;
+  const expandedModel = hasRules && !hasReactions && directVariableModel === model
     ? await generateExpandedNetwork(model, () => { }, () => { })
-    : model;
+    : directVariableModel;
   const opts: SimulationOptions = {
     t_end: options.t_end ?? 1,
     n_steps: options.n_steps ?? 1,
@@ -359,15 +461,46 @@ export async function simulate(
   // Auto-expand network if model has rules but no generated reactions yet.
   const hasRules = (inputModel.reactionRules?.length ?? 0) > 0;
   const hasReactions = (inputModel.reactions?.length ?? 0) > 0;
-  const expandedInput = hasRules && !hasReactions
+  const hasVariableStoichiometryRules = (inputModel.reactionRules || []).some((rule) => (rule.dynamicStoichiometries?.length ?? 0) > 0);
+  const directVariableModel = hasVariableStoichiometryRules ? buildDirectVariableStoichiometryModel(inputModel) : inputModel;
+  const expandedInput = hasRules && !hasReactions && directVariableModel === inputModel
     ? await generateExpandedNetwork(inputModel, callbacks.checkCancelled, () => { })
-    : inputModel;
+    : directVariableModel;
 
   // STRICT PARITY: Output time grid management
   // ... (Managed by toBngGridTime)
 
   // 1. Prepare Model State without the JSON deep-clone hot-path.
   const model = cloneModelForSimulation(expandedInput);
+
+  const rateRuleSpeciesTarget = (value: string): { target: string; synthetic: boolean } | undefined => {
+    const normalized = removeTrailingParenthesizedSuffix(value.trim()
+      .replace(/^\$/, '')
+      .replace(/^@[A-Za-z0-9_]+::/, '')
+      .split('@')[0]);
+    const synthetic = /^M___rate_rule_state__(.+)$/.exec(normalized);
+    if (synthetic) return { target: synthetic[1], synthetic: true };
+    const ordinary = /^M_(.+)$/.exec(normalized);
+    return ordinary ? { target: ordinary[1], synthetic: false } : undefined;
+  };
+
+  // SBML rate rules own their target variable even when the source species
+  // carries boundaryCondition=true. Treat the corresponding BNGL species as
+  // writable so the synthetic rate-rule reactions can update it; otherwise
+  // event delays and trajectories observe a frozen boundary species.
+  const rateRuleTargets = new Set(
+    (model.functions || [])
+      .filter(fn => fn.name.startsWith('__rate_rule__') && fn.args.length === 0)
+      .map(fn => fn.name.slice('__rate_rule__'.length)),
+  );
+  if (rateRuleTargets.size > 0) {
+    for (const species of model.species) {
+      const target = rateRuleSpeciesTarget(species.name);
+      if (target && rateRuleTargets.has(target.target)) {
+        species.isConstant = false;
+      }
+    }
+  }
 
   const numSpecies = model.species.length;
   const speciesHeaders = model.species.map(s => s.name);
@@ -478,6 +611,14 @@ export async function simulate(
   if (parameterChanges.length > 0) {
     parameterChanges.forEach(c => changingParameterNames.add(c.parameter));
   }
+  // Atomizer encodes SBML rate-rule variables as synthetic species plus a
+  // zero-argument __rate_rule__ definition. Any reaction flux referring to
+  // that variable is state-dependent even though it is not a BNGL observable.
+  for (const fn of model.functions || []) {
+    if (fn.name.startsWith('__rate_rule__') && fn.args.length === 0) {
+      changingParameterNames.add(fn.name.slice('__rate_rule__'.length));
+    }
+  }
 
   const reactions = model.reactions ?? [];
 
@@ -492,6 +633,39 @@ export async function simulate(
   // });
 
   const functionNames = new Set((model.functions || []).map(f => f.name));
+
+  const resolveConversionFactorSpecies = (pattern: string): number | undefined => {
+    const compact = pattern.replace(/\s+/g, '');
+    const exact = model.species.findIndex((species) => species.name.replace(/\s+/g, '') === compact);
+    if (exact >= 0) return exact;
+    const canonicalBase = (value: string): string => value
+      .replace(/^@[^:]+::/, '')
+      .split('.')
+      .map((molecule) => removeParenthesizedSegments(molecule)
+        .replace(/@[^@:\s]+$/, '')
+        .replace(/^M_/, ''))
+      .join('.');
+    const base = canonicalBase(compact);
+    const candidates = model.species
+      .map((species, index) => ({
+        index,
+        base: canonicalBase(species.name.replace(/\s+/g, '')),
+      }))
+      .filter((candidate) => candidate.base === base);
+    return candidates.length === 1 ? candidates[0].index : undefined;
+  };
+  const conversionFactorsByRule = new Map<string, Map<number, number>>();
+  for (const metadata of model.reactionConversionFactors || []) {
+    const speciesIndex = resolveConversionFactorSpecies(metadata.bnglPattern);
+    const factor = Number(metadata.factor);
+    if (speciesIndex === undefined || !Number.isFinite(factor)) continue;
+    let factors = conversionFactorsByRule.get(metadata.ruleName);
+    if (!factors) {
+      factors = new Map<number, number>();
+      conversionFactorsByRule.set(metadata.ruleName, factors);
+    }
+    factors.set(speciesIndex, factor);
+  }
 
   // ⚡ Bolt Optimization: Hoist Map creations out of hot reaction parsing loop
   const staticParamMap = new Map(Object.entries(model.parameters || {}));
@@ -540,22 +714,33 @@ export async function simulate(
       rate = 0; // Safe fallback
     }
 
+    const isSyntheticRateRuleReaction = typeof r.name === 'string' && /^__rate_rule_(?:in|out)_/.test(r.name);
+    const conversionFactorBySpecies = r.name ? conversionFactorsByRule.get(r.name) : undefined;
     return {
       reactants: new Int32Array(reactantIndices),
       products: new Int32Array(productIndices),
-      rateConstant: rate,
-      rateExpression: isFunctionalRate ? rateExpr : null,
-      rate: rateExpr !== undefined && rateExpr !== null ? String(rateExpr) : '',
-      isFunctionalRate,
+      // Rate-rule targets are integrated directly below in their SBML value
+      // units. Keep generated +/- reaction shells inert so they do not apply
+      // BNGL molecule-volume scaling a second time.
+      rateConstant: isSyntheticRateRuleReaction ? 0 : rate,
+      rateExpression: isSyntheticRateRuleReaction ? null : (isFunctionalRate ? rateExpr : null),
+      rate: isSyntheticRateRuleReaction ? '0' : (rateExpr !== undefined && rateExpr !== null ? String(rateExpr) : ''),
+      isFunctionalRate: isSyntheticRateRuleReaction ? false : isFunctionalRate,
       propensityFactor: r.propensityFactor ?? 1,
       productStoichiometries: r.productStoichiometries,
       scalingVolume: r.scalingVolume,
       degeneracy: r.degeneracy ?? 1,
       statFactor: r.statFactor ?? 1,
       totalRate: r.totalRate,
-      ruleName: r.name
+      ruleName: r.name,
+      conversionFactorBySpecies,
+      dynamicStoichiometries: r.dynamicStoichiometries?.map((entry) => ({ ...entry })),
     };
   });
+  const hasTotalRateReactions = concreteReactions.some((reaction) => reaction.totalRate === true);
+  const hasSpeciesConversionFactors = concreteReactions.some((reaction) => (reaction.conversionFactorBySpecies?.size ?? 0) > 0);
+  const hasDynamicStoichiometries = concreteReactions.some((reaction) => (reaction.dynamicStoichiometries?.length ?? 0) > 0);
+  const hasAlgebraicRules = (model.algebraicRules?.length ?? 0) > 0;
 
   // fs.appendFileSync(debugLog, `[SimulationLoop] Concrete Reactions (${concreteReactions.length}):\n`);
   // concreteReactions.forEach((r, idx) => {
@@ -567,7 +752,7 @@ export async function simulate(
   // -------------------------------------------------------------------------
   // If functional rates exist (MM, Hill, or time-dependent), we must load the SafeEvaluator.
   const functionalRateCount = concreteReactions.filter(r => r.isFunctionalRate).length;
-  if (functionalRateCount > 0 || shouldPrintFunctions) {
+  if (functionalRateCount > 0 || shouldPrintFunctions || (model.events?.length ?? 0) > 0) {
     if (VERBOSE_SIM_DEBUG) console.log(`[Worker] Functional rates/functions enabled (Reactions: ${functionalRateCount}, Printing Functions: ${shouldPrintFunctions})`);
     if (!getFeatureFlags().functionalRatesEnabled) {
       console.error('[Worker] Functional rates temporarily disabled pending security review');
@@ -592,7 +777,7 @@ export async function simulate(
   // 3. Pre-process Observables
   // Prefer concrete observables attached to the model (produced earlier by NetworkExpansion). If not present,
   // fall back to dynamic matching here (legacy behavior).
-  const concreteObservables: ConcreteObservable[] = ('concreteObservables' in model && Array.isArray((model as typeof model & { concreteObservables?: ConcreteObservable[] }).concreteObservables)) ? (model as typeof model & { concreteObservables?: ConcreteObservable[] }).concreteObservables! : model.observables.map(obs => {
+  const concreteObservablesSource: ConcreteObservable[] = ('concreteObservables' in model && Array.isArray((model as typeof model & { concreteObservables?: ConcreteObservable[] }).concreteObservables)) ? (model as typeof model & { concreteObservables?: ConcreteObservable[] }).concreteObservables! : model.observables.map(obs => {
     const splitPatternsSafe = (patternStr: string): string[] => {
       const commaChunks: string[] = [];
       let current = '';
@@ -670,9 +855,34 @@ export async function simulate(
       coefficients: new Float64Array(coefficients)
     };
   });
+  const eventAssignedCompartmentNames = new Set<string>();
+  for (const event of model.events || []) {
+    for (const assignment of event.assignments || []) {
+      const target = assignment.bnglVariable || assignment.variable;
+      if (target && model.compartments?.some((compartment) => compartment.name === target)) {
+        eventAssignedCompartmentNames.add(target);
+      }
+    }
+  }
+  // Any general event can mutate a parameter that feeds a compartment
+  // assignment rule, so observable amount conversion must use live volumes for
+  // every compartment in an event-bearing model.
+  if ((model.events?.length ?? 0) > 0) {
+    for (const compartment of model.compartments || []) eventAssignedCompartmentNames.add(compartment.name);
+  }
+  const concreteObservables: ConcreteObservable[] = concreteObservablesSource.map((observable) => ({
+    ...observable,
+    volumes: eventAssignedCompartmentNames.size > 0 ? undefined : observable.volumes?.map((volume, index) => {
+      const speciesIndex = observable.indices[index];
+      return /^@[^:]+::M___rate_rule_state__/.test(model.species[speciesIndex]?.name || '')
+        ? 1
+        : volume;
+    }),
+  }));
 
   // 4. Initialize State Vector
   const speciesVolumes = new Float64Array(numSpecies);
+  const speciesCompartmentNames: Array<string | undefined> = new Array(numSpecies);
   const compartmentMap = new Map<string, number>();
   if (model.compartments && model.compartments.length > 0) {
     if (VERBOSE_SIM_DEBUG) {
@@ -681,6 +891,13 @@ export async function simulate(
     (model.compartments || []).forEach(c => {
       const vol = c.resolvedVolume ?? c.size ?? 1.0;
       compartmentMap.set(c.name, vol);
+      // Keep compartment IDs in the live expression namespace. SBML events,
+      // assignment rules, and printable functions may all refer to a
+      // compartment directly (not only through the internal volume symbol).
+      if (!Object.prototype.hasOwnProperty.call(model.parameters, c.name)) {
+        setSafeNumberField(model.parameters, c.name, vol);
+      }
+      setSafeNumberField(model.parameters, `__compartment_${c.name}__`, vol);
       if (VERBOSE_SIM_DEBUG) {
         console.log(`[Worker]   - Compartment: '${c.name}', Vol: ${vol}`);
       }
@@ -706,14 +923,70 @@ export async function simulate(
     if (compName && compartmentMap.has(compName)) {
       vol = compartmentMap.get(compName)!;
     }
+    // Synthetic rate-rule species represent scalar SBML variables, not a
+    // molecule amount inside their declared compartment.
+    if (/^@[^:]+::M___rate_rule_state__/.test(s.name) || /^M___rate_rule_state__/.test(s.name)) {
+      vol = 1;
+    }
+    speciesCompartmentNames[idx] = compName ?? undefined;
     speciesVolumes[idx] = vol;
   });
+
+  const rateRuleDefinitions = new Map<string, BNGLFunction>();
+  const normalizeRateRuleExpression = (expression: string): string =>
+    expression.replace(/\btime\s*\(\s*\)/g, 'time');
+  for (const fn of model.functions || []) {
+    if (fn.name.startsWith('__rate_rule__') && fn.args.length === 0) {
+      rateRuleDefinitions.set(fn.name.slice('__rate_rule__'.length), fn);
+    }
+  }
+  const rateRuleTargetIndices = new Map<string, number>();
+  const rateRuleTargetIsSynthetic = new Map<string, boolean>();
+  const rateRuleTargetIsConcentration = new Map<string, boolean>();
+  const rateRuleTargetUsesConcentration = (target: string): boolean => {
+    const functionName = `_c_${target}`;
+    const concentrationFunction = (model.functions || []).find((fn) => fn.name === functionName && fn.args.length === 0);
+    if (!concentrationFunction) return false;
+    const expression = concentrationFunction.expression.replace(/\s+/g, '');
+    // Atomizer emits `_c_S = S` for hasOnlySubstanceUnits=true and
+    // `_c_S = S / volume` for concentration-valued SBML species.
+    return expression !== target && (expression.includes('/') || expression.includes('__compartment_'));
+  };
+  for (const [target] of rateRuleDefinitions) {
+    for (let i = 0; i < model.species.length; i++) {
+      const speciesTarget = rateRuleSpeciesTarget(model.species[i].name);
+      if (speciesTarget?.target === target) {
+        rateRuleTargetIndices.set(target, i);
+        rateRuleTargetIsSynthetic.set(target, speciesTarget.synthetic);
+        rateRuleTargetIsConcentration.set(target, rateRuleTargetUsesConcentration(target));
+        break;
+      }
+    }
+  }
+  const refreshDynamicVolumes = (currentState: Float64Array): void => {
+    for (const compartment of model.compartments || []) {
+      const targetIndex = rateRuleTargetIndices.get(compartment.name);
+      const targetIsSynthetic = rateRuleTargetIsSynthetic.get(compartment.name);
+      if (targetIndex === undefined || !targetIsSynthetic) continue;
+      const volume = currentState[targetIndex];
+      if (!Number.isFinite(volume) || volume <= 0) continue;
+      compartmentMap.set(compartment.name, volume);
+      for (let i = 0; i < speciesCompartmentNames.length; i++) {
+        if (speciesCompartmentNames[i] === compartment.name && !rateRuleTargetIsSynthetic.get(
+          [...rateRuleTargetIndices.entries()].find(([, index]) => index === i)?.[0] || ''
+        )) {
+          speciesVolumes[i] = volume;
+        }
+      }
+    }
+  };
 
   // BioNetGen scales ODE rates by an anchor compartment volume. For mixed-dimension
   // reactants (e.g. 3D + 2D), anchoring to the lower-dimensional compartment yields
   // closer parity with cBNGL transport/binding models.
   const reactionReactingVolumes = new Float64Array(reactions.length);
-  const compartmentMapForDim = new Map((inputModel.compartments ?? []).map(c => [c.name, c]));
+  const reactionAnchorCompartments: Array<string | undefined> = new Array(reactions.length);
+  const compartmentMapForDim = new Map((model.compartments ?? inputModel.compartments ?? []).map(c => [c.name, c]));
 
   reactions.forEach((r, idx) => {
     const declaredScalingVolume = r.scalingVolume;
@@ -748,6 +1021,7 @@ export async function simulate(
         if (dim < minDim) {
           minDim = dim;
           vAnchor = vol;
+          reactionAnchorCompartments[idx] = compName || undefined;
         }
       } else {
         // Fallback for no compartment: default to 1.0 and dim 3
@@ -760,6 +1034,37 @@ export async function simulate(
 
     reactionReactingVolumes[idx] = vAnchor;
   });
+  const hasDynamicCompartmentVolumes = eventAssignedCompartmentNames.size > 0
+    || (model.compartments || []).some((compartment) =>
+      rateRuleDefinitions.has(compartment.name)
+      || (model.functions || []).some((fn) => fn.name === `__assign_rule__${compartment.name}`));
+  // Only resolve index-based anchors when a run can change compartment sizes.
+  // Static models must retain their declared scalingVolume and the existing
+  // string-based anchor calculation above.
+  if (hasDynamicCompartmentVolumes) {
+    concreteReactions.forEach((reaction, reactionIndex) => {
+      const declaredScalingVolume = reactions[reactionIndex]?.scalingVolume;
+      if (typeof declaredScalingVolume === 'number' && Number.isFinite(declaredScalingVolume) && declaredScalingVolume > 0) {
+        return;
+      }
+
+      const candidates = reaction.reactants.length > 0 ? reaction.reactants : reaction.products;
+      let minDim = Number.POSITIVE_INFINITY;
+      let anchor: string | undefined;
+      let volume = 1;
+      for (const speciesIndex of candidates) {
+        const compartmentName = speciesCompartmentNames[speciesIndex];
+        const compartment = compartmentName ? compartmentMapForDim.get(compartmentName) : undefined;
+        if (compartment && compartmentName && (compartment.dimension ?? 3) < minDim) {
+          minDim = compartment.dimension ?? 3;
+          anchor = compartmentName;
+          volume = compartmentMap.get(compartmentName) ?? 1;
+        }
+      }
+      reactionAnchorCompartments[reactionIndex] = anchor;
+      reactionReactingVolumes[reactionIndex] = volume;
+    });
+  }
 
   const buildParamMap = (parameters: Record<string, unknown> | undefined): Map<string, number> => {
     const paramMap = new Map<string, number>();
@@ -853,7 +1158,8 @@ export async function simulate(
   // The amount-space branch fixes CVODE parity for compartment models whose rates
   // depend on observables/functions. Keep pure mass-action compartment models on
   // the existing concentration-space fast path for performance.
-  const odeUsesAmountState = isOde && hasHeterogeneousSpeciesVolumes && functionalRateCount > 0;
+  const odeUsesAmountState = isOde && hasHeterogeneousSpeciesVolumes
+    && (functionalRateCount > 0 || rateRuleDefinitions.size > 0);
   const solverVolumes = odeUsesAmountState
     ? new Float64Array(numSpecies).fill(1.0)
     : speciesVolumes;
@@ -878,6 +1184,7 @@ export async function simulate(
       console.log(`[Worker] State Init FB (Idx ${i}): name='${s.name}', initAmt=${initAmt}, vol=${speciesVolumes[i]}, isOde=${isOde}, finalState=${state[i]}`);
     }
   });
+  refreshDynamicVolumes(state);
 
   // DEBUG: Scaling volumes check
   if (VERBOSE_SIM_DEBUG) {
@@ -924,8 +1231,8 @@ export async function simulate(
 
     const dataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
     const speciesDataBySuffix: Record<string, Record<string, number>[]> = Object.create(null) as Record<string, Record<string, number>[]>;
-    const includeSpeciesData = options.includeSpeciesData ?? true;
-    const includeExpandedNetwork = options.includeExpandedNetwork ?? true;
+    const includeSpeciesData = options.includeSpeciesData ?? false;
+    const includeExpandedNetwork = options.includeExpandedNetwork ?? false;
 
     const normalizeSuffixKey = (suffix?: unknown): string => {
       const raw = typeof suffix === 'string' ? suffix : (suffix == null ? '' : String(suffix));
@@ -997,7 +1304,8 @@ export async function simulate(
     // V8 JIT deoptimization that occurs with a single massive compiled function.
     // For smaller models, use chunked JIT (chunks of 64 observables each stay
     // within TurboFan's optimization threshold).
-    const useCSRObservables = shouldUseCSRObservables(concreteObservables.length);
+    const useCSRObservables = shouldUseCSRObservables(concreteObservables.length)
+      && eventAssignedCompartmentNames.size === 0;
     const useAmountsForObs = isOde && !odeUsesAmountState;
 
     let csrObservableMatrix: CSRObservableMatrix | null = null;
@@ -1056,9 +1364,12 @@ export async function simulate(
           const idx = obs.indices[j];
           const val = currentState[idx];
           const obsVolumes = 'volumes' in obs ? (obs as typeof obs & { volumes?: number[] }).volumes : undefined;
-          const termVolume = Array.isArray(obsVolumes)
-            ? (obsVolumes[j] ?? speciesVolumes[idx])
-            : speciesVolumes[idx];
+          // Use the live compartment volume. The observable metadata may carry
+          // the initial volume, but SBML events can resize a compartment while
+          // a run is in progress.
+          const termVolume = speciesVolumes[idx]
+            ?? (Array.isArray(obsVolumes) ? obsVolumes[j] : undefined)
+            ?? 1;
           const amount = isOde
             ? (odeUsesAmountState ? val : (val * termVolume))
             : val;
@@ -1070,27 +1381,485 @@ export async function simulate(
       return observableValuesBuffer;
     };
 
-    const evaluateObservablesFast = (currentState: Float64Array) => {
+    const eventParameterOverrides = new Set<string>();
+    let eventDelayExpander: ((expression: string, context: Record<string, number>, state: Float64Array) => string) | undefined;
+    let suppressAssignmentRuleValues = false;
+    const normalizeTimeCalls = (expression: string): string => expression.replace(/\btime\s*\(\s*\)/g, 'time');
+    const assignmentRuleDefinitions = new Map<string, BNGLFunction>();
+    for (const fn of model.functions || []) {
+      if (fn.name.startsWith('__assign_rule__') && fn.args.length === 0) {
+        assignmentRuleDefinitions.set(fn.name.slice('__assign_rule__'.length), fn);
+      }
+    }
+
+    const resolveAssignmentRuleSpecies = (target: string): { index: number; valueType: 'amount' | 'concentration' } | undefined => {
+      const declaredType = model.speciesValueTypes?.[target];
+      const directObservable = concreteObservables.find((observable) =>
+        observable.name === `${target}_amt` || observable.name === target
+      );
+      if (directObservable?.indices[0] !== undefined) {
+        return { index: directObservable.indices[0], valueType: declaredType || 'amount' };
+      }
+      const targetBase = removeAtSuffix(target.replace(/^M_/, ''));
+      const candidates = model.species
+        .map((species, index) => ({ species, index }))
+        .filter(({ species }) => {
+          const base = removeParenthesizedSegments(removeAtSuffix(species.name
+            .replace(/^@[A-Za-z0-9_]+::/, '')
+            .replace(/^M_/, '')));
+          return base === targetBase;
+        });
+      if (candidates.length !== 1) return undefined;
+      return { index: candidates[0].index, valueType: declaredType || 'amount' };
+    };
+
+    const algebraicIdentifier = (value: string): string => removeParenthesizedSegments(value.trim()
+      .replace(/^@[A-Za-z0-9_]+::/, ''))
+      .replace(/[^A-Za-z0-9_]/g, '_')
+      .replace(/^_+|_+$/g, '');
+
+    const algebraicRuleTargets: Array<{
+      symbol: string;
+      index?: number;
+      parameter?: string;
+      participation: number;
+    } | undefined> = (model.algebraicRules || []).map((rule) => {
+      const symbols = [...new Set(rule.math.match(/[A-Za-z_][A-Za-z0-9_]*/g) || [])]
+        .filter((symbol) => symbol !== 'time' && symbol !== 't');
+      const candidates = symbols.flatMap((symbol) => {
+        const directObservable = concreteObservables.find((observable) => {
+          const base = observable.name.endsWith('_amt') ? observable.name.slice(0, -4) : observable.name;
+          return symbol === observable.name || symbol === base || symbol === `${base}_amt` || symbol === `${base}_conc`;
+        });
+        const directIndex = directObservable?.indices[0] ?? model.species.findIndex((species) => {
+          const base = algebraicIdentifier(species.name);
+          return symbol === base || symbol === `${base}_amt` || symbol === `${base}_conc`;
+        });
+        const candidates: Array<{
+          symbol: string;
+          index?: number;
+          parameter?: string;
+          participation: number;
+        }> = [];
+        if (directIndex >= 0) {
+          const participation = concreteReactions.reduce((count, reaction) => (
+            count
+            + Array.from(reaction.reactants).filter(index => index === directIndex).length
+            + Array.from(reaction.products).filter(index => index === directIndex).length
+          ), 0);
+          candidates.push({ symbol, index: directIndex, participation });
+        }
+        const hasRateRule = (model.functions || []).some((fn) => fn.name === `__rate_rule__${symbol}`);
+        if (Object.prototype.hasOwnProperty.call(model.parameters, symbol) && !hasRateRule) {
+          // Algebraic rules frequently determine a mutable parameter that has
+          // no literal value. Keep differential rate-rule states out of this
+          // selection and solve their algebraic companion instead.
+          candidates.push({ symbol, parameter: symbol, participation: -1 });
+        }
+        return candidates;
+      });
+      const speciesCandidates = candidates.filter((candidate) => {
+        if (candidate.index === undefined) return false;
+        // A rate-rule variable is a differential state, not an algebraic
+        // degree of freedom. Solve an algebraic companion parameter (for
+        // example k2 in k1 - k2 = 0) instead of projecting the live rate-rule
+        // state back onto its stale parameter seed.
+        return !(model.functions || []).some((fn) =>
+          fn.name === `__rate_rule__${candidate.symbol}` && fn.args.length === 0
+        );
+      });
+      if (speciesCandidates.length > 0) {
+        speciesCandidates.sort((left, right) => left.participation - right.participation);
+        return speciesCandidates[0];
+      }
+      // If no species can satisfy the constraint, prefer a parameter that is
+      // not itself event-assigned (e.g. S in S = Q + R).
+      const eventAssigned = new Set(
+        (model.events || []).flatMap((event) => event.assignments.map((assignment) => assignment.variable)),
+      );
+      const parameterCandidates = candidates.filter((candidate) => candidate.parameter !== undefined);
+      parameterCandidates.sort((left, right) => Number(eventAssigned.has(left.parameter || '')) - Number(eventAssigned.has(right.parameter || '')));
+      return parameterCandidates[0];
+    });
+
+    const applyAlgebraicConstraints = (
+      context: Record<string, number>,
+      currentState: Float64Array,
+      projectState = false,
+    ): void => {
+      if (!model.algebraicRules || model.algebraicRules.length === 0) return;
+      for (let ruleIndex = 0; ruleIndex < model.algebraicRules.length; ruleIndex++) {
+        const target = algebraicRuleTargets[ruleIndex];
+        if (!target) continue;
+        const evaluateConstraint = (values: Record<string, number>): number => {
+          try {
+            return evaluateFunctionalRate(
+              normalizeTimeCalls(model.algebraicRules![ruleIndex].math),
+              model.parameters,
+              values,
+              model.functions,
+              values,
+              undefined,
+              strictFunctionalRates,
+            );
+          } catch (error) {
+            if (strictFunctionalRates) throw error;
+            return Number.NaN;
+          }
+        };
+        const current = Number(context[target.symbol]);
+        if (!Number.isFinite(current)) continue;
+        const residual = evaluateConstraint(context);
+        if (!Number.isFinite(residual) || Math.abs(residual) < 1e-12) continue;
+        const step = 1e-6 * Math.max(1, Math.abs(current));
+        const perturbed = { ...context, [target.symbol]: current + step };
+        const derivative = (evaluateConstraint(perturbed) - residual) / step;
+        if (!Number.isFinite(derivative) || Math.abs(derivative) < 1e-12) continue;
+        const solved = current - residual / derivative;
+        if (!Number.isFinite(solved)) continue;
+        setSafeNumberField(context, target.symbol, solved);
+        if (target.parameter) {
+          setSafeNumberField(model.parameters, target.parameter, solved);
+          // A mass-action rule may refer to the algebraically solved
+          // parameter. Refresh its scalar rate immediately; optimized paths
+          // are disabled below for algebraic systems, so the next RHS call
+          // consumes this value directly.
+          for (const reaction of concreteReactions) {
+            if (reaction.isFunctionalRate || !reaction.rate || reaction.rate === '0') continue;
+            try {
+              const nextRate = evaluateFunctionalRate(
+                reaction.rate,
+                model.parameters,
+                context,
+                model.functions,
+                context,
+                undefined,
+                strictFunctionalRates,
+              );
+              if (Number.isFinite(nextRate)) reaction.rateConstant = nextRate;
+            } catch (error) {
+              if (strictFunctionalRates) throw error;
+            }
+          }
+        } else if (target.index !== undefined) {
+          const speciesName = algebraicIdentifier(model.species[target.index].name);
+          const volume = speciesVolumes[target.index] || 1;
+          const amount = target.symbol.endsWith('_conc') ? solved * volume : solved;
+          // Algebraic variables are implicit DAE values. Do not mutate the
+          // solver state from inside an RHS evaluation: CVODE/RK45 may call
+          // the RHS repeatedly at trial points, and a write here makes the
+          // derivative discontinuous and can stall the integrator. Keep the
+          // solved value in the observable/context namespace; callers that
+          // explicitly request a projected state still get the legacy write.
+          if (
+            projectState && Number.isInteger(target.index) &&
+            target.index >= 0 && target.index < currentState.length
+          ) {
+            const projectedValue = isOde
+              ? (odeUsesAmountState ? amount : amount / volume)
+              : amount;
+            currentState.fill(projectedValue, target.index, target.index + 1);
+          }
+          const baseSymbol = target.symbol.replace(/_(?:amt|conc)$/, '');
+          const aliases = new Set([speciesName, baseSymbol, target.symbol]);
+          for (const alias of aliases) {
+            if (!isSafeObjectKey(alias)) continue;
+            setSafeNumberField(observableValuesRecord, alias, alias.endsWith('_conc') ? amount / volume : amount);
+            setSafeNumberField(context, alias, alias.endsWith('_conc') ? amount / volume : amount);
+          }
+          setSafeNumberField(observableValuesRecord, `${baseSymbol}_amt`, amount);
+          setSafeNumberField(observableValuesRecord, `${baseSymbol}_conc`, amount / volume);
+          setSafeNumberField(context, `${baseSymbol}_amt`, amount);
+          setSafeNumberField(context, `${baseSymbol}_conc`, amount / volume);
+        }
+      }
+    };
+
+    const updateLiveCompartment = (name: string, value: number, currentState?: Float64Array): void => {
+      if (!Number.isFinite(value) || value <= 0) return;
+      const previousVolume = compartmentMap.get(name) ?? 1;
+      if (currentState && isOde && !odeUsesAmountState && value !== previousVolume) {
+        for (let i = 0; i < speciesCompartmentNames.length; i++) {
+          if (speciesCompartmentNames[i] === name) currentState[i] *= previousVolume / value;
+        }
+      }
+      compartmentMap.set(name, value);
+      setSafeNumberField(model.parameters, name, value);
+      setSafeNumberField(model.parameters, `__compartment_${name}__`, value);
+      const compartment = model.compartments?.find((entry) => entry.name === name);
+      if (compartment) {
+        compartment.size = value;
+        compartment.resolvedVolume = value;
+      }
+      for (let i = 0; i < speciesCompartmentNames.length; i++) {
+        if (speciesCompartmentNames[i] === name) speciesVolumes[i] = value;
+      }
+      for (let i = 0; i < reactionAnchorCompartments.length; i++) {
+        if (reactionAnchorCompartments[i] === name) reactionReactingVolumes[i] = value;
+      }
+    };
+
+    const applyAssignmentRuleValues = (context: Record<string, number>, currentTime: number, currentState?: Float64Array): void => {
+      setSafeNumberField(context, 'time', currentTime);
+      setSafeNumberField(context, 't', currentTime);
+      // Assignment rules may depend on one another. The writer normally emits them in dependency
+      // order, but a bounded fixed point also handles source files whose declarations are not
+      // topologically ordered.
+      for (let pass = 0; pass < 10; pass++) {
+        let changed = false;
+        for (const [target, fn] of assignmentRuleDefinitions) {
+          if (!isSafeObjectKey(target)) continue;
+          let value: number;
+          if (eventParameterOverrides.has(target) && Object.prototype.hasOwnProperty.call(model.parameters, target)) {
+            value = model.parameters[target];
+          } else {
+            try {
+              const expandedRateOf = normalizeTimeCalls(
+                eventDelayExpander?.(fn.expression, context, currentState ?? new Float64Array(numSpecies)) ?? fn.expression,
+              ).replace(
+                /\brateOf\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g,
+                (_match, symbol: string) => String(eventRateOfEvaluator?.(symbol, currentState || new Float64Array(numSpecies), currentTime) ?? 0),
+              );
+              value = evaluateFunctionalRate(
+                expandedRateOf,
+                model.parameters,
+                context,
+                model.functions,
+                context,
+                undefined,
+                strictFunctionalRates,
+              );
+            } catch (error) {
+              if (strictFunctionalRates) throw error;
+              continue;
+            }
+          }
+          if (!Number.isFinite(value)) continue;
+          if (context[target] !== value) changed = true;
+          setSafeNumberField(context, target, value);
+          const targetSpecies = resolveAssignmentRuleSpecies(target);
+          if (targetSpecies) {
+            const volume = speciesVolumes[targetSpecies.index] || 1;
+            const amount = targetSpecies.valueType === 'concentration' ? value * volume : value;
+            const concentration = targetSpecies.valueType === 'concentration' ? value : value / volume;
+            setSafeNumberField(context, `${target}_amt`, amount);
+            setSafeNumberField(context, `${target}_conc`, concentration);
+          } else {
+            setSafeNumberField(context, `${target}_amt`, value);
+            setSafeNumberField(context, `${target}_conc`, value);
+          }
+          if (model.compartments?.some((compartment) => compartment.name === target)) {
+            updateLiveCompartment(target, value, currentState);
+          }
+        }
+        if (!changed) break;
+      }
+    };
+
+    const evaluateObservablesFast = (
+      currentState: Float64Array,
+      currentTime = 0,
+      projectAlgebraicState = false,
+    ) => {
+      refreshDynamicVolumes(currentState);
       const buffer = evaluateObservablesIntoBuffer(currentState);
       // ⚡ Bolt Optimization: Use pre-filtered safe observable names to directly assign values,
       // avoiding repeated regex validation via setSafeNumberField in the hot loop.
       for (let i = 0; i < safeObservableNames.length; i++) {
         setSafeNumberField(observableValuesRecord, safeObservableNames[i], buffer[safeObservableIndices[i]]);
       }
+      // Atomizer emits paired amount observables (e.g. S1_amt and S1). Keep
+      // the BNGL amount values unchanged, while exposing an explicit
+      // concentration alias for SBML species declared with
+      // hasOnlySubstanceUnits=false. This path is shared by ordinary output,
+      // event context construction, and event-runtime output.
+      for (let i = 0; i < concreteObservables.length; i++) {
+        const amountName = concreteObservables[i].name;
+        if (!amountName.endsWith('_amt')) continue;
+        const baseName = amountName.slice(0, -4);
+        if (!isSafeObjectKey(`${baseName}_conc`)) continue;
+        const firstIndex = concreteObservables[i].indices[0];
+        const volume = firstIndex === undefined ? 1 : (speciesVolumes[firstIndex] || 1);
+        setSafeNumberField(observableValuesRecord, `${baseName}_conc`, buffer[i] / volume);
+      }
+      for (const compartment of model.compartments || []) {
+        const volume = compartmentMap.get(compartment.name);
+        if (!Number.isFinite(volume) || !isSafeObjectKey(compartment.name)) continue;
+        setSafeNumberField(observableValuesRecord, compartment.name, volume!);
+        setSafeNumberField(observableValuesRecord, `__compartment_${compartment.name}__`, volume!);
+      }
+      const observableContext: Record<string, number> = {
+        ...model.parameters,
+        ...observableValuesRecord,
+        time: currentTime,
+        t: currentTime,
+      };
+      // Synthetic rate-rule species are the live SBML state for scalar
+      // variables such as k1. Make that state visible before solving
+      // algebraic companion rules (k1 - k2 = 0), rather than using the
+      // parameter's initial seed value forever.
+      for (let i = 0; i < model.species.length; i++) {
+        const rateRuleName = rateRuleStateNameFromPattern(model.species[i].name);
+        if (!rateRuleName || !isSafeObjectKey(rateRuleName)) continue;
+        const amount = isOde && !odeUsesAmountState
+          ? currentState[i] * (speciesVolumes[i] || 1)
+          : currentState[i];
+        setSafeNumberField(observableContext, rateRuleName, amount);
+        setSafeNumberField(observableContext, `${rateRuleName}_amt`, amount);
+      }
+      if (!suppressAssignmentRuleValues) applyAssignmentRuleValues(observableContext, currentTime, currentState);
+      applyAlgebraicConstraints(observableContext, currentState, projectAlgebraicState);
+      for (const target of assignmentRuleDefinitions.keys()) {
+        if (!isSafeObjectKey(target) || !Object.prototype.hasOwnProperty.call(observableContext, target)) continue;
+        const value = observableContext[target];
+        if (!Number.isFinite(value)) continue;
+        const targetSpecies = resolveAssignmentRuleSpecies(target);
+        const volume = targetSpecies ? (speciesVolumes[targetSpecies.index] || 1) : 1;
+        const amount = targetSpecies?.valueType === 'concentration' ? value * volume : value;
+        const concentration = targetSpecies?.valueType === 'concentration' ? value : value / volume;
+        if (Object.prototype.hasOwnProperty.call(observableValuesRecord, target)) setSafeNumberField(observableValuesRecord, target, amount);
+        if (Object.prototype.hasOwnProperty.call(observableValuesRecord, `${target}_amt`)) setSafeNumberField(observableValuesRecord, `${target}_amt`, amount);
+        if (Object.prototype.hasOwnProperty.call(observableValuesRecord, `${target}_conc`)) setSafeNumberField(observableValuesRecord, `${target}_conc`, concentration);
+      }
       return observableValuesRecord;
     };
 
-    const evaluateFunctionsForOutput = (_currentState: Float64Array, observableValues: Record<string, number>) => {
+    const eventIdentifier = (value: string): string => {
+      const trimmed = value.trim();
+      const withoutCompartment = trimmed.startsWith('@') && trimmed.includes(':')
+        ? trimmed.slice(trimmed.indexOf(':') + 1)
+        : trimmed;
+      const withoutState = removeParenthesizedSegments(withoutCompartment);
+      return withoutState.replace(/[^A-Za-z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+    };
+
+    const rateRuleStateName = rateRuleStateNameFromPattern;
+    let eventReactionFluxEvaluator: ((currentState: Float64Array, time: number, context: Record<string, number>) => void) | undefined;
+    let suppressEventReactionFlux = false;
+
+    const buildEventContext = (currentState: Float64Array, time: number): Record<string, number> => {
+      refreshDynamicVolumes(currentState);
+      const observableValues = evaluateObservablesFast(currentState, time);
+      const context: Record<string, number> = { ...model.parameters, ...observableValues, time, t: time };
+
+      // Atomizer represents some SBML mutable parameters with an initial-assignment
+      // function when the source parameter has no literal value. Materialize those
+      // zero-argument definitions into the live event context until an event writes
+      // a new value; subsequent contexts then prefer the assigned parameter value.
+      for (const fn of model.functions || []) {
+        // Assignment-rule functions are materialized by applyAssignmentRuleValues,
+        // which also expands SBML delay() through the event-history runtime. Do
+        // not evaluate their raw delay expression as an ordinary zero-argument
+        // function here.
+        if (fn.args.length !== 0
+          || fn.name.startsWith('__assign_rule__')
+          || assignmentRuleDefinitions.has(fn.name)
+          || !isSafeObjectKey(fn.name)
+          || Object.prototype.hasOwnProperty.call(context, fn.name)) continue;
+        if (eventParameterOverrides.has(fn.name) && Object.prototype.hasOwnProperty.call(model.parameters, fn.name)) continue;
+        try {
+          const value = evaluateFunctionalRate(normalizeTimeCalls(fn.expression), model.parameters, context, model.functions, context, undefined, strictFunctionalRates);
+          if (Number.isFinite(value)) setSafeNumberField(context, fn.name, value);
+        } catch (error) {
+          if (strictFunctionalRates) throw error;
+        }
+      }
+
+      for (let i = 0; i < concreteObservables.length; i++) {
+        const name = eventIdentifier(concreteObservables[i].name);
+        if (name && isSafeObjectKey(`${name}_amt`)) {
+          const amount = observableValues[concreteObservables[i].name] ?? 0;
+          setSafeNumberField(context, `${name}_amt`, amount);
+          const firstIndex = concreteObservables[i].indices[0];
+          // Prefer the live species volume: a compartment may itself be an SBML
+          // rate-rule state, so the static NetworkExpansion volume is stale after
+          // the first integration step.
+          const volume = (firstIndex !== undefined ? speciesVolumes[firstIndex] : undefined)
+            ?? concreteObservables[i].volumes?.[0]
+            ?? 1;
+          if (isSafeObjectKey(`${name}_conc`)) setSafeNumberField(context, `${name}_conc`, amount / (volume || 1));
+        }
+      }
+      for (let i = 0; i < model.species.length; i++) {
+        const name = eventIdentifier(model.species[i].name);
+        const rateRuleName = rateRuleStateName(model.species[i].name);
+        if (!name) continue;
+        const amount = isOde
+          ? (odeUsesAmountState ? currentState[i] : currentState[i] * speciesVolumes[i])
+          : currentState[i];
+        if (isSafeObjectKey(name) && !Object.prototype.hasOwnProperty.call(context, name)) setSafeNumberField(context, name, amount);
+        if (isSafeObjectKey(`${name}_amt`)) setSafeNumberField(context, `${name}_amt`, amount);
+        if (isSafeObjectKey(`${name}_conc`)) {
+          const concentration = amount / (speciesVolumes[i] || 1);
+          setSafeNumberField(context, `${name}_conc`, concentration);
+        }
+        // Atomizer represents SBML rate-rule parameters as synthetic species.
+        // Their live state must shadow the initial parameter value in event
+        // triggers, assignments, and rateOf() expressions.
+        if (rateRuleName && isSafeObjectKey(rateRuleName)) {
+          setSafeNumberField(context, rateRuleName, amount);
+          if (isSafeObjectKey(`${rateRuleName}_amt`)) setSafeNumberField(context, `${rateRuleName}_amt`, amount);
+        }
+      }
+      if (!suppressAssignmentRuleValues) applyAssignmentRuleValues(context, time, currentState);
+      applyAlgebraicConstraints(context, currentState);
+      if (!suppressEventReactionFlux) eventReactionFluxEvaluator?.(currentState, time, context);
+      return context;
+    };
+
+    const evaluateFunctionsForOutput = (_currentState: Float64Array, observableValues: Record<string, number>, outputTime = 0) => {
       if (!shouldPrintFunctions) return Object.create(null) as Record<string, number>;
       const results: Record<string, number> = Object.create(null) as Record<string, number>;
+      const outputContext: Record<string, number> = { ...model.parameters, ...observableValues, time: outputTime, t: outputTime };
+      applyAssignmentRuleValues(outputContext, outputTime, _currentState);
       for (const f of model.functions || []) {
         if (f.args && f.args.length > 0) continue;
         if (f.name === '__proto__' || f.name === 'constructor' || f.name === 'prototype') continue;
         try {
+          const assignmentTarget = f.name.startsWith('__assign_rule__') ? f.name.slice('__assign_rule__'.length) : undefined;
+          if (assignmentTarget && Object.prototype.hasOwnProperty.call(outputContext, assignmentTarget)) {
+            setSafeNumberField(results, f.name, outputContext[assignmentTarget]);
+            // SBML result variables use the original assignment-rule target
+            // name. Keep the generated BNGL helper for compatibility, but
+            // also publish the direct target alias for round-trip parity.
+            if (isSafeObjectKey(assignmentTarget)) setSafeNumberField(results, assignmentTarget, outputContext[assignmentTarget]);
+            continue;
+          }
+          if (assignmentRuleDefinitions.has(f.name) && Object.prototype.hasOwnProperty.call(outputContext, f.name)) {
+            // The public zero-argument alias shares the assignment-rule target
+            // name. Its raw body may contain delay(), so use the already
+            // expanded live value rather than compiling that body again.
+            setSafeNumberField(results, f.name, outputContext[f.name]);
+            continue;
+          }
+          if (eventParameterOverrides.has(f.name) && Object.prototype.hasOwnProperty.call(model.parameters, f.name)) {
+            setSafeNumberField(results, f.name, model.parameters[f.name]);
+            continue;
+          }
+          const directOutputVariable = normalizeTimeCalls(f.expression).trim();
+          // Event assignments may override a scalar parameter after the output
+          // context was assembled. Read the live parameter explicitly for
+          // aliases such as __sbml_expected_P22() used by SBML trajectory
+          // comparisons.
+          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(directOutputVariable)
+            && eventParameterOverrides.has(directOutputVariable)
+            && Object.prototype.hasOwnProperty.call(model.parameters, directOutputVariable)) {
+            setSafeNumberField(results, f.name, model.parameters[directOutputVariable]);
+            continue;
+          }
+          if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(directOutputVariable)
+            && Object.prototype.hasOwnProperty.call(outputContext, directOutputVariable)) {
+            setSafeNumberField(results, f.name, outputContext[directOutputVariable]);
+            continue;
+          }
+          const expandedRateOf = normalizeTimeCalls(f.expression).replace(
+            /\brateOf\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g,
+            (_match, symbol: string) => String(eventRateOfEvaluator?.(symbol, _currentState, outputTime) ?? 0),
+          );
           setSafeNumberField(
             results,
             f.name,
-            evaluateFunctionalRate(f.expression, model.parameters, observableValues, model.functions, undefined, undefined, strictFunctionalRates)
+            evaluateFunctionalRate(expandedRateOf, model.parameters, outputContext, model.functions, outputContext, undefined, strictFunctionalRates)
           );
         } catch (e) {
           if (strictFunctionalRates) throw e;
@@ -1101,15 +1870,28 @@ export async function simulate(
     };
 
     const pushDataRow = (suffix: string | undefined, outT: number, currentState: Float64Array) => {
-      const buffer = evaluateObservablesIntoBuffer(currentState);
+      // A generated Atomizer model exposes paired observables such as S1_amt
+      // and S1.  Both are BNGL amount observables internally; publish the
+      // explicit concentration alias as well so SBML result tables can be
+      // compared in their declared hasOnlySubstanceUnits=false units without
+      // changing legacy BNGL amount output.
+      refreshDynamicVolumes(currentState);
+      const obsValues = evaluateObservablesFast(currentState, outT);
       outputTemplate.time = outT;
-      for (let i = 0; i < safeObservableNames.length; i++) {
-        setSafeNumberField(outputTemplate, safeObservableNames[i], buffer[safeObservableIndices[i]]);
+      for (const key of Object.keys(obsValues)) {
+        if (key !== '__proto__' && key !== 'constructor' && key !== 'prototype') {
+          setSafeNumberField(outputTemplate, key, obsValues[key]);
+        }
       }
       if (shouldPrintFunctions) {
-        const funcResults = evaluateFunctionsForOutput(currentState, outputTemplate);
+        const funcResults = evaluateFunctionsForOutput(currentState, outputTemplate, outT);
         for (const key in funcResults) {
-          if (Object.prototype.hasOwnProperty.call(funcResults, key)) {
+          // Atomizer may emit a zero-argument helper with the same name as an SBML
+          // species (assignment-rule targets are the common case). The SBML result
+          // column is the species observable; do not let the helper's concentration
+          // value overwrite the observable's amount value.
+          if (Object.prototype.hasOwnProperty.call(funcResults, key) &&
+              !Object.prototype.hasOwnProperty.call(obsValues, key)) {
             outputTemplate[key] = funcResults[key];
           }
         }
@@ -1172,9 +1954,217 @@ export async function simulate(
 
     let compiledMassActionJit: JITCompiledFunction | undefined;
     let rebuildNativeByteCode: (() => void) | undefined;
-    let persistedSolver: { integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult; destroy?: () => void } | undefined = undefined;
+    let persistedSolver: {
+      integrate: (y: Float64Array, t0: number, tEnd: number, check?: () => void) => SolverResult;
+      destroy?: () => void;
+      updateRateConstants?: (rates: Float64Array) => boolean;
+    } | undefined = undefined;
 
     let persistedSolverKey = '';
+
+    let onEventParameterChange: () => void = () => {};
+    // Declared before the SSA path: phase/event parameter updates can run before
+    // the ODE derivative builder installs the optimized callback.
+    let refreshRateContextParameters: (() => void) | undefined = undefined;
+    let eventRateOfEvaluator: ((symbol: string, currentState: Float64Array, time: number) => number) | undefined;
+    const eventDiagnostics = new Set<string>();
+    const collectEventDiagnostics = (result: { diagnostics?: string[] } | undefined): void => {
+      for (const diagnostic of result?.diagnostics ?? []) eventDiagnostics.add(diagnostic);
+    };
+    const runtimeEvents = (model.events || []).filter((event) => event.bnglExecution !== 'native');
+    const eventRuntime = runtimeEvents.length > 0
+      ? new SBMLEventRuntime({
+        events: runtimeEvents,
+        parameters: model.parameters,
+        functions: model.functions,
+        buildContext: buildEventContext,
+        resolveAssignment: (assignment): SBMLEventAssignmentTarget | undefined => {
+          const candidates = [assignment.bnglTarget, assignment.bnglVariable, assignment.variable]
+            .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+            .map(value => value.trim());
+
+          for (const candidate of candidates) {
+            const direct = speciesMap.get(candidate);
+            if (direct !== undefined) {
+              return {
+                kind: 'species',
+                index: direct,
+                name: candidate,
+                valueType: assignment.bnglValueType,
+              };
+            }
+          for (const [speciesName, index] of speciesMap) {
+              if (isSpeciesMatch(speciesName, candidate)) return {
+                kind: 'species',
+                index,
+                name: speciesName,
+                valueType: assignment.bnglValueType,
+              };
+              if (rateRuleStateName(speciesName) === candidate) return {
+                kind: 'species',
+                index,
+                name: speciesName,
+                valueType: assignment.bnglValueType,
+              };
+            }
+          }
+
+          for (const candidate of candidates) {
+            if (compartmentMap.has(candidate)) return { kind: 'compartment', name: candidate };
+            if (Object.prototype.hasOwnProperty.call(model.parameters, candidate)) return { kind: 'parameter', name: candidate };
+            const hasAssignmentRule = (model.functions || []).some((fn) => fn.name === `__assign_rule__${candidate}`);
+            if (hasAssignmentRule) return { kind: 'parameter', name: candidate };
+            // Atomizer represents SBML initial assignments (including variable
+            // speciesReference coefficients) as zero-argument BNGL functions.
+            // Event assignments make those symbols mutable at runtime.
+            const hasMutableFunction = (model.functions || []).some((fn) => fn.name === candidate && fn.args.length === 0);
+            if (hasMutableFunction) return { kind: 'parameter', name: candidate };
+          }
+          return undefined;
+        },
+        applyAssignment: (target, value, currentState) => {
+          if (target.kind === 'species' && target.index !== undefined) {
+            const volume = speciesVolumes[target.index] || 1;
+            const stateValue = target.valueType === 'concentration'
+              ? (isOde ? (odeUsesAmountState ? value * volume : value) : value * volume)
+              : (isOde && !odeUsesAmountState ? value / volume : value);
+            currentState[target.index] = stateValue;
+          } else if (target.kind === 'parameter' && isSafeObjectKey(target.name)) {
+            setSafeNumberField(model.parameters, target.name, value);
+            eventParameterOverrides.add(target.name);
+          } else if (target.kind === 'compartment' && isSafeObjectKey(target.name)) {
+            const previousVolume = compartmentMap.get(target.name) ?? 1;
+            const nextVolume = Number(value);
+            if (!Number.isFinite(nextVolume) || nextVolume <= 0) return;
+            if (isOde && !odeUsesAmountState && nextVolume !== previousVolume) {
+              for (let i = 0; i < speciesCompartmentNames.length; i++) {
+                if (speciesCompartmentNames[i] === target.name) {
+                  currentState[i] *= previousVolume / nextVolume;
+                }
+              }
+            }
+            compartmentMap.set(target.name, nextVolume);
+            setSafeNumberField(model.parameters, target.name, nextVolume);
+            setSafeNumberField(model.parameters, `__compartment_${target.name}__`, nextVolume);
+            const compartment = model.compartments?.find((entry) => entry.name === target.name);
+            if (compartment) {
+              compartment.size = nextVolume;
+              compartment.resolvedVolume = nextVolume;
+            }
+            for (let i = 0; i < speciesCompartmentNames.length; i++) {
+              if (speciesCompartmentNames[i] === target.name) speciesVolumes[i] = nextVolume;
+            }
+            for (let i = 0; i < reactionAnchorCompartments.length; i++) {
+              if (reactionAnchorCompartments[i] === target.name) reactionReactingVolumes[i] = nextVolume;
+            }
+          }
+        },
+        applyAssignments: (assignments, currentState) => {
+          // SBML evaluates every RHS against one pre-event snapshot. In
+          // particular, a species concentration assigned in the same event as
+          // its compartment size uses the old compartment volume; apply species
+          // values first, then resize compartments without changing that amount.
+          const oldSpeciesVolumes = [...speciesVolumes];
+          const oldCompartmentVolumes = new Map(compartmentMap);
+          const compartmentAssignments: Array<{ target: SBMLEventAssignmentTarget; value: number }> = [];
+          for (const assignment of assignments) {
+            const { target, value } = assignment;
+            if (target.kind === 'species' && target.index !== undefined) {
+              const volume = oldSpeciesVolumes[target.index] || 1;
+              const stateValue = target.valueType === 'concentration'
+                ? (isOde ? (odeUsesAmountState ? value * volume : value) : value * volume)
+                : (isOde && !odeUsesAmountState ? value / volume : value);
+              currentState[target.index] = stateValue;
+            } else if (target.kind === 'parameter' && isSafeObjectKey(target.name)) {
+              setSafeNumberField(model.parameters, target.name, value);
+              eventParameterOverrides.add(target.name);
+            } else if (target.kind === 'compartment') {
+              compartmentAssignments.push(assignment);
+            }
+          }
+          for (const { target, value } of compartmentAssignments) {
+            if (!isSafeObjectKey(target.name)) continue;
+            const previousVolume = oldCompartmentVolumes.get(target.name) ?? 1;
+            const nextVolume = Number(value);
+            if (!Number.isFinite(nextVolume) || nextVolume <= 0) continue;
+            if (isOde && !odeUsesAmountState && nextVolume !== previousVolume) {
+              for (let i = 0; i < speciesCompartmentNames.length; i++) {
+                if (speciesCompartmentNames[i] === target.name) currentState[i] *= previousVolume / nextVolume;
+              }
+            }
+            compartmentMap.set(target.name, nextVolume);
+            setSafeNumberField(model.parameters, target.name, nextVolume);
+            setSafeNumberField(model.parameters, `__compartment_${target.name}__`, nextVolume);
+            const compartment = model.compartments?.find((entry) => entry.name === target.name);
+            if (compartment) {
+              compartment.size = nextVolume;
+              compartment.resolvedVolume = nextVolume;
+            }
+            for (let i = 0; i < speciesCompartmentNames.length; i++) {
+              if (speciesCompartmentNames[i] === target.name) speciesVolumes[i] = nextVolume;
+            }
+            for (let i = 0; i < reactionAnchorCompartments.length; i++) {
+              if (reactionAnchorCompartments[i] === target.name) reactionReactingVolumes[i] = nextVolume;
+            }
+          }
+        },
+        onParameterChange: () => onEventParameterChange(),
+        evaluateRateOf: (symbol, currentState, time) => {
+          return eventRateOfEvaluator?.(symbol, currentState, time) ?? 0;
+        },
+        strict: strictFunctionalRates,
+      })
+      : undefined;
+    if (eventRuntime) {
+      eventDelayExpander = (expression, context, currentState) =>
+        eventRuntime.expandDelayExpression(expression, context, currentState);
+    }
+
+    const dynamicStoichiometricDelta = (
+      reaction: ConcreteReaction,
+      currentState: Float64Array,
+      evaluationTime: number,
+      suppliedContext?: Record<string, number>,
+    ): Map<number, number> | undefined => {
+      const entries = reaction.dynamicStoichiometries;
+      if (!entries || entries.length === 0) return undefined;
+      const delta = new Map<number, number>();
+      for (const index of reaction.reactants) delta.set(index, (delta.get(index) ?? 0) - 1);
+      for (let i = 0; i < reaction.products.length; i++) {
+        const index = reaction.products[i];
+        const stoich = reaction.productStoichiometries?.[i] ?? 1;
+        delta.set(index, (delta.get(index) ?? 0) + stoich);
+      }
+      const context = suppliedContext || buildEventContext(currentState, evaluationTime);
+      for (const entry of entries) {
+        let index = speciesMap.get(entry.bnglPattern);
+        if (index === undefined) {
+          for (const [speciesName, candidate] of speciesMap) {
+            if (isSpeciesMatch(speciesName, entry.bnglPattern)) {
+              index = candidate;
+              break;
+            }
+          }
+        }
+        if (index === undefined) continue;
+        const sign = entry.side === 'reactant' ? -1 : 1;
+        const expression = Object.prototype.hasOwnProperty.call(context, entry.variable)
+          ? entry.variable
+          : `${entry.variable}()`;
+        let value = Number(context[entry.variable]);
+        if (!Number.isFinite(value)) {
+          try {
+            value = evaluateFunctionalRate(expression, model.parameters, context, model.functions, context, undefined, strictFunctionalRates);
+          } catch (error) {
+            if (strictFunctionalRates) throw error;
+            value = entry.fixedStoichiometry;
+          }
+        }
+        if (!Number.isFinite(value)) value = entry.fixedStoichiometry;
+        delta.set(index, (delta.get(index) ?? 0) - sign * entry.fixedStoichiometry + sign * value);
+      }
+      return delta;
+    };
 
 
     const applyParameterUpdates = (targetPhaseIdx: number): boolean => {
@@ -1248,6 +2238,7 @@ export async function simulate(
       if (parametersUpdated) {
         compiledMassActionJit?.updateParameters?.(model.parameters);
         const context = model.parameters || {};
+        let massActionRatesChanged = false;
         for (let i = 0; i < concreteReactions.length; i++) {
           const rxn = concreteReactions[i];
           // Only re-evaluate if it's a mass-action rate (static string) that might be a parameter
@@ -1258,6 +2249,7 @@ export async function simulate(
               if (!isNaN(newK) && isFinite(newK) && Math.abs(newK - oldK) > 1e-15) {
 
                 rxn.rateConstant = newK;
+                massActionRatesChanged = true;
               }
             } catch (e: unknown) {
               if (strictFunctionalRates) throw e;
@@ -1266,11 +2258,19 @@ export async function simulate(
           }
         }
         clearAllEvaluatorCaches();
-        rebuildNativeByteCode?.();
         refreshRateContextParameters?.();
 
-        // Destroy persisted solver on parameter updates to force recreation with new rates/bytecode
-        if (persistedSolver) {
+        // A continued native CVODE solve can update the loaded mass-action
+        // network in place. Functional rate bytecode still needs the ordinary
+        // rebuild path below.
+        const nativeRatesUpdated = massActionRatesChanged
+          && concreteReactions.every((reaction) => !reaction.isFunctionalRate)
+          && persistedSolver?.updateRateConstants?.(Float64Array.from(concreteReactions, (reaction) => reaction.rateConstant)) === true;
+        if (!nativeRatesUpdated) rebuildNativeByteCode?.();
+
+        // Keep the native network alive only when its complete mass-action rate
+        // vector was updated successfully; every other edit requires rebuild.
+        if (persistedSolver && !nativeRatesUpdated) {
           try {
             persistedSolver.destroy?.();
           } catch (e) {
@@ -1459,18 +2459,6 @@ export async function simulate(
       // Neumaier-compensated accumulation of the total it can be far less frequent.
       const SSA_RECALC_INTERVAL = 1000;
 
-      // Linear cumulative-sum selection: smallest i with prefixSum(0..i) >= target.
-      const selectLinear = (target: number): number => {
-        const p = propensities;
-        const n = numReactions;
-        let sum = 0;
-        for (let i = 0; i < n; i++) {
-          sum += p[i];
-          if (target <= sum) return i;
-        }
-        return n - 1;
-      };
-
       // === OPT 1: ZERO-ALLOCATION TYPED ARRAY FIRING LOG ===
       const shouldRecordFirings = !!(options as typeof options & { recordFirings?: boolean }).recordFirings;
       const maxFiringEvents = ((options as typeof options & { maxFiringEvents?: number }).maxFiringEvents) ?? 100000;
@@ -1620,6 +2608,10 @@ export async function simulate(
         } else {
           const n = rxn.reactants.length;
           let eff = rxn.rateConstant * rxn.propensityFactor;
+          if (rxn.totalRate) {
+            kEff[i] = eff;
+            continue;
+          }
           const volume = reactionReactingVolumes[i];
           if (n === 0) {
             eff *= volume;
@@ -1632,6 +2624,34 @@ export async function simulate(
           }
           kEff[i] = eff;
         }
+      }
+
+      if (eventRuntime) {
+        onEventParameterChange = () => {
+          for (let i = 0; i < numReactions; i++) {
+            const rxn = concreteReactions[i];
+            if (rxn.isFunctionalRate || !rxn.rate) continue;
+            try {
+              const nextRate = evaluateFunctionalRate(rxn.rate, model.parameters, {}, model.functions, undefined, undefined, strictFunctionalRates);
+              if (Number.isFinite(nextRate)) rxn.rateConstant = nextRate;
+            } catch (error) {
+              if (strictFunctionalRates) throw error;
+            }
+            if (rxn.totalRate) {
+              kEff[i] = rxn.rateConstant * rxn.propensityFactor;
+              continue;
+            }
+            const n = rxn.reactants.length;
+            let effective = rxn.rateConstant * rxn.propensityFactor;
+            const volume = reactionReactingVolumes[i];
+            if (n === 0) effective *= volume;
+            else if (n === 2) effective /= volume;
+            else if (n === 3) effective /= volume * volume;
+            else if (n > 3) effective /= Math.pow(volume, n - 1);
+            kEff[i] = effective;
+          }
+        };
+        eventRuntime.initialize(0, state);
       }
 
       // Flatten reaction reactants for ultra-fast, zero-overhead mass-action calculations
@@ -1733,6 +2753,7 @@ export async function simulate(
               strictFunctionalRates
             );
             let a = rate * rxn.propensityFactor;
+            if (rxn.totalRate) return a;
             const volume = reactionReactingVolumes[rxnIdx];
             const n = rxnReactantCount[rxnIdx];
             if (n === 0) {
@@ -1768,6 +2789,7 @@ export async function simulate(
         }
 
         // Mass-action: use precomputed effective rate constant and flat reactant arrays
+        if (concreteReactions[rxnIdx].totalRate) return kEff[rxnIdx];
         const count = rxnReactantCount[rxnIdx];
         if (count === 1) {
           return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]];
@@ -1868,7 +2890,7 @@ export async function simulate(
         let nextOutIdx = 1;
         let nextTOut = (phaseTEnd * nextOutIdx) / phaseNSteps;
 
-        const compiledSSAPropensities = functionalRateCount === 0
+        const compiledSSAPropensities = !hasDynamicStoichiometries && functionalRateCount === 0 && !eventRuntime
           ? jitCompiler.compileSSAPropensities(concreteReactions, reactionReactingVolumes)
           : jitCompiler.compileSSAPropensitiesWithFunctionalRates(
             concreteReactions,
@@ -1882,7 +2904,7 @@ export async function simulate(
         // the network + folded rate constants are unchanged, recompiled correctly
         // when a parameter change alters a rate constant. useFenwick decides whether
         // the generated code also maintains the Fenwick tree.
-        const compiledSSAEventUpdater = functionalRateCount === 0
+        const compiledSSAEventUpdater = !hasDynamicStoichiometries && functionalRateCount === 0 && !eventRuntime
           ? jitCompiler.compileSSAEventUpdater(concreteReactions, reactionReactingVolumes, rxnUpdateRxn, useFenwick)
           : null;
 
@@ -1965,9 +2987,32 @@ export async function simulate(
             aTot = aTotal + aTotalC;
           }
 
+          const eventNow = globalTime + t;
+          const eventAtCurrentTime = eventRuntime?.process(eventNow, state);
+          collectEventDiagnostics(eventAtCurrentTime);
+          if (eventAtCurrentTime?.changed || eventAtCurrentTime?.parametersChanged) {
+            computeAllPropensities();
+            continue;
+          }
+          let nextEventTime = eventRuntime?.nextWakeTime(eventNow, globalTime + phaseTEnd, state);
+          if (nextEventTime !== undefined && nextEventTime <= eventNow + 1e-12) {
+            const eventAtWake = eventRuntime!.process(nextEventTime, state);
+            collectEventDiagnostics(eventAtWake);
+            t = Math.max(t, nextEventTime - globalTime);
+            if (eventAtWake.changed || eventAtWake.parametersChanged || eventAtWake.fired.length > 0) computeAllPropensities();
+            continue;
+          }
+
           if (!(aTot > 0)) {
             // If the total is exactly 0, we gracefully finish (stable state).
             // If it was NaN, the check above would have caught it.
+            if (nextEventTime !== undefined && nextEventTime > eventNow && nextEventTime <= globalTime + phaseTEnd + 1e-12) {
+              t = nextEventTime - globalTime;
+              const eventAtWake = eventRuntime?.process(nextEventTime, state);
+              collectEventDiagnostics(eventAtWake);
+              if (eventAtWake?.changed || eventAtWake?.parametersChanged || eventAtWake?.fired.length) computeAllPropensities();
+              continue;
+            }
             if (VERBOSE_SIM_DEBUG) {
               console.log(`[Worker] SSA Terminating early (total propensity = 0) at t=${globalTime + t}. Model reached stable state or reactants depleted.`);
             }
@@ -1977,6 +3022,14 @@ export async function simulate(
           // OPT 3: Inlined PRNG calls
           const r1 = nextRand();
           const tau = (1 / aTot) * Math.log(1 / r1);
+          nextEventTime = eventRuntime?.nextWakeTime(eventNow, globalTime + phaseTEnd, state);
+          if (nextEventTime !== undefined && nextEventTime < eventNow + tau - 1e-12) {
+            t = nextEventTime - globalTime;
+            const eventAtWake = eventRuntime!.process(nextEventTime, state);
+            collectEventDiagnostics(eventAtWake);
+            if (eventAtWake.changed || eventAtWake.parametersChanged || eventAtWake.fired.length > 0) computeAllPropensities();
+            continue;
+          }
           if (t + tau > phaseTEnd) {
             break;
           }
@@ -2062,7 +3115,28 @@ export async function simulate(
 
           // OPT 3/4/10: apply state change + dependent propensity update.
           let eventDelta: number;
-          if (compiledSSAEventUpdater) {
+          const dynamicDelta = dynamicStoichiometricDelta(concreteReactions[reactionIndex], state, t);
+          if (dynamicDelta) {
+            for (const [sp, d] of dynamicDelta) {
+              state[sp] += d;
+              if (maintainObs) {
+                const end = speciesObsOffsets[sp + 1];
+                for (let k = speciesObsOffsets[sp]; k < end; k++) {
+                  ssaObsValues[speciesObsIdx[k]] += speciesObsCoeff[k] * d;
+                }
+              }
+            }
+            eventDelta = 0;
+            const deps = rxnUpdateRxn[reactionIndex];
+            for (let d = 0; d < deps.length; d++) {
+              const jrxn = deps[d];
+              const aNew = calcPropensity(jrxn);
+              const delta = aNew - propensities[jrxn];
+              eventDelta += delta;
+              if (useFenwick) fenwickAdd(jrxn, delta);
+              propensities[jrxn] = aNew;
+            }
+          } else if (compiledSSAEventUpdater) {
             // Mass-action fast path: the JIT function applies the net state deltas,
             // recomputes dependent propensities from fresh state (and updates the
             // Fenwick tree when useFenwick), and returns the summed propensity delta.
@@ -2150,6 +3224,10 @@ export async function simulate(
             else aTotalC += (eventDelta - tSum) + aTotal;
             aTotal = tSum;
           }
+
+          const eventAfterReaction = eventRuntime?.process(globalTime + t, state);
+          collectEventDiagnostics(eventAfterReaction);
+          if (eventAfterReaction?.changed || eventAfterReaction?.parametersChanged) computeAllPropensities();
 
           // === DIN INFLUENCE TRACKING: Compare with new propensities AFTER state change ===
           // NOTE: propensities[depRxn] was already updated by the incremental loop above,
@@ -2253,9 +3331,11 @@ export async function simulate(
         headers,
         data: dataBySuffix[defaultSuffix] || [],
         dataBySuffix,
-        speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
-        speciesData: includeSpeciesData ? speciesDataBySuffix[defaultSuffix] || [] : undefined,
-        speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
+        ...(includeSpeciesData ? {
+          speciesHeaders,
+          speciesData: speciesDataBySuffix[defaultSuffix] || [],
+          speciesDataBySuffix,
+        } : {}),
         ...(includeExpandedNetwork ? {
           expandedReactions: cloneReactionsForResult(model.reactions),
           expandedSpecies: model.species,
@@ -2270,6 +3350,8 @@ export async function simulate(
             propensity: logPropensities[i],
           }))
           : undefined,
+        eventDiagnostics: eventRuntime ? Array.from(eventDiagnostics) : undefined,
+        eventFirings: eventRuntime ? eventRuntime.firedEvents : undefined,
       } satisfies SimulationResults;
     }
 
@@ -2285,8 +3367,7 @@ export async function simulate(
       throw err;
     }
 
-    let derivatives: (y: Float64Array, dydt: Float64Array) => void;
-    let refreshRateContextParameters: (() => void) | undefined = undefined;
+    let derivatives: (y: Float64Array, dydt: Float64Array, time?: number) => void;
 
 
 
@@ -2363,7 +3444,12 @@ export async function simulate(
           compiledRates = preCompileFunctionalRatesWithJIT(
             functionalRateExprs,
             allVarNames,
-            model.functions,
+            // Assignment-rule bodies are evaluated live by the context
+            // builder (including delay() history expansion). Do not inline
+            // their raw definitions into kinetic-rate compilation.
+            model.functions?.filter((fn) =>
+              !fn.name.startsWith('__assign_rule__') && !assignmentRuleDefinitions.has(fn.name)
+            ),
             true // enableJIT
           );
         } catch (e: unknown) {
@@ -2412,7 +3498,7 @@ export async function simulate(
           rateContext[ridxKeys[j]] = 0;
         }
 
-        return (yIn: Float64Array, dydt: Float64Array) => {
+        return (yIn: Float64Array, dydt: Float64Array, evaluationTime = 0) => {
           dydt.fill(0);
 
           // Refresh parameters (may change between phases via setParameter)
@@ -2424,10 +3510,21 @@ export async function simulate(
 
           // Update observable values in the mutable context (in-place)
           // S3-2: Use pre-filtered names and plain assignment — no per-iteration guard or regex
-          const obsValues = evaluateObservablesFast(yIn);
+          const obsValues = evaluateObservablesFast(yIn, evaluationTime);
           for (let i = 0; i < safeRateObservableNames.length; i++) {
             const name = safeRateObservableNames[i];
             setSafeNumberField(rateContext, name, obsValues[name]);
+          }
+          // Synthetic rate-rule species are the live SBML state for parameters
+          // such as S1_stoich. Functional reaction fluxes must see that state,
+          // not the parameter's t=0 seed value.
+          for (let k = 0; k < model.species.length; k++) {
+            const liveRateRuleName = rateRuleStateName(model.species[k].name);
+            if (!liveRateRuleName || !isSafeObjectKey(liveRateRuleName)) continue;
+            const amount = odeUsesAmountState ? yIn[k] : (yIn[k] * speciesVolumes[k]);
+            setSafeNumberField(rateContext, liveRateRuleName, amount);
+            setSafeNumberField(rateContext, `${liveRateRuleName}_amt`, amount);
+            setSafeNumberField(rateContext, `${liveRateRuleName}_conc`, amount / (speciesVolumes[k] || 1));
           }
           // Update species values in the mutable context (in-place) — only those referenced by functional rates
           for (let ri = 0; ri < referencedSpeciesIndices.length; ri++) {
@@ -2449,7 +3546,8 @@ export async function simulate(
 
               const compiled = rxnCompiledRate[i];
               try {
-                if (compiled) {
+                const hasRateOf = /\brateOf\s*\(/.test(rxn.rateExpression);
+                if (compiled && !hasRateOf) {
                   // Fast path: use pre-compiled function (JIT or AST-walk)
                   // No cache lookup, no Object.keys(), no preExpandExpression(), no feature flag check
                   rate = compiled.isJIT && compiled.jitFn
@@ -2457,8 +3555,11 @@ export async function simulate(
                     : compiled.astFn(rateContext);
                 } else {
                   // Fallback: pre-compilation failed for this reaction, use original path
+                  const expandedRateOf = hasRateOf
+                    ? rxn.rateExpression.replace(/\brateOf\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g, (_match, symbol: string) => String(eventRateOfEvaluator?.(symbol, yIn, evaluationTime) ?? 0))
+                    : rxn.rateExpression;
                   rate = evaluateFunctionalRate(
-                    rxn.rateExpression,
+                    expandedRateOf,
                     model.parameters,
                     obsValues,
                     model.functions,
@@ -2482,7 +3583,7 @@ export async function simulate(
                     `[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed: ${e instanceof Error ? e.message : String(e)}`
                   );
                 }
-                console.error(`[Worker] Functional rate evaluation for '${rxn.rateExpression}' failed:`, e instanceof Error ? e.message : String(e));
+                console.error("[Worker] Functional rate evaluation for '%s' failed:", rxn.rateExpression, e instanceof Error ? e.message : String(e));
                 rate = 0;
               }
             } else {
@@ -2496,39 +3597,56 @@ export async function simulate(
             // Rate in nM/s * Vol_Reacting = Amount_Rate in counts/s or moles/s
             // Include degeneracy (symmetry factor)
             const vAnchor = reactionReactingVolumes[i] || 1.0;
-            const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1) * vAnchor;
+            const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1)
+              * (rxn.totalRate ? 1 : vAnchor);
             let multiplicative = 1;
             // TotalRate is honored upstream: NetworkGenerator skips statFactor/multiplicity
             // baking for TotalRate rules (sf=1), and NetworkExpansion omits statFactor from
             // the functional-rate fold. The flux below uses the rate as-is from those sources,
             // so no TotalRate adjustment is needed here.
-            for (let j = 0; j < rxn.reactants.length; j++) {
-              const ridx = rxn.reactants[j];
-              const nativeVal = yIn[ridx];
-              const anchorRelVal = odeUsesAmountState
-                ? (nativeVal / vAnchor)
-                : (nativeVal * (speciesVolumes[ridx] / vAnchor));
-              multiplicative *= anchorRelVal;
+            if (!rxn.totalRate) {
+              for (let j = 0; j < rxn.reactants.length; j++) {
+                const ridx = rxn.reactants[j];
+                const nativeVal = yIn[ridx];
+                const anchorRelVal = odeUsesAmountState
+                  ? (nativeVal / vAnchor)
+                  : (nativeVal * (speciesVolumes[ridx] / vAnchor));
+                multiplicative *= anchorRelVal;
+              }
             }
             const velocity = velocityBase * multiplicative;
+
+            const dynamicDelta = dynamicStoichiometricDelta(rxn, yIn, evaluationTime);
+            if (dynamicDelta) {
+              for (const [idx, stoich] of dynamicDelta) {
+                if (model.species[idx].isConstant) continue;
+                const conversionFactor = rxn.conversionFactorBySpecies?.get(idx) ?? 1;
+                dydt[idx] += odeUsesAmountState
+                  ? velocity * stoich * conversionFactor
+                  : (velocity * stoich * conversionFactor / speciesVolumes[idx]);
+              }
+              continue;
+            }
 
 
             for (let j = 0; j < rxn.reactants.length; j++) {
               const reactantIdx = rxn.reactants[j];
               const isActuallyConstant = model.species[reactantIdx].isConstant;
               if (!isActuallyConstant) {
+                const conversionFactor = rxn.conversionFactorBySpecies?.get(reactantIdx) ?? 1;
                 dydt[reactantIdx] -= odeUsesAmountState
-                  ? velocity
-                  : (velocity / speciesVolumes[reactantIdx]);
+                  ? velocity * conversionFactor
+                  : (velocity * conversionFactor / speciesVolumes[reactantIdx]);
               }
             }
             for (let j = 0; j < rxn.products.length; j++) {
-              const productIdx = rxn.products[j];
+                const productIdx = rxn.products[j];
               if (!model.species[productIdx].isConstant) {
                 const stoich = rxn.productStoichiometries ? rxn.productStoichiometries[j] : 1;
+                const conversionFactor = rxn.conversionFactorBySpecies?.get(productIdx) ?? 1;
                 const contrib = odeUsesAmountState
-                  ? (velocity * stoich)
-                  : ((velocity * stoich) / speciesVolumes[productIdx]);
+                  ? (velocity * stoich * conversionFactor)
+                  : ((velocity * stoich * conversionFactor) / speciesVolumes[productIdx]);
                 dydt[productIdx] += contrib;
               }
             }
@@ -2536,7 +3654,13 @@ export async function simulate(
         };
       }
 
-      const allowJit = functionalRateCount === 0;
+      // The optimized JIT and sparse paths encode ordinary mass-action
+      // reactant multiplication. TotalRate rules deliberately omit that
+      // multiplication, so route them through the semantics-preserving loop.
+      const allowJit = functionalRateCount === 0
+        && !hasTotalRateReactions
+        && !hasSpeciesConversionFactors
+        && !hasAlgebraicRules;
 
       if (allowJit) {
         try {
@@ -2559,7 +3683,10 @@ export async function simulate(
       // --- Sparse CSR acceleration for large models ---
       const constantSpeciesMaskForCSR = model.species.map((s) => !!s.isConstant);
       const csrMatrix = buildCSRStoichiometry(concreteReactions, numSpecies, constantSpeciesMaskForCSR);
-      const useSparse = shouldUseSparse(numSpecies, concreteReactions.length, csrMatrix.nnz);
+      const useSparse = !hasTotalRateReactions
+        && !hasSpeciesConversionFactors
+        && !hasAlgebraicRules
+        && shouldUseSparse(numSpecies, concreteReactions.length, csrMatrix.nnz);
 
       if (useSparse) {
         // Pre-allocate velocity buffer once (reused every derivative call)
@@ -2606,7 +3733,7 @@ export async function simulate(
           console.log(`[Worker] Sparse CSR derivative active: ${numSpecies} species, ${sparseNRxns} reactions, ${csrMatrix.nnz} nnz (sparsity ${((1 - csrMatrix.nnz / (numSpecies * sparseNRxns)) * 100).toFixed(1)}%)`);
         }
 
-        return (yIn: Float64Array, dydt: Float64Array) => {
+        return (yIn: Float64Array, dydt: Float64Array, evaluationTime = 0) => {
           if (VERBOSE_SIM_DEBUG && !(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
             console.log('[Worker] DERIVATIVE FUNCTION CALLED (Sparse CSR Fallback)');
             (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
@@ -2630,7 +3757,8 @@ export async function simulate(
               }
             }
 
-            velocity *= multiplicative * sparseRxnPropDeg[i] * vAnchor;
+            velocity *= multiplicative * sparseRxnPropDeg[i]
+              * (concreteReactions[i].totalRate ? 1 : vAnchor);
             velocityBuffer[i] = velocity;
           }
 
@@ -2659,11 +3787,12 @@ export async function simulate(
       const rxnRateConstants = new Float64Array(nRxns);
       const rxnPropensityFactors = new Float64Array(nRxns);   // propensityFactor * degeneracy
       const rxnVAnchors = new Float64Array(nRxns);
+      const denseTotalRate = new Uint8Array(nRxns);
 
       // Flatten reactant indices into a single contiguous Int32Array with offsets
       let totalReactants = 0;
       let totalProducts = 0;
-      for (let i = 0; i < nRxns; i++) {
+          for (let i = 0; i < nRxns; i++) {
         totalReactants += concreteReactions[i].reactants.length;
         totalProducts += concreteReactions[i].products.length;
       }
@@ -2698,6 +3827,7 @@ export async function simulate(
         rxnRateConstants[i] = rxn.rateConstant;
         rxnPropensityFactors[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
         rxnVAnchors[i] = vAnchor;
+        denseTotalRate[i] = rxn.totalRate ? 1 : 0;
 
         flatReactantOffsets[i] = rOff;
         for (let j = 0; j < rxn.reactants.length; j++) {
@@ -2723,10 +3853,18 @@ export async function simulate(
         console.log(`[Worker] Zero-copy dense derivative active: ${numSpecies} species, ${nRxns} reactions (pre-allocated ${(totalReactants + totalProducts) * 4 + nRxns * 24} bytes)`);
       }
 
-      return (yIn: Float64Array, dydt: Float64Array) => {
+      return (yIn: Float64Array, dydt: Float64Array, evaluationTime = 0) => {
         if (VERBOSE_SIM_DEBUG && !(globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall) {
           console.log('[Worker] DERIVATIVE FUNCTION CALLED (Zero-Copy Dense Fallback)');
           (globalThis as { _hasLoggedDerivCall?: boolean })._hasLoggedDerivCall = true;
+        }
+
+        if (hasAlgebraicRules) {
+          // Algebraic constraints may update a parameter used by a mass-action
+          // rule. The dense arrays are otherwise immutable, so refresh them
+          // after projecting the current state onto the constraint manifold.
+          evaluateObservablesFast(yIn, evaluationTime);
+          for (let i = 0; i < nRxns; i++) rxnRateConstants[i] = concreteReactions[i].rateConstant;
         }
 
         // Step 1: Compute reaction velocities into pre-allocated buffer
@@ -2737,24 +3875,40 @@ export async function simulate(
           const rStart = flatReactantOffsets[i];
           const rEnd = flatReactantOffsets[i + 1];
 
-          if (odeUsesAmountState) {
-            for (let j = rStart; j < rEnd; j++) {
-              multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
-            }
-          } else {
-            for (let j = rStart; j < rEnd; j++) {
-              multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
+          if (!denseTotalRate[i]) {
+            if (odeUsesAmountState) {
+              for (let j = rStart; j < rEnd; j++) {
+                multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
+              }
+            } else {
+              for (let j = rStart; j < rEnd; j++) {
+                multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
+              }
             }
           }
 
-          velocity *= multiplicative * rxnPropensityFactors[i] * vAnchor;
-          denseVelocityBuffer[i] = velocity;
-        }
+            velocity *= multiplicative * rxnPropensityFactors[i]
+              * (denseTotalRate[i] ? 1 : vAnchor);
+            denseVelocityBuffer[i] = velocity;
+          }
 
         // Step 2: Distribute flux using flattened arrays
         dydt.fill(0);
+        const dynamicContext = hasDynamicStoichiometries
+          ? buildEventContext(yIn, evaluationTime)
+          : undefined;
         for (let i = 0; i < nRxns; i++) {
           const velocity = denseVelocityBuffer[i];
+          const dynamicDelta = dynamicStoichiometricDelta(concreteReactions[i], yIn, evaluationTime, dynamicContext);
+          if (dynamicDelta) {
+            for (const [idx, stoich] of dynamicDelta) {
+              if (isConstant[idx]) continue;
+              const conversionFactor = concreteReactions[i].conversionFactorBySpecies?.get(idx) ?? 1;
+              dydt[idx] += velocity * stoich * conversionFactor
+                * (odeUsesAmountState ? 1 : denseInvSpeciesVolumes![idx]);
+            }
+            continue;
+          }
           const rStart = flatReactantOffsets[i];
           const rEnd = flatReactantOffsets[i + 1];
 
@@ -2763,14 +3917,14 @@ export async function simulate(
             for (let j = rStart; j < rEnd; j++) {
               const idx = flatReactantIdx[j];
               if (!isConstant[idx]) {
-                dydt[idx] -= velocity;
+                dydt[idx] -= velocity * (concreteReactions[i].conversionFactorBySpecies?.get(idx) ?? 1);
               }
             }
           } else {
             for (let j = rStart; j < rEnd; j++) {
               const idx = flatReactantIdx[j];
               if (!isConstant[idx]) {
-                dydt[idx] -= velocity * denseInvSpeciesVolumes![idx];
+                dydt[idx] -= velocity * (concreteReactions[i].conversionFactorBySpecies?.get(idx) ?? 1) * denseInvSpeciesVolumes![idx];
               }
             }
           }
@@ -2783,14 +3937,14 @@ export async function simulate(
             for (let j = pStart; j < pEnd; j++) {
               const idx = flatProductIdx[j];
               if (!isConstant[idx]) {
-                dydt[idx] += velocity * flatProductStoich[j];
+                dydt[idx] += velocity * flatProductStoich[j] * (concreteReactions[i].conversionFactorBySpecies?.get(idx) ?? 1);
               }
             }
           } else {
             for (let j = pStart; j < pEnd; j++) {
               const idx = flatProductIdx[j];
               if (!isConstant[idx]) {
-                dydt[idx] += velocity * flatProductStoich[j] * denseInvSpeciesVolumes![idx];
+                dydt[idx] += velocity * flatProductStoich[j] * (concreteReactions[i].conversionFactorBySpecies?.get(idx) ?? 1) * denseInvSpeciesVolumes![idx];
               }
             }
           }
@@ -2798,7 +3952,159 @@ export async function simulate(
       };
     };
 
-    derivatives = buildDerivativesFunction();
+    const baseDerivatives = buildDerivativesFunction();
+    derivatives = (currentState, derivative, evaluationTime = 0) => {
+      refreshDynamicVolumes(currentState);
+      baseDerivatives(currentState, derivative, evaluationTime);
+      if (rateRuleDefinitions.size === 0) return;
+
+      const context = buildEventContext(currentState, evaluationTime);
+      const values = new Map<string, number>();
+      for (const [target, fn] of rateRuleDefinitions) {
+        try {
+          const value = evaluateFunctionalRate(
+            normalizeRateRuleExpression(fn.expression),
+            model.parameters,
+            context,
+            model.functions,
+            context,
+            undefined,
+            strictFunctionalRates,
+          );
+          if (Number.isFinite(value)) values.set(target, value);
+        } catch (error) {
+          if (strictFunctionalRates) throw error;
+        }
+      }
+      for (const [target, index] of rateRuleTargetIndices) {
+        const value = values.get(target);
+        if (value === undefined) continue;
+        if (rateRuleTargetIsSynthetic.get(target)) {
+          derivative[index] += value;
+          continue;
+        }
+        if (odeUsesAmountState && rateRuleTargetIsConcentration.get(target)) {
+          const volume = speciesVolumes[index] || 1;
+          const concentration = currentState[index] / volume;
+          const compartment = speciesCompartmentNames[index];
+          const compartmentRate = compartment ? values.get(compartment) : undefined;
+          derivative[index] += value * volume + concentration * (compartmentRate ?? 0);
+        } else {
+          derivative[index] += value;
+        }
+      }
+    };
+
+    eventReactionFluxEvaluator = (currentState, _time, context) => {
+      for (const rxn of concreteReactions) {
+        if (!rxn.ruleName || !isSafeObjectKey(rxn.ruleName)) continue;
+        let rate = rxn.rateConstant;
+        if (rxn.isFunctionalRate && rxn.rateExpression) {
+          const rateContext: Record<string, number> = { ...context };
+          for (let j = 0; j < rxn.reactants.length; j++) {
+            const index = rxn.reactants[j];
+            const amount = odeUsesAmountState ? currentState[index] : currentState[index] * speciesVolumes[index];
+            setSafeNumberField(rateContext, `ridx${j}`, amount);
+          }
+          const expandedRateOf = rxn.rateExpression.replace(/\brateOf\s*\(\s*([A-Za-z_][A-Za-z0-9_]*)\s*\)/g, (_match, symbol: string) => String(eventRateOfEvaluator?.(symbol, currentState, _time) ?? 0));
+          rate = evaluateFunctionalRate(
+            expandedRateOf,
+            model.parameters,
+            context,
+            model.functions,
+            rateContext,
+            undefined,
+            strictFunctionalRates,
+          );
+        }
+        const vAnchor = reactionReactingVolumes[concreteReactions.indexOf(rxn)] || 1;
+        let multiplicative = 1;
+        if (!rxn.totalRate) {
+          for (const index of rxn.reactants) {
+            const relativeAmount = odeUsesAmountState
+              ? currentState[index] / vAnchor
+              : (currentState[index] * speciesVolumes[index]) / vAnchor;
+            multiplicative *= relativeAmount;
+          }
+        }
+        const velocity = rate * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1)
+          * (rxn.totalRate ? 1 : vAnchor) * multiplicative;
+        setSafeNumberField(context, rxn.ruleName, velocity);
+        setSafeNumberField(context, `netflux_${rxn.ruleName}`, velocity);
+      }
+    };
+
+    if (eventRuntime) {
+    eventRateOfEvaluator = (symbol, currentState, evaluationTime = 0) => {
+        const raw = symbol.endsWith('_amt') || symbol.endsWith('_conc')
+          ? symbol.replace(/_(?:amt|conc)$/, '')
+          : symbol;
+        let speciesIndex = speciesMap.get(symbol);
+        if (speciesIndex === undefined) speciesIndex = speciesMap.get(raw);
+        if (speciesIndex === undefined) {
+          for (const [speciesName, index] of speciesMap) {
+            if (eventIdentifier(speciesName) === raw
+              || eventIdentifier(speciesName) === symbol
+              || rateRuleStateName(speciesName) === raw
+              || rateRuleStateName(speciesName) === symbol) {
+              speciesIndex = index;
+              break;
+            }
+          }
+        }
+        if (speciesIndex === undefined) {
+          for (const observable of concreteObservables) {
+            if (eventIdentifier(observable.name) === raw || eventIdentifier(observable.name) === symbol) {
+              speciesIndex = observable.indices[0];
+              break;
+            }
+          }
+        }
+        const directTarget = [...rateRuleDefinitions.keys()].find((target) => target === raw || target === symbol);
+        if (directTarget) {
+          const definition = rateRuleDefinitions.get(directTarget);
+          const targetIndex = rateRuleTargetIndices.get(directTarget);
+          if (definition && targetIndex !== undefined) {
+            suppressEventReactionFlux = true;
+            try {
+              suppressAssignmentRuleValues = true;
+              const context = buildEventContext(currentState, evaluationTime);
+              const value = evaluateFunctionalRate(
+                normalizeRateRuleExpression(definition.expression),
+                model.parameters,
+                context,
+                model.functions,
+                context,
+                undefined,
+                strictFunctionalRates,
+              );
+              if (rateRuleTargetIsSynthetic.get(directTarget)) return value;
+              const volume = speciesVolumes[targetIndex] || 1;
+              if (odeUsesAmountState && rateRuleTargetIsConcentration.get(directTarget)) {
+                const concentration = currentState[targetIndex] / volume;
+                const compartment = speciesCompartmentNames[targetIndex];
+                const compartmentDefinition = compartment ? rateRuleDefinitions.get(compartment) : undefined;
+                const compartmentRate = compartmentDefinition
+                  ? evaluateFunctionalRate(compartmentDefinition.expression, model.parameters, context, model.functions, context, undefined, strictFunctionalRates)
+                  : 0;
+                return value * volume + concentration * compartmentRate;
+              }
+              return value;
+            } finally {
+              suppressAssignmentRuleValues = false;
+              suppressEventReactionFlux = false;
+            }
+          }
+        }
+        if (speciesIndex === undefined) {
+          return 0;
+        }
+        const derivative = new Float64Array(numSpecies);
+        derivatives(currentState, derivative);
+        const value = odeUsesAmountState ? derivative[speciesIndex] : derivative[speciesIndex] * speciesVolumes[speciesIndex];
+        return value;
+      };
+    }
 
     // Expose the exact RHS the simulator integrates (test/introspection hook).
     if (options.captureOdeSystem) {
@@ -2838,7 +4144,7 @@ export async function simulate(
     // Use adaptive auto-tuning only when caller explicitly requests solver='auto'.
     const requestedSolverType: string = options.solver ?? 'cvode';
     let solverType: string = requestedSolverType;
-    const allMassAction = functionalRateCount === 0;
+    const allMassAction = functionalRateCount === 0 && !hasSpeciesConversionFactors;
 
     // Stiffness Analysis
     const methodRates = concreteReactions.map(r => r.rateConstant);
@@ -2979,6 +4285,12 @@ export async function simulate(
       minStep: options.minStep ?? 1e-15,
       maxStep: options.maxStep ?? 0,  // 0 = no limit (matches BNG2)
       solver: solverType,
+      // SBML parameters with rate rules are represented as synthetic state
+      // species and may legitimately cross zero. Keep those coordinates signed;
+      // ordinary concentration states retain CVODE's non-negative guard.
+      signedStateIndices: model.species
+        .map((species, index) => species.name.includes('___rate_rule_state__') ? index : -1)
+        .filter((index) => index >= 0),
       // Keep BNG2 defaults for explicit solver modes.
       // Apply adaptive tuning only in solver='auto' mode unless caller overrides explicitly.
       stabLimDet: options.stabLimDet !== undefined
@@ -3040,7 +4352,7 @@ export async function simulate(
       if (rootExprs.length > 0) {
         solverOptions.numRoots = rootExprs.length;
         solverOptions.rootFunction = (t: number, yCurrent: Float64Array, gout: Float64Array) => {
-          const obsValues = evaluateObservablesFast(yCurrent);
+          const obsValues = evaluateObservablesFast(yCurrent, t);
           const context = { ...model.parameters, ...obsValues, t };
           for (let i = 0; i < rootExprs.length; i++) {
             try {
@@ -3051,6 +4363,17 @@ export async function simulate(
             }
           }
         };
+      }
+    }
+
+    if (eventRuntime && eventRuntime.rootCount > 0) {
+      solverOptions.numRoots = eventRuntime.rootCount;
+      solverOptions.rootFunction = eventRuntime.rootFunction;
+      // General event roots need a continuous root-capable integrator. Keep explicit
+      // non-CVODE requests deterministic by upgrading only event-bearing runs.
+      if (!solverType.startsWith('cvode')) {
+        solverType = 'cvode';
+        solverOptions.solver = 'cvode';
       }
     }
 
@@ -3185,7 +4508,11 @@ export async function simulate(
       }
     }
 
-    if (jacobianColMajor) {
+    // The direct SBML rate-rule derivative path contributes terms that are not
+    // represented by the reaction Jacobian below.  Keep CVODE on its finite
+    // difference/Javascript RHS path for those models so rate-rule states are
+    // integrated by the same RHS that captureOdeSystem exposes.
+    if (jacobianColMajor && rateRuleDefinitions.size === 0) {
       if (solverType === 'cvode' || solverType === 'cvode_jac') {
         solverOptions.solver = 'cvode_jac';
         solverOptions.jacobian = jacobianColMajor;
@@ -3205,7 +4532,11 @@ export async function simulate(
       const canUseNativeBytecode =
         enableNativeBytecode &&
         (requestedSolverType.startsWith('cvode') || requestedSolverType === 'auto') &&
-        !hasLocalFunctions;
+        !hasLocalFunctions &&
+        !eventRuntime &&
+        rateRuleDefinitions.size === 0 &&
+        !hasTotalRateReactions &&
+        !hasSpeciesConversionFactors;
 
       if (!canUseNativeBytecode) {
         return;
@@ -3313,7 +4644,7 @@ export async function simulate(
             const conc = gpuResult.concentrations[i];
             const time = i < outputTimes.length ? outputTimes[i] : gpuResult.times[i];
             const y64 = new Float64Array(conc);
-            const obsValues = evaluateObservablesFast(y64);
+            const obsValues = evaluateObservablesFast(y64, time);
             const wgpuSuffix = phases[0]?.suffix;
             appendDataRow(wgpuSuffix, { time, ...obsValues });
             if (includeSpeciesData) {
@@ -3327,9 +4658,11 @@ export async function simulate(
             headers,
             data: dataBySuffix[defaultWgpuSuffix] || [],
             dataBySuffix,
-            speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
-            speciesData: includeSpeciesData ? speciesDataBySuffix[defaultWgpuSuffix] || [] : undefined,
-            speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
+            ...(includeSpeciesData ? {
+              speciesHeaders,
+              speciesData: speciesDataBySuffix[defaultWgpuSuffix] || [],
+              speciesDataBySuffix,
+            } : {}),
             ...(includeExpandedNetwork ? {
               expandedReactions: cloneReactionsForResult(model.reactions),
               expandedSpecies: model.species,
@@ -3350,6 +4683,77 @@ export async function simulate(
     // ODE Loop
     const odeStart = VERBOSE_SIM_DEBUG ? performance.now() : 0;
     const y = new Float64Array(state);
+    if (eventRuntime) {
+      onEventParameterChange = () => {
+        compiledMassActionJit?.updateParameters?.(model.parameters);
+        for (let i = 0; i < concreteReactions.length; i++) {
+          const rxn = concreteReactions[i];
+          if (rxn.isFunctionalRate || !rxn.rate) continue;
+          try {
+            const nextRate = evaluateFunctionalRate(rxn.rate, model.parameters, {}, model.functions, undefined, undefined, strictFunctionalRates);
+            if (Number.isFinite(nextRate)) rxn.rateConstant = nextRate;
+          } catch (error) {
+            if (strictFunctionalRates) throw error;
+          }
+        }
+        clearAllEvaluatorCaches();
+        rebuildNativeByteCode?.();
+        refreshRateContextParameters?.();
+        if (persistedSolver) {
+          persistedSolver.destroy?.();
+          persistedSolver = undefined;
+        }
+      };
+      eventRuntime.initialize(0, y);
+      const initialEventResult = eventRuntime.process(0, y);
+      collectEventDiagnostics(initialEventResult);
+
+      // CVODE does not accept a zero-dimensional state vector. SBML event models can
+      // nevertheless be parameter-only systems, so execute their event queue directly
+      // on the requested output grid instead of pretending the solver ran.
+      if (numSpecies === 0) {
+        let globalTime = 0;
+        for (let phaseIdx = 0; phaseIdx < phases.length; phaseIdx++) {
+          const phase = phases[phaseIdx];
+          const recordThisPhase = phaseIdx >= recordFromPhaseIdx;
+          const phaseEnd = phase.t_end ?? options.t_end;
+          const phaseSteps = phase.n_steps ?? options.n_steps;
+          if (recordThisPhase) pushDataRow(phase.suffix, globalTime, y);
+          for (let i = 1; i <= phaseSteps; i++) {
+            callbacks.checkCancelled();
+            const target = globalTime + (phaseEnd * i) / phaseSteps;
+            let cursor = globalTime;
+            while (true) {
+              const wake = eventRuntime.nextWakeTime(cursor, target, y);
+              if (wake === undefined || wake > target + 1e-12) break;
+              const eventResult = eventRuntime.process(wake, y);
+              collectEventDiagnostics(eventResult);
+              if (wake <= cursor + 1e-12) break;
+              cursor = wake;
+            }
+            const eventResult = eventRuntime.process(target, y);
+            collectEventDiagnostics(eventResult);
+            if (recordThisPhase) pushDataRow(phase.suffix, target, y);
+          }
+          globalTime += phaseEnd;
+        }
+        const defaultEventSuffix = dataBySuffix.__default__ ? '__default__' : (Object.keys(dataBySuffix)[0] || '__default__');
+        return {
+          headers,
+          data: dataBySuffix[defaultEventSuffix] || [],
+          dataBySuffix,
+          speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
+          speciesData: includeSpeciesData ? speciesDataBySuffix[defaultEventSuffix] || [] : undefined,
+          speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
+          ...(includeExpandedNetwork ? {
+            expandedReactions: cloneReactionsForResult(model.reactions),
+            expandedSpecies: model.species,
+          } : {}),
+          eventDiagnostics: Array.from(eventDiagnostics),
+          eventFirings: eventRuntime.firedEvents,
+        } satisfies SimulationResults;
+      }
+    }
     const conservationLawReductionEnabled = getFeatureFlags().conservationLawReduction;
     const conservationTemplate = conservationLawReductionEnabled
       ? findConservationLaws(concreteReactions.map(r => ({ reactants: Array.from(r.reactants), products: Array.from(r.products), rate: typeof r.rate === 'number' ? r.rate : 0, degeneracy: r.degeneracy, statFactor: r.statFactor })), numSpecies, y, speciesHeaders)
@@ -3577,7 +4981,20 @@ export async function simulate(
       const phaseAtol = phase.atol ?? userAtol;
       const phaseRtol = phase.rtol ?? userRtol;
 
-      const phaseSolverOptions = { ...solverOptions, atol: phaseAtol, rtol: phaseRtol, solver: solverType };
+      // Event root times can shift materially when a user requests loose
+      // trajectory tolerances (the SBML Test Suite deliberately includes
+      // threshold crossings close to output boundaries). Keep the requested
+      // tolerances for ordinary models, but tighten CVODE's local error
+      // control whenever the general event runtime is active so root
+      // localization does not change the event schedule.
+      const eventPhaseAtol = eventRuntime && solverType.startsWith('cvode')
+        ? Math.min(phaseAtol, 1e-10)
+        : phaseAtol;
+      const eventPhaseRtol = eventRuntime && solverType.startsWith('cvode')
+        ? Math.min(phaseRtol, 1e-10)
+        : phaseRtol;
+
+      const phaseSolverOptions = { ...solverOptions, atol: eventPhaseAtol, rtol: eventPhaseRtol, solver: solverType };
 
       let currentSolverType = solverType;
       // Upgrade logic: prefer analytical dense over sparse-finite-differences for small networks
@@ -3596,6 +5013,7 @@ export async function simulate(
       let phaseDerivatives = derivatives;
       let phaseState: Float64Array<ArrayBufferLike> = y;
       let phaseExpandState: ((y_r: Float64Array) => Float64Array) | undefined;
+      let phaseReduceState: ((yFull: Float64Array) => Float64Array) | undefined;
       let phaseReductionKey = 'full';
 
       if (conservationTemplate && currentSolverType !== 'sparse' && currentSolverType !== 'sparse_implicit') {
@@ -3604,6 +5022,7 @@ export async function simulate(
           const reducedSystem = createReducedSystem(conservation, numSpecies);
           phaseDerivatives = reducedSystem.transformDerivatives(derivatives);
           phaseState = reducedSystem.reduce(y);
+          phaseReduceState = reducedSystem.reduce;
           phaseExpandState = reducedSystem.expand;
           phaseReductionKey = `reduced:${conservation.dependentSpecies.join(',')}`;
 
@@ -3635,12 +5054,29 @@ export async function simulate(
 
       phaseSolverOptions.solver = currentSolverType;
       // Key used to detect whether a persisted solver is compatible with this phase.
-      const thisSolverKey = `${phaseAtol}:${phaseRtol}:${currentSolverType}:${phaseReductionKey}`;
+      const thisSolverKey = `${eventPhaseAtol}:${eventPhaseRtol}:${currentSolverType}:${phaseReductionKey}`;
 
       // Reuse the persisted CVODE instance for continue=>1 phases when solver config matches.
       // This preserves CVODE's internal BDF history (step sizes, order) across phase boundaries,
       // matching BNG2's continuous-integration behavior.
       const canReuseCvode = isContinue && persistedSolver !== undefined && thisSolverKey === persistedSolverKey;
+
+      // CVODE can hang while initializing a root function whose initial value
+      // is exactly zero. SBML permits that state (for example S4 == S3 at
+      // t=0). Advance a tiny root-free warm-up interval first, process the
+      // event state there, then recreate the solver with roots enabled. This
+      // preserves continuous root detection after initialization without
+      // allowing an initial zero to trap the integrator.
+      const deferInitialEventRoots = eventRuntime?.hasInitialZeroRoot === true
+        && phaseIdx === 0
+        && Math.abs(phaseStart) <= 1e-12
+        && (phaseSolverOptions.numRoots ?? 0) > 0;
+      const deferredRootFunction = deferInitialEventRoots ? phaseSolverOptions.rootFunction : undefined;
+      const deferredNumRoots = deferInitialEventRoots ? phaseSolverOptions.numRoots : undefined;
+      if (deferInitialEventRoots) {
+        delete phaseSolverOptions.rootFunction;
+        delete phaseSolverOptions.numRoots;
+      }
 
       let solver;
       if (canReuseCvode) {
@@ -3663,14 +5099,44 @@ export async function simulate(
       // reused across continue phases, t0 === solver.currentT and ensureInitialized() reuses
       // the solver without CVodeReInit, preserving full BDF history.
       let t = phaseStart;
+      if (deferInitialEventRoots && phaseDuration > 0) {
+        const warmupDuration = Math.min(1e-7, phaseDuration);
+        const warmupEnd = phaseStart + warmupDuration;
+        const warmupWake = eventRuntime?.nextWakeTime(phaseStart, warmupEnd, y);
+        const warmup = solver.integrate(phaseState, phaseStart, warmupEnd, callbacks.checkCancelled);
+        if (!warmup.success) {
+          throw new Error(`Initial SBML event warm-up failed at t=${warmup.t}: ${warmup.errorMessage || 'unknown solver error'}`);
+        }
+        if (phaseExpandState) {
+          y.set(phaseExpandState(warmup.y));
+          phaseState = phaseReduceState!(y);
+        } else {
+          y.set(warmup.y);
+          phaseState = y;
+        }
+        t = warmup.t;
+        // Do not reinterpret a numerically tiny post-zero state as a genuine
+        // state-trigger transition. Only process the warm-up immediately when
+        // it was needed to deliver an already-scheduled delayed event.
+        if (warmupWake !== undefined && warmupWake <= warmupEnd + 1e-12) {
+          const warmupEvent = eventRuntime?.process(t, y);
+          collectEventDiagnostics(warmupEvent);
+        }
+        solver.destroy?.();
+        if (deferredRootFunction && deferredNumRoots) {
+          phaseSolverOptions.rootFunction = deferredRootFunction;
+          phaseSolverOptions.numRoots = deferredNumRoots;
+        }
+        solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
+      }
       const steadyStateEnabled = (phase.steady_state ?? !!options.steadyState) === true;
       const steadyStateAtol = phase.atol ?? userAtol; // Use model's atol for steady-state detection
       const steadyStateDerivs = steadyStateEnabled ? new Float64Array(numSpecies) : null;
 
       if (shouldEmitPhaseStart) {
         const outT0 = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, 0);
-        const obsValues = evaluateObservablesFast(y);
-        appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
+        const obsValues = evaluateObservablesFast(y, outT0);
+        appendDataRow(phase.suffix, { time: outT0, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues, outT0) });
         if (includeSpeciesData) {
           const s0: Record<string, number> = { time: outT0 };
           for (let i = 0; i < numSpecies; i++) setSafeNumberField(s0, speciesHeaders[i], stateValueToSpeciesOutput(y[i], i));
@@ -3694,56 +5160,114 @@ export async function simulate(
         for (let i = 1; i <= phase_n_steps; i++) {
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
+          let stepFailed = false;
+          while (t < tTarget - 1e-12 * Math.max(1, Math.abs(tTarget))) {
+            const nextEventTime = eventRuntime?.nextWakeTime(t, tTarget, y);
+            const segmentTarget = nextEventTime !== undefined
+              ? Math.min(tTarget, Math.max(t, nextEventTime))
+              : tTarget;
 
-          // Dense output: snapshot state before integration step
-          const denseT0 = denseOutputBuffer && !phaseExpandState ? t : 0;
-          const denseY0 = denseOutputBuffer && !phaseExpandState ? new Float64Array(solverState) : undefined;
+            if (segmentTarget <= t + 1e-14 * Math.max(1, Math.abs(t))) {
+              const eventResult = eventRuntime?.process(t, y);
+              collectEventDiagnostics(eventResult);
+              if (eventResult?.parametersChanged) {
+                phaseSolverOptions.networkByteCode = solverOptions.networkByteCode;
+              }
+              if (eventResult?.stateChanged) {
+                if (phaseExpandState) {
+                  phaseState = phaseReduceState!(y);
+                  solverState = phaseState;
+                } else {
+                  solverState = y;
+                }
+                solver.destroy?.();
+                solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
+                denseF0 = undefined;
+                continue;
+              }
+              break;
+            }
 
-          const result = solver.integrate(solverState, t, tTarget, callbacks.checkCancelled);
+            if (denseOutputBuffer && !phaseExpandState && !denseF0) {
+              denseF0 = new Float64Array(solverState.length);
+              phaseDerivatives(solverState, denseF0);
+            }
+            const denseT0 = denseOutputBuffer && !phaseExpandState ? t : 0;
+            const denseY0 = denseOutputBuffer && !phaseExpandState ? new Float64Array(solverState) : undefined;
+            const result = solver.integrate(solverState, t, segmentTarget, callbacks.checkCancelled);
 
-          if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Step ${i} done. t=${result.t}, success=${result.success}`);
+            if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Step ${i} done. t=${result.t}, success=${result.success}`);
 
-          if (!result.success) {
-            const msg = result.errorMessage || 'Unknown error';
-            console.warn(`[Worker] ODE solver failed at phase ${phaseIdx}: ${msg}`);
-            // ... (Error handling)
-            callbacks.postMessage({ type: 'progress', message: `Simulation stopped at t=${t.toFixed(2)}`, warning: msg });
-            shouldStop = true;
-            solverError = true;
-            break;
+            if (!result.success) {
+              const msg = result.errorMessage || 'Unknown error';
+              console.warn(`[Worker] ODE solver failed at phase ${phaseIdx}: ${msg}`);
+              callbacks.postMessage({ type: 'progress', message: `Simulation stopped at t=${t.toFixed(2)}`, warning: msg });
+              shouldStop = true;
+              solverError = true;
+              stepFailed = true;
+              break;
+            }
+
+            if (phaseExpandState) {
+              solverState = result.y;
+              y.set(phaseExpandState(solverState));
+            } else {
+              y.set(result.y);
+              solverState = y;
+            }
+            t = result.t;
+
+            if (denseOutputBuffer && denseY0 && denseF0 && !phaseExpandState) {
+              const denseF1 = new Float64Array(solverState.length);
+              phaseDerivatives(solverState, denseF1);
+              denseOutputBuffer.addInterval(denseT0, t, denseY0, new Float64Array(solverState), denseF0, denseF1);
+              denseF0 = denseF1;
+            }
+
+            const eventResult = eventRuntime?.process(t, y, result.rootsFound);
+            collectEventDiagnostics(eventResult);
+            // CVODE may report an initial zero root for a comparison whose two
+            // sides start equal. Initialization already handled SBML
+            // initialValue semantics; recreating the solver at t=0 would feed
+            // the same root back forever.
+            const rootDetected = t > 1e-12 * Math.max(1, Math.abs(segmentTarget))
+              && result.rootsFound?.some((direction: number) => direction !== 0) === true;
+            if (eventResult?.parametersChanged) {
+              phaseSolverOptions.networkByteCode = solverOptions.networkByteCode;
+            }
+            // CVODE reports a root at the current integration time and will report
+            // the same zero again if the solver is continued without a reinitialization.
+            // Recreate the solver after every event root, even when the root only
+            // schedules a delayed event and does not yet change the state.
+            // Parameter assignments alter the RHS even for an ordinary
+            // mass-action reaction (for example k1 in a zero-order flux).
+            // Restart the adaptive solver for every parameter event so its
+            // cached derivative/JIT state cannot integrate one extra segment
+            // with the pre-event rate. The previous narrower condition only
+            // restarted functional/dynamic-stoichiometry models.
+            const parameterEventNeedsRestart = eventResult?.parametersChanged === true;
+            if (rootDetected || eventResult?.stateChanged || parameterEventNeedsRestart) {
+              if (phaseExpandState) {
+                phaseState = phaseReduceState!(y);
+                solverState = phaseState;
+              } else {
+                solverState = y;
+              }
+              solver.destroy?.();
+              solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
+              denseF0 = undefined;
+            }
+
+            if (t >= segmentTarget - 1e-12 * Math.max(1, Math.abs(segmentTarget))
+              && segmentTarget >= tTarget - 1e-12 * Math.max(1, Math.abs(tTarget))) break;
           }
 
-          if (phaseExpandState) {
-            solverState = result.y;
-            y.set(phaseExpandState(solverState));
-          } else {
-            y.set(result.y);
-            solverState = y;
-          }
-          t = result.t;
-
-          // Dense output: compute f(t_{n+1}, y_{n+1}) and store the Hermite interval.
-          // Only supported for non-reduced (full-state) systems to keep the interpolant
-          // in the same coordinate space as the solution output.
-          if (denseOutputBuffer && denseY0 && denseF0 && !phaseExpandState) {
-            const denseF1 = new Float64Array(solverState.length);
-            phaseDerivatives(solverState, denseF1);
-            denseOutputBuffer.addInterval(denseT0, t, denseY0, new Float64Array(solverState), denseF0, denseF1);
-            // f1 of this step becomes f0 of next step
-            denseF0 = denseF1;
-          }
-
-          if (result.errorMessage === "ROOT_FOUND") {
-            // Signal a discontinuity event. In BNG2, this usually just means 
-            // stopping the current step and starting a new one.
-            if (VERBOSE_SIM_DEBUG) console.log(`[Worker] Root found at t=${t}. Re-evaluating rates.`);
-            // No action needed other than continuing the loop, as y/t are updated.
-          }
+          if (stepFailed) break;
 
           if (recordThisPhase) {
             const outT = toBngGridTime(phaseStart, phaseDuration, phase_n_steps, i);
-            const obsValues = evaluateObservablesFast(y);
-            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues) });
+            const obsValues = evaluateObservablesFast(y, outT);
+            appendDataRow(phase.suffix, { time: outT, ...obsValues, ...evaluateFunctionsForOutput(y, obsValues, outT) });
             if (includeSpeciesData) {
               const sp: Record<string, number> = { time: outT };
               for (let k = 0; k < numSpecies; k++) setSafeNumberField(sp, speciesHeaders[k], stateValueToSpeciesOutput(y[k], k));
@@ -3818,7 +5342,7 @@ export async function simulate(
           if (phase.stop_if) {
             try {
               // Evaluate the stop_if expression
-              const currentObsValues = evaluateObservablesFast(y);
+              const currentObsValues = evaluateObservablesFast(y, t);
               const stopResult = evaluateFunctionalRate(
                 phase.stop_if,
                 model.parameters || {},
@@ -3860,7 +5384,7 @@ export async function simulate(
         const nextHasParamChange =
           parameterChanges.some((c) => c.afterPhaseIndex === phaseIdx) ||
           concentrationChanges.some((c) => c.afterPhaseIndex === phaseIdx && (c.mode === 'set' || c.mode === 'add'));
-        const shouldPersist = !solverError && nextUsesContinue && !nextHasParamChange
+        const shouldPersist = !solverError && !eventRuntime && nextUsesContinue && !nextHasParamChange
           && nextAtol === phaseAtol && nextRtol === phaseRtol && nextSolverType === currentSolverType;
         if (shouldPersist) {
           persistedSolver = solver as typeof persistedSolver;
@@ -3917,14 +5441,18 @@ export async function simulate(
       headers,
       data: dataBySuffix[defaultOdeSuffix] || [],
       dataBySuffix,
-      speciesHeaders: includeSpeciesData ? speciesHeaders : undefined,
-      speciesData: includeSpeciesData ? speciesDataBySuffix[defaultOdeSuffix] || [] : undefined,
-      speciesDataBySuffix: includeSpeciesData ? speciesDataBySuffix : undefined,
+      ...(includeSpeciesData ? {
+        speciesHeaders,
+        speciesData: speciesDataBySuffix[defaultOdeSuffix] || [],
+        speciesDataBySuffix,
+      } : {}),
       ...(includeExpandedNetwork ? {
         expandedReactions: cloneReactionsForResult(model.reactions),
         expandedSpecies: model.species,
       } : {}),
-      denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined
+      denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined,
+      eventDiagnostics: eventRuntime ? Array.from(eventDiagnostics) : undefined,
+      eventFirings: eventRuntime ? eventRuntime.firedEvents : undefined
     } satisfies SimulationResults;
   }
 

@@ -32,7 +32,8 @@ export function hasInvalidValues(arr: Float64Array): boolean {
 }
 
 /** Shared type for RHS derivative function. */
-export type DerivativeFunction = (y: Float64Array, dydt: Float64Array) => void;
+/** RHS callback. Solvers that expose physical time pass it as the optional third argument. */
+export type DerivativeFunction = (y: Float64Array, dydt: Float64Array, time?: number) => void;
 
 /** Default solver options matching BNG2 CVODE defaults. */
 export const DEFAULT_SOLVER_OPTIONS: SolverOptions = {
@@ -79,6 +80,8 @@ export interface SolverOptions {
   /** Reaction data for analytical Jacobian auto-generation (set by SimulationLoop). */
   reactions?: SolverReaction[];
   disableNativeBytecode?: boolean;
+  /** State coordinates that represent signed SBML rate-rule variables, not concentrations. */
+  signedStateIndices?: number[];
 }
 
 export interface SolverResult {
@@ -87,4 +90,6 @@ export interface SolverResult {
   y: Float64Array;
   steps: number;
   errorMessage?: string;
+  /** CVODE root directions: +1 rising, -1 falling, 0 not involved. */
+  rootsFound?: number[];
 }

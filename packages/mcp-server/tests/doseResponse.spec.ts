@@ -99,6 +99,30 @@ describe('dose_response handler', () => {
         for (let i = 1; i < responses.length; i++) {
             expect(responses[i]).toBeGreaterThanOrEqual(responses[i - 1] - 0.1);
         }
+        expect(responses.at(-1)!).toBeGreaterThan(responses[0] + 10);
+    }, 30000);
+
+    it('matches exact-RHS root finding to long ODE runs across doses', async () => {
+        const shared = {
+            code: SATURATION_MODEL,
+            input_parameter: 'L_total',
+            input_min: 0.1,
+            input_max: 1000,
+            observables: ['Bound'],
+            n_points: 3,
+            log_scale: true,
+        };
+        const [rootResult, simulationResult] = await Promise.all([
+            handleDoseResponse(shared),
+            handleDoseResponse({ ...shared, method: 'simulate', t_end: 5000 }),
+        ]);
+        const root = JSON.parse(rootResult.content[0].text);
+        const simulated = JSON.parse(simulationResult.content[0].text);
+        expect(root.curves[0].responses).toHaveLength(3);
+        expect(simulated.curves[0].responses).toHaveLength(3);
+        for (let index = 0; index < 3; index++) {
+            expect(root.curves[0].responses[index]).toBeCloseTo(simulated.curves[0].responses[index], 0);
+        }
     }, 30000);
 
       it('supports simulate method and returns non-empty curves', async () => {
@@ -118,6 +142,7 @@ describe('dose_response handler', () => {
         expect(body.methodUsed).toBe('simulate');
         expect(body.curves[0].doses.length).toBeGreaterThan(0);
         expect(body.curves[0].responses.length).toBe(body.curves[0].doses.length);
+        expect(body.curves[0].responses.at(-1)!).toBeGreaterThan(body.curves[0].responses[0] + 1);
       }, 30000);
 
     it('rejects empty or blank code input', async () => {

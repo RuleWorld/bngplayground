@@ -1,10 +1,10 @@
 import type { BNGLModel } from '../../types.js';
 import { simulate } from '../simulation/SimulationLoop.js';
 import { computeFIM } from './FisherInformationMatrix.js';
-import { updateMassActionRates as engineUpdateMassActionRates } from './DoseResponse.js';
+import { forkPreparedModel, updatePreparedModel } from '../../utils/preparedModel.js';
 
 function defaultCloneExpandedModel(model: BNGLModel): BNGLModel {
-  return structuredClone(model);
+  return forkPreparedModel(model);
 }
 
 /**
@@ -64,7 +64,7 @@ export async function analyzeOptimalExperiment(
     method,
     tEnd,
     cloneExpandedModel = defaultCloneExpandedModel,
-    updateMassActionRates = engineUpdateMassActionRates,
+    updateMassActionRates,
   } = config;
 
   const recommendations: OptimalExperimentRecommendation[] = [];
@@ -95,13 +95,11 @@ export async function analyzeOptimalExperiment(
     let bestSuggestedTimes = candidateTimes.slice(0, 3);
 
     try {
+      const runModel = cloneExpandedModel(expandedModel);
       const fimResult = await computeFIM({
         simulate: async (overrides: Record<string, number>) => {
-          const runModel = cloneExpandedModel(expandedModel);
-          Object.entries(overrides).forEach(([k, v]) => {
-            runModel.parameters[k] = v;
-          });
-          updateMassActionRates(runModel);
+          updatePreparedModel(runModel, overrides, { mutate: true });
+          updateMassActionRates?.(runModel);
           return simulate(
             0,
             runModel,

@@ -78,14 +78,34 @@ function mratio(a: number, b: number, z: number): number {
   return f;
 }
 
+function relationValue(operator: string, values: number[]): number {
+  if (values.length < 2) return 0;
+  for (let i = 0; i < values.length - 1; i++) {
+    const left = values[i];
+    const right = values[i + 1];
+    const satisfied = operator === '==' ? left === right
+      : operator === '!=' ? left !== right
+        : operator === '<' ? left < right
+          : operator === '<=' ? left <= right
+            : operator === '>' ? left > right
+              : left >= right;
+    if (!satisfied) return 0;
+  }
+  return 1;
+}
+
 // Allowlist of math functions supported in BNGL-like expressions
 const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   abs: Math.abs,
   acos: Math.acos,
+  arccos: Math.acos,
   asin: Math.asin,
+  arcsin: Math.asin,
   atan: Math.atan,
+  arctan: Math.atan,
   atan2: Math.atan2,
   ceil: Math.ceil,
+  ceiling: Math.ceil,
   cos: Math.cos,
   exp: Math.exp,
   expm1: Math.expm1 ?? ((x: number) => Math.exp(x) - 1),
@@ -93,8 +113,49 @@ const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   // BioNetGen if(cond, trueVal, falseVal) function - returns trueVal if cond > 0.5, else falseVal
   // Matches muParser behavior used in BNG2. Original: (cond !== 0 ? trueVal : falseVal)
   if: (cond: number, trueVal: number, falseVal: number) => (cond > 0.5 ? trueVal : falseVal),
+  // SBML MathML n-ary arithmetic and relational operators emitted by the Atomizer event projection.
+  add: (...values: number[]) => values.reduce((sum, value) => sum + value, 0),
+  plus: (...values: number[]) => values.reduce((sum, value) => sum + value, 0),
+  subtract: (first: number, ...rest: number[]) => rest.reduce((value, next) => value - next, first),
+  minus: (first: number, ...rest: number[]) => rest.reduce((value, next) => value - next, first),
+  multiply: (...values: number[]) => values.reduce((product, value) => product * value, 1),
+  times: (...values: number[]) => values.reduce((product, value) => product * value, 1),
+  divide: (first: number, ...rest: number[]) => rest.reduce((value, next) => value / next, first),
+  quotient: (first: number, ...rest: number[]) => rest.reduce((value, next) => value / next, first),
+  remainder: (first: number, second: number) => first % second,
+  rem: (first: number, second: number) => first % second,
+  modulo: (first: number, second: number) => first % second,
+  power: (base: number, exponent: number) => Math.pow(base, exponent),
+  root: (degreeOrRadicand: number, maybeRadicand?: number) => maybeRadicand === undefined
+    ? Math.sqrt(degreeOrRadicand)
+    : Math.pow(maybeRadicand, 1 / degreeOrRadicand),
+  eq: (...values: number[]) => relationValue('==', values),
+  neq: (...values: number[]) => relationValue('!=', values),
+  lt: (...values: number[]) => relationValue('<', values),
+  leq: (...values: number[]) => relationValue('<=', values),
+  gt: (...values: number[]) => relationValue('>', values),
+  geq: (...values: number[]) => relationValue('>=', values),
+  lessthan: (...values: number[]) => relationValue('<', values),
+  greaterthan: (...values: number[]) => relationValue('>', values),
+  equal: (...values: number[]) => relationValue('==', values),
+  notequal: (...values: number[]) => relationValue('!=', values),
+  and: (...values: number[]) => values.every(value => value !== 0) ? 1 : 0,
+  or: (...values: number[]) => values.some(value => value !== 0) ? 1 : 0,
+  xor: (...values: number[]) => values.reduce((parity, value) => parity ^ (value !== 0 ? 1 : 0), 0),
+  not: (value: number) => value === 0 ? 1 : 0,
+  // SBML piecewise(value, condition, ..., otherwise) after MathML-to-formula lowering.
+  piecewise: (...args: number[]) => {
+    for (let i = 0; i + 1 < args.length; i += 2) {
+      if (args[i + 1] !== 0) return args[i];
+    }
+    return args.length % 2 === 1 ? args[args.length - 1] : 0;
+  },
   ln: Math.log,
-  log: Math.log,
+  // MathML log(base, x) is emitted by some libSBML formula printers; the
+  // one-argument BNGL form remains natural log.
+  log: (value: number, baseOrUndefined?: number) => baseOrUndefined === undefined
+    ? Math.log(value)
+    : Math.log(baseOrUndefined) / Math.log(value),
   log10: Math.log10 ?? ((x: number) => Math.log(x) / Math.LN10),
   log2: Math.log2 ?? ((x: number) => Math.log(x) / Math.LN2),
   log1p: Math.log1p ?? ((x: number) => Math.log(1 + x)),
@@ -123,8 +184,22 @@ const ALLOWED_FUNCTIONS: Record<string, (...args: number[]) => number> = {
   signum: Math.sign ?? ((x: number) => (x > 0 ? 1 : x < 0 ? -1 : 0)),
   tan: Math.tan,
   asinh: Math.asinh,
+  arcsinh: Math.asinh,
   acosh: Math.acosh,
-  atanh: Math.atanh
+  arccosh: Math.acosh,
+  atanh: Math.atanh,
+  arctanh: Math.atanh,
+  sec: (x: number) => 1 / Math.cos(x),
+  csc: (x: number) => 1 / Math.sin(x),
+  cot: (x: number) => 1 / Math.tan(x),
+  arcsec: (x: number) => Math.acos(1 / x),
+  arccsc: (x: number) => Math.asin(1 / x),
+  // SBML inverse-cotangent uses the principal atan(1/x) branch. atan2(1, x)
+  // returns an angle in [0, pi], which gives the wrong sign for negative x.
+  arccot: (x: number) => Math.atan(1 / x),
+  arcsech: (x: number) => Math.acosh(1 / x),
+  arccsch: (x: number) => Math.asinh(1 / x),
+  arccoth: (x: number) => Math.atanh(1 / x)
 };
 
 // Allowed constants available by name
@@ -143,6 +218,24 @@ const ALLOWED_CONSTS: Record<string, number> = {
 
 // Limit nesting depth by parentheses count as a simple guard against pathological AST depth
 const MAX_PAREN_DEPTH = 200;
+
+const COMPARISON_OPERATORS = new Set(['==', '!=', '<', '<=', '>', '>=']);
+
+function isComparisonNode(node: JsepNode | undefined): boolean {
+  return node?.type === 'BinaryExpression'
+    && typeof node.operator === 'string'
+    && COMPARISON_OPERATORS.has(node.operator);
+}
+
+/** MathML n-ary relations lower to left-associated jsep comparisons. */
+function comparisonChain(node: JsepNode): { operands: JsepNode[]; operators: string[] } | undefined {
+  if (!isComparisonNode(node) || !node.left || !node.right) return undefined;
+  if (isComparisonNode(node.left)) {
+    const prefix = comparisonChain(node.left);
+    if (prefix) return { operands: [...prefix.operands, node.right], operators: [...prefix.operators, node.operator!] };
+  }
+  return { operands: [node.left, node.right], operators: [node.operator!] };
+}
 
 function maxParenDepth(expr: string): number {
   let depth = 0;
@@ -261,6 +354,24 @@ function evaluateNode(node: JsepNode, context: Record<string, number>, stepRef: 
 
     case 'BinaryExpression': {
       if (!node.left || !node.right) throw new Error('Malformed binary expression');
+      if (isComparisonNode(node) && isComparisonNode(node.left)) {
+        const chain = comparisonChain(node);
+        if (!chain) throw new Error('Malformed comparison chain');
+        const values = chain.operands.map(operand => evaluateNode(operand, context, stepRef));
+        for (let i = 0; i < chain.operators.length; i++) {
+          const left = values[i];
+          const right = values[i + 1];
+          const operator = chain.operators[i];
+          const satisfied = operator === '==' ? left === right
+            : operator === '!=' ? left !== right
+              : operator === '<' ? left < right
+                : operator === '<=' ? left <= right
+                  : operator === '>' ? left > right
+                    : left >= right;
+          if (!satisfied) return 0;
+        }
+        return 1;
+      }
       const left = evaluateNode(node.left, context, stepRef);
       const right = evaluateNode(node.right, context, stepRef);
       switch (node.operator) {

@@ -1,6 +1,7 @@
 import type { BNGLModel } from '../../types.js';
 import { simulate } from '../simulation/SimulationLoop.js';
 import { findConservationLaws } from './ConservationLaws.js';
+import { updatePreparedModel } from '../../utils/preparedModel.js';
 
 export interface PhaseHandoffConfig {
     model: BNGLModel;
@@ -74,7 +75,7 @@ export async function analyzePhaseHandoff(config: PhaseHandoffConfig): Promise<P
 
     // Phase 1: Equilibrate at initial parameter value
     const phase1Model = cloneExpandedModel(expandedModel);
-    phase1Model.parameters[parameter] = initialValue;
+    updatePreparedModel(phase1Model, { [parameter]: initialValue }, { mutate: true });
     updateMassActionRates(phase1Model);
 
     const phase1Result = await simulate(0, phase1Model, {
@@ -115,7 +116,7 @@ export async function analyzePhaseHandoff(config: PhaseHandoffConfig): Promise<P
 
     // Phase 2: Start from Phase 1 endpoint, change parameter abruptly
     const phase2Model = cloneExpandedModel(expandedModel);
-    phase2Model.parameters[parameter] = finalValue;
+    updatePreparedModel(phase2Model, { [parameter]: finalValue }, { mutate: true });
     updateMassActionRates(phase2Model);
 
     // Set initial concentrations to Phase 1 endpoint

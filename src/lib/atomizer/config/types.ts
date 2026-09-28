@@ -69,6 +69,7 @@ export interface BNGLEventAssignment {
   bnglVariable?: string;
   bnglTarget?: string;
   bnglMath?: string;
+  bnglValueType?: 'amount' | 'concentration';
 }
 
 export interface BNGLEvent {
@@ -84,6 +85,7 @@ export interface BNGLEvent {
   bnglTrigger?: string;
   bnglDelay?: string;
   bnglPriority?: string;
+  bnglExecution?: 'native' | 'playground';
 }
 
 export interface BNGLModel {

@@ -1376,6 +1376,27 @@ export class SBMLParser {
         }
       }
     }
+    // L3 speciesReference ids are model-scoped SId symbols. They can be used by SBML MathML
+    // outside the reaction (notably in event delays), where the identifier denotes the declared
+    // stoichiometric coefficient. Preserve that value as a synthetic global parameter when the
+    // source did not already define a global parameter with the same id. Kinetic-law local
+    // parameters remain scoped to their reaction and are still substituted independently by the
+    // writer.
+    for (const reaction of result.reactions.values()) {
+      for (const reference of [...reaction.reactants, ...reaction.products]) {
+        if (!reference.id) continue;
+        const id = standardizeName(reference.id);
+        if (!id || result.parameters.has(id)) continue;
+        result.parameters.set(id, {
+          id,
+          name: reference.id,
+          value: Number.isFinite(reference.stoichiometry) ? reference.stoichiometry : 1,
+          units: '',
+          constant: true,
+          scope: 'global',
+        });
+      }
+    }
     const rxnTime = performance.now() - t;
 
     // Extract rules/functions/events
@@ -1424,6 +1445,35 @@ export class SBMLParser {
           }
         }
       }
+      // Some bundled libSBML builds expose only a prefix of the Core event list through the
+      // generated event getters (notably a second event with no name in compact L3 fixtures).
+      // Recover any event blocks visible in the source XML so event preservation is not dependent
+      // on that binding quirk. Native getter results remain authoritative for ids already seen.
+      const extractedEventIds = new Set(result.events.map((event) => event.id));
+      for (const rawEvent of this.extractRawEvents()) {
+        const existing = result.events.find((event) => event.id === rawEvent.id);
+        if (!existing) {
+          result.events.push(rawEvent);
+          extractedEventIds.add(rawEvent.id);
+          continue;
+        }
+        // Some bundled libSBML builds expose an event but truncate its
+        // assignment list (especially when an earlier assignment has no
+        // MathML). Merge the raw XML assignments by variable so the event is
+        // lossless even when the native getter is only partially populated.
+        const mergedAssignments = [...existing.assignments];
+        for (const rawAssignment of rawEvent.assignments) {
+          const index = mergedAssignments.findIndex((assignment) => assignment.variable === rawAssignment.variable);
+          if (index < 0) mergedAssignments.push(rawAssignment);
+          else if (!mergedAssignments[index].math && rawAssignment.math) mergedAssignments[index] = rawAssignment;
+        }
+        existing.assignments = mergedAssignments;
+        if (!existing.trigger && rawEvent.trigger) existing.trigger = rawEvent.trigger;
+        if (!existing.delay && rawEvent.delay) existing.delay = rawEvent.delay;
+        if (!existing.priority && rawEvent.priority) existing.priority = rawEvent.priority;
+        if (existing.triggerInitialValue === undefined) existing.triggerInitialValue = rawEvent.triggerInitialValue;
+        if (existing.triggerPersistent === undefined) existing.triggerPersistent = rawEvent.triggerPersistent;
+      }
     }
 
     if (!advancedExtractionAborted) {
@@ -1439,6 +1489,25 @@ export class SBMLParser {
           }
         }
       }
+      // Recover initial assignments when the bundled libSBML binding reports
+      // zero objects for an otherwise valid Core list (the same reduced API
+      // issue that affects some event assignments).
+      for (const rawAssignment of this.extractRawInitialAssignments()) {
+        const existing = result.initialAssignments.find((assignment) => assignment.symbol === rawAssignment.symbol);
+        if (!existing) {
+          result.initialAssignments.push(rawAssignment);
+        } else if (!existing.math && rawAssignment.math) {
+          existing.math = rawAssignment.math;
+        }
+      }
+    }
+
+    // Keep this fallback outside the libSBML-success branch too: a binding may
+    // abort one advanced list while still returning useful Core model data.
+    for (const rawAssignment of this.extractRawInitialAssignments()) {
+      const existing = result.initialAssignments.find((assignment) => assignment.symbol === rawAssignment.symbol);
+      if (!existing) result.initialAssignments.push(rawAssignment);
+      else if (!existing.math && rawAssignment.math) existing.math = rawAssignment.math;
     }
 
     if (advancedExtractionAborted) {
@@ -1488,12 +1557,13 @@ export class SBMLParser {
     // source and count top-level objects so nothing is dropped without an explicit, counted notice.
     this.detectUnsupportedPackages(result);
 
-    // Events are captured but the engine has no general event executor, so they change nothing
-    // during simulation unless the writer maps them (only simple time-triggered cases can be).
+    // Events are captured losslessly. The Playground engine executes representable events in its
+    // ODE/SSA runtime; native BNGL still has no general trigger scheduler, so this remains an
+    // explicit interoperability diagnostic rather than a claim of native-BNG2 execution.
     if (result.events.length > 0) {
       this.recordWarning('event',
-        `${result.events.length} SBML event(s) parsed; discrete state changes are not executed by the simulation engine and are emitted as an annotated block for review.`,
-        'dropped');
+        `${result.events.length} SBML event(s) parsed and preserved; Playground ODE/SSA can execute representable triggers, while native BNGL has no general event scheduler.`,
+        'info');
     }
 
     // Algebraic rules cannot be represented in BNGL (implicit DAE constraints).
@@ -2347,10 +2417,17 @@ export class SBMLParser {
       // change over time. BNGL has no representation for that; record it so it is not silently lost.
       const hasStoichMath = /<stoichiometryMath\b/i.test(refAttrs) ||
         (refId ? new RegExp(`<speciesReference\\b[^>]*\\bid\\s*=\\s*["']${refId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["'][\\s\\S]*?<stoichiometryMath`, 'i').test(this.currentSbml) : false);
-      const variableStoichiometry = (isConstant === false) || hasStoichMath;
+      // SBML also permits an otherwise-constant speciesReference coefficient
+      // to be named by `id` and supplied through an initialAssignment or rule.
+      // libSBML reports the reference's own `constant` attribute in that case,
+      // so inspect the model-level assignment targets as well.
+      const coefficientAssignedByModel = refId
+        ? new RegExp(`<(?:initialAssignment\\b[^>]*\\bsymbol|assignmentRule\\b[^>]*\\bvariable|rateRule\\b[^>]*\\bvariable)\\s*=\\s*["']${refId.replace(/[.*+?^${}()|[\\]\\\\]/g, '\\$&')}["']`, 'i').test(this.currentSbml)
+        : false;
+      const variableStoichiometry = (isConstant === false) || hasStoichMath || coefficientAssignedByModel;
       if (variableStoichiometry) {
         this.recordWarning('stoichiometry',
-          `Reaction "${reactionId}" has variable/StoichiometryMath stoichiometry on species "${ref.getSpecies()}"; BNGL cannot represent this, treated as fixed value ${stoichiometry}.`,
+          `Reaction "${reactionId}" has variable/StoichiometryMath stoichiometry on species "${ref.getSpecies()}"; preserved as executable Atomizer metadata with fixed BNGL projection ${stoichiometry}.`,
           'approximated');
       }
       const rounded = Math.round(stoichiometry);
@@ -2731,12 +2808,20 @@ export class SBMLParser {
     const initValAttr = this.getXmlAttribute(triggerTag, 'initialValue');
     const persistAttr = this.getXmlAttribute(triggerTag, 'persistent');
     const priorityMath = eventBlock.match(/<priority\b[\s\S]*?<math\b[\s\S]*?<\/math>[\s\S]*?<\/priority>/i)?.[0] || '';
+    const rawMathFor = (tagName: string): string | null => {
+      const fragment = eventBlock.match(new RegExp(`<${tagName}\\b[\\s\\S]*?</${tagName}>`, 'i'))?.[0] || '';
+      return fragment.match(/<math\b[\s\S]*?<\/math>/i)?.[0] || null;
+    };
+    const formulaFor = (nativeMath: any, rawMath: string | null): string => {
+      if (rawMath && this.mathHasLossyConstructs(rawMath)) return this.mathMlToFormula(rawMath);
+      return nativeMath ? this.safeFormulaToString(nativeMath) : '';
+    };
 
     return {
       id: eventId,
       name: event.getName() || eventId,
-      trigger: triggerMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(triggerMath)) : '',
-      delay: delayMath ? this.normalizeFormulaIdentifiers(this.safeFormulaToString(delayMath)) : undefined,
+      trigger: triggerMath ? this.normalizeFormulaIdentifiers(formulaFor(triggerMath, rawMathFor('trigger'))) : '',
+      delay: delayMath ? this.normalizeFormulaIdentifiers(formulaFor(delayMath, rawMathFor('delay'))) : undefined,
       // SBML defaults this attribute to true when it is absent. Do not use `|| true`: that turns
       // an explicit false into true and changes assignment-time event semantics.
       useValuesFromTriggerTime: (() => {
@@ -2752,6 +2837,48 @@ export class SBMLParser {
       triggerPersistent: persistAttr === null ? undefined : /true|1/i.test(persistAttr),
       priority: priorityMath ? this.mathMlToFormula(priorityMath) : undefined,
     };
+  }
+
+  private extractRawEvents(): SBMLEvent[] {
+    const events: SBMLEvent[] = [];
+    const eventBlocks = this.currentSbml.match(/<event\b[\s\S]*?<\/event>/gi) || [];
+    const mathFrom = (fragment: string): string => {
+      const math = fragment.match(/<math\b[\s\S]*?<\/math>/i)?.[0];
+      return math ? this.mathMlToFormula(math) : '';
+    };
+    for (const eventBlock of eventBlocks) {
+      const opening = eventBlock.match(/^<event\b([^>]*)>/i)?.[1] || '';
+      const rawId = this.getXmlAttribute(opening, 'id') || this.getXmlAttribute(opening, 'name') || `event_${events.length + 1}`;
+      const name = this.getXmlAttribute(opening, 'name') || rawId;
+      const triggerMatch = eventBlock.match(/<trigger\b[^>]*>([\s\S]*?)<\/trigger>/i);
+      const delayMatch = eventBlock.match(/<delay\b[^>]*>([\s\S]*?)<\/delay>/i);
+      const triggerOpening = triggerMatch?.[0].match(/<trigger\b([^>]*)>/i)?.[1] || '';
+      const assignments: Array<{ variable: string; math: string }> = [];
+      const assignmentRe = /<eventAssignment\b([^>]*?)(?:\/>|>([\s\S]*?)<\/eventAssignment>)/gi;
+      let assignmentMatch: RegExpExecArray | null;
+      while ((assignmentMatch = assignmentRe.exec(eventBlock)) !== null) {
+        assignments.push({
+          variable: this.getXmlAttribute(assignmentMatch[1] || '', 'variable') || '',
+          math: this.normalizeFormulaIdentifiers(mathFrom(assignmentMatch[2] || '')),
+        });
+      }
+      const useValuesAttr = this.getXmlAttribute(opening, 'useValuesFromTriggerTime');
+      const persistentAttr = this.getXmlAttribute(triggerOpening, 'persistent');
+      const initialAttr = this.getXmlAttribute(triggerOpening, 'initialValue');
+      const priorityMatch = eventBlock.match(/<priority\b[\s\S]*?<\/priority>/i);
+      events.push({
+        id: rawId,
+        name,
+        trigger: this.normalizeFormulaIdentifiers(triggerMatch ? mathFrom(triggerMatch[1] || '') : ''),
+        delay: delayMatch ? this.normalizeFormulaIdentifiers(mathFrom(delayMatch[1] || '')) : undefined,
+        useValuesFromTriggerTime: useValuesAttr === null ? true : /true|1/i.test(useValuesAttr),
+        assignments,
+        triggerInitialValue: initialAttr === null ? undefined : /true|1/i.test(initialAttr),
+        triggerPersistent: persistentAttr === null ? undefined : /true|1/i.test(persistentAttr),
+        priority: priorityMatch ? this.normalizeFormulaIdentifiers(mathFrom(priorityMatch[0])) : undefined,
+      });
+    }
+    return events;
   }
 
   private extractInitialAssignment(ia: any): SBMLInitialAssignment | null {
@@ -2782,6 +2909,18 @@ export class SBMLParser {
       symbol,
       math: formula,
     };
+  }
+
+  private extractRawInitialAssignments(): SBMLInitialAssignment[] {
+    const assignments: SBMLInitialAssignment[] = [];
+    const assignmentBlocks = this.currentSbml.match(/<initialAssignment\b[\s\S]*?<\/initialAssignment>/gi) || [];
+    for (const block of assignmentBlocks) {
+      const opening = block.match(/^<initialAssignment\b([^>]*)>/i)?.[1] || '';
+      const symbol = this.getXmlAttribute(opening, 'symbol') || '';
+      const math = this.mathMlToFormula(block.match(/<math\b[\s\S]*?<\/math>/i)?.[0] || '');
+      if (symbol && math.trim()) assignments.push({ symbol, math: this.normalizeFormulaIdentifiers(math) });
+    }
+    return assignments;
   }
 }
 

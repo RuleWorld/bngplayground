@@ -26,8 +26,8 @@ export class NFsimResultAdapter {
   ): SimulationResults {
     const parsed = typeof gdat === 'string' ? parseGdat(gdat) : gdat;
     const headers = normalizeHeaders(parsed.headers, model);
-    const includeSpeciesData = options.includeSpeciesData ?? true;
-    const includeExpandedNetwork = options.includeExpandedNetwork ?? true;
+    const includeSpeciesData = options.includeSpeciesData ?? false;
+    const includeExpandedNetwork = options.includeExpandedNetwork ?? false;
     const data = parsed.data.map((row) => {
       const mapped: Record<string, number> = Object.create(null) as Record<string, number>;
       for (const header of headers) {

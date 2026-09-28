@@ -3,6 +3,7 @@ import type { BNGLModel } from '../types';
 import {
   applyParameterOverrides,
   expressionReferencesAny,
+  canReuseExpandedNetworkForOverrides,
 } from '../services/workerHandlers/applyParameterOverrides';
 
 /**
@@ -75,6 +76,15 @@ describe('applyParameterOverrides — rate constants and direct overrides', () =
     expect(speciesAmount(out, 'A()')).toBe(100);
   });
 
+  it('re-evaluates symbolic rate expressions from the updated parameter context', () => {
+    const model = makeModel();
+    model.parameters.scale = 3;
+    model.reactions[0].rate = 'ka * scale';
+    model.reactions[0].rateConstant = 1;
+    const out = applyParameterOverrides(model, { ka: 2 });
+    expect(out.reactions[0].rateConstant).toBeCloseTo(6, 9);
+  });
+
   it('still supports overriding a species amount directly by species name', () => {
     const out = applyParameterOverrides(makeModel(), { 'A()': 42 });
     expect(speciesAmount(out, 'A()')).toBe(42);
@@ -83,6 +93,26 @@ describe('applyParameterOverrides — rate constants and direct overrides', () =
   it('returns the cached model unchanged when there are no overrides', () => {
     const cached = makeModel();
     expect(applyParameterOverrides(cached, {})).toBe(cached);
+  });
+});
+
+describe('expanded-network dependency safety', () => {
+  it('allows rate-only overrides to reuse expanded topology', () => {
+    expect(canReuseExpandedNetworkForOverrides(makeModel(), { ka: 2 })).toBe(true);
+  });
+
+  it('reuses topology for direct and transitive seed amount dependencies', () => {
+    const model = makeModel();
+    model.parameters.dose = 10;
+    model.paramExpressions = { A0: 'dose * 2' };
+    expect(canReuseExpandedNetworkForOverrides(model, { dose: 20 })).toBe(true);
+  });
+
+  it('reuses topology for seed dependencies through custom functions', () => {
+    const model = makeModel();
+    model.functions = [{ name: 'seedAmount', args: [], expression: 'A0 * 2' } as any];
+    model.species[0].initialExpression = 'seedAmount()';
+    expect(canReuseExpandedNetworkForOverrides(model, { A0: 150 })).toBe(true);
   });
 });
 

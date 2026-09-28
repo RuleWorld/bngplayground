@@ -5,12 +5,19 @@ import {
     getSharedEnsembleFeatureVector,
     isSharedEnsembleResultsHandle,
     materializeSharedSimulationResult,
+    estimateSimulationWorkerCount,
     writeSimulationResultsToShared,
 } from '../../services/BnglWorkerPool';
 import { mergeSimulationOptionsWithModelActionDefaults } from '../../services/bnglWorker';
 import { SimulationResults } from '../../types';
 
 describe('BnglWorkerPool shared ensemble helpers', () => {
+    it('caps parallel model copies as estimated retained model cost grows', () => {
+        expect(estimateSimulationWorkerCount({ species: [], reactions: [], reactionRules: [] } as any, 16)).toBe(8);
+        expect(estimateSimulationWorkerCount({ species: [], reactions: new Array(40_000), reactionRules: [] } as any, 16)).toBe(4);
+        expect(estimateSimulationWorkerCount({ species: [], reactions: [], reactionRules: new Array(300) } as any, 16)).toBe(1);
+    });
+
     it('writes and materializes shared ensemble runs without copying per-read', () => {
         const shared = createSharedEnsembleResults(2, ['time', 'A', 'B'], 2);
 
@@ -224,6 +231,50 @@ describe('BnglWorkerPool class', () => {
         await simulatePromise;
         expect(error).toBeDefined();
         expect(error.message).toBe('Worker crashed');
+    });
+
+    it('runs parameter jobs across prepared workers and releases their cached models', async () => {
+        const pool = new BnglWorkerPool(2);
+        const resultsPromise = pool.runParameterSweep(
+            { parameters: { k: 1 } } as any,
+            [{ k: 2 }, { k: 3 }],
+            { method: 'ode' } as any,
+        );
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const cacheRequests = mockWorkerInsts.map((worker) => worker.postMessage.mock.calls[0][0]);
+        cacheRequests.forEach((request, index) => {
+            expect(request.type).toBe('cache_model');
+            mockWorkerInsts[index].trigger({
+                id: request.id,
+                type: 'cache_model_success',
+                payload: { modelId: index + 10 },
+            });
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const simulateRequests = mockWorkerInsts.map((worker) => worker.postMessage.mock.calls[1][0]);
+        expect(simulateRequests.map((request) => request.payload.parameterOverrides)).toEqual([{ k: 2 }, { k: 3 }]);
+        simulateRequests.forEach((request, index) => {
+            mockWorkerInsts[index].trigger({
+                id: request.id,
+                type: 'simulate_success',
+                payload: { headers: ['time', 'A'], data: [{ time: 0, A: index + 1 }] },
+            });
+        });
+        await new Promise((resolve) => setTimeout(resolve, 0));
+
+        const releaseRequests = mockWorkerInsts.map((worker) => worker.postMessage.mock.calls[2][0]);
+        releaseRequests.forEach((request, index) => {
+            expect(request.type).toBe('release_model');
+            mockWorkerInsts[index].trigger({ id: request.id, type: 'release_model_success', payload: { modelId: index + 10 } });
+        });
+
+        await expect(resultsPromise).resolves.toEqual([
+            { headers: ['time', 'A'], data: [{ time: 0, A: 1 }] },
+            { headers: ['time', 'A'], data: [{ time: 0, A: 2 }] },
+        ]);
+        pool.terminate();
     });
 
     it('rejects when worker_internal_error is reported during simulation', async () => {

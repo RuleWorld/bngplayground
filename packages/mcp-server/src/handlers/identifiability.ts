@@ -2,7 +2,7 @@ import { profileLikelihood, simulate, loadEvaluator } from '@bngplayground/engin
 import type { ProfileLikelihoodResult } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult, MCPErrorResult } from '../types/index.js';
 import { identifiabilityArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, applyPreparedModelOverrides } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleIdentifiability(args: ToolArgs): Promise<ToolResult<ProfileLikelihoodResult | MCPErrorResult>> {
@@ -60,11 +60,7 @@ export async function handleIdentifiability(args: ToolArgs): Promise<ToolResult<
 
         const result = await profileLikelihood({
             simulate: async (overrides) => {
-                const runModel = cloneExpandedModel(expandedModel);
-                Object.entries(overrides).forEach(([k, v]) => {
-                    runModel.parameters[k] = v;
-                });
-                updateMassActionRates(runModel);
+                const runModel = applyPreparedModelOverrides(expandedModel, overrides);
                 return simulate(0, runModel, simOptions, {
                     checkCancelled: () => { },
                     postMessage: () => { },

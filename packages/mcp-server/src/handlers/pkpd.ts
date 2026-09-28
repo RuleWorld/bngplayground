@@ -17,7 +17,7 @@ import {
   parseArgs,
   parseModelOrThrow,
   expandModel,
-  updateMassActionRates,
+  applyPreparedModelOverrides,
 } from '../services/engine.js';
 import { pkpdArgsSchema } from '../schemas/index.js';
 import { structureError } from '../services/errors.js';
@@ -188,11 +188,8 @@ export async function handlePKPD(args: ToolArgs): Promise<ToolResult<any>> {
           async (code: string, paramOverrides: Record<string, number>) => {
             const patientModel = parseModelOrThrow(code);
             const patientExpanded = await expandModel(patientModel);
-            for (const [k, v] of Object.entries(paramOverrides)) {
-              patientExpanded.parameters[k] = v;
-            }
-            updateMassActionRates(patientExpanded);
-            return simulate(0, patientExpanded, {
+            const updatedPatient = applyPreparedModelOverrides(patientExpanded, paramOverrides);
+            return simulate(0, updatedPatient, {
               method: 'ode',
               t_end: 200,
               n_steps: 100,

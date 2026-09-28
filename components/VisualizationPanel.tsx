@@ -51,6 +51,8 @@ interface VisualizationPanelProps {
   modelSource?: string | null;
   simulationOptions?: SimulationOptions | null;
   onLoadModel?: (code: string, name: string, id: string) => void;
+  onRequestPreparedNetwork?: () => Promise<void>;
+  onRequestSpeciesData?: () => Promise<SimulationResults>;
 }
 
 const TabButton: React.FC<{
@@ -89,6 +91,8 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   modelSource,
   simulationOptions,
   onLoadModel,
+  onRequestPreparedNetwork,
+  onRequestSpeciesData,
 }) => {
   const [visibleSpecies, setVisibleSpecies] = useState<Set<string>>(new Set());
   const [selectedRuleId, setSelectedRuleId] = useState<string | null>(null);
@@ -104,6 +108,9 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
   };
 
   const [networkViewMode, setNetworkViewMode] = useState<'regulatory' | 'rules' | 'contact' | 'influence' | 'analysis'>('regulatory');
+  const auxiliaryRequestRef = React.useRef(new Set<string>());
+  const [isLoadingAuxiliary, setIsLoadingAuxiliary] = useState(false);
+  const [auxiliaryError, setAuxiliaryError] = useState<string | null>(null);
 
   React.useEffect(() => {
     if (model) {
@@ -192,6 +199,28 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
     const overlays = buildRuleOverlays(reactionRules);
     return computeInfluenceGraph(overlays, reactionRules);
   }, [activeTab, model, networkViewMode, reactionRules]);
+
+  React.useEffect(() => {
+    if (!results) return;
+    const needsNetwork = (activeTab === 6 || activeTab === 19) && !results.expandedReactions && (model?.reactionRules?.length ?? 0) > 0;
+    const needsSpecies = activeTab === 6 && !results.speciesData;
+    const requestKey = `tab:${activeTab}`;
+    if ((!needsNetwork && !needsSpecies) || auxiliaryRequestRef.current.has(requestKey)) return;
+    auxiliaryRequestRef.current.add(requestKey);
+    setIsLoadingAuxiliary(true);
+    setAuxiliaryError(null);
+    void (async () => {
+      try {
+        if (needsNetwork) await onRequestPreparedNetwork?.();
+        if (needsSpecies) await onRequestSpeciesData?.();
+      } catch (cause) {
+        setAuxiliaryError(cause instanceof Error ? cause.message : String(cause));
+      } finally {
+        auxiliaryRequestRef.current.delete(requestKey);
+        setIsLoadingAuxiliary(false);
+      }
+    })();
+  }, [activeTab, model, results, onRequestPreparedNetwork, onRequestSpeciesData]);
 
   return (
     <div role="region" aria-label="Visualization panel" className="flex h-full min-h-0 flex-col gap-0 border rounded-lg border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 shadow-sm relative">
@@ -329,6 +358,10 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
 
       {/* Content Panels */}
       <div className="flex-1 min-h-0 flex flex-col p-4 overflow-hidden">
+        {isLoadingAuxiliary && (
+          <div className="mb-2 text-xs text-slate-500 dark:text-slate-300" role="status">Loading requested simulation data…</div>
+        )}
+        {auxiliaryError && <div className="mb-2 text-xs text-red-600 dark:text-red-400" role="alert">{auxiliaryError}</div>}
         <Suspense fallback={<div className="flex h-full items-center justify-center text-sm text-slate-500 dark:text-slate-300">Loading analysis…</div>}>
         {activeTab === 0 && (
           <div role="tabpanel" id="viz-tabpanel-0" aria-labelledby="viz-tab-0" aria-label="Time courses" className="flex-1 min-h-0 flex flex-col overflow-y-auto pb-2">
@@ -356,6 +389,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   expressions={expressions}
                   modelSource={modelSource}
                   simulationOptions={simulationOptions}
+                  onRequestSpeciesData={onRequestSpeciesData}
                 />
               </div>
               <div className="mt-4 shrink-0">
@@ -366,6 +400,7 @@ export const VisualizationPanel: React.FC<VisualizationPanelProps> = ({
                   parameterNames={seedParameterNames}
                   speciesNames={results?.speciesHeaders ?? []}
                   hasSpeciesData={!!results?.speciesData && results.speciesData.length > 0}
+                  onRequestSpeciesData={onRequestSpeciesData ? async () => { await onRequestSpeciesData(); } : undefined}
                 />
               </div>
             </ErrorBoundary>

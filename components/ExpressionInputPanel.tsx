@@ -21,6 +21,7 @@ interface ExpressionInputPanelProps {
   parameterNames?: string[];
   speciesNames?: string[];
   hasSpeciesData?: boolean;  // Whether species-level data is available for BNGL patterns
+  onRequestSpeciesData?: () => Promise<void>;
 }
 
 
@@ -45,6 +46,7 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
   parameterNames = [],
   speciesNames = [],
   hasSpeciesData = false,
+  onRequestSpeciesData,
 }) => {
   const [isExpanded, setIsExpanded] = useState(false);
   const [newExprName, setNewExprName] = useState('');
@@ -226,6 +228,17 @@ export const ExpressionInputPanel: React.FC<ExpressionInputPanelProps> = ({
                 BNGL Pattern
               </button>
             </div>
+            {!hasSpeciesData && onRequestSpeciesData && (
+              <button
+                type="button"
+                onClick={() => {
+                  void onRequestSpeciesData().catch((cause) => setError(cause instanceof Error ? cause.message : String(cause)));
+                }}
+                className="rounded-md border border-slate-300 px-2 py-1 text-xs text-slate-600 hover:bg-slate-50 dark:border-slate-600 dark:text-slate-300 dark:hover:bg-slate-700"
+              >
+                Load species trajectories
+              </button>
+            )}
           </div>
 
           <p className="text-xs text-slate-500 dark:text-slate-400">

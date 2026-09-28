@@ -17,6 +17,34 @@ async function readZipEntry(blob: Blob, name: string): Promise<string> {
 }
 
 describe('result export serialization', () => {
+  it('loads rich species trajectories only when the complete export is built', async () => {
+    const leanResults: SimulationResults = {
+      headers: ['time', 'A_total'],
+      data: [{ time: 0, A_total: 2 }],
+      dataBySuffix: { __default__: [{ time: 0, A_total: 2 }] },
+    };
+    const richResults: SimulationResults = {
+      ...leanResults,
+      speciesHeaders: ['A(x)'],
+      speciesData: [{ time: 0, 'A(x)': 2 }],
+      speciesDataBySuffix: { __default__: [{ time: 0, 'A(x)': 2 }] },
+    };
+    let requested = 0;
+    const descriptor = createSimulationResultsExportDescriptor({
+      results: leanResults,
+      requestFullSpeciesData: async () => {
+        requested += 1;
+        return richResults;
+      },
+    });
+    expect(requested).toBe(0);
+    const artifact = descriptor.fullResult!.artifacts.find((item) => item.id === 'simulation-data')!;
+    const exported = await buildResultExport(descriptor, 'full', [{ artifact, format: artifact.defaultFormat }]);
+    const root = exported.filename.replace(/\.zip$/, '');
+    expect(requested).toBe(1);
+    expect(await readZipEntry(exported.blob, `${root}/data/species.csv`)).toContain('A(x)');
+  });
+
   it('keeps current-view filters separate from complete simulation data', async () => {
     const results: SimulationResults = {
       headers: ['time', 'A', 'B'],

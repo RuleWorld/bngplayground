@@ -78,41 +78,43 @@ describe('NFsimRunner postMessage Resilience', () => {
     }
   });
 
-  it('retains result metadata by default and omits it without changing trajectory data', async () => {
-    const defaultResult = await runNFsimSimulation(baseModel, {
+  it('omits rich result metadata by default and includes it only when requested', async () => {
+    const leanDefault = await runNFsimSimulation(baseModel, {
       t_end: 1.0,
       n_steps: 10,
       requireRuntime: true,
     });
-    const leanResult = await runNFsimSimulation(baseModel, {
+    const richResult = await runNFsimSimulation(baseModel, {
       t_end: 1.0,
       n_steps: 10,
       requireRuntime: true,
-      includeSpeciesData: false,
-      includeExpandedNetwork: false,
+      includeSpeciesData: true,
+      includeExpandedNetwork: true,
     });
     const withoutSpeciesData = await runNFsimSimulation(baseModel, {
       t_end: 1.0,
       n_steps: 10,
       requireRuntime: true,
       includeSpeciesData: false,
+      includeExpandedNetwork: true,
     });
     const withoutExpandedNetwork = await runNFsimSimulation(baseModel, {
       t_end: 1.0,
       n_steps: 10,
       requireRuntime: true,
+      includeSpeciesData: true,
       includeExpandedNetwork: false,
     });
 
-    expect(defaultResult).toHaveProperty('speciesHeaders');
-    expect(defaultResult).toHaveProperty('speciesData');
-    expect(defaultResult).toHaveProperty('expandedReactions');
-    expect(defaultResult).toHaveProperty('expandedSpecies');
+    expect(leanDefault).not.toHaveProperty('speciesHeaders');
+    expect(leanDefault).not.toHaveProperty('speciesData');
+    expect(leanDefault).not.toHaveProperty('expandedReactions');
+    expect(leanDefault).not.toHaveProperty('expandedSpecies');
 
-    expect(leanResult).not.toHaveProperty('speciesHeaders');
-    expect(leanResult).not.toHaveProperty('speciesData');
-    expect(leanResult).not.toHaveProperty('expandedReactions');
-    expect(leanResult).not.toHaveProperty('expandedSpecies');
+    expect(richResult).toHaveProperty('speciesHeaders');
+    expect(richResult).toHaveProperty('speciesData');
+    expect(richResult).toHaveProperty('expandedReactions');
+    expect(richResult).toHaveProperty('expandedSpecies');
 
     expect(withoutSpeciesData).not.toHaveProperty('speciesHeaders');
     expect(withoutSpeciesData).not.toHaveProperty('speciesData');
@@ -124,9 +126,9 @@ describe('NFsimRunner postMessage Resilience', () => {
     expect(withoutExpandedNetwork).not.toHaveProperty('expandedReactions');
     expect(withoutExpandedNetwork).not.toHaveProperty('expandedSpecies');
 
-    for (const result of [leanResult, withoutSpeciesData, withoutExpandedNetwork]) {
-      expect(result.headers).toEqual(defaultResult.headers);
-      expect(result.data).toEqual(defaultResult.data);
+    for (const result of [richResult, withoutSpeciesData, withoutExpandedNetwork]) {
+      expect(result.headers).toEqual(leanDefault.headers);
+      expect(result.data).toEqual(leanDefault.data);
     }
 
     for (const [, runtimeOptions] of vi.mocked(runNFsim).mock.calls) {

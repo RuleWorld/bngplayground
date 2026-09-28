@@ -35,6 +35,12 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
         }
 
         const model = parseModelOrThrow(parsedArgs.code);
+        const seedExpressions = new Map<string, string>();
+        for (const species of model.species ?? []) {
+            if (typeof species.initialExpression === 'string' && species.initialExpression.trim()) {
+                seedExpressions.set(species.name, species.initialExpression);
+            }
+        }
         const expanded = await expandModel(model);
 
         if (!(parsedArgs.input_parameter in model.parameters)) {
@@ -80,6 +86,7 @@ export async function handleDoseResponse(args: ToolArgs): Promise<ToolResult<any
             t_end: parsedArgs.t_end,
             tolerance: parsedArgs.tolerance,
             detectBifurcations: parsedArgs.detect_bifurcations,
+            seedExpressions,
         });
 
         const totalPoints = result.curves.reduce((acc, curve) => acc + curve.responses.length, 0);

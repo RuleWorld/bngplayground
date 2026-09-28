@@ -105,7 +105,7 @@ export async function runNFsimSimulation(
 
   try {
     const xml = BNGXMLWriter.write(inputModel);
-    const VERBOSE_NFSIM_DEBUG = true; // Enabled to help investigate why iteration isn't showing
+    const VERBOSE_NFSIM_DEBUG = options.verbose ?? false;
     if (VERBOSE_NFSIM_DEBUG) console.log('[NFsimRunner] Generated XML:\n', xml);
     const hasSpeciesObservables = (inputModel.observables || [])
       .some((obs) => String(obs.type ?? '').toLowerCase() === 'species');
@@ -115,8 +115,12 @@ export async function runNFsimSimulation(
       cb: options.cb ?? hasSpeciesObservables
     };
     // Attach a progress callback so we can forward NFsim stdout lines to the main thread as 'progress' messages
+    let lastProgressAt = 0;
     const progressCallback = (line: string) => {
       try {
+        const now = Date.now();
+        if (now - lastProgressAt < 100) return;
+        lastProgressAt = now;
         const message = String(line).trim();
         // Strict regex: only parse "Sim time" to avoid CPU time / events noise
         const tm = message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||

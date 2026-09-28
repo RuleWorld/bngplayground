@@ -213,12 +213,14 @@ export async function generateExpandedNetwork(
         canonical: string;
         concentration: number;
         isConstant: boolean;
+        initialExpression?: string;
     };
     const seedEntries: SeedEntry[] = inputModel.species.map((species, index) => ({
         graph: __seedSpecies[index],
         canonical: GraphCanonicalizer.canonicalize(__seedSpecies[index]),
         concentration: resolvedSeedConcentrations[index] ?? 0,
         isConstant: !!species.isConstant,
+        initialExpression: species.initialExpression,
     }));
 
     // CRITICAL FIX (Parity Issue 2): Map Canonical Names -> Initial Concentrations
@@ -675,7 +677,14 @@ export async function generateExpandedNetwork(
             console.log(`[NetworkExpansion] Expanded Species: '${canonicalName}', Conc: ${concentration}, Constant: ${isConstant}`);
         }
 
-        return { name: canonicalName, initialConcentration: concentration, isConstant };
+        return {
+            name: canonicalName,
+            initialConcentration: concentration,
+            ...(matchedSeedEntry?.initialExpression
+                ? { initialExpression: matchedSeedEntry.initialExpression }
+                : {}),
+            isConstant,
+        };
     });
 
     const observableNamesSet = new Set(inputModel.observables.map(o => o.name));

@@ -484,6 +484,7 @@ export interface SimulationResultsExportInput {
   results: SimulationResults;
   modelSource?: string | null;
   simulationOptions?: SimulationOptions | null;
+  requestFullSpeciesData?: () => Promise<SimulationResults>;
   currentRows?: Record<string, unknown>[];
   currentHeaders?: string[];
   currentFigureSvg?: () => string | null;
@@ -516,21 +517,25 @@ export function createSimulationResultsExportDescriptor(
     selectedByDefault: true,
     estimatedBytes: fullRows * fullColumns * 18,
     build: async () => {
+      const exportResults = !results.speciesData && !results.speciesDataBySuffix && input.requestFullSpeciesData
+        ? await input.requestFullSpeciesData()
+        : results;
+      const exportSlices = getSimulationSlices(exportResults);
       const files: ResultExportFile[] = [];
-      for (const slice of slices) {
+      for (const slice of exportSlices) {
         const suffix = suffixFilename(slice.suffix);
         files.push({
           path: `data/observables${suffix || ''}.gdat`,
-          content: gdatFromResults({ headers: results.headers, data: slice.data }),
+          content: gdatFromResults({ headers: exportResults.headers, data: slice.data }),
           mimeType: MIME_TYPES.gdat,
           description: `Observable trajectories for ${slice.suffix === '__default__' ? 'the default output' : `phase ${slice.suffix}`}.`,
         });
 
-        if (slice.speciesData && results.speciesHeaders && results.speciesHeaders.length > 0) {
-          const speciesRows = speciesRowsWithTime(slice.speciesData, slice.data, results.speciesHeaders);
+        if (slice.speciesData && exportResults.speciesHeaders && exportResults.speciesHeaders.length > 0) {
+          const speciesRows = speciesRowsWithTime(slice.speciesData, slice.data, exportResults.speciesHeaders);
           files.push({
             path: `data/species${suffix || ''}.csv`,
-            content: toCsvTable(speciesRows, ['time', ...results.speciesHeaders.filter((header) => header !== 'time')]),
+            content: toCsvTable(speciesRows, ['time', ...exportResults.speciesHeaders.filter((header) => header !== 'time')]),
             mimeType: MIME_TYPES.csv,
             description: 'Species-level concentrations or counts linked to the observable time points.',
           });

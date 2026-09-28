@@ -1,7 +1,7 @@
 import { abcSMC, simulate, loadEvaluator, type ABCSMCConfig } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { bayesianInferenceArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, applyNetworkOptions, parseModelOrThrow, expandModel, buildSimulationOptions, withDataOnlySimulationOutput, applyPreparedModelOverrides } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 export async function handleBayesianInference(args: ToolArgs): Promise<ToolResult<any>> {
@@ -20,11 +20,7 @@ export async function handleBayesianInference(args: ToolArgs): Promise<ToolResul
 
         const result = await abcSMC({
             simulate: async (overrides) => {
-                const runModel = cloneExpandedModel(expandedModel);
-                Object.entries(overrides).forEach(([k, v]) => {
-                    runModel.parameters[k] = v;
-                });
-                updateMassActionRates(runModel);
+                const runModel = applyPreparedModelOverrides(expandedModel, overrides);
                 return simulate(0, runModel, simOptions, {
                     checkCancelled: () => { },
                     postMessage: () => { },

@@ -1,7 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-vi.mock('@bngplayground/engine', () => {
+vi.mock('@bngplayground/engine', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@bngplayground/engine')>();
   return {
+    ...actual,
     generateExpandedNetwork: vi.fn(),
     simulate: vi.fn(),
     resolveCompartmentVolumes: vi.fn(),
@@ -13,7 +15,10 @@ vi.mock('@bngplayground/engine', () => {
     getCacheSizes: vi.fn(),
     loadEvaluator: vi.fn(),
     parseBNGLWithANTLR: vi.fn(),
-    BNGLParser: { evaluateExpression: vi.fn() },
+    BNGLParser: { evaluateExpression: vi.fn((expr: string, params: Map<string, number>) => params.get(expr) ?? Number(expr)) },
+    reevaluateParameterExpressions: vi.fn((model: any, overrides: Record<string, number>) => {
+      Object.assign(model.parameters, overrides);
+    }),
     CVODESolver: { cvodeModuleFactory: vi.fn() }
   };
 });
@@ -640,7 +645,7 @@ describe('bnglWorker cached network expansion', () => {
   const sendAndWait = async (id: number, type: string, payload: unknown, terminalType: string) => {
     await messageListener({ origin: '', data: { id, type, payload } });
     await vi.waitFor(() => {
-      expect(mockPostMessage).toHaveBeenCalledWith(expect.objectContaining({ id, type: terminalType }));
+      expect(mockPostMessage.mock.calls.some(([message]: any[]) => message?.id === id && message?.type === terminalType)).toBe(true);
     });
   };
 
@@ -686,21 +691,100 @@ describe('bnglWorker cached network expansion', () => {
     expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(1);
     expect(engine.simulate).toHaveBeenCalledTimes(2);
     expect((vi.mocked(engine.simulate).mock.calls[1][1] as any).reactions).toHaveLength(1);
+    const ordinaryResponse = mockPostMessage.mock.calls.map(([message]: any[]) => message)
+      .find((message: any) => message.id === 2 && message.type === 'simulate_success');
+    expect(ordinaryResponse.payload).not.toHaveProperty('expandedReactions');
+    expect(ordinaryResponse.payload).not.toHaveProperty('speciesData');
   });
 
-  it('regenerates override variants without poisoning the cached baseline', async () => {
+  it('returns the prepared network on explicit request without re-expanding it', async () => {
+    const engine = await import('@bngplayground/engine');
+    await sendAndWait(4, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    await sendAndWait(5, 'simulate', { modelId: 1, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
+    await sendAndWait(6, 'get_prepared_network', { modelId: 1 }, 'get_prepared_network_success');
+
+    const response = mockPostMessage.mock.calls.map(([message]: any[]) => message)
+      .find((message: any) => message.id === 6 && message.type === 'get_prepared_network_success');
+    expect(response.payload.reactions).toHaveLength(1);
+    expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(1);
+  });
+
+  it('regenerates an evicted expanded network from the worker-owned source model', async () => {
+    const engine = await import('@bngplayground/engine');
+    await sendAndWait(20, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    await sendAndWait(21, 'simulate', { modelId: 1, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
+    await sendAndWait(22, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    await sendAndWait(23, 'simulate', { modelId: 2, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
+    await sendAndWait(24, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    await sendAndWait(25, 'simulate', { modelId: 3, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
+    await sendAndWait(26, 'get_prepared_network', { modelId: 1 }, 'get_prepared_network_success');
+
+    expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(4);
+  });
+
+  it('reports source-cache eviction when prepared-network retrieval is requested', async () => {
+    for (let index = 0; index < 9; index += 1) {
+      await sendAndWait(30 + index, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    }
+    await sendAndWait(50, 'get_prepared_network', { modelId: 1 }, 'get_prepared_network_error');
+    const error = mockPostMessage.mock.calls.map(([message]: any[]) => message)
+      .find((message: any) => message.id === 50 && message.type === 'get_prepared_network_error');
+    expect(error.payload.message).toContain('Cached model not found');
+  });
+
+  it('honors cancellation while lazily generating a prepared network', async () => {
+    const engine = await import('@bngplayground/engine');
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    vi.mocked(engine.generateExpandedNetwork).mockImplementation(async (model: any, checkCancelled: any) => {
+      await gate;
+      checkCancelled();
+      return expandedModel(model);
+    });
+    await sendAndWait(60, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    const pending = messageListener({ origin: '', data: { id: 61, type: 'get_prepared_network', payload: { modelId: 1 } } });
+    await vi.waitFor(() => expect(engine.generateExpandedNetwork).toHaveBeenCalled());
+    await messageListener({ origin: '', data: { id: 62, type: 'cancel', payload: { targetId: 61 } } });
+    release();
+    await pending;
+    const error = mockPostMessage.mock.calls.map(([message]: any[]) => message)
+      .find((message: any) => message.id === 61 && message.type === 'get_prepared_network_error');
+    expect(error.payload).toEqual(expect.objectContaining({ name: 'AbortError' }));
+  });
+
+  it('reuses the cached topology for rate overrides without poisoning the baseline', async () => {
     const engine = await import('@bngplayground/engine');
     await sendAndWait(10, 'cache_model', { model: sourceModel() }, 'cache_model_success');
     await sendAndWait(11, 'simulate', { modelId: 1, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
     await sendAndWait(12, 'simulate', { modelId: 1, parameterOverrides: { k: 2 }, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
     await sendAndWait(13, 'simulate', { modelId: 1, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
 
-    expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(2);
-    expect((vi.mocked(engine.generateExpandedNetwork).mock.calls[1][0] as any).parameters.k).toBe(2);
+    expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(1);
+    expect((vi.mocked(engine.simulate).mock.calls[1][1] as any).parameters.k).toBe(2);
     expect((vi.mocked(engine.simulate).mock.calls[2][1] as any).parameters.k).toBe(1);
   });
 
-  it('applies initial-expression parameter overrides before regeneration', async () => {
+  it('warms and reuses a baseline topology when the first cached run has rate overrides', async () => {
+    const engine = await import('@bngplayground/engine');
+    await sendAndWait(70, 'cache_model', { model: sourceModel() }, 'cache_model_success');
+    await sendAndWait(71, 'simulate', {
+      modelId: 1,
+      parameterOverrides: { k: 2 },
+      options: { method: 'ssa', t_end: 1, n_steps: 1 },
+    }, 'simulate_success');
+    await sendAndWait(72, 'simulate', {
+      modelId: 1,
+      parameterOverrides: { k: 3 },
+      options: { method: 'ssa', t_end: 1, n_steps: 1 },
+    }, 'simulate_success');
+
+    expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(1);
+    expect((vi.mocked(engine.generateExpandedNetwork).mock.calls[0][0] as any).parameters.k).toBe(1);
+    expect((vi.mocked(engine.simulate).mock.calls[0][1] as any).parameters.k).toBe(2);
+    expect((vi.mocked(engine.simulate).mock.calls[1][1] as any).parameters.k).toBe(3);
+  });
+
+  it('refreshes seed amounts on the cached network without regeneration', async () => {
     const engine = await import('@bngplayground/engine');
     vi.mocked(engine.BNGLParser.evaluateExpression).mockImplementation((expr: string, params: Map<string, number>) => {
       if (expr === 'A0') return params.get('A0') ?? 0;
@@ -711,11 +795,13 @@ describe('bnglWorker cached network expansion', () => {
     model.species = [{ name: 'A()', initialConcentration: 100, initialExpression: 'A0' }];
 
     await sendAndWait(14, 'cache_model', { model }, 'cache_model_success');
-    await sendAndWait(15, 'simulate', { modelId: 1, parameterOverrides: { A0: 110 }, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
+    await sendAndWait(15, 'simulate', { modelId: 1, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
+    await sendAndWait(16, 'simulate', { modelId: 1, parameterOverrides: { A0: 110 }, options: { method: 'ssa', t_end: 1, n_steps: 1 } }, 'simulate_success');
 
-    const regenerated = vi.mocked(engine.generateExpandedNetwork).mock.calls[0][0] as any;
-    expect(regenerated.parameters.A0).toBe(110);
-    expect(regenerated.species[0].initialConcentration).toBeCloseTo(110);
+    expect(engine.generateExpandedNetwork).toHaveBeenCalledTimes(1);
+    const updated = vi.mocked(engine.simulate).mock.calls[1][1] as any;
+    expect(updated.parameters.A0).toBe(110);
+    expect(updated.species[0].initialConcentration).toBeCloseTo(110);
   });
 
   it('keeps pure NFsim runs on the original seed model after warming the expanded cache', async () => {

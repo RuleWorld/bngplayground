@@ -93,7 +93,7 @@ export const requiresCompartmentResolution = (model: BNGLModel): boolean => {
  *
  * @invariant Must remain free of browser APIs (browser-API-free) as a core engine package utility.
  */
-export const resolveCompartmentVolumes = async (model: BNGLModel): Promise<BNGLModel> => {
+export const resolveCompartmentVolumesSync = (model: BNGLModel): BNGLModel => {
   if (!model.compartments || model.compartments.length === 0) return model;
 
   const resolvedMap = computeResolvedVolumes(model.compartments);
@@ -116,3 +116,6 @@ export const resolveCompartmentVolumes = async (model: BNGLModel): Promise<BNGLM
     compartments
   };
 };
+
+export const resolveCompartmentVolumes = async (model: BNGLModel): Promise<BNGLModel> =>
+  resolveCompartmentVolumesSync(model);

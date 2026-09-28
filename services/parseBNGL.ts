@@ -6,7 +6,7 @@
  * - `parseBNGLRegexDeprecated()` keeps the legacy regex parser for comparison/debug.
  */
 
-import type { BNGLModel, BNGLEvent } from '../types.ts';
+import type { BNGLAlgebraicRule, BNGLModel, BNGLEvent, BNGLReactionConversionFactor, BNGLVariableStoichiometry } from '../types.ts';
 import { BNGLParser } from '@bngplayground/engine';
 import { SafeExpressionEvaluator } from '@bngplayground/engine';
 import { parseBNGLWithANTLR } from '@bngplayground/engine';
@@ -255,6 +255,10 @@ export interface ParseBNGLOptions {
 }
 
 const SBML_EVENT_METADATA_RE = /^\s*#\s*@sbml-event\s+([^\s]+)\s*$/gim;
+const SBML_ALGEBRAIC_METADATA_RE = /^\s*#\s*@sbml-algebraic\s+([^\s]+)\s*$/gim;
+const SBML_REACTION_CF_METADATA_RE = /^\s*#\s*@sbml-reaction-conversion-factor\s+([^\s]+)\s*$/gim;
+const SBML_SPECIES_VALUE_TYPE_METADATA_RE = /^\s*#\s*@sbml-species-value-type\s+([^\s]+)\s*$/gim;
+const SBML_VARIABLE_STOICH_METADATA_RE = /^\s*#\s*@sbml-variable-stoichiometry\s+([^\s]+)\s*$/gim;
 
 function extractSBMLEventMetadata(code: string): BNGLEvent[] {
   const events: BNGLEvent[] = [];
@@ -271,6 +275,72 @@ function extractSBMLEventMetadata(code: string): BNGLEvent[] {
     }
   }
   return events;
+}
+
+function extractSBMLAlgebraicMetadata(code: string): BNGLAlgebraicRule[] {
+  const rules: BNGLAlgebraicRule[] = [];
+  for (const match of code.matchAll(SBML_ALGEBRAIC_METADATA_RE)) {
+    try {
+      const decoded = decodeURIComponent(match[1]);
+      const value = JSON.parse(decoded) as BNGLAlgebraicRule;
+      if (!value || typeof value !== 'object' || typeof value.math !== 'string' || value.math.trim().length === 0) continue;
+      rules.push({ math: value.math });
+    } catch {
+      // Metadata is additive; ignore malformed comments.
+    }
+  }
+  return rules;
+}
+
+function extractSBMLReactionConversionFactors(code: string): BNGLReactionConversionFactor[] {
+  const factors: BNGLReactionConversionFactor[] = [];
+  for (const match of code.matchAll(SBML_REACTION_CF_METADATA_RE)) {
+    try {
+      const decoded = decodeURIComponent(match[1]);
+      const value = JSON.parse(decoded) as BNGLReactionConversionFactor;
+      if (!value || typeof value !== 'object' || typeof value.ruleName !== 'string' ||
+          typeof value.bnglPattern !== 'string' || typeof value.factor !== 'string') continue;
+      factors.push(value);
+    } catch {
+      // Metadata is additive; ignore malformed comments.
+    }
+  }
+  return factors;
+}
+
+function extractSBMLSpeciesValueTypes(code: string): Record<string, 'amount' | 'concentration'> {
+  const valueTypes: Record<string, 'amount' | 'concentration'> = {};
+  for (const match of code.matchAll(SBML_SPECIES_VALUE_TYPE_METADATA_RE)) {
+    try {
+      const decoded = decodeURIComponent(match[1]);
+      const value = JSON.parse(decoded) as { name?: string; type?: string };
+      if (!value || typeof value.name !== 'string') continue;
+      if (value.type === 'amount' || value.type === 'concentration') valueTypes[value.name] = value.type;
+    } catch {
+      // Metadata is additive; ignore malformed comments.
+    }
+  }
+  return valueTypes;
+}
+
+function extractSBMLVariableStoichiometries(code: string): BNGLVariableStoichiometry[] {
+  const entries: BNGLVariableStoichiometry[] = [];
+  for (const match of code.matchAll(SBML_VARIABLE_STOICH_METADATA_RE)) {
+    try {
+      const decoded = decodeURIComponent(match[1]);
+      const value = JSON.parse(decoded) as BNGLVariableStoichiometry;
+      if (!value || typeof value !== 'object'
+        || typeof value.ruleName !== 'string'
+        || typeof value.bnglPattern !== 'string'
+        || typeof value.variable !== 'string'
+        || (value.side !== 'reactant' && value.side !== 'product')
+        || !Number.isFinite(Number(value.fixedStoichiometry))) continue;
+      entries.push({ ...value, fixedStoichiometry: Number(value.fixedStoichiometry) });
+    } catch {
+      // Metadata is additive; ignore malformed comments.
+    }
+  }
+  return entries;
 }
 
 export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLModel {
@@ -296,6 +366,48 @@ export function parseBNGL(code: string, options: ParseBNGLOptions = {}): BNGLMod
   const eventMetadata = extractSBMLEventMetadata(code);
   if (eventMetadata.length > 0) {
     result.model.events = eventMetadata;
+  }
+  const algebraicMetadata = extractSBMLAlgebraicMetadata(code);
+  if (algebraicMetadata.length > 0) {
+    result.model.algebraicRules = algebraicMetadata;
+  }
+  const reactionConversionFactors = extractSBMLReactionConversionFactors(code);
+  if (reactionConversionFactors.length > 0) {
+    result.model.reactionConversionFactors = reactionConversionFactors;
+  }
+  const speciesValueTypes = extractSBMLSpeciesValueTypes(code);
+  if (Object.keys(speciesValueTypes).length > 0) {
+    result.model.speciesValueTypes = speciesValueTypes;
+  }
+  const variableStoichiometries = extractSBMLVariableStoichiometries(code);
+  if (variableStoichiometries.length > 0) {
+    result.model.variableStoichiometries = variableStoichiometries;
+    const byRule = new Map<string, BNGLVariableStoichiometry[]>();
+    for (const entry of variableStoichiometries) {
+      const existing = byRule.get(entry.ruleName);
+      if (existing) existing.push(entry);
+      else byRule.set(entry.ruleName, [entry]);
+    }
+    for (const rule of result.model.reactionRules) {
+      if (!rule.name) continue;
+      const entries = byRule.get(rule.name);
+      if (entries && entries.length > 0) {
+        rule.dynamicStoichiometries = entries.map((entry) => ({ ...entry }));
+        rule.totalRate = true;
+      }
+    }
+    for (const reaction of result.model.reactions) {
+      if (!reaction.name) continue;
+      const entries = byRule.get(reaction.name);
+      if (!entries || entries.length === 0) continue;
+      const matches = entries.every((entry) =>
+        (entry.side === 'reactant' ? reaction.reactants : reaction.products).includes(entry.bnglPattern)
+      );
+      if (matches) {
+        reaction.dynamicStoichiometries = entries.map((entry) => ({ ...entry }));
+        reaction.totalRate = true;
+      }
+    }
   }
 
   return result.model;
@@ -728,7 +840,26 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
       if (new RegExp(`\\b${obsName}\\b`).test(rateExpr)) return true;
     }
     for (const funcName of functionNames) {
-      if (new RegExp(`\\b${funcName}\\s*\\(`).test(rateExpr)) return true;
+      // Do not rely on the regex escape sequence here: generated Atomizer
+      // functions can contain BNGL-safe names that are also parsed from
+      // metadata, and a malformed/over-escaped boundary silently classified
+      // the whole rule as constant. That dropped it from `model.reactions`,
+      // so a valid custom-function flux never reached the simulator.
+      let searchFrom = 0;
+      while (searchFrom < rateExpr.length) {
+        const index = rateExpr.indexOf(funcName, searchFrom);
+        if (index < 0) break;
+        const before = index > 0 ? rateExpr[index - 1] : '';
+        const afterIndex = index + funcName.length;
+        const after = afterIndex < rateExpr.length ? rateExpr[afterIndex] : '';
+        const identifierChar = (value: string): boolean => /[A-Za-z0-9_]/.test(value);
+        if (!identifierChar(before) && !identifierChar(after)) {
+          let cursor = afterIndex;
+          while (cursor < rateExpr.length && /\s/.test(rateExpr[cursor])) cursor++;
+          if (rateExpr[cursor] === '(') return true;
+        }
+        searchFrom = afterIndex;
+      }
     }
     return false;
   };
@@ -755,6 +886,8 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
         products: rule.products,
         rate: rule.rate,
         rateConstant: Number.isNaN(forwardRate) ? 0 : forwardRate,
+        name: rule.name,
+        totalRate: rule.totalRate,
         rateExpression: isFunctionalForward ? rule.rate : undefined,
         isFunctionalRate: isFunctionalForward,
       });
@@ -776,12 +909,39 @@ export function parseBNGLRegexDeprecated(code: string, options: ParseBNGLOptions
           products: rule.reactants,
           rate: rule.reverseRate,
           rateConstant: Number.isNaN(reverseRate) ? 0 : reverseRate,
+          name: rule.name ? `${rule.name}_rev` : undefined,
+          totalRate: rule.totalRate,
           rateExpression: isFunctionalReverse ? rule.reverseRate : undefined,
           isFunctionalRate: isFunctionalReverse,
         });
       }
     }
   });
+
+  // Variable SBML speciesReference coefficients cannot be represented by a
+  // BNGL pattern. Keep the parsed rule as the direct executable reaction and
+  // attach the coefficient metadata so the Playground ODE/SSA kernels can
+  // replace the fixed net stoichiometry at runtime.
+  if (model.variableStoichiometries && model.variableStoichiometries.length > 0) {
+    const byRule = new Map<string, BNGLVariableStoichiometry[]>();
+    for (const entry of model.variableStoichiometries) {
+      const existing = byRule.get(entry.ruleName);
+      if (existing) existing.push(entry);
+      else byRule.set(entry.ruleName, [entry]);
+    }
+    for (const reaction of model.reactions) {
+      if (!reaction.name) continue;
+      const entries = byRule.get(reaction.name);
+      if (!entries || entries.length === 0) continue;
+      const matches = entries.every((entry) =>
+        (entry.side === 'reactant' ? reaction.reactants : reaction.products).includes(entry.bnglPattern)
+      );
+      if (matches) {
+        reaction.dynamicStoichiometries = entries.map((entry) => ({ ...entry }));
+        reaction.totalRate = true;
+      }
+    }
+  }
 
   // Parse actions like generate_network, simulate, simulate_ode
   const actionKeywords = ['generate_network', 'simulate', 'simulate_ode'];

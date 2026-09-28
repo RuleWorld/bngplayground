@@ -1,0 +1,289 @@
+# Multiscale Engine Optimization Report
+
+Date: 2026-09-27
+Scope: `packages/engine/src/services/multiscale/`, `services/multiscaleWorker.ts`, `components/tabs/MultiscaleTab.tsx`
+
+All "after" numbers were measured with `npx tsx scripts/benchmark_multiscale.ts`
+(deterministic, Node 26, arm64). "Before" numbers were measured by running the
+pre-change `ExtracellularGrid` extracted from git HEAD
+(`scripts/benchmark_multiscale_baseline.ts`).
+
+## 1. Before
+
+### The catastrophic bug
+
+`MultiscaleSimulation.ts` hard-coded `gridRes = [20, 20, 20]` even for
+2D models (`dimensions: 2, size: [50, 50, 1]`). With `dz = 0.05` and
+`D = 100`, the 3D explicit stability criterion gave
+`dtMax ≈ 3.75e-6`, so a single extracellular step of `dt = 0.5` required
+~133,000 substeps × 8,000 voxels ≈ 1.07 billion voxel updates.
+
+Measured with the old implementation (default demo geometry):
+
+| Measurement | Result |
+|---|---|
+| `grid.step(0.01)` on old `[20,20,20]` grid | **638 ms** (≈2,667 substeps ≈ 0.24 ms/substep) |
+| `grid.step(0.5)` (one default-demo extracellular step) | ≈ 32 s (derived from measured per-substep cost) |
+| Full default demo (`tEnd=10`, 10 decision steps × `grid.step(1.0)`) | **> 10 min — effective timeout**; the synchronous loop never yielded, so the worker event loop was blocked, Cancel did nothing, and the tab appeared crashed |
+
+### Other baseline defects confirmed by code inspection
+
+- `dtIntracellular` / `dtExtracellular` were parsed but unused; everything
+  advanced on `dtStep = dtDecision`.
+- Division performed a full O(N) active-cell scan per division and
+  `lineage.find(...)` (O(N) lookup) per division/death ⇒ O(N²) population growth.
+- `refractoryPeriod` was parsed into the rule but never enforced.
+- `moveCell` fell back to `crypto.getRandomValues()` when no RNG was passed
+  (it never was), destroying reproducibility, and did an isotropic 3D walk in
+  2D models. Cell positions were never bounded by domain BCs.
+- Snapshots used `{ ...cell }` — they retained `intracellularState`
+  (Float64Array, solver-sized) and **aliased** the live `observables` object,
+  so history was silently rewritten by later steps.
+- Division reset `ruleCooldowns`, bypassing any refractory period.
+- No workload validation: negative D, dt ≤ 0, etc. reached the solver.
+
+## 2. After (measured)
+
+| Benchmark | Before | After | Speedup |
+|---|---|---|---|
+  | A — default demo (5 cells, D=100, tEnd=10, CVODE) | > 10 min (timeout, frozen UI) | **49.4 ms** | > 10,000× |
+  | B — no intracellular (agent + PDE) | n/a (same PDE blowup) | **1.2 ms** | — |
+  | C — no extracellular species (cell decisions only) | ~ms scale | **0.2 ms** | — |
+  | D — 10 initial cells | — | **2.0 ms** | — |
+  | D — 100 initial cells | — | **3.5 ms** | — |
+  | D — 1000 initial cells | O(N²) scans, grew unbounded | **21.3 ms** | — |
+  | E — PDE 2D 20×20 (tEnd=2) | — | **0.4 ms** | — |
+  | E — PDE 2D 50×50 | — | **0.5 ms** | — |
+  | E — PDE 2D 100×100 | — | **4.2 ms** | — |
+  | E — PDE 2D 200×200 | — | **63.3 ms** | — |
+  | E — PDE 3D 20×20×10 | — | **3.1 ms** | — |
+  | F — 1 / 4 / 8 extracellular species | — | **0.2 / 0.2 / 0.3 ms** | — |
+
+Correctness spot-check: the default demo's intracellular decay
+(`A() -> 0, k=0.01`) integrates to `A_count(10) = 10·e^(-0.1) = 9.048…`
+via CVODE — exact.
+
+### Memory
+
+- Snapshots are compact (`id, cellType, position, radius, phase, observables`);
+  the solver-sized `intracellularState` Float64Array is no longer retained per
+  snapshot cell (was O(outputs × cells × stateSize) before).
+- Observables/position are deep-copied per snapshot — history is immutable and
+  never aliases live state (verified by test).
+- Worker sends one final compact result; UI keeps only visualization-ready
+  snapshots. Export serialization is lazy (`build: () => …` artifacts).
+
+### Cancellation
+
+- Old: `cancel` could not be processed at all during a run (no yield).
+- New: the simulation yields to the worker event loop every ≥50 ms of wall
+  time; the worker answers `cancel` with `{ type: 'cancelled' }`, and the UI
+  force-terminates the worker after a 500 ms fallback. Typical cancellation
+  latency ≤ 50–100 ms.
+
+## 3. Changes by file
+
+### `packages/engine/src/services/multiscale/ExtracellularGrid.ts`
+- True 2D/3D representation: explicit `dimensions`; 2D uses Nx×Ny voxels,
+  5-point stencil, no z-terms; 3D uses 7-point stencil. Dimension inferred
+  from resolution when not given.
+- Correct stability criteria: 2D `dt < 0.9 / (2D(1/dx²+1/dy²))`,
+  3D adds `1/dz²`; substeps capped at 10,000 with a warning.
+- Specialized interior/boundary loops per BC (neumann/periodic/dirichlet)
+  with no per-voxel `getVal`/`bc` calls; grid swap by pointer, zero-copy.
+- Source/sink accumulation into flat Float64Array fields with active-index
+  lists: O(1) accumulation per cell, O(active voxels) application per substep,
+  instead of per-cell `{ix,iy,iz,rate}` object arrays iterated every substep.
+- Non-negativity clamp; validation of resolution/domain/D/decay.
+- Bilinear interpolation + zero-z gradient in 2D; trilinear in 3D;
+  BC-aware `exportSlice` (full-plane in 2D).
+- **VCell-conformant Dirichlet (VALUE) boundaries**: the fixed boundary value
+  sits on the cell *face* (ghost = 2V − c, i.e. −c for V=0), not at the ghost
+  cell center. The old off-by-half-cell placement under-leaked by up to ~2×.
+- **Exact degradation via operator splitting**: decay applied as
+  `exp(−k·dt)` per substep (D=0 species solved in a single exact pass), so
+  pure decay is exact at any step size and can never destabilize the
+  explicit stencil. This removes the main source of clamp-induced mass error.
+
+## 3b. Accuracy verification against VCell conventions
+
+The VCell codebase (`github.com/virtualcell/vcell`) was fetched and reviewed.
+Its production kernel is semi-implicit finite-volume (C binaries not in the
+repo), but its math-model semantics (`PdeEquation`: VALUE=Dirichlet at the
+face, FLUX=Neumann) and analytic-validation workflow
+(`MathTestingUtilities`, "verify with analytic") define the accuracy bar the
+kernel above is held to. Findings and fixes:
+
+- Dirichlet face-offset error (above) — fixed; verified by a new
+  absorbing-vs-reflective leakage ordering test.
+- Forward-Euler decay was inaccurate at large steps (k=0.5, dt=1 gave 0.5
+  vs analytic 0.736) — fixed with exact exponential splitting; the decay
+  test now asserts `c = c0·e^(−kt)` to 8 digits.
+- `multiscale-optimization.spec.ts` now checks the kernel against the
+  Gaussian heat kernel like VCell's analytic validation:
+  - 2D delta spread: mass conserved, center and ring values match
+    `M/(4πDT)·exp(−r²/4DT)` to 1 digit, `var(r²) = 4DT` exactly.
+  - 3D smooth-Gaussian evolution (init from analytic at T0=0.5, evolve to
+    T1=1.5): matches `M/(4πDT)^1.5·exp(−r²/4DT)` at center and rings.
+  - A convergence study (n=31→91) confirmed delta-peak oscillations are a
+    lattice-initial-condition artifact (variance exact at every resolution),
+    which is why the 3D test initializes from the smooth field.
+- Intracellular: `A() -> 0` at k=0.01 integrates to `10·e^(−0.1)` exactly
+  via CVODE.
+
+### `packages/engine/src/services/multiscale/MultiscaleSimulation.ts`
+- **Multirate event scheduler**: independent clocks for intracellular,
+  extracellular, decisions, and outputs; integer step counters avoid
+  long-term float drift; non-commensurate intervals verified by test
+  (dtIntra=0.07, dtExtra=0.13, dtDecision=0.5, outputs every 0.5).
+- **Cooperative cancellation**: yields every ≥50 ms; `options.isCancelled()`
+  checked per outer event.
+- O(1) bookkeeping: `activeCellCount` counter (no per-division O(N) scan),
+  `lineageByCellId: Map` for O(1) lineage lookup; `maxCells` enforced
+  against the counter with a one-time diagnostic (divisions suppressed,
+  deterministic).
+- Refractory periods enforced via per-cell `ruleCooldowns[ruleName]`
+  deadlines; work for every action type.
+- Compact immutable snapshots (`CompactCellSnapshot`); deep-copied
+  position/observables; no intracellular runtime state in history.
+- Dead-cell pruning only when dead fraction is significant; dense active
+  population otherwise.
+- try/finally disposes every CVODE engine on all exit paths.
+- 2D movement stays planar; `applyCellBoundary` enforces reflective /
+  periodic / absorbing domain BCs for cells; change_type rebuilds
+  intracellular state from the new type's engine.
+- Uptake/secretion coupling and decisions occur on the decision clock;
+  PDE steps on the extracellular clock; sources/sinks refreshed from cell
+  rates each decision.
+
+### `packages/engine/src/services/multiscale/CellAgent.ts`
+- `moveCell` is dimension-aware: 2D walks use a single angle and keep z=0;
+  chemotaxis uses only in-plane gradient in 2D; always uses the supplied
+  seeded `SimpleRNG` (no `crypto.getRandomValues` fallback).
+- `divideCell` conserves mass exactly: exact binomial for small integer
+  counts, Gaussian-sampled but strictly mass-conserving split for continuous
+  concentrations; 2D daughters stay in-plane; parent keeps its refractory
+  cooldowns (bug fix — division previously reset them).
+- New `applyCellBoundary` (reflective/periodic/absorbing).
+
+### `packages/engine/src/services/multiscale/MultiscaleParser.ts`
+- Full validation: definition shape, dimensions ∈ {2,3}, positive domain
+  size, positive tEnd/dtIntra/dtExtra/dtDecision/outputs, non-negative D,
+  refractory passthrough, `absorbing` boundary now accepted, optional
+  `domain.resolution`, `maxCells`, `seed`.
+
+### `packages/engine/src/services/multiscale/IntracellularEngine.ts`
+- Explicit `await CVODESolver.init()` after `buildOdeSystem` so the WASM
+  module is guaranteed loaded before the first cell integrates (fixes
+  "CVODE WASM not loaded" fallback that silently held all cell states).
+
+### `services/multiscaleWorker.ts`
+- Cooperative cancellation with run IDs: `cancel` posts `{type:'cancelled'}`
+  and invalidates the in-flight run; stale runs cannot post results.
+- Progress throttled to ≥60 ms between messages, clamped to [0,1].
+- Global error / unhandledrejection / messageerror handlers post structured
+  errors; cancellation is never reported as failure.
+
+### `components/tabs/MultiscaleTab.tsx`
+- Run-ID guard: messages from superseded runs are ignored; worker terminated
+  before each new run and on unmount; completed workers released.
+- `cancelled` response handled distinctly from `error` (no red banner on
+  user cancellation), with a 500 ms force-terminate fallback.
+- Observable headers derived from the current snapshot only (was
+  O(snapshots × cells) per render); redundant row duplication memo removed;
+  export artifacts build lazily.
+
+## 4. Tests
+
+`npx vitest run packages/engine/tests/multiscale/ tests/services/multiscaleWorker.spec.ts`
+
+  - **49 passed, 0 failed, 0 skipped** (3 files):
+  - `multiscale.spec.ts` — 8 passed (existing, unchanged semantics)
+  - `multiscale-optimization.spec.ts` — 39 passed (new): dimensionality
+    (2D grid is Nx×Ny; 3D is Nx×Ny×Nz), mass conservation under Neumann
+    (2D & 3D), uniform-field invariance, symmetric point-source spreading,
+    degradation decay, zero-z gradient in 2D, periodic wrapping,
+    Gaussian heat-kernel match (2D delta + 3D smooth-field evolution),
+    exact exponential decay to 8 digits, Dirichlet/Neumann leakage ordering,
+    seeded-RNG determinism, planar 2D movement, chemotaxis in-plane,
+    reflective/periodic/absorbing cell BCs, exact division conservation
+    (integer & continuous), non-commensurate clocks, refractory enforcement
+    (division at t=1 and t=6, none between), maxCells under simultaneous
+    divisions, lineage parent/birth/division/death records, snapshot
+    compactness & immutability, seed reproducibility, monotonic progress,
+    early cancellation, invalid-config rejection, parser validation,
+    boundary-respecting migration in 2D.
+  - `multiscaleWorker.spec.ts` — 2 passed.
+
+`npm run test:fast`: **6,415 passed, 6 skipped; 3 test files fail** — all
+three (`tests/mcp-server.spec.ts`, `packages/mcp-server/tests/protocol-v2.spec.ts`,
+`packages/mcp-server/tests/registry.spec.ts`) fail on the **clean tree too**
+with `Cannot find package '@modelcontextprotocol/server/stdio'` — a
+pre-existing missing-dependency issue unrelated to this change (verified via
+`git stash`).
+
+## 5. Round 2 — measured micro-optimizations (and one reverted experiment)
+
+With correctness and accuracy settled, component attribution was measured
+directly (cold vs warm runs, motility on/off, coupling on/off):
+
+- One-time JIT/RHS compile dominates cold start (~80 ms of the first run;
+  warm steady-state of the default demo is ~8 ms for 500 cell-integrates).
+- Per-cell motility (seeded RNG + 2 trig calls) is ~40% of agent-step cost
+  at scale (~250 ns/cell/decision); left exact — the walk distribution is
+  model semantics.
+- `CVODESolver.integrate` warm path is already minimal (one `ReInit` + one
+  `_solve_step` per cell, ~13 µs); engine-wide internals were deliberately
+  not touched (blast radius).
+
+Changes made (all semantics-preserving, all tests green):
+
+- **Fused decision pass** (`MultiscaleSimulation`): couple → evaluate →
+  execute → motility → source registration in a single traversal instead of
+  4–5 full-population passes; eliminates the per-decision `actions` array
+  and repeated `Object.entries` allocs (for-in on null-prototype rate maps).
+  D-1000 bench: 21.3 → 18.8 ms. Note: RNG draws now interleave per cell
+  rather than phase-by-phase, so stochastic trajectories differ from the
+  pre-fusion version while remaining fully deterministic per seed.
+- **Interpolation fast paths** (`getConcentration` 2D/3D): interior
+  samples skip all BC handling via direct reads (micro-measured 16 ns vs
+  21 ns per call; matters at 10k+ cell scales).
+- **Exact-binomial threshold 100 → 30** (`divideCell`): partitioning is
+  O(n) draws per species; above 30 counts the existing near-equal
+  O(1) split applies (mass still conserved exactly). No formula changed.
+
+**Reverted experiment (documented negative result):** precomputed neighbor
+  index tables (`Int32Array` xL/xR/yD/yU/zB/zF) were built to make the
+  stencil branch-free. A/B measurement showed a **regression**
+  (100×100: 5.4 → 8.8 ms per 20 steps): data-dependent indices defeat V8
+  bounds-check elimination (6 checks/voxel), which costs more than the
+  predictable branches it replaced. Reverted; the branched kernel
+  (~4 ns/voxel-update) stands.
+
+## 6. Remaining bottlenecks
+
+Measured floors on this hardware (single-threaded JS): PDE ~4 ns/voxel,
+  agent pass ~0.4 µs/cell/decision, CVODE ~13 µs/cell/event, interpolation
+  ~16 ns/call. Beyond these, only architectural moves help:
+
+- **CVODE per-cell integration** dominates for large populations with rich
+  intracellular models (one solver per cell type, one `integrate` call per
+  cell per intracellular step). Batching cells by type into grouped solves
+  or reducing JS↔WASM crossings is the next lever.
+- **200×200 2D grid** already costs 65 ms for a 2 s run; ≥500×500 CPU
+  stencils will dominate. A WebGPU diffusion backend is the natural next
+  optimization (regular stencil, semantically separable).
+- The 10,000-substep cap on explicit diffusion protects against hangs but
+  silently under-resolves extremely stiff configurations (warns loudly);
+  an implicit/ADI solver would remove the cap but is deferred until
+  profiling justifies it.
+- Snapshot arrays still hold one entry per output per cell; very long runs
+  may want ring-buffer/decimated history (not yet implemented).
+
+## Reproducing
+
+```bash
+npx tsx scripts/benchmark_multiscale.ts          # after (full harness)
+npx tsx scripts/benchmark_multiscale_baseline.ts # before (needs /tmp/msbench/OldExtracellularGrid.ts from git HEAD)
+npx vitest run packages/engine/tests/multiscale/ tests/services/multiscaleWorker.spec.ts
+```

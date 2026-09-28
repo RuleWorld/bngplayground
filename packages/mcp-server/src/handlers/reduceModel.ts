@@ -3,7 +3,7 @@ import { z } from 'zod';
 import type { ParamBounds, ExperimentalDataPoint, RegularizationConfig } from '@bngplayground/engine';
 import type { ToolArgs, ToolResult } from '../types/index.js';
 import { reduceModelArgsSchema } from '../schemas/index.js';
-import { createToolResult, parseArgs, parseModelOrThrow, expandModel, withDataOnlySimulationOutput, cloneExpandedModel, updateMassActionRates } from '../services/engine.js';
+import { createToolResult, parseArgs, parseModelOrThrow, expandModel, withDataOnlySimulationOutput, applyPreparedModelOverrides } from '../services/engine.js';
 import { structureError } from '../services/errors.js';
 
 type ReduceModelArgs = z.infer<typeof reduceModelArgsSchema>;
@@ -40,11 +40,7 @@ export async function handleReduceModel(args: ToolArgs): Promise<ToolResult<any>
             paramBounds,
             experimentalData,
             simulate: async (overrides, options) => {
-                const runModel = cloneExpandedModel(expandedModel);
-                Object.entries(overrides).forEach(([k, v]) => {
-                    runModel.parameters[k] = v;
-                });
-                updateMassActionRates(runModel);
+                const runModel = applyPreparedModelOverrides(expandedModel, overrides);
                 return simulate(0, runModel, withDataOnlySimulationOutput({ ...options, method: parsedArgs.method, t_end: tEnd, n_steps: 100 }), {
                     checkCancelled: () => { },
                     postMessage: () => { },

@@ -1,5 +1,6 @@
 import type { BNGLModel } from '../../types.js';
 import { simulate } from '../simulation/SimulationLoop.js';
+import { updatePreparedModel } from '../../utils/preparedModel.js';
 
 export interface HysteresisConfig {
     model: BNGLModel;
@@ -59,7 +60,7 @@ export async function analyzeHysteresis(config: HysteresisConfig): Promise<Hyste
         paramValues.push(paramValue);
 
         const runModel = cloneExpandedModel(expandedModel);
-        runModel.parameters[parameter] = paramValue;
+        updatePreparedModel(runModel, { [parameter]: paramValue }, { mutate: true });
         updateMassActionRates(runModel);
 
         // Carry state from previous step
@@ -105,7 +106,7 @@ export async function analyzeHysteresis(config: HysteresisConfig): Promise<Hyste
         const paramValue = minVal + (steps - 1 - i) * stepSize;
 
         const runModel = cloneExpandedModel(expandedModel);
-        runModel.parameters[parameter] = paramValue;
+        updatePreparedModel(runModel, { [parameter]: paramValue }, { mutate: true });
         updateMassActionRates(runModel);
 
         // Use carried state from previous step (or final forward state for first step)

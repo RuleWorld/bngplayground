@@ -37,7 +37,7 @@ import { SolverOptions, SolverResult } from '../../../utils/solverUtils';
 import type { NetworkByteCode } from '../../analysis/JITCompiler';
 import { resetCVodeSensModule, setCVodeSensModule } from '../../analysis/DifferentiableSolver';
 
-type DerivativeFunction = (y: Float64Array, dydt: Float64Array) => void;
+type DerivativeFunction = (y: Float64Array, dydt: Float64Array, time?: number) => void;
 
 const WINDOWS_ABS_PATH_RE = /[A-Za-z]:\\(?:[^\\\]\r\n]+\\)*[^\\\]\r\n]+/g;
 const POSIX_ABS_PATH_RE = /\/(?:Users|home)\/[A-Za-z0-9._-]+(?:\/[A-Za-z0-9._-]+)+/g;
@@ -69,6 +69,7 @@ export interface CVodeModule {
   _malloc(size: number): number;
   _free(ptr: number): void;
   HEAPF64: Float64Array;
+  HEAP32?: Int32Array;
   ccall?: (ident: string, returnType: string | null, argTypes: string[], args: unknown[], opts?: { async?: boolean }) => unknown;
   cwrap?: (ident: string, returnType: string | null, argTypes: string[]) => (...args: unknown[]) => unknown;
   derivativeCallback: (t: number, y: number, ydot: number) => void;
@@ -287,7 +288,7 @@ export class CVODESolver {
       }
       const absValue = Math.abs(value);
       if (absValue > maxAbs) maxAbs = absValue;
-      if (value < minValue) minValue = value;
+      if (value < minValue && !this.options.signedStateIndices?.includes(i)) minValue = value;
     }
 
     if (hasNonFinite) {
@@ -295,7 +296,7 @@ export class CVODESolver {
     }
 
     for (let i = 0; i < y.length; i++) {
-      if (y[i] < 0) y[i] = 0;
+      if (y[i] < 0 && !this.options.signedStateIndices?.includes(i)) y[i] = 0;
     }
 
     if (minValue < -1.0 && Math.abs(minValue) > 0.01 * maxAbs) {
@@ -552,17 +553,21 @@ export class CVODESolver {
     return true;
   }
 
-  updateRateConstants(newRates: Float64Array): void {
+  updateRateConstants(newRates: Float64Array): boolean {
     const m = CVODESolver.module;
-    if (!m || !this.networkHandle) return;
+    if (!m || !this.networkHandle) return false;
     const updateRateConstants = m._cvode_update_rate_constants ?? m._update_rate_constants;
-    if (!updateRateConstants) return;
+    if (!updateRateConstants) return false;
 
     const ptr = m._malloc(newRates.length * 8);
-    if (!ptr) return;
-    m.HEAPF64.set(newRates, ptr >> 3);
-    updateRateConstants(this.networkHandle, ptr, newRates.length);
-    m._free(ptr);
+    if (!ptr) return false;
+    try {
+      m.HEAPF64.set(newRates, ptr >> 3);
+      updateRateConstants(this.networkHandle, ptr, newRates.length);
+      return true;
+    } finally {
+      m._free(ptr);
+    }
   }
 
   private ensureInitialized(y0: Float64Array, t0: number): { success: true } | { success: false; errorMessage: string } {
@@ -599,6 +604,18 @@ export class CVODESolver {
         }
       }
 
+      // Keep the loaded native network and solver allocation when only the
+      // initial state/time changed. The WASM wrapper copies y0 before CVodeReInit.
+      if (this.yPtr && m._reinit_solver) {
+        m.HEAPF64.set(y0, this.yPtr >> 3);
+        const status = m._reinit_solver(this.solverMem, t0, this.yPtr);
+        if (status >= 0) {
+          this.currentT = t0;
+          this.yOut?.set(y0);
+          return { success: true as const };
+        }
+      }
+
       // Not continuing cleanly: reset the solver.
       this.destroy();
     }
@@ -621,7 +638,7 @@ export class CVODESolver {
         this.yView = new Float64Array(buf, yPtr, neq);
         this.dydtView = new Float64Array(buf, ydotPtr, neq);
       }
-      this.f(this.yView, this.dydtView);
+      this.f(this.yView, this.dydtView, _t);
     };
 
     if (!bcLoaded) {
@@ -842,7 +859,18 @@ export class CVODESolver {
             return { success: false, t, y: yOut, steps, errorMessage: stateError };
           }
           this.currentT = t;
-          return { success: true, t, y: yOut, steps, errorMessage: 'ROOT_FOUND' };
+          let rootsFound: number[] | undefined;
+          if (this.rootsFoundPtr && this.options.numRoots && m._get_root_info) {
+            const rootInfoStatus = m._get_root_info(solverMem, this.rootsFoundPtr);
+            if (rootInfoStatus === 0) {
+              const heap32 = m.HEAP32 ?? new Int32Array(m.HEAPF64.buffer);
+              rootsFound = Array.from(heap32.subarray(
+                this.rootsFoundPtr >> 2,
+                (this.rootsFoundPtr >> 2) + this.options.numRoots
+              ));
+            }
+          }
+          return { success: true, t, y: yOut, steps, errorMessage: 'ROOT_FOUND', rootsFound };
         }
 
         if (flag === 0 || flag === 1) {

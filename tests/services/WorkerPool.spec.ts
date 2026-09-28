@@ -123,7 +123,6 @@ describe('WorkerPool batch method', () => {
         await pool.initialize();
 
         mockWorkerInsts[0].postMessage = vi.fn((req) => {
-            const { id } = req;
             setTimeout(() => {
                 mockWorkerInsts[0].trigger(null);
             }, 0);

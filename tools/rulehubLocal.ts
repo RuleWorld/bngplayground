@@ -108,10 +108,7 @@ export function findRuleHubModelPath(projectRoot: string, modelName: string): st
     }
   }
 
-  const fallbackFiles = [
-    ...listRuleHubPublishedModelFiles(projectRoot),
-    ...listRuleHubExampleModelFiles(projectRoot),
-  ];
+  const fallbackFiles = listAllRuleHubModelFiles(projectRoot).map((f) => f.filePath);
   return fallbackFiles.find((filePath) => normalizeModelKey(filePath) === targetKey) ?? null;
 }
 

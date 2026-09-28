@@ -11,6 +11,7 @@ import {
     parseModelOrThrow,
     validateModel,
     cloneExpandedModel,
+    applyPreparedModelOverrides,
     updateMassActionRates,
     expandModel,
     buildSimulationOptions,
@@ -221,11 +222,7 @@ export async function diagnoseModelDeep(args: {
 
         await loadEvaluator();
         const simulateWithOverrides = async (overrides: Record<string, number>) => {
-            const runModel = cloneExpandedModel(expandedModel);
-            Object.entries(overrides).forEach(([key, value]) => {
-                runModel.parameters[key] = value;
-            });
-            updateMassActionRates(runModel);
+            const runModel = applyPreparedModelOverrides(expandedModel, overrides);
             return simulate(0, runModel, simOptions, {
                 checkCancelled: () => { },
                 postMessage: () => { },

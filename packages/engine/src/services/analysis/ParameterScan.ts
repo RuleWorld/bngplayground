@@ -1,7 +1,6 @@
 import { simulate } from '../simulation/SimulationLoop';
 import { loadEvaluator } from '../simulation/ExpressionEvaluator';
-import { reevaluateSeedSpecies } from '../../utils/paramUtils';
-import { updateMassActionRates } from './DoseResponse';
+import { forkPreparedModel, updatePreparedModel } from '../../utils/preparedModel';
 import { BNGLModel, SimulationOptions } from '../../types';
 
 export interface ParameterScanOptions {
@@ -113,13 +112,6 @@ export const validateScanSettings = (
     return true;
 };
 
-// Helper to clone an expanded model to prevent shared mutation between scan iterations.
-// Uses structuredClone for deep copy so that reevaluateSeedSpecies and
-// updateMassActionRates mutations on nested species/reaction objects don't leak.
-function cloneModel(model: BNGLModel): BNGLModel {
-  return structuredClone(model);
-}
-
 /**
  * Runs a 1D or 2D parameter scan on the given expanded model and simulation options.
  */
@@ -162,11 +154,9 @@ export async function runParameterScan(
       observables[observable.name] = [];
     });
 
+    const runModel = forkPreparedModel(expandedModel);
     for (const value of xValues) {
-      const runModel = cloneModel(expandedModel);
-      runModel.parameters[options.parameter] = value;
-      reevaluateSeedSpecies(runModel, seedExpressions);
-      updateMassActionRates(runModel);
+      updatePreparedModel(runModel, { [options.parameter]: value }, { mutate: true, seedExpressions });
       const result = await simulate(0, runModel, leanSimulationOptions, {
         checkCancelled: () => { },
         postMessage: () => { },
@@ -192,13 +182,13 @@ export async function runParameterScan(
     observables[observable.name] = yValues.map(() => new Array(xValues.length).fill(0));
   });
 
+  const runModel = forkPreparedModel(expandedModel);
   for (let yIndex = 0; yIndex < yValues.length; yIndex += 1) {
     for (let xIndex = 0; xIndex < xValues.length; xIndex += 1) {
-      const runModel = cloneModel(expandedModel);
-      runModel.parameters[options.parameter] = xValues[xIndex];
-      runModel.parameters[options.parameter2] = yValues[yIndex];
-      reevaluateSeedSpecies(runModel, seedExpressions);
-      updateMassActionRates(runModel);
+      updatePreparedModel(runModel, {
+        [options.parameter]: xValues[xIndex],
+        [options.parameter2]: yValues[yIndex],
+      }, { mutate: true, seedExpressions });
       const result = await simulate(0, runModel, leanSimulationOptions, {
         checkCancelled: () => { },
         postMessage: () => { },

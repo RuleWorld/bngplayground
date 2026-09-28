@@ -26,6 +26,7 @@ type PendingRequest = {
 const DEFAULT_TIMEOUT_MS = 300_000;
 
 import { toError } from './workerErrorUtils';
+import { materializeSimulationResult, type SimulationResultPayload } from './workerResultTransport';
 
 class BnglService {
   private worker!: Worker;
@@ -35,7 +36,7 @@ class BnglService {
   private terminated = false;
   private lastCachedModelId?: number;
   private lastCachedModel?: BNGLModel;
-  private lastCachedModelSignature?: string;
+  private lastCachedModelRevision?: number;
   private lastCachedModelPromise?: Promise<number>;
   private modelCacheRequestId = 0;
   private progressListeners = new Set<(payload: any) => void>();
@@ -126,7 +127,7 @@ class BnglService {
       this.promises.delete(id);
       pending.cleanup();
 
-      if (type === 'parse_success' || type === 'simulate_success' || type === 'generate_network_success' || type === 'atomize_success' || type === 'analyse_network_success') {
+      if (type === 'parse_success' || type === 'simulate_success' || type === 'generate_network_success' || type === 'atomize_success' || type === 'analyse_network_success' || type === 'get_prepared_network_success') {
         pending.resolve(payload);
         return;
       }
@@ -136,13 +137,14 @@ class BnglService {
         return;
       }
 
-      if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'generate_network_error' || type === 'atomize_error' || type === 'analyse_network_error') {
+      if (type === 'parse_error' || type === 'simulate_error' || type === 'cache_model_error' || type === 'release_model_error' || type === 'get_prepared_network_error' || type === 'generate_network_error' || type === 'atomize_error' || type === 'analyse_network_error') {
         const errType = type === 'parse_error' ? 'parse'
           : type === 'simulate_error' ? 'simulate'
           : type === 'atomize_error' ? 'atomize'
           : type === 'generate_network_error' ? 'generate_network'
           : type === 'analyse_network_error' ? 'analyse_network'
           : type === 'release_model_error' ? 'release_model'
+          : type === 'get_prepared_network_error' ? 'get_prepared_network'
           : 'cache_model';
         const err = toError(errType, payload);
         pending.reject(err);
@@ -284,6 +286,8 @@ class BnglService {
         request = { id, type, payload: payload as any };
       } else if (type === 'cache_model') {
         request = { id, type, payload: payload as { model: BNGLModel } };
+      } else if (type === 'get_prepared_network') {
+        request = { id, type, payload: payload as { modelId: number; parameterOverrides?: Record<string, number> } };
       } else {
         request = { id, type, payload } as WorkerRequest;
       }
@@ -357,10 +361,9 @@ class BnglService {
    * for each simulation run. Returns a numeric modelId that can be used with simulateCached.
    */
   public prepareModel(model: BNGLModel, requestOptions?: RequestOptions): Promise<number> {
-    const signature = this.getModelCacheSignature(model);
     if (
       this.lastCachedModel === model
-      && this.lastCachedModelSignature === signature
+      && this.lastCachedModelRevision === model.cacheRevision
       && this.lastCachedModelPromise
     ) {
       return this.lastCachedModelPromise;
@@ -370,7 +373,7 @@ class BnglService {
     const previousId = this.lastCachedModelId;
     const cacheRequestId = ++this.modelCacheRequestId;
     this.lastCachedModel = model;
-    this.lastCachedModelSignature = signature;
+    this.lastCachedModelRevision = model.cacheRevision;
 
     const cachePromise = (async () => {
       let modelIdToRelease = previousId;
@@ -417,10 +420,47 @@ class BnglService {
    * to the worker (much smaller payload), so repeated runs are cheaper on the main thread.
    */
   public simulateCached(modelId: number, parameterOverrides: Record<string, number> | undefined, options: SimulationOptions, requestOptions?: RequestOptions): Promise<SimulationResults> {
-    return this.postMessage<SimulationResults>('simulate', { modelId, parameterOverrides, options }, {
+    return this.postMessage<SimulationResultPayload>('simulate', { modelId, parameterOverrides, options }, {
       ...requestOptions,
       description: requestOptions?.description ?? `Simulation (${options.method}) (cached)`,
+    }).then(materializeSimulationResult);
+  }
+
+  /** Re-run the last prepared source model with numeric parameter overrides. */
+  public simulatePreparedWithOverrides(
+    parameterOverrides: Record<string, number>,
+    options: SimulationOptions,
+    requestOptions?: RequestOptions,
+    sourceModel?: BNGLModel,
+  ): Promise<SimulationResults> {
+    const prepared = this.resolvePreparedModel(sourceModel, requestOptions);
+    if (!prepared) {
+      return Promise.reject(new Error('No prepared model is available for parameter update'));
+    }
+    return prepared.then((modelId) =>
+      this.simulateCached(modelId, parameterOverrides, options, requestOptions),
+    );
+  }
+
+  /** Fetch expanded topology only when a network view, flux view, or export needs it. */
+  public async getPreparedNetwork(
+    parameterOverrides?: Record<string, number>,
+    requestOptions?: RequestOptions,
+    sourceModel?: BNGLModel,
+  ): Promise<BNGLModel> {
+    const prepared = this.resolvePreparedModel(sourceModel, requestOptions);
+    if (!prepared) throw new Error('No prepared model is available for network retrieval');
+    const modelId = await prepared;
+    return this.postMessage<BNGLModel>('get_prepared_network', { modelId, parameterOverrides }, {
+      ...requestOptions,
+      description: requestOptions?.description ?? 'Retrieve prepared network',
     });
+  }
+
+  private resolvePreparedModel(model?: BNGLModel, requestOptions?: RequestOptions): Promise<number> | undefined {
+    if (model && this.lastCachedModel !== model) return this.prepareModel(model, requestOptions);
+    if (this.lastCachedModelPromise) return this.lastCachedModelPromise;
+    return model ? this.prepareModel(model, requestOptions) : undefined;
   }
 
   /**
@@ -437,16 +477,8 @@ class BnglService {
     this.modelCacheRequestId++;
     this.lastCachedModelId = undefined;
     this.lastCachedModel = undefined;
-    this.lastCachedModelSignature = undefined;
+    this.lastCachedModelRevision = undefined;
     this.lastCachedModelPromise = undefined;
-  }
-
-  private getModelCacheSignature(model: BNGLModel): string {
-    const signature = JSON.stringify(model);
-    if (signature === undefined) {
-      throw new Error('Unable to serialize model for worker cache validation');
-    }
-    return signature;
   }
 
   /**

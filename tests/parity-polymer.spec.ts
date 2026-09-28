@@ -18,11 +18,12 @@ const paths = resolveBNG2Paths();
  * 3. Optionally generates BNG2 reference via BNG2.pl
  * 4. Validates NFsim produces reasonable output
  */
-describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
+const modelPath = findRuleHubModelPath('polymer');
+
+describe.skipIf(!hasNFsim() || !modelPath)('Polymer Model Parity', () => {
     const testDir = 'temp_parity_polymer';
     const nfsimPath = paths.nfsim!;
     const bng2plPath = paths.bng2pl;
-    const modelPath = findRuleHubModelPath('polymer')!;
 
     beforeAll(() => {
         if (!fs.existsSync(testDir)) {
@@ -31,7 +32,7 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
     });
 
     it('should parse and simulate polymer.bngl with NFsim', { timeout: 8 * 60 * 1000 }, () => {
-        const bnglCode = fs.readFileSync(modelPath, 'utf-8');
+        const bnglCode = fs.readFileSync(modelPath!, 'utf-8');
 
         console.log('Parsing BNGL...');
         const model = parseBNGLStrict(bnglCode);
@@ -127,7 +128,7 @@ describe.skipIf(!hasNFsim())('Polymer Model Parity', () => {
         // Verify that BNG2.pl can parse this model
         const bnglFileName = 'polymer_for_bng2.bngl';
         const bnglPath = path.join(testDir, bnglFileName);
-        const bnglCode = fs.readFileSync(modelPath, 'utf-8');
+        const bnglCode = fs.readFileSync(modelPath!, 'utf-8');
         fs.writeFileSync(bnglPath, bnglCode);
 
         console.log('Testing BNG2.pl compatibility...');

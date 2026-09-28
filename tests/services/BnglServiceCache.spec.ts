@@ -13,11 +13,15 @@ class FakeWorker {
     FakeWorker.messages.push(request);
     const responseType = request.type === 'cache_model'
       ? 'cache_model_success'
+      : request.type === 'get_prepared_network'
+        ? 'get_prepared_network_success'
       : request.type === 'release_model'
         ? 'release_model_success'
         : 'simulate_success';
     const payload = request.type === 'cache_model'
       ? { modelId: FakeWorker.messages.filter((message) => message.type === 'cache_model').length }
+      : request.type === 'get_prepared_network'
+        ? { species: [{ name: 'A()', initialConcentration: 10 }], reactions: [] }
       : request.type === 'release_model'
         ? request.payload
         : { headers: ['time'], data: [[0]], timePoints: [0] };
@@ -60,6 +64,31 @@ describe('BnglService model cache', () => {
     expect(FakeWorker.messages.filter((message) => message.type === 'simulate')).toHaveLength(2);
   });
 
+  it('retrieves the worker-prepared network only when requested', async () => {
+    const { bnglService } = await import('../../services/bnglService');
+    const model = createModel();
+    await bnglService.simulate(model, { method: 'ode', t_end: 1, n_steps: 1 });
+
+    const network = await bnglService.getPreparedNetwork({ k: 2 });
+
+    expect(network.species).toHaveLength(1);
+    const request = FakeWorker.messages.find((message) => message.type === 'get_prepared_network');
+    expect(request?.payload).toEqual({ modelId: 1, parameterOverrides: { k: 2 } });
+  });
+
+  it('runs prepared overrides without retransferring the model', async () => {
+    const { bnglService } = await import('../../services/bnglService');
+    const model = createModel();
+    const options = { method: 'ode' as const, t_end: 1, n_steps: 1 };
+    await bnglService.simulate(model, options);
+    await bnglService.simulatePreparedWithOverrides({ k: 2 }, options);
+
+    expect(FakeWorker.messages.filter((message) => message.type === 'cache_model')).toHaveLength(1);
+    const simulateRequests = FakeWorker.messages.filter((message) => message.type === 'simulate');
+    expect(simulateRequests).toHaveLength(2);
+    expect(simulateRequests[1].payload).toMatchObject({ modelId: 1, parameterOverrides: { k: 2 } });
+  });
+
   it('invalidates the cached transfer when parameters change in place', async () => {
     const { bnglService } = await import('../../services/bnglService');
     const model = createModel();
@@ -67,6 +96,7 @@ describe('BnglService model cache', () => {
 
     await bnglService.simulate(model, options);
     model.parameters.k = 2;
+    model.cacheRevision = 1;
     await bnglService.simulate(model, options);
 
     expect(FakeWorker.messages.filter((message) => message.type === 'cache_model')).toHaveLength(2);
@@ -80,6 +110,7 @@ describe('BnglService model cache', () => {
 
     await bnglService.simulate(model, options);
     model.observables.push({ type: 'Molecules', name: 'A_total', pattern: 'A()' });
+    model.cacheRevision = 1;
     await bnglService.simulate(model, options);
 
     expect(FakeWorker.messages.filter((message) => message.type === 'cache_model')).toHaveLength(2);

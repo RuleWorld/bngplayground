@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdir, readFile, symlink, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 
 import { campaignTargetSchema, candidateResultSchema, type CampaignTarget, type CandidateResult } from './schemas.js';
@@ -152,7 +153,7 @@ export async function evaluateCandidate(options: EvaluateOptions): Promise<Candi
   await writeJson(join(options.outputDirectory, 'target.json'), options.target);
   const patch = await readFile(options.patchPath, 'utf8');
   const patchSha256 = createHash('sha256').update(patch).digest('hex');
-  const worktree = join('/private/tmp', 'bng-autoresearch', options.runId, options.target.campaign, `${options.candidate}-${shortId(options.target.target_id)}`);
+  const worktree = join(tmpdir(), 'bng-autoresearch', options.runId, options.target.campaign, `${options.candidate}-${shortId(options.target.target_id)}`);
   const guards = { locked_paths_clean: false, typecheck: false, tests: false, scientific_suite: false };
   let result: CandidateResult;
 

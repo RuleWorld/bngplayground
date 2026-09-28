@@ -4,6 +4,8 @@ import {
     generateExpandedNetwork,
     extractMoleculeNames,
     updateMassActionRates,
+    forkPreparedModel,
+    updatePreparedModel,
     findUnreachableRules,
     buildContactMap,
     validateModel,
@@ -276,7 +278,7 @@ export function assertScannableParameter(model: BNGLModel, parameter: string): v
  */
 
 /**
- * Creates a deep copy of a BNGLModel using structuredClone.
+ * Forks only mutable numeric containers of a prepared model through the engine API.
  *
  * Note: This currently reimplements logic from the engine package (`DoseResponse.ts`),
  * whereas MCP tools should ideally call engine functions instead of duplicating logic.
@@ -285,7 +287,13 @@ export function assertScannableParameter(model: BNGLModel, parameter: string): v
  * @returns A deep copy of the provided model.
  */
 export function cloneExpandedModel(model: BNGLModel): BNGLModel {
-    return structuredClone(model);
+    return forkPreparedModel(model);
+}
+
+/** Apply shared dependency, seed, volume, and reaction-rate semantics to a fork. */
+export function applyPreparedModelOverrides(model: BNGLModel, overrides: Record<string, number>): BNGLModel {
+    const prepared = forkPreparedModel(model);
+    return updatePreparedModel(prepared, overrides, { mutate: true }).model;
 }
 
 export { updateMassActionRates };

@@ -19,6 +19,7 @@ interface ResultsChartProps {
   expressions?: CustomExpression[];
   isNFsim?: boolean; // Flag to indicate if this is NFsim data (counts vs concentrations)
   isSSA?: boolean;   // Flag for SSA (Gillespie)
+  onRequestSpeciesData?: () => Promise<SimulationResults>;
 }
 
 const MERGED_PHASE_SUFFIX = '__merged_phases__';
@@ -192,7 +193,7 @@ import { toggleSetMember } from '../services/collections';
 export const ResultsChart: React.FC<ResultsChartProps & {
   modelSource?: string | null;
   simulationOptions?: SimulationOptions | null;
-}> = ({ results, model, isNFsim, visibleSpecies, onVisibleSpeciesChange, highlightedSeries = [], expressions = [], modelSource, simulationOptions }) => {
+}> = ({ results, model, isNFsim, visibleSpecies, onVisibleSpeciesChange, highlightedSeries = [], expressions = [], modelSource, simulationOptions, onRequestSpeciesData }) => {
   const [zoomHistory, setZoomHistory] = useState<ZoomDomain[]>([]);
   const [selection, setSelection] = useState<ZoomDomain | null>(null);
   const [filterMode, setFilterMode] = useState<'all' | 'search'>('all');
@@ -494,8 +495,9 @@ export const ResultsChart: React.FC<ResultsChartProps & {
       currentRows: currentViewRows,
       currentHeaders: currentViewHeaders,
       currentFigureSvg: () => wrapperRef?.querySelector('svg')?.outerHTML ?? null,
+      requestFullSpeciesData: onRequestSpeciesData,
     });
-  }, [currentViewHeaders, currentViewRows, modelSource, results, simulationOptions, wrapperRef]);
+  }, [currentViewHeaders, currentViewRows, modelSource, onRequestSpeciesData, results, simulationOptions, wrapperRef]);
 
   if (!results || sourceData.length === 0) {
     return (

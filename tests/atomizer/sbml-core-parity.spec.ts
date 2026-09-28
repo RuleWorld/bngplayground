@@ -3,6 +3,7 @@ import { Atomizer } from '../../src/lib/atomizer/index';
 import { generateSBML } from '../../src/lib/atomizer';
 import { parseBNGL } from '../../services/parseBNGL';
 import { parseBNGLStrict } from '../../packages/engine/src/parser/BNGLParserWrapper';
+import { simulate } from '../../packages/engine/src/services/simulation/SimulationLoop';
 
 const SBML_HOST = ['www', 'sbml', 'org'].join('.');
 const W3_HOST = ['www', 'w3', 'org'].join('.');
@@ -32,6 +33,37 @@ describe('Atomizer SBML Core parity regressions', () => {
     expect(result.success).toBe(true);
     expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
     expect(result.bngl).not.toMatch(/__assign_rule__S\(\)\s*=\s*\(\)/);
+  });
+
+  it('does not emit a duplicate observable for concentration assignment-rule species', async () => {
+    const { result } = await atomize(`
+      <sbml xmlns="${CORE}" level="3" version="2">
+        <model id="concentrationAssignmentTarget">
+          <listOfCompartments><compartment id="c" size="1"/></listOfCompartments>
+          <listOfSpecies>
+            <species id="A" compartment="c" initialConcentration="1"/>
+            <species id="B" compartment="c" initialConcentration="2"/>
+            <species id="total" compartment="c" boundaryCondition="true" constant="false" hasOnlySubstanceUnits="false" initialConcentration="0"/>
+          </listOfSpecies>
+          <listOfRules>
+            <assignmentRule variable="total"><math xmlns="${MATH}"><apply><plus/><ci>A</ci><ci>B</ci></apply></math></assignmentRule>
+          </listOfRules>
+          <listOfParameters><parameter id="k" value="1"/></listOfParameters>
+          <listOfReactions>
+            <reaction id="convert">
+              <listOfReactants><speciesReference species="A"/></listOfReactants>
+              <listOfProducts><speciesReference species="B"/></listOfProducts>
+              <kineticLaw><math xmlns="${MATH}"><apply><times/><ci>k</ci><ci>total</ci></apply></math></kineticLaw>
+            </reaction>
+          </listOfReactions>
+        </model>
+      </sbml>`);
+
+    expect(result.success).toBe(true);
+    expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
+    expect(result.bngl).toMatch(/^\s*total\(\)\s*=/m);
+    expect(result.bngl).not.toMatch(/^\s*Species total(?:_amt)?\s/m);
+    expect(result.bngl).toMatch(/convert:\s*M_A[^\n]*\bk\s*\*\s*total\(\)/);
   });
 
   it('omits missing rule MathML instead of emitting a blank BNGL function', async () => {
@@ -73,7 +105,7 @@ describe('Atomizer SBML Core parity regressions', () => {
 
     expect(result.success).toBe(true);
     expect(instance.getModel()?.events[0]?.useValuesFromTriggerTime).toBe(false);
-    expect(result.bngl).toContain('Events NOT simulated');
+    expect(result.bngl).toContain('SBML events require the Playground event runtime');
     expect(result.bngl).toContain('@sbml-event');
     expect(result.bngl).not.toContain('time-triggered event(s) converted');
     expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
@@ -83,6 +115,51 @@ describe('Atomizer SBML Core parity regressions', () => {
     expect(roundTripped).toContain('useValuesFromTriggerTime="false"');
     expect(roundTripped).toContain('variable="y"');
     expect(roundTripped).toContain('<geq/>');
+  });
+
+  it('executes an Atomizer-preserved delayed event in the Playground engine', async () => {
+    const { result } = await atomize(`
+      <sbml xmlns="${CORE}" level="3" version="2">
+        <model id="runtimeEventPath">
+          <listOfCompartments><compartment id="c" size="1"/></listOfCompartments>
+          <listOfSpecies><species id="S" compartment="c" initialAmount="0"/></listOfSpecies>
+          <listOfParameters><parameter id="pulse" value="2"/></listOfParameters>
+          <listOfEvents>
+            <event id="pulseEvent">
+              <trigger initialValue="true" persistent="true">
+                <math xmlns="${MATH}"><apply><geq/><csymbol encoding="text" definitionURL="http://www.sbml.org/sbml/symbols/time">time</csymbol><cn>1</cn></apply></math>
+              </trigger>
+              <delay><math xmlns="${MATH}"><cn>0.5</cn></math></delay>
+              <listOfEventAssignments>
+                <eventAssignment variable="S"><math xmlns="${MATH}"><apply><plus/><ci>pulse</ci><ci>S</ci></apply></math></eventAssignment>
+              </listOfEventAssignments>
+            </event>
+          </listOfEvents>
+        </model>
+      </sbml>`);
+
+    const parsed = parseBNGL(result.bngl);
+    expect(parsed.events).toHaveLength(1);
+    expect(parsed.events?.[0]?.bnglDelay).toBe('0.5');
+    expect(parsed.events?.[0]?.bnglExecution).toBe('playground');
+    const simulation = await simulate(901, parsed, {
+      method: 'ode',
+      t_end: 2,
+      n_steps: 8,
+      solver: 'cvode',
+      includeSpeciesData: true,
+      includeExpandedNetwork: false,
+    }, {
+      checkCancelled: () => {},
+      postMessage: () => {},
+    });
+
+    const speciesKey = simulation.speciesHeaders?.find((header) => header !== 'time');
+    expect(speciesKey).toBeTruthy();
+    expect(simulation.speciesData?.find((row) => row.time === 1)?.[speciesKey!]).toBeCloseTo(0, 12);
+    expect(simulation.speciesData?.find((row) => row.time === 1.5)?.[speciesKey!]).toBeCloseTo(2, 10);
+    expect(simulation.eventDiagnostics).toEqual([]);
+    expect(simulation.eventFirings).toEqual(['pulseEvent']);
   });
 
   it('applies a model conversionFactor to the generated reaction rule', async () => {
@@ -191,5 +268,38 @@ describe('Atomizer SBML Core parity regressions', () => {
     expect(result.bngl).toContain('_c_A() > threshold');
     expect(result.bngl).not.toMatch(/if\([^\n]*\)\s*\*\s*_c_A\(\)/);
     expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
+  });
+
+  it('retains executable reactions whose flux calls a custom function', async () => {
+    const { result } = await atomize(`
+      <sbml xmlns="${CORE}" level="3" version="2">
+        <model id="customFunctionFlux">
+          <listOfFunctionDefinitions>
+            <functionDefinition id="fluxLaw">
+              <math xmlns="${MATH}"><lambda><bvar><ci>k</ci></bvar><apply><times/><ci>k</ci><cn>2</cn></apply></lambda></math>
+            </functionDefinition>
+          </listOfFunctionDefinitions>
+          <listOfCompartments><compartment id="c" size="1"/></listOfCompartments>
+          <listOfSpecies>
+            <species id="A" compartment="c" initialAmount="1"/>
+            <species id="B" compartment="c" initialAmount="0"/>
+          </listOfSpecies>
+          <listOfParameters><parameter id="k" value="0.5"/></listOfParameters>
+          <listOfReactions>
+            <reaction id="r">
+              <listOfReactants><speciesReference species="A"/></listOfReactants>
+              <listOfProducts><speciesReference species="B"/></listOfProducts>
+              <kineticLaw>
+                <math xmlns="${MATH}"><apply><times/><apply><ci>fluxLaw</ci><ci>k</ci></apply><ci>A</ci></apply></math>
+              </kineticLaw>
+            </reaction>
+          </listOfReactions>
+        </model>
+      </sbml>`);
+
+    expect(result.success).toBe(true);
+    expect(() => parseBNGLStrict(result.bngl)).not.toThrow();
+    const parsed = parseBNGL(result.bngl);
+    expect(parsed.reactionRules.some((reaction) => reaction.name === 'r')).toBe(true);
   });
 });

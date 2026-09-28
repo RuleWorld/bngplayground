@@ -80,7 +80,9 @@ async function main(): Promise<void> {
       result.eventPreserved = /#\s*@sbml-event\s+/i.test(atomized.bngl);
       // A diagnostic note may remain for an event that is preserved losslessly in metadata.
       // Count it as untranslated only when neither an executable action nor metadata exists.
-      result.eventUntranslated = /Events NOT simulated/i.test(atomized.bngl) && !result.eventPreserved;
+      result.eventUntranslated = result.warningCategories.includes('event')
+        && !result.eventConverted
+        && !result.eventPreserved;
       if (!atomized.success) {
         result.error = atomized.error || 'Atomizer returned success=false';
       } else {

@@ -9,10 +9,11 @@ import { findRuleHubModelPath } from './helpers/rulehub';
 
 const paths = resolveBNG2Paths();
 
-describe.skipIf(!hasNFsim())('Model_ZAP Parity', () => {
+const bnglPath = findRuleHubModelPath('Model_ZAP');
+
+describe.skipIf(!hasNFsim() || !bnglPath)('Model_ZAP Parity', () => {
     it('should simulate Model_ZAP successfully with NFsim', () => {
-        const bnglPath = findRuleHubModelPath('Model_ZAP')!;
-        const bnglCode = fs.readFileSync(bnglPath, 'utf-8');
+        const bnglCode = fs.readFileSync(bnglPath!, 'utf-8');
         
         console.log('Parsing BNGL...');
         const model = parseBNGLStrict(bnglCode);

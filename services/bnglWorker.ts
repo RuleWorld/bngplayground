@@ -26,10 +26,10 @@ import {
   CVODESolver
 } from '@bngplayground/engine';
 import type { NFsimSimulationOptions } from '@bngplayground/engine';
-import { Atomizer } from '../src/lib/atomizer';
 import { analyseGraph } from './igraphLoader';
 import { isRecord } from './workerHandlers/guards';
-import { applyParameterOverrides } from './workerHandlers/applyParameterOverrides';
+import { applyParameterOverrides, canReuseExpandedNetworkForOverrides } from './workerHandlers/applyParameterOverrides';
+import { toCompactSimulationResult } from './workerResultTransport';
 import type { JobState } from './workerHandlers/types';
 
 // Wire up the CVODE factory with a lazy dynamic import so:
@@ -53,43 +53,6 @@ const ctx: DedicatedWorkerGlobalScope = typeof self !== 'undefined'
 const jobStates = new Map<number, JobState>();
 let activeSimulationJobId: number | null = null;
 let activeSimulationMethod: 'ode' | 'ssa' | 'nf' | 'pla' | null = null;
-
-// Ring buffer for logs to prevent memory blowup
-// Default size (1000) chosen to capture ~5-10 minutes of active simulation logs
-class LogRingBuffer {
-  private buffer: string[] = [];
-  private maxSize: number;
-  private writeIndex = 0;
-
-  constructor(maxSize: number = 1000) {
-    this.maxSize = maxSize;
-  }
-
-  add(message: string) {
-    this.buffer[this.writeIndex] = `[${new Date().toISOString()}] ${message}`;
-    this.writeIndex = (this.writeIndex + 1) % this.maxSize;
-  }
-
-  getAll(): string[] {
-    const result: string[] = [];
-    for (let i = 0; i < this.maxSize; i++) {
-      const index = (this.writeIndex - 1 - i + this.maxSize) % this.maxSize;
-      if (this.buffer[index]) {
-        result.push(this.buffer[index]);
-      } else {
-        break;
-      }
-    }
-    return result.reverse();
-  }
-
-  clear() {
-    this.buffer = [];
-    this.writeIndex = 0;
-  }
-}
-
-const logBuffer = new LogRingBuffer(1000);
 
 export function mergeSimulationOptionsWithModelActionDefaults(
   options: SimulationOptions,
@@ -146,30 +109,7 @@ export function mergeSimulationOptionsWithModelActionDefaults(
   return merged;
 }
 
-const safeStringify = (value: unknown): string => {
-  if (typeof value === 'string') return value;
-  if (value instanceof Error) {
-    return `${value.name}: ${value.message}`;
-  }
-  try {
-    const seen = new WeakSet<object>();
-    return JSON.stringify(value, (_key, v) => {
-      if (typeof v === 'object' && v !== null) {
-        if (seen.has(v)) return '[Circular]';
-        seen.add(v);
-      }
-      return v;
-    });
-  } catch {
-    try {
-      return String(value);
-    } catch {
-      return '[Unserializable]';
-    }
-  }
-};
-
-// Override console.log/warn/error to use ring buffer and prevent circular object crashes
+// Keep worker diagnostics opt-in; simulation progress uses structured messages.
 const originalConsoleLog = console.log;
 const originalConsoleWarn = console.warn;
 const originalConsoleError = console.error;
@@ -192,25 +132,20 @@ const FORWARD_WORKER_ERRORS =
   workerGlobal.__BNGL_WORKER_FORWARD_ERRORS__ !== false;
 
 console.log = (...args: any[]) => {
-  const message = args.map((arg) => safeStringify(arg)).join(' ');
-  logBuffer.add(message);
-  // Forward NFsim sim-time logs as progress updates when possible
   if (activeSimulationJobId !== null && activeSimulationMethod === 'nf') {
-    try {
-      const match = message.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) ||
-        message.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
+    for (const arg of args) {
+      if (typeof arg !== 'string') continue;
+      const match = arg.match(/(?:^|\b)Sim\s*time\s*[:=]\s*([0-9.eE+-]+)/i) || arg.match(/\bt\s*=\s*([0-9.eE+-]+)/i);
       if (match) {
-        const val = Number(match[1]);
-        if (!Number.isNaN(val)) {
-          ctx.postMessage({
-            id: activeSimulationJobId,
-            type: 'progress',
-            payload: { message, simulationTime: val, source: 'nfsim-console' }
-          });
+        const simulationTime = Number(match[1]);
+        if (Number.isFinite(simulationTime)) {
+          try {
+            ctx.postMessage({ id: activeSimulationJobId, type: 'progress', payload: { message: arg, simulationTime, source: 'nfsim-console' } });
+          } catch {
+            // Progress is best-effort and must not interrupt the simulation.
+          }
         }
       }
-    } catch {
-      // best-effort only
     }
   }
   if (FORWARD_WORKER_LOGS) {
@@ -219,23 +154,17 @@ console.log = (...args: any[]) => {
 };
 
 console.warn = (...args: any[]) => {
-  const message = '[WARN] ' + args.map((arg) => safeStringify(arg)).join(' ');
-  logBuffer.add(message);
   if (FORWARD_WORKER_WARNINGS) {
     originalConsoleWarn(...args);
   }
 };
 
 console.error = (...args: any[]) => {
-  const message = '[ERROR] ' + args.map((arg) => safeStringify(arg)).join(' ');
-  logBuffer.add(message);
   if (FORWARD_WORKER_ERRORS) {
     originalConsoleError(...args);
   }
 };
 console.debug = (...args: any[]) => {
-  const message = '[DEBUG] ' + args.map((arg) => safeStringify(arg)).join(' ');
-  logBuffer.add(message);
   if (FORWARD_WORKER_LOGS) {
     originalConsoleDebug?.(...args);
   }
@@ -245,8 +174,8 @@ const workerVerboseLog = (...args: any[]) => {
   console.log(...args);
 };
 const cachedModels = new Map<number, BNGLModel>();
-// Generated networks are cached separately so parameter-overridden simulations can
-// still start from the original rule model when rates or seed expressions change.
+// Generated networks are cached separately so parameter variants can reuse the
+// original rule model when topology or compartment scaling needs regeneration.
 const expandedCachedModels = new Map<number, BNGLModel>();
 let nextModelId = 1;
 // Keep more compact source models than expanded networks: generated networks can
@@ -565,6 +494,7 @@ if (typeof ctx.addEventListener === 'function') {
       workerVerboseLog(`[Worker] Received atomize request ${id}`);
       registerJob(id);
       try {
+        const { Atomizer } = await import('../src/lib/atomizer');
         const sbml = typeof payload === 'string' ? payload : '';
         const atomizer = new Atomizer();
         workerVerboseLog('[Worker] Initializing atomizer...');
@@ -605,6 +535,7 @@ if (typeof ctx.addEventListener === 'function') {
           let cachedModelId: number | undefined;
           let cachedSourceModel: BNGLModel | undefined;
           let hasParameterOverrides = false;
+          let parameterOverrides: Record<string, number> | undefined;
 
           if (isSimulateModelPayload(p)) {
             model = p.model;
@@ -616,6 +547,7 @@ if (typeof ctx.addEventListener === 'function') {
             cachedModelId = p.modelId;
             cachedSourceModel = cached;
             options = p.options;
+            parameterOverrides = p.parameterOverrides;
             hasParameterOverrides = !!p.parameterOverrides && Object.keys(p.parameterOverrides).length > 0;
 
             if (hasParameterOverrides) {
@@ -658,7 +590,6 @@ if (typeof ctx.addEventListener === 'function') {
           // Update options with resolved method so declared simulators don't have to guess 'default'
           options.method = effectiveMethod;
 
-          // Track active simulation for progress forwarding
           activeSimulationJobId = id;
           activeSimulationMethod = effectiveMethod;
 
@@ -671,15 +602,20 @@ if (typeof ctx.addEventListener === 'function') {
           const hasMixedMethods = phases.length > 1 &&
             phases.some(p => p.method !== phases[0].method);
 
-          // Pure NFsim keeps the original seed/rule model. Other cached baseline
-          // workflows can reuse the generated network and update its LRU position.
-          if (
-            cachedModelId !== undefined &&
-            cachedSourceModel &&
-            !hasParameterOverrides &&
-            (!isNF || hasMixedMethods)
-          ) {
-            model = touchExpandedCachedModel(cachedModelId) ?? cachedSourceModel;
+          // Pure NFsim keeps compact source. Other methods reuse worker-owned
+          // topology when overrides do not change volume scaling. Seed amounts
+          // are refreshed on the cached network and do not change topology.
+          const canReuseCachedTopology = !hasParameterOverrides || (
+            !!parameterOverrides && canReuseExpandedNetworkForOverrides(cachedSourceModel ?? model, parameterOverrides)
+          );
+          if (cachedModelId !== undefined && cachedSourceModel && (!isNF || hasMixedMethods)) {
+            const expanded = touchExpandedCachedModel(cachedModelId);
+            const reusable = expanded && canReuseCachedTopology;
+            if (expanded && reusable) {
+              model = hasParameterOverrides
+                ? applyParameterOverrides(expanded, parameterOverrides!)
+                : expanded;
+            }
           }
 
           // Auto-generate a rule model only after the final source/expanded model
@@ -703,23 +639,34 @@ if (typeof ctx.addEventListener === 'function') {
               // CRITICAL: We MUST load the evaluator - the fallback returns zeros for all expressions
               await loadEvaluator();
 
-              model = await generateExpandedNetworkService(
-                model,
+              // When a worker first sees a safe numerical override, expand
+              // the original source once, cache that baseline topology, then
+              // apply the override. Otherwise every sweep point would expand
+              // independently because the first request arrived with edits.
+              const cacheBaselineTopology = cachedModelId !== undefined
+                && cachedSourceModel !== undefined
+                && canReuseCachedTopology;
+              const expansionInput: BNGLModel = cacheBaselineTopology && cachedSourceModel
+                ? cachedSourceModel
+                : model;
+              const expandedModel = await generateExpandedNetworkService(
+                expansionInput,
                 () => ensureNotCancelled(id),
                 (p) => safePostMessage({ id, type: 'generate_network_progress', payload: p })
               );
-              // Reuse only the unmodified base network. Parameter-dependent local
-              // functions, Arrhenius rates, and seed expressions are baked during
-              // expansion, so override variants must continue to regenerate.
-              if (
-                cachedModelId !== undefined &&
-                cachedSourceModel !== undefined &&
-                !hasParameterOverrides &&
-                (model.reactions?.length ?? 0) > 0 &&
-                cachedModels.get(cachedModelId) === cachedSourceModel
-              ) {
-                cacheExpandedModel(cachedModelId, model);
+              // Cache the baseline expansion. Later rate and seed amount changes
+              // are applied to this worker-owned network; compartment changes
+              // still require a fresh expansion for updated volume scaling.
+              if (cacheBaselineTopology
+                && cachedModelId !== undefined
+                && cachedSourceModel !== undefined
+                && (expandedModel.reactions?.length ?? 0) > 0
+                && cachedModels.get(cachedModelId) === cachedSourceModel) {
+                cacheExpandedModel(cachedModelId, expandedModel);
               }
+              model = hasParameterOverrides && cacheBaselineTopology
+                ? applyParameterOverrides(expandedModel, parameterOverrides!)
+                : expandedModel;
               workerVerboseLog(
                 `[Worker] Network auto-generation complete: ${model.species.length} species, ${model.reactions?.length ?? 0} reactions`
               );
@@ -783,7 +730,7 @@ if (typeof ctx.addEventListener === 'function') {
                 includeExpandedNetwork: options.includeExpandedNetwork,
                 timeoutMs: 300000, // 5 minutes for NFsim simulations
                 requireRuntime: true,
-                verbose: true
+                verbose: WORKER_VERBOSE_LOGS
               };
 
               // Run via encapsulated runner
@@ -808,7 +755,13 @@ if (typeof ctx.addEventListener === 'function') {
           } else {
             const response: WorkerResponse = { id, type: 'simulate_success', payload: results };
             try {
-              ctx.postMessage(response);
+              const compact = toCompactSimulationResult(results);
+              if (compact) {
+                response.payload = compact;
+                ctx.postMessage(response, [compact.values]);
+              } else {
+                ctx.postMessage(response);
+              }
             } catch (postError: any) {
               const msg = postError?.message ?? String(postError ?? '');
               if (/Data cannot be cloned|out of memory/i.test(msg)) {
@@ -906,6 +859,40 @@ if (typeof ctx.addEventListener === 'function') {
         console.error('[Worker] Release model error for job', id, error);
         const response: WorkerResponse = { id, type: 'release_model_error', payload: serializeError(error) };
         safePostMessage(response);
+      } finally {
+        markJobComplete(id);
+      }
+      return;
+    }
+
+    if (type === 'get_prepared_network') {
+      registerJob(id);
+      try {
+        const request = payload as { modelId?: unknown; parameterOverrides?: unknown };
+        if (typeof request?.modelId !== 'number') throw new Error('get_prepared_network payload missing modelId');
+        const source = cachedModels.get(request.modelId);
+        if (!source) throw new Error('Cached model not found in worker');
+        touchCachedModel(request.modelId);
+        const overrides = isRecord(request.parameterOverrides)
+          ? request.parameterOverrides as Record<string, number>
+          : undefined;
+        const canReuse = !overrides || Object.keys(overrides).length === 0 || canReuseExpandedNetworkForOverrides(source, overrides);
+        const expanded = canReuse ? touchExpandedCachedModel(request.modelId) : undefined;
+        let prepared = expanded
+          ? (overrides && Object.keys(overrides).length > 0 ? applyParameterOverrides(expanded, overrides) : expanded)
+          : (overrides && Object.keys(overrides).length > 0 ? applyParameterOverrides(source, overrides) : source);
+        if ((prepared.reactionRules?.length ?? 0) > 0 && (prepared.reactions?.length ?? 0) === 0) {
+          await loadEvaluator();
+          prepared = await generateExpandedNetworkService(
+            prepared,
+            () => ensureNotCancelled(id),
+            (progress) => safePostMessage({ id, type: 'generate_network_progress', payload: progress }),
+          );
+          if (canReuse && (prepared.reactions?.length ?? 0) > 0) cacheExpandedModel(request.modelId, prepared);
+        }
+        safePostMessage({ id, type: 'get_prepared_network_success', payload: prepared } satisfies WorkerResponse);
+      } catch (error) {
+        safePostMessage({ id, type: 'get_prepared_network_error', payload: serializeError(error) } satisfies WorkerResponse);
       } finally {
         markJobComplete(id);
       }
