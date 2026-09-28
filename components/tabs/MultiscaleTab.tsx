@@ -70,10 +70,12 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
   const [progress, setProgress] = useState(0);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const workerRef = useRef<Worker | null>(null);
+  const runIdRef = useRef(0);
 
   // Clean up worker on unmount
   useEffect(() => {
     return () => {
+      runIdRef.current++;
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
@@ -82,12 +84,23 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
   }, []);
 
   const handleCancel = useCallback(() => {
+    runIdRef.current++;
     if (workerRef.current) {
       const msg: MultiscaleWorkerRequest = { type: 'cancel' };
       workerRef.current.postMessage(msg);
+      // Fallback: forcefully terminate if worker does not acknowledge within 500ms
+      const activeWorker = workerRef.current;
+      setTimeout(() => {
+        if (workerRef.current === activeWorker) {
+          activeWorker.terminate();
+          workerRef.current = null;
+          setIsRunning(false);
+          setProgress(0);
+        }
+      }, 500);
     }
+    setIsRunning(false);
   }, []);
-
   const handleRun = useCallback(async () => {
     setIsRunning(true);
     setError(null);
@@ -110,13 +123,27 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
       );
       workerRef.current = worker;
 
+      const runId = ++runIdRef.current;
+      const isStale = () => runId !== runIdRef.current;
+
       worker.onmessage = (event: MessageEvent<MultiscaleWorkerResponse>) => {
-        const msg = event.data ?? { type: 'error', message: 'Empty or undefined worker response' };
+        const msg = event.data ?? { type: 'error' as const, message: 'Empty or undefined worker response' };
+        if (isStale()) return; // ignore messages from a superseded run
 
         switch (msg.type) {
           case 'progress':
             setProgress(msg.fraction);
             break;
+
+          case 'cancelled': {
+            setIsRunning(false);
+            setProgress(0);
+            if (workerRef.current) {
+              workerRef.current.terminate();
+              workerRef.current = null;
+            }
+            break;
+          }
 
           case 'complete': {
             const result = msg.result;
@@ -135,6 +162,7 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
             setPopulationTimeSeries(tsData);
             setIsRunning(false);
             setProgress(1);
+            workerRef.current = null; // worker finished naturally
             break;
           }
 
@@ -148,9 +176,12 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
             break;
 
           default: {
-            const unknownType = (msg as { type?: unknown })?.type;
+            const raw: unknown = event.data;
+            const unknownType = typeof raw === 'object' && raw !== null && 'type' in raw
+              ? String(raw.type)
+              : 'unknown';
             console.warn('[MultiscaleTab] Received unexpected worker response:', msg);
-            setError(`Unexpected response from multiscale worker: ${String(unknownType ?? 'unknown')}`);
+            setError(`Unexpected response from multiscale worker: ${unknownType}`);
             setIsRunning(false);
             if (workerRef.current) {
               workerRef.current.terminate();
@@ -182,12 +213,12 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
 
       const msg: MultiscaleWorkerRequest = { type: 'run_from_definition', definition: parsed };
       worker.postMessage(msg);
-    } catch (err: any) {
+    } catch (err: unknown) {
       if (workerRef.current) {
         workerRef.current.terminate();
         workerRef.current = null;
       }
-      setError(err.message || 'Failed to start simulation');
+      setError(err instanceof Error ? err.message : 'Failed to start simulation');
       setIsRunning(false);
     }
   }, [definition]);
@@ -257,17 +288,21 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
   // Redraw when snapshot changes
   React.useEffect(() => { drawCells(); }, [drawCells]);
 
-  const fullPopulationRows = useMemo(
-    () => populationTimeSeries.map((row) => ({ ...row })),
-    [populationTimeSeries],
-  );
+  const fullPopulationRows = populationTimeSeries;
   const currentSnapshot = snapshots[currentSnapshotIdx];
   const currentCellHeaders = useMemo(() => {
-    const observableHeaders = Array.from(new Set(snapshots.flatMap((snapshot) =>
-      snapshot.cells.flatMap((cell) => Object.keys(cell.observables)),
-    )));
+    // Observables are homogeneous across cells of a run; scanning the current
+    // snapshot is sufficient and avoids O(snapshots × cells) work on each render.
+    const observableHeaders = new Set<string>();
+    if (currentSnapshot) {
+      for (const cell of currentSnapshot.cells) {
+        for (const key of Object.keys(cell.observables)) {
+          observableHeaders.add(key);
+        }
+      }
+    }
     return ['id', 'cell_type', 'x', 'y', 'z', 'radius', 'phase', ...observableHeaders];
-  }, [snapshots]);
+  }, [currentSnapshot]);
   const currentCellRows = useMemo(() => {
     if (!currentSnapshot) return [] as Record<string, unknown>[];
     return currentSnapshot.cells.map((cell) => ({
