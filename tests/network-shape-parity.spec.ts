@@ -24,7 +24,8 @@ const expand = async (bngl: string) => {
     numReactions: net.reactions.length,
     reactions: net.reactions.map((r) => r.name).sort(),
     // .net reaction lines carry the actual transformation, not the rule name.
-    reactionLines: net.reactions.map((r) => `${r.reactants.join('+')} -> ${r.products.join('+')}`),
+    // BNG2 writes "index reactants products rate", reactants/products comma separated.
+    reactionLines: net.reactions.map((r) => `${r.reactants.join(',')} ${r.products.join(',')}`),
   };
 };
 
