@@ -114,7 +114,11 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Install Playwright chromium
-        run: npx playwright install chromium --with-deps
+        # Invoke the CLI shipped by the installed `playwright` package rather than
+        # `npx playwright`, which resolves a hoisted bin that can belong to a
+        # different version (e.g. via @playwright/test) and then installs browser
+        # builds the app's `import { chromium } from 'playwright'` cannot launch.
+        run: node node_modules/playwright/cli.js install chromium --with-deps
 
       - name: Run tool initialization safety check
         run: npm run test:tool-init
@@ -278,7 +282,8 @@ jobs:
         run: npm install --legacy-peer-deps
 
       - name: Install Playwright browsers
-        run: npx playwright install chromium --with-deps
+        # See tool-init-safety-check: pin the CLI to the installed playwright package.
+        run: node node_modules/playwright/cli.js install chromium --with-deps
 
       - name: Build application
         run: npm run build
