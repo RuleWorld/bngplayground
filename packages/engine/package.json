@@ -60,6 +60,6 @@
     "jsep": "^1.4.0"
   },
   "devDependencies": {
-    "vitest": "^4.0.8"
+    "vitest": "^5.0.0"
   }
 }
