@@ -106,6 +106,28 @@ function appendDefaultOdeActions(code: string): string {
 	return `${cleaned}\n\n# [auto-generated] Default ODE actions for reference generation\ngenerate_network({overwrite=>1})\nsimulate({method=>"ode",t_end=>100,n_steps=>100})\n`;
 }
 
+/**
+ * PyBNF/BNG2 `__FREE` parameters abort BNG2.pl outright:
+ *   `ABORT: Parameter 't0__FREE' is referenced but not defined`
+ * The playground resolves these to 0 (see BNGLVisitor's __FREE handling), so
+ * give BNG2.pl the same value; both engines then simulate the same model
+ * instead of the model being left with no reference at all.
+ */
+function injectFreeParameterDefaults(code: string): string {
+	const freeNames = new Set<string>();
+	for (const match of code.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*__FREE)\b/g)) {
+		freeNames.add(match[1]);
+	}
+	if (freeNames.size === 0) return code;
+
+	const block = [...freeNames]
+		.sort()
+		.map((name) => `setParameter("${name}", 0)`)
+		.join('\n');
+	const cleaned = code.replace(/\s+$/, '');
+	return `${cleaned}\n\n# [auto-generated] PyBNF __FREE defaults, matching the playground's resolution to 0\n${block}\n`;
+}
+
 function sanitizeActionsKeepAllOdeSimulates(code: string): string {
 	// Keep all ODE simulate calls. Comment out SSA/NFsim simulate calls only.
 	const beginRe = /\bbegin\s+actions\b/i;
@@ -280,6 +302,10 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	ensureDir(workDir);
 
 	let sanitized = sanitizeActionsKeepAllOdeSimulates(loadedCode);
+	// Give BNG2.pl the same __FREE values the playground uses, so PyBNF fitting
+	// models can produce a reference instead of aborting before simulation.
+	// This must come before generate_network/simulate are appended below.
+	sanitized = injectFreeParameterDefaults(sanitized);
 	if (!hasUncommentedSimulateAction(sanitized)) {
 		sanitized = appendDefaultOdeActions(sanitized);
 	}
