@@ -23,6 +23,7 @@ import { spawn } from 'child_process';
 import { once } from 'events';
 import { fileURLToPath } from 'url';
 import { collectBnglFilesRecursive, listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
+import { injectFreeParameterDefaults } from './freeParameterDefaults';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(THIS_DIR, '..', '..');
@@ -104,28 +105,6 @@ function hasUncommentedSimulateAction(code: string): boolean {
 function appendDefaultOdeActions(code: string): string {
 	const cleaned = code.replace(/\s+$/, '');
 	return `${cleaned}\n\n# [auto-generated] Default ODE actions for reference generation\ngenerate_network({overwrite=>1})\nsimulate({method=>"ode",t_end=>100,n_steps=>100})\n`;
-}
-
-/**
- * PyBNF/BNG2 `__FREE` parameters abort BNG2.pl outright:
- *   `ABORT: Parameter 't0__FREE' is referenced but not defined`
- * The playground resolves these to 0 (see BNGLVisitor's __FREE handling), so
- * give BNG2.pl the same value; both engines then simulate the same model
- * instead of the model being left with no reference at all.
- */
-function injectFreeParameterDefaults(code: string): string {
-	const freeNames = new Set<string>();
-	for (const match of code.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*__FREE)\b/g)) {
-		freeNames.add(match[1]);
-	}
-	if (freeNames.size === 0) return code;
-
-	const block = [...freeNames]
-		.sort()
-		.map((name) => `setParameter("${name}", 0)`)
-		.join('\n');
-	const cleaned = code.replace(/\s+$/, '');
-	return `${cleaned}\n\n# [auto-generated] PyBNF __FREE defaults, matching the playground's resolution to 0\n${block}\n`;
 }
 
 function sanitizeActionsKeepAllOdeSimulates(code: string): string {
