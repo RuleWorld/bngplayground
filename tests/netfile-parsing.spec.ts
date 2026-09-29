@@ -84,6 +84,17 @@ describe('parseNetFile against real BioNetGen 2.9.3 output', () => {
     expect(r.model.observables?.[0]).toEqual({ name: 'Dimers', type: 'molecules', pattern: 'CD14(CR1!+)' });
   });
 
+  it('handles stoichiometric coefficients in reactions and groups', () => {
+    // BNG2 writes "1,1" for two copies of species 1 and "2*6" in groups.
+    const net = REAL_BNG2_NET
+      .replace('    1 2,3 4 LPS_MD2_Bind', '    1 2,3 2*4 LPS_MD2_Bind')
+      .replace('    8 IkB_active           1,2,4', '    8 IkB_active           2*1,2,4');
+    const r = parseNetFile(net);
+    expect(r.errors).toEqual([]);
+    expect(r.model.reactions?.[0].products).toEqual(['LPS(CD14,LPS!1,MD2,TLR4).MD2(CD14,LPS!1,MD2)']);
+    expect(r.model.observables?.[1].pattern).toContain('CD14(LPS,MD2,TLR4)');
+  });
+
   it('leaves pattern-style reaction participants untouched', () => {
     const net = REAL_BNG2_NET.replace('    1 2,3 4 LPS_MD2_Bind', '    1 CD14(LPS,MD2,TLR4),MD2(CD14,LPS,TLR4) LPS(CD14,LPS!1,MD2,TLR4).MD2(CD14,LPS!1,MD2) LPS_MD2_Bind');
     const r = parseNetFile(net);

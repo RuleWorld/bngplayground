@@ -37,9 +37,13 @@ function parseCommaSeparated(str: string, filterEmpty: boolean = true): string[]
 /**
  * Split a participant list on commas that are not nested inside parentheses.
  *
- * BNG2 writes participants as bare species indices, so a plain comma split is
+ * BNG2 writes participants as species indices, so a plain comma split is
  * enough for its own output — but the pattern form ("A(b,c),D(e,f)") contains
  * commas inside the pattern and must not be split there.
+ *
+ * Tokens may carry a stoichiometric coefficient ("2*6"). The coefficient is
+ * dropped: BNGLReaction has no field for it, and species identity is what
+ * network comparison needs.
  */
 function splitParticipants(str: string): string[] {
   const result: string[] = [];
@@ -51,13 +55,27 @@ function splitParticipants(str: string): string[] {
     else if (ch === ')') depth--;
     else if (ch === ',' && depth === 0) {
       const part = str.slice(start, i).trim();
-      if (part) result.push(part);
+      if (part) result.push(stripCoefficient(part));
       start = i + 1;
     }
   }
   const last = str.slice(start).trim();
-  if (last) result.push(last);
+  if (last) result.push(stripCoefficient(last));
   return result;
+}
+
+/** "2*6" -> "6"; anything else is returned unchanged. */
+function stripCoefficient(token: string): string {
+  const star = token.lastIndexOf('*');
+  if (star > 0 && /^\d+$/.test(token.slice(0, star)) && /^\d+$/.test(token.slice(star + 1))) {
+    return token.slice(star + 1);
+  }
+  return token;
+}
+
+/** True when a token is a species-index list, e.g. "1,2,4" or "2*6,7". */
+function isSpeciesIndexList(token: string): boolean {
+  return token.split(',').every((t) => /^\d*\*?\d+$/.test(t.trim()));
 }
 
 /**
@@ -364,8 +382,7 @@ function parseGroupLine(
   const name = parts[1];
 
   // Group form: the third token is a species index list, not a type keyword.
-  const looksLikeGroup =
-    parts.length === 3 && parts[2].split(',').every((t) => /^\d+$/.test(t.trim()));
+  const looksLikeGroup = parts.length === 3 && isSpeciesIndexList(parts[2]);
 
   if (looksLikeGroup) {
     const species = splitParticipants(parts[2]).map(resolveParticipant);
