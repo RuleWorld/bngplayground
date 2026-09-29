@@ -1,4 +1,4 @@
-import { bench, describe } from 'vitest';
+import { describe, test } from 'vitest';
 import { HybridModelGenerator } from '../src/services/simulation/HybridModelGenerator';
 import type { BNGLModel, BNGLMoleculeType, BNGLSpecies, ReactionRule } from '../src/types';
 
@@ -40,11 +40,21 @@ describe('HybridModelGenerator performance', () => {
     populationMaps: popMaps
   };
 
-  bench('generate', async () => {
-    await HybridModelGenerator.generate(model);
+  // Vitest 5 exposes `bench` as a test-context fixture instead of a top-level
+  // import. The iteration budget is a `run()` option, and each pass over this
+  // 5000-molecule / 1000-rule model is expensive, so sampling is bounded and
+  // the test timeout raised accordingly.
+  const runOptions = { time: 500, iterations: 10 };
+
+  test('generate', { timeout: 300_000 }, async ({ bench }) => {
+    await bench('generate', async () => {
+      await HybridModelGenerator.generate(model);
+    }).run(runOptions);
   });
 
-  bench('partitionRules', () => {
-    HybridModelGenerator.partitionRules(model, popTypes.map(pt => ({ moleculeName: pt.name, treatAsPopulation: true })));
+  test('partitionRules', { timeout: 300_000 }, async ({ bench }) => {
+    await bench('partitionRules', () => {
+      HybridModelGenerator.partitionRules(model, popTypes.map(pt => ({ moleculeName: pt.name, treatAsPopulation: true })));
+    }).run(runOptions);
   });
 });
