@@ -22,6 +22,7 @@
     "test:full": "vitest --run --config vitest.full.config.ts",
     "test:full:safe": "node scripts/run_full_tests.mjs --config vitest.full.config.ts",
     "test:reference": "tsx tools/validation/compare_outputs.ts",
+    "test:reference:net-shape": "tsx tools/validation/compare_networks.ts",
     "test:native-parity": "vitest --run --config vitest.reference.config.ts",
     "test:atomizer-roundtrip": "node --import tsx scripts/atomizer/roundtrip_parity.ts",
     "test:atomizer-sbml-suite": "node --import tsx scripts/atomizer/sbml_suite_audit.ts",

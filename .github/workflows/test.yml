@@ -305,6 +305,23 @@ jobs:
           BNGPATH: ${{ env.BNGPATH }}
           NFSIM_PATH: ${{ env.NFSIM_PATH }}
 
+      # Structural parity: a rule the expander silently drops yields a smaller
+      # network whose trajectories can still look plausible, so compare species
+      # and reaction counts against the .net files BNG2.pl just produced.
+      - name: Run network-shape parity against BNG2 networks
+        run: npm run test:reference:net-shape
+        env:
+          BNG_TEST_OUTPUT_DIR: bng_test_output
+          NODE_ENV: test
+
+      - name: Upload network-shape report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: network-shape-report
+          path: artifacts/network_shape_report.json
+          if-no-files-found: ignore
+
       - name: Run reference validation suite
         run: npm run test:reference
         env:

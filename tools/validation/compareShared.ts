@@ -86,6 +86,13 @@ export const EXPECTED_MISMATCHES: Record<string, string> = {
   circadianoscillator: 'Method mismatch: web=ODE, BNG2=SSA',
 };
 
+// Known network-shape differences (species/reaction counts vs BNG2's .net).
+// Trajectory parity can hide a structurally smaller network, so these are
+// tracked separately from EXPECTED_MISMATCHES. Keys are lowercased basenames.
+export const EXPECTED_NETWORK_MISMATCHES: Record<string, string> = {
+  // placeholder: add entries as real divergences are triaged
+};
+
 // Allow steady-state models to have different row counts if values match in overlap
 export const STEADY_STATE_MODELS = ['barua_2007'];
 
