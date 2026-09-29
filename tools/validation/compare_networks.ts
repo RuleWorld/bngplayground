@@ -27,6 +27,11 @@ const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), 
 const BNG_TEST_OUTPUT_DIR = process.env.BNG_TEST_OUTPUT_DIR ?? path.join(PROJECT_ROOT, 'bng_test_output');
 const REPORT_PATH = process.env.NET_SHAPE_REPORT ?? path.join(PROJECT_ROOT, 'artifacts', 'network_shape_report.json');
 const PER_MODEL_TIMEOUT_MS = Number(process.env.NET_SHAPE_TIMEOUT_MS ?? 30_000);
+/**
+ * Minimum fraction of .net fixtures that must actually be compared. Guards
+ * against a vacuous green run when the parser or reference generation breaks.
+ */
+const MIN_COVERAGE = Number(process.env.NET_SHAPE_MIN_COVERAGE ?? 0.8);
 
 /** Compartments are annotated differently by the two engines; compare topology only. */
 const stripCompartment = (name: string): string => name.replace(/@[A-Za-z0-9_]+\s*::\s*/g, '');
@@ -162,7 +167,25 @@ const main = async (): Promise<void> => {
         (Array.isArray(m.extraSpecies) && m.extraSpecies.length ? ` | extra e.g. ${m.extraSpecies[0]}` : ''),
     );
   }
+  for (const e of report.errors.slice(0, 10)) {
+    console.log(`  ERROR ${e.model}: ${e.error}`);
+  }
   console.log(`[net-shape] report: ${REPORT_PATH}`);
+
+  // A gate that quietly compares nothing is worse than no gate: a broken .net
+  // parser or a failed reference generation would turn every model into an
+  // "error" and the run would still go green. Require that most fixtures are
+  // actually compared, otherwise the gate is reporting on nothing.
+  const comparable = report.totals.netFixtures - report.totals.noPlaygroundNet;
+  const coverage = comparable > 0 ? report.totals.compared / comparable : 0;
+  if (coverage < MIN_COVERAGE) {
+    console.error(
+      `[net-shape] only ${report.totals.compared}/${comparable} networks compared ` +
+        `(${(coverage * 100).toFixed(1)}%, minimum ${(MIN_COVERAGE * 100).toFixed(0)}%). ` +
+        `The gate would be vacuous — fix the underlying parse/generation failure.`
+    );
+    process.exit(1);
+  }
 
   if (report.totals.mismatched > 0) {
     console.error(`[net-shape] ${report.totals.mismatched} model(s) differ from BioNetGen's network shape.`);
