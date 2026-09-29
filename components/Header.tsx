@@ -9,7 +9,7 @@ import { QuestionMarkCircleIcon } from './icons/QuestionMarkCircleIcon';
 import { BookOpenIcon } from './icons/BookOpenIcon';
 import { EyeIcon } from './icons/EyeIcon';
 import { InfoIcon } from './icons/InfoIcon';
-import { VSCodeAnalysisPayload, VSCodeExportModal } from './VSCodeExportModal';
+import { VSCodeAnalysisContext, VSCodeExportModal } from './VSCodeExportModal';
 import { DownloadIcon } from './icons/DownloadIcon';
 import { UploadIcon } from './icons/UploadIcon';
 import { BioModelsImportModal } from './BioModelsImportModal';
@@ -27,7 +27,7 @@ interface HeaderProps {
   modelName?: string | null;
   modelId?: string | null;
   onModelNameChange?: (name: string | null) => void;
-  vscodeExportPayload?: VSCodeAnalysisPayload | null;
+  vscodeAnalysis?: VSCodeAnalysisContext | null;
   viewMode: 'code' | 'design';
   onViewModeChange: (mode: 'code' | 'design') => void;
 }
@@ -45,7 +45,7 @@ export const Header: React.FC<HeaderProps> = ({
   modelName,
   modelId,
   onModelNameChange,
-  vscodeExportPayload,
+  vscodeAnalysis,
   viewMode,
   onViewModeChange,
 }) => {
@@ -239,7 +239,7 @@ export const Header: React.FC<HeaderProps> = ({
           onClose={() => setIsVSCodeModalOpen(false)}
           code={code || ''}
           modelName={modelName}
-          payload={vscodeExportPayload}
+          analysis={vscodeAnalysis}
         />
         <input
           type="file"

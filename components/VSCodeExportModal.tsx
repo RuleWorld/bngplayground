@@ -10,9 +10,16 @@ export interface VSCodeAnalysisPayload {
   analyses?: {
     activeTabIndex?: number;
     simulationOptions?: Record<string, unknown> | null;
-    simulationResults?: Record<string, unknown> | null;
+    simulationResults?: unknown;
     exportedAt: string;
   };
+}
+
+/** Raw analysis inputs. Serialized lazily, only while the modal is open. */
+export interface VSCodeAnalysisContext {
+  activeTabIndex?: number;
+  simulationOptions?: Record<string, unknown> | null;
+  simulationResults?: unknown;
 }
 
 interface VSCodeExportModalProps {
@@ -20,15 +27,28 @@ interface VSCodeExportModalProps {
   onClose: () => void;
   code: string;
   modelName?: string | null;
-  payload?: VSCodeAnalysisPayload | null;
+  analysis?: VSCodeAnalysisContext | null;
 }
+
+/**
+ * JSON.stringify throws RangeError once the result exceeds the engine's max
+ * string length (large SSA firing logs). Degrade to `null` instead of crashing.
+ */
+const safeStringify = (value: unknown): string | null => {
+  try {
+    return JSON.stringify(value);
+  } catch (err) {
+    console.warn('VS Code export payload too large to serialize', err);
+    return null;
+  }
+};
 
 export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
   isOpen,
   onClose,
   code,
   modelName,
-  payload,
+  analysis,
 }) => {
   const [copyStatus, setCopyStatus] = useState<'idle' | 'copied'>('idle');
   const [showHelp, setShowHelp] = useState(false);
@@ -36,16 +56,32 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
 
   if (!isOpen) return null;
 
-  const effectivePayload: VSCodeAnalysisPayload = payload ?? {
+  const exportedAt = new Date().toISOString();
+  const fullPayload: VSCodeAnalysisPayload = {
     version: 1,
     source: 'bng-playground',
     modelName,
     code,
     analyses: {
-      exportedAt: new Date().toISOString(),
+      activeTabIndex: analysis?.activeTabIndex,
+      simulationOptions: analysis?.simulationOptions ?? null,
+      simulationResults: analysis?.simulationResults ?? null,
+      exportedAt,
     },
   };
-  const serializedPayload = JSON.stringify(effectivePayload);
+
+  // Full snapshot if it serializes, otherwise a code-only payload.
+  const fullSerialized = safeStringify(fullPayload);
+  const resultsOmitted = fullSerialized === null;
+  const serializedPayload = fullSerialized ?? safeStringify({
+    ...fullPayload,
+    analyses: {
+      activeTabIndex: analysis?.activeTabIndex,
+      simulationOptions: null,
+      simulationResults: null,
+      exportedAt,
+    },
+  }) ?? JSON.stringify({ version: fullPayload.version, source: fullPayload.source, code });
 
   const isTooLongForUrl = serializedPayload.length > 2000;
 
@@ -146,6 +182,11 @@ export const VSCodeExportModal: React.FC<VSCodeExportModalProps> = ({
                   ? 'Model plus analysis snapshot is large. The extension will import it from your clipboard.'
                   : 'The extension will open the BNGL file and a sidecar analysis snapshot in VS Code.'}
               </p>
+              {resultsOmitted && (
+                <p className="mt-1 text-xs text-amber-700 dark:text-amber-400">
+                  Simulation results are too large to serialize and were omitted; the model source is still exported.
+                </p>
+              )}
             </div>
           </div>
 

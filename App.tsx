@@ -10,7 +10,7 @@ import { bnglService } from './services/bnglService';
 import { exportToNet } from './services/exportNet';
 import { exportToSedML } from './services/exportSedML';
 import { exportToOMEX } from './services/exportOMEX';
-import { VSCodeAnalysisPayload } from './components/VSCodeExportModal';
+import { VSCodeAnalysisContext } from './components/VSCodeExportModal';
 import { BNGLModel, SimulationOptions, SimulationResults, Status, ValidationWarning, EditorMarker } from './types';
 import { loadModelCode, setCachedCode, getCachedCode } from './services/modelLoader';
 import { loadModelCatalog, getModelCatalogSync, findCatalogExampleByQuery, type CatalogExample } from './services/modelCatalog';
@@ -1018,18 +1018,14 @@ function App() {
     }
   };
 
-  const vscodeExportPayload: VSCodeAnalysisPayload | null = code?.trim()
+  // Passed by reference and serialized only when the VS Code export modal is
+  // open — a deep clone here would run on every render and blow the string
+  // length limit once results carry a large SSA firing log.
+  const vscodeAnalysis: VSCodeAnalysisContext | null = code?.trim()
     ? {
-        version: 1,
-        source: 'bng-playground',
-        modelName: loadedModelName,
-        code,
-        analyses: {
-          activeTabIndex: activeVizTab,
-          simulationOptions: simOptions ? { ...simOptions } as Record<string, unknown> : null,
-          simulationResults: results ? JSON.parse(JSON.stringify(results)) as Record<string, unknown> : null,
-          exportedAt: new Date().toISOString(),
-        },
+        activeTabIndex: activeVizTab,
+        simulationOptions: simOptions ? { ...simOptions } as Record<string, unknown> : null,
+        simulationResults: results,
       }
     : null;
 
@@ -1052,7 +1048,7 @@ function App() {
         modelName={loadedModelName}
         modelId={loadedModelId}
         onModelNameChange={setLoadedModelName}
-        vscodeExportPayload={vscodeExportPayload}
+        vscodeAnalysis={vscodeAnalysis}
         viewMode={viewMode}
         onViewModeChange={handleViewModeChange}
       />
