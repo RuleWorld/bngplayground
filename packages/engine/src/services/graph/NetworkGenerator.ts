@@ -3679,6 +3679,15 @@ export class NetworkGenerator {
           const anchoredMatchingPattern = anchored.filter((subgraph) =>
             subgraph.molecules.some((mol) => productPatternMolNames.has(mol.name))
           );
+          // A fragment left over from a *different* product pattern is also anchored and can
+          // share a molecule name — e.g. a catalytic rule whose substrate is still unconsumed
+          // while the catalyst pattern is processed. Matching on names alone cannot separate
+          // `Ras(sos,a~p)` from `Ras(sos!1).Sos(ras!1)`, so fall back to the single anchored
+          // component that accounts for every molecule of this product pattern.
+          const anchoredCoveringPattern = anchored.filter((subgraph) => {
+            const names = new Set(subgraph.molecules.map((mol) => mol.name));
+            return productPattern.molecules.every((mol) => names.has(mol.name));
+          });
 
           if (anchored.length === 1) {
             productsToKeep = anchored;
@@ -3687,6 +3696,8 @@ export class NetworkGenerator {
             // identity of the current product pattern and let other product patterns
             // account for the remaining anchored fragments.
             productsToKeep = anchoredMatchingPattern;
+          } else if (anchoredCoveringPattern.length === 1) {
+            productsToKeep = anchoredCoveringPattern;
           } else {
             if (shouldLogNetworkGenerator) {
               debugNetworkLog(`[applyTransformation] Rule ${rule.name} REJECTED: Product pattern yielded ${splitProducts.length} disconnected anchored components.`);
