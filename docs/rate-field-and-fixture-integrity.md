@@ -76,4 +76,16 @@ target cannot produce. Treat it as unverified ground truth.
 
 Note this did not affect the gate: the networks agree on species and reactions, and
 only the rate annotations differ, which is why `motivating_example_cbngl` passes
-the network-shape gate at 354/354.
+the network-shape gate at 354/354. The fixture's provenance is unknown — no RuleHub
+copy was found on this machine.
+
+## 4. Where the divergences sit, and the discriminator between the two variants
+
+By rule: Rule1 48, Rule2 30, Rule8 14, Rule9 14, Rule28 3, Rule24 2, Rule26 2,
+Rule12 1. In **114/114** the base parameter token is identical — every one is a
+numeric-prefix difference and nothing else.
+
+The discriminator between the two variants is simply whether the model declares
+compartments: `motivating_example.bngl` has no `begin compartments` block, so the
+conversion factor is always 1 and the question never arises; `motivating_example_cbngl.bngl`
+has one.
