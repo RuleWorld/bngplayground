@@ -152,6 +152,35 @@ function stripDecorativeLines(src: string): string {
   return kept.join('\n');
 }
 
+/**
+ * Drop stray closing parentheses that make the file's parentheses unbalanced,
+ * as a few published models do at the end of a statement. BNG2.pl ignores
+ * them. Balance is tracked across the whole source (excluding comments), so
+ * multi-line calls whose "(" is on an earlier line are left alone, and a
+ * genuinely unbalanced paren inside a model still fails to parse.
+ */
+function stripTrailingStrayParens(src: string): string {
+  const kept: string[] = [];
+  let balance = 0;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '#') {
+      // Comment: copy through to end of line without counting brackets.
+      while (i < src.length && src[i] !== '\n') kept.push(src[i++]);
+      if (i < src.length) kept.push(src[i]);
+      continue;
+    }
+    if (ch === '(') {
+      balance++;
+    } else if (ch === ')') {
+      if (balance === 0) continue; // stray: would go negative
+      balance--;
+    }
+    kept.push(ch);
+  }
+  return kept.join('');
+}
+
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
@@ -194,6 +223,11 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     // that consist purely of separator characters, but only outside the model
     // and actions blocks so genuine syntax errors inside a model still surface.
     sanitizedInput = stripDecorativeLines(sanitizedInput);
+
+    // A few published models end with stray closing parentheses (an extra ")"
+    // after the last action). BNG2.pl ignores them; our grammar stops. Only
+    // unbalanced trailing parens are dropped, so errors elsewhere still surface.
+    sanitizedInput = stripTrailingStrayParens(sanitizedInput);
 
     // Normalize legacy molecule block aliases ('molecules' and
     // 'molecular types') to

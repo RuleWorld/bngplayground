@@ -181,3 +181,22 @@ simulate({method=>"ode" t_end=>100})`);
     expect(r.success).toBe(false);
   });
 });
+
+describe('stray closing parentheses', () => {
+  it('accepts a surplus ")" at the end of an action, as BNG2.pl does', () => {
+    const bngl = 'begin model\nend model\nsimulate({method=>"ode",t_end=>10}))\n';
+    expect(parseBNGLWithANTLR(bngl).success).toBe(true);
+  });
+
+  it('keeps balanced parentheses untouched', () => {
+    const bngl = 'begin model\nbegin parameters\n  k (1+2)\nend parameters\nend model';
+    const r = parseBNGLWithANTLR(bngl);
+    expect(r.success).toBe(true);
+    expect(r.model.parameters.k).toBe(3);
+  });
+
+  it('still rejects an unbalanced paren inside the model', () => {
+    const bngl = 'begin model\nbegin molecule types\n  A()\n)';
+    expect(parseBNGLWithANTLR(bngl).success).toBe(false);
+  });
+});
