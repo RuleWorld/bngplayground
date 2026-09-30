@@ -517,6 +517,12 @@ export class NetworkGenerator {
   // A rule object is immutable during generation. Cache both successful plans
   // and conservative rejections so the structural proof is paid once per rule.
   private pureStateChangePlanCache: WeakMap<RxnRule, PureStateChangePlan | null> = new WeakMap();
+  // Which product molecule each reactant-pattern molecule corresponds to, keyed on
+  // `globalReactantMolIdx`. BNG2 reaction rules keep the two molecule lists in
+  // correspondence: the n-th reactant molecule of a given name is the image of the
+  // n-th product molecule of that name. Cached because a rule is immutable during
+  // generation. See matchRespectsProductImpliedFreeConstraints.
+  private productCorrespondenceCache: WeakMap<RxnRule, Map<number, number>> = new WeakMap();
 
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
@@ -2085,6 +2091,61 @@ export class NetworkGenerator {
   }
 
   /**
+   * Map every reactant-pattern molecule to the product molecule it becomes.
+   *
+   * A reaction rule's reactant and product molecule lists are positionally
+   * corresponding per molecule name: the n-th reactant molecule named `A` is the
+   * image of the n-th product molecule named `A`. That correspondence is what lets
+   * a product constraint be attributed to the reactant molecule it actually
+   * constrains.
+   *
+   * The previous code inferred this from "does the product molecule share a bonded
+   * component name with the reactant molecule", which is ambiguous as soon as two
+   * reactant molecules of the same name share a component name. Every molecule of a
+   * disulfide-linked dimer lists `C`, so a product's free-site constraint was
+   * applied to *both* copies and rejected matches BNG2 keeps — the whole
+   * two-ligand-per-receptor family in the IGF1R fitting models was lost that way.
+   *
+   * Returns a map from global reactant molecule index to global product molecule
+   * index. Names with no counterpart (deleted by DeleteMolecules, or with fewer
+   * product copies) are simply absent.
+   */
+  private getProductCorrespondence(rule: RxnRule): Map<number, number> {
+    const cached = this.productCorrespondenceCache.get(rule);
+    if (cached) return cached;
+
+    // Global molecule indices grouped by name, in the order the rule writes them.
+    const reactantByName = new Map<string, number[]>();
+    const productByName = new Map<string, number[]>();
+    let gIdx = 0;
+    for (const pat of rule.reactants) {
+      for (const mol of pat.molecules) {
+        const list = reactantByName.get(mol.name);
+        if (list) list.push(gIdx); else reactantByName.set(mol.name, [gIdx]);
+        gIdx++;
+      }
+    }
+    gIdx = 0;
+    for (const pat of rule.products) {
+      for (const mol of pat.molecules) {
+        const list = productByName.get(mol.name);
+        if (list) list.push(gIdx); else productByName.set(mol.name, [gIdx]);
+        gIdx++;
+      }
+    }
+
+    const map = new Map<number, number>();
+    for (const [name, reactantIdxs] of reactantByName) {
+      const productIdxs = productByName.get(name);
+      if (!productIdxs) continue;
+      const n = Math.min(reactantIdxs.length, productIdxs.length);
+      for (let k = 0; k < n; k++) map.set(reactantIdxs[k], productIdxs[k]);
+    }
+    this.productCorrespondenceCache.set(rule, map);
+    return map;
+  }
+
+  /**
    * BNG2 parity: if a product explicitly lists a component as unbound (free site),
    * but the reactant pattern for the same molecule type doesn't mention that component,
    * BNG2 interprets this as an implicit requirement that the component is already free
@@ -2115,27 +2176,22 @@ export class NetworkGenerator {
     // guard below, so transported cargo (e.g. Im(cargo!1) in Rule29) is handled correctly
     // without needing a blanket bypass here.
 
-    // Count total reactant molecules by name across ALL reactant patterns, and
-    // total product molecules by name. If a molecule type has more reactant instances
-    // than product instances, some are being deleted (DeleteMolecules). For deleted
-    // molecules, we cannot determine which product corresponds to which reactant, so
-    // we skip the product-implied-free constraint for those molecule types.
-    // Example: DeCe2: CCNE(CDKN1A) + CCNE() -> CCNE(CDKN1A) DeleteMolecules
-    //   2 CCNE reactants, 1 CCNE product → 1 CCNE is deleted → skip constraint for CCNE
-    //   (The product CCNE(CDKN1A) comes from reactant slot 0, NOT slot 1; applying it to slot 1
-    //    would wrongly reject CCNE complexes from matching the "any CCNE" pattern.)
-    const totalReactantMolsByName = new Map<string, number>();
-    for (const rPat of rule.reactants) {
-      for (const rMol of rPat.molecules) {
-        totalReactantMolsByName.set(rMol.name, (totalReactantMolsByName.get(rMol.name) ?? 0) + 1);
+    // The rule's reactant and product molecule lists correspond positionally per
+    // molecule name (see getProductCorrespondence), so a product constraint is
+    // applied to exactly the reactant molecule that becomes it. A name with more
+    // reactant copies than product copies is DeleteMolecules: the surplus reactant
+    // molecules have no counterpart and are skipped, which is what the
+    // DeCe2 case (CCNE(CDKN1A) + CCNE() -> CCNE(CDKN1A) DeleteMolecules) needs —
+    // the product CCNE(CDKN1A) belongs to reactant slot 0, not slot 1.
+    const patternOffset = (() => {
+      let off = 0;
+      for (let k = 0; k < rule.reactants.length; k++) {
+        if (rule.reactants[k] === reactantPattern) return off;
+        off += rule.reactants[k].molecules.length;
       }
-    }
-    const totalProductMolsByName = new Map<string, number>();
-    for (const pPat of rule.products) {
-      for (const pMol of pPat.molecules) {
-        totalProductMolsByName.set(pMol.name, (totalProductMolsByName.get(pMol.name) ?? 0) + 1);
-      }
-    }
+      return off;
+    })();
+    const correspondence = this.getProductCorrespondence(rule);
 
     for (let pMolIdx = 0; pMolIdx < reactantPattern.molecules.length; pMolIdx++) {
       const reactantMol = reactantPattern.molecules[pMolIdx];
@@ -2144,112 +2200,66 @@ export class NetworkGenerator {
       const targetMol = target.molecules[targetMolIdx];
       if (!targetMol) continue;
 
-      // If fewer products have this molecule name than there are reactant instances, some are
-      // deleted. Skip the product-implied-free constraint to avoid cross-contamination where a
-      // product belonging to a different reactant slot is wrongly applied as a constraint here.
-      const reactCountForName = totalReactantMolsByName.get(reactantMol.name) ?? 0;
-      const prodCountForName = totalProductMolsByName.get(reactantMol.name) ?? 0;
-      if (reactCountForName > prodCountForName) continue;
+      // The product molecule this reactant pattern molecule becomes. Absent when
+      // the molecule is deleted or its name has no surviving product copy.
+      const prodGlobalIdx = correspondence.get(patternOffset + pMolIdx);
+      if (prodGlobalIdx === undefined) continue;
+      let prodMol: (typeof rule.products)[number]['molecules'][number] | undefined;
+      let seen = 0;
+      outer: for (const prodPattern of rule.products) {
+        for (const m of prodPattern.molecules) {
+          if (seen === prodGlobalIdx) { prodMol = m; break outer; }
+          seen++;
+        }
+      }
+      if (!prodMol) continue;
 
       // Build set of component names present in the reactant pattern molecule.
       // Components in the pattern are explicitly constrained; missing ones are free.
       const reactantCompNames = new Set(reactantMol.components.map(c => c.name));
 
-      // Search for a matching product molecule by molecule name and collect
-      // components that are explicitly unbound in the product but absent from
-      // the reactant pattern.
-      for (const prodPattern of rule.products) {
-        for (const prodMol of prodPattern.molecules) {
-          if (prodMol.name !== reactantMol.name) continue;
-
-          // Skip product mols that share NO *explicitly written* (non-synthetic) component names
-          // with this reactant mol. This prevents cross-contamination in dissociation rules where
-          // different product patterns correspond to different matched molecules.
-          //
-          // Example: A(x!1).A(y!1) → A(x) + A(y): when checking reactant mol A(x!1),
-          // completeMissingComponents adds 'y' as a synthetic wildcard, so reactantCompNames = {x, y}.
-          // But product A(y) corresponds to the OTHER matched molecule (A(y!1)), not this one.
-          // We must skip A(y) here to avoid wrongly rejecting trimer+ matches where target mol0.y
-          // is bonded to a bystander. Using only explicit (non-synthetic) component names ensures
-          // we correctly associate each product pattern with its corresponding reactant molecule.
-          // Skip product mols that don't correspond to this reactant mol.
-          //
-          // For dissociation rules (multiple product patterns), each product pattern corresponds
-          // to ONE of the matched reactant molecules. The correspondence is determined by which
-          // bond is being broken: the reactant mol has an explicit bond (!n) on component C,
-          // and the corresponding product mol has C explicitly FREE (bond broken by the rule).
-          //
-          // Example: PrP(a~Sc,y!1).PrP(a~Sc,x!1) → PrP(a~Sc,y) + PrP(a~Sc,x)
-          //   - reactant mol0 PrP(a~Sc,y!1): explicitly bonded at y → bondedReactantCompNames = {y}
-          //   - product PrP(a~Sc,y): has y → overlap {y}∩{y} → relevant ✓ (bond at y being broken)
-          //   - product PrP(a~Sc,x): has x but NOT y → {x}∩{y} = ∅ → SKIP ✓ (belongs to mol1)
-          //
-          // Without this guard, product PrP(a~Sc,x)'s x-free constraint would be checked against
-          // target mol0 (which may have x bonded), causing wrong rejection of valid matches.
-          //
-          // Note: state components like a~Sc are shared across all molecules and must NOT be used
-          // as the correspondence identifier. Only explicit bond sites (edges.size > 0) qualify.
-          //
-          // When bondedReactantCompNames is empty (no explicit bonds in this reactant mol,
-          // e.g. GPCR state-change rules), skip this filter to preserve the GPCR fix behavior.
-          const bondedReactantCompNames = new Set(
-            reactantMol.components
-              .filter(c => !c.syntheticWildcard && c.edges.size > 0)
-              .map(c => c.name)
-          );
-          if (bondedReactantCompNames.size > 0 && prodMol.components.length > 0) {
-            // Only check explicit (non-synthetic) product components for overlap.
-            // Product A(y) has synthetic x added by completeMissingComponents, but that
-            // synthetic x must NOT be used to match reactant mol A(x!1)'s bonded set {x}.
-            const hasBondOverlap = prodMol.components.some(pc => !pc.syntheticWildcard && bondedReactantCompNames.has(pc.name));
-            if (!hasBondOverlap) continue;
-          }
-
-
-          for (const prodComp of prodMol.components) {
-            if (prodComp.wildcard) continue;
-            if (prodComp.edges.size !== 0) continue;            // not unbound in product
-            // If the product explicitly assigns a new state (e.g. s~U, Y1068~P), the rule is
-            // actively modifying this component and is allowed to break any existing bond as a
-            // side-effect (BNG2 semantics). Do NOT apply the "must be free in target" filter here.
-            // Examples: BetaR(l,g,loc~cyt)->BetaR(l,g,loc~mem,s~U) may act on BetaR(s~P!1).Arr;
-            //           EGFR(d!1).EGFR(d!1,Y1068~U)->EGFR(d!1).EGFR(d!1,Y1068~P) k_phos acts on
-            //           EGFR complexes where the first EGFR's Y1068 may be bonded to Grb2.
-            if (prodComp.state && prodComp.state !== '?') continue;
-            if (reactantCompNames.has(prodComp.name)) {
-              // Component is present in the reactant pattern. If it was explicitly written by the user
-              // (e.g. CD40(l!?)), the pattern matcher already handles it — skip.
-              // But a synthetically-added wildcard (completeMissingComponents added it as !?__SYN__)
-              // means the user DID NOT write it; treat it as absent and apply the product-implied-free
-              // check, just like GPCR where l is absent from the reactant but free in the product.
-              // ⚡ Bolt: replace array .find in inner loop
-              let reactantComp: typeof reactantMol.components[0] | undefined;
-              for (let i = 0; i < reactantMol.components.length; i++) {
-                if (reactantMol.components[i].name === prodComp.name) {
-                  reactantComp = reactantMol.components[i];
-                  break;
-                }
-              }
-              if (!reactantComp?.syntheticWildcard) continue; // explicit pattern component — already constrained
-              // synthetic wildcard — fall through to check target bond state
-            }
-
-            // Component is explicitly free in product but absent from reactant pattern.
-            // BNG2 requires the target to also have it free.
-            // ⚡ Bolt: replace array .find in inner loop
-            let targetComp: typeof targetMol.components[0] | undefined;
-            for (let i = 0; i < targetMol.components.length; i++) {
-              if (targetMol.components[i].name === prodComp.name) {
-                targetComp = targetMol.components[i];
-                break;
-              }
-            }
-            if (!targetComp) continue; // molecule type doesn't have this component on this instance
-            if (targetComp.edges.size !== 0) {
-              // Target has this component bonded — reject this match.
-              return false;
+      for (const prodComp of prodMol.components) {
+        if (prodComp.wildcard) continue;
+        if (prodComp.edges.size !== 0) continue;            // not unbound in product
+        // If the product explicitly assigns a new state (e.g. s~U, Y1068~P), the rule is
+        // actively modifying this component and is allowed to break any existing bond as a
+        // side-effect (BNG2 semantics). Do NOT apply the "must be free in target" filter here.
+        // Examples: BetaR(l,g,loc~cyt)->BetaR(l,g,loc~mem,s~U) may act on BetaR(s~P!1).Arr;
+        //           EGFR(d!1).EGFR(d!1,Y1068~U)->EGFR(d!1).EGFR(d!1,Y1068~P) k_phos acts on
+        //           EGFR complexes where the first EGFR's Y1068 may be bonded to Grb2.
+        if (prodComp.state && prodComp.state !== '?') continue;
+        if (reactantCompNames.has(prodComp.name)) {
+          // Component is present in the reactant pattern. If it was explicitly written by the user
+          // (e.g. CD40(l!?)), the pattern matcher already handles it — skip.
+          // But a synthetically-added wildcard (completeMissingComponents added it as !?__SYN__)
+          // means the user DID NOT write it; treat it as absent and apply the product-implied-free
+          // check, just like GPCR where l is absent from the reactant but free in the product.
+          // ⚡ Bolt: replace array .find in inner loop
+          let reactantComp: typeof reactantMol.components[0] | undefined;
+          for (let i = 0; i < reactantMol.components.length; i++) {
+            if (reactantMol.components[i].name === prodComp.name) {
+              reactantComp = reactantMol.components[i];
+              break;
             }
           }
+          if (!reactantComp?.syntheticWildcard) continue; // explicit pattern component — already constrained
+          // synthetic wildcard — fall through to check target bond state
+        }
+
+        // Component is explicitly free in product but absent from reactant pattern.
+        // BNG2 requires the target to also have it free.
+        // ⚡ Bolt: replace array .find in inner loop
+        let targetComp: typeof targetMol.components[0] | undefined;
+        for (let i = 0; i < targetMol.components.length; i++) {
+          if (targetMol.components[i].name === prodComp.name) {
+            targetComp = targetMol.components[i];
+            break;
+          }
+        }
+        if (!targetComp) continue; // molecule type doesn't have this component on this instance
+        if (targetComp.edges.size !== 0) {
+          // Target has this component bonded — reject this match.
+          return false;
         }
       }
     }
