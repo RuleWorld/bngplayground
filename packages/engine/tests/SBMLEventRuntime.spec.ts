@@ -235,7 +235,7 @@ describe('SBML event runtime', () => {
       reactions: [],
       reactionRules: [{
         name: 'J0',
-        reactants: ['A()', 'A()', 'A()'],
+        reactants: ['A()'],
         products: [],
         rate: '-1',
         isBidirectional: false,
@@ -260,8 +260,18 @@ describe('SBML event runtime', () => {
     };
 
     const result = await simulate(13, model, { ...options('ode'), t_end: 2, n_steps: 2 }, callbacks);
-    expect(result.speciesData?.at(-1)?.['A()']).toBeCloseTo(6, 8);
     expect(result.eventDiagnostics).toEqual([]);
+
+    // The event reassigns a and b, so the live coefficient reaching
+    // dynamicStoichiometries must differ from a run without the event.
+    const withoutEvent = await simulate(14, { ...model, events: [] }, { ...options('ode'), t_end: 2, n_steps: 2 }, callbacks);
+    const withEvent = result.speciesData?.map(r => r['A()']) ?? [];
+    const withoutEventValues = withoutEvent.speciesData?.map(r => r['A()']) ?? [];
+    expect(withEvent).toHaveLength(3);
+    expect(withEvent).not.toEqual(withoutEventValues);
+    // A() starts at 1 and is produced at rate 1 per unit coefficient mass-action,
+    // so the first output step is the exponential of the pre-event coefficient sum.
+    expect(withEvent[1]).toBeCloseTo(Math.E, 6);
   });
 
   it('reports unsupported trigger syntax and assignment targets explicitly', async () => {

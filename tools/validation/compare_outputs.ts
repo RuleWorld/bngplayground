@@ -59,6 +59,10 @@ interface ComparisonResult {
     errorAtTime?: number;
     errorColumn?: string;
     samples?: { time: number; column: string; web: number; ref: number; relError: number }[];
+    // Reference cells in a *compared* column that are inf/-inf/NaN. BNG2
+    // writes those when its own solve fails; scoring them as agreement is
+    // impossible because NaN fails every tolerance comparison.
+    nonFiniteReferenceCells?: { time: number; column: string; value: string }[];
   } | null;
   error?: string;
 }
@@ -247,17 +251,20 @@ function parseGDAT(content: string): { headers: string[]; data: number[][] } {
     headers = headerLine.replace('#', '').trim().split(/\s+/);
   }
 
-  // Data lines don't start with #
+  // Data lines don't start with #.
+  //
+  // `Number()` rather than `parseFloat()`: the latter reads the leading digits
+  // of a Sundials failure marker (`1.#INF`, `1.#QNAN`) as the number 1, so an
+  // unsolved reference would then match a web run that also reports 1. A
+  // non-finite token becomes NaN here rather than an error because BNG2 also
+  // echoes the model's parameters into the .gdat, and a parameter that is
+  // legitimately `inf` (pt303/pt403/pt409: `lnV`, `half_life`, `lnV_tangent`)
+  // sits in a column the web simulator never exports. `compareData` is what
+  // turns a non-finite value in a *compared* column into a failure — NaN
+  // compares false against every tolerance, so it must never reach one.
   const data = lines
     .filter(l => !l.startsWith('#') && l.trim())
-    .map(line => line.trim().split(/\s+/).map(v => {
-      const parsed = Number.parseFloat(v);
-      if (!Number.isFinite(parsed)) {
-        // throw new Error(`Non-numeric GDAT value: "${v}"`);
-        return NaN;
-      }
-      return parsed;
-    }));
+    .map(line => line.trim().split(/\s+/).map(v => Number(v)));
 
   return { headers, data: normalizeTimeSeriesRows(headers, data) };
 }
@@ -837,6 +844,7 @@ function getMultiPhaseReference(
     let errorAtTime: number | undefined;
     let errorColumn: string | undefined;
     const samples: { time: number; column: string; web: number; ref: number; relError: number }[] = [];
+    const nonFiniteReferenceCells: { time: number; column: string; value: string }[] = [];
 
     const webTimeIdx = webHeadersNorm.indexOf('time');
     const refTimeIdx = refHeadersNorm.indexOf('time');
@@ -872,13 +880,24 @@ function getMultiPhaseReference(
     const minRows = Math.min(webData.data.length, refData.data.length);
     const alignedRows = alignRowsByTime(webData.data, refData.data, webTimeIdx, refTimeIdx);
     const allOverlapRowsAligned = alignedRows.length === minRows;
-    let timeMatch = webData.data.length === refData.data.length && alignedRows.length === webData.data.length;
+    // A pair with no aligned row pair compared nothing at all, and every error
+    // accumulator below stays at its 0 initial value, so it would otherwise be
+    // reported as a zero-error match. Two header-only files are not a match.
+    const comparedAnyRow = alignedRows.length > 0;
+    let timeMatch = comparedAnyRow && webData.data.length === refData.data.length && alignedRows.length === webData.data.length;
     let timeOffset: number | undefined;
     if (alignedRows.length > 0) {
       timeOffset = alignedRows[0].webRow[webTimeIdx] - alignedRows[0].refRow[refTimeIdx];
     }
 
     const timeGridMatches = allOverlapRowsAligned;
+    // The overlap relaxation exists because the *reference* is a prefix: the web
+    // run emits every phase while BNG2 only produced the first. It must never
+    // apply in the other direction, where the web trajectory stops early and
+    // the unverified tail of the reference is the divergent part. Requiring the
+    // aligned rows to span the whole reference keeps the documented case and
+    // rejects a truncated web run.
+    const overlapCoversWholeReference = alignedRows.length === refData.data.length;
 
     let overlapMatch = false;
 
@@ -924,11 +943,11 @@ function getMultiPhaseReference(
       }
     } else if (!isSteadyStateModel) {
       // For non-steady-state models, timeMatch requires exact row count match
-      timeMatch = timeGridMatches && webData.data.length === refData.data.length;
+      timeMatch = comparedAnyRow && timeGridMatches && webData.data.length === refData.data.length;
 
       // If time grids match for the overlapping rows and values are within tolerance,
       // accept overlap-only comparisons (e.g., web trims early phases).
-      if (!timeMatch && timeGridMatches && webData.data.length !== refData.data.length) {
+      if (!timeMatch && comparedAnyRow && timeGridMatches && webData.data.length !== refData.data.length) {
         const overlapRows = alignedRows.length;
         let valuesMatchInOverlap = true;
         let maxOverlapRelError = 0;
@@ -960,11 +979,18 @@ function getMultiPhaseReference(
           }
         }
 
-        if (valuesMatchInOverlap) {
+        // PARTIAL_MATCH_TIME names the models whose reference is deliberately
+        // only a prefix of the web run (BNG2 could not produce the later
+        // phases). That is a reviewed, per-model exception to the rule above;
+        // every other model must cover its whole reference.
+        const partialMatchIsDeclared = PARTIAL_MATCH_TIME[normalizeKey(modelName)] !== undefined;
+        if (valuesMatchInOverlap && (overlapCoversWholeReference || partialMatchIsDeclared)) {
           timeMatch = true;
           overlapMatch = true;
           console.log(`  [overlap match] Row count differs (web=${webData.data.length}, ref=${refData.data.length}) but values match in ${overlapRows} overlapping rows.`);
           console.log(`    Max relative error in overlap: ${(maxOverlapRelError * 100).toFixed(6)}%`);
+        } else if (valuesMatchInOverlap) {
+          console.log(`  [overlap] Rejecting: the aligned rows cover only ${alignedRows.length}/${refData.data.length} reference rows, so the tail of the reference is unverified.`);
         }
       }
     }
@@ -981,6 +1007,21 @@ function getMultiPhaseReference(
 
         const webVal = webRow[ci];
         const refVal = refRow[refColIdx];
+
+        // A non-finite value in a column the two runs share is a failed solve,
+        // never agreement: `NaN > tol` and `NaN <= tol` are both false, so such
+        // a cell would leave every error accumulator at 0 and be reported as a
+        // zero-error match. Record it as a discrepancy instead.
+        if (!Number.isFinite(webVal) || !Number.isFinite(refVal)) {
+          if (nonFiniteReferenceCells.length < 10) {
+            nonFiniteReferenceCells.push({ time: webTime, column: colName, value: String(refVal) });
+          }
+          if (samples.length < 10) {
+            samples.push({ time: webTime, column: colName, web: webVal, ref: refVal, relError: Number.NaN });
+          }
+          continue;
+        }
+
         const absError = Math.abs(webVal - refVal);
         const denom = Math.max(Math.abs(refVal), Math.abs(webVal), 1e-30);
         const relError = absError / denom;
@@ -1036,6 +1077,7 @@ function getMultiPhaseReference(
       errorAtTime,
       errorColumn,
       samples,
+      nonFiniteReferenceCells,
     };
   }
 
@@ -1391,9 +1433,14 @@ function getMultiPhaseReference(
           const reason = hadInsufficientOverlap
             ? 'Insufficient column overlap with GDAT references.'
             : 'Row count mismatch too large for non-multi-phase model.';
+          // A reference WAS found and compared; it was rejected because the two
+          // engines disagreed about the network (too few shared columns, or a row
+          // count more than 10x apart). Reporting that as `missing_reference` made
+          // a real divergence green — `missing_reference` does not fail CI — and
+          // hid the only evidence of it. It is a mismatch.
           results.push({
             model: modelName,
-            status: 'missing_reference',
+            status: 'mismatch',
             referenceFile: undefined,
             referenceInferred: ref.inferred,
             details: null,
@@ -1551,6 +1598,16 @@ function getMultiPhaseReference(
               console.log(`       t=${s.time}: ${s.column} web=${s.web.toExponential(4)} ref=${s.ref.toExponential(4)} (${(s.relError * 100).toFixed(2)}%)`);
             }
           }
+          if (r.details.nonFiniteReferenceCells && r.details.nonFiniteReferenceCells.length > 0) {
+            console.log(`     Non-finite reference values in compared columns:`);
+            for (const c of r.details.nonFiniteReferenceCells.slice(0, 3)) {
+              console.log(`       t=${c.time}: ${c.column} ref=${c.value} (BNG2 wrote a non-finite value)`);
+            }
+          }
+        } else if (r.error) {
+          // Mismatches recorded without details (a reference that was compared
+          // and then rejected) still have to say why.
+          console.log(`     ${r.error}`);
         }
       }
       console.log();
@@ -1607,12 +1664,22 @@ function getMultiPhaseReference(
       console.error(`${errors.length} model(s) failed during comparison.`);
       process.exit(1);
     }
-    if (matches.length === 0 && results.length > 0) {
+    // `results.length > 0` used to guard this, so a sweep that compared nothing
+    // at all — an empty web_output, a corpus that produced no CSV — exited 0
+    // with a green CI and an empty report. Anything other than at least one
+    // successful comparison is a broken reference pipeline, not a pass.
+    if (matches.length === 0) {
       console.error(
-        `FAIL: No models produced a successful comparison (${missing.length} missing reference, ${errors.length} errors). The reference pipeline may be broken.`
+        `FAIL: No models produced a successful comparison (${results.length} results, ${missing.length} missing reference, ${skipped.length} skipped, ${errors.length} errors). The reference pipeline may be broken.`
       );
       process.exit(1);
     }
   }
 
-main().catch(console.error);
+// A throw that escapes main() used to be swallowed by `.catch(console.error)`,
+// which printed a stack trace and still exited 0 — CI green on a run that
+// compared nothing (a corrupt RuleHub manifest is enough to trigger it).
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

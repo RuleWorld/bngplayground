@@ -25,6 +25,7 @@ import { State_listContext } from "./BNGParser";
 import { State_nameContext } from "./BNGParser";
 import { Seed_species_blockContext } from "./BNGParser";
 import { Seed_species_defContext } from "./BNGParser";
+import { Seed_species_noteContext } from "./BNGParser";
 import { Species_defContext } from "./BNGParser";
 import { Molecule_compartmentContext } from "./BNGParser";
 import { Molecule_patternContext } from "./BNGParser";
@@ -62,6 +63,7 @@ import { Population_maps_blockContext } from "./BNGParser";
 import { Population_map_defContext } from "./BNGParser";
 import { Population_types_blockContext } from "./BNGParser";
 import { Population_type_defContext } from "./BNGParser";
+import { Protocol_blockContext } from "./BNGParser";
 import { Actions_blockContext } from "./BNGParser";
 import { Wrapped_actions_blockContext } from "./BNGParser";
 import { Begin_actions_blockContext } from "./BNGParser";
@@ -342,6 +344,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitSeed_species_def?: (ctx: Seed_species_defContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.seed_species_note`.
+	 * @param ctx the parse tree
+	 */
+	enterSeed_species_note?: (ctx: Seed_species_noteContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.seed_species_note`.
+	 * @param ctx the parse tree
+	 */
+	exitSeed_species_note?: (ctx: Seed_species_noteContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.species_def`.
@@ -749,6 +762,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitPopulation_type_def?: (ctx: Population_type_defContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.protocol_block`.
+	 * @param ctx the parse tree
+	 */
+	enterProtocol_block?: (ctx: Protocol_blockContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.protocol_block`.
+	 * @param ctx the parse tree
+	 */
+	exitProtocol_block?: (ctx: Protocol_blockContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.actions_block`.

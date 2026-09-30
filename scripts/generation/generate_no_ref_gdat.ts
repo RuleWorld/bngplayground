@@ -66,7 +66,7 @@ type GenerationResult = {
 	safeName: string;
 	source: ModelSource;
 	sourceId?: string;
-	status: 'generated' | 'skipped_exists' | 'bng2_failed' | 'source_missing';
+	status: 'generated' | 'skipped_exists' | 'bng2_failed' | 'source_missing' | 'network_free';
 	elapsedMs?: number;
 	exitStatus?: number | null;
 	timedOut?: boolean;
@@ -100,6 +100,29 @@ function hasUncommentedSimulateAction(code: string): boolean {
 		.filter((line) => !line.startsWith('#'))
 		.join('\n');
 	return /\b(simulate|simulate_ode)\s*\(/i.test(uncommented);
+}
+
+/**
+ * True when the model declares simulate actions but every one of them is
+ * network-free (NFsim) or stochastic (SSA), and it never asks for a network.
+ *
+ * `sanitizeActionsKeepAllOdeSimulates` comments those calls out before this is
+ * consulted, so it inspects the ORIGINAL text: the point is to notice that the
+ * author deliberately asked for a network-free run and must not be handed a
+ * `generate_network` instead.
+ */
+function isNetworkFreeModel(originalCode: string): boolean {
+	const simulateCalls = originalCode.match(/\b(?:simulate|simulate_ode|simulate_ssa|simulate_nf|simulate_psa|simulate_pla|simulate_rm)\s*\([^;]*\)/gi);
+	if (!simulateCalls || simulateCalls.length === 0) return false;
+	// An explicit request for a network means the model is not network-free.
+	if (/\bgenerate_network\s*\(/i.test(originalCode)) return false;
+	const networkFree = simulateCalls.every((call) =>
+		/\bsimulate_nf\s*\(/i.test(call) ||
+		/\bsimulate_ssa\s*\(/i.test(call) ||
+		/\bsimulate_psa\s*\(/i.test(call) ||
+		/\bmethod\s*=>\s*["'](?:nf|nfsim|ssa|psa)["']/i.test(call)
+	);
+	return networkFree;
 }
 
 function appendDefaultOdeActions(code: string): string {
@@ -301,12 +324,43 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	// models can produce a reference instead of aborting before simulation.
 	// This must come before generate_network/simulate are appended below.
 	sanitized = injectFreeParameterDefaults(sanitized);
-	if (!hasUncommentedSimulateAction(sanitized)) {
+	// A model whose only simulate actions are NFsim/network-free ones has no
+	// reaction network at all, and that is not a defect: BNG2 writes no .net for
+	// it either, and asking for one is how a fitting model turns into a
+	// combinatorially explosive one. `tcr_iter28p4h2` (129 rules, TCRtot=88223)
+	// went 20 -> 53 -> 203 -> 2659 species in four iterations and never
+	// converged once `generate_network` was appended for it. Skip it, and say so,
+	// instead of burning the per-model timeout to find out.
+	if (hasUncommentedSimulateAction(sanitized)) {
+		// nothing to add
+	} else if (isNetworkFreeModel(sanitized)) {
+		return {
+			safeName,
+			source: model.source,
+			sourceId: model.sourceId,
+			status: 'network_free',
+			error: 'Model is network-free (only NFsim/ssa simulate actions); no ODE reference can exist.',
+		};
+	} else {
 		sanitized = appendDefaultOdeActions(sanitized);
 	}
 
 	const bnglPath = path.join(workDir, `${safeName}.bngl`);
 	fs.writeFileSync(bnglPath, sanitized, 'utf8');
+
+	// BioNetGen master (ruleworld/bionetgen) resolves `default.geometry.mdl`
+	// from the MODEL FILE's directory — Perl2/BNGOutput.pm:127 does
+	// `catfile(dirname($model->Params->{'file'}), "default.geometry.mdl")` and
+	// dies without it. The packaged release ships no geometry file, so it
+	// tolerated the absence. Because each model is copied into a fresh
+	// `workDir` above, that per-model directory is the model's directory, and a
+	// copy placed anywhere else is never read. Without this the three
+	// writeMDL() models (fceri_ji_comp, rec_dim, rec_dim_comp) abort before
+	// simulate() and produce no .gdat at all.
+	const geometrySource = path.join(path.dirname(BNG2_PL), 'Models2', 'MCell', 'default.geometry.mdl');
+	if (fs.existsSync(geometrySource)) {
+		fs.copyFileSync(geometrySource, path.join(workDir, 'default.geometry.mdl'));
+	}
 
 	const t0 = Date.now();
 	const res = await runBng2Process(workDir, bnglPath);

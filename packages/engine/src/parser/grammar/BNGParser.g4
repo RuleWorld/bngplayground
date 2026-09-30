@@ -10,8 +10,10 @@ options {
 }
 
 // Entry point - support both "begin actions...end actions" and loose action commands after model
+// A `begin protocol` block may follow `end model`, ahead of the actions it is
+// replayed from, so the trailing group is repeatable rather than optional-once.
 prog
-    : LB* (header_block | action_command)* ((BEGIN MODEL LB+ program_block* END MODEL LB*) | program_block*) (wrapped_actions_block | actions_block)? EOF
+    : LB* (header_block | action_command)* ((BEGIN MODEL LB+ program_block* END MODEL LB*) | program_block*) (wrapped_actions_block | actions_block | protocol_block)* EOF
     ;
 
 header_block
@@ -53,6 +55,7 @@ program_block
     | wrapped_actions_block
     | begin_actions_block  // NEW: Support "begin actions ... end actions"
     | action_command       // LEGACY: Support loose action commands in model body
+    | protocol_block
     ;
 
 // Parameters block
@@ -136,7 +139,14 @@ seed_species_block
 
 // Support: "1 @c0:Species(...) concentration" or just species without concentration
 seed_species_def
-    : INT? (STRING COLON)? DOLLAR? (AT STRING COLON)? species_def expression?
+    : INT? (STRING COLON)? DOLLAR? (AT STRING COLON)? species_def expression? seed_species_note?
+    ;
+
+// BNG2 reads the initial amount with Expression::readString, which stops at the first
+// token that cannot continue the expression and discards the rest of the line. A
+// `%(...)` annotation after the amount is therefore accepted and ignored.
+seed_species_note
+    : MOD (~LB)+
     ;
 
 // Species can optionally have compartment annotation using @ (prefix @comp: or suffix @comp)
@@ -247,6 +257,7 @@ reaction_rule_def
 // Also support bare INT labels without colon (e.g. "1 A->B")
 label_def
     : (INT | STRING) (STRING | INT | LPAREN STRING? RPAREN)* COLON
+    | MOLECULE_TAG_TOKEN COLON   // Molecule label (e.g. `%x:R(P~1)`)
     | INT
     ;
 
@@ -335,6 +346,13 @@ population_type_def
     : molecule_def STRING?
     ;
 
+// Protocol block (BEGIN PROTOCOL ... END PROTOCOL) records a simulation protocol that
+// `parameter_scan({method=>"protocol"})` replays. There is no protocol representation in
+// the model we build, so the block is accepted and ignored.
+protocol_block
+    : BEGIN PROTOCOL LB+ action_command* END PROTOCOL LB*
+    ;
+
 
 
 
@@ -397,7 +415,7 @@ other_action_cmd
 // `setOption("Name","Value")` is also valid inside an actions block, where it
 // takes two quoted strings rather than an action-args map.
 set_option_cmd
-    : SET_OPTION LPAREN DBQUOTES (~DBQUOTES)* DBQUOTES COMMA DBQUOTES (~DBQUOTES)* DBQUOTES RPAREN SEMI? LB*
+    : SET_OPTION LPAREN DBQUOTES (~DBQUOTES)* DBQUOTES COMMA action_arg_value RPAREN SEMI? LB*
     ;
 
 // Action arguments can be: {key=>val,...} or simple quoted string
@@ -472,7 +490,7 @@ arg_name
     ;
 
 expression_list
-    : expression (COMMA expression)*
+    : expression (COMMA expression)* COMMA?   // BNG2 accepts a trailing comma
     ;
 
 // Expressions

@@ -16,8 +16,9 @@ import {
 
 describe('unparseable-reference baseline', () => {
   it('recognises baseline entries case-insensitively', () => {
-    expect(isKnownUnparseableReference('after_scaling')).toBe(true);
-    expect(isKnownUnparseableReference('AFTER_SCALING')).toBe(true);
+    // One of the models BNG2 itself cannot terminate on, so no reference exists.
+    expect(isKnownUnparseableReference('egfr_ode')).toBe(true);
+    expect(isKnownUnparseableReference('EGFR_ODE')).toBe(true);
   });
 
   it('does not recognise models that are not listed', () => {
@@ -38,7 +39,26 @@ describe('unparseable-reference baseline', () => {
 
   it('does not list models whose parser gaps have been fixed', () => {
     // These parse today; keeping them listed would let a regression hide.
-    for (const fixed of ['elephant', 'elephant_simplex_init0', 'actions_syntax']) {
+    // `after_scaling`/`before_scaling` are the `!?` state modifier,
+    // `mwc`/`simple_genonly` the `setOption` forms,
+    // `igf1r_fit_all_*` the parameter_scan argument forms,
+    // `test_mratio` the observable pattern form, `univ_synth` the compartment
+    // volume variant, and the three `*_mi_*` models the en dash.
+    for (const fixed of [
+      'elephant',
+      'elephant_simplex_init0',
+      'actions_syntax',
+      'after_scaling',
+      'before_scaling',
+      'mwc',
+      'simple_genonly',
+      'igf1r_fit_all_gen19ind47',
+      'test_mratio',
+      'univ_synth',
+      'tricky',
+      'mek_isoform_optimization_de_mek1_ko',
+      'detroit_warren_dearborn_mi_detroit_warren_dearborn_mi',
+    ]) {
       expect(isKnownUnparseableReference(fixed)).toBe(false);
     }
   });

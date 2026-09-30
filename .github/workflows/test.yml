@@ -165,20 +165,103 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install BioNetGen (native binaries for parity tests)
+      # BioNetGen comes from akutuva21/bionetgen at a pinned commit, not from
+      # `pip install bionetgen`. Two reasons, both measured:
+      #
+      #  1. The packaged release expands `egfr` to 4301 reactions and
+      #     `tlr3_dsrna_sensing` to 161, where upstream master gives 3749 and
+      #     158; the surplus entries are duplicates.
+      #  2. The cause is in `Perl2/RxnList.pm`: `add()` folded two reactions only
+      #     when their RateLaw objects were the SAME OBJECT (`$rxn->RateLaw ==
+      #     $rxn2->RateLaw`), so two rules producing an identical reaction each
+      #     kept their own entry. The fork merges on
+      #     `RateLaw::equivalent(...)` instead, which is what `RateLaw.pm` exists
+      #     for, and the duplicates fold away with their stat factors summed.
+      #
+      # So the reference is the fork, pinned: it is upstream master plus that
+      # identity fix, and it is the engine this project is measured against.
+      - name: Install BioNetGen from akutuva21/bionetgen (pinned commit)
+        env:
+          BNG_REPO: https://github.com/akutuva21/bionetgen
+          # "fix: fold byte-identical reactions across rules in RxnList::add".
+          # bng2/VERSION still reads 2.9.3 here — it is a forked source tree, not
+          # a release, so the VERSION file is not a useful pin. This SHA is the
+          # commit the reference corpus was generated from. Bump deliberately,
+          # then regenerate references.
+          BNG_COMMIT: 3513bca766a35de82b883c147174734d316858ba
+          # Prebuilt linux-x86_64 run_network, taken from this wheel (see below).
+          BNG_WHEEL_VERSION: 0.8.7
+          BNG_WHEEL_SHA256: 95c6ff9cf2349dd20280dcd2388a723df72f2283783d0d233a780874ba3628a8
         run: |
-          pip install bionetgen
-          BNG_ROOT=$(python -c "import bionetgen; import os; print(os.path.join(os.path.dirname(bionetgen.__file__), 'bng-linux'))")
-          if [ ! -d "$BNG_ROOT" ]; then
-            echo "bng-linux not found, falling back to parent directory"
-            BNG_ROOT=$(python -c "import bionetgen; import os; print(os.path.dirname(bionetgen.__file__))")
+          set -euo pipefail
+
+          # ---- BioNetGen: akutuva21/bionetgen at a pinned commit ----
+          mkdir -p "$RUNNER_TEMP/bng-src"
+          cd "$RUNNER_TEMP/bng-src"
+          git init -q .
+          git remote add origin "$BNG_REPO"
+          git fetch -q --depth 1 origin "$BNG_COMMIT"
+          git checkout -q --detach FETCH_HEAD
+          if [ "$(git rev-parse HEAD)" != "$BNG_COMMIT" ]; then
+            echo "::error::expected BioNetGen $BNG_COMMIT, got $(git rev-parse HEAD)"
+            exit 1
           fi
-          echo "BNG2_PATH=${BNG_ROOT}/BNG2.pl" >> $GITHUB_ENV
-          echo "BNGPATH=${BNG_ROOT}" >> $GITHUB_ENV
-          echo "NFSIM_PATH=${BNG_ROOT}/bin/NFsim" >> $GITHUB_ENV
-          # Verify binaries exist (don't fail here, tests will skip if not found)
-          ls -la "${BNG_ROOT}/BNG2.pl" || true
-          ls -la "${BNG_ROOT}/bin/NFsim" || true
+          BNG_ROOT="$RUNNER_TEMP/bng-src/bng2"
+          if [ ! -f "$BNG_ROOT/BNG2.pl" ]; then
+            echo "::error::BNG2.pl missing at $BNG_ROOT/BNG2.pl"
+            exit 1
+          fi
+          mkdir -p "$BNG_ROOT/bin"
+
+          # ---- run_network for linux-x86_64 ----
+          # The clone tracks only bng2/bin/run_network_MSWin32-32bit.exe, so it
+          # carries no linux run_network. Every simulate() action needs one
+          # (BNGModel.pm findExec -> $BNGPATH/bin/run_network) and without it the
+          # model ABORTs before writing its .gdat -- which reads as an engine
+          # regression rather than a missing tool, hence the hard check below.
+          #
+          # Chosen source: the run_network inside the published bionetgen wheel.
+          # It is the binary this job already executed for every model before
+          # this change, and it is version-matched to the clone: the wheel's
+          # VERSION and the clone's bng2/VERSION are both 2.9.3, i.e. the same
+          # Network3 C++ build that belongs to this Perl2 source. Compiling the
+          # clone's own Network3 instead would build a *different* binary from
+          # whatever toolchain the runner has and move the numerics of the
+          # stochastic references, so the pinned prebuilt artifact is the
+          # reproducible choice. It links only libc, libm, libstdc++ and
+          # libgcc_s, all present on ubuntu-latest.
+          pip download --no-deps --quiet -d "$RUNNER_TEMP/bng-wheel" "bionetgen==$BNG_WHEEL_VERSION"
+          WHEEL=$(ls "$RUNNER_TEMP"/bng-wheel/bionetgen-*.whl)
+          echo "$BNG_WHEEL_SHA256  $WHEEL" | sha256sum -c -
+          python3 -c 'import sys,zipfile,shutil; z=zipfile.ZipFile(sys.argv[1]); s=z.open("bionetgen/bng-linux/bin/run_network"); d=open(sys.argv[2],"wb"); shutil.copyfileobj(s,d); d.close(); s.close(); z.close()' \
+            "$WHEEL" "$BNG_ROOT/bin/run_network"
+          chmod +x "$BNG_ROOT/bin/run_network"
+          if [ ! -x "$BNG_ROOT/bin/run_network" ]; then
+            echo "::error::linux run_network not installed at $BNG_ROOT/bin/run_network"
+            exit 1
+          fi
+
+          echo "BNGPATH=$BNG_ROOT" >> "$GITHUB_ENV"
+          echo "BNG2_PATH=$BNG_ROOT/BNG2.pl" >> "$GITHUB_ENV"
+          echo "BNG2_PL=$BNG_ROOT/BNG2.pl" >> "$GITHUB_ENV"
+          echo "NFSIM_PATH=$BNG_ROOT/bin/NFsim" >> "$GITHUB_ENV"
+          echo "BioNetGen $BNG_COMMIT installed at $BNG_ROOT"
+          ls -la "$BNG_ROOT/BNG2.pl" "$BNG_ROOT/bin/run_network"
+
+          # ---- default.geometry.mdl ----
+          # master's BNGOutput.pm:127 resolves default.geometry.mdl from the
+          # MODEL FILE's directory and dies without it; the packaged release
+          # ships no geometry file, so it tolerated the absence. The reference
+          # generator plants a copy next to every model it writes
+          # (scripts/generation/generate_no_ref_gdat.ts), so all this step owes
+          # is to confirm the source exists -- otherwise the three writeMDL()
+          # models (fceri_ji_comp, rec_dim, rec_dim_comp) abort before simulate()
+          # and silently produce no .gdat.
+          GEOM_SRC="$BNG_ROOT/Models2/MCell/default.geometry.mdl"
+          if [ ! -f "$GEOM_SRC" ]; then
+            echo "::error::default.geometry.mdl missing at $GEOM_SRC -- BNG2 master needs it next to every model"
+            exit 1
+          fi
 
       - name: Build NFsim from source (ruleworld/nfsim HEAD)
         run: |
@@ -261,17 +344,103 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install BioNetGen (native binaries for parity tests)
+      # BioNetGen comes from akutuva21/bionetgen at a pinned commit, not from
+      # `pip install bionetgen`. Two reasons, both measured:
+      #
+      #  1. The packaged release expands `egfr` to 4301 reactions and
+      #     `tlr3_dsrna_sensing` to 161, where upstream master gives 3749 and
+      #     158; the surplus entries are duplicates.
+      #  2. The cause is in `Perl2/RxnList.pm`: `add()` folded two reactions only
+      #     when their RateLaw objects were the SAME OBJECT (`$rxn->RateLaw ==
+      #     $rxn2->RateLaw`), so two rules producing an identical reaction each
+      #     kept their own entry. The fork merges on
+      #     `RateLaw::equivalent(...)` instead, which is what `RateLaw.pm` exists
+      #     for, and the duplicates fold away with their stat factors summed.
+      #
+      # So the reference is the fork, pinned: it is upstream master plus that
+      # identity fix, and it is the engine this project is measured against.
+      - name: Install BioNetGen from akutuva21/bionetgen (pinned commit)
+        env:
+          BNG_REPO: https://github.com/akutuva21/bionetgen
+          # "fix: fold byte-identical reactions across rules in RxnList::add".
+          # bng2/VERSION still reads 2.9.3 here — it is a forked source tree, not
+          # a release, so the VERSION file is not a useful pin. This SHA is the
+          # commit the reference corpus was generated from. Bump deliberately,
+          # then regenerate references.
+          BNG_COMMIT: 3513bca766a35de82b883c147174734d316858ba
+          # Prebuilt linux-x86_64 run_network, taken from this wheel (see below).
+          BNG_WHEEL_VERSION: 0.8.7
+          BNG_WHEEL_SHA256: 95c6ff9cf2349dd20280dcd2388a723df72f2283783d0d233a780874ba3628a8
         run: |
-          pip install bionetgen
-          BNG_ROOT=$(python -c "import bionetgen; import os; print(os.path.join(os.path.dirname(bionetgen.__file__), 'bng-linux'))")
-          if [ ! -d "$BNG_ROOT" ]; then
-            echo "bng-linux not found, falling back to parent directory"
-            BNG_ROOT=$(python -c "import bionetgen; import os; print(os.path.dirname(bionetgen.__file__))")
+          set -euo pipefail
+
+          # ---- BioNetGen: akutuva21/bionetgen at a pinned commit ----
+          mkdir -p "$RUNNER_TEMP/bng-src"
+          cd "$RUNNER_TEMP/bng-src"
+          git init -q .
+          git remote add origin "$BNG_REPO"
+          git fetch -q --depth 1 origin "$BNG_COMMIT"
+          git checkout -q --detach FETCH_HEAD
+          if [ "$(git rev-parse HEAD)" != "$BNG_COMMIT" ]; then
+            echo "::error::expected BioNetGen $BNG_COMMIT, got $(git rev-parse HEAD)"
+            exit 1
           fi
-          echo "BNG2_PATH=${BNG_ROOT}/BNG2.pl" >> $GITHUB_ENV
-          echo "BNGPATH=${BNG_ROOT}" >> $GITHUB_ENV
-          echo "NFSIM_PATH=${BNG_ROOT}/bin/NFsim" >> $GITHUB_ENV
+          BNG_ROOT="$RUNNER_TEMP/bng-src/bng2"
+          if [ ! -f "$BNG_ROOT/BNG2.pl" ]; then
+            echo "::error::BNG2.pl missing at $BNG_ROOT/BNG2.pl"
+            exit 1
+          fi
+          mkdir -p "$BNG_ROOT/bin"
+
+          # ---- run_network for linux-x86_64 ----
+          # The clone tracks only bng2/bin/run_network_MSWin32-32bit.exe, so it
+          # carries no linux run_network. Every simulate() action needs one
+          # (BNGModel.pm findExec -> $BNGPATH/bin/run_network) and without it the
+          # model ABORTs before writing its .gdat -- which reads as an engine
+          # regression rather than a missing tool, hence the hard check below.
+          #
+          # Chosen source: the run_network inside the published bionetgen wheel.
+          # It is the binary this job already executed for every model before
+          # this change, and it is version-matched to the clone: the wheel's
+          # VERSION and the clone's bng2/VERSION are both 2.9.3, i.e. the same
+          # Network3 C++ build that belongs to this Perl2 source. Compiling the
+          # clone's own Network3 instead would build a *different* binary from
+          # whatever toolchain the runner has and move the numerics of the
+          # stochastic references, so the pinned prebuilt artifact is the
+          # reproducible choice. It links only libc, libm, libstdc++ and
+          # libgcc_s, all present on ubuntu-latest.
+          pip download --no-deps --quiet -d "$RUNNER_TEMP/bng-wheel" "bionetgen==$BNG_WHEEL_VERSION"
+          WHEEL=$(ls "$RUNNER_TEMP"/bng-wheel/bionetgen-*.whl)
+          echo "$BNG_WHEEL_SHA256  $WHEEL" | sha256sum -c -
+          python3 -c 'import sys,zipfile,shutil; z=zipfile.ZipFile(sys.argv[1]); s=z.open("bionetgen/bng-linux/bin/run_network"); d=open(sys.argv[2],"wb"); shutil.copyfileobj(s,d); d.close(); s.close(); z.close()' \
+            "$WHEEL" "$BNG_ROOT/bin/run_network"
+          chmod +x "$BNG_ROOT/bin/run_network"
+          if [ ! -x "$BNG_ROOT/bin/run_network" ]; then
+            echo "::error::linux run_network not installed at $BNG_ROOT/bin/run_network"
+            exit 1
+          fi
+
+          echo "BNGPATH=$BNG_ROOT" >> "$GITHUB_ENV"
+          echo "BNG2_PATH=$BNG_ROOT/BNG2.pl" >> "$GITHUB_ENV"
+          echo "BNG2_PL=$BNG_ROOT/BNG2.pl" >> "$GITHUB_ENV"
+          echo "NFSIM_PATH=$BNG_ROOT/bin/NFsim" >> "$GITHUB_ENV"
+          echo "BioNetGen $BNG_COMMIT installed at $BNG_ROOT"
+          ls -la "$BNG_ROOT/BNG2.pl" "$BNG_ROOT/bin/run_network"
+
+          # ---- default.geometry.mdl ----
+          # master's BNGOutput.pm:127 resolves default.geometry.mdl from the
+          # MODEL FILE's directory and dies without it; the packaged release
+          # ships no geometry file, so it tolerated the absence. The reference
+          # generator plants a copy next to every model it writes
+          # (scripts/generation/generate_no_ref_gdat.ts), so all this step owes
+          # is to confirm the source exists -- otherwise the three writeMDL()
+          # models (fceri_ji_comp, rec_dim, rec_dim_comp) abort before simulate()
+          # and silently produce no .gdat.
+          GEOM_SRC="$BNG_ROOT/Models2/MCell/default.geometry.mdl"
+          if [ ! -f "$GEOM_SRC" ]; then
+            echo "::error::default.geometry.mdl missing at $GEOM_SRC -- BNG2 master needs it next to every model"
+            exit 1
+          fi
 
       - name: Build NFsim from source (ruleworld/nfsim HEAD)
         run: |
@@ -387,17 +556,103 @@ jobs:
         with:
           python-version: '3.11'
 
-      - name: Install BioNetGen (native binaries for parity tests)
+      # BioNetGen comes from akutuva21/bionetgen at a pinned commit, not from
+      # `pip install bionetgen`. Two reasons, both measured:
+      #
+      #  1. The packaged release expands `egfr` to 4301 reactions and
+      #     `tlr3_dsrna_sensing` to 161, where upstream master gives 3749 and
+      #     158; the surplus entries are duplicates.
+      #  2. The cause is in `Perl2/RxnList.pm`: `add()` folded two reactions only
+      #     when their RateLaw objects were the SAME OBJECT (`$rxn->RateLaw ==
+      #     $rxn2->RateLaw`), so two rules producing an identical reaction each
+      #     kept their own entry. The fork merges on
+      #     `RateLaw::equivalent(...)` instead, which is what `RateLaw.pm` exists
+      #     for, and the duplicates fold away with their stat factors summed.
+      #
+      # So the reference is the fork, pinned: it is upstream master plus that
+      # identity fix, and it is the engine this project is measured against.
+      - name: Install BioNetGen from akutuva21/bionetgen (pinned commit)
+        env:
+          BNG_REPO: https://github.com/akutuva21/bionetgen
+          # "fix: fold byte-identical reactions across rules in RxnList::add".
+          # bng2/VERSION still reads 2.9.3 here — it is a forked source tree, not
+          # a release, so the VERSION file is not a useful pin. This SHA is the
+          # commit the reference corpus was generated from. Bump deliberately,
+          # then regenerate references.
+          BNG_COMMIT: 3513bca766a35de82b883c147174734d316858ba
+          # Prebuilt linux-x86_64 run_network, taken from this wheel (see below).
+          BNG_WHEEL_VERSION: 0.8.7
+          BNG_WHEEL_SHA256: 95c6ff9cf2349dd20280dcd2388a723df72f2283783d0d233a780874ba3628a8
         run: |
-          pip install bionetgen
-          BNG_ROOT=$(python -c "import bionetgen; import os; print(os.path.join(os.path.dirname(bionetgen.__file__), 'bng-linux'))")
-          if [ ! -d "$BNG_ROOT" ]; then
-            echo "bng-linux not found, falling back to parent directory"
-            BNG_ROOT=$(python -c "import bionetgen; import os; print(os.path.dirname(bionetgen.__file__))")
+          set -euo pipefail
+
+          # ---- BioNetGen: akutuva21/bionetgen at a pinned commit ----
+          mkdir -p "$RUNNER_TEMP/bng-src"
+          cd "$RUNNER_TEMP/bng-src"
+          git init -q .
+          git remote add origin "$BNG_REPO"
+          git fetch -q --depth 1 origin "$BNG_COMMIT"
+          git checkout -q --detach FETCH_HEAD
+          if [ "$(git rev-parse HEAD)" != "$BNG_COMMIT" ]; then
+            echo "::error::expected BioNetGen $BNG_COMMIT, got $(git rev-parse HEAD)"
+            exit 1
           fi
-          echo "BNG2_PATH=${BNG_ROOT}/BNG2.pl" >> $GITHUB_ENV
-          echo "BNGPATH=${BNG_ROOT}" >> $GITHUB_ENV
-          echo "NFSIM_PATH=${BNG_ROOT}/bin/NFsim" >> $GITHUB_ENV
+          BNG_ROOT="$RUNNER_TEMP/bng-src/bng2"
+          if [ ! -f "$BNG_ROOT/BNG2.pl" ]; then
+            echo "::error::BNG2.pl missing at $BNG_ROOT/BNG2.pl"
+            exit 1
+          fi
+          mkdir -p "$BNG_ROOT/bin"
+
+          # ---- run_network for linux-x86_64 ----
+          # The clone tracks only bng2/bin/run_network_MSWin32-32bit.exe, so it
+          # carries no linux run_network. Every simulate() action needs one
+          # (BNGModel.pm findExec -> $BNGPATH/bin/run_network) and without it the
+          # model ABORTs before writing its .gdat -- which reads as an engine
+          # regression rather than a missing tool, hence the hard check below.
+          #
+          # Chosen source: the run_network inside the published bionetgen wheel.
+          # It is the binary this job already executed for every model before
+          # this change, and it is version-matched to the clone: the wheel's
+          # VERSION and the clone's bng2/VERSION are both 2.9.3, i.e. the same
+          # Network3 C++ build that belongs to this Perl2 source. Compiling the
+          # clone's own Network3 instead would build a *different* binary from
+          # whatever toolchain the runner has and move the numerics of the
+          # stochastic references, so the pinned prebuilt artifact is the
+          # reproducible choice. It links only libc, libm, libstdc++ and
+          # libgcc_s, all present on ubuntu-latest.
+          pip download --no-deps --quiet -d "$RUNNER_TEMP/bng-wheel" "bionetgen==$BNG_WHEEL_VERSION"
+          WHEEL=$(ls "$RUNNER_TEMP"/bng-wheel/bionetgen-*.whl)
+          echo "$BNG_WHEEL_SHA256  $WHEEL" | sha256sum -c -
+          python3 -c 'import sys,zipfile,shutil; z=zipfile.ZipFile(sys.argv[1]); s=z.open("bionetgen/bng-linux/bin/run_network"); d=open(sys.argv[2],"wb"); shutil.copyfileobj(s,d); d.close(); s.close(); z.close()' \
+            "$WHEEL" "$BNG_ROOT/bin/run_network"
+          chmod +x "$BNG_ROOT/bin/run_network"
+          if [ ! -x "$BNG_ROOT/bin/run_network" ]; then
+            echo "::error::linux run_network not installed at $BNG_ROOT/bin/run_network"
+            exit 1
+          fi
+
+          echo "BNGPATH=$BNG_ROOT" >> "$GITHUB_ENV"
+          echo "BNG2_PATH=$BNG_ROOT/BNG2.pl" >> "$GITHUB_ENV"
+          echo "BNG2_PL=$BNG_ROOT/BNG2.pl" >> "$GITHUB_ENV"
+          echo "NFSIM_PATH=$BNG_ROOT/bin/NFsim" >> "$GITHUB_ENV"
+          echo "BioNetGen $BNG_COMMIT installed at $BNG_ROOT"
+          ls -la "$BNG_ROOT/BNG2.pl" "$BNG_ROOT/bin/run_network"
+
+          # ---- default.geometry.mdl ----
+          # master's BNGOutput.pm:127 resolves default.geometry.mdl from the
+          # MODEL FILE's directory and dies without it; the packaged release
+          # ships no geometry file, so it tolerated the absence. The reference
+          # generator plants a copy next to every model it writes
+          # (scripts/generation/generate_no_ref_gdat.ts), so all this step owes
+          # is to confirm the source exists -- otherwise the three writeMDL()
+          # models (fceri_ji_comp, rec_dim, rec_dim_comp) abort before simulate()
+          # and silently produce no .gdat.
+          GEOM_SRC="$BNG_ROOT/Models2/MCell/default.geometry.mdl"
+          if [ ! -f "$GEOM_SRC" ]; then
+            echo "::error::default.geometry.mdl missing at $GEOM_SRC -- BNG2 master needs it next to every model"
+            exit 1
+          fi
 
       - name: Build NFsim from source (ruleworld/nfsim HEAD)
         run: |

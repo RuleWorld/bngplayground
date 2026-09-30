@@ -60,10 +60,10 @@ describe('MathPermutations', () => {
                } else {
                     const res = evaluateFunctionalRate(expr, context, emptyObs);
                     if (Math.abs(expected) > 1e10) {
-                         // Loose check for large numbers
-                         // expect(res).toBeGreaterThan(100); 
-                         // safeExpressionEvaluator returns 0 for non-finite results
-                         expect(res).toBe(0);
+                         // Infinite results (log(0) = -inf) propagate as IEEE-754
+                         // values, matching BNG2's mu::Parser, rather than being
+                         // collapsed to 0.
+                         expect(res).toBe(expected);
                     } else {
                          expect(res).toBeCloseTo(expected, 4);
                     }

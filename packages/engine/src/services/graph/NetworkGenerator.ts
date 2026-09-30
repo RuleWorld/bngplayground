@@ -279,11 +279,25 @@ function computeWildcardBoundStatFactor(pattern: SpeciesGraph, target: SpeciesGr
  * separately and the reaction count came out high even though the unique
  * reaction set matched. Use the normalised rate law instead, falling back to the
  * rule name only when a rule has no usable rate.
+ *
+ * A rate that is a bare number is the exception. `RateLaw::equivalent` compares
+ * the rate law's *constants* by parameter name, and BNG2 mints one auto-named
+ * parameter per rule for a constant rate — `complexdegradation` writes
+ * `_rateLaw1` … `_rateLaw5`, five distinct names for five rules whose rate is
+ * all `1`. Those never compare equal, so `A(b) -> 0 1` and `A() -> 0 1` are two
+ * reactions in BNG2. A numeric rate is therefore scoped to its rule; a rate that
+ * names a parameter or function is shared, because there the parameter name is
+ * what `equivalent` compares and it is the same name for every rule.
  */
 function rateIdentity(ruleName: string, rateExpression?: string, rate?: number): string {
   const expr = rateExpression?.trim();
-  if (expr) return expr.replace(/\s+/g, '');
-  if (typeof rate === 'number' && Number.isFinite(rate)) return String(rate);
+  // No identifier in the expression: a literal rate, parameterised per rule.
+  const isLiteralRate = (e: string): boolean => !/[A-Za-z_]/.test(e);
+  if (expr) {
+    const normalised = expr.replace(/\s+/g, '');
+    return isLiteralRate(normalised) ? `${ruleName}:${normalised}` : normalised;
+  }
+  if (typeof rate === 'number' && Number.isFinite(rate)) return `${ruleName}:${rate}`;
   return ruleName;
 }
 
@@ -2870,46 +2884,48 @@ export class NetworkGenerator {
         speciesCountInGroup.set(speciesIdx, (speciesCountInGroup.get(speciesIdx) || 0) + 1);
       }
 
-      // For correctness with embedding degeneracy we must convert the naive
-      // per-pattern product-of-embeddings into the proper combinatorial count
-      // of unordered assignments for identical patterns mapped across species.
-      // Let e_j = embedding count for species j, and c_j the number of
-      // identical patterns mapped to that species.  The correct contribution
-      // is product_j C(e_j, c_j).  The current `multiplicity` was initialized
-      // earlier to (product_j e_j^{c_j}) / factorial(group.length).  We apply
-      // a corrective multiplier so the net group contribution becomes
-      // product_j C(e_j, c_j).
-      // Compute per-species embedding counts (emb_j) for this identical-pattern
-      // group.  If every emb_j == 1 (no component-level degeneracy), apply the
-      // classic tuple-aware correction factorial(group.length)/denom to undo the
-      // ruleSymmetryFactor division; otherwise *do not* apply the general
-      // correction (BNG2 semantics for embedding-degenerate cases match the
-      // baseline multiplicity = totalDegeneracy / ruleSymmetryFactor).
-      const embCounts: number[] = [];
-      for (const [speciesIdx, _count] of speciesCountInGroup.entries()) {
-        let repPatternIdx;
-        for (let i = 0; i < group.length; i++) {
-          if (currentSpeciesIndices[group[i]] === speciesIdx) {
-            repPatternIdx = group[i];
-            break;
-          }
-        }
-        const emb = repPatternIdx !== undefined ? Math.max(1, countEmbeddingDegeneracy(patterns[repPatternIdx], reactantSpeciesList[repPatternIdx].graph, currentMatches[repPatternIdx])) : 1;
-        embCounts.push(emb);
-      }
-
-      // Historical/BNG2 semantics:
-      // - If there is NO component-level embedding degeneracy for this identical
-      //   pattern group (all emb_j == 1), restore the classic tuple-aware
-      //   correction factorial(group.length)/prod_j factorial(c_j).
-      // - Otherwise (some emb_j > 1), *do not* apply the tuple-aware collapse and
-      //   leave multiplicity as initialized (totalDegeneracy / ruleSymmetryFactor).
-      const allEmbeddingsAreOne = embCounts.every((v) => v === 1);
-      if (allEmbeddingsAreOne) {
-        const correction = factorial(group.length) / Array.from(speciesCountInGroup.values()).reduce((s, c) => s * factorial(c), 1);
-        multiplicity *= correction;
-        if (correction !== 1) tupleAwareCorrectionApplied = true;
-      }
+      // BNG2 STATISTICAL FACTOR (RxnRule::find_reaction_center):
+      //
+      //   multScale = 1 / (|RG| / |Stab|) / crg_permutations
+      //
+      // RG is the set of reactant-graph automorphisms whose induced permutation
+      // on the product is *itself* a product automorphism; Stab is the subgroup
+      // of RG that fixes the reaction centre. For a group of `k` identical
+      // reactant patterns, the divisor is therefore NOT simply k! — it is k!
+      // only when exchanging the group maps the product onto itself up to
+      // product-graph isomorphism. Verified against BNG2's own multScale
+      // instrumentation:
+      //
+      //   ERK(s~P,b) + ERK(s~P,b) -> ERK(s~P,b!1).ERK(s~P,b!1) k
+      //     symmetric product      -> multScale 0.5  (|RG|=2, |Stab|=1, p_auto=2)
+      //   A(x,y,z) + A(x,y,z) -> A(x!1,y~P,z).A(x!1,y~U,z) k
+      //     asymmetric product     -> multScale 1    (|RG|=1, |Stab|=1, p_auto=1)
+      //
+      // In the second rule the product records which pattern index became
+      // y~P, so the exchange is not a product automorphism, the swap never
+      // enters RG, and BNG2 applies no division at all.
+      //
+      // That factor is per *instance* and never depends on which species the
+      // patterns landed on. BNG2 still enumerates every ordering of identical
+      // patterns (`expand_rule` takes the Cartesian product of the per-pattern
+      // match sets) and `RxnList::add` sums the stat factors of the orderings
+      // that fold into one entry. So for a symmetric-product dimerisation of
+      // two distinct species, the orderings [cyt, nuc] and [nuc, cyt] each
+      // carry 0.5 and sum to 1 (`k_dimer`), while the homodimerisation has a
+      // single ordering and keeps 0.5 (`0.5*k_dimer`).
+      //
+      // The old "tuple-aware" correction keyed on the species tuple instead of
+      // product symmetry, dividing out the 1/2 exactly when the two identical
+      // patterns mapped onto *distinct* species. That is the case where BNG2
+      // emits the second ordering and sums, so the correction double-counted:
+      // each ordering got factor 1 and the pair summed to 2, halving `k_dimer`
+      // in the ODE RHS and shifting the erk_nuclear_translocation trajectory by
+      // up to 6.3%.
+      //
+      // No adjustment is applied here: multiplicity keeps its initialised value
+      // totalDegeneracy / ruleSymmetryFactor, which is the per-instance
+      // 1 / (|RG| / |Stab|) that BNG2 assigns. The orderings BNG2 also
+      // enumerates are summed downstream by the reaction-key merge.
 
       // Maintain the historical special-case behavior for pure self-association
       // / directional-pair situations handled below (these may restore a
@@ -3922,10 +3938,19 @@ export class NetworkGenerator {
               }
             }
 
-            // Keep only orphan molecules that can still reconnect to a bound anchor site.
-            // If a transformation explicitly unbound an anchor component, connected bystanders
-            // should not be resurrected as detached products for this anchored merge path.
+            // Classify the bystanders in this cluster against the anchor:
+            //   reconnectable        — can rejoin a survivor's free bond site
+            //   bondedToSurvivor     — attached to a surviving molecule; when the
+            //     product pattern explicitly frees that bond BNG2 drops them
+            //     silently, so we drop them too
+            //   strandedBehindDelete  — attached only to a molecule the rule
+            //     DELETES. Those become BNG2 surplus products: the reaction is
+            //     void unless the rule carries DeleteMolecules.
+            //     `complexdegradation`'s `A(b!1).B(a!1) -> A(b)` on
+            //     `A(b!1).B(a!1,c!2).C(b!2)` is the case that distinguishes the
+            //     last two: C hangs off the deleted B, so the rule must not fire.
             const reconnectable = new Set<number>();
+            const bondedToSurvivor = new Set<number>();
             for (const oldIdx of survivingInCluster) {
               const oldMol = rg.molecules[oldIdx];
               for (let c = 0; c < oldMol.components.length; c++) {
@@ -3939,7 +3964,9 @@ export class NetworkGenerator {
                   const nC = Number(nCStr);
                   const nKey = (r << 16) | nM;
                   const anchorLoc = anchors.get(nKey);
-                  if (!anchorLoc || anchorLoc.graphIdx !== anchorGraphIdx) continue;
+                  if (!anchorLoc) continue;
+                  bondedToSurvivor.add(oldIdx);
+                  if (anchorLoc.graphIdx !== anchorGraphIdx) continue;
 
                   const anchorMol = targetGraph.molecules[anchorLoc.molIdx] as Molecule & {
                     _explicitUnboundComponents?: Set<number>;
@@ -3966,10 +3993,21 @@ export class NetworkGenerator {
               }
             }
 
+            const strandedBehindDeletion = new Set<number>();
             for (const oldIdx of Array.from(survivingInCluster)) {
-              if (!reconnectable.has(oldIdx)) {
+              if (reconnectable.has(oldIdx)) continue;
+              if (bondedToSurvivor.has(oldIdx)) {
+                survivingInCluster.delete(oldIdx);
+              } else {
+                strandedBehindDeletion.add(oldIdx);
                 survivingInCluster.delete(oldIdx);
               }
+            }
+
+            if (strandedBehindDeletion.size > 0) {
+              const strandedGraphs = this.harvestStrandedBystanders(r, rg, strandedBehindDeletion, rule.isDeleteMolecules);
+              if (strandedGraphs === null) return null;
+              productGraphs.push(...strandedGraphs);
             }
 
             if (survivingInCluster.size === 0) {
@@ -4124,65 +4162,21 @@ export class NetworkGenerator {
 
             if (survivingOrphans.size > 0) {
               if (shouldLogNetworkGenerator) {
-                debugNetworkLog(`[applyTransformation] Preserving bystanders from orphan cluster: reactant ${r}, mols [${Array.from(survivingOrphans).join(',')}] (Original cluster size: ${clusterIndices.size})`);
+                debugNetworkLog(`[applyTransformation] Harvesting bystanders from orphan cluster: reactant ${r}, mols [${Array.from(survivingOrphans).join(',')}] (Original cluster size: ${clusterIndices.size})`);
               }
 
-              // Create new SpeciesGraph for the surviving bystanders
-              const newGraph = new SpeciesGraph();
-              newGraph.compartment = rg.compartment;
-
-              const oldToNewIdx = new Map<number, number>();
-
-              // 1. Clone only survivors
-              for (const oldIdx of survivingOrphans) {
-                const oldMol = rg.molecules[oldIdx];
-                const newMol = this.cloneMoleculeStructure(oldMol);
-                newMol._sourceKey = `${r}:${oldIdx}`;
-                newMol._sourceR = r;
-                newMol._sourceM = oldIdx;
-                if (!newMol.compartment && rg.compartment) newMol.compartment = rg.compartment;
-
-                const newIdx = newGraph.molecules.length;
-                newGraph.molecules.push(newMol);
-                oldToNewIdx.set(oldIdx, newIdx);
-              }
-
-              // 2. Reconstruct adjacency among survivors
-              for (const oldIdx of survivingOrphans) {
-                const oldMol = rg.molecules[oldIdx];
-                const newIdx = oldToNewIdx.get(oldIdx)!;
-
-                for (let c = 0; c < oldMol.components.length; c++) {
-                  const neighbors = rg.adjacency.get(`${oldIdx}.${c}`);
-                  if (neighbors) {
-                    for (const neighbor of neighbors) {
-                      const _dIdx3 = neighbor.indexOf('.');
-                      const nMStr = neighbor.slice(0, _dIdx3);
-                      const nCStr = neighbor.slice(_dIdx3 + 1);
-                      const nM = Number(nMStr);
-                      const nC = Number(nCStr);
-
-                      // Only add bond if neighbor is ALSO a survivor
-                      if (survivingOrphans.has(nM)) {
-                        const newN = oldToNewIdx.get(nM)!;
-                        const keyA = `${newIdx}.${c}`;
-                        const valA = `${newN}.${nC}`;
-                        if (!newGraph.adjacency.has(keyA)) newGraph.adjacency.set(keyA, []);
-                        if (!newGraph.adjacency.get(keyA)!.includes(valA)) newGraph.adjacency.get(keyA)!.push(valA);
-                      }
-                    }
-                  }
-                }
-              }
-
-              // Split potential disconnected components if the deleted molecule bridged them
-              const splitOrphans = newGraph.split();
-              for (const sub of splitOrphans) {
+              // Same rule as the anchored path: an unanchored bystander survives only
+              // as a surplus product under DeleteMolecules, otherwise the reaction is
+              // rejected (BioNetGen RxnRule::build_reaction).
+              const strandedGraphs = this.harvestStrandedBystanders(r, rg, survivingOrphans, rule.isDeleteMolecules);
+              if (strandedGraphs === null) return null;
+              for (const sub of strandedGraphs) {
                 productGraphs.push(sub);
               }
 
               // Track used (even if effectively deleted, we handled them)
               for (const oldIdx of clusterIndices) usedReactantMolsInReaction.add((r << 16) | oldIdx);
+
 
             } else {
               if (shouldLogNetworkGenerator) {
@@ -6129,6 +6123,90 @@ export class NetworkGenerator {
     );
     clone.label = source.label;
     return clone;
+  }
+
+  /**
+   * BIO-NETGEN PARITY (`RxnRule::build_reaction`): the transformed graph is split
+   * into connected components, and a component that holds no molecule declared by
+   * any product pattern is a surplus product. BNG2 accepts surplus components only
+   * for a rule carrying `DeleteMolecules`:
+   *
+   *   if (@$products != $nprod_patterns) {
+   *     if ($rr->DeleteMolecules and @$products > $nprod_patterns) { keep }
+   *     else { return undef }   # reaction does not happen
+   *   }
+   *
+   * Those surplus molecules are bystanders the rule leaves stranded — the partner of
+   * a molecule the rule deleted. With `DeleteMolecules` they are released as
+   * products of their own; without it the rule would silently destroy them, so BNG2
+   * does not fire it at all. Dropping them quietly is what made
+   * `complexdegradation`'s `A(b!1).B(a!1) -> A(b)` destroy the bystander `C`.
+   *
+   * @returns one graph per stranded component, or `null` to reject the reaction.
+   */
+  private harvestStrandedBystanders(
+    reactantIdx: number,
+    reactantGraph: SpeciesGraph,
+    bystanderMols: Set<number>,
+    deleteMolecules: boolean
+  ): SpeciesGraph[] | null {
+    if (bystanderMols.size === 0) return [];
+    if (!deleteMolecules) {
+      if (shouldLogNetworkGenerator) {
+        debugNetworkLog(
+          `[harvestStrandedBystanders] REJECTED: reactant ${reactantIdx} leaves bystander molecules ` +
+            `[${Array.from(bystanderMols).join(',')}] with no product pattern, and the rule has no DeleteMolecules.`
+        );
+      }
+      return null;
+    }
+
+    const stranded = new SpeciesGraph();
+    stranded.compartment = reactantGraph.compartment;
+
+    const oldToNewIdx = new Map<number, number>();
+    for (const oldIdx of bystanderMols) {
+      const oldMol = reactantGraph.molecules[oldIdx];
+      const newMol = this.cloneMoleculeStructure(oldMol);
+      newMol._sourceKey = `${reactantIdx}:${oldIdx}`;
+      newMol._sourceR = reactantIdx;
+      newMol._sourceM = oldIdx;
+      if (!newMol.compartment && reactantGraph.compartment) newMol.compartment = reactantGraph.compartment;
+      oldToNewIdx.set(oldIdx, stranded.molecules.length);
+      stranded.molecules.push(newMol);
+    }
+
+    // Rebuild only the bonds internal to the stranded set: bonds to a deleted
+    // molecule die with it, and bonds to a survivor would have merged the
+    // bystander into that survivor's product graph instead.
+    for (const oldIdx of bystanderMols) {
+      const oldMol = reactantGraph.molecules[oldIdx];
+      const newIdx = oldToNewIdx.get(oldIdx)!;
+      for (let c = 0; c < oldMol.components.length; c++) {
+        const neighbors = reactantGraph.adjacency.get(`${oldIdx}.${c}`);
+        if (!neighbors) continue;
+        for (const neighbor of neighbors) {
+          const _dIdx = neighbor.indexOf('.');
+          const nM = Number(neighbor.slice(0, _dIdx));
+          const nC = Number(neighbor.slice(_dIdx + 1));
+          const newN = oldToNewIdx.get(nM);
+          if (newN === undefined) continue;
+          const keyA = `${newIdx}.${c}`;
+          const valA = `${newN}.${nC}`;
+          if (!stranded.adjacency.has(keyA)) stranded.adjacency.set(keyA, []);
+          if (!stranded.adjacency.get(keyA)!.includes(valA)) stranded.adjacency.get(keyA)!.push(valA);
+        }
+      }
+    }
+
+    const graphs = stranded.split();
+    if (shouldLogNetworkGenerator) {
+      debugNetworkLog(
+        `[harvestStrandedBystanders] Reactant ${reactantIdx}: releasing ${graphs.length} stranded product(s) ` +
+          `[${graphs.map((g) => g.toString()).join(' | ')}] (DeleteMolecules)`
+      );
+    }
+    return graphs;
   }
 
   /**

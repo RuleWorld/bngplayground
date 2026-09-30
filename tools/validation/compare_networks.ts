@@ -69,6 +69,28 @@ const canonicalSpecies = (name: string): string => {
   });
   return molecules.sort().join('.');
 };
+/**
+ * Canonicalise a reaction to `reactants->products` with both sides
+ * species-canonicalised and sorted.
+ *
+ * BNG2's `.net` reactions carry participant *indices*, not patterns, so the
+ * label field is useless for comparison: `_rateLaw1`/`#Rule01` on one side has
+ * no counterpart on the other. Identity lives in the species multiset, which is
+ * also how BNG2 itself keys reactions (`Rxn->stringID()`), so participants are
+ * sorted to ignore the arbitrary ordering of both writers.
+ *
+ * A participant of `0` means "nothing on this side" — BNG2 writes index 0 for
+ * an empty product list, and the `.net` reader resolves no species for it.
+ */
+const canonicalReaction = (r: { reactants?: string[]; products?: string[] }): string => {
+  const side = (patterns: string[] | undefined): string[] =>
+    (patterns ?? [])
+      .map((p) => p.trim())
+      .filter((p) => p.length > 0 && p !== '0')
+      .map(canonicalSpecies)
+      .sort();
+  return `${side(r.reactants).join('+')}->${side(r.products).join('+')}`;
+};
 
 interface NetworkShape {
   species: string[];
@@ -103,7 +125,7 @@ const expandModel = async (bngl: string, check: () => void): Promise<NetworkShap
     species: net.species.map((s) => s.name).sort(),
     numSpecies: net.species.length,
     numReactions: net.reactions.length,
-    reactions: net.reactions.map((r) => r.name).sort(),
+    reactions: net.reactions.map(canonicalReaction).sort(),
   };
 };
 
@@ -117,7 +139,7 @@ const readReferenceShape = (netText: string): NetworkShape => {
     species: (model.species ?? []).map((s) => s.name).sort(),
     numSpecies: (model.species ?? []).length,
     numReactions: (model.reactions ?? []).length,
-    reactions: (model.reactions ?? []).map((r) => r.name).sort(),
+    reactions: (model.reactions ?? []).map(canonicalReaction).sort(),
   };
 };
 
@@ -181,8 +203,9 @@ const main = async (): Promise<void> => {
     // from both engines, while BNG2's raw total reaches 767 purely from
     // repeated identical entries. Counting those flags a correct network as a
     // mismatch. Raw totals are still reported so a real divergence stays visible.
-    const refRxnSet = new Set(reference.reactions.map(canonicalReaction));
-    const genRxnSet = new Set(generated.reactions.map(canonicalReaction));
+    // Both readers already store canonical reaction strings.
+    const refRxnSet = new Set(reference.reactions);
+    const genRxnSet = new Set(generated.reactions);
     const missingRxns = [...refRxnSet].filter((r) => !genRxnSet.has(r));
     const extraRxns = [...genRxnSet].filter((r) => !refRxnSet.has(r));
 

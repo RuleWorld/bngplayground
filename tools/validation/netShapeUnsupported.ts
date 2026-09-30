@@ -11,38 +11,28 @@
  * instead of silently widening the exclusion.
  *
  * Keys are lowercased basenames.
+ *
+ * Entries are measured against BioNetGen **master** (RuleWorld/bionetgen), not
+ * the packaged 2.9.3 release. Several models were removed from this list once
+ * the parser front end could read them: the en-dash regional models, the three
+ * `writeMDL` models, `mek_isoform_optimization_de_mek1_ko` (capitalised `Begin`)
+ * and `simple_genonly`. `mcamkii_ca_spike` was removed because master now
+ * rejects that model as invalid syntax, so it is not a reference at all.
+ * An entry that survives a fix hides the regression, so re-check the whole list
+ * whenever the grammar or the front end changes.
  */
 export const UNPARSEABLE_REFERENCE_REASONS: Record<string, string> = {
-  // State modifier written as `R(Y~P!?)`.
-  after_scaling: 'state modifier `!?` is not in the grammar; needs ANTLR regeneration',
-  before_scaling: 'state modifier `!?` is not in the grammar; needs ANTLR regeneration',
-
-  // Unicode en dash inside an identifier or parameter name.
-  detroit_warren_dearborn_mi_detroit_warren_dearborn_mi: 'en dash inside an identifier is not in the lexer; needs ANTLR regeneration',
-  nashville_davidson_murfreesboro_franklin_tn_nashville_davidson_murfreesboro_franklin_tn: 'en dash inside an identifier is not in the lexer; needs ANTLR regeneration',
-  scranton_wilkes_barre_pa_scranton_wilkes_barre_pa: 'en dash inside an identifier is not in the lexer; needs ANTLR regeneration',
-
-  // Actions outside the supported command set.
-  fceri_ji_comp: '`writeMDL` action is not in the grammar; needs ANTLR regeneration',
-  rec_dim: '`writeMDL` action is not in the grammar; needs ANTLR regeneration',
-  rec_dim_comp: '`writeMDL` action is not in the grammar; needs ANTLR regeneration',
-  nfkb_illustrating_protocols: '`protocol` action is not in the grammar; needs ANTLR regeneration',
-  mwc: '`setOption` inside an actions block is not in the grammar; needs ANTLR regeneration',
-
-  // parameter_scan argument combinations BNG2 accepts.
-  igf1r_fit_all_gen19ind47: 'scan action argument combination is not in the grammar; needs ANTLR regeneration',
-  igf1r_fit_all_gen20ind12: 'scan action argument combination is not in the grammar; needs ANTLR regeneration',
-  igf1r_fit_all_iter16p0: 'scan action argument combination is not in the grammar; needs ANTLR regeneration',
-  igf1r_fit_all_iter6p1h4: 'scan action argument combination is not in the grammar; needs ANTLR regeneration',
-
-  // Other constructs seen in the corpus and confirmed to parse under BNG2.
-  mcamkii_ca_spike: 'expression form accepted by BNG2 is not in the grammar; needs ANTLR regeneration',
-  mek_isoform_optimization_de_mek1_ko: 'capitalised `Begin` block keyword is not in the lexer; needs ANTLR regeneration',
-  simple_genonly: '`setOption` header form is not in the grammar; needs ANTLR regeneration',
-  simple_nf_seed: '`generate_network` placement accepted by BNG2 is not in the grammar; needs ANTLR regeneration',
-  test_mratio: 'observable pattern form accepted by BNG2 is not in the grammar; needs ANTLR regeneration',
-  tricky: 'literal tab inside a construct is not handled by the lexer; needs ANTLR regeneration',
-  univ_synth: 'compartment volume declaration variant is not in the grammar; needs ANTLR regeneration',
+  // BNG2 does not terminate on these. They are Kozer et al. 2013-style EGFR
+  // models whose rule set has unbounded oligomerization — a reversible
+  // homodimerisation plus the cd~c/cd~o tail-crosslinking pair — and none of
+  // them sets `max_species` or `max_iter`, so the species count grows without
+  // bound. Measured: 1800 s with no `.net` written, with the model's own
+  // actions stripped and a single `generate_network` appended. Not an engine
+  // defect: there is no reference to be compared against.
+  egfr_nf_iter5p12h10: 'BNG2 does not terminate: unbounded oligomerization, no max_species/max_iter',
+  egfr_ode: 'BNG2 does not terminate: unbounded oligomerization, no max_species/max_iter',
+  jobs_tofit_gen48ind13: 'BNG2 does not terminate: unbounded oligomerization, no max_species/max_iter',
+  tlbr_iter7p5: 'BNG2 does not terminate: unbounded oligomerization, no max_species/max_iter',
 };
 
 /** True when the given model is a known-unparseable reference. */

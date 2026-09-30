@@ -25,6 +25,7 @@ import { State_listContext } from "./BNGParser";
 import { State_nameContext } from "./BNGParser";
 import { Seed_species_blockContext } from "./BNGParser";
 import { Seed_species_defContext } from "./BNGParser";
+import { Seed_species_noteContext } from "./BNGParser";
 import { Species_defContext } from "./BNGParser";
 import { Molecule_compartmentContext } from "./BNGParser";
 import { Molecule_patternContext } from "./BNGParser";
@@ -62,6 +63,7 @@ import { Population_maps_blockContext } from "./BNGParser";
 import { Population_map_defContext } from "./BNGParser";
 import { Population_types_blockContext } from "./BNGParser";
 import { Population_type_defContext } from "./BNGParser";
+import { Protocol_blockContext } from "./BNGParser";
 import { Actions_blockContext } from "./BNGParser";
 import { Wrapped_actions_blockContext } from "./BNGParser";
 import { Begin_actions_blockContext } from "./BNGParser";
@@ -257,6 +259,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitSeed_species_def?: (ctx: Seed_species_defContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.seed_species_note`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitSeed_species_note?: (ctx: Seed_species_noteContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.species_def`.
@@ -516,6 +525,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitPopulation_type_def?: (ctx: Population_type_defContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.protocol_block`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitProtocol_block?: (ctx: Protocol_blockContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.actions_block`.

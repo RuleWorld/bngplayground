@@ -537,9 +537,15 @@ export function compile(
     try {
       const stepRef = { count: 0 };
       const val = evaluateNode(ast, context, stepRef);
-      if (typeof val !== 'number' || !Number.isFinite(val)) {
-        console.warn(`[SafeExpressionEvaluator] Expression evaluated to non-finite: ${expr} => ${String(val)}`);
-        return NaN; // Return NaN so callers can detect the problem (Issue #6 fix)
+      // IEEE-754 infinities are legitimate results, not evaluation failures: BNG2
+      // evaluates rate laws and functions with mu::Parser, which propagates
+      // `ln(0) => -inf` and `x/0 => +/-inf` and writes those straight into the
+      // .gdat. Collapsing them to NaN here made `evaluateFunctionalRate` fall back
+      // to 0, so pt403/pt409 reported lnV=0 where BNG2 reports -inf. Only a true
+      // NaN (0/0, sqrt of a negative, …) is a failure and stays NaN.
+      if (typeof val !== 'number' || Number.isNaN(val)) {
+        console.warn(`[SafeExpressionEvaluator] Expression evaluated to non-numeric: ${expr} => ${String(val)}`);
+        return NaN;
       }
       return val;
     } catch (e) {

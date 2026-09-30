@@ -32,6 +32,7 @@ REACTION_RULES: 'reaction_rules';
 MOLECULE_TYPES: 'molecule_types';
 GROUPS: 'groups';
 ACTIONS: 'actions';
+PROTOCOL: 'protocol';
 POPULATION: 'population';
 MAPS: 'maps';
 ENERGY: 'energy';
@@ -231,12 +232,16 @@ AVG: 'avg';
 TIME: 'time';
 
 // Literals - FLOAT supports: 1.0, .5, 1e-5, 1.0e5, .01, 1D-10 (Fortran)
-// Support bare 1. only if not followed by letter (to avoid matching 1.EGFR as float)
+// Support bare 1. only if not followed by letter (to avoid matching 1.EGFR as float).
+// The character after the dot must NOT be consumed: `10.` at end of line is a float
+// followed by a line break, and `-1./b` is 1. divided by b, not the float "1./". A
+// lexer cannot express a zero-width negative lookahead, and a consuming one would
+// swallow the delimiter. `%1.EGFR` is unaffected because `%1` lexes as MOLECULE_TAG_TOKEN.
 FLOAT
     : DIGIT+ '.' DIGIT+ EXPONENT_ALL?
     | '.' DIGIT+ EXPONENT_ALL?
     | DIGIT+ EXPONENT_ALL
-    | DIGIT+ '.' ~[a-zA-Z_]
+    | DIGIT+ '.'
     ;
 INT: DIGIT+;
 STRING: (LETTER | '_') (LETTER | DIGIT | '_')*;
@@ -282,6 +287,8 @@ EMARK: '!';
 DBQUOTES: '"';
 SQUOTE: '\'';
 AMPERSAND: '&';
+// An en dash (U+2013) is folded to an ASCII hyphen before lexing, so it never
+// reaches the token stream.
 
 // Fragments
 fragment DIGIT: [0-9];
@@ -293,4 +300,4 @@ fragment EXPONENT_ALL: [eEdDfFgG] [+-]? DIGIT+;  // Includes Fortran-style expon
 VERSION_NUMBER: INT '.' INT '.' INT [+-]?;
 
 // Line continuation
-ULB: '\\' [ ]* '\r'? '\n' WS* -> skip;
+ULB: '\\' [ \t]* '\r'? '\n' WS* -> skip;

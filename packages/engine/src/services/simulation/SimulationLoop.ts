@@ -2606,12 +2606,11 @@ export async function simulate(
           isFunctionalRxn[i] = 1;
           kEff[i] = 0; // unused
         } else {
+          // TotalRate zeroes the statistical factor only; the volume
+          // normalization below still applies (BNG2's Network3 runner has no
+          // `totalrate` concept).
           const n = rxn.reactants.length;
           let eff = rxn.rateConstant * rxn.propensityFactor;
-          if (rxn.totalRate) {
-            kEff[i] = eff;
-            continue;
-          }
           const volume = reactionReactingVolumes[i];
           if (n === 0) {
             eff *= volume;
@@ -2637,10 +2636,8 @@ export async function simulate(
             } catch (error) {
               if (strictFunctionalRates) throw error;
             }
-            if (rxn.totalRate) {
-              kEff[i] = rxn.rateConstant * rxn.propensityFactor;
-              continue;
-            }
+            // TotalRate zeroes the statistical factor only; the reacting-volume
+            // normalization still applies, exactly as in the loop above.
             const n = rxn.reactants.length;
             let effective = rxn.rateConstant * rxn.propensityFactor;
             const volume = reactionReactingVolumes[i];
@@ -2752,8 +2749,9 @@ export async function simulate(
               undefined,
               strictFunctionalRates
             );
+            // TotalRate zeroes the statistical factor only; volume normalization
+            // and the mass-action reactant product below still apply.
             let a = rate * rxn.propensityFactor;
-            if (rxn.totalRate) return a;
             const volume = reactionReactingVolumes[rxnIdx];
             const n = rxnReactantCount[rxnIdx];
             if (n === 0) {
@@ -2788,8 +2786,8 @@ export async function simulate(
           }
         }
 
-        // Mass-action: use precomputed effective rate constant and flat reactant arrays
-        if (concreteReactions[rxnIdx].totalRate) return kEff[rxnIdx];
+        // Mass-action: use precomputed effective rate constant and flat reactant arrays.
+        // TotalRate zeroes the statistical factor only, so the reactant product applies.
         const count = rxnReactantCount[rxnIdx];
         if (count === 1) {
           return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]];
@@ -3597,22 +3595,26 @@ export async function simulate(
             // Rate in nM/s * Vol_Reacting = Amount_Rate in counts/s or moles/s
             // Include degeneracy (symmetry factor)
             const vAnchor = reactionReactingVolumes[i] || 1.0;
-            const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1)
-              * (rxn.totalRate ? 1 : vAnchor);
+            // TotalRate zeroes the *statistical* factor only (BNG2 RateLaw.pm:
+            // `TotalRate => 'If true, this ratelaw specifies the Total reaction
+            // rate'` is applied as `sf = TotalRate ? 1 : StatFactor` when the rate
+            // law is emitted). It does NOT make the flux independent of the
+            // reactant concentrations, and it does not drop the reacting-volume
+            // normalization: BNG2's Network3 runner has no `totalrate` concept at
+            // all and always multiplies the rate law by the mass-action product of
+            // the reactant concentrations. Applying the reactant product here
+            // unconditionally keeps blood_coagulation_thrombin's
+            // `Fibrinogen(s~S) -> Fibrinogen(s~F) ... TotalRate` saturating as it
+            // does in BNG2 instead of growing linearly at a constant rate.
+            const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1) * vAnchor;
             let multiplicative = 1;
-            // TotalRate is honored upstream: NetworkGenerator skips statFactor/multiplicity
-            // baking for TotalRate rules (sf=1), and NetworkExpansion omits statFactor from
-            // the functional-rate fold. The flux below uses the rate as-is from those sources,
-            // so no TotalRate adjustment is needed here.
-            if (!rxn.totalRate) {
-              for (let j = 0; j < rxn.reactants.length; j++) {
-                const ridx = rxn.reactants[j];
-                const nativeVal = yIn[ridx];
-                const anchorRelVal = odeUsesAmountState
-                  ? (nativeVal / vAnchor)
-                  : (nativeVal * (speciesVolumes[ridx] / vAnchor));
-                multiplicative *= anchorRelVal;
-              }
+            for (let j = 0; j < rxn.reactants.length; j++) {
+              const ridx = rxn.reactants[j];
+              const nativeVal = yIn[ridx];
+              const anchorRelVal = odeUsesAmountState
+                ? (nativeVal / vAnchor)
+                : (nativeVal * (speciesVolumes[ridx] / vAnchor));
+              multiplicative *= anchorRelVal;
             }
             const velocity = velocityBase * multiplicative;
 
@@ -3757,8 +3759,10 @@ export async function simulate(
               }
             }
 
-            velocity *= multiplicative * sparseRxnPropDeg[i]
-              * (concreteReactions[i].totalRate ? 1 : vAnchor);
+            // TotalRate zeroes the statistical factor only; the reacting-volume
+            // normalization and the mass-action reactant product above both still
+            // apply (BNG2's Network3 runner has no `totalrate` concept).
+            velocity *= multiplicative * sparseRxnPropDeg[i] * vAnchor;
             velocityBuffer[i] = velocity;
           }
 
@@ -3875,20 +3879,20 @@ export async function simulate(
           const rStart = flatReactantOffsets[i];
           const rEnd = flatReactantOffsets[i + 1];
 
-          if (!denseTotalRate[i]) {
-            if (odeUsesAmountState) {
-              for (let j = rStart; j < rEnd; j++) {
-                multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
-              }
-            } else {
-              for (let j = rStart; j < rEnd; j++) {
-                multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
-              }
+          // TotalRate zeroes the statistical factor only; the mass-action reactant
+          // product and the reacting-volume normalization both still apply
+          // (BNG2's Network3 runner has no `totalrate` concept).
+          if (odeUsesAmountState) {
+            for (let j = rStart; j < rEnd; j++) {
+              multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
+            }
+          } else {
+            for (let j = rStart; j < rEnd; j++) {
+              multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
             }
           }
 
-            velocity *= multiplicative * rxnPropensityFactors[i]
-              * (denseTotalRate[i] ? 1 : vAnchor);
+          velocity *= multiplicative * rxnPropensityFactors[i] * vAnchor;
             denseVelocityBuffer[i] = velocity;
           }
 
@@ -4018,17 +4022,17 @@ export async function simulate(
           );
         }
         const vAnchor = reactionReactingVolumes[concreteReactions.indexOf(rxn)] || 1;
+        // TotalRate zeroes the statistical factor only; the mass-action reactant
+        // product and the reacting-volume normalization both still apply.
         let multiplicative = 1;
-        if (!rxn.totalRate) {
-          for (const index of rxn.reactants) {
-            const relativeAmount = odeUsesAmountState
-              ? currentState[index] / vAnchor
-              : (currentState[index] * speciesVolumes[index]) / vAnchor;
-            multiplicative *= relativeAmount;
-          }
+        for (const index of rxn.reactants) {
+          const relativeAmount = odeUsesAmountState
+            ? currentState[index] / vAnchor
+            : (currentState[index] * speciesVolumes[index]) / vAnchor;
+          multiplicative *= relativeAmount;
         }
         const velocity = rate * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1)
-          * (rxn.totalRate ? 1 : vAnchor) * multiplicative;
+          * vAnchor * multiplicative;
         setSafeNumberField(context, rxn.ruleName, velocity);
         setSafeNumberField(context, `netflux_${rxn.ruleName}`, velocity);
       }
