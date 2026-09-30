@@ -102,8 +102,10 @@ import {
   PARTIAL_MATCH_TIME,
   detectUnsupportedFeature,
   compareColumnCoverage,
-  referenceMatchesModel,
   indexReferenceColumns,
+  parseCSV,
+  parseGDAT,
+  normalizeTimeSeriesRows,
 } from './compareShared';
 
 function stripDownloadSuffix(name: string): string {
@@ -173,24 +175,6 @@ function csvModelLabel(csvFile: string): string {
     .replace(/\.csv$/i, '');
 }
 
-function normalizeTimeSeriesRows(headers: string[], rows: number[][]): number[][] {
-  const timeIdx = headers.findIndex((header) => header.trim().toLowerCase() === 'time');
-  if (timeIdx === -1 || rows.length <= 1) return rows;
-
-  const sorted = [...rows].sort((left, right) => left[timeIdx] - right[timeIdx]);
-  const normalized: number[][] = [];
-
-  for (const row of sorted) {
-    const last = normalized[normalized.length - 1];
-    if (last && Math.abs(last[timeIdx] - row[timeIdx]) <= TIME_TOL) {
-      normalized[normalized.length - 1] = row;
-      continue;
-    }
-    normalized.push(row);
-  }
-
-  return normalized;
-}
 
 function alignRowsByTime(
   webRows: number[][],
@@ -226,56 +210,6 @@ function alignRowsByTime(
   return pairs;
 }
 
-function parseCSV(content: string): { headers: string[]; data: number[][] } {
-  const lines = content.trim().split('\n').filter(l => l.trim() && !l.startsWith('#'));
-  const headers = lines[0].split(',').map(h => h.trim());
-  const data = lines.slice(1).map(line =>
-    line.split(',').map(v => {
-      const token = v.trim();
-      const parsed = Number(token);
-      // `Infinity`, `-Infinity` and `NaN` are the literals our own exporter
-      // writes for a non-finite result, and BNG2's mu::Parser produces the same
-      // quantities (it writes `1.#INF`). They are values, not malformed cells,
-      // and the comparison loop below records a non-finite cell in a compared
-      // column as a discrepancy rather than silently scoring it as agreement.
-      // `parseFloat` would have read `-Infinity` as NaN and thrown here, turning
-      // pt403/pt409 into hard errors instead of comparisons.
-      if (Number.isNaN(parsed) && !/^[+-]?nan$/i.test(token)) {
-        throw new Error(`Non-numeric CSV value: "${v}"`);
-      }
-      return parsed;
-    })
-  );
-  return { headers, data: normalizeTimeSeriesRows(headers, data) };
-}
-
-function parseGDAT(content: string): { headers: string[]; data: number[][] } {
-  const lines = content.trim().split('\n').filter(l => l.trim());
-
-  // First line is header with #
-  const headerLine = lines.find(l => l.startsWith('#'));
-  let headers: string[] = [];
-  if (headerLine) {
-    headers = headerLine.replace('#', '').trim().split(/\s+/);
-  }
-
-  // Data lines don't start with #.
-  //
-  // `Number()` rather than `parseFloat()`: the latter reads the leading digits
-  // of a Sundials failure marker (`1.#INF`, `1.#QNAN`) as the number 1, so an
-  // unsolved reference would then match a web run that also reports 1. A
-  // non-finite token becomes NaN here rather than an error because BNG2 also
-  // echoes the model's parameters into the .gdat, and a parameter that is
-  // legitimately `inf` (pt303/pt403/pt409: `lnV`, `half_life`, `lnV_tangent`)
-  // sits in a column the web simulator never exports. `compareData` is what
-  // turns a non-finite value in a *compared* column into a failure — NaN
-  // compares false against every tolerance, so it must never reach one.
-  const data = lines
-    .filter(l => !l.startsWith('#') && l.trim())
-    .map(line => line.trim().split(/\s+/).map(v => Number(v)));
-
-  return { headers, data: normalizeTimeSeriesRows(headers, data) };
-}
 
 interface SimCall {
   method: 'ode' | 'ssa' | 'nf';
