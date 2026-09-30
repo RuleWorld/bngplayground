@@ -37,7 +37,11 @@ const LOCAL_CONTEXT_MATCH_RE = /%([A-Za-z_][A-Za-z0-9_]*)::/g;
 const LOCAL_CONTEXT_STRIP_RE = /%[A-Za-z_][A-Za-z0-9_]*::/g;
 
 const LEGACY_COMP_BEFORE_PAREN_RE = /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-z0-9_]*)\(([^(){}]*)\)/g;
-const LINE_CONTINUATION_RE = /\\\s*\r?\n\s*/g;
+// A trailing backslash continues the logical line. Only the newline it escapes
+// and that line's indentation are consumed: the previous `\s*` also ate blank
+// lines, which merged consecutive definitions (e.g. two `begin functions`
+// entries separated by a blank line) onto one line and failed to parse.
+const LINE_CONTINUATION_RE = /\\[ \t]*\r?\n[ \t]*/g;
 
 const MOL_HEADER_RE = /^([A-Za-z_][A-Za-z0-9_]*)\(([^)]*)\)/;
 const COMMENT_INLINE_RE = /\s*#(?![-+])/;
