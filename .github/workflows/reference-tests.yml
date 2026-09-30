@@ -15,10 +15,17 @@ on:
     branches: [ main ]
   workflow_dispatch:
 
-# No cancel-in-progress: a sweep is 40-50 minutes and a kill mid-run reports a
-# reduced set of completed checks. Superseded sweeps queue instead.
+# Supersede an in-flight sweep rather than queue behind it. This was previously
+# left unset, out of fear that a cancelled sweep would make a commit look green
+# while its checks had never been scheduled — but that failure mode was the
+# run-level head-of-line stall, and splitting this workflow out of test.yml
+# removed it. A sweep no longer blocks anything, so cancelling one costs only the
+# 40-50 minutes of work for a commit a newer push has already superseded, while
+# queueing every push behind the previous sweep makes the parity result lag the
+# head by hours and grows without bound.
 concurrency:
   group: reference-parity-${{ github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
