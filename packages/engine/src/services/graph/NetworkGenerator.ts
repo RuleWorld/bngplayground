@@ -3733,6 +3733,36 @@ export class NetworkGenerator {
           }
         }
 
+        // BIO-NETGEN PARITY (SpeciesGraph::splitConnectedComponents): every reactant
+        // molecule this product pattern explicitly names must survive in ONE connected
+        // component. BNG2 assigns each product molecule to the pattern that declared it
+        // and aborts the whole reaction when a declared pattern ends up with no component
+        // of its own — which is what a rule does when its only effect is to break the bond
+        // holding its single written product together, e.g.
+        // R(Y1~P!1).S(PTP~O!1) -> R(Y1~U).S(PTP~O). Keeping one fragment and dropping the
+        // other would silently delete the released partner.
+        const patternOwnedKeys = fullProductGraph.patternOwnedMolKeys;
+        if (patternOwnedKeys && patternOwnedKeys.size > 0 && splitProducts.length > 1) {
+          let owningComponents = 0;
+          for (const subgraph of splitProducts as Array<SpeciesGraph>) {
+            for (const mol of subgraph.molecules) {
+              const mKey = getMolKeyFromMol(mol);
+              if (mKey !== -1 && patternOwnedKeys.has(mKey)) {
+                owningComponents++;
+                break;
+              }
+            }
+          }
+          if (owningComponents !== 1) {
+            if (shouldLogNetworkGenerator) {
+              debugNetworkLog(
+                `[applyTransformation] Rule ${rule.name} REJECTED: product pattern ${productPattern.toString()} spans ${owningComponents} disconnected components.`
+              );
+            }
+            return null;
+          }
+        }
+
         // CRITICAL FIX FOR BIO-NETGEN PARITY:
         // A single product pattern like "A().B()" should still be rejected if it resolves
         // to multiple disconnected components that all originate from explicitly matched
@@ -6132,6 +6162,18 @@ export class NetworkGenerator {
           }
         }
       }
+    }
+
+    // Record which reactant molecules this product pattern explicitly names. The
+    // product-graph split in applyRuleTransformation must keep them all in one
+    // connected component: BioNetGen SpeciesGraph::splitConnectedComponents assigns
+    // each product molecule to the pattern that declared it and rejects the whole
+    // reaction when a declared pattern is left with no component of its own. Molecules
+    // pulled in implicitly (!+ carry-through, bystanders) are deliberately excluded —
+    // BNG2 lets those become separate products.
+    productGraph.patternOwnedMolKeys = new Set<number>();
+    for (const mapping of productPatternToReactant.values()) {
+      productGraph.patternOwnedMolKeys.add((mapping.reactantIdx << 16) | mapping.targetMolIdx);
     }
 
     if (shouldLogNetworkGenerator) {
