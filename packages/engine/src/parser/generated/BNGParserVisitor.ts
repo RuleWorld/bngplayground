@@ -1,4 +1,4 @@
-// Generated from packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
+// Generated from /Users/akutuva/Documents/BioNetGen/julesplayground/packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
 import { ParseTreeVisitor } from "antlr4ts/tree/ParseTreeVisitor";
@@ -72,6 +72,7 @@ import { Simulate_cmdContext } from "./BNGParser";
 import { Write_cmdContext } from "./BNGParser";
 import { Set_cmdContext } from "./BNGParser";
 import { Other_action_cmdContext } from "./BNGParser";
+import { Set_option_cmdContext } from "./BNGParser";
 import { Action_argsContext } from "./BNGParser";
 import { Action_arg_listContext } from "./BNGParser";
 import { Action_argContext } from "./BNGParser";
@@ -587,6 +588,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitOther_action_cmd?: (ctx: Other_action_cmdContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.set_option_cmd`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitSet_option_cmd?: (ctx: Set_option_cmdContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.action_args`.

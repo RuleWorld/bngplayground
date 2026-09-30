@@ -360,6 +360,7 @@ action_command
     | write_cmd
     | set_cmd
     | other_action_cmd
+    | set_option_cmd
     ;
 
 generate_network_cmd
@@ -388,8 +389,15 @@ set_cmd
 
 other_action_cmd
     : (SAVECONCENTRATIONS | RESETCONCENTRATIONS | SAVEPARAMETERS | RESETPARAMETERS | QUIT
-       | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE | SETVOLUME)
+       | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE | SETVOLUME
+       | WRITEMDL | SET_OPTION)
       LPAREN (action_args | action_arg_value)? RPAREN SEMI? LB*
+    ;
+
+// `setOption("Name","Value")` is also valid inside an actions block, where it
+// takes two quoted strings rather than an action-args map.
+set_option_cmd
+    : SET_OPTION LPAREN DBQUOTES (~DBQUOTES)* DBQUOTES COMMA DBQUOTES (~DBQUOTES)* DBQUOTES RPAREN SEMI? LB*
     ;
 
 // Action arguments can be: {key=>val,...} or simple quoted string
