@@ -174,20 +174,44 @@ const main = async (): Promise<void> => {
     const genSpecies = new Set(generated.species.map(canonicalSpecies));
     const missing = [...refSpecies].filter((s) => !genSpecies.has(s));
     const extra = [...genSpecies].filter((s) => !refSpecies.has(s));
-    const countsMatch =
-      reference.numSpecies === generated.numSpecies && reference.numReactions === generated.numReactions;
 
-    if (countsMatch && missing.length === 0 && extra.length === 0) {
+    // Compare the SET of distinct reactions, not the raw count. BNG2 writes
+    // duplicate copies of a reaction when several rules produce the same
+    // transformation — the Miller2025_MEK family emits 636 distinct reactions
+    // from both engines, while BNG2's raw total reaches 767 purely from
+    // repeated identical entries. Counting those flags a correct network as a
+    // mismatch. Raw totals are still reported so a real divergence stays visible.
+    const refRxnSet = new Set(reference.reactions.map(canonicalReaction));
+    const genRxnSet = new Set(generated.reactions.map(canonicalReaction));
+    const missingRxns = [...refRxnSet].filter((r) => !genRxnSet.has(r));
+    const extraRxns = [...genRxnSet].filter((r) => !refRxnSet.has(r));
+
+    if (
+      missing.length === 0 &&
+      extra.length === 0 &&
+      missingRxns.length === 0 &&
+      extraRxns.length === 0
+    ) {
       report.totals.matched++;
       continue;
     }
 
     const entry = {
       model: safeName,
-      reference: { species: reference.numSpecies, reactions: reference.numReactions },
-      generated: { species: generated.numSpecies, reactions: generated.numReactions },
+      reference: {
+        species: reference.numSpecies,
+        reactions: reference.numReactions,
+        distinctReactions: refRxnSet.size,
+      },
+      generated: {
+        species: generated.numSpecies,
+        reactions: generated.numReactions,
+        distinctReactions: genRxnSet.size,
+      },
       missingSpecies: missing.slice(0, 10),
       extraSpecies: extra.slice(0, 10),
+      missingReactions: missingRxns.slice(0, 6),
+      extraReactions: extraRxns.slice(0, 6),
     };
     if (EXPECTED_NETWORK_MISMATCHES[safeName.toLowerCase()]) {
       report.totals.expectedMismatch++;
@@ -205,11 +229,16 @@ const main = async (): Promise<void> => {
   console.log('[net-shape] totals:', report.totals);
   for (const m of report.mismatches) {
     if (m.expected) continue;
+    const gen = m.generated as Record<string, number>;
+    const ref = m.reference as Record<string, number>;
     console.log(
-      `  MISMATCH ${m.model}: species ${m.generated.species} vs ref ${m.reference.species}, ` +
-        `reactions ${m.generated.reactions} vs ref ${m.reference.reactions}` +
-        (Array.isArray(m.missingSpecies) && m.missingSpecies.length ? ` | missing e.g. ${m.missingSpecies[0]}` : '') +
-        (Array.isArray(m.extraSpecies) && m.extraSpecies.length ? ` | extra e.g. ${m.extraSpecies[0]}` : ''),
+      `  MISMATCH ${m.model}: species ${gen.species} vs ref ${ref.species}, ` +
+        `distinct reactions ${gen.distinctReactions} vs ref ${ref.distinctReactions} ` +
+        `(raw ${gen.reactions} vs ${ref.reactions})` +
+        (Array.isArray(m.missingSpecies) && m.missingSpecies.length ? ` | missing species e.g. ${m.missingSpecies[0]}` : '') +
+        (Array.isArray(m.missingReactions) && m.missingReactions.length
+          ? ` | missing rxn e.g. ${String(m.missingReactions[0]).slice(0, 70)}`
+          : ''),
     );
   }
   for (const u of report.unsupported) {
