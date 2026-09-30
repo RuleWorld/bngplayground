@@ -135,36 +135,32 @@ because it read `species.graph.molecules`, which the exported network does not
 populate. The numbers above are from the corrected name-parsing version, spot
 checked against `zhang_2021` (9), `egfr` (14) and `barua_2013` (5) where the
 count is visibly non-zero.
+### Under-count scan: resolved, and currently harmless
 
-### Under-count scan (the opposite failure)
+Running the instrumented fork over all 741 models, **234 rule instances across
+62 models** apply a BNG2 divisor > 1. Cross-referencing our live
+`patternAutomorphismFactor` × `ruleSymmetryFactor`, **60 of the 62 already
+divide correctly** via `ruleSymmetryFactor` (identical reactant patterns — the
+legitimate ERK/rafi path).
 
-The term is wrong in **one direction only**, but a correct fix must handle both.
+Two models apply no division at all: `egfr_signaling_pathway` and
+`fgf_signaling_pathway`, both BNG2 divisor 2 / ours 1. **Neither emits a wrong
+rate** — checked per reaction against the shape-exact networks, 0 mismatches
+each. The under-count is real in the factor and harmless in the output.
 
-Running the instrumented fork over all 741 models: **234 rule instances across
-62 models** where BNG2 applies a divisor > 1 (`|RG|/|Stab|`, or
-`crg_permutations`). Almost all are `|RG|=2, |Stab|=1` → divisor 2. Note
+So the under-count direction is **not** a second bug to fix. But note:
 `brusselator_oscillator` is `|RG|=2 |Stab|=2 crg=2` → net 0.5, so
 `|RG|/|Stab|` alone is not always the whole divisor — `crg_permutations`
-matters. Largest concentrations: `motivating_example` 23, `zhang_2021` 21,
-`motivating_example_cbngl` 10, `nfsim_aggregation_gelation` 6.
+contributes independently.
 
-Cross-referencing our two live factors (`patternAutomorphismFactor` ×
-`ruleSymmetryFactor`): **60 of the 62 already divide correctly**, via
-`ruleSymmetryFactor` for identical reactant patterns — the legitimate
-ERK/rafi path. Two models apply no division at all:
+**Validation warning.** A correct `|RG|/|Stab|` will change the *factor* on
+`egfr_signaling_pathway` and `fgf_signaling_pathway` while leaving their
+*output* identical. Validate the replacement against BNG2's measured numbers,
+not emitted rates, or these two will look like the fix did nothing.
 
-- `egfr_signaling_pathway` — BNG2 divisor 2, ours 1. **Emits correct rates**
-  (320 shared keys, 0 mismatches); the missing division is compensated by
-  instance folding.
-- `fgf_signaling_pathway` — BNG2 divisor 2, ours 1. **Unresolved.** Reports
-  mismatches, but they may be the bond-label canonicalisation artifact rather
-  than the under-count. Not attributed.
-
-So: 17 models over-count, at most 2 under-count, one root cause — the factor is
-a molecule-level count standing in for a statement about the product graph. The
-replacement must be validated in **both** directions or it will fix igf1r and
-quietly break the `egfr_signaling_pathway` shape.
-
-Validation caveat: `egfr_signaling_pathway` is correct in output while its
-underlying factor is wrong, so validate the replacement against BNG2's measured
-`|RG|/|Stab|`, not against emitted rates alone.
+**Comparison-harness warning.** Aggregating reactions by canonical
+`reactants->products` silently sums over colliding keys — `fgf_signaling_pathway`
+has 484 reactions collapsing to 325 keys on *both* sides, and summing them
+produced 264 phantom mismatches. Where a model has colliding keys, mismatch
+counts from any aggregating comparator are unreliable. Per-reaction comparison
+on the shape-exact network is the trustworthy method.
