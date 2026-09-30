@@ -215,7 +215,12 @@ const main = async (): Promise<void> => {
   for (const u of report.unsupported) {
     console.log(`  UNSUPPORTED ${u.model}: ${u.reason}`);
   }
-  for (const e of report.errors.slice(0, 10)) {
+  // Never truncate silently: a shortened list hides models that need a
+  // baseline entry.
+  if (report.errors.length > 10) {
+    console.log(`  ... and ${report.errors.length - 10} more error(s), all listed in the report`);
+  }
+  for (const e of report.errors) {
     console.log(`  ERROR ${e.model}: ${e.error}`);
   }
   console.log(`[net-shape] report: ${REPORT_PATH}`);
