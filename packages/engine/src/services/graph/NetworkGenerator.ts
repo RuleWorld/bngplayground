@@ -286,6 +286,35 @@ function getReactionKeyWithOrderMode(
   return getReactionKey(reactants, products, ruleName);
 }
 
+/**
+ * Reaction identity key that does not depend on species indices.
+ *
+ * BNG2 canonicalises species graphs before deciding whether two reactions are
+ * the same: bond labels (`!1`, `!2`) are arbitrary names, so a reaction that
+ * differs from another only in bond numbering is a duplicate. The index-based
+ * key cannot see that, because each relabelling yields a different species and
+ * therefore a different index, so those duplicates were kept.
+ *
+ * Normalising the label numbers into a hash is equivalent to BNG2's pairwise
+ * reaction-centre comparison, but O(1) per reaction rather than O(N^2).
+ */
+function canonicalSpeciesKey(graph: SpeciesGraph | undefined): string {
+  if (!graph) return '?';
+  return graph.toString().replace(/!(\d+)/g, '!');
+}
+
+function canonicalReactionKey(
+  reactants: number[],
+  products: number[],
+  ruleName: string,
+  speciesList: Species[]
+): string {
+  const key = (idx: number): string => canonicalSpeciesKey(speciesList[idx]?.graph);
+  const r = reactants.map(key).sort().join('+');
+  const p = products.map(key).sort().join('+');
+  return `${r}->${p}:${ruleName}`;
+}
+
 function mergeRateExpressions(existingExpr?: string, incomingExpr?: string): string | undefined {
   if (!existingExpr) return incomingExpr;
   if (!incomingExpr) return existingExpr;
@@ -461,6 +490,8 @@ export class NetworkGenerator {
   private currentRuleName: string | null = null;
   private currentSpeciesList: Species[] = [];
   private currentReactionsList: Rxn[] = [];
+  /** Reaction identity keyed by canonical species graphs (BNG2-equivalent dedup). */
+  private canonicalReactionIndex = new Map<string, number>();
   private energyService?: EnergyService;
 
   constructor(options: Partial<GeneratorOptions> & { seedConcentrationMap?: Map<string, number> } = {}) {
@@ -927,6 +958,8 @@ export class NetworkGenerator {
     this.currentSpeciesList = speciesList;
     this.currentReactionsList = reactionsList;
     const reactionIndexByKey = new Map<string, number>();
+    // Canonical (bond-label independent) reaction identity, mirroring BNG2.
+    this.canonicalReactionIndex = new Map<string, number>();
     const queue: Species[] = [];
     const reactiveRules = rules.filter(r => r.reactants.length > 0);
     const synthesisRules = rules.filter(r => r.reactants.length === 0);
@@ -2397,30 +2430,6 @@ export class NetworkGenerator {
           // rule whose products do not depend on the assignment — are collapsed
           // downstream by the reaction key, which is the correct place for it.
 
-          // When a rule has a single product pattern, swapping which identical
-          // reactant pattern maps to which species cannot change the outcome —
-          // the product is one connected species either way, differing only in
-          // bond numbering. Those permutations are duplicates and are pruned by
-          // species-index order, as before.
-          //
-          // With two or more product patterns the assignment CAN matter: for
-          //   EGFR(I_III!+,II~u,Kin~0) + EGFR(I_III!+,II~u,Kin~0)
-          //     -> EGFR(...,Kin~act) + EGFR(...,Kin~rec)
-          // pairing pattern 0 with either species decides which monomer becomes
-          // the activator, and BNG2 emits both. So only prune when there is a
-          // single product. Duplicates that remain are collapsed by the
-          // reaction key downstream.
-          if (rule.products.length < 2) {
-            for (const group of identicalPatternGroups.values()) {
-              if (group.length < 2) continue;
-              for (let gi = 1; gi < group.length; gi++) {
-                const prev = currentIndices[group[gi - 1]];
-                const next = currentIndices[group[gi]];
-                if (prev > next) return;
-              }
-            }
-          }
-
           // Proceed with reaction generation
           const reactantSpeciesList = currentIndices.map(idx => allSpecies[idx]);
 
@@ -3331,6 +3340,19 @@ export class NetworkGenerator {
     if (isIdentityReactionByGraph(rxn.reactants, rxn.products, speciesList)) {
       return;
     }
+
+    // BNG2 treats reactions that differ only in bond labelling as one reaction.
+    // The index-based key below cannot see that, so duplicates were emitted and
+    // the reaction count drifted above BNG2's. Merge them the way BNG2
+    // accumulates duplicates.
+    const canonicalKey = canonicalReactionKey(rxn.reactants, rxn.products, rule.name, speciesList);
+    const canonicalIdx = this.canonicalReactionIndex.get(canonicalKey);
+    if (canonicalIdx !== undefined) {
+      reactionsList[canonicalIdx].rate += rxn.rate;
+      mergeReactionExpressionWithStatFactors(reactionsList[canonicalIdx], rxn);
+      return;
+    }
+    this.canonicalReactionIndex.set(canonicalKey, reactionsList.length);
 
     const preserveOrderInKey = hasRateExpression;
     const rxnKey = getReactionKeyWithOrderMode(
