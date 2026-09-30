@@ -231,8 +231,16 @@ function parseCSV(content: string): { headers: string[]; data: number[][] } {
   const headers = lines[0].split(',').map(h => h.trim());
   const data = lines.slice(1).map(line =>
     line.split(',').map(v => {
-      const parsed = Number.parseFloat(v.trim());
-      if (!Number.isFinite(parsed)) {
+      const token = v.trim();
+      const parsed = Number(token);
+      // `Infinity`, `-Infinity` and `NaN` are the literals our own exporter
+      // writes for a non-finite result, and BNG2's mu::Parser produces the same
+      // quantities (it writes `1.#INF`). They are values, not malformed cells,
+      // and the comparison loop below records a non-finite cell in a compared
+      // column as a discrepancy rather than silently scoring it as agreement.
+      // `parseFloat` would have read `-Infinity` as NaN and thrown here, turning
+      // pt403/pt409 into hard errors instead of comparisons.
+      if (Number.isNaN(parsed) && !/^[+-]?nan$/i.test(token)) {
         throw new Error(`Non-numeric CSV value: "${v}"`);
       }
       return parsed;
