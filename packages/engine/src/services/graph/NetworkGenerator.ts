@@ -5056,6 +5056,18 @@ export class NetworkGenerator {
       debugNetworkLog(`[buildProductGraph] Included molecules: ${Array.from(includedMols).join(', ')}`);
     }
 
+    // A rule may transform one molecule type into another (`Ang2_3(tie2bs,tie2bs,tie2bs) ->
+    // Ang2_2(tie2bs,tie2bs)`). The product molecule is then defined by the product
+    // pattern, not by the reactant it was matched from, so its component list has to be
+    // rebuilt from the pattern here. Doing it later is not an option: bonds are recreated
+    // against the clone's component indices below, so a clone that keeps the reactant's
+    // arity yields a product that violates its own type declaration — and such a molecule
+    // then also matches reactant patterns written against the shorter type.
+    const productPatternMolByReactant = new Map<number, number>();
+    for (const [pMolIdx, mapping] of productPatternToReactant.entries()) {
+      productPatternMolByReactant.set((mapping.reactantIdx << 16) | mapping.targetMolIdx, pMolIdx);
+    }
+
     // Clone included molecules
     for (const key of includedMols) {
       const r = key >> 16;
@@ -5068,6 +5080,64 @@ export class NetworkGenerator {
       clone._sourceKey = `${r}:${molIdx}`; // Preserve source mapping (reactantIdx:molIdx)
       clone._sourceR = r;
       clone._sourceM = molIdx;
+
+      // Molecule-type transformation: the product pattern, not the matched reactant,
+      // defines this molecule's sites, so take the pattern's component list verbatim.
+      const pMolIdxForClone = productPatternMolByReactant.get(key);
+      const transformMapping = pMolIdxForClone === undefined ? undefined : productPatternToReactant.get(pMolIdxForClone);
+      if (transformMapping) {
+        if (pMolIdxForClone !== undefined) {
+          const pMolForClone = pattern.molecules[pMolIdxForClone];
+          if (pMolForClone && pMolForClone.name !== sourceMol.name) {
+          // A bond the rule does not name is a bystander: it has to survive into the
+          // product, and a shorter type has no site to put it on. BNGL does not shed it,
+          // so such a match is simply not applicable. Bonds the reactant pattern itself
+          // declares are under the rule's control and are fine. Counting declared bonds
+          // per matched site — rather than per bond endpoint — keeps this correct when
+          // symmetric sites let the pattern's !1 land on any of them.
+          const rMatch = matches[transformMapping.reactantIdx];
+          const rPattern = reactantPatterns[transformMapping.reactantIdx];
+          let rpMolIdx = -1;
+          if (rMatch) {
+            for (const [rpIdx, tIdx] of rMatch.moleculeMap.entries()) {
+              if (tIdx === transformMapping.targetMolIdx) {
+                rpMolIdx = rpIdx;
+                break;
+              }
+            }
+          }
+
+          const declaredSites = new Set<number>();
+          if (rpMolIdx !== -1 && rPattern) {
+            const rpMol = rPattern.molecules[rpMolIdx];
+            for (let i = 0; i < rpMol.components.length; i++) {
+              if (rpMol.components[i].edges.size === 0) continue;
+              const targetKey = rMatch!.componentMap.get(`${rpMolIdx}.${i}`);
+              if (!targetKey) continue;
+              declaredSites.add(Number(targetKey.slice(targetKey.indexOf('.') + 1)));
+            }
+          }
+
+          for (let cIdx = 0; cIdx < sourceMol.components.length; cIdx++) {
+            if (declaredSites.has(cIdx)) continue;
+            const partnerKeys = reactantGraphs[r].adjacency.get(`${molIdx}.${cIdx}`);
+            if (!partnerKeys || partnerKeys.length === 0) continue;
+            if (shouldLogNetworkGenerator) {
+              debugNetworkLog(`[buildProductGraph] Rejecting ${sourceMol.name} -> ${pMolForClone.name}: undeclared bond on site ${cIdx} has no counterpart in the product molecule`);
+            }
+            return null;
+          }
+
+          clone.name = pMolForClone.name;
+          clone.components = pMolForClone.components.map((component: Component) => {
+            const cloned = new Component(component.name, [...component.states]);
+            cloned.state = component.state;
+            cloned.wildcard = component.wildcard;
+            return cloned;
+          });
+        }
+      }
+        }
 
       // CRITICAL FIX: If molecule doesn't have its own compartment, inherit from its reactant graph
       // This ensures that when L@EC.R@PM unbinds, L gets EC and R gets PM (not both PM)
@@ -5422,6 +5492,19 @@ export class NetworkGenerator {
           const productMolIdx2 = reactantToProductMol.get(mol2Key);
 
           if (productMolIdx1 !== undefined && productMolIdx2 !== undefined) {
+            // A molecule-type transformation can leave the product with fewer
+            // components than the reactant, so a reactant bond may address a product site
+            // that no longer exists. Such a bond cannot be carried over; the product
+            // pattern decides that site's fate.
+            if (
+              compIdx >= productGraph.molecules[productMolIdx1].components.length ||
+              partnerCompIdx >= productGraph.molecules[productMolIdx2].components.length
+            ) {
+              if (shouldLogNetworkGenerator) {
+                debugNetworkLog(`[buildProductGraph] SKIPPING bond ${bondEndpoint1} - ${bondEndpoint2}: product site does not exist`);
+              }
+              continue;
+            }
             // Find original label
             const comp = reactantGraph.molecules[molIdx].components[compIdx];
             const partnerComp = reactantGraph.molecules[partnerMolIdx].components[partnerCompIdx];
@@ -5570,6 +5653,13 @@ export class NetworkGenerator {
           for (let rpCompIdx = 0; rpCompIdx < reactantPatternMol.components.length; rpCompIdx++) {
             const reactantPatternComp = reactantPatternMol.components[rpCompIdx];
             if (reactantPatternComp.name !== pComp.name) continue;
+            // A product "!+" site is the counterpart of a reactant "!+" site: it means
+            // "this site is bound, and whatever is bound to it stays bound". Only the
+            // reactant pattern's own "!+" component carries that site. Without this
+            // filter a "!+" in a symmetric molecule claims the first same-named site it
+            // can find, so a numbered site (b!1) steals the wildcard's slot and the
+            // product's bond labels come out rotated, leaving a dangling partner.
+            if (pComp.wildcard === '+' && reactantPatternComp.wildcard !== '+') continue;
 
             // Look up exact target component via componentMap
             const compKey = `${prMapping.reactantPatternMolIdx}.${rpCompIdx}`;
