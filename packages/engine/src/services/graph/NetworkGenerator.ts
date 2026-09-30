@@ -311,6 +311,32 @@ function isIdentityReactionBySpeciesIndices(reactants: number[], products: numbe
   return true;
 }
 
+/**
+ * True when the reaction maps each reactant species onto an identical product
+ * species, compared by species graph rather than by index.
+ *
+ * Rule application frequently renumbers bonds and re-orders molecules, so the
+ * same species can appear under a different index on each side. Comparing
+ * indices alone misses those, and the no-op reaction is then emitted as a real
+ * reaction — inflating the network (Barua_2007 produced 296 of them) with
+ * reactions that change nothing and that BNG2 does not generate.
+ */
+function isIdentityReactionByGraph(
+  reactants: number[],
+  products: number[],
+  speciesList: Species[]
+): boolean {
+  if (reactants.length !== products.length) return false;
+  const graphKey = (idx: number): string | undefined => speciesList[idx]?.graph?.toString();
+  const left = reactants.map(graphKey).sort();
+  const right = products.map(graphKey).sort();
+  if (left.some((k) => k === undefined) || right.some((k) => k === undefined)) {
+    // Species unavailable: fall back to index comparison.
+    return isIdentityReactionBySpeciesIndices(reactants, products);
+  }
+  return left.every((k, i) => k === right[i]);
+}
+
 function foldRateExpressionWithStatFactor(expr: string | undefined, statFactor: number | undefined): string | undefined {
   if (!expr) return undefined;
   const sf = typeof statFactor === 'number' && Number.isFinite(statFactor) ? statFactor : 1;
@@ -1933,7 +1959,7 @@ export class NetworkGenerator {
         }
       );
 
-      if (isIdentityReactionBySpeciesIndices(rxn.reactants, rxn.products)) {
+      if (isIdentityReactionByGraph(rxn.reactants, rxn.products, speciesList)) {
         continue;
       }
 
@@ -3278,7 +3304,7 @@ export class NetworkGenerator {
         totalRate: rule.totalRate
       }
     );
-    if (isIdentityReactionBySpeciesIndices(rxn.reactants, rxn.products)) {
+    if (isIdentityReactionByGraph(rxn.reactants, rxn.products, speciesList)) {
       return;
     }
 
