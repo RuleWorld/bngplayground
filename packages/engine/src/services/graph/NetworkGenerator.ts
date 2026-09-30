@@ -2380,12 +2380,6 @@ export class NetworkGenerator {
         debugNetworkLog(`[applyNaryRule] Rule ${rule.name}: currentSpecies ${currentSpecies.index} matches pattern ${i}`);
       }
 
-      const seenSignaturesForThisSpeciesSet = new Map<string, {
-        indices: number[];
-        matches: MatchMap[];
-        multiplicity: number;
-      }>();
-
       // Recursive helper to match REMAINING patterns j != i
       const matchPartnersRecursively = async (
         patternIndicesToMatch: number[],
@@ -2441,32 +2435,31 @@ export class NetworkGenerator {
             }
           }
 
-          // EVENT SIGNATURE DEDUPLICATION
-          // If a species has internal symmetries, multiple match maps can represent
-          // the same physical event. Deduplicate by mapped transformation signature,
-          // but keep a count so multiplicity can be restored in rate factors.
-          const signature = this.buildNaryEventSignature(rule, currentMatches, reactantSpeciesList);
-          if (signature) {
-            const bucket = seenSignaturesForThisSpeciesSet.get(signature);
-            if (bucket) {
-              bucket.multiplicity += 1;
-              return;
-            }
-            seenSignaturesForThisSpeciesSet.set(signature, {
-              indices: [...currentIndices],
-              matches: [...currentMatches],
-              multiplicity: 1,
-            });
-            return;
-          }
-
-          // Generate product graphs and aggregate reaction
+          // Every distinct combination of match maps is a candidate event, exactly
+          // as in BNG2: `RxnRule::find_embeddings` keeps the embeddings of a pattern
+          // whose reaction-centre image differs, `expand_rule` then takes the plain
+          // Cartesian product of those per-pattern match sets, and
+          // `RxnList::add` folds the resulting reactions that share species
+          // indices into one entry with the rates summed.
+          //
+          // Collapsing match combinations here — by the local signature of the
+          // molecules they map onto — merged events that BNG2 keeps apart. Two
+          // mappings that are indistinguishable 1-hop apart (egfr_net R9: which of
+          // two identical-looking egfr monomers receives the new Grb2 bond) carry
+          // different reaction-centre images and are different reactions, so the
+          // signature collided and one of them was dropped.
+          //
+          // Symmetry-equivalent embeddings are handled elsewhere: the matcher runs
+          // symmetry-broken, and generateNaryReaction recovers the true embedding
+          // count for the rate factor from the target graphs. Genuine duplicates —
+          // the same species matched twice, or a symmetric rule whose products do
+          // not depend on the assignment — collapse downstream on the reaction key,
+          // which is where BNG2 does it too.
           await this.generateNaryReaction(
             rule,
             reactantSpeciesList,
             currentIndices,
             currentMatches,
-            1,
             allSpecies,
             speciesMap,
             speciesList,
@@ -2562,25 +2555,6 @@ export class NetworkGenerator {
 
         await matchPartnersRecursively(patternIndicesToMatch, initialIndices, initialMatches);
       }
-
-      // Materialize signature-deduplicated events, restoring collapsed multiplicity.
-      for (const bucket of seenSignaturesForThisSpeciesSet.values()) {
-        const reactantSpeciesList = bucket.indices.map((idx) => allSpecies[idx]);
-        await this.generateNaryReaction(
-          rule,
-          reactantSpeciesList,
-          bucket.indices,
-          bucket.matches,
-          bucket.multiplicity,
-          allSpecies,
-          speciesMap,
-          speciesList,
-          queue,
-          reactionsList,
-          reactionIndexByKey,
-          signal
-        );
-      }
     }
   }
 
@@ -2592,7 +2566,6 @@ export class NetworkGenerator {
     reactantSpeciesList: Species[],
     currentSpeciesIndices: number[],
     currentMatches: MatchMap[],
-    signatureMultiplicity: number,
     allSpecies: Species[],
     speciesMap: Map<string, Species>,
     speciesList: Species[],
@@ -2626,34 +2599,6 @@ export class NetworkGenerator {
     for (let k = 0; k < n; k++) {
       const kDeg = countEmbeddingDegeneracy(patterns[k], reactantSpeciesList[k].graph, currentMatches[k]);
       totalDegeneracy *= kDeg;
-    }
-
-    // Account for signature-collapsed duplicate SB matches: bucket.multiplicity
-    // represents how many SB match-tuples were deduplicated into this signature.
-    // For most cases we must multiply totalDegeneracy by signatureMultiplicity to
-    // recover the true raw-embedding count. However, for N-ary rules with
-    // repeated reactant patterns (e.g. ternary rules with A + A + B), the
-    // signature multiplicity is already reflected in the cross-product of
-    // per-pattern embeddings and in tuple-aware combinatorics below; multiplying
-    // here causes double-counting. Skip multiplicative application in that
-    // scenario and let tuple-aware corrections handle multiplicity.
-    const skipSignatureMultForRepeatedPatterns = (n > 2 && Array.from(rulePatternCounts.values()).some(c => c > 1));
-    // For bond-topology rules with wildcard-bound patterns, signatureMultiplicity is already
-    // handled by the bondTopoFullMapCount fix. Multiplying it here causes 2x overcounting.
-    const _earlyHasWilcardBound = patterns.some((pat) =>
-      pat.molecules.some((mol) => mol.components.some((comp) => comp.wildcard === '+'))
-    );
-    const _earlyHasBondTopoOps =
-      rule.addBonds.length > 0 ||
-      rule.deleteBonds.length > 0 ||
-      rule.changeStates.length > 0 ||
-      rule.deleteMolecules.length > 0;
-    const skipSignatureMultForBondTopo = _earlyHasBondTopoOps && _earlyHasWilcardBound;
-    if (!skipSignatureMultForRepeatedPatterns && !skipSignatureMultForBondTopo) {
-      totalDegeneracy *= signatureMultiplicity;
-    } else {
-      // preserve signatureMultiplicity for later consideration via Math.max() guards
-      // (do not include it in totalDegeneracy product to avoid overcounting)
     }
 
     const countGraphBonds = (graph: SpeciesGraph): number => {
@@ -2734,16 +2679,11 @@ export class NetworkGenerator {
       rule.deleteBonds.length === 0 &&
       rule.deleteMolecules.length === 0;
 
-    // For pure state-change rules, symmetry-broken matching is disabled (matchSymmetryBreaking=false),
-    // so distinct equivalent events are enumerated as separate buckets in seenSignaturesForThisSpeciesSet,
-    // each with signatureMultiplicity=1. Each bucket represents exactly one physical event and should
-    // contribute multiplicity=1 (not the total full-map count across all events).
-    // Using all full maps here would over-count: N buckets × N full-maps/bucket = N² instead of N.
-    // Use signatureMultiplicity (the collapsed count for THIS bucket) instead.
-    let stateChangeEmbeddingDegeneracy = totalDegeneracy;
-    if (hasPureStateChangeOps) {
-      stateChangeEmbeddingDegeneracy = signatureMultiplicity;
-    }
+    // For pure state-change rules, symmetry-broken matching is disabled
+    // (matchSymmetryBreaking=false) so every distinct assignment is enumerated as
+    // its own event and each contributes multiplicity 1. Using the full map count
+    // across all of them would over-count: N events x N full maps each = N².
+    const stateChangeEmbeddingDegeneracy = hasPureStateChangeOps ? 1 : totalDegeneracy;
     const useEmbeddingDegeneracy =
       hasBondTopologyOps &&
       (
@@ -2870,39 +2810,9 @@ export class NetworkGenerator {
         bondTopoFullMapCount *= fullMaps.length || 1;
         bondTopoSBMapCount *= sbMaps.length || 1;
       }
-      // The signature-dedup mechanism already handles signatureMultiplicity>1 cases.
-      // Scale the SB baseline by signatureMultiplicity to account for deduplicated matches.
-      const effectiveSBCount = bondTopoSBMapCount * signatureMultiplicity;
-      if (bondTopoFullMapCount > effectiveSBCount * totalDegeneracy) {
-        multiplicity = Math.max(multiplicity, bondTopoFullMapCount / (effectiveSBCount * ruleSymmetryFactor));
+      if (bondTopoFullMapCount > bondTopoSBMapCount * totalDegeneracy) {
+        multiplicity = Math.max(multiplicity, bondTopoFullMapCount / (bondTopoSBMapCount * ruleSymmetryFactor));
       }
-    }
-
-    const shouldSkipBondTopologySignatureMultiplicity =
-      n > 2 &&
-      hasRepeatedReactantPatterns;
-
-    if (
-      !rule.isMatchOnce &&
-      hasBondTopologyOps &&
-      signatureMultiplicity > 1 &&
-      !shouldSkipBondTopologySignatureMultiplicity
-    ) {
-      multiplicity = Math.max(multiplicity, signatureMultiplicity);
-    }
-
-    if (!rule.isMatchOnce && !hasBondTopologyOps && signatureMultiplicity > 1) {
-      // For non-topology rules where the fallback signature (ops arrays all empty) collapsed
-      // N equivalent N-ary event-tuples into one bucket, signatureMultiplicity directly
-      // encodes the total number of physically distinct events that produce the same product.
-      // Example: G(s~P) + S(s~U) → G(s~P) + S(s~P) with S(b!1,s~U).S(b!1,s~U):
-      //   both S monomers give the same fallback signature (molecule index dropped) →
-      //   signatureMultiplicity=2 → multiplicity=2 → rate=2*k. ✓
-      //
-      // For the full-parser / topology-signature path, this block is not entered because
-      // hasPureStateChangeOps=true → distinct topology signatures per monomer → sigMult=1 per
-      // bucket → two separate buckets merge via rate += to give the correct total.
-      multiplicity = Math.max(multiplicity, signatureMultiplicity / ruleSymmetryFactor);
     }
 
     const collapsedRuleStatFactor = this.computeCollapsedRuleStatFactor(rule);
@@ -6355,175 +6265,6 @@ export class NetworkGenerator {
 
   private warnSpeciesLimit() {
     this.speciesLimitWarnings++;
-  }
-
-  private buildNaryEventSignature(
-    rule: RxnRule,
-    matches: MatchMap[],
-    reactantSpeciesList: Species[]
-  ): string | null {
-    const ops: string[] = [];
-
-    const buildMoleculeLocalSignature = (mol: Molecule): string => {
-      const compSig = mol.components
-        .map((comp) => {
-          const state = comp.state ?? '';
-          const wildcard = comp.wildcard ?? '';
-          const bondDegree = comp.edges.size;
-          return `${comp.name}~${state}!${wildcard}#${bondDegree}`;
-        })
-        .sort()
-        .join(',');
-      return `${mol.name}(${compSig})`;
-    };
-
-    const getTargetComponentDescriptor = (globalMolIdx: number, compIdx: number): string | null => {
-      let currentMolOffset = 0;
-      for (let k = 0; k < rule.reactants.length; k++) {
-        const pattern = rule.reactants[k];
-        if (globalMolIdx < currentMolOffset + pattern.molecules.length) {
-          const molIdxInPattern = globalMolIdx - currentMolOffset;
-          const match = matches[k];
-          const targetSpecies = reactantSpeciesList[k];
-          if (!match || !targetSpecies) return null;
-
-          const targetMolIdx = match.moleculeMap.get(molIdxInPattern);
-          if (targetMolIdx === undefined) return null;
-          const targetMol = targetSpecies.graph.molecules[targetMolIdx];
-          if (!targetMol) return null;
-
-          const targetCompKey = match.componentMap.get(`${molIdxInPattern}.${compIdx}`);
-          let targetCompIdx: number;
-          if (targetCompKey) {
-            const dotIdx = targetCompKey.indexOf('.');
-            if (dotIdx === -1) return null;
-            const parsed = Number(targetCompKey.slice(dotIdx + 1));
-            if (!Number.isFinite(parsed)) return null;
-            targetCompIdx = parsed;
-          } else {
-            // Some rules reference components not explicitly constrained in reactant patterns
-            // (e.g., add-bond on product-only sites). Fall back to direct component index
-            // on the mapped target molecule so signature dedup can still work.
-            targetCompIdx = compIdx;
-          }
-
-          const targetComp = targetMol.components[targetCompIdx];
-          if (!targetComp) return null;
-
-          const molSig = buildMoleculeLocalSignature(targetMol);
-          const compSig = `${targetComp.name}~${targetComp.state ?? ''}#${targetComp.edges.size}`;
-          return `S${targetSpecies.index}_MI${targetMolIdx}_M{${molSig}}_CI${targetCompIdx}_C{${compSig}}`;
-        }
-        currentMolOffset += pattern.molecules.length;
-      }
-      return null;
-    };
-
-    for (const [m1, c1, m2, c2] of rule.deleteBonds) {
-      const a = getTargetComponentDescriptor(m1, c1);
-      const b = getTargetComponentDescriptor(m2, c2);
-      if (!a || !b) return null;
-      const pair = [a, b].sort().join('|');
-      ops.push(`delBond:${pair}`);
-    }
-
-    for (const [m1, c1, m2, c2] of rule.addBonds) {
-      const a = getTargetComponentDescriptor(m1, c1);
-      const b = getTargetComponentDescriptor(m2, c2);
-      if (!a || !b) return null;
-      const pair = [a, b].sort().join('|');
-      ops.push(`addBond:${pair}`);
-    }
-
-    for (const [m, c, newState] of rule.changeStates) {
-      const a = getTargetComponentDescriptor(m, c);
-      if (!a) return null;
-      ops.push(`state:${a}:${newState}`);
-    }
-
-    for (const globalMolIdx of rule.deleteMolecules) {
-      let currentMolOffset = 0;
-      for (let k = 0; k < rule.reactants.length; k++) {
-        const pattern = rule.reactants[k];
-        if (globalMolIdx < currentMolOffset + pattern.molecules.length) {
-          const molIdxInPattern = globalMolIdx - currentMolOffset;
-          const targetMolIdx = matches[k]?.moleculeMap.get(molIdxInPattern);
-          if (targetMolIdx !== undefined) {
-            ops.push(`delMol:S${reactantSpeciesList[k].index}_M${targetMolIdx}`);
-          }
-          break;
-        }
-        currentMolOffset += pattern.molecules.length;
-      }
-    }
-
-    if (ops.length === 0) {
-      // Fallback for rules where explicit op arrays are empty (common for state-only
-      // transforms parsed via reactant/product graphs). Build a signature from changed
-      // reactant embeddings while ignoring pure carry-through catalysts.
-      const remainingProductCounts = new Map<string, number>();
-      for (const product of rule.products) {
-        const key = getPatternSymmetryKey(product);
-        remainingProductCounts.set(key, (remainingProductCounts.get(key) ?? 0) + 1);
-      }
-
-      const embeddingSignatureParts: string[] = [];
-      for (let k = 0; k < rule.reactants.length; k++) {
-        const reactantKey = getPatternSymmetryKey(rule.reactants[k]);
-        const remaining = remainingProductCounts.get(reactantKey) ?? 0;
-        const reactantSpecies = reactantSpeciesList[k];
-        const speciesPart = `R${k}:S${reactantSpecies?.index ?? -1}`;
-
-        if (remaining > 0) {
-          remainingProductCounts.set(reactantKey, remaining - 1);
-          embeddingSignatureParts.push(`${speciesPart}:carry`);
-          continue;
-        }
-
-        const match = matches[k];
-        if (!match || !reactantSpecies) continue;
-
-        const mappedMoleculeSignatures = Array.from(match.moleculeMap.values())
-          .map((molIdx) => {
-            const mol = reactantSpecies.graph.molecules[molIdx];
-            if (!mol) return `M${molIdx}`;
-            // Use 1-hop neighborhood signature (neighbor LOCAL signatures per component)
-            // to distinguish non-equivalent embeddings in asymmetric species.
-            // E.g., FGFR bonded to Spry vs FGFR bonded to FRS2 — identical local
-            // degree signatures but different neighbors → should NOT be deduplicated.
-            // Using full local signature of neighbor (includes state+degree) also
-            // distinguishes FGFR bonded to FRS2(s~P) vs FRS2(s~U).
-            // For truly symmetric cases the neighbor-extended sigs are still equal,
-            // so correct sigMult=2 is preserved for those.
-            const compSig = mol.components.map((comp, ci) => {
-              const state = comp.state ?? '';
-              const bondDegree = comp.edges.size;
-              const partnerKeys = reactantSpecies.graph.adjacency.get(`${molIdx}.${ci}`) ?? [];
-              const neighborSigs = partnerKeys.map((pk: string) => {
-                // ⚡ Bolt: Use parseInt directly to avoid split() array allocation
-                const partnerMolIdx = parseInt(pk, 10);
-                const neighborMol = reactantSpecies.graph.molecules[partnerMolIdx];
-                if (!neighborMol) return '?';
-                // Local (degree-only) sig of neighbor: captures name+state+bond degree
-                return buildMoleculeLocalSignature(neighborMol);
-              }).sort().join(',');
-              return `${comp.name}~${state}#${bondDegree}[${neighborSigs}]`;
-            }).sort().join(',');
-            return `${mol.name}(${compSig})`;
-          })
-          .sort();
-        embeddingSignatureParts.push(`${speciesPart}:M${mappedMoleculeSignatures.join('|')}`);
-      }
-
-      if (embeddingSignatureParts.length === 0) {
-        return 'identity';
-      }
-
-      embeddingSignatureParts.sort();
-      return embeddingSignatureParts.join('|');
-    }
-    ops.sort();
-    return ops.join(';');
   }
 
   private buildLimitError(message: string): NetworkGenerationLimitError {
