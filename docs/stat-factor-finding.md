@@ -101,3 +101,37 @@ Open questions for whoever picks it up:
 Network shape is exact across the corpus. Only the four `igf1r_fit_all_*`
 models have wrong rate constants, which is a trajectory-accuracy issue rather
 than a gate failure.
+
+## Appendix: `max_agg` — evidence that 500 is not truncating this corpus
+
+Separate open item, measured the same way (741 models, live expansion, max
+molecules in any single species; exported species carry a name so the count is
+parsed from it — compartments and bond labels stripped, `.` inside parentheses
+ignored).
+
+**Global maximum across the whole corpus: 32 molecules in a single species**
+(`nfsim_ring_closure_polymer`). Next highest: `an_2009` 18, `blinov_2006` 14,
+the whole `egfr*` family 14, `fceri_viz` and `zhang_2021` 9.
+
+Our maximum and BNG2's maximum agree exactly on every one of the top 15
+models, and **0 of 741 models exceed 500 on either side**.
+
+Consequences:
+
+- `maxAgg = 500` is not binding anywhere in this corpus. Raising it toward
+  BNG2's `max_agg => 1e9` would change no current result, so there is no
+  evidence-driven reason to touch it and no regression risk either.
+- The other risk Main flagged — the knob interacting with the `maxSpecies`
+  cap — is real in principle but unexercised here, because nothing gets near
+  500 molecules.
+- If parity on this knob is wanted for its own sake, it is safe to align, but
+  it should be justified as matching BNG2's documented default rather than as
+  a fix, and it should be re-checked against any future model with genuinely
+  large aggregates (the `max_stoich` models like `rule_based_egfr_tutorial` set
+  their own limits anyway and were not binding here either).
+
+Caveat on method: an earlier run of this scan reported 0 for *every* model
+because it read `species.graph.molecules`, which the exported network does not
+populate. The numbers above are from the corrected name-parsing version, spot
+checked against `zhang_2021` (9), `egfr` (14) and `barua_2013` (5) where the
+count is visibly non-zero.

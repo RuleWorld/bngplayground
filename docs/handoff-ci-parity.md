@@ -184,10 +184,13 @@ expand 6 job definitions).
   component-aware variant was tried and does not work. Full analysis, the
   measured ground truth, and the at-risk model list are in
   `docs/stat-factor-finding.md`. **Deleting it is not safe on this corpus.**
-- **`maxAgg` 500 vs BNG2's `1e9`** — a real divergence, deliberately not
-  changed: it interacts with our `maxSpecies` cap and widening an unbounded
-  aggregation knob without evidence is how one model becomes a multi-minute
-  expansion. Needs to know which models actually hit an aggregation depth of 500.
+- **`maxAgg` 500 vs BNG2's `1e9`** — measured across all 741 models and
+  deliberately left alone. The largest molecule count in any single species
+  anywhere is **32** (`nfsim_ring_closure_polymer`), and our maximum agrees with
+  BNG2's exactly on every one of the top 15 models. Zero models exceed 500 on
+  either side, so the default is not binding and aligning it would change
+  nothing today. If it is ever aligned, justify it as matching BNG2's documented
+  default rather than as a fix.
 - **Trajectory accuracy** — network shape is exact across the corpus and the ODE
   was measured exact (1 649 state comparisons, zero deviations above 1e-6), so
   what remains is observable projection and rate constants. Two models were
