@@ -8,7 +8,7 @@
 import Decimal from 'decimal.js';
 import { CharStreams, CommonTokenStream } from 'antlr4ts';
 import { BNGLexer } from './../../../parser/generated/BNGLexer.ts';
-import { BNGParser, ExpressionContext, Function_callContext, Conditional_exprContext, Or_exprContext, And_exprContext, Equality_exprContext, Relational_exprContext, Additive_exprContext, Multiplicative_exprContext, Power_exprContext, Unary_exprContext, Primary_exprContext } from './../../../parser/generated/BNGParser.ts';
+import { BNGParser, ExpressionContext, Function_callContext, Or_exprContext, And_exprContext, Equality_exprContext, Additive_exprContext, Multiplicative_exprContext, Power_exprContext, Unary_exprContext, Primary_exprContext } from './../../../parser/generated/BNGParser.ts';
 import { AbstractParseTreeVisitor } from 'antlr4ts/tree/AbstractParseTreeVisitor.js';
 import type { BNGParserVisitor } from './../../../parser/generated/BNGParserVisitor.ts';
 
@@ -60,13 +60,8 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
   }
 
   visitExpression(ctx: ExpressionContext): Decimal {
-    // expression: conditional_expr
-    return this.visit(ctx.conditional_expr());
-  }
-
-  visitConditional_expr(ctx: Conditional_exprContext): Decimal {
-    // grammar now simplifies conditional_expr -> or_expr (no ternary operator)
-    // just evaluate the subexpression
+    // expression: or_expr (the conditional_expr pass-through was removed so
+    // each nesting level costs fewer generated parser frames)
     return this.visit(ctx.or_expr());
   }
 
@@ -93,11 +88,11 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
   }
 
   visitEquality_expr(ctx: Equality_exprContext): Decimal {
-    let left = this.visit(ctx.relational_expr(0));
-    // Determine operators. The structure is relational_expr (OP relational_expr)*
-    // We iterate children to find operators
-    for (let i = 1; i < ctx.relational_expr().length; i++) {
-      const right = this.visit(ctx.relational_expr(i));
+    // Structure is additive_expr (OP additive_expr)*; the relational_expr
+    // pass-through was removed from the grammar.
+    let left = this.visit(ctx.additive_expr(0));
+    for (let i = 1; i < ctx.additive_expr().length; i++) {
+      const right = this.visit(ctx.additive_expr(i));
       // Find the operator between i-1 and i
       // It's the child at index (i-1)*2 + 1
       const opNode = ctx.getChild((i - 1) * 2 + 1);
@@ -116,10 +111,6 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       left = new Decimal(val ? 1 : 0);
     }
     return left;
-  }
-
-  visitRelational_expr(ctx: Relational_exprContext): Decimal {
-    return this.visit(ctx.additive_expr());
   }
 
   visitAdditive_expr(ctx: Additive_exprContext): Decimal {

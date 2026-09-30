@@ -83,11 +83,9 @@ import { Nested_hash_itemContext } from "./BNGParser";
 import { Arg_nameContext } from "./BNGParser";
 import { Expression_listContext } from "./BNGParser";
 import { ExpressionContext } from "./BNGParser";
-import { Conditional_exprContext } from "./BNGParser";
 import { Or_exprContext } from "./BNGParser";
 import { And_exprContext } from "./BNGParser";
 import { Equality_exprContext } from "./BNGParser";
-import { Relational_exprContext } from "./BNGParser";
 import { Additive_exprContext } from "./BNGParser";
 import { Multiplicative_exprContext } from "./BNGParser";
 import { Power_exprContext } from "./BNGParser";
@@ -984,17 +982,6 @@ export interface BNGParserListener extends ParseTreeListener {
 	exitExpression?: (ctx: ExpressionContext) => void;
 
 	/**
-	 * Enter a parse tree produced by `BNGParser.conditional_expr`.
-	 * @param ctx the parse tree
-	 */
-	enterConditional_expr?: (ctx: Conditional_exprContext) => void;
-	/**
-	 * Exit a parse tree produced by `BNGParser.conditional_expr`.
-	 * @param ctx the parse tree
-	 */
-	exitConditional_expr?: (ctx: Conditional_exprContext) => void;
-
-	/**
 	 * Enter a parse tree produced by `BNGParser.or_expr`.
 	 * @param ctx the parse tree
 	 */
@@ -1026,17 +1013,6 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitEquality_expr?: (ctx: Equality_exprContext) => void;
-
-	/**
-	 * Enter a parse tree produced by `BNGParser.relational_expr`.
-	 * @param ctx the parse tree
-	 */
-	enterRelational_expr?: (ctx: Relational_exprContext) => void;
-	/**
-	 * Exit a parse tree produced by `BNGParser.relational_expr`.
-	 * @param ctx the parse tree
-	 */
-	exitRelational_expr?: (ctx: Relational_exprContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.additive_expr`.

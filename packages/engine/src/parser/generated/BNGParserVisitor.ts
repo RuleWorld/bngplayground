@@ -83,11 +83,9 @@ import { Nested_hash_itemContext } from "./BNGParser";
 import { Arg_nameContext } from "./BNGParser";
 import { Expression_listContext } from "./BNGParser";
 import { ExpressionContext } from "./BNGParser";
-import { Conditional_exprContext } from "./BNGParser";
 import { Or_exprContext } from "./BNGParser";
 import { And_exprContext } from "./BNGParser";
 import { Equality_exprContext } from "./BNGParser";
-import { Relational_exprContext } from "./BNGParser";
 import { Additive_exprContext } from "./BNGParser";
 import { Multiplicative_exprContext } from "./BNGParser";
 import { Power_exprContext } from "./BNGParser";
@@ -667,13 +665,6 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitExpression?: (ctx: ExpressionContext) => Result;
 
 	/**
-	 * Visit a parse tree produced by `BNGParser.conditional_expr`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitConditional_expr?: (ctx: Conditional_exprContext) => Result;
-
-	/**
 	 * Visit a parse tree produced by `BNGParser.or_expr`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -693,13 +684,6 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitEquality_expr?: (ctx: Equality_exprContext) => Result;
-
-	/**
-	 * Visit a parse tree produced by `BNGParser.relational_expr`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitRelational_expr?: (ctx: Relational_exprContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.additive_expr`.

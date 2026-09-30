@@ -476,11 +476,11 @@ expression_list
     ;
 
 // Expressions
+// `conditional_expr` was a token-free pass-through to `or_expr`; it is removed
+// so each nesting level costs fewer JS frames in the generated recursive-descent
+// parser. Deeply nested rate laws (NYC nests 353 levels) otherwise exhaust the
+// browser's stack where BNG2 has no equivalent limit.
 expression
-    : conditional_expr
-    ;
-
-conditional_expr
     : or_expr
     ;
 
@@ -492,12 +492,9 @@ and_expr
     : equality_expr (LOGICAL_AND equality_expr)*
     ;
 
+// Likewise `relational_expr` was a pass-through to `additive_expr`.
 equality_expr
-    : relational_expr ((EQUALS | NOT_EQUALS | GTE | GT | LTE | LT) relational_expr)*
-    ;
-
-relational_expr
-    : additive_expr
+    : additive_expr ((EQUALS | NOT_EQUALS | GTE | GT | LTE | LT) additive_expr)*
     ;
 
 additive_expr
