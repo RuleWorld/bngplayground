@@ -23,7 +23,6 @@ import { spawn } from 'child_process';
 import { once } from 'events';
 import { fileURLToPath } from 'url';
 import { collectBnglFilesRecursive, listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
-import { injectFreeParameterDefaults } from './freeParameterDefaults';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(THIS_DIR, '..', '..');
@@ -93,22 +92,12 @@ function tail(str: string, maxChars = 4000): string {
 	return str.slice(-maxChars);
 }
 
-function hasUncommentedSimulateAction(code: string): boolean {
-	const uncommented = code
-		.split(/\r?\n/)
-		.map((line) => line.trimStart())
-		.filter((line) => !line.startsWith('#'))
-		.join('\n');
-	return /\b(simulate|simulate_ode)\s*\(/i.test(uncommented);
-}
-
 /**
  * True when the model declares simulate actions but every one of them is
  * network-free (NFsim) or stochastic (SSA), and it never asks for a network.
  *
- * `sanitizeActionsKeepAllOdeSimulates` comments those calls out before this is
- * consulted, so it inspects the ORIGINAL text: the point is to notice that the
- * author deliberately asked for a network-free run and must not be handed a
+ * The model is inspected exactly as published. The point is to notice that the
+ * author deliberately asked for a network-free run, so it must not be handed a
  * `generate_network` instead.
  */
 function isNetworkFreeModel(originalCode: string): boolean {
@@ -123,60 +112,6 @@ function isNetworkFreeModel(originalCode: string): boolean {
 		/\bmethod\s*=>\s*["'](?:nf|nfsim|ssa|psa)["']/i.test(call)
 	);
 	return networkFree;
-}
-
-function appendDefaultOdeActions(code: string): string {
-	const cleaned = code.replace(/\s+$/, '');
-	const generated =
-		'# [auto-generated] Default ODE actions for reference generation\n' +
-		'generate_network({overwrite=>1})\n' +
-		'simulate({method=>"ode",t_end=>100,n_steps=>100})\n';
-
-	// When the model already ends with a top-level `begin actions ... end actions`
-	// block, appending bare actions after `end actions` is not valid BNGL and the
-	// resulting reference model cannot be re-read. Add them to the block instead.
-	const trailingActions = /(^|\n)[ \t]*end\s+actions\b[ \t]*$/i.exec(cleaned);
-	if (trailingActions) {
-		const insertAt = trailingActions.index + (trailingActions[1] ? 1 : 0);
-		const before = cleaned.slice(0, insertAt).replace(/\s+$/, '');
-		const after = cleaned.slice(insertAt);
-		return `${before}\n${generated.replace(/^/gm, '\t')}${after}`;
-	}
-
-	return `${cleaned}\n\n${generated}`;
-}
-
-function sanitizeActionsKeepAllOdeSimulates(code: string): string {
-	// Keep all ODE simulate calls. Comment out SSA/NFsim simulate calls only.
-	const beginRe = /\bbegin\s+actions\b/i;
-	const endRe = /\bend\s+actions\b/i;
-
-	const beginMatch = beginRe.exec(code);
-	if (!beginMatch) return code;
-	const beginIdx = beginMatch.index;
-
-	const afterBeginIdx = beginIdx + beginMatch[0].length;
-	const endMatch = endRe.exec(code.slice(afterBeginIdx));
-	if (!endMatch) return code;
-	const endIdx = afterBeginIdx + endMatch.index;
-
-	const before = code.slice(0, afterBeginIdx);
-	const actionsBody = code.slice(afterBeginIdx, endIdx);
-	const after = code.slice(endIdx);
-
-	const lines = actionsBody.split(/\r?\n/);
-	const outLines = lines.map((line) => {
-		const trimmed = line.trimStart();
-		if (trimmed.startsWith('#')) return line;
-		if (!/\b(simulate|simulate_ode)\s*\(/i.test(line)) return line;
-
-		const isSsa = /\bsimulate_ssa\s*\(/i.test(line) || /\bmethod\s*=>\s*["']ssa["']/i.test(line);
-		const isNf = /\bsimulate_nf\s*\(/i.test(line) || /\bmethod\s*=>\s*["'](?:nf|nfsim)["']/i.test(line);
-		if (isSsa || isNf) return `# [auto-disabled] ${line}`;
-		return line;
-	});
-
-	return `${before}\n${outLines.join('\n')}\n${after}`;
 }
 
 function chooseBetterCandidate(left: ModelCandidate, right: ModelCandidate): ModelCandidate {
@@ -319,31 +254,37 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	if (fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
 	ensureDir(workDir);
 
-	let sanitized = sanitizeActionsKeepAllOdeSimulates(loadedCode);
-	// Give BNG2.pl the same __FREE values the playground uses, so PyBNF fitting
-	// models can produce a reference instead of aborting before simulation.
-	// This must come before generate_network/simulate are appended below.
-	sanitized = injectFreeParameterDefaults(sanitized);
-	// A model whose only simulate actions are NFsim/network-free ones has no
-	// reaction network at all, and that is not a defect: BNG2 writes no .net for
-	// it either, and asking for one is how a fitting model turns into a
-	// combinatorially explosive one. `tcr_iter28p4h2` (129 rules, TCRtot=88223)
-	// went 20 -> 53 -> 203 -> 2659 species in four iterations and never
-	// converged once `generate_network` was appended for it. Skip it, and say so,
-	// instead of burning the per-model timeout to find out.
-	if (hasUncommentedSimulateAction(sanitized)) {
-		// nothing to add
-	} else if (isNetworkFreeModel(sanitized)) {
+	// BNG2 is given the model EXACTLY AS PUBLISHED. Nothing is injected,
+	// commented out or appended.
+	//
+	// This is not a stylistic choice. A reference built from a modified model is
+	// a reference to a different model than the one the playground runs, and the
+	// comparison is then meaningless while still reporting a number:
+	//   - `nyc`/`phoenix` had 21 lines of `*__FREE 0` injected. BNG2 aborts on the
+	//     published file (`Parameter ts0__FREE is referenced but not defined`), so
+	//     the fixture was a model BioNetGen would never accept.
+	//   - `toggle`/`baruabcr_2012` had `generate_network` + `simulate` appended to
+	//     files that contain no `simulate()` at all.
+	// The playground does not modify models either: with no `simulate()` action it
+	// falls back to ODE at whatever the UI supplies, running the file as written.
+	// So a model BNG2 cannot process has no reference, and that is the honest
+	// outcome — reported as such rather than papered over with a synthetic fixture.
+	//
+	// A network-free model (only NFsim/ssa actions) is skipped rather than left to
+	// burn the per-model timeout: BNG2 writes no .net for those, and appending
+	// `generate_network` for one is how `tcr_iter28p4h2` went 20 -> 53 -> 203 ->
+	// 2659 species and never converged.
+	if (isNetworkFreeModel(loadedCode)) {
 		return {
 			safeName,
 			source: model.source,
 			sourceId: model.sourceId,
 			status: 'network_free',
-			error: 'Model is network-free (only NFsim/ssa simulate actions); no ODE reference can exist.',
+			error: 'Model is network-free (only NFsim/ssa simulate actions); BioNetGen writes no network for it either.',
 		};
-	} else {
-		sanitized = appendDefaultOdeActions(sanitized);
 	}
+
+	const sanitized = loadedCode;
 
 	const bnglPath = path.join(workDir, `${safeName}.bngl`);
 	fs.writeFileSync(bnglPath, sanitized, 'utf8');

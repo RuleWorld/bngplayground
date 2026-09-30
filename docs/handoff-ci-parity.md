@@ -141,7 +141,35 @@ the shared rule every construct uses.
 
 ## 6. Reference pipeline
 
-`scripts/generation/generate_no_ref_gdat.ts`:
+**BNG2 is given each model exactly as published.** Nothing is injected, commented
+out or appended. This is load-bearing, not stylistic: a reference built from a
+modified model is a reference to a *different model* than the one the playground
+runs, and the comparison still reports a number.
+
+Concretely, three transformations were removed after they were found doing this:
+
+- **`nyc`/`phoenix`** had 21 lines of `*__FREE 0` injected. BNG2 **aborts** on the
+  published file — `Parameter ts0__FREE is referenced but not defined` — so the
+  fixture was a model BioNetGen would never accept. It is also why they "ran" here
+  at all: the playground silently defaults undefined parameters to 0 where BNG2
+  hard-aborts.
+- **`toggle`/`baruabcr_2012`** had `generate_network` + `simulate` appended to
+  files containing no `simulate()` action.
+- **`sanitizeActionsKeepAllOdeSimulates`** commented out SSA/NFsim simulate calls.
+
+The playground does not modify models either: with no `simulate()` action it falls
+back to ODE at whatever the UI supplies, running the file as written. So a model
+BNG2 cannot process has **no reference**, and that is the outcome to report — not a
+synthetic fixture that makes the comparison look meaningful.
+
+A network-free model (only NFsim/SSA actions) is skipped rather than left to burn
+the per-model timeout: BNG2 writes no `.net` for those, and appending
+`generate_network` for one is how `tcr_iter28p4h2` went 20 → 53 → 203 → 2 659
+species and never converged.
+
+
+
+`scripts/generation/generate_no_ref_gdat.ts` also:
 
 - Plants `default.geometry.mdl` next to every model it writes. The reference
   resolves it from the *model file's* directory (`Perl2/BNGOutput.pm:127`) and
