@@ -647,15 +647,27 @@ function getMultiPhaseReference(
     const normalizedAlias = alias ? normalizeKey(alias) : null;
     const candidateKeys = [baseKey, normalizedAlias].filter(Boolean) as string[];
 
-    const directMatches: string[] = [];
-
-    // 1) Direct match by normalized key.
+    // 1) Direct match.
+    //
+    // `normalizeKey` strips punctuation, so `circadian_oscillator` and
+    // `circadianoscillator` — two distinct RuleHub models whose .net files are
+    // byte-identical and differ only in that underscore — both normalise to the
+    // same key. Matching on the normalised key alone handed the ODE model the
+    // SSA model's reference, and the gate then compared an 801-row ODE
+    // trajectory against a 1001-row stochastic one and called it a divergence.
+    //
+    // So: prefer a filename that matches exactly, and when only a normalised
+    // match exists it must be unambiguous. Guessing between two references
+    // belonging to different models is worse than reporting no reference.
+    const exactMatches: string[] = [];
+    const normalisedOnly: string[] = [];
     for (const gf of gdatFiles) {
       const gKey = normalizeKey(gf);
-      if (candidateKeys.includes(gKey)) {
-        directMatches.push(path.join(BNG_OUTPUT_DIR, gf));
-      }
+      if (!candidateKeys.includes(gKey)) continue;
+      const stemMatches = candidateKeys.some(k => path.basename(gf, '.gdat').toLowerCase() === k);
+      (stemMatches ? exactMatches : normalisedOnly).push(path.join(BNG_OUTPUT_DIR, gf));
     }
+    const directMatches = exactMatches.length > 0 ? exactMatches : normalisedOnly.length === 1 ? normalisedOnly : [];
 
     // Even for direct matches, try to find a BNGL file for multi-phase concatenation
     const bnglPathForDirect = findBestBnglForCsv(csvFile, bnglFiles);

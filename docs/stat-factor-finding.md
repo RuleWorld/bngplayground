@@ -94,6 +94,41 @@ and `zhang_2021` numbers in that table are not trustworthy and would need
 re-measuring per reaction before they are cited. The conclusion that deletion is
 unsafe does not depend on them.
 
+## A minimal reproducer exists: `zhang_2021`, 6 reactions
+
+Re-measured per reaction (the earlier 10-12 figure came from the aggregating
+comparator and is superseded — the true count is **6**).
+
+Network identical: 150 species / 496 reactions / 496 keys, none only in ours.
+Rates: 494 of 496 identical. The 6 that differ are all *last-binding-site* rules,
+and only the last ones are wrong:
+
+| rule | rate | ours | BNG2 |
+|---|---|---|---|
+| `_R3` / `_R53` (3rd of 4) | `konang1tie2_3` | 2 | 2 ✅ |
+| `_R4` / `_R54` (4th of 4) | `konang1tie2_4` | **6** | 1 |
+| `_R13` / `_R63` (4th of 4) | `konang2_4tie2_4` | **6** | 1 |
+| `_R9` / `_R59` (3rd of 3) | `konang2_3tie2_3` | **2** | 1 |
+
+BNG2's factor for this family is the number of **free binding sites** on the
+receptor; ours becomes the number of *already-bound* identical sites factorial'd
+in. Per-instance multiplicity is correct (`exprScaleFactor=1 multiplicity=1`);
+the canonical-key merge sums six automorphism-equivalent embeddings of the same
+physical event.
+
+### Why no local fix exists
+
+A division keyed on `patternAutomorphismFactor` cannot discriminate. That factor
+is **2 for both `_R3` and `_R9`** — they merge the same number of times and differ
+only in free-site count (2 vs 1). `_R3` is correct at 2 *by coincidence*: 2 free
+sites happens to equal 2!. So dividing by `pAuto` fixes `_R9`/`_R59` and breaks
+`_R3`/`_R12`/`_R53`/`_R62`. The discriminating quantity is BNG2's free-site
+count, which is exactly the product-graph automorphism question below.
+
+This is the clearest statement of what the replacement has to compute, and it is
+also a trap for whoever writes it: a fix tuned on this model alone will break its
+neighbours.
+
 ## The correct fix, and its open questions
 
 The replacement has to compute BNG2's `|RG| / |Stab|` at that one call site:

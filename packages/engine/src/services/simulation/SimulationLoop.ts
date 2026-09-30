@@ -1924,21 +1924,14 @@ export async function simulate(
         productStoich.push(count);
       }
 
-      const propensityFactor = rxn.propensityFactor ?? 1;
+
       const degeneracyFactor = rxn.degeneracy ?? 1;
-      let rateConstant: number | string = rxn.rateConstant * propensityFactor * degeneracyFactor;
+      let rateConstant: number | string = rxn.rateConstant * degeneracyFactor;
       if (!rxn.isFunctionalRate && typeof rxn.rate === 'string' && rxn.rate.trim().length > 0) {
         const symbolicRate = rxn.rate.trim();
-        const applyPropensityFactor = rxn.propensityFactor !== undefined && rxn.propensityFactor !== 1;
+
         const applyDegeneracyFactor = rxn.degeneracy !== undefined && rxn.degeneracy !== 1;
-        if (applyPropensityFactor || applyDegeneracyFactor) {
-          const factors: string[] = [symbolicRate];
-          if (applyPropensityFactor) factors.push(String(propensityFactor));
-          if (applyDegeneracyFactor) factors.push(String(degeneracyFactor));
-          rateConstant = factors.map((part) => `(${part})`).join(' * ');
-        } else {
-          rateConstant = symbolicRate;
-        }
+        if (applyDegeneracyFactor) { rateConstant = `(${symbolicRate}) * ${degeneracyFactor}`; } else { rateConstant = symbolicRate; }
       }
 
       return {
@@ -3606,7 +3599,7 @@ export async function simulate(
             // unconditionally keeps blood_coagulation_thrombin's
             // `Fibrinogen(s~S) -> Fibrinogen(s~F) ... TotalRate` saturating as it
             // does in BNG2 instead of growing linearly at a constant rate.
-            const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1) * vAnchor;
+            const velocityBase = rate * (rxn.degeneracy ?? 1) * vAnchor;
             let multiplicative = 1;
             for (let j = 0; j < rxn.reactants.length; j++) {
               const ridx = rxn.reactants[j];
@@ -3704,7 +3697,7 @@ export async function simulate(
 
         // Flatten per-reaction data into contiguous typed arrays (zero-copy hot path)
         const sparseRxnRateK = new Float64Array(sparseNRxns);
-        const sparseRxnPropDeg = new Float64Array(sparseNRxns);
+        const sparseRxnDeg = new Float64Array(sparseNRxns);
         const sparseRxnVAnchors = new Float64Array(sparseNRxns);
         let sparseTotalReactants = 0;
         for (let i = 0; i < sparseNRxns; i++) sparseTotalReactants += concreteReactions[i].reactants.length;
@@ -3717,7 +3710,7 @@ export async function simulate(
           const rxn = concreteReactions[i];
           const vAnchor = reactionReactingVolumes[i] || 1.0;
           sparseRxnRateK[i] = rxn.rateConstant;
-          sparseRxnPropDeg[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+          sparseRxnDeg[i] = rxn.degeneracy ?? 1;
           sparseRxnVAnchors[i] = vAnchor;
           sparseFlatReactantOffsets[i] = srOff;
           for (let j = 0; j < rxn.reactants.length; j++) {
@@ -3762,7 +3755,7 @@ export async function simulate(
             // TotalRate zeroes the statistical factor only; the reacting-volume
             // normalization and the mass-action reactant product above both still
             // apply (BNG2's Network3 runner has no `totalrate` concept).
-            velocity *= multiplicative * sparseRxnPropDeg[i] * vAnchor;
+            velocity *= multiplicative * sparseRxnDeg[i] * vAnchor;
             velocityBuffer[i] = velocity;
           }
 
@@ -3789,7 +3782,12 @@ export async function simulate(
       // Flatten per-reaction data into contiguous typed arrays for cache-friendly access.
       // This eliminates object property lookups on concreteReactions[i] in the hot loop.
       const rxnRateConstants = new Float64Array(nRxns);
-      const rxnPropensityFactors = new Float64Array(nRxns);   // propensityFactor * degeneracy
+      // Degeneracy only. `propensityFactor` (the 1/2 same-pool correction for
+      // identical-reactant rules) is a stochastic propensity correction and is
+      // deliberately not applied to ODE fluxes: BNG2's deterministic RHS comes
+      // from the .net rate law, which carries the full k, so the flux is
+      // k*[A]*[B]. SSA keeps it (see JITCompiler.compileSSAPropensities*).
+      const rxnDegeneracyFactors = new Float64Array(nRxns);
       const rxnVAnchors = new Float64Array(nRxns);
       const denseTotalRate = new Uint8Array(nRxns);
 
@@ -3829,7 +3827,7 @@ export async function simulate(
         const vAnchor = reactionReactingVolumes[i] || 1.0;
 
         rxnRateConstants[i] = rxn.rateConstant;
-        rxnPropensityFactors[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+        rxnDegeneracyFactors[i] = rxn.degeneracy ?? 1;
         rxnVAnchors[i] = vAnchor;
         denseTotalRate[i] = rxn.totalRate ? 1 : 0;
 
@@ -3892,7 +3890,7 @@ export async function simulate(
             }
           }
 
-          velocity *= multiplicative * rxnPropensityFactors[i] * vAnchor;
+          velocity *= multiplicative * rxnDegeneracyFactors[i] * vAnchor;
             denseVelocityBuffer[i] = velocity;
           }
 
@@ -4031,8 +4029,7 @@ export async function simulate(
             : (currentState[index] * speciesVolumes[index]) / vAnchor;
           multiplicative *= relativeAmount;
         }
-        const velocity = rate * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1)
-          * vAnchor * multiplicative;
+        const velocity = rate * (rxn.degeneracy ?? 1) * vAnchor * multiplicative;
         setSafeNumberField(context, rxn.ruleName, velocity);
         setSafeNumberField(context, `netflux_${rxn.ruleName}`, velocity);
       }
@@ -4547,7 +4544,7 @@ export async function simulate(
       }
 
       const byteCodeReactions = concreteReactions.map((r, i) => {
-        const multiplicativeFactor = (r.propensityFactor ?? 1) * (r.degeneracy ?? 1);
+        const multiplicativeFactor = r.degeneracy ?? 1;
         const scaledRateConstant = r.isFunctionalRate
           ? (
             multiplicativeFactor !== 1
