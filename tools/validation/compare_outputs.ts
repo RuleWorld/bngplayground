@@ -99,6 +99,7 @@ import {
   detectUnsupportedFeature,
   compareColumnCoverage,
   referenceMatchesModel,
+  indexReferenceColumns,
 } from './compareShared';
 
 function stripDownloadSuffix(name: string): string {
@@ -866,8 +867,7 @@ function getMultiPhaseReference(
     const isSteadyStateRowMismatch = isSteadyStateModel && webData.data.length !== refData.data.length;
 
     // Compare all rows/cols (by index once headers are mapped).
-    const refColIndexByNorm = new Map<string, number>();
-    for (let i = 0; i < refHeadersNorm.length; i++) refColIndexByNorm.set(refHeadersNorm[i], i);
+    const refColumnIndex = indexReferenceColumns(refData.headers);
 
     const minRows = Math.min(webData.data.length, refData.data.length);
     const alignedRows = alignRowsByTime(webData.data, refData.data, webTimeIdx, refTimeIdx);
@@ -896,7 +896,7 @@ function getMultiPhaseReference(
           const colNameNorm = normalizeHeader(colName);
           if (colNameNorm === 'time') continue;
 
-          const refColIdx = refColIndexByNorm.get(colNameNorm);
+          const refColIdx = refColumnIndex(colName);
           if (refColIdx === undefined) continue;
 
           const webVal = webRow[ci];
@@ -941,7 +941,7 @@ function getMultiPhaseReference(
             const colNameNorm = normalizeHeader(colName);
             if (colNameNorm === 'time') continue;
 
-            const refColIdx = refColIndexByNorm.get(colNameNorm);
+            const refColIdx = refColumnIndex(colName);
             if (refColIdx === undefined) continue;
 
             const webVal = webRow[ci];
@@ -976,7 +976,7 @@ function getMultiPhaseReference(
         const colNameNorm = normalizeHeader(colName);
         if (colNameNorm === 'time') continue;
 
-        const refColIdx = refColIndexByNorm.get(colNameNorm);
+        const refColIdx = refColumnIndex(colName);
         if (refColIdx === undefined) continue;
 
         const webVal = webRow[ci];

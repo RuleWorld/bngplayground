@@ -16,7 +16,12 @@
  */
 import { describe, it, expect } from 'vitest';
 
-import { compareColumnCoverage, parameterValues, referenceMatchesModel } from '../tools/validation/compareShared';
+import {
+  compareColumnCoverage,
+  indexReferenceColumns,
+  parameterValues,
+  referenceMatchesModel,
+} from '../tools/validation/compareShared';
 
 describe('compareColumnCoverage', () => {
   it('accepts a reference that carries parameter columns the web cannot export', () => {
@@ -151,5 +156,26 @@ describe('referenceMatchesModel', () => {
   it('accepts a reference regenerated from the very same model', () => {
     const same = `${mitraEgg}\ngenerate_network({overwrite=>1})`;
     expect(referenceMatchesModel(same, mitraEgg)).toBe(true);
+  });
+});
+
+describe('indexReferenceColumns', () => {
+  // Alabama's reference carries the observable R and the printed function r.
+  const alabamaRef = ['time', 'IM', 'H', 'R', 'D', 'r', 'P'];
+
+  it('resolves an exact spelling instead of a case-folded sibling', () => {
+    const index = indexReferenceColumns(alabamaRef);
+    expect(index('R')).toBe(3);
+    expect(index('r')).toBe(5);
+  });
+
+  it('falls back to the case-folded match when the spelling differs', () => {
+    const index = indexReferenceColumns(['time', 'I_M', 'egfr_tot']);
+    expect(index('I_m')).toBe(1);
+    expect(index('EGFR_TOT')).toBe(2);
+  });
+
+  it('reports no column for a name the reference does not carry', () => {
+    expect(indexReferenceColumns(alabamaRef)('absent')).toBeUndefined();
   });
 });

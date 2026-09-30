@@ -193,6 +193,28 @@ export function compareColumnCoverage(
   };
 }
 
+/**
+ * Index a reference's columns for lookup by a web column name.
+ *
+ * Headers are matched case-insensitively, so a reference carrying both the
+ * observable `R` and the printed function `r` (Alabama, dallas, houston) folds
+ * to a single key and the web's `R` would be compared against the function —
+ * a 100% error on values that actually agree. Look the exact spelling up first
+ * and only fall back to the case-folded index.
+ */
+export function indexReferenceColumns(
+  refHeaders: readonly string[],
+): (webHeader: string) => number | undefined {
+  const byExact = new Map<string, number>();
+  const byFolded = new Map<string, number>();
+  refHeaders.forEach((header, index) => {
+    if (!byExact.has(header)) byExact.set(header, index);
+    const folded = header.toLowerCase().replace(/\s+/g, '_');
+    byFolded.set(folded, index);
+  });
+  return (webHeader) => byExact.get(webHeader) ?? byFolded.get(webHeader.toLowerCase().replace(/\s+/g, '_'));
+}
+
 const PARAMETERS_BLOCK_RE = /^[ \t]*begin\s+parameters\b[^\n]*\n([\s\S]*?)^[ \t]*end\s+parameters\b/im;
 const FREE_PARAMETER_RE = /^[A-Za-z_][A-Za-z0-9_]*__FREE_*$/;
 
