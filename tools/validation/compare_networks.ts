@@ -18,6 +18,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { parseNetFile } from '../../packages/engine/src/services/graph/NetParser';
+import { isKnownUnparseableReference, unparseableReferenceReason } from './netShapeUnsupported';
 import { parseBNGLWithANTLR } from '../../packages/engine/src/parser/BNGLParserWrapper';
 import { generateExpandedNetwork } from '../../packages/engine/src/services/simulation/NetworkExpansion';
 import type { BNGLModel } from '../../packages/engine/src/types';
@@ -130,11 +131,11 @@ const main = async (): Promise<void> => {
   const report = {
     generatedAt: new Date().toISOString(),
     referenceDir: BNG_TEST_OUTPUT_DIR,
-    totals: { netFixtures: netFiles.length, compared: 0, matched: 0, mismatched: 0, expectedMismatch: 0, noPlaygroundNet: 0, errored: 0 },
+    totals: { netFixtures: netFiles.length, compared: 0, matched: 0, mismatched: 0, expectedMismatch: 0, noPlaygroundNet: 0, errored: 0, unsupported: 0 },
     mismatches: [] as Array<Record<string, unknown>>,
     errors: [] as Array<Record<string, unknown>>,
+    unsupported: [] as Array<Record<string, unknown>>,
   };
-
   for (const netFile of netFiles) {
     const safeName = path.basename(netFile, path.extname(netFile));
     const bnglPath = path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.bngl`);
@@ -152,8 +153,19 @@ const main = async (): Promise<void> => {
         PER_MODEL_TIMEOUT_MS,
       );
     } catch (err) {
+      const message = String(err instanceof Error ? err.message : err);
+      // A reference we cannot parse means there is no network to compare, not
+      // that the engines disagree. Known-unparseable references are recorded
+      // (see netShapeUnsupported.ts); anything unlisted still fails the gate,
+      // so a newly broken model cannot hide here.
+      const isParseFailure = /^net parse:|^parse:/.test(message);
+      if (isParseFailure && isKnownUnparseableReference(safeName)) {
+        report.totals.unsupported++;
+        report.unsupported.push({ model: safeName, reason: unparseableReferenceReason(safeName) });
+        continue;
+      }
       report.totals.errored++;
-      report.errors.push({ model: safeName, error: String(err instanceof Error ? err.message : err).slice(0, 200) });
+      report.errors.push({ model: safeName, error: message.slice(0, 200) });
       continue;
     }
 
@@ -200,6 +212,9 @@ const main = async (): Promise<void> => {
         (Array.isArray(m.extraSpecies) && m.extraSpecies.length ? ` | extra e.g. ${m.extraSpecies[0]}` : ''),
     );
   }
+  for (const u of report.unsupported) {
+    console.log(`  UNSUPPORTED ${u.model}: ${u.reason}`);
+  }
   for (const e of report.errors.slice(0, 10)) {
     console.log(`  ERROR ${e.model}: ${e.error}`);
   }
@@ -217,6 +232,14 @@ const main = async (): Promise<void> => {
         `(${(coverage * 100).toFixed(1)}%, minimum ${(MIN_COVERAGE * 100).toFixed(0)}%). ` +
         `The gate would be vacuous — fix the underlying parse/generation failure.`
     );
+    process.exit(1);
+  }
+
+  if (report.totals.errored > 0) {
+    // An unlisted model we could not read is a regression, not a skip: the
+    // ratchet in netShapeUnsupported.ts exists precisely so this cannot grow
+    // silently.
+    console.error(`[net-shape] ${report.totals.errored} model(s) could not be compared.`);
     process.exit(1);
   }
 
