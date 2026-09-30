@@ -7,10 +7,20 @@ two distinct BNG installations on macOS arm64:
 - **wheel** — BioNetGen 2.9.3 from the `bionetgen` PyPI wheel
   (`~/Library/Python/3.9/lib/python/site-packages/bionetgen/bng-mac`).
   This is the environment all original numbers below were produced in.
-- **checkout** — this workspace's repo at `BioNetGen-2.9.3-633-g8726b30b`
-  (`bionetgen/bionetgen/bng2`), i.e. latest codebase, 633 commits past the
-  2.9.3 tag. Several defects below are **already fixed here**; each finding
-  states its status per binary.
+- **checkout** — `akutuva21/bionetgen` at `3513bca7`
+  (`bionetgen/bionetgen/bng2`), three commits past `RuleWorld/bionetgen` master.
+  Its tip is `fix: fold byte-identical reactions across rules in RxnList::add`.
+  Several defects below are **already fixed here**; each finding states its
+  status per binary.
+
+**The parity reference for CI and for the `reference-tests` job is the
+checkout, not the wheel.** Two measured reasons: the wheel expands `egfr` to
+4301 reactions and `tlr3_dsrna_sensing` to 161 where master gives 3749 and 158,
+and the cause is `Perl2/RxnList.pm`, where `add()` folded two reactions only
+when their `RateLaw` objects were the same object (`$rxn->RateLaw == $rxn2->RateLaw`).
+The fork merges on `RateLaw::equivalent(...)` instead, which is what
+`RateLaw.pm` exists for. `.github/workflows/test.yml` clones that fork at a
+pinned commit for every parity job.
 
 Only items verified by direct reproduction are recorded here. A final section
 lists things that look like bugs but are not, so they are not re-investigated.
@@ -107,24 +117,44 @@ counts reactant-side swaps only; the extra 276 are product-side swaps.
 ### Scale, across the whole corpus (audit key, trailing patch, wheel binary)
 
 Auditing every `.net` produced for the original RuleHub sweep (748 models at
-the time; the corpus has since grown to 918 `.bngl` files — see §Corpus
-drift), 7 models contain repeated reaction entries — 453 surplus lines in
-total:
+the time; the corpus has since grown — see §Corpus drift), 7 models contain
+repeated reaction entries — 453 surplus lines in total. **All rows
+re-verified 2026-09-30** by a full 918-model sweep under the doc's
+conditions (wheel binary, forward-ref patch, 600 s per-model timeout):
 
-| model | surplus reaction lines | re-verified 2026-09-30 |
+| model | surplus | re-verified 2026-09-30 |
 |---|---|---|
-| `egfr` | 276 | ✓ (276 of 4301 raw) |
-| `mek_isoform_optimization_de_mek1_ko` | 42 | ✓ |
-| `mek_isoform_optimization_de_mek1_t292a` | 42 | ✓ |
-| `mek_isoform_optimization_de_mek1_t292d` | 42 | ✓ |
-| `mek_isoform_optimization_de_mek1_wt` | 42 | ✓ |
-| `mek_isoform_optimization_de_mek1_n78g` | 6 | ✓ (731 raw / 725 distinct) |
-| (1 further model, 3 lines) | 3 | pending re-identification in full-corpus sweep |
+| `egfr` (4 corpus copies, counted once) | 276 | ✓ (4301 raw / 4025 distinct) |
+| `mek_isoform_optimization_de_mek1_ko` | 42 | ✓ (767/725) |
+| `mek_isoform_optimization_de_mek1_t292a` | 42 | ✓ (767/725) |
+| `mek_isoform_optimization_de_mek1_t292d` | 42 | ✓ (767/725) |
+| `mek_isoform_optimization_de_mek1_wt` | 42 | ✓ (767/725) |
+| `mek_isoform_optimization_de_mek1_n78g` | 6 | ✓ (731/725) |
+| `Examples/biology/tlr3dsrnasensing/tlr3-dsrna-sensing` — the formerly unnamed "1 further model" | 3 | ✓ (161/158; also the `158 vs 161` row in `handoff-ci-parity.md`) |
 
-For `egfr` that is 276 duplicate lines against 3749 canonical-distinct
-(4301 raw) — roughly 7%. The aMCMC MEK variants (5 files) correctly show 0
-and are not in the table; `Tutorials/egfrnet` (3749 raw, no `__FREE` params)
-also shows 0.
+276 + 42·4 + 6 + 3 = **453 across 7 models — aggregate confirmed exactly**,
+keyed by model name (the four `egfr` copies — 3 distinct md5s — count once,
+as the doc's table does). The aMCMC MEK variants (5 files) correctly show 0
+(their `__FREE` params are only output scale factors; homodimer rates stay
+`Ele`), and `Tutorials/egfrnet` (3749 raw, no `__FREE`) also shows 0.
+
+**The table is not exhaustive even for the original corpus era.** The same
+sweep found **18 files / 3931 surplus lines** in total; beyond the doc's 7
+names, three families also duplicate but are absent from the table:
+
+| family (files) | wheel surplus | why likely omitted |
+|---|---|---|
+| `egfr_ode` ×2 + `example1` (same Kozer-EGFR content) | 880 each (13678/12798) | heavy: needs ≥263 s generation; reproduced-by-timing-out here too (old-snapshot copy stalls at iteration 5, ~50 s CPU per iteration after). Original sweep's per-model timeout almost certainly excluded them → no net → not audited |
+| `receptor` ×2, `receptor_nf` ×3 | 2 each (62/60) | **unexplained** — fast (0.03 s), and the pre-growth snapshot's `receptor.bngl` also yields 62/2, so it duplicated in the doc's era too. Possible causes: the model's internal `generate_network()` lacks `overwrite=>1` (rerun in a dirty dir aborts → no net), or a harness skip |
+| `Kesseler2013` | 192 (2688/2496) at HEAD+leading patch; aborts under forward-ref on both binaries (`Bareword 'unlimited'`) | not auditable in the doc's forward-ref conditions at all; see HEAD section — its 192 are now fixed |
+
+File-level totals for the full sweep: 918 models attempted, 802 nets
+produced (65 NONET: species-block/legacy-syntax/undefined-non-FREE errors;
+51 TIMEOUT >600 s: tlbr/tcr/jobs/mapk-ensemble families), 18 with surplus,
+3931 surplus total.
+
+For `egfr` that is 276 duplicate lines against 4025 audit-key distinct
+(4301 raw, 3749 canonical-key distinct) — roughly 7% by any reading.
 
 ### Why it matters here
 
@@ -203,15 +233,25 @@ subsection).
 
 ### Status at latest codebase (checkout `8726b30b`)
 
-**The ordered-pair class is fixed; the cross-rule class is not.**
+**The ordered-pair class was fixed at HEAD; the cross-rule class persisted
+until `3513bca7` (this document's accompanying fix).**
 
-| | wheel 2.9.3 | checkout HEAD |
+Per-model, forward-ref patch, both binaries (pre-`3513bca7` measurements):
+
+| model | wheel 2.9.3 (total/surplus) | checkout HEAD (total/surplus) |
 |---|---|---|
-| MEK WT raw lines | 767 | 692 |
-| audit-key surplus | 42 | **3** (only the cross-rule singles above) |
-| canonical-key distinct | 636 | 636 (same set) |
-| quoted lines `2 5,6 11` / `3 6,5 11` | present verbatim | absent — one merged line `2 5,6 11 b2` |
-| egfr surplus | 276 | **0** |
+| MEK WT (and KO/T292A/T292D) | 767 / 42 | 692 / **3** (cross-rule pairs only) |
+| MEK N78G | 731 / 6 | 692 / 3 |
+| MEK aMCMC ×5 | 689 / 0 | 692 / 3 |
+| `egfr` ×4 | 4301 / 276 | 3749 / **0** |
+| `tlr3-dsrna-sensing` | 161 / 3 | 158 / **0** |
+| `receptor`/`receptor_nf` ×5 | 62 / 2 | 54 / **0** |
+| `egfr_ode`×2 + `example1` | 13678 / 880 | 11918 / **0** |
+| `Kesseler2013` (leading patch only — aborts under forward-ref on both: `Bareword 'unlimited'`) | n/a (aborts) | 2688 / **192** |
+
+Quoted-line spot check: `2 5,6 11` / `3 6,5 11` present verbatim on the
+wheel; at HEAD absent — one merged line `2 5,6 11 b2` (StatFactor 0.5+0.5=1).
+Canonical-key distinct for MEK: 636 on both (same set).
 
 Two commits did this:
 
@@ -240,18 +280,20 @@ Two commits did this:
   `Function::equivalent` check was removed rather than corrected, and its
   failure mode (cross-rule non-merge) survives in pointer-identity form.
 
-**Residual defect at HEAD (was current, now fixed — see below):** any two
+**Residual cross-rule defect (was at HEAD, fixed by `3513bca7`):** any two
 different rules that generate byte-identical reactions (same reactants,
 products, and rate-law expression) were written twice, because
 `RxnList::add:86` compared rate laws by object identity instead of
-structure. At HEAD this cost MEK 3 of 692 lines (0.4%); invisible to
-set-comparison consumers, still wrong for counters. It was also a mild
-regression versus 2.9.3: wheel + leading patch on MEK = 689 lines / 0
-surplus, HEAD (pre-fix) + same patch = 692 / 3. The deleted
-`Function::equivalent` inverted check had been removed rather than
-corrected, so its failure mode survived in pointer-identity form.
+structure. At HEAD this cost MEK 3 of 692 lines (0.4%) and — as the full
+sweep revealed — **`Kesseler2013` 192 of 2688 lines (7.1%)**, making it a
+material HEAD defect, not a curiosity. Invisible to set-comparison
+consumers, wrong for counters. It was also a regression versus 2.9.3:
+wheel + leading patch on MEK = 689 lines / 0 surplus, HEAD (pre-fix) +
+same patch = 692 / 3. The deleted `Function::equivalent` inverted check
+had been removed rather than corrected, so its failure mode survived in
+pointer-identity form.
 
-### Fix applied (working tree, uncommitted, 2026-09-30)
+### Fix applied (committed `3513bca7`, 2026-09-30)
 
 Restored structural rate-law comparison at the merge site, with the old
 identity-check bug corrected:
@@ -281,6 +323,7 @@ Validation (all re-run independently after the agent reported):
 | new test on unmodified HEAD | FAILED first ("found 2") — genuine failing-before |
 | `ctest -R bng2` after fix | 7/7 passed |
 | MEK WT HEAD after fix | 689 lines / 0 surplus (was 692/3) |
+| Kesseler2013 HEAD after fix (leading patch) | 2496 lines / **0** surplus (was 2688/192) — largest verified case fixed |
 | fixed HEAD reaction block vs wheel 2.9.3 | **byte-identical** |
 | pre vs post diff | exactly 6 lines removed (the 3 known pairs), 3 added (`44 20 2*u5 #_R33,_R35`, `56 44 4*u5 #_R33,_R35,_R35`, `89 74 2*u5 #_R33,_R35`), all others unchanged modulo index renumbering |
 | 5 existing fixture models (issue_090/217/234/295/312) HEAD-versions vs fixed | artifacts byte-identical |
@@ -311,9 +354,15 @@ and `RateLaw::equivalent` at `Perl2/RateLaw.pm:564-604`. Verified positions:
 
 The original audit ran 748 models. The RuleHub corpus on disk today contains
 **918 `.bngl` files** (Published 656, Examples 175, Tutorials 87; 871 unique
-basenames; `manifest.json` lists 482). Any count comparison against the
-"748 models" figure must account for growth — model counts in this document
-are as-of-audit, not as-of-today.
+basenames; `manifest.json` lists 482). 748 matches neither the file count
+nor this sweep's net-production count (802 of 918 under 600 s timeout) —
+it was most plausibly a coverage count of the original sweep, not a file
+count. The corpus is a live clone that has grown since; model counts in
+this document are as-of-audit, not as-of-today. File-level surplus totals
+are therefore NOT directly comparable: today's full sweep finds 18 files /
+3931 surplus vs the doc's 7 models / 453, the difference being
+(content-duplicate copies, post-audit corpus additions, and the
+timeout-excluded heavy models itemized in §Scale).
 
 ## Looked at and ruled out
 
