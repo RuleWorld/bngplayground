@@ -20,7 +20,7 @@ import { fileURLToPath } from 'node:url';
 import { parseNetFile } from '../../packages/engine/src/services/graph/NetParser';
 import { isKnownUnparseableReference, unparseableReferenceReason } from './netShapeUnsupported';
 import { parseBNGLWithANTLR } from '../../packages/engine/src/parser/BNGLParserWrapper';
-import { generateExpandedNetwork } from '../../packages/engine/src/services/simulation/NetworkExpansion';
+import { expandBounded } from '../../packages/engine/src/services/graph/boundedExpansion';
 import type { BNGLModel } from '../../packages/engine/src/types';
 import { EXPECTED_NETWORK_MISMATCHES } from './compareShared';
 
@@ -99,33 +99,33 @@ interface NetworkShape {
   reactions: string[];
 }
 
-class Timeout extends Error {
-  constructor() {
-    super('timeout');
-    this.name = 'Timeout';
+/**
+ * Expand one reference model under a hard deadline.
+ *
+ * The expander's cancellation callback is polled between iterations and
+ * between rule applications, so it cannot stop an expansion wedged inside a
+ * single rule applied to a combinatorial explosion of match candidates — the
+ * callback is never reached and the gate stalls forever. Expansion therefore
+ * runs in a child process that can actually be killed; see
+ * `packages/engine/src/services/graph/boundedExpansion.ts`.
+ */
+const expandModel = async (bnglPath: string): Promise<NetworkShape> => {
+  const expansion = await expandBounded(bnglPath, { timeoutMs: PER_MODEL_TIMEOUT_MS });
+  if (expansion.status === 'killed') {
+    // Deliberately not prefixed `parse:` — the gate treats that prefix as
+    // "the reference is unreadable" and consults the ratchet, and a timeout is
+    // a different failure: it must be reported and must fail the gate unless a
+    // model is ratcheted with that reason.
+    throw new Error(`expansion: ${expansion.error}`);
   }
-}
-
-const withDeadline = async <T>(work: () => Promise<T>, ms: number): Promise<T> => {
-  const expiry = Date.now() + ms;
-  const check = () => {
-    if (Date.now() > expiry) throw new Timeout();
-  };
-  // The engine polls checkCancelled cooperatively during expansion.
-  return work(check);
-};
-
-const expandModel = async (bngl: string, check: () => void): Promise<NetworkShape> => {
-  const parsed = parseBNGLWithANTLR(bngl);
-  if (!parsed.success) {
-    throw new Error(`parse: ${parsed.errors?.[0]?.message ?? 'failed'}`);
+  if (expansion.status !== 'ok') {
+    throw new Error(`parse: ${expansion.error}`);
   }
-  const net = await generateExpandedNetwork(parsed.model as BNGLModel, check, () => {});
   return {
-    species: net.species.map((s) => s.name).sort(),
-    numSpecies: net.species.length,
-    numReactions: net.reactions.length,
-    reactions: net.reactions.map(canonicalReaction).sort(),
+    species: [...expansion.species].sort(),
+    numSpecies: expansion.species.length,
+    numReactions: expansion.reactions.length,
+    reactions: expansion.reactions.map(canonicalReaction).sort(),
   };
 };
 
@@ -170,10 +170,7 @@ const main = async (): Promise<void> => {
     let generated: NetworkShape;
     try {
       reference = readReferenceShape(fs.readFileSync(path.join(BNG_TEST_OUTPUT_DIR, netFile), 'utf8'));
-      generated = await withDeadline(
-        (check) => expandModel(fs.readFileSync(bnglPath, 'utf8'), check),
-        PER_MODEL_TIMEOUT_MS,
-      );
+      generated = await expandModel(bnglPath);
     } catch (err) {
       const message = String(err instanceof Error ? err.message : err);
       // A reference we cannot parse means there is no network to compare, not
