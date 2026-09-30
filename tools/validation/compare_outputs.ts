@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { getRuleHubManifestBnglPaths } from '../rulehubLocal';
+import { getRuleHubManifestBnglPaths, loadRuleHubManifest, resolveRuleHubRoot } from '../rulehubLocal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -97,6 +97,8 @@ import {
   CSV_MODEL_ALIASES,
   PARTIAL_MATCH_TIME,
   detectUnsupportedFeature,
+  compareColumnCoverage,
+  referenceMatchesModel,
 } from './compareShared';
 
 function stripDownloadSuffix(name: string): string {
@@ -547,6 +549,75 @@ function getMultiPhaseReference(
     return null;
   }
 
+  /**
+   * The RuleHub model a web CSV was produced from.
+   *
+   * The browser names its export `results_<manifest id>_<simulate suffix>.csv`,
+   * so the manifest id is a prefix of the CSV label. Resolving it directly is
+   * what disambiguates models that share a basename (`alabama_Alabama` and
+   * `mallela2021_states_Alabama` are `Alabama/Alabama.bngl` and
+   * `Mallela2021/SI_files_Alabama_Alabama.bngl`), which basename scoring
+   * cannot do.
+   */
+  function modelSourceForCsvLabel(csvFile: string): string | null {
+    const labelKey = normalizeKey(csvModelLabel(csvFile));
+    const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
+    if (!ruleHubRoot) return null;
+
+    let best: { id: string; file: string } | null = null;
+    for (const entry of loadRuleHubManifest(PROJECT_ROOT)) {
+      if (!entry.id || !entry.path) continue;
+      const idKey = normalizeKey(entry.id);
+      // A 4-character floor keeps a short id from prefix-matching everything,
+      // and the longest match wins so a specific id beats a shorter one.
+      if (idKey.length < 4 || !labelKey.startsWith(idKey)) continue;
+      const file = path.join(ruleHubRoot, entry.path);
+      if (!fs.existsSync(file)) continue;
+      if (!best || idKey.length > normalizeKey(best.id).length) best = { id: entry.id, file };
+    }
+    return best?.file ?? null;
+  }
+
+  /**
+   * The `.bngl` a reference was generated from: the reference generator writes
+   * `<safeName>.bngl` next to the `<safeName>[_suffix].gdat` it produced.
+   */
+  function referenceSourceBngl(gdatPath: string, bnglNames: string[]): string | null {
+    const base = path.basename(gdatPath).replace(/\.gdat$/i, '').toLowerCase();
+    let best: { name: string; file: string } | null = null;
+    for (const name of bnglNames) {
+      const stem = name.replace(/\.bngl$/i, '').toLowerCase();
+      if (!base.startsWith(stem)) continue;
+      if (!best || stem.length > best.name.length) best = { name: stem, file: path.join(BNG_OUTPUT_DIR, name) };
+    }
+    return best?.file ?? null;
+  }
+
+  /**
+   * Drop references that provably come from a different model than the web run.
+   * A wrong reference reports a divergence that belongs to a different model,
+   * so a false failure is worse than an honest "no reference".
+   */
+  function keepReferencesForModel(
+    candidates: string[],
+    modelSourcePath: string | null,
+    bnglNames: string[],
+  ): string[] {
+    if (!modelSourcePath) return candidates;
+    const modelSource = fs.readFileSync(modelSourcePath, 'utf8');
+    const trusted = candidates.filter((candidate) => {
+      const referenceSource = referenceSourceBngl(candidate, bnglNames);
+      // No provenance on record: keep the candidate as before.
+      if (!referenceSource || !fs.existsSync(referenceSource)) return true;
+      if (referenceMatchesModel(fs.readFileSync(referenceSource, 'utf8'), modelSource)) return true;
+      console.warn(
+        `[compare] Dropping ${path.basename(candidate)} for ${path.basename(modelSourcePath)}: it was generated from a different model.`
+      );
+      return false;
+    });
+    return trusted;
+  }
+
   function uniqueStrings(values: string[]): string[] {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -636,9 +707,17 @@ function getMultiPhaseReference(
 
     // Even for direct matches, try to find a BNGL file for multi-phase concatenation
     const bnglPathForDirect = findBestBnglForCsv(csvFile, bnglFiles);
+    const referenceBnglNames = fs
+      .readdirSync(BNG_OUTPUT_DIR)
+      .filter((f) => f.toLowerCase().endsWith('.bngl'));
+    const modelSource = modelSourceForCsvLabel(csvFile);
 
     if (directMatches.length > 0) {
-      return { gdatPaths: uniqueStrings(directMatches), bnglPath: bnglPathForDirect ?? undefined, inferred: false };
+      return {
+        gdatPaths: keepReferencesForModel(uniqueStrings(directMatches), modelSource, referenceBnglNames),
+        bnglPath: bnglPathForDirect ?? undefined,
+        inferred: false,
+      };
     }
 
     // 2) Try infer from matching BNGL and its last simulate() call.
@@ -674,9 +753,10 @@ function getMultiPhaseReference(
     // Prefer comparing against ODE references; drop explicit SSA/NF variants.
     const odeCandidates = candidates.filter((p) => !isClearlyNonOdeGdat(p));
     const filteredCandidates = odeCandidates.length > 0 ? odeCandidates : candidates;
+    const trustedCandidates = keepReferencesForModel(filteredCandidates, modelSource, referenceBnglNames);
     const tofitFilteredCandidates = requiresTofit
-      ? filteredCandidates.filter((candidate) => normalizeKey(path.basename(candidate)).includes('tofit'))
-      : filteredCandidates;
+      ? trustedCandidates.filter((candidate) => normalizeKey(path.basename(candidate)).includes('tofit'))
+      : trustedCandidates;
 
     if (requestedPhaseIndex > 1) {
       const phaseSpecificCandidates = tofitFilteredCandidates.filter((candidate) => {
@@ -725,23 +805,24 @@ function getMultiPhaseReference(
     const webHeadersNorm = webData.headers.map(normalizeHeader);
     const refHeadersNorm = refData.headers.map(normalizeHeader);
 
-    // Check column match (excluding 'time')
-    const webCols = new Set(webHeadersNorm.filter(h => h !== 'time'));
-    const refCols = new Set(refHeadersNorm.filter(h => h !== 'time'));
-    const matchedColumns = [...webCols].filter(c => refCols.has(c)).sort();
-    const totalDataColumnCount = webCols.size;
-    const minComparableColumns = Math.min(webCols.size, refCols.size);
-    const hasEnoughColumnCoverage =
-      minComparableColumns === 0 || matchedColumns.length >= Math.max(1, Math.ceil(minComparableColumns * 0.5));
-    const exactColumnSetMatch = [...webCols].every(c => refCols.has(c)) && [...refCols].every(c => webCols.has(c));
-    const columnMatch = exactColumnSetMatch && hasEnoughColumnCoverage;
+    // Column coverage is one-directional: the reference may carry columns the
+    // web run cannot produce (BNG2 writes model parameters and the
+    // `_rateLaw*` helpers it synthesises for functional rate rules), but a web
+    // column with no reference column is a genuine mismatch.
+    const coverage = compareColumnCoverage(webHeadersNorm, refHeadersNorm);
+    const { columnMatch, matchedColumns, referenceOnlyColumns, webOnlyColumns } = coverage;
+    const totalDataColumnCount = coverage.totalWebColumns;
+    const missingColumns = referenceOnlyColumns;
+    const extraColumns = webOnlyColumns;
 
-    const missingColumns = [...refCols].filter(c => !webCols.has(c)).sort();
-    const extraColumns = [...webCols].filter(c => !refCols.has(c)).sort();
-
-    if (!hasEnoughColumnCoverage && minComparableColumns > 0) {
+    if (webOnlyColumns.length > 0) {
       console.warn(
-        `[compare] Low column coverage for ${modelName}: matched ${matchedColumns.length}/${totalDataColumnCount} web columns against ${refCols.size} reference columns.`
+        `[compare] ${modelName}: web columns absent from the reference: ${webOnlyColumns.slice(0, 10).join(', ')}`
+      );
+    }
+    if (coverage.lowCoverage) {
+      console.warn(
+        `[compare] Low column coverage for ${modelName}: matched ${matchedColumns.length}/${coverage.totalWebColumns} web columns against ${coverage.totalRefColumns} reference columns.`
       );
     }
 

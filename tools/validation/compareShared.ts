@@ -145,3 +145,118 @@ export const PARTIAL_MATCH_TIME: Record<string, number> = {
   // e2frbcellcycleswitch: both phases work, no limit needed - updated reference
   // inositolphosphatemetabolism: both phases work, no limit needed - updated reference
 };
+
+/**
+ * Decide whether a web CSV and a BNG2 reference describe the same set of
+ * simulated quantities.
+ *
+ * Only one direction carries information: the reference must cover every
+ * column the web run reported. BNG2's `.gdat` is deliberately a superset —
+ * next to observables and printed functions it also writes the model's
+ * parameters, and the `_rateLaw*` helper functions it synthesises for
+ * functional rate rules. The web simulator exports neither, so demanding an
+ * equal column set failed models whose every shared column agreed to 1e-13
+ * (parabola, polynomial, pt403/pt409, dallas/houston, Alabama).
+ */
+export function compareColumnCoverage(
+  webColumns: readonly string[],
+  refColumns: readonly string[],
+): {
+  columnMatch: boolean;
+  lowCoverage: boolean;
+  matchedColumns: string[];
+  referenceOnlyColumns: string[];
+  webOnlyColumns: string[];
+  totalWebColumns: number;
+  totalRefColumns: number;
+} {
+  const normalize = (h: string) => h.toLowerCase().replace(/\s+/g, '_');
+  const webCols = new Set(webColumns.map(normalize).filter((h) => h !== 'time'));
+  const refCols = new Set(refColumns.map(normalize).filter((h) => h !== 'time'));
+
+  const matchedColumns = [...webCols].filter((c) => refCols.has(c)).sort();
+  const webOnlyColumns = [...webCols].filter((c) => !refCols.has(c)).sort();
+  const referenceOnlyColumns = [...refCols].filter((c) => !webCols.has(c)).sort();
+
+  const minComparableColumns = Math.min(webCols.size, refCols.size);
+  const lowCoverage =
+    minComparableColumns > 0 && matchedColumns.length < Math.max(1, Math.ceil(minComparableColumns * 0.5));
+
+  return {
+    columnMatch: webOnlyColumns.length === 0 && !lowCoverage,
+    lowCoverage,
+    matchedColumns,
+    referenceOnlyColumns,
+    webOnlyColumns,
+    totalWebColumns: webCols.size,
+    totalRefColumns: refCols.size,
+  };
+}
+
+const PARAMETERS_BLOCK_RE = /^[ \t]*begin\s+parameters\b[^\n]*\n([\s\S]*?)^[ \t]*end\s+parameters\b/im;
+const FREE_PARAMETER_RE = /^[A-Za-z_][A-Za-z0-9_]*__FREE_*$/;
+
+/**
+ * Read a model's `begin parameters` block as a map of name -> value expression.
+ *
+ * `a a__FREE` is a reference to another parameter rather than a literal, and
+ * PyBNF fitting models leave the referenced name undefined, which both engines
+ * resolve to 0. The generator additionally injects `X__FREE 0` before running
+ * BNG2.pl, so the two sources differ textually while describing the same model.
+ * Resolving one level of reference (and undefined -> 0) makes the two directly
+ * comparable.
+ */
+export function parameterValues(bnglSource: string): Map<string, string> {
+  const block = PARAMETERS_BLOCK_RE.exec(bnglSource);
+  const values = new Map<string, string>();
+  if (!block) return values;
+
+  const body = block[1]
+    .replace(/\\[ \t]*\r?\n/g, ' ')
+    .split(/\r?\n/)
+    .map((line) => line.replace(/#.*$/, '').trim())
+    .filter(Boolean);
+
+  for (const line of body) {
+    const eq = line.indexOf('=');
+    const name = (eq === -1 ? line.split(/\s+/)[0] : line.slice(0, eq)).trim().replace(/\(\s*\)$/, '');
+    const rawValue = (eq === -1 ? line.split(/\s+/).slice(1).join(' ') : line.slice(eq + 1)).trim();
+    if (!name || !rawValue) continue;
+    values.set(name, rawValue.replace(/\s+/g, ''));
+  }
+
+  // Resolve `a a__FREE` style references so an injected `X__FREE 0` and an
+  // undefined `X__FREE` describe the same value.
+  const resolved = new Map<string, string>();
+  for (const [name, raw] of values) {
+    if (FREE_PARAMETER_RE.test(raw)) {
+      const target = values.get(raw);
+      resolved.set(name, target !== undefined && !FREE_PARAMETER_RE.test(target) ? target : '0');
+    } else {
+      resolved.set(name, raw);
+    }
+  }
+  return resolved;
+}
+
+/**
+ * Whether a reference was generated from the model a web CSV was produced
+ * from.
+ *
+ * The reference directory ships the exact `.bngl` BNG2.pl was run on, next to
+ * the `.gdat` it produced, and RuleHub contains distinct models that share a
+ * basename (`egg.bngl` exists three times, `elephant.bngl` twice). The
+ * reference generator keys its output on that basename, so one reference can
+ * end up standing in for several different models — comparing against it then
+ * reports a divergence that belongs to a different model entirely. Parameter
+ * values are what separate those models (the egg family is byte-identical
+ * apart from its fitted `__FREE` values), so compare those.
+ */
+export function referenceMatchesModel(referenceBnglSource: string, modelBnglSource: string): boolean {
+  const reference = parameterValues(referenceBnglSource);
+  const model = parameterValues(modelBnglSource);
+  for (const name of new Set([...reference.keys(), ...model.keys()])) {
+    if ((reference.get(name) ?? '0') !== (model.get(name) ?? '0')) return false;
+  }
+  return true;
+}
