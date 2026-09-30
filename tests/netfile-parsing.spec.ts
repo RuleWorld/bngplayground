@@ -12,6 +12,7 @@
 import { describe, it, expect } from 'vitest';
 
 import { parseNetFile } from '../packages/engine/src/services/graph/NetParser';
+import { parseBNGLWithANTLR } from '../packages/engine/src/parser/BNGLParserWrapper';
 
 const REAL_BNG2_NET = `# Created by BioNetGen 2.9.3
 begin parameters
@@ -141,5 +142,42 @@ describe('parseNetFile against real BioNetGen 2.9.3 output', () => {
     const r = parseNetFile(net);
     expect(r.errors).toEqual([]);
     expect(r.model.reactions?.[0].reactants[0]).toBe('CD14(LPS,MD2,TLR4)');
+  });
+});
+
+describe('decorative separator lines', () => {
+  const decorated = (body: string) =>
+    `================================================\n${body}\n================================================\n`;
+
+  it('accepts a model wrapped in separator lines, as BNG2.pl does', () => {
+    const bngl = decorated(`begin model
+begin parameters
+  k 0.5
+end parameters
+begin molecule types
+  A()
+end molecule types
+begin species
+  A() 100
+end species
+end model`);
+    const r = parseBNGLWithANTLR(bngl);
+    expect(r.errors).toEqual([]);
+    expect(r.success).toBe(true);
+    expect(r.model.species).toHaveLength(1);
+  });
+
+  it('still reports genuine syntax errors inside the model', () => {
+    const bngl = decorated(`begin model
+begin molecule types
+  A()
+end molecule types
+begin species
+  A() 100
+end species
+end model
+simulate({method=>"ode" t_end=>100})`);
+    const r = parseBNGLWithANTLR(bngl);
+    expect(r.success).toBe(false);
   });
 });

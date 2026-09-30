@@ -128,6 +128,30 @@ function getFirstActiveLine(src: string): string | null {
  * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
  *          and list of accumulated syntactic/semantic parsing errors.
  */
+/**
+ * Remove decorative separator lines (runs of `=`, `-`, `~`, `*` and spaces)
+ * that appear outside the model and actions blocks. BNG2.pl tolerates these in
+ * published models; the strict grammar does not, and the parse then fails before
+ * the model is ever read.
+ */
+function stripDecorativeLines(src: string): string {
+  const lines = src.split('\n');
+  let depth = 0;
+  const kept: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const opensModel = /^begin\s+model\b/i.test(trimmed);
+    const closesModel = /^end\s+model\b/i.test(trimmed);
+    if (opensModel) depth++;
+    else if (closesModel) depth = Math.max(0, depth - 1);
+
+    const isDecoration = trimmed.length > 0 && /^[=~*\-_\s]+$/.test(trimmed);
+    if (depth === 0 && isDecoration) continue;
+    kept.push(line);
+  }
+  return kept.join('\n');
+}
+
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
@@ -163,6 +187,13 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     if (input.charCodeAt(0) === 0xFEFF) {
       sanitizedInput = input.substring(1);
     }
+
+    // Some published BNGL files are wrapped in decorative rules such as
+    // "================================================" outside the model block.
+    // BNG2.pl accepts them; our lexer stops at the first such line. Drop lines
+    // that consist purely of separator characters, but only outside the model
+    // and actions blocks so genuine syntax errors inside a model still surface.
+    sanitizedInput = stripDecorativeLines(sanitizedInput);
 
     // Normalize legacy molecule block aliases ('molecules' and
     // 'molecular types') to
