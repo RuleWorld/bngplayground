@@ -63,6 +63,8 @@ interface ComparisonResult {
     // writes those when its own solve fails; scoring them as agreement is
     // impossible because NaN fails every tolerance comparison.
     nonFiniteReferenceCells?: { time: number; column: string; value: string }[];
+    /** Cells where BOTH runs produced a non-finite value: agreement that the quantity is undefined. Not a divergence. */
+    bothNonFiniteCells?: { time: number; column: string; web: string; ref: string }[];
   } | null;
   error?: string;
 }
@@ -787,6 +789,7 @@ function getMultiPhaseReference(
     let errorColumn: string | undefined;
     const samples: { time: number; column: string; web: number; ref: number; relError: number }[] = [];
     const nonFiniteReferenceCells: { time: number; column: string; value: string }[] = [];
+    const bothNonFiniteCells: { time: number; column: string; web: string; ref: string }[] = [];
 
     const webTimeIdx = webHeadersNorm.indexOf('time');
     const refTimeIdx = refHeadersNorm.indexOf('time');
@@ -953,13 +956,27 @@ function getMultiPhaseReference(
         // A non-finite value in a column the two runs share is a failed solve,
         // never agreement: `NaN > tol` and `NaN <= tol` are both false, so such
         // a cell would leave every error accumulator at 0 and be reported as a
-        // zero-error match. Record it as a discrepancy instead.
+        // zero-error match.
+        //
+        // When only ONE side is non-finite that is a divergence and is recorded
+        // as a discrepancy. When BOTH are non-finite it is not: the two runs
+        // agree that the quantity is undefined at that point, just with
+        // different notation — BNG2's mu::Parser writes `1.#INF` where our
+        // exporter writes `Infinity`. pt403/pt409 hit exactly this at t=0 on
+        // lnV/half_life/lnV_tangent and matched to 4.9e-13 absolute everywhere
+        // else; failing them for agreeing that a log is -inf would be the gate
+        // inventing a divergence that is not there.
         if (!Number.isFinite(webVal) || !Number.isFinite(refVal)) {
-          if (nonFiniteReferenceCells.length < 10) {
-            nonFiniteReferenceCells.push({ time: webTime, column: colName, value: String(refVal) });
-          }
-          if (samples.length < 10) {
-            samples.push({ time: webTime, column: colName, web: webVal, ref: refVal, relError: Number.NaN });
+          const bothNonFinite = !Number.isFinite(webVal) && !Number.isFinite(refVal);
+          if (!bothNonFinite) {
+            if (nonFiniteReferenceCells.length < 10) {
+              nonFiniteReferenceCells.push({ time: webTime, column: colName, value: String(refVal) });
+            }
+            if (samples.length < 10) {
+              samples.push({ time: webTime, column: colName, web: webVal, ref: refVal, relError: Number.NaN });
+            }
+          } else if (bothNonFiniteCells.length < 10) {
+            bothNonFiniteCells.push({ time: webTime, column: colName, web: String(webVal), ref: String(refVal) });
           }
           continue;
         }
@@ -1020,6 +1037,7 @@ function getMultiPhaseReference(
       errorColumn,
       samples,
       nonFiniteReferenceCells,
+      bothNonFiniteCells,
     };
   }
 
