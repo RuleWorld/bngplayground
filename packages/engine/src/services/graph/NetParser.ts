@@ -188,6 +188,13 @@ export function parseNetFile(content: string): NetFileParseResult {
 /**
  * Parse a parameter line: <index> <name> <value>
  * Example: "1 NA 6.02e+23"
+ *
+ * BNG2 also writes expression-valued parameters, marked with a trailing
+ * "# ConstantExpression" comment:
+ *   2 k2  2*k1  # Constant
+ *   3 k3  k1*2  # ConstantExpression
+ * A value that is not a plain number is kept in paramExpressions instead of
+ * failing the parse.
  */
 function parseParameterLine(line: string, model: BNGLModel, lineNum: number): void {
   const parts = line.trim().split(/\s+/);
@@ -199,14 +206,20 @@ function parseParameterLine(line: string, model: BNGLModel, lineNum: number): vo
   }
 
   const index = parseInt(parts[0]);
+  if (isNaN(index)) {
+    throw new Error(
+      `Invalid parameter in .net file at line ${lineNum}: the index "${parts[0]}" is not a valid number.`
+    );
+  }
+
   const name = parts[1];
   const value = parseFloat(parts[2]);
 
-  if (isNaN(index) || isNaN(value)) {
-    throw new Error(
-      `Invalid parameter in .net file at line ${lineNum}: the index and value must be numeric, ` +
-      `but got index="${parts[0]}", value="${parts[2]}".`
-    );
+  if (isNaN(value)) {
+    model.paramExpressions ??= {};
+    model.paramExpressions[name] = parts[2];
+    model.parameters[name] = 0;
+    return;
   }
 
   model.parameters[name] = value;

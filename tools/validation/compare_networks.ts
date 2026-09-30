@@ -33,8 +33,41 @@ const PER_MODEL_TIMEOUT_MS = Number(process.env.NET_SHAPE_TIMEOUT_MS ?? 30_000);
  */
 const MIN_COVERAGE = Number(process.env.NET_SHAPE_MIN_COVERAGE ?? 0.8);
 
-/** Compartments are annotated differently by the two engines; compare topology only. */
-const stripCompartment = (name: string): string => name.replace(/@[A-Za-z0-9_]+\s*::\s*/g, '');
+/**
+ * Canonicalise a species pattern so the two engines can be compared by
+ * topology rather than by labelling.
+ *
+ * Three differences are cosmetic and were producing false mismatches:
+ *   - compartments:      playground writes "@ER::Ca()", BNG2 writes "Ca()"
+ *   - synthesis marker:  BNG2 writes "$Source()"/"$Sink()", the playground does not
+ *   - bond ordering:     identical symmetric complexes are emitted with their
+ *                        molecules and components in different orders
+ *     BNG2:  J(Y~P,Y1~P!1).J(Y~P,Y1~P!2)
+ *     local: J(Y1~P!1,Y~P).J(Y1~P!2,Y~P)
+ *
+ * Molecules and their components are therefore sorted, and bond labels are
+ * stripped. Species/reaction *counts* remain the primary signal and are
+ * compared exactly.
+ */
+const canonicalSpecies = (name: string): string => {
+  const withoutCompartment = name.replace(/@[A-Za-z0-9_]+\s*::\s*/g, '');
+  const molecules = withoutCompartment.split('.').map((molecule) => {
+    const withoutMarker = molecule.replace(/^\$/, '');
+    const open = withoutMarker.indexOf('(');
+    if (open === -1) return withoutMarker;
+    const moleculeName = withoutMarker.slice(0, open);
+    const body = withoutMarker.slice(open + 1, withoutMarker.lastIndexOf(')'));
+    const components = body
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean)
+      // Drop bond labels (!1) — ordering is canonicalised below.
+      .map((c) => c.replace(/!\d+/g, ''))
+      .sort();
+    return `${moleculeName}(${components.join(',')})`;
+  });
+  return molecules.sort().join('.');
+};
 
 interface NetworkShape {
   species: string[];
@@ -125,8 +158,8 @@ const main = async (): Promise<void> => {
     }
 
     report.totals.compared++;
-    const refSpecies = new Set(reference.species.map(stripCompartment));
-    const genSpecies = new Set(generated.species.map(stripCompartment));
+    const refSpecies = new Set(reference.species.map(canonicalSpecies));
+    const genSpecies = new Set(generated.species.map(canonicalSpecies));
     const missing = [...refSpecies].filter((s) => !genSpecies.has(s));
     const extra = [...genSpecies].filter((s) => !refSpecies.has(s));
     const countsMatch =
