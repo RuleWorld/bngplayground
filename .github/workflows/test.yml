@@ -19,9 +19,12 @@ on:
 # full sweep per commit, so superseded runs are cancelled — but never on main,
 # where the sweep is the signal we actually want completed. A Dependabot merge
 # landing mid-sweep must not silently cancel it.
+# One run per ref at a time. Deliberately NO cancel-in-progress: an expression
+# there was still cancelling pushes to main, so a 40-minute reference sweep
+# could be killed mid-run and report a reduced set of completed checks. Runs are
+# appended instead — slower to drain, but never silently incomplete.
 concurrency:
   group: ci-tests-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
