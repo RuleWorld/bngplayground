@@ -30,11 +30,7 @@ import type { BNGLModel, BNGLReaction } from '../packages/engine/src/types';
 const FIXTURE = path.join(__dirname, 'fixtures', 'cho-egfr-r2-minimal.bngl');
 
 describe('bimolecular rule orientation enumeration', () => {
-  // Known divergence from BNG2: the expander takes the first candidate match per reactant
-  // pattern instead of enumerating every valid pattern-to-target assignment, so this
-  // instantiation is never produced. it.fails keeps the reproduction in CI and will
-  // start failing (and be fixed) once orientation enumeration lands.
-  it.fails('generates the reaction where the second monomer becomes the activator', async () => {
+  it('generates the reaction where the second monomer becomes the activator', async () => {
     const source = readFileSync(FIXTURE, 'utf8');
     const parsed = parseBNGLWithANTLR(source);
     expect(parsed.success).toBe(true);
@@ -86,7 +82,7 @@ describe('bimolecular rule orientation enumeration', () => {
     ).toBe(true);
   });
 
-  it.fails('matches BioNetGen reaction count for this network', async () => {
+  it('matches BioNetGen reaction count for this network', async () => {
     const source = readFileSync(FIXTURE, 'utf8');
     const parsed = parseBNGLWithANTLR(source);
     if (!parsed.success) throw new Error('fixture failed to parse');

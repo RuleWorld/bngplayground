@@ -2386,14 +2386,38 @@ export class NetworkGenerator {
 
           if (i !== kFirst) return; // We are matching against pattern i, but kFirst is the anchor.
 
-          // Canonicalize assignments for identical reactant patterns (e.g., A + A) so
-          // permutations of the same species tuple are counted once.
-          for (const group of identicalPatternGroups.values()) {
-            if (group.length < 2) continue;
-            for (let gi = 1; gi < group.length; gi++) {
-              const prev = currentIndices[group[gi - 1]];
-              const next = currentIndices[group[gi]];
-              if (prev > next) return;
+          // Identical reactant patterns (e.g. EGFR(I_III!+,II~u,Kin~0) twice) can
+          // match distinct species, and then the two assignments are DIFFERENT
+          // reactions whenever the rule's products are asymmetric: pairing
+          // pattern 0 with either species decides which monomer becomes Kin~act,
+          // and BNG2 emits both. The previous pruning by species-index order
+          // silently dropped the second one.
+          //
+          // Genuine duplicates — the same species matched twice, or a symmetric
+          // rule whose products do not depend on the assignment — are collapsed
+          // downstream by the reaction key, which is the correct place for it.
+
+          // When a rule has a single product pattern, swapping which identical
+          // reactant pattern maps to which species cannot change the outcome —
+          // the product is one connected species either way, differing only in
+          // bond numbering. Those permutations are duplicates and are pruned by
+          // species-index order, as before.
+          //
+          // With two or more product patterns the assignment CAN matter: for
+          //   EGFR(I_III!+,II~u,Kin~0) + EGFR(I_III!+,II~u,Kin~0)
+          //     -> EGFR(...,Kin~act) + EGFR(...,Kin~rec)
+          // pairing pattern 0 with either species decides which monomer becomes
+          // the activator, and BNG2 emits both. So only prune when there is a
+          // single product. Duplicates that remain are collapsed by the
+          // reaction key downstream.
+          if (rule.products.length < 2) {
+            for (const group of identicalPatternGroups.values()) {
+              if (group.length < 2) continue;
+              for (let gi = 1; gi < group.length; gi++) {
+                const prev = currentIndices[group[gi - 1]];
+                const next = currentIndices[group[gi]];
+                if (prev > next) return;
+              }
             }
           }
 
