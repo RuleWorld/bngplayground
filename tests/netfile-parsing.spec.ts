@@ -26,7 +26,7 @@ begin species
     4 LPS(CD14,LPS!1,MD2,TLR4).MD2(CD14,LPS!1,MD2) 0.000000000000e+00
 end species
 begin reactions
-    1 2,3 4 LPS_MD2_Bind
+    1 2,3 4 LPS_MD2_Bind #_R1
     2 4 2,3 LPS_MD2_Unbind
     3 4 4 kdeg #degrade
 end reactions
@@ -57,6 +57,14 @@ describe('parseNetFile against real BioNetGen 2.9.3 output', () => {
     const s = r.model.species?.find((x) => x.name === 'LPS(CD14,LPS,MD2,TLR4)');
     expect(s?.initialConcentration).toBe(0);
     expect(s?.initialExpression).toBe('some_undefined');
+  });
+
+  it('keeps the "#"-prefixed reaction label BNG2 writes as rule attribution', () => {
+    // '#' is a comment elsewhere in the file, but on a reaction line it is the
+    // label naming the originating rule.
+    expect(parsed.model.reactions?.[0].name).toBe('#_R1');
+    // Parameter lines still drop their trailing "# Constant" comment.
+    expect(parsed.model.parameters.LPS_MD2_Bind).toBe(0.001);
   });
 
   it('resolves index-based reaction participants to species names', () => {

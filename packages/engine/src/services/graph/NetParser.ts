@@ -136,9 +136,12 @@ export function parseNetFile(content: string): NetFileParseResult {
     let end = content.indexOf('\n', start);
     if (end === -1) end = len;
 
+    // '#' normally starts a comment, but BNG2 uses a '#'-prefixed token as the
+    // reaction label ("1 1,5 7 kp1 #_R1"). Stripping it would drop every
+    // reaction's rule attribution, so reaction lines keep their label.
     const hashIdx = content.indexOf('#', start);
     let lineEndIdx = end;
-    if (hashIdx !== -1 && hashIdx < end) {
+    if (hashIdx !== -1 && hashIdx < end && currentSection !== 'reactions') {
       lineEndIdx = hashIdx;
     }
 
