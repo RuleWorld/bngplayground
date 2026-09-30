@@ -13,6 +13,14 @@ on:
         type: boolean
         default: false
 
+
+# The reference sweep regenerates BioNetGen references for the whole RuleHub
+# corpus and takes ~40 minutes. Without this, a burst of pushes queues one
+# full sweep per commit and results arrive long after they are relevant.
+concurrency:
+  group: ci-tests-${{ github.ref }}
+  cancel-in-progress: true
+
 permissions:
   contents: read
 
