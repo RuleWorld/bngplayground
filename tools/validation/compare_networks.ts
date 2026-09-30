@@ -216,7 +216,17 @@ const main = async (): Promise<void> => {
       continue;
     }
 
-    const entry = {
+    const entry: {
+      model: string;
+      reference: { species: number; reactions: number; distinctReactions: number };
+      generated: { species: number; reactions: number; distinctReactions: number };
+      missingSpecies: string[];
+      extraSpecies: string[];
+      missingReactions: string[];
+      extraReactions: string[];
+      /** Set when the model is on the reviewed-mismatch list rather than a new failure. */
+      expected?: string;
+    } = {
       model: safeName,
       reference: {
         species: reference.numSpecies,

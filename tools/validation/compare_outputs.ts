@@ -104,6 +104,7 @@ import {
   PARTIAL_MATCH_TIME,
   detectUnsupportedFeature,
   compareColumnCoverage,
+  referenceMatchesModel,
   indexReferenceColumns,
   parseCSV,
   parseGDAT,

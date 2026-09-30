@@ -341,7 +341,7 @@ function parseGDAT(content: string): { headers: string[]; data: number[][] } {
   return { headers, data: normalizeTimeSeriesRows(headers, data) };
 }
 
-function normalizeTimeSeriesRows(headers: string[], rows: number[][]): number[][] {
+export function normalizeTimeSeriesRows(headers: string[], rows: number[][]): number[][] {
   const timeIdx = headers.findIndex((header) => header.trim().toLowerCase() === 'time');
   if (timeIdx === -1 || rows.length <= 1) return rows;
 

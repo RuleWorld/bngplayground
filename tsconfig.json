@@ -32,14 +32,14 @@
         "packages/engine/src/index.ts"
       ],
       "@bngplayground/engine/*": [
-      "packages/engine/src/*"
-    ],
-    "@bngplayground/rulehub": [
-      "packages/rulehub/src/index.ts"
-    ],
-    "@bngplayground/rulehub/*": [
-      "packages/rulehub/src/*"
-    ]
+        "packages/engine/src/*"
+      ],
+      "@bngplayground/rulehub": [
+        "packages/rulehub/src/index.ts"
+      ],
+      "@bngplayground/rulehub/*": [
+        "packages/rulehub/src/*"
+      ]
     },
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
@@ -71,7 +71,11 @@
     "wasm-nfsim/build_ems",
     "artifacts",
     "tests/**",
-    "tools/**",
-    "changes/**"
+    "changes/**",
+    "tools/validation/complete_benchmark.ts",
+    "tools/validation/full_benchmark.ts",
+    "tools/validation/full_ode_benchmark.ts",
+    "tools/validation/generate_refs.ts",
+    "tools/validation/verify_models.ts"
   ]
 }
