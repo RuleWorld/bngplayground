@@ -91,8 +91,14 @@ describe('parseNetFile against real BioNetGen 2.9.3 output', () => {
       .replace('    8 IkB_active           1,2,4', '    8 IkB_active           2*1,2,4');
     const r = parseNetFile(net);
     expect(r.errors).toEqual([]);
-    expect(r.model.reactions?.[0].products).toEqual(['LPS(CD14,LPS!1,MD2,TLR4).MD2(CD14,LPS!1,MD2)']);
-    expect(r.model.observables?.[1].pattern).toContain('CD14(LPS,MD2,TLR4)');
+    expect(r.model.reactions?.[0].products).toEqual([
+      'LPS(CD14,LPS!1,MD2,TLR4).MD2(CD14,LPS!1,MD2)',
+      'LPS(CD14,LPS!1,MD2,TLR4).MD2(CD14,LPS!1,MD2)'
+    ]);
+    const groupPattern = r.model.observables?.[1].pattern ?? '';
+    const sp1 = 'CD14(LPS,MD2,TLR4)';
+    const occurrences = groupPattern.split(sp1).length - 1;
+    expect(occurrences).toBe(2);
   });
 
   it('leaves pattern-style reaction participants untouched', () => {

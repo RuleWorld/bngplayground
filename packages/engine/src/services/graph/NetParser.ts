@@ -55,22 +55,26 @@ function splitParticipants(str: string): string[] {
     else if (ch === ')') depth--;
     else if (ch === ',' && depth === 0) {
       const part = str.slice(start, i).trim();
-      if (part) result.push(stripCoefficient(part));
+      if (part) result.push(...expandParticipantToken(part));
       start = i + 1;
     }
   }
   const last = str.slice(start).trim();
-  if (last) result.push(stripCoefficient(last));
+  if (last) result.push(...expandParticipantToken(last));
   return result;
 }
 
-/** "2*6" -> "6"; anything else is returned unchanged. */
-function stripCoefficient(token: string): string {
+/** "2*6" -> ["6", "6"]; "6" -> ["6"]. */
+function expandParticipantToken(token: string): string[] {
   const star = token.lastIndexOf('*');
-  if (star > 0 && /^\d+$/.test(token.slice(0, star)) && /^\d+$/.test(token.slice(star + 1))) {
-    return token.slice(star + 1);
+  if (star > 0 && /^\d+$/.test(token.slice(0, star))) {
+    const count = parseInt(token.slice(0, star), 10);
+    const rest = token.slice(star + 1).trim();
+    if (count > 0 && rest) {
+      return Array(count).fill(rest);
+    }
   }
-  return token;
+  return [token];
 }
 
 /** True when a token is a species-index list, e.g. "1,2,4" or "2*6,7". */
