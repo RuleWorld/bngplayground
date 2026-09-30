@@ -95,6 +95,8 @@ import { Unary_exprContext } from "./BNGParser";
 import { Primary_exprContext } from "./BNGParser";
 import { Function_callContext } from "./BNGParser";
 import { Observable_refContext } from "./BNGParser";
+import { Observable_arg_listContext } from "./BNGParser";
+import { Observable_argContext } from "./BNGParser";
 import { LiteralContext } from "./BNGParser";
 
 
@@ -749,6 +751,20 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitObservable_ref?: (ctx: Observable_refContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.observable_arg_list`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitObservable_arg_list?: (ctx: Observable_arg_listContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.observable_arg`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitObservable_arg?: (ctx: Observable_argContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.literal`.

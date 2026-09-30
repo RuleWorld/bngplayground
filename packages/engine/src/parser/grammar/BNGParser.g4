@@ -143,10 +143,13 @@ seed_species_def
     ;
 
 // BNG2 reads the initial amount with Expression::readString, which stops at the first
-// token that cannot continue the expression and discards the rest of the line. A
-// `%(...)` annotation after the amount is therefore accepted and ignored.
+// token that cannot continue the expression and discards the rest of the line. So a
+// `%(...)` annotation after the amount, together with anything still trailing on that
+// same line, is accepted and ignored. The rule is deliberately narrow: it only fires
+// when a `%` annotation is present and it can never cross a line break, so an ordinary
+// seed species line can never swallow the text that follows it.
 seed_species_note
-    : MOD (~LB)+
+    : MOD LPAREN (~RPAREN)* RPAREN (~LB)*
     ;
 
 // Species can optionally have compartment annotation using @ (prefix @comp: or suffix @comp)
@@ -437,7 +440,10 @@ action_arg_value
     | keyword_as_value  // NEW: Allow keywords like 'ode', 'ssa' as unquoted values
     | DBQUOTES (~DBQUOTES)* DBQUOTES
     | SQUOTE (~SQUOTE)* SQUOTE
-    | LSBRACKET expression_list RSBRACKET
+    // `par_scan_vals=>[ 1, 2, ]` — a trailing comma is a Perl list literal in BNG2.
+    // It is accepted only here, not in the shared expression_list, so function-call
+    // arguments keep rejecting it.
+    | LSBRACKET expression_list COMMA? RSBRACKET
     | LBRACKET nested_hash_list? RBRACKET
     ;
 
@@ -490,7 +496,7 @@ arg_name
     ;
 
 expression_list
-    : expression (COMMA expression)* COMMA?   // BNG2 accepts a trailing comma
+    : expression (COMMA expression)*
     ;
 
 // Expressions
@@ -548,7 +554,22 @@ function_call
     ;
 
 observable_ref
-    : STRING LPAREN expression_list? RPAREN
+    : STRING LPAREN observable_arg_list? RPAREN
+    ;
+
+// A function reference's arguments may be array literals as well as
+// expressions: `tfun([0,1,2],[1,2,4],time)` is valid BNGL and appears in
+// BioNetGen's own Validate models (test_tfun_expr, test_tfun_validation,
+// test_tfun_xml). An array is not an `expression`, so `expression_list` cannot
+// accept one; the alternative is scoped to function-reference arguments so it
+// cannot loosen arithmetic or the shared `expression_list`.
+observable_arg_list
+    : observable_arg (COMMA observable_arg)*
+    ;
+
+observable_arg
+    : expression
+    | LSBRACKET expression_list? RSBRACKET
     ;
 
 literal

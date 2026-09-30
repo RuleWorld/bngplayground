@@ -94,9 +94,11 @@ export function foldLooseActionCommandsIntoActionsBlock(src: string): { normaliz
       break;
     }
   }
-  if (actionsBegin === -1 || actionsEnd === -1 || actionsEnd <= actionsBegin) {
-    return { normalized: src, folded: 0 };
-  }
+  // No actions block: BNG2 still runs these commands, in file order, after the
+  // model. Collect them and wrap them in one so the grammar has a single place
+  // to read action commands from.
+  const hasActionsBlock = actionsBegin !== -1 && actionsEnd !== -1 && actionsEnd > actionsBegin;
+
 
   // Collect depth-0 action commands after `end model`, split around the block so
   // their original order can be rebuilt inside the body.
@@ -110,7 +112,7 @@ export function foldLooseActionCommandsIntoActionsBlock(src: string): { normaliz
       if (BEGIN_BLOCK_LINE_RE.test(lines[i])) depth++;
       else if (END_BLOCK_LINE_RE.test(lines[i])) depth--;
     }
-    if (depth !== 0 || (actionsBegin <= i && i <= actionsEnd)) continue;
+    if (depth !== 0 || (hasActionsBlock && actionsBegin <= i && i <= actionsEnd)) continue;
     if (trimmed === '' || isComment) continue;
     if (!ACTION_COMMAND_NAME_RE.test(trimmed) || !isBalanced(trimmed)) continue;
     (i < actionsBegin ? before : after).push(lines[i]);
@@ -125,9 +127,15 @@ export function foldLooseActionCommandsIntoActionsBlock(src: string): { normaliz
   for (let i = endModelIdx + 1; i < lines.length; i++) {
     const trimmed = result[i].trim();
     if (trimmed === '' || trimmed.startsWith('#')) continue;
-    if ((actionsBegin <= i && i <= actionsEnd) || !ACTION_COMMAND_NAME_RE.test(trimmed) || !isBalanced(trimmed)) continue;
+    if ((hasActionsBlock && actionsBegin <= i && i <= actionsEnd) || !ACTION_COMMAND_NAME_RE.test(trimmed) || !isBalanced(trimmed)) continue;
     result[i] = '';
   }
-  result.splice(actionsEnd, 0, ...moved);
+
+  if (hasActionsBlock) {
+    result.splice(actionsEnd, 0, ...moved);
+    return { normalized: result.join('\n'), folded: moved.length };
+  }
+
+  result.push('begin actions', ...moved, 'end actions');
   return { normalized: result.join('\n'), folded: moved.length };
 }

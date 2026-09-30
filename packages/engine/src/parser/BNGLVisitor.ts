@@ -165,9 +165,35 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
   // Visit the root program
   visitProg(ctx: Parser.ProgContext): BNGLModel {
-    // The model body, a wrapped actions block inside it, or a loose action
-    // command between blocks are all program_blocks; visitProgram_block routes
-    // each of those to its visitor.
+    // `prog` is `LB* (header_block | action_command)* (model | program_block*)
+    // (actions_block | wrapped_actions_block | protocol_block)* EOF`, so action
+    // commands appear as direct children of `prog` as well as inside a block —
+    // before and after the model. Visiting only `program_block()` silently
+    // dropped the direct ones, which is how loose top-level
+    // `generate_network(...)` / `simulate(...)` ended up with an empty
+    // `model.actions`.
+    for (const header of ctx.header_block()) {
+      try {
+        this.visit(header);
+      } catch (e: unknown) {
+        console.error('Error visiting header block:', (e as Error).message);
+        throw e;
+      }
+    }
+
+    for (const command of ctx.action_command()) {
+      try {
+        this.visit(command);
+      } catch (e: unknown) {
+        console.error('Error visiting action command:', (e as Error).message);
+        throw e;
+      }
+    }
+
+    // Everything else is a program_block: the model body, a wrapped actions
+    // block, a protocol block, or a loose action command. visitProgram_block
+    // routes each of those to its visitor, so visiting them in source order
+    // covers the whole file.
     for (const block of ctx.program_block()) {
       try {
         this.visitProgram_block(block);
@@ -178,34 +204,30 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
     }
 
-    // Action commands may also precede `begin model`, alongside the header block.
-    for (const action of ctx.action_command()) {
+    for (const block of ctx.actions_block()) {
       try {
-        this.visit(action);
-      } catch (e: unknown) {
-        console.error('Error visiting top-level action:', (e as Error).message);
-      }
-    }
-
-    // A `begin protocol` block records a simulation protocol replayed by
-    // `parameter_scan({method=>"protocol"})`. The model we build has no protocol
-    // representation, so the block is accepted and deliberately not visited.
-
-    // An unwrapped actions block after `end model` is not a program_block.
-    for (const actionsBlock of ctx.actions_block()) {
-      try {
-        this.visitActions_block(actionsBlock);
+        this.visitActions_block(block);
       } catch (e: unknown) {
         console.error('Error visiting actions block:', (e as Error).message);
+        throw e;
       }
     }
 
-    // Many published models use BEGIN ACTIONS ... END ACTIONS after the model.
-    for (const wrappedActionsBlock of ctx.wrapped_actions_block()) {
+    for (const block of ctx.wrapped_actions_block()) {
       try {
-        this.visitWrapped_actions_block(wrappedActionsBlock);
+        this.visitWrapped_actions_block(block);
       } catch (e: unknown) {
         console.error('Error visiting wrapped actions block:', (e as Error).message);
+        throw e;
+      }
+    }
+
+    for (const block of ctx.protocol_block()) {
+      try {
+        this.visit(block);
+      } catch (e: unknown) {
+        console.error('Error visiting protocol block:', (e as Error).message);
+        throw e;
       }
     }
 

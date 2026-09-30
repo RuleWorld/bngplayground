@@ -95,6 +95,8 @@ import { Unary_exprContext } from "./BNGParser";
 import { Primary_exprContext } from "./BNGParser";
 import { Function_callContext } from "./BNGParser";
 import { Observable_refContext } from "./BNGParser";
+import { Observable_arg_listContext } from "./BNGParser";
+import { Observable_argContext } from "./BNGParser";
 import { LiteralContext } from "./BNGParser";
 
 
@@ -1114,6 +1116,28 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitObservable_ref?: (ctx: Observable_refContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.observable_arg_list`.
+	 * @param ctx the parse tree
+	 */
+	enterObservable_arg_list?: (ctx: Observable_arg_listContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.observable_arg_list`.
+	 * @param ctx the parse tree
+	 */
+	exitObservable_arg_list?: (ctx: Observable_arg_listContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.observable_arg`.
+	 * @param ctx the parse tree
+	 */
+	enterObservable_arg?: (ctx: Observable_argContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.observable_arg`.
+	 * @param ctx the parse tree
+	 */
+	exitObservable_arg?: (ctx: Observable_argContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.literal`.
