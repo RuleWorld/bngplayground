@@ -104,7 +104,23 @@ function hasUncommentedSimulateAction(code: string): boolean {
 
 function appendDefaultOdeActions(code: string): string {
 	const cleaned = code.replace(/\s+$/, '');
-	return `${cleaned}\n\n# [auto-generated] Default ODE actions for reference generation\ngenerate_network({overwrite=>1})\nsimulate({method=>"ode",t_end=>100,n_steps=>100})\n`;
+	const generated =
+		'# [auto-generated] Default ODE actions for reference generation\n' +
+		'generate_network({overwrite=>1})\n' +
+		'simulate({method=>"ode",t_end=>100,n_steps=>100})\n';
+
+	// When the model already ends with a top-level `begin actions ... end actions`
+	// block, appending bare actions after `end actions` is not valid BNGL and the
+	// resulting reference model cannot be re-read. Add them to the block instead.
+	const trailingActions = /(^|\n)[ \t]*end\s+actions\b[ \t]*$/i.exec(cleaned);
+	if (trailingActions) {
+		const insertAt = trailingActions.index + (trailingActions[1] ? 1 : 0);
+		const before = cleaned.slice(0, insertAt).replace(/\s+$/, '');
+		const after = cleaned.slice(insertAt);
+		return `${before}\n${generated.replace(/^/gm, '\t')}${after}`;
+	}
+
+	return `${cleaned}\n\n${generated}`;
 }
 
 function sanitizeActionsKeepAllOdeSimulates(code: string): string {
