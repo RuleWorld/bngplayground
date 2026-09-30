@@ -15,11 +15,13 @@ on:
 
 
 # The reference sweep regenerates BioNetGen references for the whole RuleHub
-# corpus and takes ~40 minutes. Without this, a burst of pushes queues one
-# full sweep per commit and results arrive long after they are relevant.
+# corpus and takes ~40 minutes. A burst of pushes would otherwise queue one
+# full sweep per commit, so superseded runs are cancelled — but never on main,
+# where the sweep is the signal we actually want completed. A Dependabot merge
+# landing mid-sweep must not silently cancel it.
 concurrency:
   group: ci-tests-${{ github.ref }}
-  cancel-in-progress: true
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
