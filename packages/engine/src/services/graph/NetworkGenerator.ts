@@ -267,6 +267,27 @@ function computeWildcardBoundStatFactor(pattern: SpeciesGraph, target: SpeciesGr
 
 
 /**
+ * Identity of a reaction for duplicate detection.
+ *
+ * BNG2 does not key on the originating rule: `RxnList.pm` keys on
+ * `Rxn->stringID()` — the sorted species indices alone — and merges only when
+ * `RateLaw::equivalent` says the two rate laws agree, summing the stat factor.
+ * Two different rules that transform the same species pair with the same rate
+ * are therefore ONE reaction in BNG2.
+ *
+ * We keyed on the rule name, so those cross-rule duplicates were emitted
+ * separately and the reaction count came out high even though the unique
+ * reaction set matched. Use the normalised rate law instead, falling back to the
+ * rule name only when a rule has no usable rate.
+ */
+function rateIdentity(ruleName: string, rateExpression?: string, rate?: number): string {
+  const expr = rateExpression?.trim();
+  if (expr) return expr.replace(/\s+/g, '');
+  if (typeof rate === 'number' && Number.isFinite(rate)) return String(rate);
+  return ruleName;
+}
+
+/**
  * Generate a reaction key for fast duplicate detection.
  * Uses sorted reactant and product indices for canonical comparison.
  */
@@ -306,13 +327,13 @@ function canonicalSpeciesKey(graph: SpeciesGraph | undefined): string {
 function canonicalReactionKey(
   reactants: number[],
   products: number[],
-  ruleName: string,
+  identity: string,
   speciesList: Species[]
 ): string {
   const key = (idx: number): string => canonicalSpeciesKey(speciesList[idx]?.graph);
   const r = reactants.map(key).sort().join('+');
   const p = products.map(key).sort().join('+');
-  return `${r}->${p}:${ruleName}`;
+  return `${r}->${p}:${identity}`;
 }
 
 function mergeRateExpressions(existingExpr?: string, incomingExpr?: string): string | undefined {
@@ -989,7 +1010,7 @@ export class NetworkGenerator {
         scalingVolume
       });
 
-      const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
+      const rxnKey = getReactionKey(rxn.reactants, rxn.products, rateIdentity(rule.name, rxn.rateExpression, rxn.rate));
       const existingIdx = reactionIndexByKey.get(rxnKey);
       if (existingIdx === undefined) {
         reactionIndexByKey.set(rxnKey, reactionsList.length);
@@ -1997,7 +2018,7 @@ export class NetworkGenerator {
       }
 
       // Fast O(1) duplicate detection using Set
-      const rxnKey = getReactionKey(rxn.reactants, rxn.products, rule.name);
+      const rxnKey = getReactionKey(rxn.reactants, rxn.products, rateIdentity(rule.name, rxn.rateExpression, rxn.rate));
       const existingIdx = reactionIndexByKey.get(rxnKey);
       if (existingIdx === undefined) {
         reactionIndexByKey.set(rxnKey, reactionsList.length);
@@ -3255,7 +3276,7 @@ export class NetworkGenerator {
     // The index-based key below cannot see that, so duplicates were emitted and
     // the reaction count drifted above BNG2's. Merge them the way BNG2
     // accumulates duplicates.
-    const canonicalKey = canonicalReactionKey(rxn.reactants, rxn.products, rule.name, speciesList);
+    const canonicalKey = canonicalReactionKey(rxn.reactants, rxn.products, rateIdentity(rule.name, rxn.rateExpression, rxn.rate), speciesList);
     const canonicalIdx = this.canonicalReactionIndex.get(canonicalKey);
     if (canonicalIdx !== undefined) {
       reactionsList[canonicalIdx].rate += rxn.rate;
