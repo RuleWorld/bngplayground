@@ -486,6 +486,27 @@ interface PureStateChangePlan {
 }
 
 
+/**
+ * How a rule's reactant molecules line up with its product molecules, in both
+ * directions, plus the global-index offset of each pattern.
+ *
+ * `reactantOffsets[r]` is the global reactant molecule index at which reactant
+ * pattern `r` starts, so a (patternIdx, molIdx) pair converts to the global index
+ * the maps are keyed on via `reactantOffsets[patternIdx] + molIdx`. The same holds
+ * for `productOffsets`. A molecule with no counterpart — deleted by
+ * DeleteMolecules, or a name with fewer copies on the other side — is absent from
+ * both maps.
+ */
+interface RuleMoleculeCorrespondence {
+  reactantOffsets: number[];
+  productOffsets: number[];
+  /** global reactant molecule index -> global product molecule index */
+  reactantToProduct: Map<number, number>;
+  /** global product molecule index -> global reactant molecule index */
+  productToReactant: Map<number, number>;
+}
+
+
 export class NetworkGenerator {
   private options: GeneratorOptions;
   // NEW: map Molecule name -> set of species indices that contain that molecule
@@ -522,7 +543,7 @@ export class NetworkGenerator {
   // correspondence: the n-th reactant molecule of a given name is the image of the
   // n-th product molecule of that name. Cached because a rule is immutable during
   // generation. See matchRespectsProductImpliedFreeConstraints.
-  private productCorrespondenceCache: WeakMap<RxnRule, Map<number, number>> = new WeakMap();
+  private productCorrespondenceCache: WeakMap<RxnRule, RuleMoleculeCorrespondence> = new WeakMap();
 
   private startTime: number = 0;
   private lastMemoryCheck: number = 0;
@@ -2091,34 +2112,40 @@ export class NetworkGenerator {
   }
 
   /**
-   * Map every reactant-pattern molecule to the product molecule it becomes.
+   * The rule's molecule-level correspondence between reactants and products.
    *
    * A reaction rule's reactant and product molecule lists are positionally
    * corresponding per molecule name: the n-th reactant molecule named `A` is the
-   * image of the n-th product molecule named `A`. That correspondence is what lets
-   * a product constraint be attributed to the reactant molecule it actually
-   * constrains.
+   * image of the n-th product molecule named `A`. BNG2 guarantees this, and both
+   * the product-implied-free filter and the product-graph builder rely on it.
    *
-   * The previous code inferred this from "does the product molecule share a bonded
-   * component name with the reactant molecule", which is ambiguous as soon as two
-   * reactant molecules of the same name share a component name. Every molecule of a
-   * disulfide-linked dimer lists `C`, so a product's free-site constraint was
-   * applied to *both* copies and rejected matches BNG2 keeps — the whole
-   * two-ligand-per-receptor family in the IGF1R fitting models was lost that way.
+   * Inferring it heuristically is what produced two separate parity bugs. Guessing
+   * "do these molecules share a bonded component name" is ambiguous as soon as two
+   * reactant molecules of the same name share a component name — every molecule of
+   * a disulfide-linked dimer lists `C` — so a product's free-site constraint was
+   * applied to *both* copies and the whole two-ligand-per-receptor family in the
+   * IGF1R fitting models was lost. Guessing by state/bond similarity in
+   * buildProductGraph is ambiguous the moment the rule does not spell out the
+   * components distinguishing two copies, so kesseler_2013's MPF autophosphorylation
+   * built the phosphorylated product from the wrong monomer and dropped the other
+   * one's DP~P state.
    *
-   * Returns a map from global reactant molecule index to global product molecule
-   * index. Names with no counterpart (deleted by DeleteMolecules, or with fewer
-   * product copies) are simply absent.
+   * `reactantOffsets` / `productOffsets` give the global molecule index at which
+   * each pattern starts, so a (patternIdx, molIdx) pair converts to the global index
+   * the maps are keyed on. Names with no counterpart (a molecule deleted by
+   * DeleteMolecules, or a name with fewer product copies) are absent from both maps.
    */
-  private getProductCorrespondence(rule: RxnRule): Map<number, number> {
+  private getRuleMoleculeCorrespondence(rule: RxnRule): RuleMoleculeCorrespondence {
     const cached = this.productCorrespondenceCache.get(rule);
     if (cached) return cached;
 
-    // Global molecule indices grouped by name, in the order the rule writes them.
     const reactantByName = new Map<string, number[]>();
     const productByName = new Map<string, number[]>();
+    const reactantOffsets: number[] = [];
+    const productOffsets: number[] = [];
     let gIdx = 0;
     for (const pat of rule.reactants) {
+      reactantOffsets.push(gIdx);
       for (const mol of pat.molecules) {
         const list = reactantByName.get(mol.name);
         if (list) list.push(gIdx); else reactantByName.set(mol.name, [gIdx]);
@@ -2127,6 +2154,7 @@ export class NetworkGenerator {
     }
     gIdx = 0;
     for (const pat of rule.products) {
+      productOffsets.push(gIdx);
       for (const mol of pat.molecules) {
         const list = productByName.get(mol.name);
         if (list) list.push(gIdx); else productByName.set(mol.name, [gIdx]);
@@ -2134,15 +2162,21 @@ export class NetworkGenerator {
       }
     }
 
-    const map = new Map<number, number>();
+    const reactantToProduct = new Map<number, number>();
+    const productToReactant = new Map<number, number>();
     for (const [name, reactantIdxs] of reactantByName) {
       const productIdxs = productByName.get(name);
       if (!productIdxs) continue;
       const n = Math.min(reactantIdxs.length, productIdxs.length);
-      for (let k = 0; k < n; k++) map.set(reactantIdxs[k], productIdxs[k]);
+      for (let k = 0; k < n; k++) {
+        reactantToProduct.set(reactantIdxs[k], productIdxs[k]);
+        productToReactant.set(productIdxs[k], reactantIdxs[k]);
+      }
     }
-    this.productCorrespondenceCache.set(rule, map);
-    return map;
+
+    const result = { reactantOffsets, productOffsets, reactantToProduct, productToReactant };
+    this.productCorrespondenceCache.set(rule, result);
+    return result;
   }
 
   /**
@@ -2177,21 +2211,15 @@ export class NetworkGenerator {
     // without needing a blanket bypass here.
 
     // The rule's reactant and product molecule lists correspond positionally per
-    // molecule name (see getProductCorrespondence), so a product constraint is
+    // molecule name (see getRuleMoleculeCorrespondence), so a product constraint is
     // applied to exactly the reactant molecule that becomes it. A name with more
     // reactant copies than product copies is DeleteMolecules: the surplus reactant
     // molecules have no counterpart and are skipped, which is what the
     // DeCe2 case (CCNE(CDKN1A) + CCNE() -> CCNE(CDKN1A) DeleteMolecules) needs —
     // the product CCNE(CDKN1A) belongs to reactant slot 0, not slot 1.
-    const patternOffset = (() => {
-      let off = 0;
-      for (let k = 0; k < rule.reactants.length; k++) {
-        if (rule.reactants[k] === reactantPattern) return off;
-        off += rule.reactants[k].molecules.length;
-      }
-      return off;
-    })();
-    const correspondence = this.getProductCorrespondence(rule);
+    const { reactantOffsets, productOffsets, reactantToProduct } = this.getRuleMoleculeCorrespondence(rule);
+    const patternIdx = rule.reactants.indexOf(reactantPattern);
+    const patternOffset = patternIdx < 0 ? 0 : reactantOffsets[patternIdx];
 
     for (let pMolIdx = 0; pMolIdx < reactantPattern.molecules.length; pMolIdx++) {
       const reactantMol = reactantPattern.molecules[pMolIdx];
@@ -2202,16 +2230,12 @@ export class NetworkGenerator {
 
       // The product molecule this reactant pattern molecule becomes. Absent when
       // the molecule is deleted or its name has no surviving product copy.
-      const prodGlobalIdx = correspondence.get(patternOffset + pMolIdx);
+      const prodGlobalIdx = reactantToProduct.get(patternOffset + pMolIdx);
       if (prodGlobalIdx === undefined) continue;
-      let prodMol: (typeof rule.products)[number]['molecules'][number] | undefined;
-      let seen = 0;
-      outer: for (const prodPattern of rule.products) {
-        for (const m of prodPattern.molecules) {
-          if (seen === prodGlobalIdx) { prodMol = m; break outer; }
-          seen++;
-        }
-      }
+      // Translate the global product index back to (pattern, molecule) via the offsets.
+      let prodPatIdx = productOffsets.length - 1;
+      while (prodPatIdx > 0 && productOffsets[prodPatIdx] > prodGlobalIdx) prodPatIdx--;
+      const prodMol = rule.products[prodPatIdx]?.molecules[prodGlobalIdx - productOffsets[prodPatIdx]];
       if (!prodMol) continue;
 
       // Build set of component names present in the reactant pattern molecule.
@@ -3597,7 +3621,9 @@ export class NetworkGenerator {
           reactantGraphs,
           matches,
           usedReactantPatternMols,
-          !!(rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected
+          !!(rule as RxnRule & { isMoveConnected?: boolean }).isMoveConnected,
+          rule,
+          rule.products.indexOf(productPattern)
         );
 
         if (!fullProductGraph) {
@@ -4279,7 +4305,9 @@ export class NetworkGenerator {
     reactantGraphs: SpeciesGraph[],
     matches: MatchMap[],
     usedReactantPatternMols: Set<number>, // Shared tracking across product patterns
-    _isMoveConnectedRule: boolean
+    _isMoveConnectedRule: boolean,
+    rule: RxnRule,
+    productPatternIdx: number
   ): SpeciesGraph | null {
     if (shouldLogNetworkGenerator) {
       debugNetworkLog(`[buildProductGraph] Building from pattern ${pattern.toString()}`);
@@ -4583,12 +4611,65 @@ export class NetworkGenerator {
       return score;
     };
 
+    // BNG2 pairs reactant pattern molecules with product pattern molecules
+    // positionally per molecule name, so the n-th product molecule named `A` is
+    // built from the n-th reactant molecule named `A`. That is the primary choice
+    // here; the similarity score below is only a fallback.
+    //
+    // The score cannot stand in for it whenever the rule does not spell out the
+    // components that tell two same-named reactant molecules apart. In
+    // kesseler_2013, `MPF(B!0,L~C,NE2~U,S~Su).MPF(B!0,L~C,DP~U,S~Ki) ->
+    // MPF(B,L~C,NE2~P,S~no)+MPF(B,L~C,DP~U,S~no) kMPFimp` never mentions DP, so the
+    // product's NE2~P scored best against the S~Ki copy; the product was then built
+    // from that copy, the S~Su copy silently lost the DP~P state it carried, and 120
+    // reactions came out phosphorylating the wrong monomer.
+    const { reactantOffsets, productOffsets, productToReactant } = this.getRuleMoleculeCorrespondence(rule);
+    const productPatternOffset = productPatternIdx < 0 ? 0 : productOffsets[productPatternIdx];
+    // Reactant pattern molecules grouped by name, in the order the rule writes them.
+    const reactantMolIdxByName = new Map<string, number[]>();
+    for (let i = 0; i < allReactantPatternMols.length; i++) {
+      const name = allReactantPatternMols[i].name;
+      const group = reactantMolIdxByName.get(name);
+      if (group) group.push(i); else reactantMolIdxByName.set(name, [i]);
+    }
+
     for (let pMolIdx = 0; pMolIdx < pattern.molecules.length; pMolIdx++) {
       const pMol = pattern.molecules[pMolIdx];
 
-      // Try to find the best matching reactant molecule
+      // Primary: the positionally corresponding reactant pattern molecule.
+      const positionalGlobal = productToReactant.get(productPatternOffset + pMolIdx);
       let bestMatchIdx = -1;
+      if (positionalGlobal !== undefined) {
+        for (let r = 0; r < reactantPatterns.length; r++) {
+          const local = positionalGlobal - reactantOffsets[r];
+          if (local < 0 || local >= reactantPatterns[r].molecules.length) continue;
+          if (reactantPatterns[r].molecules[local].name !== pMol.name) continue;
+          for (let i = 0; i < allReactantPatternMols.length; i++) {
+            const rpm = allReactantPatternMols[i];
+            if (rpm.reactantIdx !== r || rpm.patternMolIdx !== local) continue;
+            const rpmKey = (rpm.reactantIdx << 16) | rpm.patternMolIdx;
+            if (usedReactantPatternMols.has(rpmKey)) break;
+            bestMatchIdx = i;
+            break;
+          }
+          if (bestMatchIdx !== -1) break;
+        }
+      }
       let bestScore = -Infinity;
+
+      // Fallback: the similarity score, for the cases positional correspondence
+      // cannot decide — a rule that names fewer product molecules than reactant
+      // molecules, a molecule deleted outright, or a name whose product copy was
+      // already claimed by an earlier product pattern.
+      if (bestMatchIdx !== -1) {
+        const rpm = allReactantPatternMols[bestMatchIdx];
+        usedReactantPatternMols.add((rpm.reactantIdx << 16) | rpm.patternMolIdx);
+        productPatternToReactant.set(pMolIdx, {
+          reactantIdx: rpm.reactantIdx,
+          targetMolIdx: rpm.targetMolIdx
+        });
+        continue;
+      }
 
       let hasAvailableSameName = false;
       for (let i = 0; i < allReactantPatternMols.length; i++) {
