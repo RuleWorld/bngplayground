@@ -94,6 +94,62 @@ and `zhang_2021` numbers in that table are not trustworthy and would need
 re-measuring per reaction before they are cited. The conclusion that deletion is
 unsafe does not depend on them.
 
+## SUPERSEDED IN PART — this is an enumeration defect, not a stat-factor defect
+
+A third pass derived BNG2's `multScale` from the fork source and measured it
+against the three contrasting rules. The derivation is in
+`docs/bng2-stat-factor-derivation.md`. Its conclusions:
+
+**`zhang_2021` has `multScale == 1` for all 26 rule instances** (`|RG| == |Stab|`
+everywhere), so the whole emitted factor is the surviving-instance count. BNG2's
+`filter_identical_by_rxn_center` (`RxnRule.pm:3513-3591`) keeps ONE match per
+distinct image of the reaction centre; we enumerate 6, 2 and 6 maps for
+`_R4`, `_R9` and `_R13` whose centre images are identical, and then sum their
+factors. The fix is to deduplicate by reaction-centre image, not to change any
+division.
+
+**`patternAutomorphismFactor` is inert for every zhang rule.** It is 2 for
+`_R3/_R9/_R12/_R53/_R59/_R62` and 6 for `_R4/_R13/_R54/_R63`, yet the emitted
+statFactor equals the raw instance count exactly, and forcing the factor to 1
+changes nothing — BNG2's divisor for those rules is 1, so the substitution is a
+no-op by construction.
+
+**Applying BNG2's divisor there instead double-divides**, because
+`ruleSymmetryFactor` already carries `|RG|/|Stab|` wherever it exceeds 1. Measured
+alignment (BNG2 `D = (|RG|/|Stab|)·crg` against our `ruleSymmetryFactor`): rafi
+`_R1` 2 vs 2, erk `_R2` 2 vs 2, brusselator `_R3` 2 vs 2 (ours via identical
+patterns, BNG2's via `crg=2`), igf1r all 12 instances 1 vs 1. Dividing again emits
+`0.25*kf1` where BNG2 writes `0.5*kf1`.
+
+**`igf1r` is not part of this defect.** Re-measured per reaction with a corrected
+comparator it is at **0** rate mismatches on all four models — the "12 each" above
+was the aggregating comparator. Its divisor already matches BNG2 exactly on all
+12 rule instances. Do not merge the two stories without new evidence.
+
+### What blocks the fix, and it is not the factor
+
+**Our `RxnRule` op arrays are permanently empty.** `addBonds`, `deleteBonds`,
+`changeStates`, `deleteMolecules` and `molecularMap` are declared and initialised
+but never written — `grep` over `packages/engine/src` finds only the constructor
+initialisers. So the guards beside `patternAutomorphismFactor` that test
+`rule.addBonds.length > 0` (`NetworkGenerator.ts:1838-1852`, `2740-2742`) read
+always-empty arrays, and we have no way to construct the reaction centre the way
+BNG2 does.
+
+Two routes, both real design work:
+1. Populate the op arrays in `BNGLParser.parseRxnRule` (`BNGLParser.ts:556`), which
+   makes `find_reaction_center` a direct transcription of BNG2's.
+2. Lift the correspondence `buildProductGraph` already computes
+   (`NetworkGenerator.ts:4302+`, via `productPatternToReactant` /
+   `componentIndexMap`) into a cacheable per-rule form — and canonicalise it,
+   because the current preference order picks an arbitrary representative among
+   interchangeable molecules.
+
+Also worth recording: BNG2 applies `D=2` where we apply 1 on rafi
+`_R1_rev`/`_R6`/`_R6_rev` and erk `_R2_rev`, and all four still emit correct
+rates because instance folding compensates. That is the under-count direction
+already noted, and a fix for it will not move output.
+
 ## A minimal reproducer exists: `zhang_2021`, 6 reactions
 
 Re-measured per reaction (the earlier 10-12 figure came from the aggregating
