@@ -37,9 +37,15 @@ child.stderr.on('data', (chunk) => {
 const IDLE_KILL_MS = 15_000;
 const isProfileRun = args.some((arg) => arg.includes('vitest.profile.config'));
 const configuredHardTimeout = Number(process.env.RUN_FULL_TESTS_HARD_TIMEOUT_MS);
+// Generous, because the timer starts when this process launches — not when
+// vitest does — so it also absorbs checkout and dependency-install time spent
+// before the suite begins. It is a backstop against a genuinely wedged run, not
+// a budget for the suite: the workflow's per-job `timeout-minutes` is the real
+// bound. At 5 minutes a healthy 6 500-test run on a contended runner was killed
+// mid-suite and reported as a failure, having run for under three.
 const HARD_TIMEOUT_MS = Number.isFinite(configuredHardTimeout) && configuredHardTimeout > 0
   ? configuredHardTimeout
-  : (isProfileRun ? 20 : 5) * 60 * 1000;
+  : (isProfileRun ? 30 : 15) * 60 * 1000;
 let killed = false;
 
 function hasCompletionSignal() {

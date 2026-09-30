@@ -41,7 +41,7 @@ jobs:
   # Fast unit tests - always runs
   fast-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 25
     
     steps:
       - name: Checkout code
