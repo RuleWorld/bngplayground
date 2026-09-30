@@ -36,54 +36,68 @@ export const MODEL_TOLERANCE_OVERRIDES: Record<string, { absTol?: number; relTol
   // vegfangiogenesis: { relTol: 4e-2 }
 };
 
+
+/**
+ * Detect models the web simulator cannot compare against BNG2, from the model
+ * source itself, rather than from a list of model names.
+ *
+ * A per-model allowlist was previously used for these, which meant a new
+ * scan/bifurcate or SSA model had to be added by hand and every entry silently
+ * suppressed real failures for that model. The reasons are structural and can
+ * be detected generically.
+ *
+ * Returns a human-readable reason, or null when the model is comparable.
+ */
+export function detectUnsupportedFeature(bnglSource: string): string | null {
+  const uncommented = bnglSource
+    .split(/\r?\n/)
+    .map((line) => line.trimStart())
+    .filter((line) => !line.startsWith('#'))
+    .join('\n');
+
+  if (/\b(parameter_scan|parameter_scan_2d|bifurcate)\s*[({]?/i.test(uncommented)) {
+    return 'scan/bifurcate action is not supported by the web simulator';
+  }
+
+  // The web run is compared against an ODE reference, so a model that asks for
+  // a different method produces a different trajectory by construction.
+  const methods = [...uncommented.matchAll(/\bsimulate(?:_ode|_ssa|_nf)?\s*\(\s*\{([^}]*)\}/gi)]
+    .map((m) => m[1].match(/method\s*=>\s*["']?(\w+)/i)?.[1]?.toLowerCase())
+    .filter((m): m is string => Boolean(m));
+  const nonOde = [...new Set(methods)].filter((m) => m !== 'ode' && m !== 'default');
+  if (nonOde.length > 0) {
+    return `method mismatch: web=ODE, BNG2=${nonOde.join('/')}`;
+  }
+
+  return null;
+}
+
 // Known mismatches with understood causes that should not fail CI.
+//
+// This list is deliberately tiny. Models the web simulator structurally cannot
+// run (scan/bifurcate, or a simulate method other than ODE) are detected from
+// the model source by `detectUnsupportedFeature` above, not listed by name —
+// a name list meant every new model of that kind had to be added by hand, and
+// each entry silently suppressed every other failure for that model.
+//
+// The 24 `__FREE params not set` entries that used to live here were removed:
+// the playground resolves `X__FREE` to 0 and the reference generator now
+// defines `X__FREE` as 0 for BNG2, so both engines simulate the same model
+// and the original reason no longer describes a divergence.
 export const EXPECTED_MISMATCHES: Record<string, string> = {
-  baruabcr2012: 'Method mismatch: web=ODE, BNG2=NFsim',
+  // Chaotic system: trajectories diverge for any solver implementation, so
+  // long-run parity is not a meaningful check.
   ecocoevolutionhostparasite: 'Chaotic divergence between CVODE implementations',
+  // Stiff long-time integration; drift is a solver-precision effect, not a
+  // modelling difference.
+  fceriviz: 'Long-time numerical drift in stiff FceRI model',
+  // Discontinuous right-hand sides (if() inside rate expressions). A CVODE
+  // taking steps across a discontinuity is not comparable to muParser's
+  // piecewise evaluation, so these are expected to differ rather than
+  // expected to match. If the integrator ever gains discontinuity-aware
+  // stepping, re-check these two.
   mtmusicsequencer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
   spfouriersynthesizer: 'Discontinuous if()-based RHS: CVODE 7.x/SPGMR vs BNG2 CVODE 2.6/Dense + muParser vs JS eval',
-  // bifurcate action not supported — web runs ODE, BNG2 runs bifurcation scan
-  abcscan: 'scan/bifurcate action not supported',
-  babscan: 'scan/bifurcate action not supported',
-  lismanbifurcate: 'scan/bifurcate action not supported',
-  toggle: 'scan/bifurcate action not supported',
-  // __FREE (PyBNF fitting) models: free parameters have no setParameter action in the
-  // base BNGL file — values remain at 0, producing wrong dynamics. The fitted variants
-  // (e.g., model_tofit_gen157ind72.bngl) have values baked in but aren't what the gallery loads.
-  '06degranulationmodeltofit': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp15': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp2120': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp2240': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp230': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp25': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp260': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp3120': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp3240': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp330': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp35': '__FREE params not set (PyBNF fitting model)',
-  '06degranulationmodeltofitp360': '__FREE params not set (PyBNF fitting model)',
-  egfregfr: '__FREE params not set (PyBNF fitting model)',
-  '15igf1rigf1rfitallincubate': '__FREE params not set (PyBNF fitting model)',
-  '19rafconstraintrafi': '__FREE params not set (PyBNF fitting model)',
-  '20rafconstraint4rafi': '__FREE params not set (PyBNF fitting model)',
-  '31elephantelephant': '__FREE params not set (PyBNF fitting model)',
-  rafi: '__FREE params not set (PyBNF fitting model)',
-  rafiground: '__FREE params not set (PyBNF fitting model)',
-  parabolapar: '__FREE params not set (PyBNF fitting model)',
-  '07eggeggegg': '__FREE params not set (PyBNF fitting model)',
-  pt303: '__FREE params not set (PyBNF fitting model)',
-  pt403: '__FREE params not set (PyBNF fitting model)',
-  pt409: '__FREE params not set (PyBNF fitting model)',
-  example5bnffilesexample5: '__FREE params not set (PyBNF fitting model)',
-  example5fit: '__FREE params not set (PyBNF fitting model)',
-  example5groundtruth: '__FREE params not set (PyBNF fitting model)',
-  mitra201902egfrbnf1inputfilesegfregfr: '__FREE params not set or stack overflow on large model',
-  fceriviz: 'Long-time numerical drift in stiff FceRI model',
-  zhang2021: 'Localized observable mismatch (pTie2) - likely rate-law or observable parsing bug',
-  // parameter_scan action not fully supported — web runs single ODE, BNG2 runs scan
-  fceriji: 'parameter_scan action not supported',
-  // Method mismatch: BNG2 uses SSA, web uses ODE
-  circadianoscillator: 'Method mismatch: web=ODE, BNG2=SSA',
 };
 
 // Known network-shape differences (species/reaction counts vs BNG2's .net).

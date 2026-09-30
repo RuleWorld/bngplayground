@@ -96,6 +96,7 @@ import {
   STEADY_STATE_MODELS,
   CSV_MODEL_ALIASES,
   PARTIAL_MATCH_TIME,
+  detectUnsupportedFeature,
 } from './compareShared';
 
 function stripDownloadSuffix(name: string): string {
@@ -1038,6 +1039,25 @@ function getMultiPhaseReference(
       const modelName = csvModelLabel(csvFile);
       processedModels.add(modelName);
       const referenceModelInfo = analyzeReferenceModel(modelName, ref.bnglPath);
+
+      // Models the web simulator structurally cannot reproduce (scan/bifurcate,
+      // or a simulate method other than ODE) are detected from the model source
+      // rather than from a list of model names.
+      if (ref.bnglPath && fs.existsSync(ref.bnglPath)) {
+        const unsupported = detectUnsupportedFeature(fs.readFileSync(ref.bnglPath, 'utf8'));
+        if (unsupported) {
+          console.log(`  SKIP ${modelName}: ${unsupported}`);
+          results.push({
+            model: modelName,
+            status: 'skipped',
+            referenceFile: undefined,
+            referenceInferred: ref.inferred,
+            details: null,
+            error: unsupported,
+          });
+          continue;
+        }
+      }
 
       // Skip models known to fail in canonical BNG2.pl (explicit exclusion list in constants.ts)
       const normalizedModelKey = normalizeKey(modelName);
