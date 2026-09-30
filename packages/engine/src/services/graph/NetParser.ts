@@ -398,6 +398,13 @@ function parseGroupLine(
 
   const name = parts[1];
 
+  // A group can end up with no species once its members are filtered out of
+  // the network, leaving just "1 Name".
+  if (parts.length === 2) {
+    model.observables.push({ name, type: 'molecules', pattern: '' });
+    return;
+  }
+
   // Group form: the third token is a species index list, not a type keyword.
   const looksLikeGroup = parts.length === 3 && isSpeciesIndexList(parts[2]);
 
@@ -426,16 +433,18 @@ function parseGroupLine(
 }
 
 /**
- * Parse a function line: <index> <name>() = <expression>
+ * Parse a function line: <index> <name>(<args>) [=] <expression>
  * Example: "1 TotEGFR() = EGFR_free + EGFR_bound"
+ *
+ * BNG2 omits the '=' when the expression is unambiguous, writing
+ * "1 pY1068_percent() (100*pY1068)/E" instead.
  */
 function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): void {
-  // Format: index name(args) = expression
   const trimmed = line.trim();
   const firstSpace = trimmed.search(/\s/);
   if (firstSpace <= 0) {
     throw new Error(
-      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) [=] expression" ` +
       `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
@@ -444,24 +453,25 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
   const rhs = trimmed.slice(firstSpace).trim();
   const openParen = rhs.indexOf('(');
   const closeParen = rhs.indexOf(')', openParen + 1);
-  const eqIdx = rhs.indexOf('=', closeParen + 1);
-  if (openParen <= 0 || closeParen <= openParen || eqIdx <= closeParen) {
+  if (openParen <= 0 || closeParen <= openParen) {
     throw new Error(
-      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) [=] expression" ` +
       `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
 
   const index = parseInt(indexToken, 10);
-  const name = rhs.slice(0, openParen).trim();
-  const argsStr = rhs.slice(openParen + 1, closeParen).trim();
-  const expression = rhs.slice(eqIdx + 1).trim();
-
   if (isNaN(index)) {
     throw new Error(
       `Invalid function in .net file at line ${lineNum}: the function index "${indexToken}" is not a valid number.`
     );
   }
+
+  const name = rhs.slice(0, openParen).trim();
+  const argsStr = rhs.slice(openParen + 1, closeParen).trim();
+  // Everything after the argument list, minus an optional leading '='.
+  const tail = rhs.slice(closeParen + 1).trim();
+  const expression = tail.startsWith('=') ? tail.slice(1).trim() : tail;
 
   const args = argsStr ? parseCommaSeparated(argsStr, false) : [];
 

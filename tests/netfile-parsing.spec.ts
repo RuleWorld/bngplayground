@@ -84,6 +84,33 @@ describe('parseNetFile against real BioNetGen 2.9.3 output', () => {
     expect(r.model.observables?.[0]).toEqual({ name: 'Dimers', type: 'molecules', pattern: 'CD14(CR1!+)' });
   });
 
+  it('accepts function lines written without an equals sign', () => {
+    const net = REAL_BNG2_NET.replace(
+      'end reactions',
+      'begin functions\n    1 pY1068_percent() (100*pY1068)/EGF\nend functions\nend reactions'
+    );
+    const r = parseNetFile(net);
+    expect(r.errors).toEqual([]);
+    expect(r.model.functions?.[0]).toEqual({ name: 'pY1068_percent', args: [], expression: '(100*pY1068)/EGF' });
+  });
+
+  it('still accepts function lines with an equals sign', () => {
+    const net = REAL_BNG2_NET.replace(
+      'end reactions',
+      'begin functions\n    1 totA() = 100*pY1068\nend functions\nend reactions'
+    );
+    const r = parseNetFile(net);
+    expect(r.errors).toEqual([]);
+    expect(r.model.functions?.[0].expression).toBe('100*pY1068');
+  });
+
+  it('accepts a group that ended up with no species', () => {
+    const net = REAL_BNG2_NET.replace('    8 IkB_active           1,2,4', '    8 EmptyGroup');
+    const r = parseNetFile(net);
+    expect(r.errors).toEqual([]);
+    expect(r.model.observables?.[1]).toEqual({ name: 'EmptyGroup', type: 'molecules', pattern: '' });
+  });
+
   it('handles stoichiometric coefficients in reactions and groups', () => {
     // BNG2 writes "1,1" for two copies of species 1 and "2*6" in groups.
     const net = REAL_BNG2_NET
