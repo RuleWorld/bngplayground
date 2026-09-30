@@ -16,15 +16,23 @@ on:
 
 # The reference sweep regenerates BioNetGen references for the whole RuleHub
 # corpus and takes ~40 minutes. A burst of pushes would otherwise queue one
-# full sweep per commit, so superseded runs are cancelled — but never on main,
+# full sweep per commit, so superseded sweeps are cancelled — but never on main,
 # where the sweep is the signal we actually want completed. A Dependabot merge
 # landing mid-sweep must not silently cancel it.
-# One run per ref at a time. Deliberately NO cancel-in-progress: an expression
-# there was still cancelling pushes to main, so a 40-minute reference sweep
-# could be killed mid-run and report a reduced set of completed checks. Runs are
-# appended instead — slower to drain, but never silently incomplete.
+#
+# Deliberately NO cancel-in-progress: an expression here was still cancelling
+# pushes to main, so a 40-minute reference sweep could be killed mid-run and
+# report a reduced set of completed checks.
+#
+# The group is scoped per job. With a single `ci-tests-${{ github.ref }}` group
+# a run queues behind whatever is still running in ANY job, so one long
+# reference sweep held every later push's run at `pending` with zero jobs
+# created — the commit looked green because its checks had not been scheduled at
+# all. Scoping by job means a new push's `fast-tests` starts immediately, while
+# `reference-tests` still queues behind the previous commit's `reference-tests`
+# and so never overlaps or cancels another sweep.
 concurrency:
-  group: ci-tests-${{ github.ref }}
+  group: ci-tests-${{ github.ref }}-${{ github.job }}
 
 permissions:
   contents: read
