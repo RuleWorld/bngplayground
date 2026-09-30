@@ -135,3 +135,36 @@ because it read `species.graph.molecules`, which the exported network does not
 populate. The numbers above are from the corrected name-parsing version, spot
 checked against `zhang_2021` (9), `egfr` (14) and `barua_2013` (5) where the
 count is visibly non-zero.
+
+### Under-count scan (the opposite failure)
+
+The term is wrong in **one direction only**, but a correct fix must handle both.
+
+Running the instrumented fork over all 741 models: **234 rule instances across
+62 models** where BNG2 applies a divisor > 1 (`|RG|/|Stab|`, or
+`crg_permutations`). Almost all are `|RG|=2, |Stab|=1` → divisor 2. Note
+`brusselator_oscillator` is `|RG|=2 |Stab|=2 crg=2` → net 0.5, so
+`|RG|/|Stab|` alone is not always the whole divisor — `crg_permutations`
+matters. Largest concentrations: `motivating_example` 23, `zhang_2021` 21,
+`motivating_example_cbngl` 10, `nfsim_aggregation_gelation` 6.
+
+Cross-referencing our two live factors (`patternAutomorphismFactor` ×
+`ruleSymmetryFactor`): **60 of the 62 already divide correctly**, via
+`ruleSymmetryFactor` for identical reactant patterns — the legitimate
+ERK/rafi path. Two models apply no division at all:
+
+- `egfr_signaling_pathway` — BNG2 divisor 2, ours 1. **Emits correct rates**
+  (320 shared keys, 0 mismatches); the missing division is compensated by
+  instance folding.
+- `fgf_signaling_pathway` — BNG2 divisor 2, ours 1. **Unresolved.** Reports
+  mismatches, but they may be the bond-label canonicalisation artifact rather
+  than the under-count. Not attributed.
+
+So: 17 models over-count, at most 2 under-count, one root cause — the factor is
+a molecule-level count standing in for a statement about the product graph. The
+replacement must be validated in **both** directions or it will fix igf1r and
+quietly break the `egfr_signaling_pathway` shape.
+
+Validation caveat: `egfr_signaling_pathway` is correct in output while its
+underlying factor is wrong, so validate the replacement against BNG2's measured
+`|RG|/|Stab|`, not against emitted rates alone.

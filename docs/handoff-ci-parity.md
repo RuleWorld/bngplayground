@@ -184,6 +184,14 @@ expand 6 job definitions).
   component-aware variant was tried and does not work. Full analysis, the
   measured ground truth, and the at-risk model list are in
   `docs/stat-factor-finding.md`. **Deleting it is not safe on this corpus.**
+  A follow-up scan of the *opposite* failure narrows it further: 17 models
+  over-count, at most 2 under-count, one root cause. 60 of the 62 models where
+  BNG2 applies a divisor already divide correctly through `ruleSymmetryFactor`.
+  Two traps for whoever implements the fix: `crg_permutations` is part of the
+  divisor and is not always 1 (`brusselator_oscillator` nets 0.5 from
+  `|RG|=2, |Stab|=2, crg=2`), and `egfr_signaling_pathway` emits *correct* rates
+  while its underlying factor is wrong — so validate against BNG2's measured
+  `|RG|/|Stab|`, not against emitted rates.
 - **`maxAgg` 500 vs BNG2's `1e9`** — measured across all 741 models and
   deliberately left alone. The largest molecule count in any single species
   anywhere is **32** (`nfsim_ring_closure_polymer`), and our maximum agrees with
