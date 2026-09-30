@@ -76,6 +76,24 @@ one instance folds emits 0.5 where BNG2 writes 1. That is the whole of the
   site.** Reproduces the current behaviour *exactly* (373 mismatches; rafi
   still 0, igf1r still 12). Component-level counting is not the axis either.
 
+## Evidence caveat: some deletion-test numbers came from a defective comparator
+
+The deletion test above was measured with a comparator that resolves neither
+BNG2's `_rateLawN` indirections nor plain `# Constant` parameters, and that
+aggregates over colliding canonical keys. Three independent follow-ups have since
+shown those defects produce large but entirely phantom mismatch counts:
+
+- `fgf_signaling_pathway` reported 264 mismatches and has **zero** per-reaction.
+- `motivating_example` reported 252 and has **zero**.
+- `motivating_example_cbngl` reported 65 and has **zero**.
+
+So the deletion test must be read as: **the `rafi_*` regressions are real** — those
+nine models have zero colliding keys, and went from 0 mismatches to 1 each, which
+is what rules deletion out. The `motivating_example`, `motivating_example_cbngl`
+and `zhang_2021` numbers in that table are not trustworthy and would need
+re-measuring per reaction before they are cited. The conclusion that deletion is
+unsafe does not depend on them.
+
 ## The correct fix, and its open questions
 
 The replacement has to compute BNG2's `|RG| / |Stab|` at that one call site:
