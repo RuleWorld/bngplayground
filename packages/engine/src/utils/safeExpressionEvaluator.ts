@@ -216,8 +216,12 @@ const ALLOWED_CONSTS: Record<string, number> = {
   nan: NaN
 };
 
-// Limit nesting depth by parentheses count as a simple guard against pathological AST depth
-const MAX_PAREN_DEPTH = 200;
+// Guard against pathological AST depth. Published models legitimately go far
+// deeper than 200: NYC.bngl expresses a piecewise rate law as a ~290-deep
+// chain of `if(t<=N, ...)`, which BNG2.pl evaluates fine. 2000 still leaves a
+// wide margin below the JS stack limit while accepting those models; anything
+// beyond it is pathological and is still rejected.
+const MAX_PAREN_DEPTH = 2000;
 
 const COMPARISON_OPERATORS = new Set(['==', '!=', '<', '<=', '>', '>=']);
 

@@ -64,9 +64,17 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
     expect(out).toBeLessThan(5.0);
   });
 
-  it('rejects overly deep nesting', () => {
-    const deep = '1' + ' + ('.repeat(300) + '0' + ')'.repeat(300);
+  it('rejects pathological nesting depth', () => {
+    // The guard exists to stop runaway AST recursion, not to cap legitimate
+    // models: published piecewise rate laws nest a few hundred deep.
+    const deep = '('.repeat(2100) + '1' + ')'.repeat(2100);
     expect(() => compile(deep, [])).toThrow(/nesting too deep/i);
+  });
+
+  it('accepts the nesting depth real models use', () => {
+    // NYC.bngl expresses a piecewise rate law ~290 levels deep.
+    const deep = '('.repeat(400) + '1' + ')'.repeat(400);
+    expect(() => compile(deep, [])).not.toThrow();
   });
 
   describe('getReferencedVariables', () => {
@@ -112,8 +120,8 @@ describe('SafeExpressionEvaluator (AST allowlist)', () => {
       expect(vars).toContain('a');
     });
 
-    it('throws error for overly deep nesting', () => {
-      const deep = '1' + ' + ('.repeat(300) + '0' + ')'.repeat(300);
+    it('throws error for pathological nesting depth', () => {
+      const deep = '('.repeat(2100) + '1' + ')'.repeat(2100);
       expect(() => SafeExpressionEvaluator.getReferencedVariables(deep)).toThrow(/too deeply nested/i);
     });
 
