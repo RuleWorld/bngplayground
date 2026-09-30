@@ -385,7 +385,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       //   - "sigma__FREE" = the actual free parameter name used by PyBNF / adaptive MCMC
       // Without this fix, sigma is registered as the parameter and sigma__FREE becomes
       // an unresolvable expression, causing "Unknown identifier: sigma__FREE" errors.
-      if (/^[A-Za-z_][A-Za-z0-9_]*__FREE$/.test(value)) {
+      if (/^[A-Za-z_][A-Za-z0-9_]*__FREE_*$/.test(value)) {
         // PyBNF / BNG2 __FREE parameter convention:
         // A declaration like "t0 t0__FREE" means:
         //   - "t0"           = the parameter being defined
@@ -412,7 +412,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       // Register any missing __FREE params with default 0 so the expression
       // evaluator can resolve them. Actual values come from setParameter actions
       // at runtime (PyBNF / BNG2 fitting convention).
-      const freeParamRegex = /\b([A-Za-z_][A-Za-z0-9_]*__FREE)\b/g;
+      const freeParamRegex = /\b([A-Za-z_][A-Za-z0-9_]*__FREE_*)\b/g;
       let freeMatch: RegExpExecArray | null;
       while ((freeMatch = freeParamRegex.exec(value)) !== null) {
         const freeParam = freeMatch[1];

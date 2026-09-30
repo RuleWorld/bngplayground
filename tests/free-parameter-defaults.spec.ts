@@ -18,6 +18,7 @@ const PYBNF_MODEL = `begin model
 begin parameters
   t0 t0__FREE
   k1 k1__FREE
+  kd KD_LckCd28__FREE__
 end parameters
 begin molecule types
   A()
@@ -30,7 +31,7 @@ end model
 
 describe('__FREE parameter defaults for BNG2 reference generation', () => {
   it('finds every __FREE identifier referenced in the model', () => {
-    expect(findFreeParameters(PYBNF_MODEL)).toEqual(['k1__FREE', 't0__FREE']);
+    expect(findFreeParameters(PYBNF_MODEL)).toEqual(['KD_LckCd28__FREE__', 'k1__FREE', 't0__FREE']);
   });
 
   it('defines each __FREE parameter inside the parameters block', () => {

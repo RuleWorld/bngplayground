@@ -18,7 +18,7 @@
 /** Returns the __FREE identifiers referenced anywhere in the model. */
 export function findFreeParameters(code: string): string[] {
   const names = new Set<string>();
-  for (const match of code.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*__FREE)\b/g)) {
+  for (const match of code.matchAll(/\b([A-Za-z_][A-Za-z0-9_]*__FREE_*)\b/g)) {
     names.add(match[1]);
   }
   return [...names].sort();
