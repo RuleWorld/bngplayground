@@ -153,11 +153,26 @@ const main = async (): Promise<void> => {
   const report = {
     generatedAt: new Date().toISOString(),
     referenceDir: BNG_TEST_OUTPUT_DIR,
-    totals: { netFixtures: netFiles.length, compared: 0, matched: 0, mismatched: 0, expectedMismatch: 0, noPlaygroundNet: 0, errored: 0, unsupported: 0 },
+    totals: { netFixtures: netFiles.length, expectedModels: 0, missingReference: 0, compared: 0, matched: 0, mismatched: 0, expectedMismatch: 0, noPlaygroundNet: 0, errored: 0, unsupported: 0 },
     mismatches: [] as Array<Record<string, unknown>>,
     errors: [] as Array<Record<string, unknown>>,
     unsupported: [] as Array<Record<string, unknown>>,
+    missingReference: [] as Array<Record<string, unknown>>,
   };
+
+  // A model the reference generator saw but for which BNG2 wrote no .net is
+  // invisible to a loop over .net files, so the gate would report 178/178 matched
+  // and say nothing about the hundreds of models that dropped out — the same
+  // failure mode as the vacuous passes this gate had before, where reporting
+  // success did not disclose what was not checked. Enumerate the models that
+  // have a .bngl but no .net, and require each to be declared in the ratchet.
+  const modelsWithoutReference = fs
+    .readdirSync(BNG_TEST_OUTPUT_DIR)
+    .filter((f) => f.toLowerCase().endsWith('.bngl'))
+    .map((f) => path.basename(f, '.bngl'))
+    .filter((name) => !fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${name}.net`)));
+  report.totals.expectedModels = modelsWithoutReference.length + netFiles.length;
+  report.totals.missingReference = modelsWithoutReference.length;
   for (const netFile of netFiles) {
     const safeName = path.basename(netFile, path.extname(netFile));
     const bnglPath = path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.bngl`);
@@ -282,14 +297,41 @@ const main = async (): Promise<void> => {
   for (const e of report.errors) {
     console.log(`  ERROR ${e.model}: ${e.error}`);
   }
+  const undeclaredMissing = modelsWithoutReference.filter((name) => !isKnownUnparseableReference(name));
+  if (undeclaredMissing.length > 0) {
+    console.error(
+      `[net-shape] ${undeclaredMissing.length} model(s) have a .bngl but no BioNetGen .net, so they were never ` +
+        `compared: ${undeclaredMissing.slice(0, 10).join(', ')}${undeclaredMissing.length > 10 ? ', ...' : ''}. ` +
+        `Declare each in netShapeUnsupported.ts with its reason.`
+    );
+    for (const name of undeclaredMissing) {
+      report.missingReference.push({ model: name, error: 'no BioNetGen .net produced; model not declared' });
+    }
+  }
+  console.log(
+    `[net-shape] coverage: ${report.totals.compared}/${report.totals.expectedModels} models compared ` +
+      `(${report.totals.missingReference} without a reference, ${undeclaredMissing.length} undeclared)`
+  );
   console.log(`[net-shape] report: ${REPORT_PATH}`);
 
-  // A gate that quietly compares nothing is worse than no gate: a broken .net
-  // parser or a failed reference generation would turn every model into an
-  // "error" and the run would still go green. Require that most fixtures are
-  // actually compared, otherwise the gate is reporting on nothing.
+  // Two floors. The one that matters is against the models we know about rather
+  // than the fixtures that happen to exist: measured only against present
+  // fixtures it is vacuous the moment references stop being generated — which is
+  // exactly what happened when the reference pipeline stopped injecting missing
+  // parameters, and the gate reported 178/178 without mentioning it.
   const comparable = report.totals.netFixtures - report.totals.noPlaygroundNet;
   const coverage = comparable > 0 ? report.totals.compared / comparable : 0;
+  const overallCoverage =
+    report.totals.expectedModels > 0 ? report.totals.compared / report.totals.expectedModels : 0;
+  if (overallCoverage < MIN_COVERAGE) {
+    console.error(
+      `[net-shape] only ${report.totals.compared}/${report.totals.expectedModels} models compared ` +
+        `(${(overallCoverage * 100).toFixed(1)}%, minimum ${(MIN_COVERAGE * 100).toFixed(0)}%). ` +
+        `A floor measured only against fixtures that exist is vacuous once references stop ` +
+        `being generated.`
+    );
+    process.exit(1);
+  }
   if (coverage < MIN_COVERAGE) {
     console.error(
       `[net-shape] only ${report.totals.compared}/${comparable} networks compared ` +
