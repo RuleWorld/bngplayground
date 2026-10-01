@@ -2933,39 +2933,34 @@ export class NetworkGenerator {
             while (first || inc()) {
               first = false;
               const candidateMatches: MatchMap[] = new Array(n).fill(null);
-              // Compute weight correctly for repeated-species cases. When multiple
-              // pattern positions map to the same concrete species, sbDegeneracy
-              // values represent the pool of distinct full embeddings for that
-              // species. The number of *ordered* ways to assign c_j distinct
-              // embeddings to c_j pattern positions is P(e_j, c_j).
-              const degBySpecies = new Map<number, number[]>();
-              for (let k = 0; k < n; k++) {
-                const sel = sbMapsForPattern[k][idx[k]] ?? currentMatches[k];
-                candidateMatches[k] = sel;
-                const speciesIdx = currentSpeciesIndices[k];
-                const deg = sbDegeneracyForPattern[k][idx[k]] || 1;
-                const arr = degBySpecies.get(speciesIdx) ?? [];
-                arr.push(deg);
-                degBySpecies.set(speciesIdx, arr);
-              }
-
+              // Weight of one SB representative tuple: the PRODUCT of the
+              // per-pattern degeneracies.
+              //
+              // BioNetGen's `RxnRule` field `RuleInstances => 'CartesianProduct'`
+              // (RxnRule.pm:52, instantiated at :2965) makes the rule-instance
+              // enumeration the plain Cartesian product of the per-pattern match
+              // sets -- `find_embeddings` fills `Rmatches->[$ipatt]` per pattern
+              // (`update`, RxnRule.pm:3027) and `getNext` walks the product with
+              // no constraint relating one pattern position to another. Two
+              // identical reactant patterns landing on the SAME species therefore
+              // contribute `e * e`, not the number P(e, 2) of ways to hand out
+              // *distinct* embeddings from a shared pool: BNG2 lets both positions
+              // pick the same match.
+              //
+              // Measured on `A(x,x) + A(x,x) -> A(x!1,x).A(x!1,x)`: NIN=2 NOUT=2
+              // for each of the two patterns, so 2*2 = 4 rule instances each
+              // carrying MultScale = 1/(|RG|/|Stab|) = 0.5, and `RxnList::add`
+              // sums them into a factor of 2. The falling factorial gave P(2,2)=2
+              // instances -> factor 1.
+              //
+              // The two forms coincide whenever e == 1, which is every case the
+              // enumeration was tuned on (rafi `_R1`/`_R6`, erk `_R2`,
+              // auto_activation_loop `_R4`, motivating_example `Rule1_*`: all have
+              // per-pattern degeneracy 1, so P(1, c) == 1 == 1^c).
               let weight = 1;
-              for (const [_, degArray] of degBySpecies.entries()) {
-                // Prefer the common degeneracy if all entries agree (typical case).
-                const common = degArray[0];
-                if (degArray.every((d) => d === common)) {
-                  const e = common;
-                  const c = degArray.length;
-                  // permutations P(e, c) = e * (e-1) * ... * (e-c+1)
-                  let perm = 1;
-                  for (let t = 0; t < c; t++) {
-                    perm *= Math.max(1, e - t);
-                  }
-                  weight *= perm;
-                } else {
-                  // Fallback: multiply degeneracies (conservative).
-                  weight *= degArray.reduce((s, v) => s * (v || 1), 1);
-                }
+              for (let k = 0; k < n; k++) {
+                candidateMatches[k] = sbMapsForPattern[k][idx[k]] ?? currentMatches[k];
+                weight *= sbDegeneracyForPattern[k][idx[k]] || 1;
               }
 
               const prod = this.applyRuleTransformation(rule, patterns, reactantSpeciesList.map(s => s.graph), candidateMatches);

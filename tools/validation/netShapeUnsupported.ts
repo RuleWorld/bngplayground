@@ -472,7 +472,7 @@ export const UNPARSEABLE_REFERENCE_REASONS: Record<string, string> = {
   "simple_sbml_import": "BioNetGen aborts on this model; the abort was captured during the reference audit.",
   "translatesbml": "BioNetGen aborts on this model; the abort was captured during the reference audit.",
   "zhang_2023": "BioNetGen aborts on this model; the abort was captured during the reference audit.",
-  // --- parse (3) ---
+  // --- parse (2) ---
   "baruafceri_2012": "BioNetGen rejects the model while parsing.",
   "dushek_2014": "BioNetGen rejects the model while parsing.",
   // --- syntax (3) ---
