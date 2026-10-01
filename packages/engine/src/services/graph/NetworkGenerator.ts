@@ -17,6 +17,7 @@ import type { BNGLEnergyPattern, GeneratorProgress } from '../../types';
 export type { GeneratorProgress } from '../../types';
 import { Molecule } from './core/Molecule';
 import { BNGLParser } from './core/BNGLParser';
+import { filterIdenticalByRxnCenter } from './core/RxnRuleOps';
 
 export class NetworkGenerationLimitError extends Error {
   constructor(
@@ -1726,12 +1727,22 @@ export class NetworkGenerator {
         );
       }
 
-      const skipSignatureDedup = hasWildcardBoundPattern && rule.deleteBonds.length > 0 && rule.addBonds.length === 0;
+      // Note: no signature-dedup exemption for deleteBonds rules. A signature is
+      // built purely from the mapped target bond endpoints, so two matches that
+      // share one describe the same physical bond-breaking event however the
+      // pattern labelled the bond. The builder already returns null (opting out
+      // of dedup) whenever an endpoint cannot be resolved to a concrete target
+      // component, which is what the old wildcard+deleteBonds exemption
+      // approximated. Exempting the whole class double-counted symmetric
+      // homodimer splits: in motivating_example, Rule1_5_rev/Rule1_6_rev
+      // (L(d!1,..).L(d!1,..) -> L(d,..) + L(d,..)) has two embeddings that both
+      // resolve to the same `delBond` signature, turning BNG2's single `km_LL`
+      // into 2*km_LL.
 
       // Deduplicate symmetry-equivalent embeddings (same physical event).
       // This avoids 2x overcounting for cases like symmetric dimer unbinding where
       // multiple automorphism-related embeddings map to the same bond endpoints.
-      if (signature && !skipSignatureDedup) {
+      if (signature) {
         if (seenSignatures.has(signature)) {
           if (debugSignatureForThisRule && debugPrinted < 10) {
             console.log('  -> DUPLICATE signature, skipping (symmetry-equivalent)');
@@ -1892,6 +1903,16 @@ export class NetworkGenerator {
         statFactor = 1;
       }
 
+      // A rule that changes only component states: no bond added, removed or moved,
+      // no molecule added or deleted. BioNetGen has no special case for these —
+      // it enumerates every embedding, keeps one per distinct reaction-centre image,
+      // and emits one reaction per survivor.
+      const isPureStateChangeRule =
+        rule.changeStates.length > 0 &&
+        rule.addBonds.length === 0 &&
+        rule.deleteBonds.length === 0 &&
+        rule.deleteMolecules.length === 0;
+
       if (!isSymmetricHomodimerUnbind && matchCount === 1 && hasTopologyChangingOps && hasWildcardBoundPattern) {
         const wildcardStatFactor = computeWildcardBoundStatFactor(pattern, reactantSpecies.graph, match);
         if (wildcardStatFactor > 1) {
@@ -1923,6 +1944,26 @@ export class NetworkGenerator {
       if (!hasTopologyChangingOps) {
         statFactor = 1;
       }
+      // BioNetGen `RxnRule::filter_identical_by_rxn_center` keeps exactly one match
+      // per distinct image of the reaction centre, so a rule that changes only
+      // component states carries a multiplicity equal to its number of distinct
+      // reaction-centre images — never to its raw embedding count. Embeddings that
+      // differ only in how spectator wildcard sites (`!+`) are permuted map the
+      // reaction centre onto the same target nodes, so the filter collapses them
+      // to a single event. E.g. `Ang1_4(tie2bs!1,tie2bs!+,tie2bs!+,tie2bs!+).Tie2(...pY~dp)`
+      // has 6 embeddings (3! spectator permutations) but one reaction-centre image.
+      // This is authoritative: none of the embedding-count heuristics above apply.
+      if (isPureStateChangeRule && matchCount === 1 && !isSymmetricHomodimerUnbind && !rule.isMatchOnce) {
+        const allMapsNoSB = profiledFindAllMaps(pattern, reactantSpecies.graph, {
+          symmetryBreaking: false,
+        }).filter(
+          (m) =>
+            this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, m) &&
+            this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, m)
+        );
+        filterIdenticalByRxnCenter(allMapsNoSB, rule.reactionCenter?.[0] ?? [], 0);
+        statFactor = Math.max(1, allMapsNoSB.length);
+      }
 
       // For unimolecular bond-topology rules on symmetric multi-monomer complexes,
       // symmetry-broken matching collapses equivalent embeddings to a single match.
@@ -1945,6 +1986,7 @@ export class NetworkGenerator {
       //   Two distinct bond-breaking events produce different product SPECIES.
       if (
         hasTopologyChangingOps &&
+        !isPureStateChangeRule &&
         !isSymmetricHomodimerUnbind &&
         !rule.isMatchOnce &&
         statFactor <= 1
@@ -2335,20 +2377,19 @@ export class NetworkGenerator {
       }
     }
     // Also include carry-through detected via explicit changeStates ops.
+    //
+    // Which pattern a state change belongs to cannot be recovered from
+    // `changeStates`: its molecule index is *pattern-local*, not merged
+    // (RxnRule's `mergedMoleculeIndex` drops the "iPatt" prefix), so the
+    // first molecule of every pattern reports the same index and an
+    // offset-walk attributes the change to pattern 0 no matter which
+    // pattern actually changed. `reactionCenter` keeps the full
+    // "iPatt.iMol.iComp" pointer that BNG2's `find_reaction_center` records,
+    // and a pattern with no reaction-centre node is by definition untouched
+    // — which is exactly BNG2's notion of a carry-through reactant.
     if (isPureStateChangeRule && rule.changeStates.length > 0) {
-      const changedPatternSet = new Set<number>();
-      let molOffset = 0;
       for (let k = 0; k < n; k++) {
-        const patternMolCount = patterns[k].molecules.length;
-        for (const [globalMolIdx] of rule.changeStates) {
-          if (globalMolIdx >= molOffset && globalMolIdx < molOffset + patternMolCount) {
-            changedPatternSet.add(k);
-          }
-        }
-        molOffset += patternMolCount;
-      }
-      for (let k = 0; k < n; k++) {
-        if (!changedPatternSet.has(k)) {
+        if ((rule.reactionCenter?.[k] ?? []).length === 0) {
           carryThroughPatternIndices.add(k);
         }
       }
@@ -2443,6 +2484,9 @@ export class NetworkGenerator {
           }
         }
       }
+      // BioNetGen RxnRule::find_embeddings keeps one match per distinct image of
+      // the reaction centre (RxnRule::filter_identical_by_rxn_center).
+      filterIdenticalByRxnCenter(matches, rule.reactionCenter?.[i] ?? [], i);
       if (matches.length === 0) continue;
 
       if (shouldLogNetworkGenerator) {
@@ -2600,6 +2644,8 @@ export class NetworkGenerator {
               }
             }
           }
+          // BioNetGen RxnRule::find_embeddings filters partner matches the same way.
+          filterIdenticalByRxnCenter(candMaps, rule.reactionCenter?.[nextPatternIdx] ?? [], nextPatternIdx);
 
           for (const candMatch of candMaps) {
             const nextIndices = [...currentIndices];
