@@ -111,6 +111,12 @@ import {
   normalizeTimeSeriesRows,
 } from './compareShared';
 import { modelReferenceNameFor } from './referenceNaming';
+// The browser exports CSV labels over `getModelCatalogSync().examples`, which
+// is this generated gallery list resolved against the manifest — NOT the full
+// RuleHub manifest. Label→model resolution has to use the same catalog the
+// browser used, or a label the browser gave to one model resolves here to a
+// sibling the browser catalog does not even contain.
+import { EXAMPLES } from '../../src/generated/gallery-data';
 
 function stripDownloadSuffix(name: string): string {
   // Firefox/Chrome may save duplicates as "file(1).csv".
@@ -523,11 +529,85 @@ function getMultiPhaseReference(
    */
   function exportedLabelFor(entry: CatalogEntry, catalog: CatalogEntry[]): string {
     const base = String(entry.id || entry.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
-    const sameName = catalog.filter(other => String(other.id || other.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase() === base);
+    // The browser sorts the collision group by id before assigning labels, so
+    // which member keeps the bare label is decided by locale order, not by
+    // catalog order. Mirror that or the bare label resolves to the wrong member
+    // whenever the two orders differ.
+    const sameName = catalog
+      .filter(other => String(other.id || other.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase() === base)
+      .sort((a, b) => String(a.id || a.name).localeCompare(String(b.id || b.name)));
     const index = sameName.findIndex(other => (other.id || other.name) === (entry.id || entry.name));
     if (sameName.length < 2 || index <= 0) return base;
     const suffix = String(entry.id || entry.name || '').replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
     return `${base}_${suffix || index}`;
+  }
+
+  let browserCatalogCache: CatalogEntry[] | null = null;
+
+  /**
+   * The catalog the web batch runner exports labels over: `EXAMPLES` (the
+   * generated gallery list) resolved against the RuleHub manifest, exactly as
+   * `buildCatalog` in `services/modelCatalog.ts` does for the browser.
+   *
+   * The full manifest is a different catalog: it contains models the gallery
+   * does not (Published `fceri_ji` next to the tutorial `FceRI_ji`), so
+   * collision groups — and therefore the exported labels — differ between the
+   * two. The browser exported `results_fceri_ji.csv` from the tutorial because
+   * its catalog has only that member of the pair; resolving the same label over
+   * the full manifest lands on the Published model instead.
+   */
+  function browserCatalogEntries(): CatalogEntry[] {
+    if (browserCatalogCache) return browserCatalogCache;
+    // Mirrors `buildManifestIndex`/`resolveManifestEntry` in
+    // `services/modelCatalog.ts`, including its `_`↔`-` swap: gallery ids and
+    // manifest ids differ in separator style for some models, and resolving
+    // one side without the swap drops models the browser keeps.
+    const manifestLookupKeys = (value: string): string[] => {
+      const normalized = value.trim().toLowerCase().replace(/\.bngl$/i, '');
+      const swap = normalized.includes('_') ? normalized.replace(/_/g, '-') : normalized.replace(/-/g, '_');
+      return swap === normalized ? [normalized] : [normalized, swap];
+    };
+    const manifest = loadRuleHubManifest(PROJECT_ROOT) as CatalogEntry[];
+    const byExactId = new Map<string, CatalogEntry>();
+    const byExactName = new Map<string, CatalogEntry>();
+    const index = new Map<string, CatalogEntry>();
+    for (const entry of manifest) {
+      if (entry.id && !byExactId.has(entry.id)) byExactId.set(entry.id, entry);
+      if (entry.name && !byExactName.has(entry.name)) byExactName.set(entry.name, entry);
+      for (const candidate of [entry.id, entry.name]) {
+        if (!candidate) continue;
+        for (const key of manifestLookupKeys(candidate)) {
+          if (!index.has(key)) index.set(key, entry);
+        }
+      }
+    }
+
+    const resolved: CatalogEntry[] = [];
+    for (const example of EXAMPLES) {
+      // Exact id first: the runner loads code by the gallery id, so the model
+      // that ran is the manifest entry whose id matches verbatim. The
+      // normalized index alone is first-wins and both `fceri_ji` (Published)
+      // and `FceRI_ji` (Tutorials) normalize to `fceriji` — falling straight
+      // to it maps the tutorial run onto the Published path.
+      let match = example.id ? byExactId.get(example.id) : undefined;
+      if (!match && example.name) match = byExactName.get(example.name);
+      if (!match) {
+        for (const candidate of [example.id, example.name]) {
+          if (!candidate) continue;
+          for (const key of manifestLookupKeys(candidate)) {
+            match = index.get(key);
+            if (match) break;
+          }
+          if (match) break;
+        }
+      }
+      if (!match || !match.path) continue;
+      // Browser `mergeExample` keeps the gallery id/name and takes the path
+      // from the manifest entry.
+      resolved.push({ ...match, id: example.id || match.id, name: example.name ?? match.name });
+    }
+    browserCatalogCache = resolved;
+    return resolved;
   }
 
   /**
@@ -551,9 +631,43 @@ function getMultiPhaseReference(
    * takes over where it is exact.
    */
   function manifestEntryForCsvLabel(csvFile: string): { id: string; relativePath: string; file: string } | null {
-    const labelKey = normalizeKey(csvModelLabel(csvFile));
+    const csvLabel = csvModelLabel(csvFile);
+    const labelKey = normalizeKey(csvLabel);
     const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
     if (!ruleHubRoot) return null;
+
+    // Exact match against the browser's own catalog first. The exported label
+    // is written verbatim into the filename, so equality here is exact — and it
+    // must be: `normalizeKey` strips the underscore that is the only thing
+    // separating the labels `circadian_oscillator` (the Examples ODE model) and
+    // `circadianoscillator` (the Tutorials SSA model). Two distinct models also
+    // do not always collide the same way in both catalogs — the gallery list
+    // that the browser labels from does not contain Published `fceri_ji` at
+    // all, so the browser's bare `fceri_ji` label denotes the tutorial
+    // `FceRI_ji`, while the full manifest hands that same bare label to the
+    // Published entry. Normalized-over-full-manifest matching therefore pairs
+    // the run with a sibling model's reference.
+    const browserCatalog = browserCatalogEntries();
+    // The browser appends the simulate suffix to the filename when a phase
+    // carries one (`results_<label>_ode.csv`). Try the full label first, then
+    // the label without a method suffix, so `sir_ode` still resolves to the
+    // `SIR` entry the suffix was appended to and its reference provenance can
+    // be checked. Only method suffixes are stripped: an arbitrary phase suffix
+    // (e.g. `07_egg_egg` + `egg`) is not a model id and must not be guessed at.
+    const methodSuffix = /_(?:ode|ssa|nf|nfsim)$/.exec(csvLabel);
+    const strippedLabel = methodSuffix ? csvLabel.slice(0, -methodSuffix[0].length) : '';
+    const candidateLabels = strippedLabel ? [csvLabel, strippedLabel] : [csvLabel];
+    for (const candidateLabel of candidateLabels) {
+      for (const entry of browserCatalog) {
+        if (!entry.id || !entry.path) continue;
+        if (exportedLabelFor(entry, browserCatalog).toLowerCase() !== candidateLabel.toLowerCase()) continue;
+        const file = path.join(ruleHubRoot, entry.path);
+        // The label names this entry unambiguously; a missing source file means
+        // the model is unavailable here, not that a sibling should stand in.
+        if (!fs.existsSync(file)) return null;
+        return { id: entry.id, relativePath: entry.path, file };
+      }
+    }
 
     const catalog = loadRuleHubManifest(PROJECT_ROOT);
     let best: { id: string; relativePath: string; file: string } | null = null;
@@ -746,12 +860,45 @@ function getMultiPhaseReference(
       .filter((f) => f.toLowerCase().endsWith('.bngl'));
     const modelSource = modelSourceForCsvLabel(csvFile);
 
+    // The reference this model owns, resolved through the manifest entry the
+    // CSV label denotes. Computed before any by-name candidate is trusted: a
+    // normalized filename match can belong to a sibling model that merely
+    // sanitizes to the same key.
+    const manifestEntry = manifestEntryForCsvLabel(csvFile);
+    const modelReferenceName = manifestEntry
+      ? modelReferenceNameFor(PROJECT_ROOT, manifestEntry.relativePath)
+      : null;
+
+    const dropForeignReferences = (candidates: string[]): string[] => {
+      if (!modelReferenceName) return candidates;
+      return candidates.filter((candidate) => {
+        const owner = owningReferenceName(path.basename(candidate), referenceBnglNames);
+        if (!owner || owner === modelReferenceName) return true;
+        console.warn(
+          `[compare] Dropping ${path.basename(candidate)} for ${rawLabel}: it belongs to reference ` +
+          `"${owner}", but this model's own reference is "${modelReferenceName}".`
+        );
+        return false;
+      });
+    };
+
     if (directMatches.length > 0) {
-      return {
-        gdatPaths: keepReferencesForModel(uniqueStrings(directMatches), modelSource, referenceBnglNames),
-        bnglPath: bnglPathForDirect ?? undefined,
-        inferred: false,
-      };
+      const trustedDirect = keepReferencesForModel(
+        uniqueStrings(dropForeignReferences(directMatches)),
+        modelSource,
+        referenceBnglNames,
+      );
+      if (trustedDirect.length > 0) {
+        return {
+          gdatPaths: trustedDirect,
+          bnglPath: bnglPathForDirect ?? undefined,
+          inferred: false,
+        };
+      }
+      // Every by-name candidate provably belongs to a different model. Fall
+      // through to the provenance-based resolution below instead of returning
+      // an empty list — the model's own reference may still exist under its
+      // reference name.
     }
 
     // 1b) The model the CSV is actually for, via the manifest.
@@ -768,10 +915,6 @@ function getMultiPhaseReference(
     // This only redirects when the by-name match belongs to a different model,
     // so every case where the two already agree — which is the overwhelming
     // majority — keeps exactly the references it had.
-    const manifestEntry = manifestEntryForCsvLabel(csvFile);
-    const modelReferenceName = manifestEntry
-      ? modelReferenceNameFor(PROJECT_ROOT, manifestEntry.relativePath)
-      : null;
     if (modelReferenceName) {
       const ownedByModel = gdatFiles.filter(
         gf => owningReferenceName(gf, referenceBnglNames) === modelReferenceName
@@ -821,7 +964,10 @@ function getMultiPhaseReference(
       .map((gf) => path.join(BNG_OUTPUT_DIR, gf));
 
     const requestedPhaseIndex = inferRequestedPhaseIndex(rawLabel, bnglPath);
-    const candidates = uniqueStrings([...(inferredGdat ? [inferredGdat] : []), ...byPrefix]);
+    // Provenance applies here too: `chooseReferenceFromBngl` falls back to a
+    // normalized filename match, and `byPrefix` matches on the fuzzy basename
+    // — both can land on a sibling's file for same-key families.
+    const candidates = dropForeignReferences(uniqueStrings([...(inferredGdat ? [inferredGdat] : []), ...byPrefix]));
     // Prefer comparing against ODE references; drop explicit SSA/NF variants.
     const odeCandidates = candidates.filter((p) => !isClearlyNonOdeGdat(p));
     const filteredCandidates = odeCandidates.length > 0 ? odeCandidates : candidates;
