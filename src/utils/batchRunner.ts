@@ -67,13 +67,28 @@ function exportLabelFor(
     const cached = collidingExportLabels.get(key);
     if (cached) return cached;
 
-    const sameName = catalog.filter((m) => safeModelName(m.id || m.name) === base);
+    // Order the collision group deterministically so a label does not depend on
+    // catalog order.
+    const sameName = catalog
+        .filter((m) => safeModelName(m.id || m.name) === base)
+        .sort((a, b) => (a.id || a.name).localeCompare(b.id || b.name));
     const index = sameName.findIndex((m) => (m.id || m.name) === (modelDef.id || modelDef.name));
     let label = base;
     if (sameName.length > 1) {
         if (index > 0) {
-            const suffix = (modelDef.id || modelDef.name).replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
-            label = `${base}_${suffix || index}`;
+            // A tail of the id is a readable discriminator but is NOT unique on its
+            // own — ids can share their last six characters, and `model`/`parabola`
+            // appear as literal duplicate ids. Fall back to a positional suffix
+            // until the label is free, so the mapping is injective by construction.
+            const tail = (modelDef.id || modelDef.name).replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
+            const taken = new Set(collidingExportLabels.values());
+            let candidate = `${base}_${tail || index}`;
+            let bump = 2;
+            while (taken.has(candidate)) {
+                candidate = `${base}_${tail || index}_${bump}`;
+                bump += 1;
+            }
+            label = candidate;
         }
         console.warn(
             `[batch] ${sameName.length} catalog models share the sanitised name "${base}"; their ` +

@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { getRuleHubManifestBnglPaths, loadRuleHubManifest, resolveRuleHubRoot } from '../rulehubLocal';
+import { getRuleHubManifestBnglPaths, loadRuleHubManifest, resolveRuleHubRoot, type RuleHubManifestEntry } from '../rulehubLocal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -110,6 +110,7 @@ import {
   parseGDAT,
   normalizeTimeSeriesRows,
 } from './compareShared';
+import { modelReferenceNameFor } from './referenceNaming';
 
 function stripDownloadSuffix(name: string): string {
   // Firefox/Chrome may save duplicates as "file(1).csv".
@@ -503,22 +504,71 @@ function getMultiPhaseReference(
   }
 
   /**
+   * `RuleHubManifestEntry` omits `name`, but `manifest.json` carries it and
+   * the exporter falls back to it for an entry that has no id.
+   */
+  type CatalogEntry = RuleHubManifestEntry & { name?: string };
+
+  /**
+   * The catalog label the web batch runner exports a manifest entry under.
+   *
+   * A port of `exportLabelFor` in `src/utils/batchRunner.ts`: the bare
+   * sanitised id, plus a discriminator derived from the id for every model
+   * after the first that shares one. Reproduced rather than imported because
+   * it decides which model a CSV label denotes, and a CSV label that resolves
+   * to the wrong model is compared against the wrong reference.
+   *
+   * Note `safeModelName` there keeps leading/trailing underscores, unlike
+   * `safeReferenceBaseName`, so the two deliberately differ.
+   */
+  function exportedLabelFor(entry: CatalogEntry, catalog: CatalogEntry[]): string {
+    const base = String(entry.id || entry.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    const sameName = catalog.filter(other => String(other.id || other.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase() === base);
+    const index = sameName.findIndex(other => (other.id || other.name) === (entry.id || entry.name));
+    if (sameName.length < 2 || index <= 0) return base;
+    const suffix = String(entry.id || entry.name || '').replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
+    return `${base}_${suffix || index}`;
+  }
+
+  /**
    * The RuleHub model a web CSV was produced from.
    *
-   * The browser names its export `results_<manifest id>_<simulate suffix>.csv`,
-   * so the manifest id is a prefix of the CSV label. Resolving it directly is
-   * what disambiguates models that share a basename (`alabama_Alabama` and
+   * The browser names its export `results_<exported label>.csv`, and the
+   * exported label names exactly one model. Matching on it directly is what
+   * disambiguates models that share a basename (`alabama_Alabama` and
    * `mallela2021_states_Alabama` are `Alabama/Alabama.bngl` and
    * `Mallela2021/SI_files_Alabama_Alabama.bngl`), which basename scoring
    * cannot do.
+   *
+   * An exact label match is tried first because prefix matching cannot separate
+   * ids that sanitise alike: `fceri_ji` and `FceRI_ji` both reduce to
+   * `fceriji`, so the label `fceri_ji_ceriji` — which is the second model's,
+   * the discriminator carrying that model's own id — matched the first model
+   * instead and was handed the first model's reference.
+   *
+   * Prefix matching then remains the fallback for labels the exporter shaped
+   * differently (the simulate-suffix forms the browser appends), so this only
+   * takes over where it is exact.
    */
-  function modelSourceForCsvLabel(csvFile: string): string | null {
+  function manifestEntryForCsvLabel(csvFile: string): { id: string; relativePath: string; file: string } | null {
     const labelKey = normalizeKey(csvModelLabel(csvFile));
     const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
     if (!ruleHubRoot) return null;
 
-    let best: { id: string; file: string } | null = null;
-    for (const entry of loadRuleHubManifest(PROJECT_ROOT)) {
+    const catalog = loadRuleHubManifest(PROJECT_ROOT);
+    let best: { id: string; relativePath: string; file: string } | null = null;
+    for (const entry of catalog) {
+      if (!entry.id || !entry.path) continue;
+      if (normalizeKey(exportedLabelFor(entry, catalog)) !== labelKey) continue;
+      const file = path.join(ruleHubRoot, entry.path);
+      if (!fs.existsSync(file)) continue;
+      // Two catalog entries can share an id (`parabola` appears four times), in
+      // which case the browser wrote one CSV for all of them and the label
+      // cannot say which. First match matches what the run had available.
+      return { id: entry.id, relativePath: entry.path, file };
+    }
+
+    for (const entry of catalog) {
       if (!entry.id || !entry.path) continue;
       const idKey = normalizeKey(entry.id);
       // A 4-character floor keeps a short id from prefix-matching everything,
@@ -526,9 +576,13 @@ function getMultiPhaseReference(
       if (idKey.length < 4 || !labelKey.startsWith(idKey)) continue;
       const file = path.join(ruleHubRoot, entry.path);
       if (!fs.existsSync(file)) continue;
-      if (!best || idKey.length > normalizeKey(best.id).length) best = { id: entry.id, file };
+      if (!best || idKey.length > normalizeKey(best.id).length) best = { id: entry.id, relativePath: entry.path, file };
     }
-    return best?.file ?? null;
+    return best;
+  }
+
+  function modelSourceForCsvLabel(csvFile: string): string | null {
+    return manifestEntryForCsvLabel(csvFile)?.file ?? null;
   }
 
   /**
@@ -544,6 +598,21 @@ function getMultiPhaseReference(
       if (!best || stem.length > best.name.length) best = { name: stem, file: path.join(BNG_OUTPUT_DIR, name) };
     }
     return best?.file ?? null;
+  }
+
+  /**
+   * Which model's reference a `.gdat` in `bng_test_output/` belongs to, or null
+   * when nothing on record says.
+   *
+   * The generator writes `<referenceName>.bngl` next to the outputs it
+   * produced for that model, so the longest `.bngl` stem that prefixes the
+   * `.gdat` names the reference. Longest-prefix matters: `egg.gdat` and
+   * `egg_bionetfit_files.gdat` are different models' references, and only the
+   * latter is owned by the longer stem.
+   */
+  function owningReferenceName(gdatFileName: string, bnglNames: string[]): string | null {
+    const source = referenceSourceBngl(path.join(BNG_OUTPUT_DIR, gdatFileName), bnglNames);
+    return source ? path.basename(source).replace(/\.bngl$/i, '') : null;
   }
 
   /**
@@ -683,6 +752,44 @@ function getMultiPhaseReference(
         bnglPath: bnglPathForDirect ?? undefined,
         inferred: false,
       };
+    }
+
+    // 1b) The model the CSV is actually for, via the manifest.
+    //
+    // A CSV label carries the catalog id, and the catalog id names one model.
+    // Matching it against `.gdat` filenames does not: RuleHub holds 28
+    // basenames shared by 79 distinct models in the CI-visible corpus, and the
+    // reference generator can only give one of them the bare filename — the
+    // rest are `<basename>_<path discriminator>`. So for those models the
+    // by-name match above lands on a sibling that merely shares a basename,
+    // and the gate compares a trajectory against another model's network.
+    //
+    // Resolve through the manifest to the model's own reference name instead.
+    // This only redirects when the by-name match belongs to a different model,
+    // so every case where the two already agree — which is the overwhelming
+    // majority — keeps exactly the references it had.
+    const manifestEntry = manifestEntryForCsvLabel(csvFile);
+    const modelReferenceName = manifestEntry
+      ? modelReferenceNameFor(PROJECT_ROOT, manifestEntry.relativePath)
+      : null;
+    if (modelReferenceName) {
+      const ownedByModel = gdatFiles.filter(
+        gf => owningReferenceName(gf, referenceBnglNames) === modelReferenceName
+      );
+      const nameMatchAlreadyCorrect = directMatches.some(
+        candidate => owningReferenceName(path.basename(candidate), referenceBnglNames) === modelReferenceName
+      );
+      if (ownedByModel.length > 0 && !nameMatchAlreadyCorrect) {
+        return {
+          gdatPaths: keepReferencesForModel(
+            uniqueStrings(ownedByModel.map(gf => path.join(BNG_OUTPUT_DIR, gf))),
+            modelSource,
+            referenceBnglNames
+          ),
+          bnglPath: bnglPathForDirect ?? undefined,
+          inferred: false,
+        };
+      }
     }
 
     // 2) Try infer from matching BNGL and its last simulate() call.
