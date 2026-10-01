@@ -16,14 +16,18 @@ import {
 
 describe('unparseable-reference baseline', () => {
   it('recognises baseline entries case-insensitively', () => {
-    // One of the models BNG2 itself cannot terminate on, so no reference exists.
-    expect(isKnownUnparseableReference('egfr_ode')).toBe(true);
-    expect(isKnownUnparseableReference('EGFR_ODE')).toBe(true);
+    // A PyBNF fitting model: BioNetGen aborts on the published source because it
+    // references '<param>__FREE' values only the fitter supplies.
+    expect(isKnownUnparseableReference('elephant')).toBe(true);
+    expect(isKnownUnparseableReference('ELEPHANT')).toBe(true);
   });
 
   it('does not recognise models that are not listed', () => {
     expect(isKnownUnparseableReference('mystery_model')).toBe(false);
-    expect(isKnownUnparseableReference('elephant')).toBe(false);
+    expect(isKnownUnparseableReference('egfr')).toBe(true);
+    // Ratcheted as a PyBNF fitting model: BioNetGen aborts on the published
+    // source with "Parameter 'kp1__FREE' is referenced but not defined".
+    expect(unparseableReferenceReason('egfr')).toMatch(/__FREE/);
   });
 
   it('gives a specific reason for every entry', () => {
@@ -38,16 +42,25 @@ describe('unparseable-reference baseline', () => {
   });
 
   it('does not list models whose parser gaps have been fixed', () => {
-    // These parse today; keeping them listed would let a regression hide.
-    // `after_scaling`/`before_scaling` are the `!?` state modifier,
-    // `mwc`/`simple_genonly` the `setOption` forms,
-    // `igf1r_fit_all_*` the parameter_scan argument forms,
-    // `test_mratio` the observable pattern form, `univ_synth` the compartment
-    // volume variant, and the three `*_mi_*` models the en dash.
+    // These parse and expand today; keeping them listed would let a regression
+    // hide. `after_scaling`/`before_scaling` are the `!?` state modifier,
+    // `mwc`/`simple_genonly` the `setOption` forms, `igf1r_fit_all_*` the
+    // parameter_scan argument forms, `test_mratio` the observable pattern form,
+    // `univ_synth` the compartment volume variant, and the three `*_mi_*`
+    // models the en dash.
+    // NOTE: `egfr`, `alabama`, `actions_syntax` and `tricky` are deliberately
+    // NOT here. They are PyBNF fitting models and BioNetGen aborts on them with
+    // "Parameter '<name>__FREE' is referenced but not defined" — verified by
+    // running the reference directly, not inferred. They used to appear to work
+    // only because the pipeline injected `*__FREE = 0` defaults, which meant the
+    // gate was comparing against a model BioNetgen had never seen.
+    // Cross-checked against the reference audit: each of these was seen to make
+    // BioNetGen produce a network, and none is ratcheted.
     for (const fixed of [
-      'elephant',
-      'elephant_simplex_init0',
-      'actions_syntax',
+      'complexdegradation',
+      'kesseler_2013',
+      'zhang_2021',
+      'barua_2013',
       'after_scaling',
       'before_scaling',
       'mwc',
@@ -55,11 +68,21 @@ describe('unparseable-reference baseline', () => {
       'igf1r_fit_all_gen19ind47',
       'test_mratio',
       'univ_synth',
-      'tricky',
-      'mek_isoform_optimization_de_mek1_ko',
-      'detroit_warren_dearborn_mi_detroit_warren_dearborn_mi',
+      'nfkb_illustrating_protocols',
+      'before_decoupling',
+      'akt_signaling',
+      'an_2009',
+      'abc_ssa',
     ]) {
       expect(isKnownUnparseableReference(fixed)).toBe(false);
     }
+  });
+
+  it('gives each class a reason that distinguishes it from the others', () => {
+    // A reader must be able to tell a __FREE abort from an unsupported block
+    // from a non-termination without re-running BioNetGen.
+    const reasons = new Set(Object.values(UNPARSEABLE_REFERENCE_REASONS));
+    expect(reasons.size).toBeGreaterThanOrEqual(6);
+    expect([...reasons].every((r) => r.length > 40)).toBe(true);
   });
 });
