@@ -65,18 +65,28 @@ function getPatternBondPairs(pattern: SpeciesGraph): Array<[string, string]> {
   return pairs;
 }
 
-export const countEmbeddingDegeneracy = (
+/**
+ * Enumerate every injective component assignment of `pattern` into `target` that
+ * is consistent with `match`'s molecule mapping and with the pattern's bond
+ * structure — the bounded, per-molecule-map counterpart of the embedding set
+ * `SpeciesGraph::isomorphicToSubgraph` produces in BioNetGen.
+ *
+ * `visit` is called once per surviving assignment and returns false to abandon
+ * the enumeration. `budget` bounds the number of assignments examined; when it is
+ * exhausted the enumeration stops early and `false` is returned, so callers can
+ * distinguish a complete answer from a truncated one.
+ */
+const enumerateComponentAssignments = (
   pattern: SpeciesGraph,
   target: SpeciesGraph,
-  match: MatchMap
-): number => {
-  // IMPORTANT: This function must NOT invoke global subgraph isomorphism enumeration.
-  // It is only allowed to count symmetry/multiplicity induced by *component assignments*
-  // given a fixed molecule mapping (the provided `match`).
-  //
-  // This keeps the cost bounded by per-molecule component counts, not target size.
-
-  if (pattern.molecules.length === 0 || match.moleculeMap.size === 0) return 1;
+  match: MatchMap,
+  visit: (assignment: ReadonlyMap<string, string>) => boolean,
+  budget: number
+): boolean => {
+  if (pattern.molecules.length === 0 || match.moleculeMap.size === 0) {
+    visit(new Map());
+    return true;
+  }
 
   const bondPairs = getPatternBondPairs(pattern);
 
@@ -84,7 +94,10 @@ export const countEmbeddingDegeneracy = (
   for (const [pMolIdx, tMolIdx] of match.moleculeMap.entries()) {
     const pMol = pattern.molecules[pMolIdx];
     const tMol = target.molecules[tMolIdx];
-    if (!pMol || !tMol) return 1;
+    if (!pMol || !tMol) {
+      visit(new Map());
+      return true;
+    }
 
     for (let pCompIdx = 0; pCompIdx < pMol.components.length; pCompIdx++) {
       const pComp = pMol.components[pCompIdx];
@@ -117,10 +130,13 @@ export const countEmbeddingDegeneracy = (
   }
 
   // If the pattern specifies no components anywhere, degeneracy is 1.
-  if (endpoints.length === 0) return 1;
+  if (endpoints.length === 0) {
+    visit(new Map());
+    return true;
+  }
 
   // If any component has no valid candidate, there is no embedding.
-  if (endpoints.some((e) => e.candidates.length === 0)) return 0;
+  if (endpoints.some((e) => e.candidates.length === 0)) return true;
 
   // Order by most constrained endpoint first (classic CSP heuristic).
   endpoints.sort((a, b) => a.candidates.length - b.candidates.length || a.pKey.localeCompare(b.pKey));
@@ -141,24 +157,24 @@ export const countEmbeddingDegeneracy = (
     return true;
   };
 
-  let count = 0;
+  let examined = 0;
+  let complete = true;
   const backtrack = (idx: number): void => {
+    if (!complete) return;
     if (idx >= endpoints.length) {
       // Final check: ensure ALL pattern bonds are satisfied.
       for (const [pA, pB] of bondPairs) {
         const tA = assignment.get(pA);
         const tB = assignment.get(pB);
-        if (!tA || !tB) {
-          count = 0;
-          return;
-        }
-        if (!areAdjacent(target, tA, tB) || !areAdjacent(target, tB, tA)) {
-          count = 0;
-          return;
-        }
+        if (!tA || !tB) return;
+        if (!areAdjacent(target, tA, tB) || !areAdjacent(target, tB, tA)) return;
       }
 
-      count += 1;
+      if (++examined > budget) {
+        complete = false;
+        return;
+      }
+      if (!visit(assignment)) complete = false;
       return;
     }
 
@@ -177,10 +193,84 @@ export const countEmbeddingDegeneracy = (
       backtrack(idx + 1);
       assignment.delete(e.pKey);
       used.delete(tCompIdx);
+      if (!complete) return;
     }
   };
 
   backtrack(0);
+  return complete;
+};
+
+export const countEmbeddingDegeneracy = (
+  pattern: SpeciesGraph,
+  target: SpeciesGraph,
+  match: MatchMap
+): number => {
+  // IMPORTANT: This function must NOT invoke global subgraph isomorphism enumeration.
+  // It is only allowed to count symmetry/multiplicity induced by *component assignments*
+  // given a fixed molecule mapping (the provided `match`).
+  //
+  // This keeps the cost bounded by per-molecule component counts, not target size.
+  let count = 0;
+  enumerateComponentAssignments(
+    pattern,
+    target,
+    match,
+    () => {
+      count += 1;
+      return true;
+    },
+    Number.POSITIVE_INFINITY
+  );
   return count;
+};
+
+/**
+ * `RxnRule::filter_identical_by_rxn_center` (RxnRule.pm:3501-3592) applied to the
+ * component-assignment embeddings of one reactant pattern into one species.
+ *
+ * BioNetGen enumerates every embedding, projects each onto the rule's reaction
+ * centre, and keeps one embedding per distinct image. The survivor count — not
+ * the raw embedding count — is that pattern's contribution to the rule's
+ * multiplicity. This computes it directly, without materialising the match set.
+ *
+ * Returns `null` when `budget` assignments are not enough to decide the answer;
+ * callers then fall back to the raw embedding count.
+ */
+export const countRxnCenterImages = (
+  pattern: SpeciesGraph,
+  target: SpeciesGraph,
+  match: MatchMap,
+  reactionCenter: string[],
+  iPatt: number,
+  budget: number
+): number | null => {
+  const images = new Set<string>();
+
+  const complete = enumerateComponentAssignments(
+    pattern,
+    target,
+    match,
+    assignment => {
+      let key = '';
+      for (const node of reactionCenter) {
+        const dot = node.indexOf('.');
+        const rest = dot === -1 ? '' : node.slice(dot + 1);
+        if (rest === '') {
+          key += `${iPatt}|`;
+        } else if (rest.indexOf('.') === -1) {
+          const tMol = match.moleculeMap.get(Number(rest));
+          key += `${iPatt}.${tMol === undefined ? 'undefined' : tMol}|`;
+        } else {
+          key += `${iPatt}.${assignment.get(rest) ?? match.componentMap.get(rest) ?? 'undefined'}|`;
+        }
+      }
+      images.add(key);
+      return true;
+    },
+    budget
+  );
+
+  return complete ? images.size : null;
 };
 

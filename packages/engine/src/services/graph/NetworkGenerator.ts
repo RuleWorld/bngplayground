@@ -10,7 +10,7 @@ import { Rxn } from './core/Rxn';
 import { GraphCanonicalizer } from './core/Canonical';
 import { GraphMatcher, clearMatchCache } from './core/Matcher';
 import type { MatchMap } from './core/Matcher';
-import { countEmbeddingDegeneracy } from './core/degeneracy';
+import { countEmbeddingDegeneracy, countRxnCenterImages } from './core/degeneracy';
 import { Component } from './core/Component';
 import { EnergyService } from './core/EnergyService';
 import type { BNGLEnergyPattern, GeneratorProgress } from '../../types';
@@ -2710,9 +2710,19 @@ export class NetworkGenerator {
     }
     const hasRepeatedReactantPatterns = Array.from(rulePatternCounts.values()).some((count) => count > 1);
 
+    // BioNetGen's per-pattern multiplicity is the number of embeddings that
+    // survive `filter_identical_by_rxn_center`, not the raw embedding count
+    // (RxnRule.pm:3092, 3501-3592). `countRxnCenterImages` is that survivor
+    // count computed over the bounded component-assignment enumeration; the raw
+    // count is only a fallback for when the enumeration budget is exhausted.
+    const RXN_CENTER_IMAGE_BUDGET = 20000;
     let totalDegeneracy = 1;
     for (let k = 0; k < n; k++) {
-      const kDeg = countEmbeddingDegeneracy(patterns[k], reactantSpeciesList[k].graph, currentMatches[k]);
+      const center = rule.reactionCenter?.[k] ?? [];
+      const images = center.length > 0
+        ? countRxnCenterImages(patterns[k], reactantSpeciesList[k].graph, currentMatches[k], center, k, RXN_CENTER_IMAGE_BUDGET)
+        : null;
+      const kDeg = images ?? countEmbeddingDegeneracy(patterns[k], reactantSpeciesList[k].graph, currentMatches[k]);
       totalDegeneracy *= kDeg;
     }
 
@@ -2810,92 +2820,6 @@ export class NetworkGenerator {
           shouldApplyDegeneracyStatFactor(patterns[k], reactantSpeciesList[k].graph, match)
         )
       );
-
-    // SPECTATOR CORRECTION for hasSelectiveEquivalentSiteBonding:
-    // countEmbeddingDegeneracy counts ALL component permutations (including permutations
-    // of spectator components that are same-name-and-state but do NOT participate in bonding).
-    // These spectator permutations do NOT create distinct physical events — only the
-    // choice of which site(s) gets bonded matters.
-    //
-    // NOTE: rule.addBonds is always empty for rules stored as reactant/product pattern pairs.
-    // We instead derive the correction directly from comparing reactant vs product molecules.
-    //
-    // For each component name on each molecule where deltaBound > 0 && deltaBound < total:
-    //   spectatorFree  = (n_free_in_reactant) - deltaBound   [free sites that stay free]
-    //   spectatorBound = n_bound_in_reactant                  [bound sites that stay bound]
-    //   correction    *= factorial(spectatorFree) * factorial(spectatorBound)
-    //
-    // Example: L(r,r,r) + R(l) → L(r,r,r!1).R(l!1) kp1
-    //   deltaBound=1, freeInR=3, spectatorFree=2, spectatorBound=0
-    //   correction = 2! * 1 = 2  →  totalDegeneracy = 6 / 2 = 3  ✓
-    //
-    // Example: L(r!+,r!+,r) + R(l) → L(r!+,r!+,r!1).R(l!1) kp3
-    //   deltaBound=1, freeInR=1, spectatorFree=0, spectatorBound=2
-    //   correction = 1 * 2! = 2  →  totalDegeneracy = 2 / 2 = 1  ✓
-    //
-    // Example: L(r!+,r,r) + R(l) → L(r!+,r,r!1).R(l!1) kp2
-    //   deltaBound=1, freeInR=2, spectatorFree=1, spectatorBound=1
-    //   correction = 1! * 1! = 1  →  totalDegeneracy unchanged = 2  ✓
-    if (hasSelectiveEquivalentSiteBonding && useEmbeddingDegeneracy) {
-      let spectatorCorrectionFactor = 1;
-
-      const _specCountByName = (mol: Molecule): Map<string, { total: number; bound: number }> => {
-        const map = new Map<string, { total: number; bound: number }>();
-        for (const comp of mol.components) {
-          // Skip synthetic wildcard components (added by completeMissingComponents).
-          // These are NOT explicitly written in the rule and must NOT be counted as
-          // equivalent-site selectors — doing so causes spurious spectator corrections
-          // for rules like A(b)+B(a) where expansion produces A(b,b!?,b!?).
-          if ((comp as Component & { syntheticWildcard?: boolean }).syntheticWildcard) continue;
-          const entry = map.get(comp.name) ?? { total: 0, bound: 0 };
-          entry.total += 1;
-          // Count as bound if has a concrete bond edge OR is a bound wildcard (+)
-          const isBound = comp.edges.size > 0 || comp.wildcard === '+';
-          if (isBound) entry.bound += 1;
-          map.set(comp.name, entry);
-        }
-        return map;
-      };
-
-      const _specMolSig = (mol: Molecule): string => {
-        const names = mol.components.map((c) => c.name).sort();
-        return `${mol.name}|${names.join(',')}`;
-      };
-
-      const _specReactantMols = patterns.flatMap((pat) => pat.molecules);
-      const _specProductMols = rule.products.flatMap((pat) => pat.molecules);
-
-      for (const rMol of _specReactantMols) {
-        const sig = _specMolSig(rMol);
-        const pMatches = _specProductMols.filter((pMol) => _specMolSig(pMol) === sig);
-        if (pMatches.length !== 1) continue;
-
-        const pMol = pMatches[0];
-        const rCounts = _specCountByName(rMol);
-        const pCounts = _specCountByName(pMol);
-
-        for (const [name, rEntry] of rCounts.entries()) {
-          if (rEntry.total < 2) continue;
-          const pEntry = pCounts.get(name);
-          if (!pEntry) continue;
-          const deltaBound = pEntry.bound - rEntry.bound;
-          if (deltaBound <= 0 || deltaBound >= rEntry.total) continue;
-
-          // Free-group spectators: free in reactant and still free in product
-          const freeInReactant = rEntry.total - rEntry.bound;
-          const spectatorFree = freeInReactant - deltaBound;
-          // Bound-group spectators: bound in reactant, stayed bound (all bound ones, since deltaBound>0)
-          const spectatorBound = rEntry.bound;
-
-          if (spectatorFree > 1) spectatorCorrectionFactor *= factorial(spectatorFree);
-          if (spectatorBound > 1) spectatorCorrectionFactor *= factorial(spectatorBound);
-        }
-      }
-
-      if (spectatorCorrectionFactor > 1) {
-        totalDegeneracy = Math.max(1, Math.round(totalDegeneracy / spectatorCorrectionFactor));
-      }
-    }
 
     // Default n-ary multiplicity should not include full embedding automorphisms,
     // since event-signature deduplication already collapses symmetry-equivalent mappings.
