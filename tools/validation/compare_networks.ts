@@ -153,11 +153,12 @@ const main = async (): Promise<void> => {
   const report = {
     generatedAt: new Date().toISOString(),
     referenceDir: BNG_TEST_OUTPUT_DIR,
-    totals: { netFixtures: netFiles.length, expectedModels: 0, missingReference: 0, compared: 0, matched: 0, mismatched: 0, expectedMismatch: 0, noPlaygroundNet: 0, errored: 0, unsupported: 0 },
+    totals: { netFixtures: netFiles.length, expectedModels: 0, missingReference: 0, compared: 0, matched: 0, mismatched: 0, expectedMismatch: 0, noPlaygroundNet: 0, duplicateFixtures: 0, errored: 0, unsupported: 0 },
     mismatches: [] as Array<Record<string, unknown>>,
     errors: [] as Array<Record<string, unknown>>,
     unsupported: [] as Array<Record<string, unknown>>,
     missingReference: [] as Array<Record<string, unknown>>,
+    duplicateFixtures: [] as Array<Record<string, unknown>>,
   };
 
   // A model the reference generator saw but for which BNG2 wrote no .net is
@@ -166,17 +167,48 @@ const main = async (): Promise<void> => {
   // failure mode as the vacuous passes this gate had before, where reporting
   // success did not disclose what was not checked. Enumerate the models that
   // have a .bngl but no .net, and require each to be declared in the ratchet.
-  const modelsWithoutReference = fs
-    .readdirSync(BNG_TEST_OUTPUT_DIR)
-    .filter((f) => f.toLowerCase().endsWith('.bngl'))
-    .map((f) => path.basename(f, '.bngl'))
-    .filter((name) => !fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${name}.net`)));
-  report.totals.expectedModels = modelsWithoutReference.length + netFiles.length;
+  const bnglStems = new Set(
+    fs
+      .readdirSync(BNG_TEST_OUTPUT_DIR)
+      .filter((f) => f.toLowerCase().endsWith('.bngl'))
+      .map((f) => path.basename(f, '.bngl')),
+  );
+  const modelsWithoutReference = [...bnglStems].filter(
+    (name) => !fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${name}.net`)),
+  );
   report.totals.missingReference = modelsWithoutReference.length;
+
+  // A `.net` with no exact-stem `.bngl` is not automatically a model the
+  // playground failed to expand. The generator copies every file BNG2 produced
+  // for an action, and a suffixed action (`simulate_ode({suffix=>"EGF_25nM"})`)
+  // writes `<stem>_<suffix>.net` beside the canonical `<stem>.net`, while the
+  // one `<stem>.bngl` is copied once. Those fixtures belong to a model that IS
+  // compared. Counting each as a separate unmodelled fixture inflated the
+  // denominator (554 "models" from 362 real ones, floor 64.8% while every
+  // comparable model had been compared), so the fixture is attached to its base
+  // model instead — longest `.bngl`-backed `_` prefix, exact match first — and
+  // only a `.net` whose every prefix is `.bngl`-less counts as
+  // `noPlaygroundNet`. That case still fails the floor: if the pipeline stops
+  // copying `.bngl` files while `.net` files persist, the prefixes disappear
+  // with them and every fixture becomes an unmodelled orphan again.
+  const baseModelFor = (stem: string): string | null => {
+    for (let i = stem.lastIndexOf('_'); i > 0; i = stem.lastIndexOf('_', i - 1)) {
+      const base = stem.slice(0, i);
+      if (bnglStems.has(base)) return base;
+    }
+    return null;
+  };
+
   for (const netFile of netFiles) {
     const safeName = path.basename(netFile, path.extname(netFile));
     const bnglPath = path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.bngl`);
     if (!fs.existsSync(bnglPath)) {
+      const baseModel = baseModelFor(safeName);
+      if (baseModel !== null) {
+        report.totals.duplicateFixtures++;
+        report.duplicateFixtures.push({ model: safeName, baseModel });
+        continue;
+      }
       report.totals.noPlaygroundNet++;
       continue;
     }
@@ -267,6 +299,9 @@ const main = async (): Promise<void> => {
     report.mismatches.push(entry);
   }
 
+  report.totals.expectedModels =
+    modelsWithoutReference.length + netFiles.length - report.totals.duplicateFixtures;
+
   fs.mkdirSync(path.dirname(REPORT_PATH), { recursive: true });
   fs.writeFileSync(REPORT_PATH, JSON.stringify(report, null, 1));
 
@@ -310,7 +345,8 @@ const main = async (): Promise<void> => {
   }
   console.log(
     `[net-shape] coverage: ${report.totals.compared}/${report.totals.expectedModels} models compared ` +
-      `(${report.totals.missingReference} without a reference, ${undeclaredMissing.length} undeclared)`
+      `(${report.totals.missingReference} without a reference, ${undeclaredMissing.length} undeclared, ` +
+      `${report.totals.duplicateFixtures} suffixed duplicate fixture(s) attributed to their base model)`
   );
   console.log(`[net-shape] report: ${REPORT_PATH}`);
 
@@ -319,7 +355,8 @@ const main = async (): Promise<void> => {
   // fixtures it is vacuous the moment references stop being generated — which is
   // exactly what happened when the reference pipeline stopped injecting missing
   // parameters, and the gate reported 178/178 without mentioning it.
-  const comparable = report.totals.netFixtures - report.totals.noPlaygroundNet;
+  const comparable =
+    report.totals.netFixtures - report.totals.noPlaygroundNet - report.totals.duplicateFixtures;
   const coverage = comparable > 0 ? report.totals.compared / comparable : 0;
   const overallCoverage =
     report.totals.expectedModels > 0 ? report.totals.compared / report.totals.expectedModels : 0;
