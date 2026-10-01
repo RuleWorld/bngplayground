@@ -50,12 +50,19 @@ export function mergeRuleGraphs(patterns: SpeciesGraph[]): MergedRuleGraph {
     for (const [key, partners] of src.adjacency) {
       const dot = key.indexOf('.');
       const mol = Number(key.slice(0, dot));
+      const mergedKey = `${offset + mol}.${key.slice(dot + 1)}`;
       for (const partner of partners) {
         const pDot = partner.indexOf('.');
-        adjacency.set(
-          `${offset + mol}.${key.slice(dot + 1)}`,
-          [`${offset + Number(partner.slice(0, pDot))}.${partner.slice(pDot + 1)}`]
-        );
+        const mergedPartner = `${offset + Number(partner.slice(0, pDot))}.${partner.slice(pDot + 1)}`;
+        const existing = adjacency.get(mergedKey);
+        if (existing) {
+          // A component can carry several bonds (bridging, multi-site); the merged
+          // graph must keep all of them, because the automorphism search in
+          // `find_reaction_center` compares the whole adjacency relation.
+          if (!existing.includes(mergedPartner)) existing.push(mergedPartner);
+        } else {
+          adjacency.set(mergedKey, [mergedPartner]);
+        }
       }
     }
     offset += src.molecules.length;

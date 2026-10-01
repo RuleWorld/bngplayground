@@ -18,6 +18,14 @@ export type { GeneratorProgress } from '../../types';
 import { Molecule } from './core/Molecule';
 import { BNGLParser } from './core/BNGLParser';
 import { filterIdenticalByRxnCenter } from './core/RxnRuleOps';
+import { computeRuleDivisor } from './core/RuleStatFactor';
+
+/**
+ * Cap on the component assignments `countRxnCenterImages` will enumerate for one
+ * (pattern, species, match) triple. It returns `null` when exceeded, and the
+ * caller then falls back to the raw embedding count.
+ */
+const RXN_CENTER_IMAGE_BUDGET = 20000;
 
 export class NetworkGenerationLimitError extends Error {
   constructor(
@@ -788,111 +796,7 @@ export class NetworkGenerator {
 
 
 
-  private computeCollapsedRuleStatFactor(rule: RxnRule): number {
-    // Recover BioNetGen's stat_factor for symmetric repeated sites when the matcher returns
-    // a single embedding. We approximate this from *pattern-level* bond-count changes.
-    //
-    // Example: L(r,r) + R(l) -> L(r,r!1).R(l!1)
-    // - L has 2 equivalent unbound r sites; one becomes bound => stat_factor = 2.
-    const summarize = (graphs: SpeciesGraph[]) => {
-      const byMol = new Map<string, { bound: Map<string, number>; unbound: Map<string, number> }>();
 
-      const moleculePatternKey = (mol: Molecule): string => {
-        const componentSig = mol.components
-          .map((comp) => {
-            const statePart = comp.state !== null ? `~${comp.state}` : '';
-            const wildcardPart = comp.wildcard ? `?${comp.wildcard}` : '';
-            const boundPart = comp.edges.size > 0 ? '!b' : '';
-            return `${comp.name}${statePart}${wildcardPart}${boundPart}`;
-          })
-          .sort()
-          .join(',');
-        return `${mol.name}|${componentSig}`;
-      };
-
-      const bump = (m: Map<string, number>, key: string, delta: number) => {
-        m.set(key, (m.get(key) ?? 0) + delta);
-      };
-
-      for (const g of graphs) {
-        for (const mol of g.molecules) {
-          const molKey = moleculePatternKey(mol);
-          if (!byMol.has(molKey)) {
-            byMol.set(molKey, { bound: new Map(), unbound: new Map() });
-          }
-          const entry = byMol.get(molKey)!;
-
-          for (const comp of mol.components) {
-            const isBound = comp.edges.size > 0 || comp.wildcard === '+';
-            // Treat explicit '-' as unbound. Also treat "plain" sites (no wildcard/edges)
-            // as unbound, which matches BNGL semantics for patterns like r or r~U.
-            const isUnbound = (!isBound && comp.wildcard === '-') || (!isBound && !comp.wildcard);
-
-            if (isBound) bump(entry.bound, comp.name, 1);
-            else if (isUnbound) bump(entry.unbound, comp.name, 1);
-          }
-        }
-      }
-
-      return byMol;
-    };
-
-    const react = summarize(rule.reactants);
-    const prod = summarize(rule.products);
-    const reactantMolTypeCount = new Set(
-      rule.reactants.flatMap((graph) => graph.molecules.map((mol) => mol.name))
-    ).size;
-
-    const addCandidates: number[] = [];
-    const delCandidates: number[] = [];
-
-    for (const [molPatternKey, rCounts] of react.entries()) {
-      const pCounts = prod.get(molPatternKey);
-      if (!pCounts) continue;
-
-      const allCompNames = new Set<string>([
-        ...Array.from(rCounts.bound.keys()),
-        ...Array.from(rCounts.unbound.keys()),
-        ...Array.from(pCounts.bound.keys()),
-        ...Array.from(pCounts.unbound.keys()),
-      ]);
-
-      for (const compName of allCompNames) {
-        const rBound = rCounts.bound.get(compName) ?? 0;
-        const rUnbound = rCounts.unbound.get(compName) ?? 0;
-        const pBound = pCounts.bound.get(compName) ?? 0;
-
-        // One new bond formed at this site type.
-        // NOTE: Bond formation consumes one unbound endpoint on *each* side of the bond.
-        // When patterns have symmetric repeated sites, BNG2's stat_factor corresponds to
-        // the number of equivalent endpoint choices. For the common single-bond case,
-        // the correct factor is the max endpoint multiplicity (e.g., L has 2 r sites, R has 1).
-        if (pBound === rBound + 1 && rUnbound > 1) {
-          addCandidates.push(rUnbound);
-        }
-
-        // One bond broken at this site type.
-        // IMPORTANT: rBound counts *endpoints*, not bonds. For symmetric dimer unbinding
-        // (e.g., TLR4(TLR4!1).TLR4(TLR4!1) -> TLR4 + TLR4), rBound=2 but the number of
-        // distinct bonds to break is 1, and BNG2's stat_factor is 1 (not 2).
-        //
-        // Approximate the number of equivalent deletable bonds as rBound/2 only when
-        // the reactant side is a single molecule type (typical symmetric homodimer case).
-        // For multi-type complexes (e.g., gene-protein), each bound endpoint can represent
-        // a distinct deletable bond and should keep full multiplicity.
-        if (pBound === rBound - 1 && rBound > 1) {
-          const deleteFactor = reactantMolTypeCount === 1
-            ? Math.max(1, Math.floor(rBound / 2))
-            : rBound;
-          delCandidates.push(deleteFactor);
-        }
-      }
-    }
-
-    const addFactor = addCandidates.length > 0 ? Math.max(...addCandidates) : 1;
-    const delFactor = delCandidates.length > 0 ? Math.max(...delCandidates) : 1;
-    return Math.max(addFactor, delFactor, 1);
-  }
 
   private areCompartmentsAdjacent(comp1Name: string | null, comp2Name: string | null): boolean {
     // If either is null/undefined, can't check adjacency - allow (for backward compatibility)
@@ -1655,9 +1559,6 @@ export class NetworkGenerator {
       mol.components.some((comp) => comp.wildcard === '+')
     );
 
-    // Recover stat_factor for collapsed symmetric embeddings (e.g., repeated identical sites).
-    const collapsedRuleStatFactor = matchCount === 1 ? this.computeCollapsedRuleStatFactor(rule) : 1;
-
     const signatureMultiplicityByOutcome = new Map<string, number>();
     const matchOutcomes: Array<{
       match: MatchMap;
@@ -1897,7 +1798,11 @@ export class NetworkGenerator {
           wildcardDegeneracyAllowed
         );
 
-      let statFactor = useDegeneracy ? degeneracy : (matchCount === 1 ? collapsedRuleStatFactor : 1);
+      // BioNetGen's per-instance value here is `MultScale`, and the number of
+      // instances is the distinct-reaction-centre-image count -- both handled
+      // further down. The free-site histogram that used to supply the initial
+      // value (`computeCollapsedRuleStatFactor`) is deleted.
+      let statFactor = useDegeneracy ? degeneracy : 1;
 
       if (isSymmetricHomodimerUnbind) {
         statFactor = 1;
@@ -1930,9 +1835,6 @@ export class NetworkGenerator {
         statFactor = Math.max(statFactor, signatureMultiplicity);
       }
 
-      if (hasTopologyChangingOps && hasWildcardBoundPattern && statFactor === 1 && collapsedRuleStatFactor > 1) {
-        statFactor = collapsedRuleStatFactor;
-      }
 
       if (rule.isMatchOnce) {
         statFactor = 1;
@@ -1954,15 +1856,15 @@ export class NetworkGenerator {
       // has 6 embeddings (3! spectator permutations) but one reaction-centre image.
       // This is authoritative: none of the embedding-count heuristics above apply.
       if (isPureStateChangeRule && matchCount === 1 && !isSymmetricHomodimerUnbind && !rule.isMatchOnce) {
-        const allMapsNoSB = profiledFindAllMaps(pattern, reactantSpecies.graph, {
-          symmetryBreaking: false,
-        }).filter(
-          (m) =>
-            this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, m) &&
-            this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, m)
+        const images = countRxnCenterImages(
+          pattern,
+          reactantSpecies.graph,
+          match,
+          rule.reactionCenter?.[0] ?? [],
+          0,
+          RXN_CENTER_IMAGE_BUDGET
         );
-        filterIdenticalByRxnCenter(allMapsNoSB, rule.reactionCenter?.[0] ?? [], 0);
-        statFactor = Math.max(1, allMapsNoSB.length);
+        if (images !== null) statFactor = Math.max(1, images);
       }
 
       // For unimolecular bond-topology rules on symmetric multi-monomer complexes,
@@ -1991,38 +1893,22 @@ export class NetworkGenerator {
         !rule.isMatchOnce &&
         statFactor <= 1
       ) {
-        const fullMapsNoSB = profiledFindAllMaps(pattern, reactantSpecies.graph, {
-          symmetryBreaking: false,
-        }).filter(
-          (m) =>
-            this.matchRespectsExplicitComponentBondCounts(pattern, reactantSpecies.graph, m) &&
-            this.matchRespectsProductImpliedFreeConstraints(rule, pattern, reactantSpecies.graph, m)
+        // BioNetGen's survivor count for this (pattern, species) pair, via the same
+        // `countRxnCenterImages` mechanism the n-ary path and the pure-state block
+        // use: the number of distinct images of the reaction centre over the
+        // component-assignment embeddings of this match.
+        const images = countRxnCenterImages(
+          pattern,
+          reactantSpecies.graph,
+          match,
+          rule.reactionCenter?.[0] ?? [],
+          0,
+          RXN_CENTER_IMAGE_BUDGET
         );
         // matchCount = SB match count (from filteredMatches above)
         // Only apply if SB collapsed some equivalent embeddings
-        if (fullMapsNoSB.length > matchCount && matchCount > 0) {
-          // Guard: check whether the extra non-SB matches produce distinct products.
-          // If all non-SB matches produce the same canonical product as the SB match,
-          // SB correctly deduplicates them → do NOT scale.
-          const sbProductKey = products.map((p) => p.toString()).sort().join('|');
-          let allNonSBMatchesSameProduct = true;
-          const sampleLimit = Math.min(fullMapsNoSB.length, 6);
-          for (let _ni = 0; _ni < sampleLimit; _ni++) {
-            const noSBProds = this.applyRuleTransformation(
-              rule,
-              [rule.reactants[0]],
-              [reactantSpecies.graph],
-              [fullMapsNoSB[_ni]]
-            );
-            const noSBKey = noSBProds ? noSBProds.map((p) => p.toString()).sort().join('|') : null;
-            if (noSBKey !== sbProductKey) {
-              allNonSBMatchesSameProduct = false;
-              break;
-            }
-          }
-          if (!allNonSBMatchesSameProduct) {
-            statFactor = Math.max(statFactor, fullMapsNoSB.length / matchCount);
-          }
+        if (images !== null && images > matchCount && matchCount > 0) {
+          statFactor = Math.max(statFactor, images / matchCount);
         }
       }
       // BNG2 parity: TotalRate disables statFactor (sf=1), matching BNG2's toCvodeString logic.
@@ -2698,24 +2584,46 @@ export class NetworkGenerator {
     // However, our outer loop visits each embedding combo.
     // We aggregate them by (reactantIndices, productIndices).
 
-    // Calculate rule symmetry factor (e.g. 2 for A+A)
+    // Distinct reactant patterns, used below only as a structural guard.
     const rulePatternCounts = new Map<string, number>();
     for (const p of patterns) {
       const s = getPatternSymmetryKey(p);
       rulePatternCounts.set(s, (rulePatternCounts.get(s) || 0) + 1);
     }
-    let ruleSymmetryFactor = 1;
-    for (const count of rulePatternCounts.values()) {
-      ruleSymmetryFactor *= factorial(count);
-    }
     const hasRepeatedReactantPatterns = Array.from(rulePatternCounts.values()).some((count) => count > 1);
+
+    // BIO-NETGEN PARITY: the statistical divisor.
+    //
+    // `RxnRule::find_reaction_center` (RxnRule.pm:2659-2849) derives
+    //   multScale = 1 / ( (|RG| / |Stab|) * crg_permutations )
+    // from the rule's own patterns, and `build_reaction` gives every rule instance
+    // `StatFactor = multScale` (RxnRule.pm:3397); `RxnList::add` SUMS the stat
+    // factors of the instances that fold into one `.net` entry. So the divisor
+    // belongs here -- once, per instance -- and nowhere else:
+    //
+    //   multiplicity = (number of surviving rule instances) / divisor
+    //
+    // where the surviving count is what `countRxnCenterImages` computes (one per
+    // distinct reaction-centre image, per `filter_identical_by_rxn_center`).
+    //
+    // `computeRuleDivisor` is that derivation transcribed: RG is the set of merged
+    // reactant-graph automorphisms, restricted to those that induce a permutation
+    // of the reactant patterns, whose induced permutation on the product graph is
+    // itself a product-graph automorphism; Stab is the subgroup of RG fixing every
+    // reaction-centre element; crg_permutations is the product of classSize! over
+    // isomorphism classes of pure-context reactant patterns.
+    //
+    // It returns null only if the automorphism enumeration exceeds its budget, in
+    // which case we apply no division -- BioNetGen's own value for the large
+    // majority of rule instances.
+    const ruleSymmetryFactor = computeRuleDivisor(rule)?.divisor ?? 1;
 
     // BioNetGen's per-pattern multiplicity is the number of embeddings that
     // survive `filter_identical_by_rxn_center`, not the raw embedding count
     // (RxnRule.pm:3092, 3501-3592). `countRxnCenterImages` is that survivor
     // count computed over the bounded component-assignment enumeration; the raw
     // count is only a fallback for when the enumeration budget is exhausted.
-    const RXN_CENTER_IMAGE_BUDGET = 20000;
+
     let totalDegeneracy = 1;
     for (let k = 0; k < n; k++) {
       const center = rule.reactionCenter?.[k] ?? [];
@@ -2852,16 +2760,6 @@ export class NetworkGenerator {
       if (bondTopoFullMapCount > bondTopoSBMapCount * totalDegeneracy) {
         multiplicity = Math.max(multiplicity, bondTopoFullMapCount / (bondTopoSBMapCount * ruleSymmetryFactor));
       }
-    }
-
-    const collapsedRuleStatFactor = this.computeCollapsedRuleStatFactor(rule);
-    if (
-      hasBondTopologyOps &&
-      multiplicity === 1 &&
-      collapsedRuleStatFactor > 1 &&
-      rulePatternCounts.size > 1
-    ) {
-      multiplicity = collapsedRuleStatFactor;
     }
 
     // Tuple-aware correction for identical reactant patterns.
@@ -3110,17 +3008,11 @@ export class NetworkGenerator {
     const productBondCount = products.reduce((sum, g) => sum + countGraphBonds(g), 0);
     const hasConcreteBondChange = reactantBondCount !== productBondCount;
 
-    if (
-      hasConcreteBondChange &&
-      hasWildcardBoundPattern &&
-      collapsedRuleStatFactor > 1 &&
-      rulePatternCounts.size > 1
-    ) {
-      const concreteMultiplicity = totalDegeneracy / ruleSymmetryFactor;
-      if (concreteMultiplicity > multiplicity) {
-        multiplicity = concreteMultiplicity;
-      }
-    }
+    // BioNetGen's per-rule instance count for a wildcard-bound rule is the number
+    // of distinct reaction-centre images, which `totalDegeneracy` already is; the
+    // free-site-count heuristic that used to raise `multiplicity` here counted
+    // endpoints rather than centre images, and was a second source of the
+    // `zhang_2021` `_R19`/`_R20` 4 -> 0.667 over-count. Nothing to restore.
 
     if (rule.isMatchOnce) {
       multiplicity = 1;
@@ -3183,30 +3075,19 @@ export class NetworkGenerator {
       }
     }
 
-    // BIO-NETGEN PARITY: Pattern Automorphism Correction
-    // BNG2 divides the rate by the number of automorphisms of the reactant pattern itself.
-    // This corrects for overcounting when the pattern is symmetric (see auto_activation_loop).
-    let patternAutomorphismFactor = 1;
-    for (const pattern of patterns) {
-      patternAutomorphismFactor *= GraphMatcher.getMoleculeAutomorphismFactor(pattern);
-    }
+    // There is no per-pattern automorphism division here. BioNetGen applies exactly
+    // ONE statistical divisor per rule instance -- the one `computeRuleDivisor`
+    // derives from `find_reaction_center` and `multiplicity` already carries.
+    // `patternAutomorphismFactor` (the product over reactant patterns of the
+    // molecule-level self-automorphism count `|Aut(rg)|`) was our own invention:
+    // it is 24 for `zhang_2021`'s `Ang1_4(tie2bs,tie2bs,tie2bs,tie2bs)` where BNG2's
+    // divisor is 1, and 1 for every rule where BNG2's divisor is 2 (`rafi`, `ERK`),
+    // so it moved rates in the wrong direction in both families.
 
     // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
     // not the un-evaluatable "Arrhenius(phi, Eact)" string.
     let finalRateExpr = (rule as RxnRule & { isArrhenius?: boolean }).isArrhenius ? undefined : rule.rateExpression;
     let exprScaleFactor = multiplicity;
-
-    const allIdenticalReactants =
-      currentSpeciesIndices.length > 1 &&
-      currentSpeciesIndices.every((idx) => idx === currentSpeciesIndices[0]);
-    const shouldSkipAutomorphismDivision = allIdenticalReactants && multiplicity <= 1;
-
-    if (patternAutomorphismFactor > 1 && !useEmbeddingDegeneracy && !rule.isMatchOnce && !shouldSkipAutomorphismDivision) {
-      effectiveRate /= patternAutomorphismFactor;
-      if (hasRateExpression) {
-        exprScaleFactor /= patternAutomorphismFactor;
-      }
-    }
 
     if (hasRateExpression && finalRateExpr) {
       finalRateExpr = finalRateExpr.trim();

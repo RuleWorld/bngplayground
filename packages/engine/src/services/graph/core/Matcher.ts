@@ -666,28 +666,6 @@ export class GraphMatcher {
     return null;
   }
 
-  private static moleculeAutomorphismCache = new WeakMap<SpeciesGraph, number>();
-
-  /**
-   * Calculate and cache the molecule-level self-automorphisms of a pattern.
-   * Completely avoids redundant graph matching runs for static reactant patterns.
-   */
-  static getMoleculeAutomorphismFactor(pattern: SpeciesGraph): number {
-    const cached = this.moleculeAutomorphismCache.get(pattern);
-    if (cached !== undefined) return cached;
-
-    try {
-      if (pattern.molecules.length === 0) return 1;
-      const autos = this.findAllMaps(pattern, pattern);
-      const factor = autos.length || 1;
-      this.moleculeAutomorphismCache.set(pattern, factor);
-      return factor;
-    } catch (err) {
-      console.warn(`[GraphMatcher] Failed to compute molecule automorphisms for pattern`, err);
-      return 1;
-    }
-  }
-
   /**
    * BNGL PARITY: Calculate the total number of isomorphisms of a pattern into itself.
    * This includes both molecule-level automorphisms and component-level degeneracies.
