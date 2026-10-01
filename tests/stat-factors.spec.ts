@@ -300,5 +300,53 @@ describe('Stat factors / degeneracy', () => {
     // dimer + dimer -> multiplicity 1/2 => rate 0.5
     expect(findRateFor(['Unfolded(b)', 'IRE1(b!1,s~U).IRE1(b!1,s~U)', 'IRE1(b!1,s~U).IRE1(b!1,s~U)'])).toBeCloseTo(0.5, 12);
   });
+
+  it('keeps BNG2 stat factors folded into non-bond identical-reactant rates (no propensityFactor split)', async () => {
+    // Ground truth from the pinned BNG2 (3513bca7) on
+    //   M() + M() -> M() + M() + Z() kz   (no bonds formed):
+    //     row (U,U): 0.5*kz   row (U,P): kz   row (P,P): 0.5*kz
+    // i.e. per-row sum of per-instance stat factors (divisor 2), written into
+    // the rate column itself. An earlier split multiplied the stored rate back
+    // up by the divisor and parked 1/divisor in `propensityFactor`, so the .net
+    // said kz/2*kz and every ODE kernel that skips propensityFactor simulated
+    // twice the BNG2 flux (genetic_turing_pattern_1d ran away to saturation).
+    const seedSpecies = [
+      BNGLParser.parseSpeciesGraph('M(z~U)'),
+      BNGLParser.parseSpeciesGraph('M(z~P)'),
+    ];
+
+    const rule = BNGLParser.parseRxnRule(
+      'M() + M() -> M() + M() + Z()',
+      1.0,
+      'grow'
+    );
+
+    const generator = new NetworkGenerator({ maxSpecies: 20, maxIterations: 3 });
+    const result = await generator.generate(seedSpecies, [rule]);
+
+    const speciesByIndex = new Map<number, string>();
+    for (const s of result.species) {
+      speciesByIndex.set(Number(s.index), canon(s.graph));
+    }
+
+    const findRateFor = (reactantNames: string[]): number | undefined => {
+      const key = reactantNames.map((n) => canon(BNGLParser.parseSpeciesGraph(n))).sort().join(' + ');
+      const rx = result.reactions.find((r) => {
+        const rs = r.reactants.map((idx: number) => speciesByIndex.get(Number(idx)) ?? '').sort().join(' + ');
+        return rs === key;
+      });
+      return rx ? rx.rate : undefined;
+    };
+
+    expect(findRateFor(['M(z~U)', 'M(z~U)'])).toBeCloseTo(0.5, 12);
+    expect(findRateFor(['M(z~U)', 'M(z~P)'])).toBeCloseTo(1.0, 12);
+    expect(findRateFor(['M(z~P)', 'M(z~P)'])).toBeCloseTo(0.5, 12);
+
+    // The stat factor lives in the rate; nothing is split off for kernels to
+    // apply (or, as some paths do, to silently drop).
+    for (const rxn of result.reactions) {
+      expect(rxn.propensityFactor ?? 1).toBe(1);
+    }
+  });
 });
 

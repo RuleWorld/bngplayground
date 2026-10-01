@@ -3100,54 +3100,23 @@ export class NetworkGenerator {
     // for identical patterns (ruleSymmetryFactor) already accounts for it.
     // Applying it again would cause double-counting (e.g. 0.25*k instead of 0.5*k).
 
-    // BNG2 NET PARITY: For identical-reactant bimolecular rules WITHOUT bond formation
-    // (e.g. A+A→B state-change, logistic carrying-capacity terms like R+R→R),
-    // BNG2 writes the full rate constant k in the NET (no 0.5 prefix).
-    // The web was incorrectly writing 0.5*k because multiplicity = 1/2 was baked into storedRate.
-    // NOTE: split the ruleSymmetryFactor (1/2) into a separate propensityFactor field so that:
-    //   - NET file writes the full k (matches BNG2 convention for non-bond rules)
-    //   - ODE/SSA simulation kernels apply propensityFactor implicitly (already do this)
+    // BNG2 NET + ODE PARITY: the statistical factor stays folded into the rate.
     //
-    // NOTE: For bond-FORMING symmetric A+A rules (e.g. gp130+gp130→gp130.gp130),
-    // BNG2 *does* write 0.5*k in the NET. These are handled by the existing multiplicity
-    // logic (symmetric bond → multiplicity=0.5, effectiveRate=0.5*k → NET writes "0.5*k").
-    // Do NOT apply the split for bond-forming rules or we break that convention.
+    // `RxnList::add` sums the per-instance stat factors of the orderings that
+    // fold into one `.net` entry, so a row's rate is exactly
+    // (surviving instances) / divisor -- `effectiveRate` above. Verified against
+    // the pinned BNG2 (3513bca7): for `A()+A()->A()+A()+A() k` the rows come
+    // out `0.5*k` (same species twice), `k` (two distinct species, two orderings
+    // summed), and for `Droplet(s~1)+Droplet(s~1)->Droplet(s~2) kd` and
+    // `A()+A()->A()+B() k2` -- where the divisor is 1 -- a bare `kd`/`k2`.
+    // An earlier split that multiplied the stored rate back up by the divisor
+    // and pushed 1/divisor into `propensityFactor` made every one of those rows
+    // 2x BNG2 (`k` instead of `0.5*k`, `2*kz` instead of `kz`) and the ODE
+    // kernels that skip `propensityFactor` simulated the inflated constant.
+    // SSA is unchanged either way: it multiplies rateConstant*propensityFactor
+    // = effectiveRate before, and effectiveRate*1 after.
     let storedRate = effectiveRate;
     let storedExprScaleFactor = exprScaleFactor;
-    let storedPropensityFactor: number | undefined = undefined;
-    // Detect bond formation either from explicit ops (full parser) or from the
-    // reactant→product bond count change (simplified parser / tests).
-    const hasBondFormation =
-      rule.addBonds.length > 0 || productPatternBondCount > reactantPatternBondCount;
-    const isNonBondFormingSymmetricPair =
-      hasRepeatedReactantPatterns && n === 2 && ruleSymmetryFactor > 1 &&
-      !hasBondFormation &&
-      // BNG2 convention for A+A symmetric non-bond rules:
-      // - writes k  when a reactant molecule TYPE appears in products (state-change or carry-through)
-      //   e.g. Droplet(s~1)+Droplet(s~1)→Droplet(s~2), A+A→A+B
-      // - writes 0.5*k when the product is a completely NEW molecule type (pure combination)
-      //   e.g. RA()+RA()→R2() (where R2 is a different molecule type from RA)
-      // The propensityFactor=0.5 below is applied by the ODE/SSA kernel to correctly halve
-      // the propensity for same-pool molecule selection.
-      (() => {
-        if (hasCarryThroughReactant) return true;
-        // Check molecule-level carry-through: does the product contain any molecule
-        // type that appears in the reactant patterns?
-        const reactantMolNames = new Set<string>();
-        for (const pat of patterns) {
-          for (const mol of pat.molecules) {
-            if (mol.name) reactantMolNames.add(mol.name);
-          }
-        }
-        return rule.products.some(productPattern =>
-          productPattern.molecules.some(mol => reactantMolNames.has(mol.name))
-        );
-      })();
-    if (isNonBondFormingSymmetricPair) {
-      storedRate = effectiveRate * ruleSymmetryFactor;
-      storedExprScaleFactor = exprScaleFactor * ruleSymmetryFactor;
-      storedPropensityFactor = 1 / ruleSymmetryFactor;
-    }
 
     // 6. Record Reaction
     const rxn = new Rxn(
@@ -3157,7 +3126,6 @@ export class NetworkGenerator {
       rule.name,
       {
         degeneracy: 1, // NOTE: Multiplicity is already in storedRate. ODE loop applies degeneracy again, so set to 1.
-        propensityFactor: storedPropensityFactor,
         statFactor: storedExprScaleFactor,
         rateExpression: finalRateExpr,
         scalingVolume: scalingVolume,
@@ -4471,6 +4439,17 @@ export class NetworkGenerator {
     // reactions came out phosphorylating the wrong monomer.
     const { reactantOffsets, productOffsets, productToReactant } = this.getRuleMoleculeCorrespondence(rule);
     const productPatternOffset = productPatternIdx < 0 ? 0 : productOffsets[productPatternIdx];
+    // Reactant pattern molecules the rule deletes (`MolDel` pointers, merged
+    // reactant indices — see RxnRule.computeOperations). BioNetGen pairs reactant
+    // and product molecules by label (`SpeciesGraph::buildLabelMap`), and a
+    // molecule's label starts with its name, so a deleted reactant molecule never
+    // becomes the source of a product: it is removed and the product pattern is
+    // instantiated fresh. The similarity fallback below must not pair such a
+    // molecule either — `T() -> Trash() DeleteMolecules` on `S(s!1,t!?).T(s!1)`
+    // otherwise builds Trash by transforming the matched T, trips the
+    // undeclared-bond guard on T's bound `s`, and drops the whole reaction
+    // (degradation of every bound T species vanished from the network).
+    const deletedReactantMols = new Set(rule.deleteMolecules);
     // Reactant pattern molecules grouped by name, in the order the rule writes them.
     const reactantMolIdxByName = new Map<string, number[]>();
     for (let i = 0; i < allReactantPatternMols.length; i++) {
@@ -4533,6 +4512,10 @@ export class NetworkGenerator {
         const rpm = allReactantPatternMols[i];
         const rpmKey = (rpm.reactantIdx << 16) | rpm.patternMolIdx;
         if (usedReactantPatternMols.has(rpmKey)) continue;
+        // Never build a product from a reactant molecule the rule deletes —
+        // BioNetGen's label pairing cannot pair it, so the product is fresh
+        // (see deletedReactantMols above).
+        if (deletedReactantMols.has(reactantOffsets[rpm.reactantIdx] + rpm.patternMolIdx)) continue;
         if (hasAvailableSameName && rpm.name !== pMol.name) continue;
         const score = scorePatternMolMatch(pMol, rpm);
 

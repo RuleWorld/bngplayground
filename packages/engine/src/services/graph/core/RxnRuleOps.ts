@@ -103,6 +103,18 @@ function hasEdge(graph: SpeciesGraph, a: string, b: string): boolean {
  * A molecule's label is `Name_<sorted component names>_<replicate>`, so
  * interchangeable molecules are paired in index order (replicate k <-> k),
  * and so are repeated component names within a molecule.
+ *
+ * Synthetic wildcard components (`completeMissingComponents`'s implicit `!?`
+ * scaffold, flagged `syntheticWildcard`) are EXCLUDED: BioNetGen labels a rule
+ * pattern over the components the rule actually writes, and the scaffold exists
+ * only so our matcher treats absent sites as context-free. Including it makes
+ * `IRE1(s~U) -> ... IRE1(s~P,b!1)` pair (both label `IRE1_b_s_`) where BNG2
+ * pairs nothing (`IRE1_s_` vs `IRE1_b_s_`): BNG2 records a whole-species
+ * deletion, whose species-level reaction centre collapses every match of the
+ * pattern within a species (`filter_identical_by_rxn_center`), while the
+ * paired path records component-level centres and keeps each embedding —
+ * double-counting identical-pattern instances (ire1a `_R3`: 2*k where BNG2
+ * writes 0.5*k).
  */
 export function buildLabelMap(graph: SpeciesGraph): Map<string, number | string> {
   const labelMap = new Map<string, number | string>();
@@ -114,7 +126,14 @@ export function buildLabelMap(graph: SpeciesGraph): Map<string, number | string>
   };
   for (let im = 0; im < graph.molecules.length; im++) {
     const mol = graph.molecules[im];
-    const clabels: string[] = mol.components.map(c => c.name);
+    // Components as BioNetGen sees them: written only, with true component
+    // indices so pointer values still address this graph's molecules.
+    const written: Array<{ name: string; idx: number }> = [];
+    for (let ic = 0; ic < mol.components.length; ic++) {
+      if (mol.components[ic].syntheticWildcard) continue;
+      written.push({ name: mol.components[ic].name, idx: ic });
+    }
+    const clabels: string[] = written.map(w => w.name);
     let mlabel: string;
     if (mol.label) {
       mlabel = `%${mol.label}`;
@@ -123,13 +142,13 @@ export function buildLabelMap(graph: SpeciesGraph): Map<string, number | string>
       mlabel += bump(mlabel);
     }
     labelMap.set(mlabel, im);
-    for (let ic = 0; ic < clabels.length; ic++) {
-      let clabel = clabels[ic];
+    for (const { name, idx } of written) {
+      let clabel = name;
       if (!clabel.startsWith('%')) {
         clabel = `${mlabel}|${clabel}_`;
         clabel += bump(clabel);
       }
-      labelMap.set(clabel, `${im}.${ic}`);
+      labelMap.set(clabel, `${im}.${idx}`);
     }
   }
   return labelMap;
