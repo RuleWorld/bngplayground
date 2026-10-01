@@ -92,15 +92,21 @@ function tail(str: string, maxChars = 4000): string {
  * True when the model declares simulate actions but every one of them is
  * network-free (NFsim) or stochastic (SSA), and it never asks for a network.
  *
- * The model is inspected exactly as published. The point is to notice that the
- * author deliberately asked for a network-free run, so it must not be handed a
- * `generate_network` instead.
+ * The model is inspected exactly as published — nothing injected, nothing
+ * commented out — and comments are stripped first, because a commented-out
+ * action is not a request: `#generate_network({max_stoich=>...})` sitting above
+ * an active `simulate({method=>"nf"...})` (BLBR, Dolan2015) means the author
+ * abandoned expansion for a network-free run. Without stripping, those models
+ * were classified as network-needing, BNG2 ran NFsim, which writes a `.gdat`
+ * but never a `.net`, and the network-shape gate then demanded a ratchet entry
+ * for a fixture that should never have been written.
  */
-function isNetworkFreeModel(originalCode: string): boolean {
-	const simulateCalls = originalCode.match(/\b(?:simulate|simulate_ode|simulate_ssa|simulate_nf|simulate_psa|simulate_pla|simulate_rm)\s*\([^;]*\)/gi);
+export function isNetworkFreeModel(originalCode: string): boolean {
+	const code = originalCode.replace(/#[^\n]*/g, '');
+	const simulateCalls = code.match(/\b(?:simulate|simulate_ode|simulate_ssa|simulate_nf|simulate_psa|simulate_pla|simulate_rm)\s*\([^;]*\)/gi);
 	if (!simulateCalls || simulateCalls.length === 0) return false;
 	// An explicit request for a network means the model is not network-free.
-	if (/\bgenerate_network\s*\(/i.test(originalCode)) return false;
+	if (/\bgenerate_network\s*\(/i.test(code)) return false;
 	const networkFree = simulateCalls.every((call) =>
 		/\bsimulate_nf\s*\(/i.test(call) ||
 		/\bsimulate_ssa\s*\(/i.test(call) ||
@@ -445,7 +451,11 @@ async function main() {
 	console.log('Summary:', path.relative(PROJECT_ROOT, summaryPath).replace(/\\/g, '/'));
 }
 
-main().catch((err) => {
-	console.error('[generate:gdat] Fatal error:', err);
-	process.exitCode = 1;
-});
+// Run only when executed directly: `tests/` imports `isNetworkFreeModel`, and
+// an unguarded `main()` here would start a full reference generation on import.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	main().catch((err) => {
+		console.error('[generate:gdat] Fatal error:', err);
+		process.exitCode = 1;
+	});
+}
