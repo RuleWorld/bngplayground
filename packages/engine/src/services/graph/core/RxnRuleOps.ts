@@ -225,7 +225,6 @@ export function computeRuleCorrespondence(rg: MergedRuleGraph, pg: MergedRuleGra
 }
 
 const patternOfPointer = (ptr: string): number => Number(ptr.split('.')[0]);
-const moleculeOfPointer = (ptr: string): number => Number(ptr.slice(ptr.indexOf('.') + 1).split('.')[0]);
 
 
 /**

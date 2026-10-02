@@ -155,7 +155,7 @@ export class RxnRule {
     this.deleteMolecules = ops.molDel.map(mergedMoleculeIndex);
     this.changeCompartments = ops.changeCompartment.map(
       ([p, dest]) => [mergedMoleculeIndex(p), dest] as [number, string]
-    )
+    );
     this.deletedSpeciesPatterns = ops.speciesDel;
     this.transportedSpeciesPatterns = ops.speciesCompartmentChange;
     this.molecularMap = new Map();

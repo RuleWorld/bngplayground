@@ -2329,7 +2329,7 @@ export class NetworkGenerator {
 
     // OPT #5: this metadata depends only on the rule, not on currentSpecies, so
     // compute it once per rule and reuse across every species the rule matches.
-    const { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip, identicalPatternGroups } =
+    const { matchSymmetryBreaking, carryThroughPatternIndices, applyCarryThroughAnchorSkip } =
       this.getNaryRuleMeta(rule);
 
 
@@ -2998,10 +2998,6 @@ export class NetworkGenerator {
 
     if (!products) return;
     if (!this.validateProducts(products)) return;
-
-    const reactantBondCount = reactantSpeciesList.reduce((sum, s) => sum + countGraphBonds(s.graph), 0);
-    const productBondCount = products.reduce((sum, g) => sum + countGraphBonds(g), 0);
-    const hasConcreteBondChange = reactantBondCount !== productBondCount;
 
     // BioNetGen's per-rule instance count for a wildcard-bound rule is the number
     // of distinct reaction-centre images, which `totalDegeneracy` already is; the

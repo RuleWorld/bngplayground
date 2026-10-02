@@ -1,7 +1,5 @@
 import { BNGLParser } from '../packages/engine/src/services/graph/core/BNGLParser.ts';
 import { GraphCanonicalizer } from '../packages/engine/src/services/graph/core/Canonical.ts';
-import { NetworkGenerator } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
-import type { GeneratorOptions } from '../packages/engine/src/services/graph/NetworkGenerator.ts';
 import { NetworkExporter } from '../packages/engine/src/services/graph/NetworkExporter.ts';
 import { parseBNGL } from '../services/parseBNGL.ts';
 import { generateExpandedNetwork } from '@bngplayground/engine';
@@ -18,35 +16,6 @@ const logPath = path.resolve(__dirname, 'export.log');
 function log(msg: any) {
     console.log(msg);
     fs.appendFileSync(logPath, (typeof msg === 'string' ? msg : JSON.stringify(msg, null, 2)) + '\n');
-}
-
-function normalizeRuleSide(side: string): string {
-  let s = side.trim();
-  if (s === '' || s === '0') return '0';
-
-  // Remove standalone null-species terms while preserving wildcard syntax like !+.
-  // Examples handled:
-  // - "0 + A" -> "A"
-  // - "A + 0" -> "A"
-  // - "A + 0 + B" -> "A + B"
-  const middleZero = /\s*\+\s*0\s*\+\s*/g;
-  let prev = '';
-  while (s !== prev) {
-    prev = s;
-    s = s.replace(middleZero, ' + ');
-    s = s.replace(/^\s*0\s*\+\s*/, '');
-    s = s.replace(/\s*\+\s*0\s*$/, '');
-    s = s.trim();
-  }
-
-  return s.length > 0 ? s : '0';
-}
-
-function normalizeReactionString(raw: string): string {
-  const arrow = raw.includes('<->') ? '<->' : '->';
-  const parts = raw.split(arrow);
-  if (parts.length !== 2) return raw;
-  return `${normalizeRuleSide(parts[0])} ${arrow} ${normalizeRuleSide(parts[1])}`;
 }
 
 function applySetParameterActions(model: BNGLModel, bnglCode: string): void {
@@ -101,63 +70,6 @@ function applySetParameterActions(model: BNGLModel, bnglCode: string): void {
       evalMap.set(paramName, numValue);
     }
   }
-}
-
-function pruneNetDisconnectedSpecies(
-  species: Species[],
-  reactions: Rxn[]
-): { species: Species[]; reactions: Rxn[] } {
-  const usedSpeciesIndices = new Set<number>();
-
-  for (const rxn of reactions) {
-    for (const idx of rxn.reactants) {
-      if (idx >= 0) usedSpeciesIndices.add(idx);
-    }
-    for (const idx of rxn.products) {
-      if (idx >= 0) usedSpeciesIndices.add(idx);
-    }
-  }
-
-  if (usedSpeciesIndices.size === 0 || usedSpeciesIndices.size === species.length) {
-    return { species, reactions };
-  }
-
-  const keptOldIndices = Array.from(usedSpeciesIndices)
-    .filter((idx) => idx >= 0 && idx < species.length)
-    .sort((a, b) => a - b);
-
-  const indexMap = new Map<number, number>();
-  const remappedSpecies = keptOldIndices.map((oldIdx, newIdx) => {
-    indexMap.set(oldIdx, newIdx);
-    const s = species[oldIdx];
-    const copy = new Species(s.graph, newIdx, s.concentration);
-    copy.initialConcentration = s.initialConcentration;
-    (copy as Species & { isConstant?: boolean }).isConstant = (s as Species & { isConstant?: boolean }).isConstant;
-    return copy;
-  });
-
-  const remapIndex = (idx: number): number => {
-    const mapped = indexMap.get(idx);
-    return mapped === undefined ? idx : mapped;
-  };
-
-  const remappedReactions = reactions.map((rxn) => new Rxn(
-    rxn.reactants.map(remapIndex),
-    rxn.products.map(remapIndex),
-    rxn.rate,
-    rxn.name,
-    {
-      degeneracy: rxn.degeneracy,
-      propensityFactor: rxn.propensityFactor,
-      statFactor: rxn.statFactor,
-      rateExpression: rxn.rateExpression,
-      productStoichiometries: rxn.productStoichiometries ? [...rxn.productStoichiometries] : undefined,
-      scalingVolume: rxn.scalingVolume,
-      totalRate: (rxn as any).totalRate
-    }
-  ));
-
-  return { species: remappedSpecies, reactions: remappedReactions };
 }
 
 function applySetConcentrationActions(model: BNGLModel, species: Species[]): void {

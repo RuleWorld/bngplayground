@@ -108,7 +108,6 @@ import {
   indexReferenceColumns,
   parseCSV,
   parseGDAT,
-  normalizeTimeSeriesRows,
 } from './compareShared';
 import { modelReferenceNameFor } from './referenceNaming';
 // The browser exports CSV labels over `getModelCatalogSync().examples`, which

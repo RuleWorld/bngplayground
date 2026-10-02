@@ -22,7 +22,7 @@ import { describe, it, expect, beforeAll } from 'vitest';
 import { parseBNGLStrict } from '../packages/engine/src/parser/BNGLParserWrapper';
 import { generateExpandedNetwork } from '@bngplayground/engine';
 import { loadEvaluator, _setEvaluatorRefForTests, SafeExpressionEvaluator } from '@bngplayground/engine';
-import type { BNGLModel, BNGLReaction, Species } from '@bngplayground/engine';
+import type { BNGLModel, BNGLReaction } from '@bngplayground/engine';
 
 const RULE = 'kcat: R(Y1~P!1).S(PTP~O!1) -> R(Y1~U).S(PTP~O) kcat';
 
@@ -50,13 +50,6 @@ end model
 `);
   return generateExpandedNetwork(model as BNGLModel, () => {}, () => {});
 };
-
-const reactantsOf = (net: BNGLModel) =>
-  (net.reactions as Array<BNGLReaction>).map((r) =>
-    (r.reactants ?? [])
-      .map((i) => (net.species as Species[])[i as number]?.name ?? String(i))
-      .join('+')
-  );
 
 describe('product patterns that split during transformation', () => {
   beforeAll(() => {

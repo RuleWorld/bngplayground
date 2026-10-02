@@ -19,9 +19,7 @@ import { fileURLToPath } from 'node:url';
 
 import { parseNetFile } from '../../packages/engine/src/services/graph/NetParser';
 import { isKnownUnparseableReference, unparseableReferenceReason } from './netShapeUnsupported';
-import { parseBNGLWithANTLR } from '../../packages/engine/src/parser/BNGLParserWrapper';
 import { expandBounded } from '../../packages/engine/src/services/graph/boundedExpansion';
-import type { BNGLModel } from '../../packages/engine/src/types';
 import { EXPECTED_NETWORK_MISMATCHES } from './compareShared';
 
 const PROJECT_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../..');

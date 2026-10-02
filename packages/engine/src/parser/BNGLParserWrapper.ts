@@ -47,7 +47,6 @@ const LEGACY_COMP_BEFORE_PAREN_RE = /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-
 // `BNGModel.pm`'s `get_line()` before it folds, and concatenating with no
 // separator; the lexer never sees either.
 const LINE_CONTINUATION_END_RE = /\\[ \t]*$/;
-const LINE_COMMENT_RE = /#.*$/;
 
 /**
  * Strip `#` comments and fold backslash continuations, in that order.
@@ -56,16 +55,22 @@ const LINE_COMMENT_RE = /#.*$/;
  * nothing at all, so two identifiers that were separated by the newline become
  * one token. That is what BNG2 does, and models that rely on it are written
  * for it.
+ *
+ * Comment stripping uses `indexOf('#')` rather than `/#.*$/`: the regex
+ * re-scans from every `#` on comment-heavy input (polynomial time, flagged as
+ * a ReDoS), while a comment always starts at the first `#`.
  */
 function foldLineContinuations(src: string): string {
 	const lines = src.split(/\r?\n/);
 	const out: string[] = [];
 	for (let i = 0; i < lines.length; i++) {
-		let current = lines[i].replace(LINE_COMMENT_RE, '');
+		const hash = lines[i].indexOf('#');
+		let current = hash === -1 ? lines[i] : lines[i].slice(0, hash);
 		while (LINE_CONTINUATION_END_RE.test(current) && i + 1 < lines.length) {
 			current = current.replace(LINE_CONTINUATION_END_RE, '');
 			i += 1;
-			current += lines[i].replace(LINE_COMMENT_RE, '');
+			const nextHash = lines[i].indexOf('#');
+			current += nextHash === -1 ? lines[i] : lines[i].slice(0, nextHash);
 		}
 		out.push(current);
 	}

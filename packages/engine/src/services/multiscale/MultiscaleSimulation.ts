@@ -459,7 +459,7 @@ export async function multiscaleSimulation(
           let action: CellAction | null = null;
           for (const rule of typeDef.decisionRules) {
             if (rule.refractoryPeriod && rule.refractoryPeriod > 0) {
-              const cd = cell.ruleCooldowns?.[rule.name];
+              const cd = cell.ruleCooldowns?.get(rule.name);
               if (cd !== undefined && cd > tNext + 1e-12) {
                 continue;
               }
@@ -468,8 +468,8 @@ export async function multiscaleSimulation(
               const prob = rule.probability ?? 1;
               if (rng.next() < prob) {
                 if (rule.refractoryPeriod && rule.refractoryPeriod > 0) {
-                  if (!cell.ruleCooldowns) cell.ruleCooldowns = Object.create(null) as Record<string, number>;
-                  cell.ruleCooldowns[rule.name] = tNext + rule.refractoryPeriod;
+                  if (!cell.ruleCooldowns) cell.ruleCooldowns = new Map<string, number>();
+                  cell.ruleCooldowns.set(rule.name, tNext + rule.refractoryPeriod);
                 }
                 action = rule.action;
                 break;
