@@ -4335,10 +4335,13 @@ export async function simulate(
       }
     }
 
-    // Root detection is currently disabled by default because global auto-detection
-    // of if() conditions can introduce broad parity regressions across unrelated models.
-    // Keep this opt-in until condition-to-root mapping is validated against BNG2 behavior.
-    const ENABLE_IF_ROOT_DETECTION = false;
+    // Root detection: on in this experiment (exp/if-root-detection). Global
+    // auto-detection of if() conditions was disabled in May (37471a06) after it
+    // "can introduce broad parity regressions across unrelated models" — an
+    // claim that predates the reaction-centre/stat-factor fixes and was never
+    // re-measured. This branch re-enables it to collect before/after parity
+    // evidence; keep it off on main until that evidence says otherwise.
+    const ENABLE_IF_ROOT_DETECTION = true;
     if (ENABLE_IF_ROOT_DETECTION) {
       const rootExprs: string[] = [];
       if (model.functions) {
