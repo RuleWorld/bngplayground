@@ -3078,7 +3078,7 @@ export class NetworkGenerator {
     // For Arrhenius rules: clear rateExpression so NET file writes numeric rate,
     // not the un-evaluatable "Arrhenius(phi, Eact)" string.
     let finalRateExpr = (rule as RxnRule & { isArrhenius?: boolean }).isArrhenius ? undefined : rule.rateExpression;
-    let exprScaleFactor = multiplicity;
+    const exprScaleFactor = multiplicity;
 
     if (hasRateExpression && finalRateExpr) {
       finalRateExpr = finalRateExpr.trim();
@@ -3111,8 +3111,8 @@ export class NetworkGenerator {
     // kernels that skip `propensityFactor` simulated the inflated constant.
     // SSA is unchanged either way: it multiplies rateConstant*propensityFactor
     // = effectiveRate before, and effectiveRate*1 after.
-    let storedRate = effectiveRate;
-    let storedExprScaleFactor = exprScaleFactor;
+    const storedRate = effectiveRate;
+    const storedExprScaleFactor = exprScaleFactor;
 
     // 6. Record Reaction
     const rxn = new Rxn(
