@@ -4335,20 +4335,19 @@ export async function simulate(
       }
     }
 
-    // Root detection: on in this experiment (exp/if-root-detection), hardened
-    // after the first CI attempt hung deterministic-parity for 60 minutes on a
-    // model whose functions contain a 90-condition if() time ladder (Dallas).
-    // The original May disable (37471a06) claimed broad parity regressions and
-    // was never re-measured; this branch re-enables it with three guards so a
-    // pathological root set degrades to flag-OFF behavior instead of wedging
-    // the integrator:
-    //   1. conditions that cannot be re-evaluated as written (line
-    //      continuations, embedded newlines) are never registered — an
-    //      unparseable g() is caught and written as 0, which reads as a root;
-    //   2. MAX_AUTO_IF_ROOTS caps the root set — ladder models register none;
-    //   3. the step loop drops roots after repeated no-progress returns
-    //      (see autoRootNoProgress below).
-    const ENABLE_IF_ROOT_DETECTION = true;
+    // Root detection: OFF after the exp/if-root-detection experiment (PR #1080,
+    // merged 2026-10-03 and reverted the same day). Re-enabling the flag hung
+    // deterministic-parity for 60 minutes on a 90-condition if() time ladder
+    // (Dallas); the hardened retry — condition hygiene, MAX_AUTO_IF_ROOTS, and
+    // the no-progress watchdog below, all left in place for the next attempt —
+    // fixed the hang and improved mt_music_sequencer (max abs 3.77e-2 ->
+    // 2.32e-2), but broke ph_lorenz_attractor's near-exact parity
+    // (5.575e-10 -> 3.59e+1): any change to the step sequence decorrelates a
+    // sensitive system from BNG2's blind integration, which is the broad
+    // "parity regressions across unrelated models" failure the May disable
+    // (37471a06) recorded. Revisit only with condition-to-root mapping
+    // validated per model against BNG2 behavior, as that comment demanded.
+    const ENABLE_IF_ROOT_DETECTION = false;
     const MAX_AUTO_IF_ROOTS = 64;
     if (ENABLE_IF_ROOT_DETECTION) {
       const rootExprs: string[] = [];
