@@ -9,6 +9,13 @@ export class SpeciesGraph {
   adjacencyBitset?: Uint32Array;
   private _structuralHash?: string;
 
+  /**
+   * Transient builder marker (never species metadata): the `(reactantIdx << 16) | molIdx`
+   * keys of the reactant molecules that the product pattern this graph was built from
+   * explicitly names. Every other molecule in the graph is carried over implicitly.
+   */
+  patternOwnedMolKeys?: Set<number>;
+
   // Cached properties
   private _stringExact?: string;
   private _canonicalString?: string;  // Cached canonical form

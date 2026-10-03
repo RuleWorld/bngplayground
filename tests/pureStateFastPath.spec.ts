@@ -62,11 +62,6 @@ describe('NetworkGenerator pure-state fast path', () => {
     const fast = await runGeneration(seed, rule);
     const slow = await runGeneration(seed, rule, { forceSlow: true });
 
-    // Parser operation arrays are intentionally empty; eligibility comes from
-    // the completed reactant/product graphs instead.
-    expect(fast.rule.changeStates).toEqual([]);
-    expect(fast.rule.addBonds).toEqual([]);
-    expect(fast.rule.deleteBonds).toEqual([]);
     expect(fast.buildProductSpy).not.toHaveBeenCalled();
     expect(slow.buildProductSpy).toHaveBeenCalled();
     expect(networkDigest(fast.result)).toEqual(networkDigest(slow.result));

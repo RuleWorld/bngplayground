@@ -67,4 +67,21 @@ describe('toCsvTable', () => {
       { time: 1, label: 'A, "quoted"\nvalue' },
     ], ['time', 'label'])).toBe('time,label\n1.000000000000e+00,"A, ""quoted""\nvalue"');
   });
+
+  it('writes non-finite values as numeric literals rather than empty cells', () => {
+    // BNG2 evaluates rate laws with mu::Parser, so `ln(0)` is -inf and `x/0` is
+    // +inf, and those values reach its .gdat. An empty cell cannot be parsed back
+    // as a number, so it turns a comparable row into a missing-value error in the
+    // trajectory gate; `Infinity` / `-Infinity` / `NaN` round-trip through Number().
+    expect(toCsvTable([
+      { time: 0, lnV: -Infinity },
+      { time: 1, lnV: Infinity },
+      { time: 2, lnV: Number.NaN },
+    ], ['time', 'lnV'])).toBe([
+      'time,lnV',
+      '0.000000000000e+00,-Infinity',
+      '1.000000000000e+00,Infinity',
+      '2.000000000000e+00,NaN',
+    ].join('\n'));
+  });
 });

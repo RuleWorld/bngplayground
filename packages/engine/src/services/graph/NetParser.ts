@@ -35,6 +35,54 @@ function parseCommaSeparated(str: string, filterEmpty: boolean = true): string[]
 }
 
 /**
+ * Split a participant list on commas that are not nested inside parentheses.
+ *
+ * BNG2 writes participants as species indices, so a plain comma split is
+ * enough for its own output — but the pattern form ("A(b,c),D(e,f)") contains
+ * commas inside the pattern and must not be split there.
+ *
+ * Tokens may carry a stoichiometric coefficient ("2*6"). The coefficient is
+ * dropped: BNGLReaction has no field for it, and species identity is what
+ * network comparison needs.
+ */
+function splitParticipants(str: string): string[] {
+  const result: string[] = [];
+  let depth = 0;
+  let start = 0;
+  for (let i = 0; i < str.length; i++) {
+    const ch = str[i];
+    if (ch === '(') depth++;
+    else if (ch === ')') depth--;
+    else if (ch === ',' && depth === 0) {
+      const part = str.slice(start, i).trim();
+      if (part) result.push(...expandParticipantToken(part));
+      start = i + 1;
+    }
+  }
+  const last = str.slice(start).trim();
+  if (last) result.push(...expandParticipantToken(last));
+  return result;
+}
+
+/** "2*6" -> ["6", "6"]; "6" -> ["6"]. */
+function expandParticipantToken(token: string): string[] {
+  const star = token.lastIndexOf('*');
+  if (star > 0 && /^\d+$/.test(token.slice(0, star))) {
+    const count = parseInt(token.slice(0, star), 10);
+    const rest = token.slice(star + 1).trim();
+    if (count > 0 && rest) {
+      return Array(count).fill(rest);
+    }
+  }
+  return [token];
+}
+
+/** True when a token is a species-index list, e.g. "1,2,4" or "2*6,7". */
+function isSpeciesIndexList(token: string): boolean {
+  return token.split(',').every((t) => /^\d*\*?\d+$/.test(t.trim()));
+}
+
+/**
  * Parses the raw content of a BioNetGen .net file into a structured `BNGLModel` object.
  *
  * This function processes the text line-by-line, tracking active block sections (e.g.,
@@ -67,6 +115,17 @@ export function parseNetFile(content: string): NetFileParseResult {
     actions: []
   };
 
+  // BNG2 references species by their 1-based index in `begin reactions` and
+  // `begin groups`, so keep the index -> name mapping as species are read.
+  const speciesByIndex = new Map<number, string>();
+  const resolveParticipant = (token: string): string => {
+    if (/^\d+$/.test(token)) {
+      const name = speciesByIndex.get(parseInt(token, 10));
+      if (name) return name;
+    }
+    return token;
+  };
+
   let currentSection: string | null = null;
   let lineNum = 0;
   let start = 0;
@@ -77,9 +136,12 @@ export function parseNetFile(content: string): NetFileParseResult {
     let end = content.indexOf('\n', start);
     if (end === -1) end = len;
 
+    // '#' normally starts a comment, but BNG2 uses a '#'-prefixed token as the
+    // reaction label ("1 1,5 7 kp1 #_R1"). Stripping it would drop every
+    // reaction's rule attribution, so reaction lines keep their label.
     const hashIdx = content.indexOf('#', start);
     let lineEndIdx = end;
-    if (hashIdx !== -1 && hashIdx < end) {
+    if (hashIdx !== -1 && hashIdx < end && currentSection !== 'reactions') {
       lineEndIdx = hashIdx;
     }
 
@@ -106,11 +168,11 @@ export function parseNetFile(content: string): NetFileParseResult {
           } else if (currentSection === 'compartments') {
             parseCompartmentLine(line, model, lineNum);
           } else if (currentSection === 'species') {
-            parseSpeciesLine(line, model, lineNum);
+            parseSpeciesLine(line, model, speciesByIndex, lineNum);
           } else if (currentSection === 'reactions') {
-            parseReactionLine(line, model, lineNum);
+            parseReactionLine(line, model, lineNum, resolveParticipant);
           } else if (currentSection === 'groups') {
-            parseObservableLine(line, model, lineNum);
+            parseGroupLine(line, model, lineNum, resolveParticipant);
           } else if (currentSection === 'functions') {
             parseFunctionLine(line, model, lineNum);
           }
@@ -133,6 +195,13 @@ export function parseNetFile(content: string): NetFileParseResult {
 /**
  * Parse a parameter line: <index> <name> <value>
  * Example: "1 NA 6.02e+23"
+ *
+ * BNG2 also writes expression-valued parameters, marked with a trailing
+ * "# ConstantExpression" comment:
+ *   2 k2  2*k1  # Constant
+ *   3 k3  k1*2  # ConstantExpression
+ * A value that is not a plain number is kept in paramExpressions instead of
+ * failing the parse.
  */
 function parseParameterLine(line: string, model: BNGLModel, lineNum: number): void {
   const parts = line.trim().split(/\s+/);
@@ -144,14 +213,20 @@ function parseParameterLine(line: string, model: BNGLModel, lineNum: number): vo
   }
 
   const index = parseInt(parts[0]);
+  if (isNaN(index)) {
+    throw new Error(
+      `Invalid parameter in .net file at line ${lineNum}: the index "${parts[0]}" is not a valid number.`
+    );
+  }
+
   const name = parts[1];
   const value = parseFloat(parts[2]);
 
-  if (isNaN(index) || isNaN(value)) {
-    throw new Error(
-      `Invalid parameter in .net file at line ${lineNum}: the index and value must be numeric, ` +
-      `but got index="${parts[0]}", value="${parts[2]}".`
-    );
+  if (isNaN(value)) {
+    model.paramExpressions ??= {};
+    model.paramExpressions[name] = parts[2];
+    model.parameters[name] = 0;
+    return;
   }
 
   model.parameters[name] = value;
@@ -194,12 +269,18 @@ function parseCompartmentLine(line: string, model: BNGLModel, lineNum: number): 
 /**
  * Parse a species line: <index> <pattern> <initialConcentration>
  * Example: "1 EGFR(L,CR1,Y1068~U) 1.8e5"
+ *
+ * BNG2 may write the initial value as a parameter name rather than a number
+ * (e.g. "17 LPS(CD14,LPS,MD2,TLR4) LPS_Init"). Parameters are declared before
+ * species, so such a token resolves against them; anything else is preserved
+ * as an initial expression with a zero value.
  */
-function parseSpeciesLine(line: string, model: BNGLModel, _lineNum: number): void {
-  // Format: index pattern concentration
-  // The pattern may contain spaces, so we can't just split on whitespace
-  // Typical format: "1 A(b!1).B(a!1) 100"
-
+function parseSpeciesLine(
+  line: string,
+  model: BNGLModel,
+  speciesByIndex: Map<number, string>,
+  _lineNum: number
+): void {
   const trimmed = line.trim();
   const firstSpace = trimmed.search(/\s/);
   if (firstSpace <= 0) {
@@ -215,24 +296,45 @@ function parseSpeciesLine(line: string, model: BNGLModel, _lineNum: number): voi
   const pattern = rest.slice(0, lastSpace).trim();
   const concentrationToken = rest.slice(lastSpace + 1).trim();
   const index = parseInt(indexToken, 10);
-  const concentration = parseFloat(concentrationToken);
+  if (isNaN(index)) {
+    throw new Error(`Invalid species: index "${indexToken}" is not a valid number`);
+  }
 
-  if (isNaN(index) || isNaN(concentration)) {
-    throw new Error(`Invalid species: index or concentration not a number`);
+  let concentration = parseFloat(concentrationToken);
+  let initialExpression: string | undefined;
+  if (isNaN(concentration)) {
+    const resolved = model.parameters[concentrationToken];
+    if (typeof resolved === 'number' && !isNaN(resolved)) {
+      concentration = resolved;
+    } else {
+      concentration = 0;
+      initialExpression = concentrationToken;
+    }
   }
 
   model.species.push({
     name: pattern,
-    initialConcentration: concentration
+    initialConcentration: concentration,
+    ...(initialExpression ? { initialExpression } : {})
   });
+  speciesByIndex.set(index, pattern);
 }
 
 /**
- * Parse a reaction line: <index> <reactants> -> <products> <rate> [<label>]
+ * Parse a reaction line: <index> <reactants> <products> <rate> [<label>]
  * Example: "1 S1,S2 S3 k1*S1*S2"
  * Example: "2 S3 S1,S2 k2*S3 #_reverse__R1"
+ *
+ * BNG2 writes participants as species indices ("196 76 60,66 NFkB_DNA_IkB_Unbind"),
+ * so numeric tokens are resolved to species names; pattern-style tokens are
+ * kept as they are.
  */
-function parseReactionLine(line: string, model: BNGLModel, lineNum: number): void {
+function parseReactionLine(
+  line: string,
+  model: BNGLModel,
+  lineNum: number,
+  resolveParticipant: (token: string) => string
+): void {
   // Format: index reactants products rate [label]
   // reactants and products are comma-separated species indices or patterns
 
@@ -251,8 +353,8 @@ function parseReactionLine(line: string, model: BNGLModel, lineNum: number): voi
     );
   }
 
-  const reactants = parseCommaSeparated(parts[1]);
-  const products = parseCommaSeparated(parts[2]);
+  const reactants = splitParticipants(parts[1]).map(resolveParticipant);
+  const products = splitParticipants(parts[2]).map(resolveParticipant);
   const rateExpr = parts[3];
   const label = parts.length > 4 ? parts.slice(4).join(' ').trim() : undefined;
 
@@ -274,12 +376,51 @@ function parseReactionLine(line: string, model: BNGLModel, lineNum: number): voi
 }
 
 /**
- * Parse an observable (group) line: <index> <name> <type> <patterns...>
- * Example: "1 Dimers Molecules EGFR(CR1!+)"
- * Example: "2 TotalEGFR Species EGFR()"
+ * Parse a `begin groups` line.
+ *
+ * BNG2 writes groups as "<index> <name> <species indices>", e.g.
+ *   1 TNF                  73
+ *   8 IkB_active           15,23,57,61
+ * Older/alternate writers use "<index> <name> <type> <patterns...>", e.g.
+ *   1 Dimers Molecules EGFR(CR1!+)
+ * Both are accepted; the group form resolves its indices to species names.
  */
-function parseObservableLine(line: string, model: BNGLModel, lineNum: number): void {
+function parseGroupLine(
+  line: string,
+  model: BNGLModel,
+  lineNum: number,
+  resolveParticipant: (token: string) => string
+): void {
   const parts = line.trim().split(/\s+/);
+  const index = parseInt(parts[0]);
+  if (isNaN(index)) {
+    throw new Error(
+      `Invalid observable in .net file at line ${lineNum}: the observable index "${parts[0]}" is not a valid number.`
+    );
+  }
+
+  const name = parts[1];
+
+  // A group can end up with no species once its members are filtered out of
+  // the network, leaving just "1 Name".
+  if (parts.length === 2) {
+    model.observables.push({ name, type: 'molecules', pattern: '' });
+    return;
+  }
+
+  // Group form: the third token is a species index list, not a type keyword.
+  const looksLikeGroup = parts.length === 3 && isSpeciesIndexList(parts[2]);
+
+  if (looksLikeGroup) {
+    const species = splitParticipants(parts[2]).map(resolveParticipant);
+    model.observables.push({
+      name,
+      type: 'molecules',
+      pattern: species.join(',')
+    });
+    return;
+  }
+
   if (parts.length < 4) {
     throw new Error(
       `Invalid observable format in .net file at line ${lineNum}: expected "index name type pattern" ` +
@@ -287,35 +428,26 @@ function parseObservableLine(line: string, model: BNGLModel, lineNum: number): v
     );
   }
 
-  const index = parseInt(parts[0]);
-  const name = parts[1];
-  const type = parts[2].toLowerCase(); // 'Molecules' or 'Species'
-  const patterns = parts.slice(3).join(' ');
-
-  if (isNaN(index)) {
-    throw new Error(
-      `Invalid observable in .net file at line ${lineNum}: the observable index "${parts[0]}" is not a valid number.`
-    );
-  }
-
   model.observables.push({
     name,
-    type,
-    pattern: patterns
+    type: parts[2].toLowerCase(), // 'Molecules' or 'Species'
+    pattern: parts.slice(3).join(' ')
   });
 }
 
 /**
- * Parse a function line: <index> <name>() = <expression>
+ * Parse a function line: <index> <name>(<args>) [=] <expression>
  * Example: "1 TotEGFR() = EGFR_free + EGFR_bound"
+ *
+ * BNG2 omits the '=' when the expression is unambiguous, writing
+ * "1 pY1068_percent() (100*pY1068)/E" instead.
  */
 function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): void {
-  // Format: index name(args) = expression
   const trimmed = line.trim();
   const firstSpace = trimmed.search(/\s/);
   if (firstSpace <= 0) {
     throw new Error(
-      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) [=] expression" ` +
       `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
@@ -324,24 +456,25 @@ function parseFunctionLine(line: string, model: BNGLModel, lineNum: number): voi
   const rhs = trimmed.slice(firstSpace).trim();
   const openParen = rhs.indexOf('(');
   const closeParen = rhs.indexOf(')', openParen + 1);
-  const eqIdx = rhs.indexOf('=', closeParen + 1);
-  if (openParen <= 0 || closeParen <= openParen || eqIdx <= closeParen) {
+  if (openParen <= 0 || closeParen <= openParen) {
     throw new Error(
-      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) = expression" ` +
+      `Invalid function format in .net file at line ${lineNum}: expected "index name(args) [=] expression" ` +
       `(e.g., "1 TotEGFR() = EGFR_free + EGFR_bound"), but got "${line.trim()}".`
     );
   }
 
   const index = parseInt(indexToken, 10);
-  const name = rhs.slice(0, openParen).trim();
-  const argsStr = rhs.slice(openParen + 1, closeParen).trim();
-  const expression = rhs.slice(eqIdx + 1).trim();
-
   if (isNaN(index)) {
     throw new Error(
       `Invalid function in .net file at line ${lineNum}: the function index "${indexToken}" is not a valid number.`
     );
   }
+
+  const name = rhs.slice(0, openParen).trim();
+  const argsStr = rhs.slice(openParen + 1, closeParen).trim();
+  // Everything after the argument list, minus an optional leading '='.
+  const tail = rhs.slice(closeParen + 1).trim();
+  const expression = tail.startsWith('=') ? tail.slice(1).trim() : tail;
 
   const args = argsStr ? parseCommaSeparated(argsStr, false) : [];
 

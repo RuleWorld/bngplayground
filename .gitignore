@@ -269,3 +269,8 @@ fuzzer_output*.txt
 # End of .gitignore
 coverage
 /RuleHub/
+
+# A committed node_modules symlink breaks every fresh clone (tsx not found).
+# The directory pattern above does not match a symlink named node_modules.
+/node_modules
+/packages/engine/node_modules

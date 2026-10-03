@@ -553,11 +553,15 @@ export class BNGLParser {
       }
     }
 
-    return new RxnRule(name || '', reactants, products, rateNum, {
+    const rule = new RxnRule(name || '', reactants, products, rateNum, {
       rateExpression: rateExpr,
       isMoveConnected: options?.isMoveConnected,
       isMatchOnce: options?.isMatchOnce,
     });
+    // BioNetGen derives the transformation op lists and the reaction centre
+    // from the rule's own patterns (RxnRule::findMap -> find_reaction_center).
+    rule.computeOperations();
+    return rule;
   }
 
   /**

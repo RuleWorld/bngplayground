@@ -20,6 +20,7 @@ export type RuleHubModelSource =
   | 'rulehub-runtime'
   | 'rulehub-tutorial'
   | 'rulehub-pybionetgen'
+  | 'rulehub-example-tree'
   | 'rulehub-other';
 
 export function normalizeModelKey(raw: string): string {
@@ -135,6 +136,7 @@ export function classifyRuleHubPath(ruleHubRoot: string, filePath: string): Rule
   if (relativePath.startsWith('Contributed/BNGPlayground_PublicRuntime/')) return 'rulehub-runtime';
   if (relativePath.startsWith('Tutorials/')) return 'rulehub-tutorial';
   if (relativePath.startsWith('PyBioNetGen/')) return 'rulehub-pybionetgen';
+  if (relativePath.startsWith('Examples/')) return 'rulehub-example-tree';
 
   return 'rulehub-other';
 }
@@ -152,6 +154,11 @@ export function listAllRuleHubModelFiles(
     path.join(ruleHubRoot, 'Contributed', 'BNGPlayground_PublicRuntime'),
     path.join(ruleHubRoot, 'Tutorials'),
     path.join(ruleHubRoot, 'PyBioNetGen'),
+    // `Examples/` holds 175 models the gallery serves (77 of them match a
+    // catalog entry) and none of them had a reference path, so those models
+    // could never be compared. BioNetGen processes them the same as any other
+    // published model.
+    path.join(ruleHubRoot, 'Examples'),
   ];
 
   const seen = new Set<string>();

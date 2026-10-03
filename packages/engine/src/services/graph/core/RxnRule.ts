@@ -1,6 +1,17 @@
 // graph/core/RxnRule.ts
 import { SpeciesGraph } from './SpeciesGraph.ts';
 import { Molecule } from './Molecule.ts';
+import { computeRuleOperations, reactionCenterFromOperations } from './RxnRuleOps.ts';
+
+/** Merged-graph molecule index of an `iPatt.iMol[.iComp]` pointer. */
+const mergedMoleculeIndex = (ptr: string): number => Number(ptr.slice(ptr.indexOf('.') + 1).split('.')[0]);
+
+/** Component index of an `iPatt.iMol.iComp` pointer; -1 for molecule pointers. */
+const mergedComponentIndex = (ptr: string): number => {
+  const rest = ptr.slice(ptr.indexOf('.') + 1);
+  const dot = rest.indexOf('.');
+  return dot === -1 ? -1 : Number(rest.slice(dot + 1));
+};
 
 export class RxnRule {
   name: string;
@@ -26,7 +37,6 @@ export class RxnRule {
   includeReactants: Array<{ reactantIndex: number; pattern: SpeciesGraph }>;
   excludeProducts: Array<{ productIndex: number; pattern: SpeciesGraph }>;
   includeProducts: Array<{ productIndex: number; pattern: SpeciesGraph }>;
-  isDeleteMolecules: boolean;
   isMoveConnected: boolean;
   isMatchOnce: boolean;
 
@@ -36,6 +46,22 @@ export class RxnRule {
   // For reverse bimolecular rules: max allowed molecules in reactant species
   // Prevents reverse rules from matching complexes larger than forward can produce
   maxReactantMoleculeCount?: number;
+
+  /**
+   * Reactant patterns whose whole species is deleted by this rule
+   * (BioNetGen `MolDel` entries that are a bare pattern index).
+   */
+  deletedSpeciesPatterns: number[];
+
+  /** Reactant patterns whose species-level compartment the rule changes. */
+  transportedSpeciesPatterns: number[];
+
+  /**
+   * Reaction centre, one entry per reactant pattern, of node pointers in
+   * `iPatt.iMol.iComp` notation (a bare `iPatt` for species-level entries).
+   * `undefined` until `computeReactionCenter()` has run.
+   */
+  reactionCenter?: string[][];
 
   constructor(
     name: string,
@@ -67,6 +93,77 @@ export class RxnRule {
     this.includeProducts = [];
     this.isDeleteMolecules = false;
     this.molecularMap = new Map();
+    this.deletedSpeciesPatterns = [];
+    this.transportedSpeciesPatterns = [];
+  }
+
+  private _isDeleteMolecules = false;
+
+  /**
+   * The `DeleteMolecules` rule modifier. BioNetGen's `RxnRule::findMap`
+   * (RxnRule.pm:2103) branches on this keyword to decide whether a fully
+   * consumed reactant pattern is recorded as per-molecule deletions or as a
+   * whole-species deletion, so the derived op arrays and the reaction centre
+   * depend on it. The parser assigns the flag after the rule object exists
+   * (NetworkExpansion.ts, immediately after `parseRxnRule` has already run
+   * `computeOperations`), so flip it through an accessor that recomputes
+   * rather than serving ops derived from the wrong branch.
+   */
+  get isDeleteMolecules(): boolean {
+    return this._isDeleteMolecules;
+  }
+
+  set isDeleteMolecules(value: boolean) {
+    if (this._isDeleteMolecules === value) return;
+    this._isDeleteMolecules = value;
+    if (this.reactionCenter !== undefined) {
+      this.reactionCenter = undefined;
+      this.computeOperations();
+    }
+  }
+
+  /**
+   * Populate the transformation op arrays and the reaction centre from the
+   * rule's own reactant/product patterns — a transcription of BioNetGen
+   * `RxnRule::findMap` followed by `RxnRule::find_reaction_center`.
+   *
+   * Molecule indices in `deleteBonds`, `changeStates`, `deleteMolecules` and
+   * `changeCompartments` are merged-reactant-graph indices (the reactant
+   * patterns concatenated in order); `addBonds` uses merged-product-graph
+   * indices, as in BioNetGen, which only ever maps it back to reactant space.
+   */
+  computeOperations(): void {
+    if (this.reactionCenter !== undefined) return;
+    const ops = computeRuleOperations(this);
+    // `addBonds` endpoints are merged-product "im.ic" pointers; the others are
+    // rule pointers "iPatt.iMol[.iComp]".
+    const toMergedBond = ([a, b]: [string, string]): [number, number, number, number] => {
+      const aDot = a.indexOf('.');
+      const bDot = b.indexOf('.');
+      return [
+        Number(a.slice(0, aDot)), Number(a.slice(aDot + 1)),
+        Number(b.slice(0, bDot)), Number(b.slice(bDot + 1)),
+      ];
+    };
+    const toBond = ([a, b]: [string, string]): [number, number, number, number] =>
+      [mergedMoleculeIndex(a), mergedComponentIndex(a), mergedMoleculeIndex(b), mergedComponentIndex(b)];
+    this.addBonds = ops.edgeAddMerged.map(toMergedBond);
+    this.deleteBonds = ops.edgeDel.map(toBond);
+    this.changeStates = ops.compStateChange.map(
+      ([p, , next]) => [mergedMoleculeIndex(p), mergedComponentIndex(p), next ?? ''] as [number, number, string]
+    );
+    this.deleteMolecules = ops.molDel.map(mergedMoleculeIndex);
+    this.changeCompartments = ops.changeCompartment.map(
+      ([p, dest]) => [mergedMoleculeIndex(p), dest] as [number, string]
+    );
+    this.deletedSpeciesPatterns = ops.speciesDel;
+    this.transportedSpeciesPatterns = ops.speciesCompartmentChange;
+    this.molecularMap = new Map();
+    for (let imP = 0; imP < ops.productMoleculeSource.length; imP++) {
+      const imR = ops.productMoleculeSource[imP];
+      if (imR >= 0) this.molecularMap.set(imP, imR);
+    }
+    this.reactionCenter = reactionCenterFromOperations(this, ops);
   }
 
   /**

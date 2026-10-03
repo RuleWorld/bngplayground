@@ -14,6 +14,7 @@ import { BNGParser } from './generated/BNGParser';
 import { BNGLVisitor } from './BNGLVisitor';
 import type { BNGLModel } from '../types';
 import { BNGLParser } from '../services/graph/core/BNGLParser';
+import { foldLooseActionCommandsIntoActionsBlock } from './actionCommandPreprocessor';
 
 export interface ParseError {
   line: number;
@@ -37,7 +38,44 @@ const LOCAL_CONTEXT_MATCH_RE = /%([A-Za-z_][A-Za-z0-9_]*)::/g;
 const LOCAL_CONTEXT_STRIP_RE = /%[A-Za-z_][A-Za-z0-9_]*::/g;
 
 const LEGACY_COMP_BEFORE_PAREN_RE = /\b([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z_][A-Za-z0-9_]*)\(([^(){}]*)\)/g;
-const LINE_CONTINUATION_RE = /\\\s*\r?\n\s*/g;
+// A trailing backslash continues the logical line.
+//
+// The comment has to come off FIRST. Replacing the escaped newline with a space
+// while a `#` comment is still live swallows everything after it on the joined
+// line — `tricky` has `=\<tab># Comment` as a continuation, so folding first
+// made the text unrecoverable. BNG2 gets this right by stripping comments in
+// `BNGModel.pm`'s `get_line()` before it folds, and concatenating with no
+// separator; the lexer never sees either.
+const LINE_CONTINUATION_END_RE = /\\[ \t]*$/;
+
+/**
+ * Strip `#` comments and fold backslash continuations, in that order.
+ *
+ * Folding replaces the escaped newline and the next line's indentation with
+ * nothing at all, so two identifiers that were separated by the newline become
+ * one token. That is what BNG2 does, and models that rely on it are written
+ * for it.
+ *
+ * Comment stripping uses `indexOf('#')` rather than `/#.*$/`: the regex
+ * re-scans from every `#` on comment-heavy input (polynomial time, flagged as
+ * a ReDoS), while a comment always starts at the first `#`.
+ */
+function foldLineContinuations(src: string): string {
+	const lines = src.split(/\r?\n/);
+	const out: string[] = [];
+	for (let i = 0; i < lines.length; i++) {
+		const hash = lines[i].indexOf('#');
+		let current = hash === -1 ? lines[i] : lines[i].slice(0, hash);
+		while (LINE_CONTINUATION_END_RE.test(current) && i + 1 < lines.length) {
+			current = current.replace(LINE_CONTINUATION_END_RE, '');
+			i += 1;
+			const nextHash = lines[i].indexOf('#');
+			current += nextHash === -1 ? lines[i] : lines[i].slice(0, nextHash);
+		}
+		out.push(current);
+	}
+	return out.join('\n');
+}
 
 const MOL_HEADER_RE = /^([A-Za-z_][A-Za-z0-9_]*)\(([^)]*)\)/;
 const COMMENT_INLINE_RE = /\s*#(?![-+])/;
@@ -47,6 +85,19 @@ const COMP_LABEL_RE = /^([A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_]+)/;
 const PERCENT_LABEL_CHECK_RE = /%[A-Za-z0-9_]+/;
 const PERCENT_INHERITANCE_NORM_RE = /([,(]\s*[A-Za-z_][A-Za-z0-9_]*)%([A-Za-z0-9_]+)/g;
 
+// U+2013 EN DASH appears in BNG2 model prose (comments) and in `suffix=>"..."`
+// literals, e.g. regional-population models naming "Detroit-Warren-Dearborn".
+// BNG2 accepts it verbatim; our lexer has no token for it. Folding it to an
+// ASCII hyphen keeps the literal parseable and affects nothing but a
+// simulation output-file suffix.
+const EN_DASH_RE = /\u2013/g;
+// `Begin`/`End` are matched case-insensitively by BNG2's block keywords. Only
+// lines that open or close a known block are rewritten: `End` is also a legal
+// molecule and compartment name (e.g. `End 3  Vol_End End_M`).
+const CAPITALISED_BLOCK_KEYWORD_RE =
+  /^([^\S\r\n]*)(Begin|End)(?=[^\S\r\n]+(?:model|parameters|molecule\s+types|molecular\s+types|observables|reaction\s+rules|reactions|functions|compartments|energy\s+patterns|population\s+maps|population\s+types|actions|network|initial\s+conditions|groups)\b)/gim;
+const CAPITALISED_BLOCK_KEYWORD_CHECK_RE = /^[^\S\r\n]*(?:Begin|End)(?=[^\S\r\n])/m;
+
 const INCLUDE_EXCLUDE_CHECK_RE = /include_|exclude_/i;
 const MODIFIER_ONLY_LINE_RE = /^\s*(?:(?:include|exclude)_(?:reactants|products)\([^)]*\)\s*)+$/i;
 
@@ -55,6 +106,37 @@ const BEGIN_BLOCK_RE = /^begin\b/i;
 const END_BLOCK_RE = /^end\b/i;
 const VERSION_DIRECTIVE_RE = /^version\s*\(/i;
 const SET_OPTION_DIRECTIVE_RE = /^setOption\s*\(/i;
+
+/**
+ * Replaces literal TAB characters with a single space, leaving the contents of
+ * quoted literals (double or single quoted) and of `#` comments untouched, so
+ * that string values such as simulation suffixes survive normalisation byte
+ * for byte. Comments are left alone because prose apostrophes are not string
+ * delimiters and would otherwise desynchronise the scan.
+ */
+function replaceTabsOutsideStringsAndComments(src: string): string {
+  let out = '';
+  let quote: '"' | "'" | null = null;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (quote) {
+      out += ch;
+      if (ch === quote) quote = null;
+    } else if (ch === '"' || ch === "'") {
+      quote = ch;
+      out += ch;
+    } else if (ch === '#') {
+      // Copy the comment through verbatim, tabs included.
+      const lineEnd = src.indexOf('\n', i);
+      const stop = lineEnd === -1 ? src.length : lineEnd;
+      out += src.slice(i, stop);
+      i = stop - 1;
+    } else {
+      out += ch === '\t' ? ' ' : ch;
+    }
+  }
+  return out;
+}
 
 function getFirstActiveLine(src: string): string | null {
   let start = 0;
@@ -128,6 +210,59 @@ function getFirstActiveLine(src: string): string | null {
  * @returns An object of type `ParseResult` indicating success, containing the parsed `BNGLModel` if successful,
  *          and list of accumulated syntactic/semantic parsing errors.
  */
+/**
+ * Remove decorative separator lines (runs of `=`, `-`, `~`, `*` and spaces)
+ * that appear outside the model and actions blocks. BNG2.pl tolerates these in
+ * published models; the strict grammar does not, and the parse then fails before
+ * the model is ever read.
+ */
+function stripDecorativeLines(src: string): string {
+  const lines = src.split('\n');
+  let depth = 0;
+  const kept: string[] = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    const opensModel = /^begin\s+model\b/i.test(trimmed);
+    const closesModel = /^end\s+model\b/i.test(trimmed);
+    if (opensModel) depth++;
+    else if (closesModel) depth = Math.max(0, depth - 1);
+
+    const isDecoration = trimmed.length > 0 && /^[=~*\-_\s]+$/.test(trimmed);
+    if (depth === 0 && isDecoration) continue;
+    kept.push(line);
+  }
+  return kept.join('\n');
+}
+
+/**
+ * Drop stray closing parentheses that make the file's parentheses unbalanced,
+ * as a few published models do at the end of a statement. BNG2.pl ignores
+ * them. Balance is tracked across the whole source (excluding comments), so
+ * multi-line calls whose "(" is on an earlier line are left alone, and a
+ * genuinely unbalanced paren inside a model still fails to parse.
+ */
+function stripTrailingStrayParens(src: string): string {
+  const kept: string[] = [];
+  let balance = 0;
+  for (let i = 0; i < src.length; i++) {
+    const ch = src[i];
+    if (ch === '#') {
+      // Comment: copy through to end of line without counting brackets.
+      while (i < src.length && src[i] !== '\n') kept.push(src[i++]);
+      if (i < src.length) kept.push(src[i]);
+      continue;
+    }
+    if (ch === '(') {
+      balance++;
+    } else if (ch === ')') {
+      if (balance === 0) continue; // stray: would go negative
+      balance--;
+    }
+    kept.push(ch);
+  }
+  return kept.join('');
+}
+
 export function parseBNGLWithANTLR(input: string): ParseResult {
   const errors: ParseError[] = [];
 
@@ -163,6 +298,18 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
     if (input.charCodeAt(0) === 0xFEFF) {
       sanitizedInput = input.substring(1);
     }
+
+    // Some published BNGL files are wrapped in decorative rules such as
+    // "================================================" outside the model block.
+    // BNG2.pl accepts them; our lexer stops at the first such line. Drop lines
+    // that consist purely of separator characters, but only outside the model
+    // and actions blocks so genuine syntax errors inside a model still surface.
+    sanitizedInput = stripDecorativeLines(sanitizedInput);
+
+    // A few published models end with stray closing parentheses (an extra ")"
+    // after the last action). BNG2.pl ignores them; our grammar stops. Only
+    // unbalanced trailing parens are dropped, so errors elsewhere still surface.
+    sanitizedInput = stripTrailingStrayParens(sanitizedInput);
 
     // Normalize legacy molecule block aliases ('molecules' and
     // 'molecular types') to
@@ -223,12 +370,55 @@ export function parseBNGLWithANTLR(input: string): ParseResult {
       }
 
       // Normalize explicit line continuations used in legacy reaction rules by
-      // folding continued lines into a single logical rule line.
+      // folding continued lines into a single logical rule line. Comments come
+      // off first (see foldLineContinuations) or a `#` on a continued line would
+      // swallow the rest of the joined line — `tricky` has `=\<tab># Comment`.
       if (next.includes('\\')) {
-        const joined = next.replace(LINE_CONTINUATION_RE, ' ');
+        const joined = foldLineContinuations(next);
         if (joined !== next) {
           warnings.push('Joined legacy line continuations (\\) for parser compatibility.');
           next = joined;
+        }
+      }
+
+      // Fold loose top-level action commands that sit outside the model's
+      // actions block into that block: BNG2 executes them in file order, but
+      // the grammar's entry rule admits a single trailing actions block only.
+      {
+        const { normalized: actionsFolded, folded } = foldLooseActionCommandsIntoActionsBlock(next);
+        if (folded > 0) {
+          warnings.push(`Folded ${folded} loose top-level action command(s) into the model's actions block (BNG2 executes them in file order).`);
+          next = actionsFolded;
+        }
+      }
+
+      // BNG2's block keywords and string literals tolerate an EN DASH; our
+      // lexer has no token for it, so fold it to an ASCII hyphen.
+      if (next.includes('\u2013')) {
+        warnings.push('Replaced U+2013 EN DASH with an ASCII hyphen (BNG2 accepts it in strings and comments; the lexer does not).');
+        next = next.replace(EN_DASH_RE, '-');
+      }
+
+      // `Begin actions` / `End actions`: BNG2 matches block keywords
+      // case-insensitively, so accept the capitalised spelling. `End` doubles as
+      // a molecule and compartment name, so only real block names are rewritten.
+      if (CAPITALISED_BLOCK_KEYWORD_CHECK_RE.test(next)) {
+        const keywordNormalized = next.replace(CAPITALISED_BLOCK_KEYWORD_RE, (_m, indent: string, word: string) => `${indent}${word.toLowerCase()}`);
+        if (keywordNormalized !== next) {
+          warnings.push('Lowercased capitalised block keywords (Begin/End) to match the grammar.');
+          next = keywordNormalized;
+        }
+      }
+
+      // Literal TAB characters: BNG2 treats them as ordinary whitespace, but
+      // our lexer has no tab in its whitespace set. Fold them to a single
+      // space outside quoted literals and comments, so tabs used as indentation
+      // or as separators inside a parameter list still lex.
+      if (next.includes('\t')) {
+        const tabNormalized = replaceTabsOutsideStringsAndComments(next);
+        if (tabNormalized !== next) {
+          warnings.push('Replaced literal TAB characters with spaces outside quoted strings and comments (BNG2 treats tabs as whitespace; the lexer does not).');
+          next = tabNormalized;
         }
       }
 

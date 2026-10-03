@@ -65,8 +65,16 @@ describe('ExpressionEvaluation', () => {
     expect(evaluateFunctionalRate('2^3', context, emptyObs)).toBe(8);
   });
 
-  it('should return 0 (safe fallback) for divide by zero', () => {
-    expect(evaluateFunctionalRate('1/0', context, emptyObs)).toBe(0);
+  it('should propagate +Infinity for divide by zero, matching BNG2', () => {
+    // BNG2 evaluates rate laws and functions with mu::Parser, which follows
+    // IEEE-754: 1/0 is +inf and ln(0) is -inf, and those values reach the .gdat.
+    // Collapsing them to 0 made pt403/pt409 report lnV=0 where BNG2 reports -inf.
+    expect(evaluateFunctionalRate('1/0', context, emptyObs)).toBe(Infinity);
+    expect(evaluateFunctionalRate('ln(0)', context, emptyObs)).toBe(-Infinity);
+  });
+
+  it('should still return 0 (safe fallback) for a genuine NaN', () => {
+    expect(evaluateFunctionalRate('0/0', context, emptyObs)).toBe(0);
   });
 
   it('should resolve user parameter', () => {

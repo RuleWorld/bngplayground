@@ -1,4 +1,4 @@
-// Generated from packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
+// Generated from /Users/akutuva/Documents/BioNetGen/julesplayground/packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
 import { ParseTreeListener } from "antlr4ts/tree/ParseTreeListener";
@@ -25,6 +25,7 @@ import { State_listContext } from "./BNGParser";
 import { State_nameContext } from "./BNGParser";
 import { Seed_species_blockContext } from "./BNGParser";
 import { Seed_species_defContext } from "./BNGParser";
+import { Seed_species_noteContext } from "./BNGParser";
 import { Species_defContext } from "./BNGParser";
 import { Molecule_compartmentContext } from "./BNGParser";
 import { Molecule_patternContext } from "./BNGParser";
@@ -62,6 +63,7 @@ import { Population_maps_blockContext } from "./BNGParser";
 import { Population_map_defContext } from "./BNGParser";
 import { Population_types_blockContext } from "./BNGParser";
 import { Population_type_defContext } from "./BNGParser";
+import { Protocol_blockContext } from "./BNGParser";
 import { Actions_blockContext } from "./BNGParser";
 import { Wrapped_actions_blockContext } from "./BNGParser";
 import { Begin_actions_blockContext } from "./BNGParser";
@@ -72,6 +74,7 @@ import { Simulate_cmdContext } from "./BNGParser";
 import { Write_cmdContext } from "./BNGParser";
 import { Set_cmdContext } from "./BNGParser";
 import { Other_action_cmdContext } from "./BNGParser";
+import { Set_option_cmdContext } from "./BNGParser";
 import { Action_argsContext } from "./BNGParser";
 import { Action_arg_listContext } from "./BNGParser";
 import { Action_argContext } from "./BNGParser";
@@ -82,11 +85,9 @@ import { Nested_hash_itemContext } from "./BNGParser";
 import { Arg_nameContext } from "./BNGParser";
 import { Expression_listContext } from "./BNGParser";
 import { ExpressionContext } from "./BNGParser";
-import { Conditional_exprContext } from "./BNGParser";
 import { Or_exprContext } from "./BNGParser";
 import { And_exprContext } from "./BNGParser";
 import { Equality_exprContext } from "./BNGParser";
-import { Relational_exprContext } from "./BNGParser";
 import { Additive_exprContext } from "./BNGParser";
 import { Multiplicative_exprContext } from "./BNGParser";
 import { Power_exprContext } from "./BNGParser";
@@ -94,6 +95,8 @@ import { Unary_exprContext } from "./BNGParser";
 import { Primary_exprContext } from "./BNGParser";
 import { Function_callContext } from "./BNGParser";
 import { Observable_refContext } from "./BNGParser";
+import { Observable_arg_listContext } from "./BNGParser";
+import { Observable_argContext } from "./BNGParser";
 import { LiteralContext } from "./BNGParser";
 
 
@@ -343,6 +346,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitSeed_species_def?: (ctx: Seed_species_defContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.seed_species_note`.
+	 * @param ctx the parse tree
+	 */
+	enterSeed_species_note?: (ctx: Seed_species_noteContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.seed_species_note`.
+	 * @param ctx the parse tree
+	 */
+	exitSeed_species_note?: (ctx: Seed_species_noteContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.species_def`.
@@ -752,6 +766,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	exitPopulation_type_def?: (ctx: Population_type_defContext) => void;
 
 	/**
+	 * Enter a parse tree produced by `BNGParser.protocol_block`.
+	 * @param ctx the parse tree
+	 */
+	enterProtocol_block?: (ctx: Protocol_blockContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.protocol_block`.
+	 * @param ctx the parse tree
+	 */
+	exitProtocol_block?: (ctx: Protocol_blockContext) => void;
+
+	/**
 	 * Enter a parse tree produced by `BNGParser.actions_block`.
 	 * @param ctx the parse tree
 	 */
@@ -860,6 +885,17 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitOther_action_cmd?: (ctx: Other_action_cmdContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.set_option_cmd`.
+	 * @param ctx the parse tree
+	 */
+	enterSet_option_cmd?: (ctx: Set_option_cmdContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.set_option_cmd`.
+	 * @param ctx the parse tree
+	 */
+	exitSet_option_cmd?: (ctx: Set_option_cmdContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.action_args`.
@@ -972,17 +1008,6 @@ export interface BNGParserListener extends ParseTreeListener {
 	exitExpression?: (ctx: ExpressionContext) => void;
 
 	/**
-	 * Enter a parse tree produced by `BNGParser.conditional_expr`.
-	 * @param ctx the parse tree
-	 */
-	enterConditional_expr?: (ctx: Conditional_exprContext) => void;
-	/**
-	 * Exit a parse tree produced by `BNGParser.conditional_expr`.
-	 * @param ctx the parse tree
-	 */
-	exitConditional_expr?: (ctx: Conditional_exprContext) => void;
-
-	/**
 	 * Enter a parse tree produced by `BNGParser.or_expr`.
 	 * @param ctx the parse tree
 	 */
@@ -1014,17 +1039,6 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitEquality_expr?: (ctx: Equality_exprContext) => void;
-
-	/**
-	 * Enter a parse tree produced by `BNGParser.relational_expr`.
-	 * @param ctx the parse tree
-	 */
-	enterRelational_expr?: (ctx: Relational_exprContext) => void;
-	/**
-	 * Exit a parse tree produced by `BNGParser.relational_expr`.
-	 * @param ctx the parse tree
-	 */
-	exitRelational_expr?: (ctx: Relational_exprContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.additive_expr`.
@@ -1102,6 +1116,28 @@ export interface BNGParserListener extends ParseTreeListener {
 	 * @param ctx the parse tree
 	 */
 	exitObservable_ref?: (ctx: Observable_refContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.observable_arg_list`.
+	 * @param ctx the parse tree
+	 */
+	enterObservable_arg_list?: (ctx: Observable_arg_listContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.observable_arg_list`.
+	 * @param ctx the parse tree
+	 */
+	exitObservable_arg_list?: (ctx: Observable_arg_listContext) => void;
+
+	/**
+	 * Enter a parse tree produced by `BNGParser.observable_arg`.
+	 * @param ctx the parse tree
+	 */
+	enterObservable_arg?: (ctx: Observable_argContext) => void;
+	/**
+	 * Exit a parse tree produced by `BNGParser.observable_arg`.
+	 * @param ctx the parse tree
+	 */
+	exitObservable_arg?: (ctx: Observable_argContext) => void;
 
 	/**
 	 * Enter a parse tree produced by `BNGParser.literal`.

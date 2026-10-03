@@ -22,7 +22,7 @@ import * as path from 'path';
 import { spawn } from 'child_process';
 import { once } from 'events';
 import { fileURLToPath } from 'url';
-import { collectBnglFilesRecursive, listAllRuleHubModelFiles } from '../../tools/rulehubLocal';
+import { buildReferenceNames, referenceCorpus } from '../../tools/validation/referenceNaming';
 
 const THIS_DIR = path.dirname(fileURLToPath(import.meta.url));
 const PROJECT_ROOT = path.resolve(THIS_DIR, '..', '..');
@@ -40,8 +40,6 @@ const PERL = process.env.PERL || 'perl';
 const TIMEOUT_MS = Number(process.env.BNG_MODEL_TIMEOUT_MS || process.env.BNG2_TIMEOUT_MS || 60_000);
 const CONCURRENCY = Math.max(1, Number(process.env.BNG_CONCURRENCY || 4));
 
-const PUBLIC_MODELS_DIR = path.join(PROJECT_ROOT, 'public', 'models');
-
 type ModelSource =
 	| 'rulehub-published'
 	| 'rulehub-example'
@@ -54,18 +52,23 @@ type ModelSource =
 	| 'missing';
 
 type ModelCandidate = {
-	safeName: string;
+	/**
+	 * File name stem for this model's reference in `bng_test_output/`. Equal to
+	 * the sanitised basename for every model that does not share one, so
+	 * existing fixture paths are untouched; see `tools/validation/referenceNaming.ts`
+	 * for why colliding models need more than a basename.
+	 */
+	referenceName: string;
 	fileAbs: string;
 	source: Exclude<ModelSource, 'missing'>;
 	sourceId: string;
-	priority: number;
 };
 
 type GenerationResult = {
-	safeName: string;
+	referenceName: string;
 	source: ModelSource;
 	sourceId?: string;
-	status: 'generated' | 'skipped_exists' | 'bng2_failed' | 'source_missing';
+	status: 'generated' | 'skipped_exists' | 'bng2_failed' | 'source_missing' | 'network_free';
 	elapsedMs?: number;
 	exitStatus?: number | null;
 	timedOut?: boolean;
@@ -75,13 +78,6 @@ type GenerationResult = {
 	error?: string;
 };
 
-function toSafeName(filePath: string): string {
-	return path
-		.basename(filePath, path.extname(filePath))
-		.toLowerCase()
-		.replace(/[^a-z0-9]+/g, '_')
-		.replace(/^_+|_+$/g, '');
-}
 
 function ensureDir(dir: string) {
 	fs.mkdirSync(dir, { recursive: true });
@@ -92,109 +88,55 @@ function tail(str: string, maxChars = 4000): string {
 	return str.slice(-maxChars);
 }
 
-function hasUncommentedSimulateAction(code: string): boolean {
-	const uncommented = code
-		.split(/\r?\n/)
-		.map((line) => line.trimStart())
-		.filter((line) => !line.startsWith('#'))
-		.join('\n');
-	return /\b(simulate|simulate_ode)\s*\(/i.test(uncommented);
-}
-
-function appendDefaultOdeActions(code: string): string {
-	const cleaned = code.replace(/\s+$/, '');
-	return `${cleaned}\n\n# [auto-generated] Default ODE actions for reference generation\ngenerate_network({overwrite=>1})\nsimulate({method=>"ode",t_end=>100,n_steps=>100})\n`;
-}
-
-function sanitizeActionsKeepAllOdeSimulates(code: string): string {
-	// Keep all ODE simulate calls. Comment out SSA/NFsim simulate calls only.
-	const beginRe = /\bbegin\s+actions\b/i;
-	const endRe = /\bend\s+actions\b/i;
-
-	const beginMatch = beginRe.exec(code);
-	if (!beginMatch) return code;
-	const beginIdx = beginMatch.index;
-
-	const afterBeginIdx = beginIdx + beginMatch[0].length;
-	const endMatch = endRe.exec(code.slice(afterBeginIdx));
-	if (!endMatch) return code;
-	const endIdx = afterBeginIdx + endMatch.index;
-
-	const before = code.slice(0, afterBeginIdx);
-	const actionsBody = code.slice(afterBeginIdx, endIdx);
-	const after = code.slice(endIdx);
-
-	const lines = actionsBody.split(/\r?\n/);
-	const outLines = lines.map((line) => {
-		const trimmed = line.trimStart();
-		if (trimmed.startsWith('#')) return line;
-		if (!/\b(simulate|simulate_ode)\s*\(/i.test(line)) return line;
-
-		const isSsa = /\bsimulate_ssa\s*\(/i.test(line) || /\bmethod\s*=>\s*["']ssa["']/i.test(line);
-		const isNf = /\bsimulate_nf\s*\(/i.test(line) || /\bmethod\s*=>\s*["'](?:nf|nfsim)["']/i.test(line);
-		if (isSsa || isNf) return `# [auto-disabled] ${line}`;
-		return line;
-	});
-
-	return `${before}\n${outLines.join('\n')}\n${after}`;
-}
-
-function chooseBetterCandidate(left: ModelCandidate, right: ModelCandidate): ModelCandidate {
-	if (right.priority !== left.priority) {
-		return right.priority < left.priority ? right : left;
-	}
-	if (right.sourceId.length !== left.sourceId.length) {
-		return right.sourceId.length < left.sourceId.length ? right : left;
-	}
-	return right.sourceId.localeCompare(left.sourceId) < 0 ? right : left;
+/**
+ * True when the model declares simulate actions but every one of them is
+ * network-free (NFsim) or stochastic (SSA), and it never asks for a network.
+ *
+ * The model is inspected exactly as published — nothing injected, nothing
+ * commented out — and comments are stripped first, because a commented-out
+ * action is not a request: `#generate_network({max_stoich=>...})` sitting above
+ * an active `simulate({method=>"nf"...})` (BLBR, Dolan2015) means the author
+ * abandoned expansion for a network-free run. Without stripping, those models
+ * were classified as network-needing, BNG2 ran NFsim, which writes a `.gdat`
+ * but never a `.net`, and the network-shape gate then demanded a ratchet entry
+ * for a fixture that should never have been written.
+ */
+export function isNetworkFreeModel(originalCode: string): boolean {
+	const code = originalCode.replace(/#[^\n]*/g, '');
+	const simulateCalls = code.match(/\b(?:simulate|simulate_ode|simulate_ssa|simulate_nf|simulate_psa|simulate_pla|simulate_rm)\s*\([^;]*\)/gi);
+	if (!simulateCalls || simulateCalls.length === 0) return false;
+	// An explicit request for a network means the model is not network-free.
+	if (/\bgenerate_network\s*\(/i.test(code)) return false;
+	const networkFree = simulateCalls.every((call) =>
+		/\bsimulate_nf\s*\(/i.test(call) ||
+		/\bsimulate_ssa\s*\(/i.test(call) ||
+		/\bsimulate_psa\s*\(/i.test(call) ||
+		/\bmethod\s*=>\s*["'](?:nf|nfsim|ssa|psa)["']/i.test(call)
+	);
+	return networkFree;
 }
 
 function discoverModelCandidates(): ModelCandidate[] {
-	const sourcePriority: Record<Exclude<ModelSource, 'missing'>, number> = {
-		'public-models': 0,
-		'rulehub-published': 1,
-		'rulehub-example': 2,
-		'rulehub-validation': 3,
-		'rulehub-runtime': 4,
-		'rulehub-tutorial': 5,
-		'rulehub-pybionetgen': 6,
-		'rulehub-other': 7,
-	};
+	// One reference per model, not one per basename: the CI-visible RuleHub
+	// corpus holds 28 basename groups covering 79 distinct models, and the old
+	// one-per-basename deduplication silently dropped 51 of them before BNG2
+	// ever ran. Naming is shared with the gates so a reference is never written
+	// under a name they would not look up.
+	const models = referenceCorpus(PROJECT_ROOT);
+	const referenceNames = buildReferenceNames(models);
 
-	const bySafeName = new Map<string, ModelCandidate>();
-
-	for (const entry of listAllRuleHubModelFiles(PROJECT_ROOT)) {
-		const safeName = toSafeName(entry.filePath);
-		if (!safeName) continue;
-		const candidate: ModelCandidate = {
-			safeName,
-			fileAbs: entry.filePath,
-			source: entry.source,
-			sourceId: entry.relativePath,
-			priority: sourcePriority[entry.source],
-		};
-		const existing = bySafeName.get(safeName);
-		bySafeName.set(safeName, existing ? chooseBetterCandidate(existing, candidate) : candidate);
-	}
-
-	if (fs.existsSync(PUBLIC_MODELS_DIR)) {
-		for (const fileAbs of collectBnglFilesRecursive(PUBLIC_MODELS_DIR)) {
-			const safeName = toSafeName(fileAbs);
-			if (!safeName) continue;
-			const sourceId = path.relative(PROJECT_ROOT, fileAbs).replace(/\\/g, '/');
-			const candidate: ModelCandidate = {
-				safeName,
-				fileAbs,
-				source: 'public-models',
-				sourceId,
-				priority: sourcePriority['public-models'],
-			};
-			const existing = bySafeName.get(safeName);
-			bySafeName.set(safeName, existing ? chooseBetterCandidate(existing, candidate) : candidate);
-		}
-	}
-
-	return Array.from(bySafeName.values()).sort((a, b) => a.safeName.localeCompare(b.safeName));
+	return models
+		.map(model => ({ model, referenceName: referenceNames.get(model.relativePath) }))
+		// A basename that sanitises to nothing cannot name a fixture; the
+		// naming pass skips it, so it must not reach the file writes either.
+		.filter((entry): entry is { model: typeof entry.model; referenceName: string } => Boolean(entry.referenceName))
+		.map(({ model, referenceName }) => ({
+			referenceName,
+			fileAbs: model.fileAbs,
+			source: model.source as ModelCandidate['source'],
+			sourceId: model.relativePath,
+		}))
+		.sort((left, right) => left.referenceName.localeCompare(right.referenceName));
 }
 
 type Bng2RunResult = {
@@ -254,11 +196,11 @@ async function runBng2Process(workDir: string, bnglPath: string): Promise<Bng2Ru
 }
 
 async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
-	const safeName = model.safeName;
-	const hasReferenceGdat = fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.gdat`));
+	const referenceName = model.referenceName;
+	const hasReferenceGdat = fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${referenceName}.gdat`));
 	if (hasReferenceGdat) {
 		return {
-			safeName,
+			referenceName,
 			source: model.source,
 			sourceId: model.sourceId,
 			status: 'skipped_exists',
@@ -267,7 +209,7 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	}
 
 	if (!fs.existsSync(model.fileAbs)) {
-		return { safeName, source: 'missing', status: 'source_missing', error: 'Model source file no longer exists' };
+		return { referenceName, source: 'missing', status: 'source_missing', error: 'Model source file no longer exists' };
 	}
 
 	const loadedCode = fs.readFileSync(model.fileAbs, 'utf8').replace(/^\uFEFF/, '');
@@ -275,17 +217,58 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	ensureDir(WORK_ROOT);
 	ensureDir(LOG_ROOT);
 
-	const workDir = path.join(WORK_ROOT, safeName);
+	const workDir = path.join(WORK_ROOT, referenceName);
 	if (fs.existsSync(workDir)) fs.rmSync(workDir, { recursive: true, force: true });
 	ensureDir(workDir);
 
-	let sanitized = sanitizeActionsKeepAllOdeSimulates(loadedCode);
-	if (!hasUncommentedSimulateAction(sanitized)) {
-		sanitized = appendDefaultOdeActions(sanitized);
+	// BNG2 is given the model EXACTLY AS PUBLISHED. Nothing is injected,
+	// commented out or appended.
+	//
+	// This is not a stylistic choice. A reference built from a modified model is
+	// a reference to a different model than the one the playground runs, and the
+	// comparison is then meaningless while still reporting a number:
+	//   - `nyc`/`phoenix` had 21 lines of `*__FREE 0` injected. BNG2 aborts on the
+	//     published file (`Parameter ts0__FREE is referenced but not defined`), so
+	//     the fixture was a model BioNetGen would never accept.
+	//   - `toggle`/`baruabcr_2012` had `generate_network` + `simulate` appended to
+	//     files that contain no `simulate()` at all.
+	// The playground does not modify models either: with no `simulate()` action it
+	// falls back to ODE at whatever the UI supplies, running the file as written.
+	// So a model BNG2 cannot process has no reference, and that is the honest
+	// outcome — reported as such rather than papered over with a synthetic fixture.
+	//
+	// A network-free model (only NFsim/ssa actions) is skipped rather than left to
+	// burn the per-model timeout: BNG2 writes no .net for those, and appending
+	// `generate_network` for one is how `tcr_iter28p4h2` went 20 -> 53 -> 203 ->
+	// 2659 species and never converged.
+	if (isNetworkFreeModel(loadedCode)) {
+		return {
+			referenceName,
+			source: model.source,
+			sourceId: model.sourceId,
+			status: 'network_free',
+			error: 'Model is network-free (only NFsim/ssa simulate actions); BioNetGen writes no network for it either.',
+		};
 	}
 
-	const bnglPath = path.join(workDir, `${safeName}.bngl`);
+	const sanitized = loadedCode;
+
+	const bnglPath = path.join(workDir, `${referenceName}.bngl`);
 	fs.writeFileSync(bnglPath, sanitized, 'utf8');
+
+	// BioNetGen master (ruleworld/bionetgen) resolves `default.geometry.mdl`
+	// from the MODEL FILE's directory — Perl2/BNGOutput.pm:127 does
+	// `catfile(dirname($model->Params->{'file'}), "default.geometry.mdl")` and
+	// dies without it. The packaged release ships no geometry file, so it
+	// tolerated the absence. Because each model is copied into a fresh
+	// `workDir` above, that per-model directory is the model's directory, and a
+	// copy placed anywhere else is never read. Without this the three
+	// writeMDL() models (fceri_ji_comp, rec_dim, rec_dim_comp) abort before
+	// simulate() and produce no .gdat at all.
+	const geometrySource = path.join(path.dirname(BNG2_PL), 'Models2', 'MCell', 'default.geometry.mdl');
+	if (fs.existsSync(geometrySource)) {
+		fs.copyFileSync(geometrySource, path.join(workDir, 'default.geometry.mdl'));
+	}
 
 	const t0 = Date.now();
 	const res = await runBng2Process(workDir, bnglPath);
@@ -298,12 +281,12 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	const produced = fs.readdirSync(workDir);
 	const producedFiles = produced.filter((f) => /\.(gdat|cdat|net)$/i.test(f)).sort();
 
-	const logFileAbs = path.join(LOG_ROOT, `${safeName}.log.txt`);
+	const logFileAbs = path.join(LOG_ROOT, `${referenceName}.log.txt`);
 	const logRel = path.relative(PROJECT_ROOT, logFileAbs).replace(/\\/g, '/');
 	fs.writeFileSync(
 		logFileAbs,
 		[
-			`SAFE_NAME: ${safeName}`,
+			`REFERENCE_NAME: ${referenceName}`,
 			`SOURCE: ${model.source}`,
 			`SOURCE_ID: ${model.sourceId ?? ''}`,
 			`BNG2_PL: ${BNG2_PL}`,
@@ -324,7 +307,7 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 
 	if (producedFiles.length === 0 || res.errorMessage) {
 		return {
-			safeName,
+			referenceName,
 			source: model.source,
 			sourceId: model.sourceId,
 			status: 'bng2_failed',
@@ -340,7 +323,7 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 	// Copy the BNGL used for generation + produced outputs into bng_test_output.
 	const copiedFiles: string[] = [];
 
-	const dstBngl = path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.bngl`);
+	const dstBngl = path.join(BNG_TEST_OUTPUT_DIR, `${referenceName}.bngl`);
 	if (!fs.existsSync(dstBngl)) {
 		fs.copyFileSync(bnglPath, dstBngl);
 		copiedFiles.push(path.basename(dstBngl));
@@ -348,14 +331,14 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 
 	// Copy all produced files. For suffixed outputs (e.g., model_ODE.gdat from
 	// simulate({suffix=>"ODE",...})), also create a canonical unsuffixed copy
-	// (model.gdat) so the parity checker can find it by safeName.
+	// (model.gdat) so the parity checker can find it by reference name.
 	let hasCanonicalGdat = false;
 	for (const f of producedFiles) {
 		const src = path.join(workDir, f);
 		const dst = path.join(BNG_TEST_OUTPUT_DIR, f);
 		fs.copyFileSync(src, dst);
 		copiedFiles.push(f);
-		if (f === `${safeName}.gdat`) hasCanonicalGdat = true;
+		if (f === `${referenceName}.gdat`) hasCanonicalGdat = true;
 	}
 	if (!hasCanonicalGdat) {
 		// BNG2 produced suffixed gdat(s) but no unsuffixed one.
@@ -363,14 +346,14 @@ async function generateOne(model: ModelCandidate): Promise<GenerationResult> {
 		const firstGdat = producedFiles.find((f) => f.endsWith('.gdat'));
 		if (firstGdat) {
 			const src = path.join(workDir, firstGdat);
-			const canonicalDst = path.join(BNG_TEST_OUTPUT_DIR, `${safeName}.gdat`);
+			const canonicalDst = path.join(BNG_TEST_OUTPUT_DIR, `${referenceName}.gdat`);
 			fs.copyFileSync(src, canonicalDst);
-			copiedFiles.push(`${safeName}.gdat (alias of ${firstGdat})`);
+			copiedFiles.push(`${referenceName}.gdat (alias of ${firstGdat})`);
 		}
 	}
 
 	return {
-		safeName,
+		referenceName,
 		source: model.source,
 		sourceId: model.sourceId,
 		status: 'generated',
@@ -393,7 +376,7 @@ async function processPool(models: ModelCandidate[], concurrency: number): Promi
 			const current = idx++;
 			if (current >= models.length) return;
 			const model = models[current];
-			console.log(`--- [${current + 1}/${models.length}] ${model.safeName} (${model.source}) ---`);
+			console.log(`--- [${current + 1}/${models.length}] ${model.referenceName} (${model.source}) ---`);
 			const r = await generateOne(model);
 			results[current] = r;
 			console.log(`Status: ${r.status}`);
@@ -429,7 +412,7 @@ async function main() {
 
 	const allCandidates = discoverModelCandidates();
 	const pendingCandidates = allCandidates.filter(
-		(model) => !fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${model.safeName}.gdat`))
+		(model) => !fs.existsSync(path.join(BNG_TEST_OUTPUT_DIR, `${model.referenceName}.gdat`))
 	);
 
 	console.log('Discovered .bngl candidates:', allCandidates.length);
@@ -468,7 +451,11 @@ async function main() {
 	console.log('Summary:', path.relative(PROJECT_ROOT, summaryPath).replace(/\\/g, '/'));
 }
 
-main().catch((err) => {
-	console.error('[generate:gdat] Fatal error:', err);
-	process.exitCode = 1;
-});
+// Run only when executed directly: `tests/` imports `isNetworkFreeModel`, and
+// an unguarded `main()` here would start a full reference generation on import.
+if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+	main().catch((err) => {
+		console.error('[generate:gdat] Fatal error:', err);
+		process.exitCode = 1;
+	});
+}

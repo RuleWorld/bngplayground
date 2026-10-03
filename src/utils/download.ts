@@ -99,7 +99,13 @@ function formatCsvValue(value: unknown, header: string): string {
   }
 
   if (typeof value === 'number') {
-    if (!Number.isFinite(value)) return '';
+    // Non-finite values are real results, not missing data: BNG2 evaluates rate
+    // laws with mu::Parser, which propagates `ln(0) => -inf` and `x/0 => +inf`,
+    // and writes those into the .gdat. Emitting an empty cell instead loses the
+    // value and turns a comparable row into a parse error for the gate. These
+    // are the JavaScript numeric literals, so `Number()` round-trips them.
+    if (Number.isNaN(value)) return 'NaN';
+    if (!Number.isFinite(value)) return value > 0 ? 'Infinity' : '-Infinity';
     return String(value);
   }
 

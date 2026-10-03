@@ -59,9 +59,16 @@ it('supports additional math functions and constants', () => {
   expect(out).toBeLessThan(5.0);
 });
 
-it('rejects overly deep nesting', () => {
-  const deep = '1' + ' + ('.repeat(300) + '0' + ')'.repeat(300);
+it('rejects pathological nesting depth', () => {
+  // The guard stops runaway AST recursion, not legitimate models: published
+  // piecewise rate laws nest a few hundred levels deep.
+  const deep = '('.repeat(2100) + '1' + ')'.repeat(2100);
   expect(() => compile(deep, [])).toThrow(/nesting too deep/i);
+});
+
+it('accepts the nesting depth real models use', () => {
+  const deep = '('.repeat(400) + '1' + ')'.repeat(400);
+  expect(() => compile(deep, [])).not.toThrow();
 });
 
 it('getReferencedVariables returns variables used', () => {

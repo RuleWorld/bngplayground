@@ -6,7 +6,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { fileURLToPath } from 'url';
-import { getRuleHubManifestBnglPaths } from '../rulehubLocal';
+import { getRuleHubManifestBnglPaths, loadRuleHubManifest, resolveRuleHubRoot, type RuleHubManifestEntry } from '../rulehubLocal';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -59,6 +59,12 @@ interface ComparisonResult {
     errorAtTime?: number;
     errorColumn?: string;
     samples?: { time: number; column: string; web: number; ref: number; relError: number }[];
+    // Reference cells in a *compared* column that are inf/-inf/NaN. BNG2
+    // writes those when its own solve fails; scoring them as agreement is
+    // impossible because NaN fails every tolerance comparison.
+    nonFiniteReferenceCells?: { time: number; column: string; value: string }[];
+    /** Cells where BOTH runs produced a non-finite value: agreement that the quantity is undefined. Not a divergence. */
+    bothNonFiniteCells?: { time: number; column: string; web: string; ref: string }[];
   } | null;
   error?: string;
 }
@@ -96,7 +102,20 @@ import {
   STEADY_STATE_MODELS,
   CSV_MODEL_ALIASES,
   PARTIAL_MATCH_TIME,
+  detectUnsupportedFeature,
+  compareColumnCoverage,
+  referenceMatchesModel,
+  indexReferenceColumns,
+  parseCSV,
+  parseGDAT,
 } from './compareShared';
+import { modelReferenceNameFor } from './referenceNaming';
+// The browser exports CSV labels over `getModelCatalogSync().examples`, which
+// is this generated gallery list resolved against the manifest — NOT the full
+// RuleHub manifest. Label→model resolution has to use the same catalog the
+// browser used, or a label the browser gave to one model resolves here to a
+// sibling the browser catalog does not even contain.
+import { EXAMPLES } from '../../src/generated/gallery-data';
 
 function stripDownloadSuffix(name: string): string {
   // Firefox/Chrome may save duplicates as "file(1).csv".
@@ -165,24 +184,6 @@ function csvModelLabel(csvFile: string): string {
     .replace(/\.csv$/i, '');
 }
 
-function normalizeTimeSeriesRows(headers: string[], rows: number[][]): number[][] {
-  const timeIdx = headers.findIndex((header) => header.trim().toLowerCase() === 'time');
-  if (timeIdx === -1 || rows.length <= 1) return rows;
-
-  const sorted = [...rows].sort((left, right) => left[timeIdx] - right[timeIdx]);
-  const normalized: number[][] = [];
-
-  for (const row of sorted) {
-    const last = normalized[normalized.length - 1];
-    if (last && Math.abs(last[timeIdx] - row[timeIdx]) <= TIME_TOL) {
-      normalized[normalized.length - 1] = row;
-      continue;
-    }
-    normalized.push(row);
-  }
-
-  return normalized;
-}
 
 function alignRowsByTime(
   webRows: number[][],
@@ -218,45 +219,6 @@ function alignRowsByTime(
   return pairs;
 }
 
-function parseCSV(content: string): { headers: string[]; data: number[][] } {
-  const lines = content.trim().split('\n').filter(l => l.trim() && !l.startsWith('#'));
-  const headers = lines[0].split(',').map(h => h.trim());
-  const data = lines.slice(1).map(line =>
-    line.split(',').map(v => {
-      const parsed = Number.parseFloat(v.trim());
-      if (!Number.isFinite(parsed)) {
-        throw new Error(`Non-numeric CSV value: "${v}"`);
-      }
-      return parsed;
-    })
-  );
-  return { headers, data: normalizeTimeSeriesRows(headers, data) };
-}
-
-function parseGDAT(content: string): { headers: string[]; data: number[][] } {
-  const lines = content.trim().split('\n').filter(l => l.trim());
-
-  // First line is header with #
-  const headerLine = lines.find(l => l.startsWith('#'));
-  let headers: string[] = [];
-  if (headerLine) {
-    headers = headerLine.replace('#', '').trim().split(/\s+/);
-  }
-
-  // Data lines don't start with #
-  const data = lines
-    .filter(l => !l.startsWith('#') && l.trim())
-    .map(line => line.trim().split(/\s+/).map(v => {
-      const parsed = Number.parseFloat(v);
-      if (!Number.isFinite(parsed)) {
-        // throw new Error(`Non-numeric GDAT value: "${v}"`);
-        return NaN;
-      }
-      return parsed;
-    }));
-
-  return { headers, data: normalizeTimeSeriesRows(headers, data) };
-}
 
 interface SimCall {
   method: 'ode' | 'ssa' | 'nf';
@@ -546,6 +508,251 @@ function getMultiPhaseReference(
     return null;
   }
 
+  /**
+   * `RuleHubManifestEntry` omits `name`, but `manifest.json` carries it and
+   * the exporter falls back to it for an entry that has no id.
+   */
+  type CatalogEntry = RuleHubManifestEntry & { name?: string };
+
+  /**
+   * The catalog label the web batch runner exports a manifest entry under.
+   *
+   * A port of `exportLabelFor` in `src/utils/batchRunner.ts`: the bare
+   * sanitised id, plus a discriminator derived from the id for every model
+   * after the first that shares one. Reproduced rather than imported because
+   * it decides which model a CSV label denotes, and a CSV label that resolves
+   * to the wrong model is compared against the wrong reference.
+   *
+   * Note `safeModelName` there keeps leading/trailing underscores, unlike
+   * `safeReferenceBaseName`, so the two deliberately differ.
+   */
+  function exportedLabelFor(entry: CatalogEntry, catalog: CatalogEntry[]): string {
+    const base = String(entry.id || entry.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase();
+    // The browser sorts the collision group by id before assigning labels, so
+    // which member keeps the bare label is decided by locale order, not by
+    // catalog order. Mirror that or the bare label resolves to the wrong member
+    // whenever the two orders differ.
+    const sameName = catalog
+      .filter(other => String(other.id || other.name || '').replace(/[^a-z0-9]/gi, '_').toLowerCase() === base)
+      .sort((a, b) => String(a.id || a.name).localeCompare(String(b.id || b.name)));
+    const index = sameName.findIndex(other => (other.id || other.name) === (entry.id || entry.name));
+    if (sameName.length < 2 || index <= 0) return base;
+    const suffix = String(entry.id || entry.name || '').replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
+    return `${base}_${suffix || index}`;
+  }
+
+  let browserCatalogCache: CatalogEntry[] | null = null;
+
+  /**
+   * The catalog the web batch runner exports labels over: `EXAMPLES` (the
+   * generated gallery list) resolved against the RuleHub manifest, exactly as
+   * `buildCatalog` in `services/modelCatalog.ts` does for the browser.
+   *
+   * The full manifest is a different catalog: it contains models the gallery
+   * does not (Published `fceri_ji` next to the tutorial `FceRI_ji`), so
+   * collision groups — and therefore the exported labels — differ between the
+   * two. The browser exported `results_fceri_ji.csv` from the tutorial because
+   * its catalog has only that member of the pair; resolving the same label over
+   * the full manifest lands on the Published model instead.
+   */
+  function browserCatalogEntries(): CatalogEntry[] {
+    if (browserCatalogCache) return browserCatalogCache;
+    // Mirrors `buildManifestIndex`/`resolveManifestEntry` in
+    // `services/modelCatalog.ts`, including its `_`↔`-` swap: gallery ids and
+    // manifest ids differ in separator style for some models, and resolving
+    // one side without the swap drops models the browser keeps.
+    const manifestLookupKeys = (value: string): string[] => {
+      const normalized = value.trim().toLowerCase().replace(/\.bngl$/i, '');
+      const swap = normalized.includes('_') ? normalized.replace(/_/g, '-') : normalized.replace(/-/g, '_');
+      return swap === normalized ? [normalized] : [normalized, swap];
+    };
+    const manifest = loadRuleHubManifest(PROJECT_ROOT) as CatalogEntry[];
+    const byExactId = new Map<string, CatalogEntry>();
+    const byExactName = new Map<string, CatalogEntry>();
+    const index = new Map<string, CatalogEntry>();
+    for (const entry of manifest) {
+      if (entry.id && !byExactId.has(entry.id)) byExactId.set(entry.id, entry);
+      if (entry.name && !byExactName.has(entry.name)) byExactName.set(entry.name, entry);
+      for (const candidate of [entry.id, entry.name]) {
+        if (!candidate) continue;
+        for (const key of manifestLookupKeys(candidate)) {
+          if (!index.has(key)) index.set(key, entry);
+        }
+      }
+    }
+
+    const resolved: CatalogEntry[] = [];
+    for (const example of EXAMPLES) {
+      // Exact id first: the runner loads code by the gallery id, so the model
+      // that ran is the manifest entry whose id matches verbatim. The
+      // normalized index alone is first-wins and both `fceri_ji` (Published)
+      // and `FceRI_ji` (Tutorials) normalize to `fceriji` — falling straight
+      // to it maps the tutorial run onto the Published path.
+      let match = example.id ? byExactId.get(example.id) : undefined;
+      if (!match && example.name) match = byExactName.get(example.name);
+      if (!match) {
+        for (const candidate of [example.id, example.name]) {
+          if (!candidate) continue;
+          for (const key of manifestLookupKeys(candidate)) {
+            match = index.get(key);
+            if (match) break;
+          }
+          if (match) break;
+        }
+      }
+      if (!match || !match.path) continue;
+      // Browser `mergeExample` keeps the gallery id/name and takes the path
+      // from the manifest entry.
+      resolved.push({ ...match, id: example.id || match.id, name: example.name ?? match.name });
+    }
+    browserCatalogCache = resolved;
+    return resolved;
+  }
+
+  /**
+   * The RuleHub model a web CSV was produced from.
+   *
+   * The browser names its export `results_<exported label>.csv`, and the
+   * exported label names exactly one model. Matching on it directly is what
+   * disambiguates models that share a basename (`alabama_Alabama` and
+   * `mallela2021_states_Alabama` are `Alabama/Alabama.bngl` and
+   * `Mallela2021/SI_files_Alabama_Alabama.bngl`), which basename scoring
+   * cannot do.
+   *
+   * An exact label match is tried first because prefix matching cannot separate
+   * ids that sanitise alike: `fceri_ji` and `FceRI_ji` both reduce to
+   * `fceriji`, so the label `fceri_ji_ceriji` — which is the second model's,
+   * the discriminator carrying that model's own id — matched the first model
+   * instead and was handed the first model's reference.
+   *
+   * Prefix matching then remains the fallback for labels the exporter shaped
+   * differently (the simulate-suffix forms the browser appends), so this only
+   * takes over where it is exact.
+   */
+  function manifestEntryForCsvLabel(csvFile: string): { id: string; relativePath: string; file: string } | null {
+    const csvLabel = csvModelLabel(csvFile);
+    const labelKey = normalizeKey(csvLabel);
+    const ruleHubRoot = resolveRuleHubRoot(PROJECT_ROOT);
+    if (!ruleHubRoot) return null;
+
+    // Exact match against the browser's own catalog first. The exported label
+    // is written verbatim into the filename, so equality here is exact — and it
+    // must be: `normalizeKey` strips the underscore that is the only thing
+    // separating the labels `circadian_oscillator` (the Examples ODE model) and
+    // `circadianoscillator` (the Tutorials SSA model). Two distinct models also
+    // do not always collide the same way in both catalogs — the gallery list
+    // that the browser labels from does not contain Published `fceri_ji` at
+    // all, so the browser's bare `fceri_ji` label denotes the tutorial
+    // `FceRI_ji`, while the full manifest hands that same bare label to the
+    // Published entry. Normalized-over-full-manifest matching therefore pairs
+    // the run with a sibling model's reference.
+    const browserCatalog = browserCatalogEntries();
+    // The browser appends the simulate suffix to the filename when a phase
+    // carries one (`results_<label>_ode.csv`). Try the full label first, then
+    // the label without a method suffix, so `sir_ode` still resolves to the
+    // `SIR` entry the suffix was appended to and its reference provenance can
+    // be checked. Only method suffixes are stripped: an arbitrary phase suffix
+    // (e.g. `07_egg_egg` + `egg`) is not a model id and must not be guessed at.
+    const methodSuffix = /_(?:ode|ssa|nf|nfsim)$/.exec(csvLabel);
+    const strippedLabel = methodSuffix ? csvLabel.slice(0, -methodSuffix[0].length) : '';
+    const candidateLabels = strippedLabel ? [csvLabel, strippedLabel] : [csvLabel];
+    for (const candidateLabel of candidateLabels) {
+      for (const entry of browserCatalog) {
+        if (!entry.id || !entry.path) continue;
+        if (exportedLabelFor(entry, browserCatalog).toLowerCase() !== candidateLabel.toLowerCase()) continue;
+        const file = path.join(ruleHubRoot, entry.path);
+        // The label names this entry unambiguously; a missing source file means
+        // the model is unavailable here, not that a sibling should stand in.
+        if (!fs.existsSync(file)) return null;
+        return { id: entry.id, relativePath: entry.path, file };
+      }
+    }
+
+    const catalog = loadRuleHubManifest(PROJECT_ROOT);
+    let best: { id: string; relativePath: string; file: string } | null = null;
+    for (const entry of catalog) {
+      if (!entry.id || !entry.path) continue;
+      if (normalizeKey(exportedLabelFor(entry, catalog)) !== labelKey) continue;
+      const file = path.join(ruleHubRoot, entry.path);
+      if (!fs.existsSync(file)) continue;
+      // Two catalog entries can share an id (`parabola` appears four times), in
+      // which case the browser wrote one CSV for all of them and the label
+      // cannot say which. First match matches what the run had available.
+      return { id: entry.id, relativePath: entry.path, file };
+    }
+
+    for (const entry of catalog) {
+      if (!entry.id || !entry.path) continue;
+      const idKey = normalizeKey(entry.id);
+      // A 4-character floor keeps a short id from prefix-matching everything,
+      // and the longest match wins so a specific id beats a shorter one.
+      if (idKey.length < 4 || !labelKey.startsWith(idKey)) continue;
+      const file = path.join(ruleHubRoot, entry.path);
+      if (!fs.existsSync(file)) continue;
+      if (!best || idKey.length > normalizeKey(best.id).length) best = { id: entry.id, relativePath: entry.path, file };
+    }
+    return best;
+  }
+
+  function modelSourceForCsvLabel(csvFile: string): string | null {
+    return manifestEntryForCsvLabel(csvFile)?.file ?? null;
+  }
+
+  /**
+   * The `.bngl` a reference was generated from: the reference generator writes
+   * `<safeName>.bngl` next to the `<safeName>[_suffix].gdat` it produced.
+   */
+  function referenceSourceBngl(gdatPath: string, bnglNames: string[]): string | null {
+    const base = path.basename(gdatPath).replace(/\.gdat$/i, '').toLowerCase();
+    let best: { name: string; file: string } | null = null;
+    for (const name of bnglNames) {
+      const stem = name.replace(/\.bngl$/i, '').toLowerCase();
+      if (!base.startsWith(stem)) continue;
+      if (!best || stem.length > best.name.length) best = { name: stem, file: path.join(BNG_OUTPUT_DIR, name) };
+    }
+    return best?.file ?? null;
+  }
+
+  /**
+   * Which model's reference a `.gdat` in `bng_test_output/` belongs to, or null
+   * when nothing on record says.
+   *
+   * The generator writes `<referenceName>.bngl` next to the outputs it
+   * produced for that model, so the longest `.bngl` stem that prefixes the
+   * `.gdat` names the reference. Longest-prefix matters: `egg.gdat` and
+   * `egg_bionetfit_files.gdat` are different models' references, and only the
+   * latter is owned by the longer stem.
+   */
+  function owningReferenceName(gdatFileName: string, bnglNames: string[]): string | null {
+    const source = referenceSourceBngl(path.join(BNG_OUTPUT_DIR, gdatFileName), bnglNames);
+    return source ? path.basename(source).replace(/\.bngl$/i, '') : null;
+  }
+
+  /**
+   * Drop references that provably come from a different model than the web run.
+   * A wrong reference reports a divergence that belongs to a different model,
+   * so a false failure is worse than an honest "no reference".
+   */
+  function keepReferencesForModel(
+    candidates: string[],
+    modelSourcePath: string | null,
+    bnglNames: string[],
+  ): string[] {
+    if (!modelSourcePath) return candidates;
+    const modelSource = fs.readFileSync(modelSourcePath, 'utf8');
+    const trusted = candidates.filter((candidate) => {
+      const referenceSource = referenceSourceBngl(candidate, bnglNames);
+      // No provenance on record: keep the candidate as before.
+      if (!referenceSource || !fs.existsSync(referenceSource)) return true;
+      if (referenceMatchesModel(fs.readFileSync(referenceSource, 'utf8'), modelSource)) return true;
+      console.warn(
+        `[compare] Dropping ${path.basename(candidate)} for ${path.basename(modelSourcePath)}: it was generated from a different model.`
+      );
+      return false;
+    });
+    return trusted;
+  }
+
   function uniqueStrings(values: string[]): string[] {
     const seen = new Set<string>();
     const out: string[] = [];
@@ -623,21 +830,108 @@ function getMultiPhaseReference(
     const normalizedAlias = alias ? normalizeKey(alias) : null;
     const candidateKeys = [baseKey, normalizedAlias].filter(Boolean) as string[];
 
-    const directMatches: string[] = [];
-
-    // 1) Direct match by normalized key.
+    // 1) Direct match.
+    //
+    // `normalizeKey` strips punctuation, so `circadian_oscillator` and
+    // `circadianoscillator` — two distinct RuleHub models whose .net files are
+    // byte-identical and differ only in that underscore — both normalise to the
+    // same key. Matching on the normalised key alone handed the ODE model the
+    // SSA model's reference, and the gate then compared an 801-row ODE
+    // trajectory against a 1001-row stochastic one and called it a divergence.
+    //
+    // So: prefer a filename that matches exactly, and when only a normalised
+    // match exists it must be unambiguous. Guessing between two references
+    // belonging to different models is worse than reporting no reference.
+    const exactMatches: string[] = [];
+    const normalisedOnly: string[] = [];
     for (const gf of gdatFiles) {
       const gKey = normalizeKey(gf);
-      if (candidateKeys.includes(gKey)) {
-        directMatches.push(path.join(BNG_OUTPUT_DIR, gf));
-      }
+      if (!candidateKeys.includes(gKey)) continue;
+      const stemMatches = candidateKeys.some(k => path.basename(gf, '.gdat').toLowerCase() === k);
+      (stemMatches ? exactMatches : normalisedOnly).push(path.join(BNG_OUTPUT_DIR, gf));
     }
+    const directMatches = exactMatches.length > 0 ? exactMatches : normalisedOnly.length === 1 ? normalisedOnly : [];
 
     // Even for direct matches, try to find a BNGL file for multi-phase concatenation
     const bnglPathForDirect = findBestBnglForCsv(csvFile, bnglFiles);
+    const referenceBnglNames = fs
+      .readdirSync(BNG_OUTPUT_DIR)
+      .filter((f) => f.toLowerCase().endsWith('.bngl'));
+    const modelSource = modelSourceForCsvLabel(csvFile);
+
+    // The reference this model owns, resolved through the manifest entry the
+    // CSV label denotes. Computed before any by-name candidate is trusted: a
+    // normalized filename match can belong to a sibling model that merely
+    // sanitizes to the same key.
+    const manifestEntry = manifestEntryForCsvLabel(csvFile);
+    const modelReferenceName = manifestEntry
+      ? modelReferenceNameFor(PROJECT_ROOT, manifestEntry.relativePath)
+      : null;
+
+    const dropForeignReferences = (candidates: string[]): string[] => {
+      if (!modelReferenceName) return candidates;
+      return candidates.filter((candidate) => {
+        const owner = owningReferenceName(path.basename(candidate), referenceBnglNames);
+        if (!owner || owner === modelReferenceName) return true;
+        console.warn(
+          `[compare] Dropping ${path.basename(candidate)} for ${rawLabel}: it belongs to reference ` +
+          `"${owner}", but this model's own reference is "${modelReferenceName}".`
+        );
+        return false;
+      });
+    };
 
     if (directMatches.length > 0) {
-      return { gdatPaths: uniqueStrings(directMatches), bnglPath: bnglPathForDirect ?? undefined, inferred: false };
+      const trustedDirect = keepReferencesForModel(
+        uniqueStrings(dropForeignReferences(directMatches)),
+        modelSource,
+        referenceBnglNames,
+      );
+      if (trustedDirect.length > 0) {
+        return {
+          gdatPaths: trustedDirect,
+          bnglPath: bnglPathForDirect ?? undefined,
+          inferred: false,
+        };
+      }
+      // Every by-name candidate provably belongs to a different model. Fall
+      // through to the provenance-based resolution below instead of returning
+      // an empty list — the model's own reference may still exist under its
+      // reference name.
+    }
+
+    // 1b) The model the CSV is actually for, via the manifest.
+    //
+    // A CSV label carries the catalog id, and the catalog id names one model.
+    // Matching it against `.gdat` filenames does not: RuleHub holds 28
+    // basenames shared by 79 distinct models in the CI-visible corpus, and the
+    // reference generator can only give one of them the bare filename — the
+    // rest are `<basename>_<path discriminator>`. So for those models the
+    // by-name match above lands on a sibling that merely shares a basename,
+    // and the gate compares a trajectory against another model's network.
+    //
+    // Resolve through the manifest to the model's own reference name instead.
+    // This only redirects when the by-name match belongs to a different model,
+    // so every case where the two already agree — which is the overwhelming
+    // majority — keeps exactly the references it had.
+    if (modelReferenceName) {
+      const ownedByModel = gdatFiles.filter(
+        gf => owningReferenceName(gf, referenceBnglNames) === modelReferenceName
+      );
+      const nameMatchAlreadyCorrect = directMatches.some(
+        candidate => owningReferenceName(path.basename(candidate), referenceBnglNames) === modelReferenceName
+      );
+      if (ownedByModel.length > 0 && !nameMatchAlreadyCorrect) {
+        return {
+          gdatPaths: keepReferencesForModel(
+            uniqueStrings(ownedByModel.map(gf => path.join(BNG_OUTPUT_DIR, gf))),
+            modelSource,
+            referenceBnglNames
+          ),
+          bnglPath: bnglPathForDirect ?? undefined,
+          inferred: false,
+        };
+      }
     }
 
     // 2) Try infer from matching BNGL and its last simulate() call.
@@ -669,13 +963,17 @@ function getMultiPhaseReference(
       .map((gf) => path.join(BNG_OUTPUT_DIR, gf));
 
     const requestedPhaseIndex = inferRequestedPhaseIndex(rawLabel, bnglPath);
-    const candidates = uniqueStrings([...(inferredGdat ? [inferredGdat] : []), ...byPrefix]);
+    // Provenance applies here too: `chooseReferenceFromBngl` falls back to a
+    // normalized filename match, and `byPrefix` matches on the fuzzy basename
+    // — both can land on a sibling's file for same-key families.
+    const candidates = dropForeignReferences(uniqueStrings([...(inferredGdat ? [inferredGdat] : []), ...byPrefix]));
     // Prefer comparing against ODE references; drop explicit SSA/NF variants.
     const odeCandidates = candidates.filter((p) => !isClearlyNonOdeGdat(p));
     const filteredCandidates = odeCandidates.length > 0 ? odeCandidates : candidates;
+    const trustedCandidates = keepReferencesForModel(filteredCandidates, modelSource, referenceBnglNames);
     const tofitFilteredCandidates = requiresTofit
-      ? filteredCandidates.filter((candidate) => normalizeKey(path.basename(candidate)).includes('tofit'))
-      : filteredCandidates;
+      ? trustedCandidates.filter((candidate) => normalizeKey(path.basename(candidate)).includes('tofit'))
+      : trustedCandidates;
 
     if (requestedPhaseIndex > 1) {
       const phaseSpecificCandidates = tofitFilteredCandidates.filter((candidate) => {
@@ -724,23 +1022,24 @@ function getMultiPhaseReference(
     const webHeadersNorm = webData.headers.map(normalizeHeader);
     const refHeadersNorm = refData.headers.map(normalizeHeader);
 
-    // Check column match (excluding 'time')
-    const webCols = new Set(webHeadersNorm.filter(h => h !== 'time'));
-    const refCols = new Set(refHeadersNorm.filter(h => h !== 'time'));
-    const matchedColumns = [...webCols].filter(c => refCols.has(c)).sort();
-    const totalDataColumnCount = webCols.size;
-    const minComparableColumns = Math.min(webCols.size, refCols.size);
-    const hasEnoughColumnCoverage =
-      minComparableColumns === 0 || matchedColumns.length >= Math.max(1, Math.ceil(minComparableColumns * 0.5));
-    const exactColumnSetMatch = [...webCols].every(c => refCols.has(c)) && [...refCols].every(c => webCols.has(c));
-    const columnMatch = exactColumnSetMatch && hasEnoughColumnCoverage;
+    // Column coverage is one-directional: the reference may carry columns the
+    // web run cannot produce (BNG2 writes model parameters and the
+    // `_rateLaw*` helpers it synthesises for functional rate rules), but a web
+    // column with no reference column is a genuine mismatch.
+    const coverage = compareColumnCoverage(webHeadersNorm, refHeadersNorm);
+    const { columnMatch, matchedColumns, referenceOnlyColumns, webOnlyColumns } = coverage;
+    const totalDataColumnCount = coverage.totalWebColumns;
+    const missingColumns = referenceOnlyColumns;
+    const extraColumns = webOnlyColumns;
 
-    const missingColumns = [...refCols].filter(c => !webCols.has(c)).sort();
-    const extraColumns = [...webCols].filter(c => !refCols.has(c)).sort();
-
-    if (!hasEnoughColumnCoverage && minComparableColumns > 0) {
+    if (webOnlyColumns.length > 0) {
       console.warn(
-        `[compare] Low column coverage for ${modelName}: matched ${matchedColumns.length}/${totalDataColumnCount} web columns against ${refCols.size} reference columns.`
+        `[compare] ${modelName}: web columns absent from the reference: ${webOnlyColumns.slice(0, 10).join(', ')}`
+      );
+    }
+    if (coverage.lowCoverage) {
+      console.warn(
+        `[compare] Low column coverage for ${modelName}: matched ${matchedColumns.length}/${coverage.totalWebColumns} web columns against ${coverage.totalRefColumns} reference columns.`
       );
     }
 
@@ -754,6 +1053,8 @@ function getMultiPhaseReference(
     let errorAtTime: number | undefined;
     let errorColumn: string | undefined;
     const samples: { time: number; column: string; web: number; ref: number; relError: number }[] = [];
+    const nonFiniteReferenceCells: { time: number; column: string; value: string }[] = [];
+    const bothNonFiniteCells: { time: number; column: string; web: string; ref: string }[] = [];
 
     const webTimeIdx = webHeadersNorm.indexOf('time');
     const refTimeIdx = refHeadersNorm.indexOf('time');
@@ -784,19 +1085,29 @@ function getMultiPhaseReference(
     const isSteadyStateRowMismatch = isSteadyStateModel && webData.data.length !== refData.data.length;
 
     // Compare all rows/cols (by index once headers are mapped).
-    const refColIndexByNorm = new Map<string, number>();
-    for (let i = 0; i < refHeadersNorm.length; i++) refColIndexByNorm.set(refHeadersNorm[i], i);
+    const refColumnIndex = indexReferenceColumns(refData.headers);
 
     const minRows = Math.min(webData.data.length, refData.data.length);
     const alignedRows = alignRowsByTime(webData.data, refData.data, webTimeIdx, refTimeIdx);
     const allOverlapRowsAligned = alignedRows.length === minRows;
-    let timeMatch = webData.data.length === refData.data.length && alignedRows.length === webData.data.length;
+    // A pair with no aligned row pair compared nothing at all, and every error
+    // accumulator below stays at its 0 initial value, so it would otherwise be
+    // reported as a zero-error match. Two header-only files are not a match.
+    const comparedAnyRow = alignedRows.length > 0;
+    let timeMatch = comparedAnyRow && webData.data.length === refData.data.length && alignedRows.length === webData.data.length;
     let timeOffset: number | undefined;
     if (alignedRows.length > 0) {
       timeOffset = alignedRows[0].webRow[webTimeIdx] - alignedRows[0].refRow[refTimeIdx];
     }
 
     const timeGridMatches = allOverlapRowsAligned;
+    // The overlap relaxation exists because the *reference* is a prefix: the web
+    // run emits every phase while BNG2 only produced the first. It must never
+    // apply in the other direction, where the web trajectory stops early and
+    // the unverified tail of the reference is the divergent part. Requiring the
+    // aligned rows to span the whole reference keeps the documented case and
+    // rejects a truncated web run.
+    const overlapCoversWholeReference = alignedRows.length === refData.data.length;
 
     let overlapMatch = false;
 
@@ -814,7 +1125,7 @@ function getMultiPhaseReference(
           const colNameNorm = normalizeHeader(colName);
           if (colNameNorm === 'time') continue;
 
-          const refColIdx = refColIndexByNorm.get(colNameNorm);
+          const refColIdx = refColumnIndex(colName);
           if (refColIdx === undefined) continue;
 
           const webVal = webRow[ci];
@@ -842,11 +1153,11 @@ function getMultiPhaseReference(
       }
     } else if (!isSteadyStateModel) {
       // For non-steady-state models, timeMatch requires exact row count match
-      timeMatch = timeGridMatches && webData.data.length === refData.data.length;
+      timeMatch = comparedAnyRow && timeGridMatches && webData.data.length === refData.data.length;
 
       // If time grids match for the overlapping rows and values are within tolerance,
       // accept overlap-only comparisons (e.g., web trims early phases).
-      if (!timeMatch && timeGridMatches && webData.data.length !== refData.data.length) {
+      if (!timeMatch && comparedAnyRow && timeGridMatches && webData.data.length !== refData.data.length) {
         const overlapRows = alignedRows.length;
         let valuesMatchInOverlap = true;
         let maxOverlapRelError = 0;
@@ -859,7 +1170,7 @@ function getMultiPhaseReference(
             const colNameNorm = normalizeHeader(colName);
             if (colNameNorm === 'time') continue;
 
-            const refColIdx = refColIndexByNorm.get(colNameNorm);
+            const refColIdx = refColumnIndex(colName);
             if (refColIdx === undefined) continue;
 
             const webVal = webRow[ci];
@@ -878,11 +1189,18 @@ function getMultiPhaseReference(
           }
         }
 
-        if (valuesMatchInOverlap) {
+        // PARTIAL_MATCH_TIME names the models whose reference is deliberately
+        // only a prefix of the web run (BNG2 could not produce the later
+        // phases). That is a reviewed, per-model exception to the rule above;
+        // every other model must cover its whole reference.
+        const partialMatchIsDeclared = PARTIAL_MATCH_TIME[normalizeKey(modelName)] !== undefined;
+        if (valuesMatchInOverlap && (overlapCoversWholeReference || partialMatchIsDeclared)) {
           timeMatch = true;
           overlapMatch = true;
           console.log(`  [overlap match] Row count differs (web=${webData.data.length}, ref=${refData.data.length}) but values match in ${overlapRows} overlapping rows.`);
           console.log(`    Max relative error in overlap: ${(maxOverlapRelError * 100).toFixed(6)}%`);
+        } else if (valuesMatchInOverlap) {
+          console.log(`  [overlap] Rejecting: the aligned rows cover only ${alignedRows.length}/${refData.data.length} reference rows, so the tail of the reference is unverified.`);
         }
       }
     }
@@ -894,11 +1212,40 @@ function getMultiPhaseReference(
         const colNameNorm = normalizeHeader(colName);
         if (colNameNorm === 'time') continue;
 
-        const refColIdx = refColIndexByNorm.get(colNameNorm);
+        const refColIdx = refColumnIndex(colName);
         if (refColIdx === undefined) continue;
 
         const webVal = webRow[ci];
         const refVal = refRow[refColIdx];
+
+        // A non-finite value in a column the two runs share is a failed solve,
+        // never agreement: `NaN > tol` and `NaN <= tol` are both false, so such
+        // a cell would leave every error accumulator at 0 and be reported as a
+        // zero-error match.
+        //
+        // When only ONE side is non-finite that is a divergence and is recorded
+        // as a discrepancy. When BOTH are non-finite it is not: the two runs
+        // agree that the quantity is undefined at that point, just with
+        // different notation — BNG2's mu::Parser writes `1.#INF` where our
+        // exporter writes `Infinity`. pt403/pt409 hit exactly this at t=0 on
+        // lnV/half_life/lnV_tangent and matched to 4.9e-13 absolute everywhere
+        // else; failing them for agreeing that a log is -inf would be the gate
+        // inventing a divergence that is not there.
+        if (!Number.isFinite(webVal) || !Number.isFinite(refVal)) {
+          const bothNonFinite = !Number.isFinite(webVal) && !Number.isFinite(refVal);
+          if (!bothNonFinite) {
+            if (nonFiniteReferenceCells.length < 10) {
+              nonFiniteReferenceCells.push({ time: webTime, column: colName, value: String(refVal) });
+            }
+            if (samples.length < 10) {
+              samples.push({ time: webTime, column: colName, web: webVal, ref: refVal, relError: Number.NaN });
+            }
+          } else if (bothNonFiniteCells.length < 10) {
+            bothNonFiniteCells.push({ time: webTime, column: colName, web: String(webVal), ref: String(refVal) });
+          }
+          continue;
+        }
+
         const absError = Math.abs(webVal - refVal);
         const denom = Math.max(Math.abs(refVal), Math.abs(webVal), 1e-30);
         const relError = absError / denom;
@@ -954,6 +1301,8 @@ function getMultiPhaseReference(
       errorAtTime,
       errorColumn,
       samples,
+      nonFiniteReferenceCells,
+      bothNonFiniteCells,
     };
   }
 
@@ -1038,6 +1387,25 @@ function getMultiPhaseReference(
       const modelName = csvModelLabel(csvFile);
       processedModels.add(modelName);
       const referenceModelInfo = analyzeReferenceModel(modelName, ref.bnglPath);
+
+      // Models the web simulator structurally cannot reproduce (scan/bifurcate,
+      // or a simulate method other than ODE) are detected from the model source
+      // rather than from a list of model names.
+      if (ref.bnglPath && fs.existsSync(ref.bnglPath)) {
+        const unsupported = detectUnsupportedFeature(fs.readFileSync(ref.bnglPath, 'utf8'));
+        if (unsupported) {
+          console.log(`  SKIP ${modelName}: ${unsupported}`);
+          results.push({
+            model: modelName,
+            status: 'skipped',
+            referenceFile: undefined,
+            referenceInferred: ref.inferred,
+            details: null,
+            error: unsupported,
+          });
+          continue;
+        }
+      }
 
       // Skip models known to fail in canonical BNG2.pl (explicit exclusion list in constants.ts)
       const normalizedModelKey = normalizeKey(modelName);
@@ -1290,9 +1658,14 @@ function getMultiPhaseReference(
           const reason = hadInsufficientOverlap
             ? 'Insufficient column overlap with GDAT references.'
             : 'Row count mismatch too large for non-multi-phase model.';
+          // A reference WAS found and compared; it was rejected because the two
+          // engines disagreed about the network (too few shared columns, or a row
+          // count more than 10x apart). Reporting that as `missing_reference` made
+          // a real divergence green — `missing_reference` does not fail CI — and
+          // hid the only evidence of it. It is a mismatch.
           results.push({
             model: modelName,
-            status: 'missing_reference',
+            status: 'mismatch',
             referenceFile: undefined,
             referenceInferred: ref.inferred,
             details: null,
@@ -1450,6 +1823,16 @@ function getMultiPhaseReference(
               console.log(`       t=${s.time}: ${s.column} web=${s.web.toExponential(4)} ref=${s.ref.toExponential(4)} (${(s.relError * 100).toFixed(2)}%)`);
             }
           }
+          if (r.details.nonFiniteReferenceCells && r.details.nonFiniteReferenceCells.length > 0) {
+            console.log(`     Non-finite reference values in compared columns:`);
+            for (const c of r.details.nonFiniteReferenceCells.slice(0, 3)) {
+              console.log(`       t=${c.time}: ${c.column} ref=${c.value} (BNG2 wrote a non-finite value)`);
+            }
+          }
+        } else if (r.error) {
+          // Mismatches recorded without details (a reference that was compared
+          // and then rejected) still have to say why.
+          console.log(`     ${r.error}`);
         }
       }
       console.log();
@@ -1506,12 +1889,22 @@ function getMultiPhaseReference(
       console.error(`${errors.length} model(s) failed during comparison.`);
       process.exit(1);
     }
-    if (matches.length === 0 && results.length > 0) {
+    // `results.length > 0` used to guard this, so a sweep that compared nothing
+    // at all — an empty web_output, a corpus that produced no CSV — exited 0
+    // with a green CI and an empty report. Anything other than at least one
+    // successful comparison is a broken reference pipeline, not a pass.
+    if (matches.length === 0) {
       console.error(
-        `FAIL: No models produced a successful comparison (${missing.length} missing reference, ${errors.length} errors). The reference pipeline may be broken.`
+        `FAIL: No models produced a successful comparison (${results.length} results, ${missing.length} missing reference, ${skipped.length} skipped, ${errors.length} errors). The reference pipeline may be broken.`
       );
       process.exit(1);
     }
   }
 
-main().catch(console.error);
+// A throw that escapes main() used to be swallowed by `.catch(console.error)`,
+// which printed a stack trace and still exited 0 — CI green on a run that
+// compared nothing (a corrupt RuleHub manifest is enough to trigger it).
+main().catch((error) => {
+  console.error(error);
+  process.exit(1);
+});

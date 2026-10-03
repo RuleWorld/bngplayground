@@ -67,6 +67,51 @@ const visitorDebugLog = (...args: unknown[]): void => {
   console.log(...args);
 };
 
+/**
+ * A parse-tree node (or token) whose text can be read without recursion.
+ *
+ * Terminals expose `text` as a plain property; rule contexts expose `children`.
+ */
+type TextBearingNode = {
+  text: string;
+  children?: readonly TextBearingNode[];
+};
+
+/**
+ * Text of a parse-tree node, identical to antlr4ts's `RuleContext.text` but
+ * computed with an explicit stack instead of by recursion.
+ *
+ * antlr4ts implements that getter as `builder += this.getChild(i).text`, i.e. one
+ * JavaScript frame per parse-tree level. Reading the text of a deeply nested
+ * `expression` therefore consumes stack proportional to the expression's nesting
+ * depth: NYC and Phoenix each nest ~3 270 levels inside a single parameter
+ * definition, which exhausts a browser worker's ~1 MB stack and surfaces as
+ * `Maximum call stack size exceeded` while the visitor is building the model.
+ *
+ * The substitution is exact — same nodes, same order, same terminals — it only
+ * replaces the call stack with a heap-allocated work list.
+ */
+export function nodeText(node: TextBearingNode | undefined | null): string {
+  if (!node) return '';
+
+  let out = '';
+  const pending: TextBearingNode[] = [node];
+  while (pending.length > 0) {
+    const current = pending.pop()!;
+    const children = current.children;
+    if (children && children.length > 0) {
+      for (let i = children.length - 1; i >= 0; i--) {
+        pending.push(children[i]!);
+      }
+      continue;
+    }
+    // A terminal, or a rule context with no children: `RuleContext.text`
+    // returns "" for the latter, and so does this read of its own `text`.
+    out += current.text;
+  }
+  return out;
+}
+
 export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements BNGParserVisitor<unknown> {
   public hasCompartments: boolean = true;
   private moleculeTypesMap: Map<string, BNGLMoleculeType> = new Map();
@@ -120,7 +165,35 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
   // Visit the root program
   visitProg(ctx: Parser.ProgContext): BNGLModel {
-    // Visit all program blocks
+    // `prog` is `LB* (header_block | action_command)* (model | program_block*)
+    // (actions_block | wrapped_actions_block | protocol_block)* EOF`, so action
+    // commands appear as direct children of `prog` as well as inside a block —
+    // before and after the model. Visiting only `program_block()` silently
+    // dropped the direct ones, which is how loose top-level
+    // `generate_network(...)` / `simulate(...)` ended up with an empty
+    // `model.actions`.
+    for (const header of ctx.header_block()) {
+      try {
+        this.visit(header);
+      } catch (e: unknown) {
+        console.error('Error visiting header block:', (e as Error).message);
+        throw e;
+      }
+    }
+
+    for (const command of ctx.action_command()) {
+      try {
+        this.visit(command);
+      } catch (e: unknown) {
+        console.error('Error visiting action command:', (e as Error).message);
+        throw e;
+      }
+    }
+
+    // Everything else is a program_block: the model body, a wrapped actions
+    // block, a protocol block, or a loose action command. visitProgram_block
+    // routes each of those to its visitor, so visiting them in source order
+    // covers the whole file.
     for (const block of ctx.program_block()) {
       try {
         this.visitProgram_block(block);
@@ -131,42 +204,30 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       }
     }
 
-    // Visit top-level action commands (often outside blocks, e.g. at end of file)
-    for (const action of ("action_command" in ctx && typeof (ctx as unknown as Record<string, unknown>).action_command === "function" ? (ctx as unknown as {action_command: () => import("antlr4ts").ParserRuleContext[]}).action_command() : [])) {
+    for (const block of ctx.actions_block()) {
       try {
-        this.visit(action as import("antlr4ts").ParserRuleContext);
-      } catch (e: unknown) {
-        console.error('Error visiting top-level action:', (e as Error).message);
-      }
-    }
-
-    // Visit actions blocks if present
-    const actionsBlock = ctx.actions_block();
-    if (actionsBlock) {
-      try {
-        this.visitActions_block(actionsBlock);
+        this.visitActions_block(block);
       } catch (e: unknown) {
         console.error('Error visiting actions block:', (e as Error).message);
+        throw e;
       }
     }
 
-    // Many published models use BEGIN ACTIONS ... END ACTIONS
-    const wrappedActionsBlock = ctx.wrapped_actions_block?.();
-    if (wrappedActionsBlock) {
+    for (const block of ctx.wrapped_actions_block()) {
       try {
-        this.visitWrapped_actions_block(wrappedActionsBlock);
+        this.visitWrapped_actions_block(block);
       } catch (e: unknown) {
         console.error('Error visiting wrapped actions block:', (e as Error).message);
+        throw e;
       }
     }
 
-    // Some grammars/inputs may surface begin_actions_block explicitly
-    const beginActionsBlock = ("begin_actions_block" in ctx && typeof (ctx as unknown as Record<string, unknown>).begin_actions_block === "function" ? (ctx as unknown as {begin_actions_block: () => Parser.Begin_actions_blockContext}).begin_actions_block() : undefined);
-    if (beginActionsBlock) {
+    for (const block of ctx.protocol_block()) {
       try {
-        this.visitBegin_actions_block(beginActionsBlock);
+        this.visit(block);
       } catch (e: unknown) {
-        console.error('Error visiting begin actions block:', (e as Error).message);
+        console.error('Error visiting protocol block:', (e as Error).message);
+        throw e;
       }
     }
 
@@ -385,7 +446,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       //   - "sigma__FREE" = the actual free parameter name used by PyBNF / adaptive MCMC
       // Without this fix, sigma is registered as the parameter and sigma__FREE becomes
       // an unresolvable expression, causing "Unknown identifier: sigma__FREE" errors.
-      if (/^[A-Za-z_][A-Za-z0-9_]*__FREE$/.test(value)) {
+      if (/^[A-Za-z_][A-Za-z0-9_]*__FREE_*$/.test(value)) {
         // PyBNF / BNG2 __FREE parameter convention:
         // A declaration like "t0 t0__FREE" means:
         //   - "t0"           = the parameter being defined
@@ -412,7 +473,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       // Register any missing __FREE params with default 0 so the expression
       // evaluator can resolve them. Actual values come from setParameter actions
       // at runtime (PyBNF / BNG2 fitting convention).
-      const freeParamRegex = /\b([A-Za-z_][A-Za-z0-9_]*__FREE)\b/g;
+      const freeParamRegex = /\b([A-Za-z_][A-Za-z0-9_]*__FREE_*)\b/g;
       let freeMatch: RegExpExecArray | null;
       while ((freeMatch = freeParamRegex.exec(value)) !== null) {
         const freeParam = freeMatch[1];
@@ -496,7 +557,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // Check all children for $ prefix (constant/source species)
     if (ctx.children) {
       for (const child of ctx.children) {
-        if (child.text === '$') {
+        if (nodeText(child) === '$') {
           isConstant = true;
           break;
         }
@@ -509,13 +570,13 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       if (!ctx.children) return;
       for (let i = 0; i < ctx.children.length; i++) {
         const child = ctx.children?.[i];
-        if (child.text === '@') {
+        if (nodeText(child) === '@') {
           foundAt = true;
           continue;
         }
         if (foundAt) {
           if (child.payload) {
-            const tokenText = child.text;
+            const tokenText = nodeText(child);
             if (tokenText && tokenText !== ':' && tokenText !== '$') {
               name = `@${tokenText}:${name}`;
               break;
@@ -532,11 +593,11 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       name,
       initialConcentration: concentration,
       isConstant,
-      initialExpression: exprCtx ? exprCtx.text : '0',
+      initialExpression: exprCtx ? nodeText(exprCtx) : '0',
       line: ctx.start?.line,
       column: ctx.start?.charPositionInLine
     });
-    this.speciesExpressions.push(exprCtx ? exprCtx.text : '0');
+    this.speciesExpressions.push(exprCtx ? nodeText(exprCtx) : '0');
   }
 
   // Observables block
@@ -821,7 +882,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
       literalProducts,
       rate,
       rateExpression: rate, // Always preserve the rate expression string
-      reactionString: reactantCtx.text + (isBidirectional ? ' <-> ' : ' -> ') + productCtx.text,
+      reactionString: nodeText(reactantCtx) + (isBidirectional ? ' <-> ' : ' -> ') + nodeText(productCtx),
       reverseRate,
       isBidirectional,
       deleteMolecules,
@@ -1095,7 +1156,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
     // Determine method from command name or args
     let method: 'ode' | 'ssa' | 'nf' | 'pla' | 'psa' = 'ode';
-    const cmdText = ctx.text.toLowerCase();
+    const cmdText = nodeText(ctx).toLowerCase();
     if (cmdText.includes('simulate_nf')) method = 'nf';
     else if (cmdText.includes('simulate_psa')) method = 'psa';
     else if (cmdText.includes('simulate_pla')) method = 'pla';
@@ -1244,7 +1305,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
   visitSet_cmd(ctx: Parser.Set_cmdContext): void {
     // Grammar: SETCONCENTRATION/SETPARAMETER LPAREN DBQUOTES ... DBQUOTES COMMA (expression | DBQUOTES...) RPAREN
 
-    const text = ctx.text;
+    const text = nodeText(ctx);
 
     // Handle setConcentration("Species", value)
     const concCall = this.parseNamedValueCall(text, 'setConcentration');
@@ -1352,7 +1413,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.SAVECONCENTRATIONS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: saveConcentrations("label")
-      const saveLabel = this.parseOptionalLabelAction(ctx.text, 'saveConcentrations');
+      const saveLabel = this.parseOptionalLabelAction(nodeText(ctx), 'saveConcentrations');
       this.concentrationChanges.push({
         species: '',
         value: 0,
@@ -1367,7 +1428,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.RESETCONCENTRATIONS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: resetConcentrations("label")
-      const resetLabel = this.parseOptionalLabelAction(ctx.text, 'resetConcentrations');
+      const resetLabel = this.parseOptionalLabelAction(nodeText(ctx), 'resetConcentrations');
       this.concentrationChanges.push({
         species: '',
         value: 0,
@@ -1382,7 +1443,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.SAVEPARAMETERS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: saveParameters("label") or saveParameters({label=>"label"})
-      const saveLabel = this.parseOptionalLabelAction(ctx.text, 'saveParameters');
+      const saveLabel = this.parseOptionalLabelAction(nodeText(ctx), 'saveParameters');
       this.parameterChanges.push({
         parameter: '',
         value: 0,
@@ -1397,7 +1458,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     if (ctx.RESETPARAMETERS()) {
       const afterPhaseIndex = this.simulationPhases.length - 1;
       // Parse optional label: resetParameters("label") or resetParameters({label=>"label"})
-      const resetLabel = this.parseOptionalLabelAction(ctx.text, 'resetParameters');
+      const resetLabel = this.parseOptionalLabelAction(nodeText(ctx), 'resetParameters');
       this.parameterChanges.push({
         parameter: '',
         value: 0,
@@ -1435,7 +1496,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
           args[name] = this.getExpressionText(exprCtx);
         } else {
           // Fall back to raw text for quoted strings, arrays, or nested hashes
-          args[name] = valueCtx.text;
+          args[name] = nodeText(valueCtx);
         }
       }
     }
@@ -1598,15 +1659,15 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
       // Support molecule-level wildcards (!+, !?)
       const wildcardCtx = mp.pattern_bond_wildcard();
-      if (wildcardCtx) molStr += wildcardCtx.text;
+      if (wildcardCtx) molStr += nodeText(wildcardCtx);
 
       const tagCtxList = mp.molecule_tag();
       if (tagCtxList && tagCtxList.length > 0) {
-        for (const tagCtx of tagCtxList) molStr += tagCtx.text;
+        for (const tagCtx of tagCtxList) molStr += nodeText(tagCtx);
       }
 
       const attrCtx = ("molecule_attributes" in mp && typeof (mp as unknown as Record<string, unknown>).molecule_attributes === "function" ? (mp as unknown as {molecule_attributes: () => import("antlr4ts").ParserRuleContext}).molecule_attributes() : undefined);
-      if (attrCtx) molStr += attrCtx.text;
+      if (attrCtx) molStr += nodeText(attrCtx);
 
       if (entry.compartment) {
         molStr += `@${entry.compartment}`;
@@ -1640,7 +1701,7 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
     // compartment nodes are missing in some observable contexts.
     // Example: `B@EC()` should normalize to `B()@EC`.
     if (this.hasCompartments && !prefix && !res.includes('@')) {
-      const rawSpeciesText = ctx.text?.replace(/\s+/g, '') ?? '';
+      const rawSpeciesText = nodeText(ctx)?.replace(/\s+/g, '') ?? '';
       if (rawSpeciesText.includes('@')) {
         const normalizedRaw = rawSpeciesText.replace(
           /([A-Za-z_][A-Za-z0-9_]*)@([A-Za-z0-9_]+)\(([^()]*)\)/g,
@@ -1676,12 +1737,12 @@ export class BNGLVisitor extends AbstractParseTreeVisitor<BNGLModel> implements 
 
   // Helper: Get expression text (preserving structure)
   private getExpressionText(ctx: Parser.ExpressionContext): string {
-    return ctx.text;
+    return nodeText(ctx);
   }
 
   // Helper: Evaluate expression to number
   private evaluateExpression(ctx: Parser.ExpressionContext): number {
-    const text = ctx.text;
+    const text = nodeText(ctx);
 
     // Convert parameters record to Map
     const paramMap = new Map<string, number>(Object.entries(this.parameters));

@@ -1924,21 +1924,14 @@ export async function simulate(
         productStoich.push(count);
       }
 
-      const propensityFactor = rxn.propensityFactor ?? 1;
+
       const degeneracyFactor = rxn.degeneracy ?? 1;
-      let rateConstant: number | string = rxn.rateConstant * propensityFactor * degeneracyFactor;
+      let rateConstant: number | string = rxn.rateConstant * degeneracyFactor;
       if (!rxn.isFunctionalRate && typeof rxn.rate === 'string' && rxn.rate.trim().length > 0) {
         const symbolicRate = rxn.rate.trim();
-        const applyPropensityFactor = rxn.propensityFactor !== undefined && rxn.propensityFactor !== 1;
+
         const applyDegeneracyFactor = rxn.degeneracy !== undefined && rxn.degeneracy !== 1;
-        if (applyPropensityFactor || applyDegeneracyFactor) {
-          const factors: string[] = [symbolicRate];
-          if (applyPropensityFactor) factors.push(String(propensityFactor));
-          if (applyDegeneracyFactor) factors.push(String(degeneracyFactor));
-          rateConstant = factors.map((part) => `(${part})`).join(' * ');
-        } else {
-          rateConstant = symbolicRate;
-        }
+        if (applyDegeneracyFactor) { rateConstant = `(${symbolicRate}) * ${degeneracyFactor}`; } else { rateConstant = symbolicRate; }
       }
 
       return {
@@ -2606,12 +2599,11 @@ export async function simulate(
           isFunctionalRxn[i] = 1;
           kEff[i] = 0; // unused
         } else {
+          // TotalRate zeroes the statistical factor only; the volume
+          // normalization below still applies (BNG2's Network3 runner has no
+          // `totalrate` concept).
           const n = rxn.reactants.length;
           let eff = rxn.rateConstant * rxn.propensityFactor;
-          if (rxn.totalRate) {
-            kEff[i] = eff;
-            continue;
-          }
           const volume = reactionReactingVolumes[i];
           if (n === 0) {
             eff *= volume;
@@ -2637,10 +2629,8 @@ export async function simulate(
             } catch (error) {
               if (strictFunctionalRates) throw error;
             }
-            if (rxn.totalRate) {
-              kEff[i] = rxn.rateConstant * rxn.propensityFactor;
-              continue;
-            }
+            // TotalRate zeroes the statistical factor only; the reacting-volume
+            // normalization still applies, exactly as in the loop above.
             const n = rxn.reactants.length;
             let effective = rxn.rateConstant * rxn.propensityFactor;
             const volume = reactionReactingVolumes[i];
@@ -2752,8 +2742,9 @@ export async function simulate(
               undefined,
               strictFunctionalRates
             );
+            // TotalRate zeroes the statistical factor only; volume normalization
+            // and the mass-action reactant product below still apply.
             let a = rate * rxn.propensityFactor;
-            if (rxn.totalRate) return a;
             const volume = reactionReactingVolumes[rxnIdx];
             const n = rxnReactantCount[rxnIdx];
             if (n === 0) {
@@ -2788,8 +2779,8 @@ export async function simulate(
           }
         }
 
-        // Mass-action: use precomputed effective rate constant and flat reactant arrays
-        if (concreteReactions[rxnIdx].totalRate) return kEff[rxnIdx];
+        // Mass-action: use precomputed effective rate constant and flat reactant arrays.
+        // TotalRate zeroes the statistical factor only, so the reactant product applies.
         const count = rxnReactantCount[rxnIdx];
         if (count === 1) {
           return kEff[rxnIdx] * state[rxnReactant0[rxnIdx]];
@@ -3597,22 +3588,26 @@ export async function simulate(
             // Rate in nM/s * Vol_Reacting = Amount_Rate in counts/s or moles/s
             // Include degeneracy (symmetry factor)
             const vAnchor = reactionReactingVolumes[i] || 1.0;
-            const velocityBase = rate * rxn.propensityFactor * (rxn.degeneracy ?? 1)
-              * (rxn.totalRate ? 1 : vAnchor);
+            // TotalRate zeroes the *statistical* factor only (BNG2 RateLaw.pm:
+            // `TotalRate => 'If true, this ratelaw specifies the Total reaction
+            // rate'` is applied as `sf = TotalRate ? 1 : StatFactor` when the rate
+            // law is emitted). It does NOT make the flux independent of the
+            // reactant concentrations, and it does not drop the reacting-volume
+            // normalization: BNG2's Network3 runner has no `totalrate` concept at
+            // all and always multiplies the rate law by the mass-action product of
+            // the reactant concentrations. Applying the reactant product here
+            // unconditionally keeps blood_coagulation_thrombin's
+            // `Fibrinogen(s~S) -> Fibrinogen(s~F) ... TotalRate` saturating as it
+            // does in BNG2 instead of growing linearly at a constant rate.
+            const velocityBase = rate * (rxn.degeneracy ?? 1) * vAnchor;
             let multiplicative = 1;
-            // TotalRate is honored upstream: NetworkGenerator skips statFactor/multiplicity
-            // baking for TotalRate rules (sf=1), and NetworkExpansion omits statFactor from
-            // the functional-rate fold. The flux below uses the rate as-is from those sources,
-            // so no TotalRate adjustment is needed here.
-            if (!rxn.totalRate) {
-              for (let j = 0; j < rxn.reactants.length; j++) {
-                const ridx = rxn.reactants[j];
-                const nativeVal = yIn[ridx];
-                const anchorRelVal = odeUsesAmountState
-                  ? (nativeVal / vAnchor)
-                  : (nativeVal * (speciesVolumes[ridx] / vAnchor));
-                multiplicative *= anchorRelVal;
-              }
+            for (let j = 0; j < rxn.reactants.length; j++) {
+              const ridx = rxn.reactants[j];
+              const nativeVal = yIn[ridx];
+              const anchorRelVal = odeUsesAmountState
+                ? (nativeVal / vAnchor)
+                : (nativeVal * (speciesVolumes[ridx] / vAnchor));
+              multiplicative *= anchorRelVal;
             }
             const velocity = velocityBase * multiplicative;
 
@@ -3702,7 +3697,7 @@ export async function simulate(
 
         // Flatten per-reaction data into contiguous typed arrays (zero-copy hot path)
         const sparseRxnRateK = new Float64Array(sparseNRxns);
-        const sparseRxnPropDeg = new Float64Array(sparseNRxns);
+        const sparseRxnDeg = new Float64Array(sparseNRxns);
         const sparseRxnVAnchors = new Float64Array(sparseNRxns);
         let sparseTotalReactants = 0;
         for (let i = 0; i < sparseNRxns; i++) sparseTotalReactants += concreteReactions[i].reactants.length;
@@ -3715,7 +3710,7 @@ export async function simulate(
           const rxn = concreteReactions[i];
           const vAnchor = reactionReactingVolumes[i] || 1.0;
           sparseRxnRateK[i] = rxn.rateConstant;
-          sparseRxnPropDeg[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+          sparseRxnDeg[i] = rxn.degeneracy ?? 1;
           sparseRxnVAnchors[i] = vAnchor;
           sparseFlatReactantOffsets[i] = srOff;
           for (let j = 0; j < rxn.reactants.length; j++) {
@@ -3757,8 +3752,10 @@ export async function simulate(
               }
             }
 
-            velocity *= multiplicative * sparseRxnPropDeg[i]
-              * (concreteReactions[i].totalRate ? 1 : vAnchor);
+            // TotalRate zeroes the statistical factor only; the reacting-volume
+            // normalization and the mass-action reactant product above both still
+            // apply (BNG2's Network3 runner has no `totalrate` concept).
+            velocity *= multiplicative * sparseRxnDeg[i] * vAnchor;
             velocityBuffer[i] = velocity;
           }
 
@@ -3785,7 +3782,12 @@ export async function simulate(
       // Flatten per-reaction data into contiguous typed arrays for cache-friendly access.
       // This eliminates object property lookups on concreteReactions[i] in the hot loop.
       const rxnRateConstants = new Float64Array(nRxns);
-      const rxnPropensityFactors = new Float64Array(nRxns);   // propensityFactor * degeneracy
+      // Degeneracy only. `propensityFactor` (the 1/2 same-pool correction for
+      // identical-reactant rules) is a stochastic propensity correction and is
+      // deliberately not applied to ODE fluxes: BNG2's deterministic RHS comes
+      // from the .net rate law, which carries the full k, so the flux is
+      // k*[A]*[B]. SSA keeps it (see JITCompiler.compileSSAPropensities*).
+      const rxnDegeneracyFactors = new Float64Array(nRxns);
       const rxnVAnchors = new Float64Array(nRxns);
       const denseTotalRate = new Uint8Array(nRxns);
 
@@ -3825,7 +3827,7 @@ export async function simulate(
         const vAnchor = reactionReactingVolumes[i] || 1.0;
 
         rxnRateConstants[i] = rxn.rateConstant;
-        rxnPropensityFactors[i] = (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1);
+        rxnDegeneracyFactors[i] = rxn.degeneracy ?? 1;
         rxnVAnchors[i] = vAnchor;
         denseTotalRate[i] = rxn.totalRate ? 1 : 0;
 
@@ -3875,20 +3877,20 @@ export async function simulate(
           const rStart = flatReactantOffsets[i];
           const rEnd = flatReactantOffsets[i + 1];
 
-          if (!denseTotalRate[i]) {
-            if (odeUsesAmountState) {
-              for (let j = rStart; j < rEnd; j++) {
-                multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
-              }
-            } else {
-              for (let j = rStart; j < rEnd; j++) {
-                multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
-              }
+          // TotalRate zeroes the statistical factor only; the mass-action reactant
+          // product and the reacting-volume normalization both still apply
+          // (BNG2's Network3 runner has no `totalrate` concept).
+          if (odeUsesAmountState) {
+            for (let j = rStart; j < rEnd; j++) {
+              multiplicative *= (yIn[flatReactantIdx[j]] / vAnchor);
+            }
+          } else {
+            for (let j = rStart; j < rEnd; j++) {
+              multiplicative *= (yIn[flatReactantIdx[j]] * flatReactantScale![j]);
             }
           }
 
-            velocity *= multiplicative * rxnPropensityFactors[i]
-              * (denseTotalRate[i] ? 1 : vAnchor);
+          velocity *= multiplicative * rxnDegeneracyFactors[i] * vAnchor;
             denseVelocityBuffer[i] = velocity;
           }
 
@@ -4018,17 +4020,16 @@ export async function simulate(
           );
         }
         const vAnchor = reactionReactingVolumes[concreteReactions.indexOf(rxn)] || 1;
+        // TotalRate zeroes the statistical factor only; the mass-action reactant
+        // product and the reacting-volume normalization both still apply.
         let multiplicative = 1;
-        if (!rxn.totalRate) {
-          for (const index of rxn.reactants) {
-            const relativeAmount = odeUsesAmountState
-              ? currentState[index] / vAnchor
-              : (currentState[index] * speciesVolumes[index]) / vAnchor;
-            multiplicative *= relativeAmount;
-          }
+        for (const index of rxn.reactants) {
+          const relativeAmount = odeUsesAmountState
+            ? currentState[index] / vAnchor
+            : (currentState[index] * speciesVolumes[index]) / vAnchor;
+          multiplicative *= relativeAmount;
         }
-        const velocity = rate * (rxn.propensityFactor ?? 1) * (rxn.degeneracy ?? 1)
-          * (rxn.totalRate ? 1 : vAnchor) * multiplicative;
+        const velocity = rate * (rxn.degeneracy ?? 1) * vAnchor * multiplicative;
         setSafeNumberField(context, rxn.ruleName, velocity);
         setSafeNumberField(context, `netflux_${rxn.ruleName}`, velocity);
       }
@@ -4334,19 +4335,40 @@ export async function simulate(
       }
     }
 
-    // Root detection is currently disabled by default because global auto-detection
-    // of if() conditions can introduce broad parity regressions across unrelated models.
-    // Keep this opt-in until condition-to-root mapping is validated against BNG2 behavior.
+    // Root detection: OFF after the exp/if-root-detection experiment (PR #1080,
+    // merged 2026-10-03 and reverted the same day). Re-enabling the flag hung
+    // deterministic-parity for 60 minutes on a 90-condition if() time ladder
+    // (Dallas); the hardened retry — condition hygiene, MAX_AUTO_IF_ROOTS, and
+    // the no-progress watchdog below, all left in place for the next attempt —
+    // fixed the hang and improved mt_music_sequencer (max abs 3.77e-2 ->
+    // 2.32e-2), but broke ph_lorenz_attractor's near-exact parity
+    // (5.575e-10 -> 3.59e+1): any change to the step sequence decorrelates a
+    // sensitive system from BNG2's blind integration, which is the broad
+    // "parity regressions across unrelated models" failure the May disable
+    // (37471a06) recorded. Revisit only with condition-to-root mapping
+    // validated per model against BNG2 behavior, as that comment demanded.
     const ENABLE_IF_ROOT_DETECTION = false;
+    const MAX_AUTO_IF_ROOTS = 64;
     if (ENABLE_IF_ROOT_DETECTION) {
       const rootExprs: string[] = [];
       if (model.functions) {
         for (const func of model.functions) {
           const extracted = extractIfConditions(func.expression);
           for (const cond of extracted) {
+            // Skip conditions spanning a backslash continuation or newline:
+            // they cannot be re-parsed reliably on every root call.
+            if (cond.includes('\\') || cond.includes('\n')) continue;
             if (!rootExprs.includes(cond)) rootExprs.push(cond);
           }
         }
+      }
+
+      if (rootExprs.length > MAX_AUTO_IF_ROOTS) {
+        console.warn(
+          `[SimulationLoop] if()-root detection skipped for '${model.name || 'model'}': ` +
+          `${rootExprs.length} conditions exceeds cap ${MAX_AUTO_IF_ROOTS}`
+        );
+        rootExprs.length = 0;
       }
 
       if (rootExprs.length > 0) {
@@ -4543,7 +4565,7 @@ export async function simulate(
       }
 
       const byteCodeReactions = concreteReactions.map((r, i) => {
-        const multiplicativeFactor = (r.propensityFactor ?? 1) * (r.degeneracy ?? 1);
+        const multiplicativeFactor = r.degeneracy ?? 1;
         const scaledRateConstant = r.isFunctionalRate
           ? (
             multiplicativeFactor !== 1
@@ -5161,6 +5183,14 @@ export async function simulate(
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
           let stepFailed = false;
+          // Auto if()-roots (nothing owning/disarming them, unlike event
+          // roots) are dropped after AUTO_ROOT_STALL_LIMIT consecutive
+          // integrate() returns that fail to advance time. A pathological
+          // root set can otherwise spin this loop forever: each call returns
+          // success with a root at essentially the same t, so the in-call
+          // stuck detector (which resets per call) never trips.
+          let autoRootNoProgress = 0;
+          const AUTO_ROOT_STALL_LIMIT = 8;
           while (t < tTarget - 1e-12 * Math.max(1, Math.abs(tTarget))) {
             const nextEventTime = eventRuntime?.nextWakeTime(t, tTarget, y);
             const segmentTarget = nextEventTime !== undefined
@@ -5194,6 +5224,7 @@ export async function simulate(
             }
             const denseT0 = denseOutputBuffer && !phaseExpandState ? t : 0;
             const denseY0 = denseOutputBuffer && !phaseExpandState ? new Float64Array(solverState) : undefined;
+            const tBefore = t;
             const result = solver.integrate(solverState, t, segmentTarget, callbacks.checkCancelled);
 
             if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Step ${i} done. t=${result.t}, success=${result.success}`);
@@ -5256,6 +5287,38 @@ export async function simulate(
               solver.destroy?.();
               solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
               denseF0 = undefined;
+            }
+
+            // Watchdog for auto-registered if()-roots: repeated successful
+            // returns with no time advance mean the root set is spinning this
+            // loop (the in-call stuck detector resets per integrate() call, so
+            // it cannot see this). Drop the roots, recreate the solver, and
+            // finish the phase without them — flag-OFF behavior beats a hang.
+            if (
+              !eventRuntime &&
+              (phaseSolverOptions.numRoots ?? 0) > 0 &&
+              result.rootsFound !== undefined &&
+              Math.abs(t - tBefore) <= 1e-15 * Math.max(1, Math.abs(tBefore), Math.abs(t))
+            ) {
+              autoRootNoProgress += 1;
+              if (autoRootNoProgress >= AUTO_ROOT_STALL_LIMIT) {
+                console.warn(
+                  `[SimulationLoop] if()-root detection made no time progress in ` +
+                  `${autoRootNoProgress} consecutive steps; disabling roots and continuing without them`
+                );
+                phaseSolverOptions.numRoots = 0;
+                phaseSolverOptions.rootFunction = undefined;
+                autoRootNoProgress = 0;
+                if (phaseExpandState) {
+                  phaseState = phaseReduceState!(y);
+                  solverState = phaseState;
+                } else {
+                  solverState = y;
+                }
+                solver.destroy?.();
+                solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
+                denseF0 = undefined;
+              }
             }
 
             if (t >= segmentTarget - 1e-12 * Math.max(1, Math.abs(segmentTarget))

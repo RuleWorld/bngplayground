@@ -14,7 +14,7 @@ export interface CellState {
   volume: number;
   secretionRates: Record<string, number>;
   uptakeRates: Record<string, number>;
-  ruleCooldowns?: Record<string, number>;
+  ruleCooldowns?: Map<string, number>;
 }
 
 export interface CellDecisionRule {
@@ -138,7 +138,7 @@ export function createCell(
     volume,
     secretionRates: Object.create(null) as Record<string, number>,
     uptakeRates: Object.create(null) as Record<string, number>,
-    ruleCooldowns: Object.create(null) as Record<string, number>,
+    ruleCooldowns: new Map<string, number>(),
   };
 }
 
@@ -199,7 +199,7 @@ export function divideCell(
     volume: parent.volume / 2,
     secretionRates: { ...parent.secretionRates },
     uptakeRates: { ...parent.uptakeRates },
-    ruleCooldowns: Object.create(null) as Record<string, number>,
+    ruleCooldowns: new Map<string, number>(),
   };
 
   const len = parent.intracellularState.length;
@@ -242,7 +242,7 @@ export function divideCell(
   parent.radius = parent.radius / Math.cbrt(2);
   parent.volume = parent.volume / 2;
   parent.age = 0;
-  // NOTE: parent keeps its ruleCooldowns object — refractory periods must
+  // NOTE: parent keeps its ruleCooldowns map — refractory periods must
   // survive division, otherwise a cell can bypass its own cooldown.
 
   return daughter;

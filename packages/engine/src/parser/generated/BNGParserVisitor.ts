@@ -1,4 +1,4 @@
-// Generated from packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
+// Generated from /Users/akutuva/Documents/BioNetGen/julesplayground/packages/engine/src/parser/grammar/BNGParser.g4 by ANTLR 4.9.0-SNAPSHOT
 
 
 import { ParseTreeVisitor } from "antlr4ts/tree/ParseTreeVisitor";
@@ -25,6 +25,7 @@ import { State_listContext } from "./BNGParser";
 import { State_nameContext } from "./BNGParser";
 import { Seed_species_blockContext } from "./BNGParser";
 import { Seed_species_defContext } from "./BNGParser";
+import { Seed_species_noteContext } from "./BNGParser";
 import { Species_defContext } from "./BNGParser";
 import { Molecule_compartmentContext } from "./BNGParser";
 import { Molecule_patternContext } from "./BNGParser";
@@ -62,6 +63,7 @@ import { Population_maps_blockContext } from "./BNGParser";
 import { Population_map_defContext } from "./BNGParser";
 import { Population_types_blockContext } from "./BNGParser";
 import { Population_type_defContext } from "./BNGParser";
+import { Protocol_blockContext } from "./BNGParser";
 import { Actions_blockContext } from "./BNGParser";
 import { Wrapped_actions_blockContext } from "./BNGParser";
 import { Begin_actions_blockContext } from "./BNGParser";
@@ -72,6 +74,7 @@ import { Simulate_cmdContext } from "./BNGParser";
 import { Write_cmdContext } from "./BNGParser";
 import { Set_cmdContext } from "./BNGParser";
 import { Other_action_cmdContext } from "./BNGParser";
+import { Set_option_cmdContext } from "./BNGParser";
 import { Action_argsContext } from "./BNGParser";
 import { Action_arg_listContext } from "./BNGParser";
 import { Action_argContext } from "./BNGParser";
@@ -82,11 +85,9 @@ import { Nested_hash_itemContext } from "./BNGParser";
 import { Arg_nameContext } from "./BNGParser";
 import { Expression_listContext } from "./BNGParser";
 import { ExpressionContext } from "./BNGParser";
-import { Conditional_exprContext } from "./BNGParser";
 import { Or_exprContext } from "./BNGParser";
 import { And_exprContext } from "./BNGParser";
 import { Equality_exprContext } from "./BNGParser";
-import { Relational_exprContext } from "./BNGParser";
 import { Additive_exprContext } from "./BNGParser";
 import { Multiplicative_exprContext } from "./BNGParser";
 import { Power_exprContext } from "./BNGParser";
@@ -94,6 +95,8 @@ import { Unary_exprContext } from "./BNGParser";
 import { Primary_exprContext } from "./BNGParser";
 import { Function_callContext } from "./BNGParser";
 import { Observable_refContext } from "./BNGParser";
+import { Observable_arg_listContext } from "./BNGParser";
+import { Observable_argContext } from "./BNGParser";
 import { LiteralContext } from "./BNGParser";
 
 
@@ -258,6 +261,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitSeed_species_def?: (ctx: Seed_species_defContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.seed_species_note`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitSeed_species_note?: (ctx: Seed_species_noteContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.species_def`.
@@ -519,6 +529,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitPopulation_type_def?: (ctx: Population_type_defContext) => Result;
 
 	/**
+	 * Visit a parse tree produced by `BNGParser.protocol_block`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitProtocol_block?: (ctx: Protocol_blockContext) => Result;
+
+	/**
 	 * Visit a parse tree produced by `BNGParser.actions_block`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -587,6 +604,13 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitOther_action_cmd?: (ctx: Other_action_cmdContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.set_option_cmd`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitSet_option_cmd?: (ctx: Set_option_cmdContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.action_args`.
@@ -659,13 +683,6 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	visitExpression?: (ctx: ExpressionContext) => Result;
 
 	/**
-	 * Visit a parse tree produced by `BNGParser.conditional_expr`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitConditional_expr?: (ctx: Conditional_exprContext) => Result;
-
-	/**
 	 * Visit a parse tree produced by `BNGParser.or_expr`.
 	 * @param ctx the parse tree
 	 * @return the visitor result
@@ -685,13 +702,6 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitEquality_expr?: (ctx: Equality_exprContext) => Result;
-
-	/**
-	 * Visit a parse tree produced by `BNGParser.relational_expr`.
-	 * @param ctx the parse tree
-	 * @return the visitor result
-	 */
-	visitRelational_expr?: (ctx: Relational_exprContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.additive_expr`.
@@ -741,6 +751,20 @@ export interface BNGParserVisitor<Result> extends ParseTreeVisitor<Result> {
 	 * @return the visitor result
 	 */
 	visitObservable_ref?: (ctx: Observable_refContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.observable_arg_list`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitObservable_arg_list?: (ctx: Observable_arg_listContext) => Result;
+
+	/**
+	 * Visit a parse tree produced by `BNGParser.observable_arg`.
+	 * @param ctx the parse tree
+	 * @return the visitor result
+	 */
+	visitObservable_arg?: (ctx: Observable_argContext) => Result;
 
 	/**
 	 * Visit a parse tree produced by `BNGParser.literal`.

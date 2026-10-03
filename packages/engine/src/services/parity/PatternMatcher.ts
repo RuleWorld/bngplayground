@@ -381,8 +381,14 @@ export function countPatternMatches(speciesStr: string, patternStr: string): num
     const cleanPat = normalizeBareMoleculePattern(rawPat);
     const cleanSpec = normalizeBareMoleculePattern(rawSpec);
 
-    const graphPat = normalizeGraphString(cleanPat);
-    const graphSpec = normalizeGraphString(cleanSpec);
+    // Match against the parsed graphs directly. Round-tripping through
+    // GraphCanonicalizer.canonicalize() is lossy: it re-serializes bond labels
+    // and silently drops every bond whose label does not pair up, so a species
+    // carrying a `!+` requirement would re-parse as fully unbound and the
+    // observable would score 0 instead of one match per copy present.
+    // Graph matching is order-independent, so canonical ordering buys nothing.
+    const graphPat = cleanPat;
+    const graphSpec = cleanSpec;
 
     if (graphPat.includes('.')) {
         return countMultiMoleculePatternMatches(graphSpec, graphPat);

@@ -42,6 +42,65 @@ const MINIMAL_BNGL = [
 const VERBOSE_BATCH_RUNNER = false;
 
 /**
+ * Catalog models whose sanitised names collide, and give each a distinct export
+ * label.
+ *
+ * RuleHub holds genuinely different models whose names sanitise to the same key
+ * — `FceRI ji` and `FceRI_ji` both become `fceri_ji`. Both then export to
+ * `results_fceri_ji.csv` and whichever finishes last overwrites the other, so
+ * the trajectory gate compares a reference against the *wrong model's*
+ * trajectory. That is how `fceri_ji` came to be reported as a mismatch when
+ * running the fixture by hand matched BioNetGen exactly.
+ *
+ * Only the first model keeps the bare sanitised name, so the common case and
+ * every existing fixture path are untouched; later collisions get a short
+ * discriminator derived from the catalog id, which is unique per model.
+ */
+const collidingExportLabels = new Map<string, string>();
+
+function exportLabelFor(
+    modelDef: { id?: string; name: string },
+    catalog: Array<{ id?: string; name: string }>
+): string {
+    const base = safeModelName(modelDef.id || modelDef.name);
+    const key = `${modelDef.id || ''}::${modelDef.name}`;
+    const cached = collidingExportLabels.get(key);
+    if (cached) return cached;
+
+    // Order the collision group deterministically so a label does not depend on
+    // catalog order.
+    const sameName = catalog
+        .filter((m) => safeModelName(m.id || m.name) === base)
+        .sort((a, b) => (a.id || a.name).localeCompare(b.id || b.name));
+    const index = sameName.findIndex((m) => (m.id || m.name) === (modelDef.id || modelDef.name));
+    let label = base;
+    if (sameName.length > 1) {
+        if (index > 0) {
+            // A tail of the id is a readable discriminator but is NOT unique on its
+            // own — ids can share their last six characters, and `model`/`parabola`
+            // appear as literal duplicate ids. Fall back to a positional suffix
+            // until the label is free, so the mapping is injective by construction.
+            const tail = (modelDef.id || modelDef.name).replace(/[^a-z0-9]/gi, '').slice(-6).toLowerCase();
+            const taken = new Set(collidingExportLabels.values());
+            let candidate = `${base}_${tail || index}`;
+            let bump = 2;
+            while (taken.has(candidate)) {
+                candidate = `${base}_${tail || index}_${bump}`;
+                bump += 1;
+            }
+            label = candidate;
+        }
+        console.warn(
+            `[batch] ${sameName.length} catalog models share the sanitised name "${base}"; their ` +
+                `exports would overwrite each other. Using distinct labels ` +
+                `(${sameName.map((m) => m.id || m.name).join(', ')}).`
+        );
+    }
+    collidingExportLabels.set(key, label);
+    return label;
+}
+
+/**
  * App-side implementation of the BatchSimulator interface.
  */
 const appSimulator: BatchSimulator = {
@@ -66,7 +125,10 @@ const appReporter: BatchReporter = {
     onExport: async (results, modelDef, _model) => {
         // Standard CSV export
         const headers = results.headers || [];
-        const safeName = safeModelName(modelDef.id || modelDef.name);
+        // Use a label unique to this model: two catalog entries can sanitise to
+        // the same name and would otherwise overwrite each other's CSV.
+        const catalog = getModelCatalogSync()?.examples ?? [];
+        const safeName = exportLabelFor(modelDef, catalog);
 
         if (results.dataBySuffix && Object.keys(results.dataBySuffix).length > 0) {
             for (const [suffix, suffixData] of Object.entries(results.dataBySuffix)) {

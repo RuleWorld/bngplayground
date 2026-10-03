@@ -10,8 +10,10 @@ options {
 }
 
 // Entry point - support both "begin actions...end actions" and loose action commands after model
+// A `begin protocol` block may follow `end model`, ahead of the actions it is
+// replayed from, so the trailing group is repeatable rather than optional-once.
 prog
-    : LB* (header_block | action_command)* ((BEGIN MODEL LB+ program_block* END MODEL LB*) | program_block*) (wrapped_actions_block | actions_block)? EOF
+    : LB* (header_block | action_command)* ((BEGIN MODEL LB+ program_block* END MODEL LB*) | program_block*) (wrapped_actions_block | actions_block | protocol_block)* EOF
     ;
 
 header_block
@@ -53,6 +55,7 @@ program_block
     | wrapped_actions_block
     | begin_actions_block  // NEW: Support "begin actions ... end actions"
     | action_command       // LEGACY: Support loose action commands in model body
+    | protocol_block
     ;
 
 // Parameters block
@@ -136,7 +139,17 @@ seed_species_block
 
 // Support: "1 @c0:Species(...) concentration" or just species without concentration
 seed_species_def
-    : INT? (STRING COLON)? DOLLAR? (AT STRING COLON)? species_def expression?
+    : INT? (STRING COLON)? DOLLAR? (AT STRING COLON)? species_def expression? seed_species_note?
+    ;
+
+// BNG2 reads the initial amount with Expression::readString, which stops at the first
+// token that cannot continue the expression and discards the rest of the line. So a
+// `%(...)` annotation after the amount, together with anything still trailing on that
+// same line, is accepted and ignored. The rule is deliberately narrow: it only fires
+// when a `%` annotation is present and it can never cross a line break, so an ordinary
+// seed species line can never swallow the text that follows it.
+seed_species_note
+    : MOD LPAREN (~RPAREN)* RPAREN (~LB)*
     ;
 
 // Species can optionally have compartment annotation using @ (prefix @comp: or suffix @comp)
@@ -247,6 +260,7 @@ reaction_rule_def
 // Also support bare INT labels without colon (e.g. "1 A->B")
 label_def
     : (INT | STRING) (STRING | INT | LPAREN STRING? RPAREN)* COLON
+    | MOLECULE_TAG_TOKEN COLON   // Molecule label (e.g. `%x:R(P~1)`)
     | INT
     ;
 
@@ -335,6 +349,13 @@ population_type_def
     : molecule_def STRING?
     ;
 
+// Protocol block (BEGIN PROTOCOL ... END PROTOCOL) records a simulation protocol that
+// `parameter_scan({method=>"protocol"})` replays. There is no protocol representation in
+// the model we build, so the block is accepted and ignored.
+protocol_block
+    : BEGIN PROTOCOL LB+ action_command* END PROTOCOL LB*
+    ;
+
 
 
 
@@ -360,6 +381,7 @@ action_command
     | write_cmd
     | set_cmd
     | other_action_cmd
+    | set_option_cmd
     ;
 
 generate_network_cmd
@@ -388,8 +410,15 @@ set_cmd
 
 other_action_cmd
     : (SAVECONCENTRATIONS | RESETCONCENTRATIONS | SAVEPARAMETERS | RESETPARAMETERS | QUIT
-       | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE | SETVOLUME)
+       | PARAMETER_SCAN | BIFURCATE | VISUALIZE | GENERATEHYBRIDMODEL | READFILE | SETVOLUME
+       | WRITEMDL | SET_OPTION)
       LPAREN (action_args | action_arg_value)? RPAREN SEMI? LB*
+    ;
+
+// `setOption("Name","Value")` is also valid inside an actions block, where it
+// takes two quoted strings rather than an action-args map.
+set_option_cmd
+    : SET_OPTION LPAREN DBQUOTES (~DBQUOTES)* DBQUOTES COMMA action_arg_value RPAREN SEMI? LB*
     ;
 
 // Action arguments can be: {key=>val,...} or simple quoted string
@@ -411,7 +440,10 @@ action_arg_value
     | keyword_as_value  // NEW: Allow keywords like 'ode', 'ssa' as unquoted values
     | DBQUOTES (~DBQUOTES)* DBQUOTES
     | SQUOTE (~SQUOTE)* SQUOTE
-    | LSBRACKET expression_list RSBRACKET
+    // `par_scan_vals=>[ 1, 2, ]` — a trailing comma is a Perl list literal in BNG2.
+    // It is accepted only here, not in the shared expression_list, so function-call
+    // arguments keep rejecting it.
+    | LSBRACKET expression_list COMMA? RSBRACKET
     | LBRACKET nested_hash_list? RBRACKET
     ;
 
@@ -442,6 +474,7 @@ arg_name
     // simulate options
     | METHOD | T_START | T_END | N_STEPS | N_OUTPUT_STEPS | ATOL | RTOL | STEADY_STATE | SPARSE
     | VERBOSE | NETFILE | CONTINUE | PREFIX | SUFFIX | FORMAT | FILE
+    | PRINT_FUNCTIONS   // `simulate({...,print_functions=>1})`
     // Additional simulate options
     | PRINT_CDAT | PRINT_FUNCTIONS | PRINT_NET | PRINT_END | STOP_IF | PRINT_ON_STOP
     | SAVE_PROGRESS | MAX_SIM_STEPS | OUTPUT_STEP_INTERVAL | SAMPLE_TIMES
@@ -468,11 +501,11 @@ expression_list
     ;
 
 // Expressions
+// `conditional_expr` was a token-free pass-through to `or_expr`; it is removed
+// so each nesting level costs fewer JS frames in the generated recursive-descent
+// parser. Deeply nested rate laws (NYC nests 353 levels) otherwise exhaust the
+// browser's stack where BNG2 has no equivalent limit.
 expression
-    : conditional_expr
-    ;
-
-conditional_expr
     : or_expr
     ;
 
@@ -484,12 +517,9 @@ and_expr
     : equality_expr (LOGICAL_AND equality_expr)*
     ;
 
+// Likewise `relational_expr` was a pass-through to `additive_expr`.
 equality_expr
-    : relational_expr ((EQUALS | NOT_EQUALS | GTE | GT | LTE | LT) relational_expr)*
-    ;
-
-relational_expr
-    : additive_expr
+    : additive_expr ((EQUALS | NOT_EQUALS | GTE | GT | LTE | LT) additive_expr)*
     ;
 
 additive_expr
@@ -525,7 +555,22 @@ function_call
     ;
 
 observable_ref
-    : STRING LPAREN expression_list? RPAREN
+    : STRING LPAREN observable_arg_list? RPAREN
+    ;
+
+// A function reference's arguments may be array literals as well as
+// expressions: `tfun([0,1,2],[1,2,4],time)` is valid BNGL and appears in
+// BioNetGen's own Validate models (test_tfun_expr, test_tfun_validation,
+// test_tfun_xml). An array is not an `expression`, so `expression_list` cannot
+// accept one; the alternative is scoped to function-reference arguments so it
+// cannot loosen arithmetic or the shared `expression_list`.
+observable_arg_list
+    : observable_arg (COMMA observable_arg)*
+    ;
+
+observable_arg
+    : expression
+    | LSBRACKET expression_list? RSBRACKET
     ;
 
 literal

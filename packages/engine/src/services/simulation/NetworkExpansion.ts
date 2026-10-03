@@ -559,7 +559,13 @@ export async function generateExpandedNetwork(
     const generator = new NetworkGenerator({
         maxSpecies: networkOpts.maxSpecies ?? 20000,
         maxReactions: networkOpts.maxReactions ?? 100000,
-        maxIterations: networkOpts.maxIter ?? 5000,
+        // BNG2's default is 100 (`Perl2/BNGModel.pm:2517`, `'max_iter' => 100`).
+        // We used 5000, which let expansion run fifty times past the point where
+        // BioNetGen declares the network incomplete — a different network from the
+        // reference, not a slower one. A model that legitimately needs more must
+        // say so in its own `generate_network` action, which is what `maxIter`
+        // above reads.
+        maxIterations: networkOpts.maxIter ?? 100,
         maxAgg: networkOpts.maxAgg ?? 500,
         maxStoich,
         // Model Compartment definitions for volume scaling
