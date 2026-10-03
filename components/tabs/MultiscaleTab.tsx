@@ -11,6 +11,7 @@ import {
 import type { MultiscaleWorkerRequest, MultiscaleWorkerResponse } from '../../services/multiscaleWorker';
 import { ResultsExportControl } from '../ResultsExportDialog';
 import { createStructuredAnalysisResultsExportDescriptor } from '../../services/resultsExport';
+import { computeViewTransform } from './multiscaleView';
 
 interface MultiscaleTabProps {
   bnglCode: string;
@@ -68,7 +69,9 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
   const [error, setError] = useState<string | null>(null);
   const [populationTimeSeries, setPopulationTimeSeries] = useState<any[]>([]);
   const [progress, setProgress] = useState(0);
+  const [helpOpen, setHelpOpen] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const canvasWrapRef = useRef<HTMLDivElement>(null);
   const workerRef = useRef<Worker | null>(null);
   const runIdRef = useRef(0);
 
@@ -233,8 +236,19 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
     const snapshot = snapshots[currentSnapshotIdx];
     if (!snapshot) return;
 
-    const w = canvas.width;
-    const h = canvas.height;
+    // Size the drawing buffer to the displayed box (× devicePixelRatio) so the
+    // browser never stretches the bitmap; drawing happens in CSS pixels.
+    const dpr = window.devicePixelRatio || 1;
+    const w = canvas.clientWidth;
+    const h = canvas.clientHeight;
+    if (w < 1 || h < 1) return;
+    const bufW = Math.round(w * dpr);
+    const bufH = Math.round(h * dpr);
+    if (canvas.width !== bufW || canvas.height !== bufH) {
+      canvas.width = bufW;
+      canvas.height = bufH;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, w, h);
 
     // Background
@@ -251,8 +265,10 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
       // Ignore parse errors for sizing fallback
     }
 
-    const scaleX = w / maxX;
-    const scaleY = h / maxY;
+    // Uniform scale + centring: the domain keeps its aspect ratio at any
+    // canvas size, so cells stay circular and trajectories do not skew while
+    // scrubbing the timeline slider.
+    const { scale, offX, offY } = computeViewTransform(maxX, maxY, w, h);
 
     // Unique cell types for coloring
     const cellTypes = Array.from(new Set(snapshot.cells.map(c => c.cellType)));
@@ -261,9 +277,9 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
     for (const cell of snapshot.cells) {
       if (cell.phase === 'dead') continue;
 
-      const x = cell.position[0] * scaleX;
-      const y = cell.position[1] * scaleY;
-      const r = Math.max(2, cell.radius * Math.min(scaleX, scaleY));
+      const x = offX + cell.position[0] * scale;
+      const y = offY + cell.position[1] * scale;
+      const r = Math.max(2, cell.radius * scale);
       const colorIdx = cellTypes.indexOf(cell.cellType);
       const color = CHART_COLORS[colorIdx % CHART_COLORS.length];
 
@@ -287,6 +303,16 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
 
   // Redraw when snapshot changes
   React.useEffect(() => { drawCells(); }, [drawCells]);
+
+  // Keep the drawing buffer in sync with the displayed canvas size so
+  // resizing the window or panel never stretches or squashes the view.
+  React.useEffect(() => {
+    const wrap = canvasWrapRef.current;
+    if (!wrap || typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(() => drawCells());
+    ro.observe(wrap);
+    return () => ro.disconnect();
+  }, [drawCells]);
 
   const fullPopulationRows = populationTimeSeries;
   const currentSnapshot = snapshots[currentSnapshotIdx];
@@ -356,7 +382,10 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
         </p>
       </div>
 
-      <div className="flex gap-4 flex-1 min-h-0">
+      {/* While the syntax help is open the row keeps its natural height and
+          the container scrolls, instead of squeezing the row (whose children
+          would otherwise paint over the expanded help). */}
+      <div className={`flex gap-4 ${helpOpen ? 'flex-none' : 'flex-1 min-h-0'}`}>
         {/* Model Editor (left) */}
         <Card className="w-80 shrink-0 p-3 flex flex-col">
           <h3 className="text-xs font-semibold text-slate-600 dark:text-slate-300 mb-2 uppercase tracking-wide">
@@ -401,13 +430,13 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
               </h3>
               {exportDescriptor && <ResultsExportControl descriptor={exportDescriptor} className="px-3 py-1.5 text-xs" />}
             </div>
-            <div className="relative">
+            <div className="relative" ref={canvasWrapRef}>
               <canvas
                 ref={canvasRef}
                 width={500}
                 height={400}
-                className="w-full rounded bg-slate-900"
-                style={{ imageRendering: 'auto', maxHeight: '350px' }}
+                className="block w-full rounded bg-slate-900"
+                style={{ imageRendering: 'auto', aspectRatio: '5 / 4', maxHeight: '350px' }}
               />
               {snapshots.length === 0 && !isRunning && (
                 <div className="absolute inset-0 flex items-center justify-center text-slate-400 text-sm pointer-events-none">
@@ -467,6 +496,240 @@ export const MultiscaleTab: React.FC<MultiscaleTabProps> = ({ bnglCode: _bnglCod
           )}
         </div>
       </div>
+
+      {/* Syntax help — describes the model definition JSON accepted by the editor */}
+      <details
+        open={helpOpen}
+        onToggle={(e) => setHelpOpen(e.currentTarget.open)}
+        className="shrink-0 border border-slate-200 dark:border-slate-700 rounded-lg p-4"
+      >
+        <summary className="font-semibold cursor-pointer select-none text-sm text-slate-700 dark:text-slate-200">
+          📖 Syntax Help — model definition reference
+        </summary>
+        <div className="mt-3 space-y-4 text-sm text-slate-700 dark:text-slate-300">
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            The editor takes one JSON object (double-quoted keys and strings). The intracellular
+            model is a single string with <code>\n</code> line breaks. Fields marked
+            <b> required</b> are validated before a run starts; everything else has the stated default.
+          </p>
+
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1">
+              Top-level fields
+            </h4>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr>
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">name</td>
+                  <td className="align-top py-1">Optional label for the model.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">cellTypes</td>
+                  <td className="align-top py-1"><b>Required.</b> One or more cell type definitions (below). Keys are the type names used by <code>population</code> and <code>change_type()</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">extracellular</td>
+                  <td className="align-top py-1">Optional diffusible signals: <code>{'{ "species": [ … ] }'}</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">domain</td>
+                  <td className="align-top py-1"><b>Required.</b> The spatial arena (below).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">population</td>
+                  <td className="align-top py-1">Optional initial cells (below).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">time</td>
+                  <td className="align-top py-1"><b>Required.</b> The four simulation clocks (below).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">maxCells</td>
+                  <td className="align-top py-1">Optional cap on live cells; divisions are suppressed once reached.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">seed</td>
+                  <td className="align-top py-1">Optional RNG seed for reproducible runs.</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1">
+              cellTypes entries
+            </h4>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr>
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">model</td>
+                  <td className="align-top py-1">Intracellular BNGL program as one JSON string (<code>\n</code> between lines) with <code>begin/end</code> blocks: <code>parameters</code>, <code>molecule types</code>, <code>seed species</code>, <code>observables</code>, <code>reaction rules</code>. Every cell runs its own instance.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">radius</td>
+                  <td className="align-top py-1">Initial cell radius in domain units (default 5.0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">motility</td>
+                  <td className="align-top py-1">Random-walk speed in domain units per time unit: each decision step the cell drifts <code>motility × dtDecision</code>. <code>0</code> = immotile.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">decisions</td>
+                  <td className="align-top py-1">Ordered rules evaluated every <code>dtDecision</code>. <b>The first rule whose condition holds fires; checking stops there.</b></td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">secretes</td>
+                  <td className="align-top py-1">Optional <code>[{'{ species, driven_by, rate }'}]</code>: each step secretes into extracellular <code>species</code> at rate <code>(intracellular observable driven_by) × rate</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">uptakes</td>
+                  <td className="align-top py-1">Optional <code>[{'{ species, sets_parameter, rate }'}]</code>: each step reads the local extracellular <code>species</code> concentration into the intracellular observable <code>sets_parameter</code> as <code>concentration × rate</code>.</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1">
+              Decision rules (entries of decisions)
+            </h4>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr>
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">name</td>
+                  <td className="align-top py-1">Rule identifier — used to track its refractory cooldown.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">when</td>
+                  <td className="align-top py-1">Condition: <code>&lt;observable&gt; &lt;op&gt; &lt;number&gt;</code>, e.g. <code>pERK &gt;= 0.5</code>. Operators: <code>&gt;</code>, <code>&lt;</code>, <code>&gt;=</code>, <code>&lt;=</code>, <code>==</code>, <code>!=</code>. The observable is read from this cell's intracellular state (BNGL <code>observables</code> or values set by <code>uptakes</code>); an unknown name reads as <code>0</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">then</td>
+                  <td className="align-top py-1">Action performed when the rule fires — see the action table below.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">probability</td>
+                  <td className="align-top py-1">Optional chance of firing on each qualifying check (default 1).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">refractory</td>
+                  <td className="align-top py-1">Optional minimum time before this rule can fire again.</td>
+                </tr>
+              </tbody>
+            </table>
+            <table className="w-full text-xs border-collapse mt-2">
+              <tbody>
+                <tr>
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">divide</td>
+                  <td className="align-top py-1">Cell divides; the daughter receives half of each molecular count.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">die</td>
+                  <td className="align-top py-1">Cell enters apoptosis and is removed from the population.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">secrete(species, rate)</td>
+                  <td className="align-top py-1">Start emitting the extracellular <code>species</code> at a constant <code>rate</code> until stopped.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">stop_secrete(species)</td>
+                  <td className="align-top py-1">Set that secretion rate back to 0.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">migrate(random, speed)</td>
+                  <td className="align-top py-1">Move <code>speed</code> domain units in a random direction this decision step.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">chemotaxis(species, speed)</td>
+                  <td className="align-top py-1">Move <code>speed</code> units up the concentration gradient of <code>species</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">change_type(typeName)</td>
+                  <td className="align-top py-1">Switch this cell to another declared cell type (takes effect immediately).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">set_parameter(name, value)</td>
+                  <td className="align-top py-1">Set an intracellular BNGL parameter for this cell.</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300 mb-1">
+              Extracellular species, domain, population, time
+            </h4>
+            <table className="w-full text-xs border-collapse">
+              <tbody>
+                <tr>
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">species[].name</td>
+                  <td className="align-top py-1">Identifier referenced by <code>secrete</code>, <code>stop_secrete</code>, <code>chemotaxis</code>, and <code>uptakes</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">species[].D</td>
+                  <td className="align-top py-1">Diffusion constant (must be ≥ 0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">species[].degradation</td>
+                  <td className="align-top py-1">Optional first-order decay rate.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">species[].initial</td>
+                  <td className="align-top py-1">Optional initial uniform concentration (default 0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">domain.dimensions</td>
+                  <td className="align-top py-1"><code>2</code> or <code>3</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">domain.size</td>
+                  <td className="align-top py-1"><code>[x, y]</code> (2D) or <code>[x, y, z]</code> (3D), all values &gt; 0. The view maps the whole arena to the canvas while keeping this aspect ratio.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">domain.boundary</td>
+                  <td className="align-top py-1">Cell behavior at a wall: <code>reflective</code> bounces back, <code>periodic</code> wraps to the opposite side, <code>absorbing</code> kills the cell.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">domain.resolution</td>
+                  <td className="align-top py-1">Optional extracellular grid resolution <code>[nx, ny]</code> / <code>[nx, ny, nz]</code>; default 20×20 (2D) or 20×20×20 (3D).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">population[].cellType</td>
+                  <td className="align-top py-1">Must match a key of <code>cellTypes</code>.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">population[].count</td>
+                  <td className="align-top py-1">Number of initial cells.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">population[].region</td>
+                  <td className="align-top py-1">Reserved — initial cells are currently placed at the center of the domain.</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">time.end</td>
+                  <td className="align-top py-1">Total simulation time (&gt; 0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">time.dtIntra</td>
+                  <td className="align-top py-1">Intracellular ODE integration step for each cell (&gt; 0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">time.dtExtra</td>
+                  <td className="align-top py-1">Extracellular PDE update step (&gt; 0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">time.dtDecision</td>
+                  <td className="align-top py-1">How often conditions, actions, and motility are evaluated (&gt; 0).</td>
+                </tr>
+                <tr className="border-t border-slate-100 dark:border-slate-800">
+                  <td className="align-top py-1 pr-3 font-mono whitespace-nowrap">time.outputs</td>
+                  <td className="align-top py-1">Snapshots after t = 0 (&gt; 0). The timeline slider shows <code>outputs + 1</code> frames, from t = 0 to t = end.</td>
+                </tr>
+              </tbody>
+            </table>
+          </section>
+        </div>
+      </details>
     </div>
   );
 };

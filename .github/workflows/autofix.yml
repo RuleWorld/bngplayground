@@ -17,6 +17,11 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
         with:
+          # Check out the PR head branch from its own repository: for fork PRs
+          # the branch does not exist in this repository, so the default
+          # repository + head_ref ref would fail to fetch. Falls back to this
+          # repository for workflow_dispatch (empty head_ref → default branch).
+          repository: ${{ github.event.pull_request.head.repo.full_name || github.repository }}
           ref: ${{ github.head_ref }}
 
       - name: Setup Node.js
