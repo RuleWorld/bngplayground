@@ -4335,22 +4335,41 @@ export async function simulate(
       }
     }
 
-    // Root detection: on in this experiment (exp/if-root-detection). Global
-    // auto-detection of if() conditions was disabled in May (37471a06) after it
-    // "can introduce broad parity regressions across unrelated models" — an
-    // claim that predates the reaction-centre/stat-factor fixes and was never
-    // re-measured. This branch re-enables it to collect before/after parity
-    // evidence; keep it off on main until that evidence says otherwise.
+    // Root detection: on in this experiment (exp/if-root-detection), hardened
+    // after the first CI attempt hung deterministic-parity for 60 minutes on a
+    // model whose functions contain a 90-condition if() time ladder (Dallas).
+    // The original May disable (37471a06) claimed broad parity regressions and
+    // was never re-measured; this branch re-enables it with three guards so a
+    // pathological root set degrades to flag-OFF behavior instead of wedging
+    // the integrator:
+    //   1. conditions that cannot be re-evaluated as written (line
+    //      continuations, embedded newlines) are never registered — an
+    //      unparseable g() is caught and written as 0, which reads as a root;
+    //   2. MAX_AUTO_IF_ROOTS caps the root set — ladder models register none;
+    //   3. the step loop drops roots after repeated no-progress returns
+    //      (see autoRootNoProgress below).
     const ENABLE_IF_ROOT_DETECTION = true;
+    const MAX_AUTO_IF_ROOTS = 64;
     if (ENABLE_IF_ROOT_DETECTION) {
       const rootExprs: string[] = [];
       if (model.functions) {
         for (const func of model.functions) {
           const extracted = extractIfConditions(func.expression);
           for (const cond of extracted) {
+            // Skip conditions spanning a backslash continuation or newline:
+            // they cannot be re-parsed reliably on every root call.
+            if (cond.includes('\\') || cond.includes('\n')) continue;
             if (!rootExprs.includes(cond)) rootExprs.push(cond);
           }
         }
+      }
+
+      if (rootExprs.length > MAX_AUTO_IF_ROOTS) {
+        console.warn(
+          `[SimulationLoop] if()-root detection skipped for '${model.name || 'model'}': ` +
+          `${rootExprs.length} conditions exceeds cap ${MAX_AUTO_IF_ROOTS}`
+        );
+        rootExprs.length = 0;
       }
 
       if (rootExprs.length > 0) {
@@ -5165,6 +5184,14 @@ export async function simulate(
           callbacks.checkCancelled();
           const tTarget = phaseStart + (phaseDuration * i) / phase_n_steps;
           let stepFailed = false;
+          // Auto if()-roots (nothing owning/disarming them, unlike event
+          // roots) are dropped after AUTO_ROOT_STALL_LIMIT consecutive
+          // integrate() returns that fail to advance time. A pathological
+          // root set can otherwise spin this loop forever: each call returns
+          // success with a root at essentially the same t, so the in-call
+          // stuck detector (which resets per call) never trips.
+          let autoRootNoProgress = 0;
+          const AUTO_ROOT_STALL_LIMIT = 8;
           while (t < tTarget - 1e-12 * Math.max(1, Math.abs(tTarget))) {
             const nextEventTime = eventRuntime?.nextWakeTime(t, tTarget, y);
             const segmentTarget = nextEventTime !== undefined
@@ -5198,6 +5225,7 @@ export async function simulate(
             }
             const denseT0 = denseOutputBuffer && !phaseExpandState ? t : 0;
             const denseY0 = denseOutputBuffer && !phaseExpandState ? new Float64Array(solverState) : undefined;
+            const tBefore = t;
             const result = solver.integrate(solverState, t, segmentTarget, callbacks.checkCancelled);
 
             if (VERBOSE_SIM_DEBUG) console.log(`[DEBUG_TRACE] Step ${i} done. t=${result.t}, success=${result.success}`);
@@ -5260,6 +5288,38 @@ export async function simulate(
               solver.destroy?.();
               solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
               denseF0 = undefined;
+            }
+
+            // Watchdog for auto-registered if()-roots: repeated successful
+            // returns with no time advance mean the root set is spinning this
+            // loop (the in-call stuck detector resets per integrate() call, so
+            // it cannot see this). Drop the roots, recreate the solver, and
+            // finish the phase without them — flag-OFF behavior beats a hang.
+            if (
+              !eventRuntime &&
+              (phaseSolverOptions.numRoots ?? 0) > 0 &&
+              result.rootsFound !== undefined &&
+              Math.abs(t - tBefore) <= 1e-15 * Math.max(1, Math.abs(tBefore), Math.abs(t))
+            ) {
+              autoRootNoProgress += 1;
+              if (autoRootNoProgress >= AUTO_ROOT_STALL_LIMIT) {
+                console.warn(
+                  `[SimulationLoop] if()-root detection made no time progress in ` +
+                  `${autoRootNoProgress} consecutive steps; disabling roots and continuing without them`
+                );
+                phaseSolverOptions.numRoots = 0;
+                phaseSolverOptions.rootFunction = undefined;
+                autoRootNoProgress = 0;
+                if (phaseExpandState) {
+                  phaseState = phaseReduceState!(y);
+                  solverState = phaseState;
+                } else {
+                  solverState = y;
+                }
+                solver.destroy?.();
+                solver = await createSolver(phaseState.length, phaseDerivatives, phaseSolverOptions);
+                denseF0 = undefined;
+              }
             }
 
             if (t >= segmentTarget - 1e-12 * Math.max(1, Math.abs(segmentTarget))
