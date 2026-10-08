@@ -43,22 +43,33 @@
 #include <vector>
 #include <unordered_map>
 #include <algorithm>
+#include <limits>
 
 // ============================================================
-// Xoshiro256** PRNG — Matches the TypeScript implementation exactly
+// Xoshiro256** PRNG with canonical SplitMix64 seeding.
+//
+// `next()` is the standard xoshiro256** generator (verified against the
+// published known-answer vector for state {1,2,3,4}). The state is filled by
+// canonical SplitMix64: the advancing counter `x` and the scrambled output `z`
+// are kept in SEPARATE variables. Folding the scrambled word back into the
+// counter is a common variant, but it is not SplitMix64 and it changes s[1..3]
+// (only s[0] survives).
+//
+// Mirrored byte-for-byte by Xoshiro256StarStar in
+// packages/engine/src/services/spatial/SpatialSimulation.ts; the two engines
+// must be seeded identically to stay in lockstep.
 // ============================================================
 struct Xoshiro256 {
     uint64_t s[4];
 
     void seed(uint64_t seed_val) {
-        // SplitMix64 initialization
-        uint64_t z = seed_val;
+        uint64_t x = seed_val;
         for (int i = 0; i < 4; i++) {
-            z += 0x9e3779b97f4a7c15ULL;
-            z = (z ^ (z >> 30)) * 0xbf58476d1ce4e5b9ULL;
-            z = (z ^ (z >> 27)) * 0x94d049bb133111ebULL;
-            z = z ^ (z >> 31);
-            s[i] = z;
+            x += 0x9E3779B97F4A7C15ULL;
+            uint64_t z = x;
+            z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+            z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+            s[i] = z ^ (z >> 31);
         }
     }
 
@@ -258,6 +269,14 @@ static get_pathway_fn g_get_pathway = nullptr;
 static get_product_count_fn g_get_product_count = nullptr;
 static get_product_fn g_get_product = nullptr;
 
+static bool can_store_positive_float(double value) {
+    const double min_positive = std::numeric_limits<float>::denorm_min() > 0.0f
+        ? (double)std::numeric_limits<float>::denorm_min()
+        : (double)std::numeric_limits<float>::min();
+    return std::isfinite(value) && value >= min_positive &&
+           value <= (double)std::numeric_limits<float>::max();
+}
+
 extern "C" {
 
 // ============================================================
@@ -274,16 +293,49 @@ int spatial_init(double dt, uint32_t seed) {
     return 0;
 }
 
-void spatial_set_rxn_radius(double rxn_radius) {
+// Returns 0 on success and -1 for values that cannot be represented as a
+// finite, positive radius by the engine.
+int spatial_set_rxn_radius(double rxn_radius) {
+    if (!(rxn_radius > 0.0) || !can_store_positive_float(rxn_radius)) {
+        return -1;
+    }
     g_rxn_radius = (float)rxn_radius;
+    return 0;
 }
 
-void spatial_set_grid_size(double side_x, double side_y, double side_z, double cell_size) {
-    g_boundary.cx = 0; g_boundary.cy = 0; g_boundary.cz = 0;
-    g_boundary.hx = (float)(side_x * 0.5);
-    g_boundary.hy = (float)(side_y * 0.5);
-    g_boundary.hz = (float)(side_z * 0.5);
-    g_grid.cell_size = (float)cell_size;
+// Returns 0 on success and -1 if any dimension or cell size is not finite and
+// positive, including half-extents after conversion to the grid's float storage.
+// Validation precedes all writes so a rejected request preserves the old box.
+int spatial_set_grid_size(double side_x, double side_y, double side_z, double cell_size) {
+    if (!std::isfinite(side_x) || !(side_x > 0.0) ||
+        !std::isfinite(side_y) || !(side_y > 0.0) ||
+        !std::isfinite(side_z) || !(side_z > 0.0) ||
+        !std::isfinite(cell_size) || !(cell_size > 0.0)) {
+        return -1;
+    }
+
+    const double half_x = side_x * 0.5;
+    const double half_y = side_y * 0.5;
+    const double half_z = side_z * 0.5;
+    if (!can_store_positive_float(half_x) ||
+        !can_store_positive_float(half_y) ||
+        !can_store_positive_float(half_z) ||
+        !can_store_positive_float(cell_size)) {
+        return -1;
+    }
+
+    const float hx = (float)half_x;
+    const float hy = (float)half_y;
+    const float hz = (float)half_z;
+    const float candidate_cell_size = (float)cell_size;
+    g_boundary.cx = 0;
+    g_boundary.cy = 0;
+    g_boundary.cz = 0;
+    g_boundary.hx = hx;
+    g_boundary.hy = hy;
+    g_boundary.hz = hz;
+    g_grid.cell_size = candidate_cell_size;
+    return 0;
 }
 
 void spatial_destroy() {

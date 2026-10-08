@@ -25,6 +25,7 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <limits>
 #include <unistd.h>
 #include <vector>
 
@@ -106,6 +107,58 @@ static int alive_census() {
 static int exported_census() {
     std::vector<float> buf(5 * 64);
     return spatial_export_positions(buf.data(), 64);
+}
+
+// ============================================================
+// C3: reject invalid configuration without mutating active settings
+// ============================================================
+
+static void test_c3_config_validation() {
+    SECTION("C3: invalid configuration is rejected transactionally");
+
+    CHECK(spatial_set_rxn_radius(0.25) == 0, "positive reaction radius should succeed");
+    CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, 0.25) == 0,
+          "positive box dimensions and cell size should succeed");
+    g_boundary.cx = 7.0f;
+    g_boundary.cy = 8.0f;
+    g_boundary.cz = 9.0f;
+
+    const auto unchanged = []() {
+        CHECK(g_boundary.cx == 7.0f && g_boundary.cy == 8.0f && g_boundary.cz == 9.0f,
+              "invalid grid config must preserve box center");
+        CHECK(g_boundary.hx == 1.0f && g_boundary.hy == 2.0f && g_boundary.hz == 3.0f,
+              "invalid grid config must preserve half-extents");
+        CHECK(g_grid.cell_size == 0.25f, "invalid grid config must preserve cell size");
+    };
+
+    const double invalid[] = {
+        0.0,
+        -1.0,
+        std::numeric_limits<double>::quiet_NaN(),
+        std::numeric_limits<double>::infinity(),
+        -std::numeric_limits<double>::infinity(),
+        std::numeric_limits<double>::max(),
+        std::numeric_limits<double>::denorm_min(),
+    };
+    for (double value : invalid) {
+        CHECK(spatial_set_rxn_radius(value) == -1,
+              "invalid reaction radius %g should fail", value);
+        CHECK(g_rxn_radius == 0.25f,
+              "invalid reaction radius %g must preserve prior radius", value);
+
+        CHECK(spatial_set_grid_size(value, 4.0, 6.0, 0.25) == -1,
+              "invalid side_x %g should fail", value);
+        unchanged();
+        CHECK(spatial_set_grid_size(2.0, value, 6.0, 0.25) == -1,
+              "invalid side_y %g should fail", value);
+        unchanged();
+        CHECK(spatial_set_grid_size(2.0, 4.0, value, 0.25) == -1,
+              "invalid side_z %g should fail", value);
+        unchanged();
+        CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, value) == -1,
+              "invalid cell_size %g should fail", value);
+        unchanged();
+    }
 }
 
 // ============================================================
@@ -393,6 +446,76 @@ static void test_c4_gaussian_finite() {
           "sqrt(-2 log(1 - uniform())) must be finite");
 }
 
+// ============================================================
+// PRNG: canonical xoshiro256** + canonical SplitMix64 seeding
+// ============================================================
+
+// Known-answer vectors for the canonical SplitMix64 seeding. Verified against
+// an independent reference implementation of the algorithm, not just recorded
+// from this code: an earlier non-canonical variant folded the scrambled word
+// back into the counter, which left s[0] correct but corrupted s[1..3]. Seed 1
+// is the discriminating case -- the two variants share s[0] = 0x910a2dec... and
+// differ in every later word, so asserting all four words catches a regression
+// that a single-word check would miss.
+struct SeedVector {
+    uint64_t seed;
+    uint64_t state[4];
+    uint64_t first10[10];
+};
+
+static const SeedVector k_seed_vectors[] = {
+    {0ULL,
+     {0xe220a8397b1dcdafULL, 0x6e789e6aa1b965f4ULL, 0x06c45d188009454fULL, 0xf88bb8a8724c81ecULL},
+     {0x99ec5f36cb75f2b4ULL, 0xbf6e1f784956452aULL, 0x1a5f849d4933e6e0ULL, 0x6aa594f1262d2d2cULL,
+      0xbba5ad4a1f842e59ULL, 0xffef8375d9ebcacaULL, 0x6c160deed2f54c98ULL, 0x8920ad648fc30a3fULL,
+      0xdb032c0ba7539731ULL, 0xeb3a475a3e749a3dULL}},
+    {1ULL,
+     {0x910a2dec89025cc1ULL, 0xbeeb8da1658eec67ULL, 0xf893a2eefb32555eULL, 0x71c18690ee42c90bULL},
+     {0xb3f2af6d0fc710c5ULL, 0x853b559647364ceaULL, 0x92f89756082a4514ULL, 0x642e1c7bc266a3a7ULL,
+      0xb27a48e29a233673ULL, 0x24c123126ffda722ULL, 0x123004ef8df510e6ULL, 0x61954dcc47b1e89dULL,
+      0xddfdb48ab9ed4a21ULL, 0x8d3cdb8c3aa5b1d0ULL}},
+    {12345ULL,
+     {0x22118258a9d111a0ULL, 0x346edce5f713f8edULL, 0x1e9a57bc80e6721dULL, 0x2d160e7e5c3f42caULL},
+     {0xbe6a36374160d49bULL, 0x214aaa0637a688c6ULL, 0xf69d16de9954d388ULL, 0x0c60048c4e96e033ULL,
+      0x8e2076aeed51c648ULL, 0x02bbcc1c1fc50f84ULL, 0x28e72a4fec84f699ULL, 0x4bb9d7cbb8dddebeULL,
+      0x62cea6a22cf0bd36ULL, 0xe91df042ccde955dULL}},
+};
+
+static void test_prng_seeding_is_canonical_splitmix64() {
+    SECTION("PRNG: canonical SplitMix64 seeding");
+
+    for (const SeedVector& v : k_seed_vectors) {
+        Xoshiro256 rng;
+        rng.seed(v.seed);
+        for (int i = 0; i < 4; i++) {
+            CHECK(rng.s[i] == v.state[i],
+                  "seed %llu: s[%d] should be 0x%016llx, got 0x%016llx",
+                  (unsigned long long)v.seed, i,
+                  (unsigned long long)v.state[i], (unsigned long long)rng.s[i]);
+        }
+        for (int i = 0; i < 10; i++) {
+            uint64_t got = rng.next();
+            CHECK(got == v.first10[i],
+                  "seed %llu: output %d should be 0x%016llx, got 0x%016llx",
+                  (unsigned long long)v.seed, i,
+                  (unsigned long long)v.first10[i], (unsigned long long)got);
+        }
+    }
+
+    // Published xoshiro256** known-answer vector for a hand-set state. This
+    // pins next() itself, independently of how the state was produced.
+    Xoshiro256 kat;
+    kat.s[0] = 1; kat.s[1] = 2; kat.s[2] = 3; kat.s[3] = 4;
+    const uint64_t expected[5] = {11520ULL, 0ULL, 1509978240ULL,
+                                   1215971899390074240ULL, 1216172134540287360ULL};
+    for (int i = 0; i < 5; i++) {
+        uint64_t got = kat.next();
+        CHECK(got == expected[i],
+              "xoshiro256** KAT[{1,2,3,4}][%d] should be %llu, got %llu",
+              i, (unsigned long long)expected[i], (unsigned long long)got);
+    }
+}
+
 int main() {
     fprintf(stderr, "wasm-spatial native engine tests\n");
 
@@ -400,7 +523,9 @@ int main() {
     test_d1_reaction_product_diffuses_next_step();
     test_d2_index_contract();
     test_d3_negative_species_ids();
+    test_c3_config_validation();
     test_c3_reflect_coord();
+    test_prng_seeding_is_canonical_splitmix64();
     test_c4_gaussian_finite();
 
     fprintf(stderr, "\n%d checks, %d failure(s)\n", g_checks, g_failures);
