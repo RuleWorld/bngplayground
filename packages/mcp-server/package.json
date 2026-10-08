@@ -63,7 +63,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@modelcontextprotocol/client": "2.0.0",
+    "@modelcontextprotocol/client": "2.3.1",
     "@modelcontextprotocol/conformance": "0.2.0-alpha.11",
     "@modelcontextprotocol/ext-apps": "^1.7.5",
     "@types/node": "^26.2.0",
