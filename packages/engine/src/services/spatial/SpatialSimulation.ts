@@ -106,6 +106,7 @@ export class SpatialSimulation {
     if (this.config.geometry === 'auto') {
       this.geometries = autoGenerateGeometry(compartments);
     }
+    validateCompartmentGeometries(this.geometries);
 
     this.geometryMap.clear();
     for (const geom of this.geometries) {
@@ -673,51 +674,122 @@ export class SpatialSimulation {
   }
 }
 
-function reflectCoord(x: number, min: number, max: number): number {
-  let val = x;
-  while (val < min || val > max) {
-    if (val < min) val = 2 * min - val;
-    if (val > max) val = 2 * max - val;
+/**
+ * Reject degenerate compartment geometry at initialize time.
+ *
+ * A zero-size compartment produces a zero radius / zero half-extent, which
+ * collapses the mirror fold in `reflectCoord` to a single point and used to spin
+ * forever inside the worker. Failing at startup beats hanging.
+ */
+export function validateCompartmentGeometries(geometries: CompartmentGeometry[]): void {
+  const invalid = (name: string, what: string, value: number | undefined): Error =>
+    new Error(
+      `Invalid spatial geometry for compartment "${name}": ${what} must be a finite positive ` +
+      `number (got ${value}). Every compartment needs a positive size; a zero-thickness ` +
+      `compartment makes boundary reflection undefined.`
+    );
+
+  for (const geom of geometries) {
+    if (geom.shape === 'box') {
+      if (!geom.halfExtents) throw invalid(geom.name, 'halfExtents', undefined);
+      for (const h of geom.halfExtents) {
+        if (!Number.isFinite(h) || !(h > 0)) throw invalid(geom.name, 'half-extent', h);
+      }
+    } else if (geom.shape === 'sphere') {
+      const r = geom.radius;
+      if (r === undefined || !Number.isFinite(r) || !(r > 0)) throw invalid(geom.name, 'radius', r);
+    }
   }
-  return val;
 }
 
-class Xoshiro256StarStar {
+/**
+ * Mirror-fold a coordinate into the interval [min, max] (period 2 * (max - min)).
+ *
+ * Closed form instead of a fold loop, because the loop never terminated for
+ * degenerate or non-finite inputs:
+ * - zero/negative/NaN width: each iteration mapped the value back and forth
+ *   between 2*max - val and 2*min - val forever;
+ * - ±Infinity: alternated between +Inf and -Inf forever;
+ * - NaN: exited the loop and returned NaN, poisoning the molecule position.
+ *
+ * Degenerate conventions (identical to wasm-spatial `reflect_coord`, so both
+ * engines fold identically): a non-positive or non-finite width, and any
+ * non-finite coordinate, collapse to `min` — the single point that exists.
+ */
+export function reflectCoord(x: number, min: number, max: number): number {
+  const w = max - min;
+  if (!Number.isFinite(w) || !(w > 0)) return min;
+  if (!Number.isFinite(x)) return min;
+  const p = 2 * w;
+  let t = (x - min) % p;
+  if (t < 0) t += p;
+  return t <= w ? min + t : min + (p - t);
+}
+
+/**
+ * xoshiro256** with canonical SplitMix64 seeding.
+ *
+ * Every add, multiply and shift-left is masked to 64 bits with
+ * `BigInt.asUintN`. BigInt arithmetic is unbounded, so unmasked intermediates
+ * let bits above bit 63 leak into the SplitMix64 seed shifts and into the
+ * scrambler (`rotl(s[1] * 5, 7) * 9`), producing a stream that was not
+ * xoshiro256**. Verified against the reference: the published known-answer
+ * sequence for the unseeded state {1, 2, 3, 4} is
+ * 11520, 0, 1509978240, 1215971899390074240, 1216172134540287360.
+ */
+export class Xoshiro256StarStar {
   private s: BigUint64Array;
 
   constructor(seed: number) {
     this.s = new BigUint64Array(4);
-    let s = BigInt(seed);
+    // Canonical SplitMix64 seeding: the counter advances by the golden ratio and
+    // the scrambled word is derived from it without being fed back, matching the
+    // reference splitmix64 in the xoshiro paper. (wasm-spatial's seeder fed the
+    // scrambled word back into the counter, which is a non-standard variant; the
+    // C engine is being corrected to this form as well.)
+    let x = BigInt.asUintN(64, BigInt(seed));
     for (let i = 0; i < 4; i++) {
-      s += 0x9e3779b97f4a7c15n;
-      let z = s;
-      z = (z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n;
-      z = (z ^ (z >> 27n)) * 0x94d049bb133111ebn;
-      z = z ^ (z >> 31n);
-      this.s[i] = z & 0xFFFFFFFFFFFFFFFFn;
+      x = BigInt.asUintN(64, x + 0x9e3779b97f4a7c15n);
+      let z = x;
+      z = BigInt.asUintN(64, (z ^ (z >> 30n)) * 0xbf58476d1ce4e5b9n);
+      z = BigInt.asUintN(64, (z ^ (z >> 27n)) * 0x94d049bb133111ebn);
+      this.s[i] = z ^ (z >> 31n);
     }
   }
 
-  random(): number {
-    const result = this.rotl(this.s[1] * 5n, 7n) * 9n;
-    const t = this.s[1] << 17n;
+  /** Raw 64-bit output, matching the reference xoshiro256** `next()`. */
+  next(): bigint {
+    const result = BigInt.asUintN(64, this.rotl(BigInt.asUintN(64, this.s[1] * 5n), 7n) * 9n);
+    const t = BigInt.asUintN(64, this.s[1] << 17n);
     this.s[2] ^= this.s[0];
     this.s[3] ^= this.s[1];
     this.s[1] ^= this.s[2];
     this.s[0] ^= this.s[3];
     this.s[2] ^= t;
     this.s[3] = this.rotl(this.s[3], 45n);
-    return Number((result >> 11n) & 0x1FFFFFFFFFFFFFn) / Number(0x20000000000000n);
+    return result;
   }
 
+  /** Uniform double in [0, 1). */
+  random(): number {
+    return Number(this.next() >> 11n) / Number(0x20000000000000n);
+  }
+
+  /**
+   * Standard normal via Box-Muller.
+   *
+   * `u1` is flipped into (0, 1]: `random()` can return exactly 0, and log(0)
+   * is -Infinity, which turned a diffusion step into an Infinity displacement
+   * that then fed the reflect fold. Matches wasm-spatial `gaussian()`.
+   */
   gaussian(): number {
-    const u1 = this.random();
+    const u1 = 1 - this.random();
     const u2 = this.random();
     return Math.sqrt(-2.0 * Math.log(u1)) * Math.cos(2.0 * Math.PI * u2);
   }
 
   private rotl(x: bigint, k: bigint): bigint {
-    return ((x << k) | (x >> (64n - k))) & 0xFFFFFFFFFFFFFFFFn;
+    return BigInt.asUintN(64, (x << k) | (x >> (64n - k)));
   }
 }
 
