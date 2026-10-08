@@ -294,12 +294,17 @@ int spatial_init(double dt, uint32_t seed) {
 }
 
 // Returns 0 on success and -1 for values that cannot be represented as a
-// finite, positive radius by the engine.
+// finite, positive radius by the engine. The 27-cell search is complete only
+// when each grid cell is at least as wide as the reaction radius.
 int spatial_set_rxn_radius(double rxn_radius) {
     if (!(rxn_radius > 0.0) || !can_store_positive_float(rxn_radius)) {
         return -1;
     }
-    g_rxn_radius = (float)rxn_radius;
+    const float candidate_radius = (float)rxn_radius;
+    g_rxn_radius = candidate_radius;
+    if (g_grid.cell_size > 0.0f && g_grid.cell_size < candidate_radius) {
+        g_grid.cell_size = candidate_radius;
+    }
     return 0;
 }
 
@@ -327,7 +332,8 @@ int spatial_set_grid_size(double side_x, double side_y, double side_z, double ce
     const float hx = (float)half_x;
     const float hy = (float)half_y;
     const float hz = (float)half_z;
-    const float candidate_cell_size = (float)cell_size;
+    const float requested_cell_size = (float)cell_size;
+    const float candidate_cell_size = std::max(requested_cell_size, g_rxn_radius);
     g_boundary.cx = 0;
     g_boundary.cy = 0;
     g_boundary.cz = 0;

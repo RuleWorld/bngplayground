@@ -117,8 +117,17 @@ static void test_c3_config_validation() {
     SECTION("C3: invalid configuration is rejected transactionally");
 
     CHECK(spatial_set_rxn_radius(0.25) == 0, "positive reaction radius should succeed");
-    CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, 0.25) == 0,
+    CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, 0.1) == 0,
           "positive box dimensions and cell size should succeed");
+    CHECK(g_grid.cell_size == 0.25f,
+          "grid cells must be at least as wide as the reaction radius");
+    CHECK(spatial_set_rxn_radius(0.5) == 0,
+          "increasing reaction radius should succeed");
+    CHECK(g_grid.cell_size == 0.5f,
+          "increasing reaction radius must widen existing grid cells");
+    CHECK(spatial_set_rxn_radius(0.25) == 0, "restoring reaction radius should succeed");
+    CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, 0.25) == 0,
+          "restore positive box dimensions and cell size");
     g_boundary.cx = 7.0f;
     g_boundary.cy = 8.0f;
     g_boundary.cz = 9.0f;
@@ -160,6 +169,34 @@ static void test_c3_config_validation() {
         unchanged();
     }
 }
+// C2: a 27-cell neighborhood is exhaustive only when cell width >= radius.
+static void test_c2_small_requested_cells_still_find_reactions() {
+    SECTION("C2: grid cells are clamped to reaction radius");
+
+    spatial_init(1e-3, 88);
+    CHECK(spatial_set_rxn_radius(0.25) == 0, "set reaction radius");
+    CHECK(spatial_set_grid_size(10.0, 10.0, 10.0, 0.1) == 0,
+          "set smaller requested cell size");
+    CHECK(g_grid.cell_size == 0.25f,
+          "cell size must be clamped to the reaction radius");
+    spatial_set_diffusion_constant(SPECIES_A, 0.0);
+    spatial_set_diffusion_constant(SPECIES_B, 0.0);
+    install_callbacks();
+
+    // A requested 0.1 cell would put these in cells two apart. The configured
+    // 0.25 cell keeps the existing 27-neighbor search exhaustive at radius .25.
+    spatial_add_molecule(0.0f, 0.0f, 0.0f, SPECIES_A, 0);
+    spatial_add_molecule(0.2f, 0.0f, 0.0f, SPECIES_A, 0);
+    spatial_step();
+
+    CHECK(alive_census() == 1, "the pair within rxnRadius should react");
+    std::vector<int> species_ids(64), counts(64);
+    const int n = spatial_count_species(species_ids.data(), counts.data(), 64);
+    CHECK(n == 1 && species_ids[0] == SPECIES_B && counts[0] == 1,
+          "reaction should produce one B product");
+    spatial_destroy();
+}
+
 
 // ============================================================
 // D1: loops bounded by the alive count skip the appended tail
@@ -527,6 +564,7 @@ int main() {
     test_c3_reflect_coord();
     test_prng_seeding_is_canonical_splitmix64();
     test_c4_gaussian_finite();
+    test_c2_small_requested_cells_still_find_reactions();
 
     fprintf(stderr, "\n%d checks, %d failure(s)\n", g_checks, g_failures);
     return g_failures == 0 ? 0 : 1;
