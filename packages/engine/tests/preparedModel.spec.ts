@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { updatePreparedModel } from '../src/utils/preparedModel';
+import { updatePreparedModel, findSeedSpeciesForParameter } from '../src/utils/preparedModel';
 import type { BNGLModel } from '../src/types';
 
 function makeModel(): BNGLModel {
@@ -39,6 +39,44 @@ describe('prepared model updates', () => {
     expect(result.initialStateChanged).toBe(true);
     expect(result.solverReinitRequired).toBe(true);
     expect(result.model.species[0].initialConcentration).toBe(20);
+  });
+
+  it('overrides a literal initial amount or symbolic seed directly', () => {
+    const model = makeModel();
+    model.species.push({ name: 'B()', initialConcentration: 3, initialExpression: '3' });
+    const out = updatePreparedModel(model, { 'A()': 7, 'B()': 12 });
+    expect(out.model.species[0].initialConcentration).toBe(7);
+    expect(out.model.species[0].initialExpression).toBe('7');
+    expect(out.model.species[1].initialConcentration).toBe(12);
+    expect(out.model.species[1].initialExpression).toBe('12');
+    expect(model.species[0].initialExpression).toBe('total');
+  });
+
+  it('discovers all initial dependencies through expressions, aliases and custom functions', () => {
+    const model = makeModel();
+    model.parameters = { L0: 10, R0: 1, dose: 5, multiplier: 2, seed: 10, k: 1 };
+    model.paramExpressions = { seed: 'dose * multiplier' };
+    model.functions = [{ name: 'extraSeed', args: [], expression: 'R0 * 3' }];
+    model.species = [
+      { name: 'L', initialConcentration: 10, initialExpression: 'L0' },
+      { name: 'R', initialConcentration: 1, initialExpression: 'R0' },
+      { name: 'X', initialConcentration: 20, initialExpression: '2 * seed' },
+      { name: 'Y', initialConcentration: 3, initialExpression: 'extraSeed()' },
+      { name: 'literal', initialConcentration: 5, initialExpression: '5' },
+    ];
+    expect(findSeedSpeciesForParameter(model, 'L0')).toEqual(['L']);
+    expect(findSeedSpeciesForParameter(model, 'R0')).toEqual(['R', 'Y']);
+    expect(findSeedSpeciesForParameter(model, 'dose')).toEqual(['X']);
+    expect(findSeedSpeciesForParameter(model, 'multiplier')).toEqual(['X']);
+    expect(findSeedSpeciesForParameter(model, 'k')).toEqual([]);
+  });
+
+  it('retains compound seed expressions under parameter scans', () => {
+    const model = makeModel();
+    model.species[0] = { name: 'A()', initialConcentration: 20, initialExpression: '2 * total' };
+    const out = updatePreparedModel(model, { total: 15 });
+    expect(out.model.species[0].initialConcentration).toBe(30);
+    expect(out.model.species[0].initialExpression).toBe('2 * total');
   });
 
   it('follows custom-function dependencies when refreshing dependent parameters', () => {
