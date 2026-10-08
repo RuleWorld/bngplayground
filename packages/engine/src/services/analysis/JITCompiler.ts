@@ -1393,7 +1393,22 @@ export class JITCompiler {
             }
             const obsOffsets = new Int32Array(nObservables + 1);
             let totalObsEntries = 0;
-            (observables || []).forEach(obs => totalObsEntries += obs.indices.length);
+            for (const [observableIndex, obs] of (observables || []).entries()) {
+                if (obs.indices.length !== obs.coefficients.length) {
+                    throw new Error(`[JITCompiler] observable "${obs.name}" indices/coefficients length mismatch`);
+                }
+                for (const speciesIndex of obs.indices) {
+                    if (!Number.isInteger(speciesIndex) || speciesIndex < 0 || speciesIndex >= nSpecies) {
+                        throw new Error(
+                            `[JITCompiler] observable "${obs.name}" (index ${observableIndex}) has invalid species index ${speciesIndex}; expected [0, ${nSpecies})`,
+                        );
+                    }
+                }
+                totalObsEntries += obs.indices.length;
+                if (!Number.isSafeInteger(totalObsEntries) || totalObsEntries > 0x7fffffff) {
+                    throw new Error('[JITCompiler] observable entry count exceeds Int32 range');
+                }
+            }
 
             const obsSpeciesIdx = new Int32Array(totalObsEntries);
             const obsCoeffs = new Float64Array(totalObsEntries);

@@ -1,5 +1,5 @@
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import { getFeatureFlags, jitCompiler, setFeatureFlags } from '@bngplayground/engine';
 import { OpCode } from '../../packages/engine/src/services/simulation/ExpressionCompiler';
 
@@ -220,6 +220,32 @@ describe('JITCompiler Service', () => {
                expect(bytecode?.exprBytecodeOffsets[1]).toBeGreaterThan(0);
                expect(bytecode?.requiresParameterRebuild).toBe(true);
            });
+           it('reports the observable name when its species index is out of range', () => {
+               const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+               try {
+                   const bytecode = jitCompiler.compileToByteCode([
+                       {
+                           reactantIndices: [0],
+                           reactantStoich: [1],
+                           productIndices: [1],
+                           productStoich: [1],
+                           rateConstant: 'k * A_total'
+                       }
+                   ], 2, { k: 1 }, undefined, undefined, [
+                       { name: 'A_total', indices: [2], coefficients: [1] }
+                   ], ['A', 'B']);
+
+                   expect(bytecode).toBeNull();
+                   expect(errorSpy.mock.calls[0]?.[1]).toEqual(
+                       expect.objectContaining({
+                           message: expect.stringContaining('A_total'),
+                       }),
+                   );
+               } finally {
+                   errorSpy.mockRestore();
+               }
+           });
+
 
            it('keys functional bytecode cache entries by folded parameter values', () => {
                jitCompiler.clearCache();

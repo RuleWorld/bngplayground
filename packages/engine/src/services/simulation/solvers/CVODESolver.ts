@@ -71,6 +71,7 @@ export interface CVodeModule {
   HEAPF64: Float64Array;
   HEAP32?: Int32Array;
   ccall?: (ident: string, returnType: string | null, argTypes: string[], args: unknown[], opts?: { async?: boolean }) => unknown;
+  _get_last_load_error?: () => number;
   cwrap?: (ident: string, returnType: string | null, argTypes: string[]) => (...args: unknown[]) => unknown;
   derivativeCallback: (t: number, y: number, ydot: number) => void;
   jacobianCallback?: (t: number, y: number, fy: number, J: number, neq: number) => void;
@@ -537,7 +538,18 @@ export class CVODESolver {
     [rateConstPtr, nReactantsPtr, reactantOffsetsPtr, reactantIdxPtr, reactantStoichPtr, scalingVolsPtr, speciesOffsetsPtr, speciesRxnIdxPtr, speciesStoichPtr, speciesVolsPtr, jacRowPtrPtr, jacColIdxPtr, jacContribOffsetsPtr, jacContribRxnIdxPtr, jacContribCoeffsPtr, obsOffsetsPtr, obsSpeciesIdxPtr, obsCoeffsPtr, exprBytecodeOffsetsPtr, exprBytecodePtr, exprConstantsPtr].forEach(p => p && m._free(p));
 
     if (!handle) {
-      console.warn('[CVODESolver] Failed to load native bytecode network handle; falling back to JS RHS callback.');
+      const getLoadError = m._get_last_load_error;
+      let reason = 'unknown native verifier error';
+      if (getLoadError) {
+        const ptr = getLoadError();
+        if (ptr) {
+          const bytes = new Uint8Array(m.HEAPF64.buffer);
+          let end = ptr;
+          while (end < bytes.length && bytes[end] !== 0) end++;
+          reason = new TextDecoder().decode(bytes.subarray(ptr, end)) || reason;
+        }
+      }
+      console.warn(`[CVODESolver] Failed to load native bytecode network: ${reason}; falling back to JS RHS callback.`);
       return false;
     }
 
