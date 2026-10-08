@@ -1,6 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
 import { jitCompiler } from '../../packages/engine/src/services/analysis/JITCompiler';
-import { compileToByteCode } from '../../packages/engine/src/services/analysis/JITByteCodeGenerator';
 
 describe('JITCompiler Security Correctness', () => {
     it('should allow valid mathematical expressions', () => {
@@ -83,7 +82,7 @@ describe('JITCompiler Security Correctness', () => {
         }
     });
 
-    it('should preserve descriptive JITByteCodeGenerator security reason in logs', () => {
+    it('should preserve descriptive JITCompiler security reason in logs', () => {
         const consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => undefined);
         try {
             const reactions = [
@@ -97,14 +96,14 @@ describe('JITCompiler Security Correctness', () => {
                 }
             ];
 
-            const result = compileToByteCode(reactions, 2, { A: 2.0 });
+            const result = jitCompiler.compileToByteCode(reactions, 2, { A: 2.0 });
             expect(result).toBeNull();
 
             const flattenedLog = consoleErrorSpy.mock.calls
                 .map((call) => call.map((arg) => String(arg)).join(' '))
                 .join('\n');
 
-            expect(flattenedLog).toMatch(/\[JITByteCodeGenerator\] Failed to compile bytecode:/);
+            expect(flattenedLog).toMatch(/\[JITCompiler\] Failed to compile bytecode:/);
             expect(flattenedLog).toMatch(/Security Error: Unknown function: evilFn/);
         } finally {
             consoleErrorSpy.mockRestore();

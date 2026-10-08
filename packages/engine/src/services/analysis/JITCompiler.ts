@@ -13,52 +13,17 @@
 
 import type { Rxn } from '../graph/core/Rxn';
 import { ExpressionTranslator } from '../graph/core/ExpressionTranslator';
-import { OpCode } from '../simulation/ExpressionCompiler';
 import { SafeExpressionEvaluator } from '../../utils/safeExpressionEvaluator';
 import { getFeatureFlags } from '../../featureFlags';
-import jsep from 'jsep';
 
 import { SAFE_BODY_CHARS, createCompiledFunction } from '../../utils/safeFunctionCompiler';
 import { isJITSafe } from '../simulation/ExpressionEvaluator.ts';
 import {
-    OP_STOP,
-    OP_PUSH_CONST,
-    OP_PUSH_SPEC,
-    OP_PUSH_OBS,
-    OP_ADD,
-    OP_SUB,
-    OP_MUL,
-    OP_DIV,
-    OP_POW,
-    OP_NEG,
-    OP_EXP,
-    OP_LOG,
-    OP_SQRT,
-    OP_ABS,
-    OP_SIN,
-    OP_COS,
-    OP_CEIL,
-    OP_FLOOR,
-    OP_ROUND,
-    OP_TAN,
-    OP_ASIN,
-    OP_ACOS,
-    OP_ATAN,
-    OP_MAX,
-    OP_MIN,
-    OP_IF_ELSE,
-    OP_LT,
-    OP_GT,
-    OP_LE,
-    OP_GE,
-    OP_EQ,
-    OP_NE,
-    OP_AND,
-    OP_OR,
-    OP_NOT,
-} from '../simulation/opcodeAliases';
+    compileExpressionToBytecode,
+    expandZeroArgFunctions,
+    type JITFunctionDefinition,
+} from './ExpressionBytecodeCompiler';
 
-const OP_LOG10 = OpCode.LOG10;
 
 export interface NetworkByteCode {
     nReactions: number;
@@ -73,11 +38,11 @@ export interface NetworkByteCode {
     speciesRxnIdx: Int32Array;
     speciesStoich: Float64Array;
     speciesVolumes: Float64Array;
-    jacRowPtr: Int32Array;
-    jacColIdx: Int32Array;
-    jacContribOffsets: Int32Array;
-    jacContribRxnIdx: Int32Array;
-    jacContribCoeffs: Float64Array;
+    jacRowPtr?: Int32Array;
+    jacColIdx?: Int32Array;
+    jacContribOffsets?: Int32Array;
+    jacContribRxnIdx?: Int32Array;
+    jacContribCoeffs?: Float64Array;
 
     // --- Functional Rate Extensions ---
     nObservables: number;
@@ -130,12 +95,6 @@ export interface JITCompiledObservableFunction {
     compiledAt: number;
 }
 
-interface JITFunctionDefinition {
-    name: string;
-    args: string[];
-    expression: string;
-}
-
 /**
  * Compiled RHS function type
  */
@@ -159,20 +118,6 @@ export interface JITCompileDebugContext {
     analysis?: string;
     parameterName?: string;
     callsite?: string;
-}
-
-export interface JITJsepNode {
-    type: string;
-    name?: string;
-    value?: number | string | boolean | null;
-    operator?: string;
-    left?: JITJsepNode;
-    right?: JITJsepNode;
-    argument?: JITJsepNode;
-    callee?: JITJsepNode;
-    arguments?: JITJsepNode[];
-    object?: JITJsepNode;
-    property?: JITJsepNode;
 }
 
 /**
@@ -610,7 +555,7 @@ export class JITCompiler {
                 // Inline zero-arg global functions (e.g. `phiM()`, `Stimulus()`) BEFORE
                 // the security validation so legitimately-defined functions are not
                 // rejected as unknown.
-                const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                const inlinedExpr = expandZeroArgFunctions(rxnStr, functions);
                 // Security check before translating and interpolating
                 this.assertSafeRateExpression(inlinedExpr, expressionVariableNames);
                 const normalizedExpr = this.normalizeExpressionForValidation(inlinedExpr);
@@ -1393,7 +1338,22 @@ export class JITCompiler {
             }
             const obsOffsets = new Int32Array(nObservables + 1);
             let totalObsEntries = 0;
-            (observables || []).forEach(obs => totalObsEntries += obs.indices.length);
+            for (const [observableIndex, obs] of (observables || []).entries()) {
+                if (obs.indices.length !== obs.coefficients.length) {
+                    throw new Error(`[JITCompiler] observable "${obs.name}" indices/coefficients length mismatch`);
+                }
+                for (const speciesIndex of obs.indices) {
+                    if (!Number.isInteger(speciesIndex) || speciesIndex < 0 || speciesIndex >= nSpecies) {
+                        throw new Error(
+                            `[JITCompiler] observable "${obs.name}" (index ${observableIndex}) has invalid species index ${speciesIndex}; expected [0, ${nSpecies})`,
+                        );
+                    }
+                }
+                totalObsEntries += obs.indices.length;
+                if (!Number.isSafeInteger(totalObsEntries) || totalObsEntries > 0x7fffffff) {
+                    throw new Error('[JITCompiler] observable entry count exceeds Int32 range');
+                }
+            }
 
             const obsSpeciesIdx = new Int32Array(totalObsEntries);
             const obsCoeffs = new Float64Array(totalObsEntries);
@@ -1408,7 +1368,18 @@ export class JITCompiler {
                     if (currentObsOffset < 0 || currentObsOffset >= obsSpeciesIdx.length || currentObsOffset >= obsCoeffs.length) {
                         throw new Error(`[JITCompiler] observable entry index out of range: ${currentObsOffset}`);
                     }
-                    obsSpeciesIdx[currentObsOffset] = obs.indices[j];
+                    const speciesIdx = obs.indices[j];
+                    if (!Number.isInteger(speciesIdx) || speciesIdx < 0 || speciesIdx >= nSpecies) {
+                        throw new Error(
+                            `[JITCompiler] Observable '${obs.name}' references invalid species index ${String(speciesIdx)} (term ${j}): expected an integer in [0, ${nSpecies})`
+                        );
+                    }
+                    if (j >= obs.coefficients.length) {
+                        throw new Error(
+                            `[JITCompiler] Observable '${obs.name}' has no coefficient for species index ${speciesIdx} (term ${j})`
+                        );
+                    }
+                    obsSpeciesIdx[currentObsOffset] = speciesIdx;
                     obsCoeffs[currentObsOffset] = obs.coefficients[j];
                     currentObsOffset++;
                 }
@@ -1457,7 +1428,7 @@ export class JITCompiler {
                             k = 0;
                         } else {
                             const rxnStr = rxn.rateConstant.toString();
-                            const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                            const inlinedExpr = expandZeroArgFunctions(rxnStr, functions);
                             const allowedNames = [
                                 ...paramKeys,
                                 ...(observables || []).map(o => o.name),
@@ -1514,7 +1485,7 @@ export class JITCompiler {
 
                 // Check for functional or parameterized rate bytecode
                 if (typeof rxn.rateConstant === 'string') {
-                    const bc = this.compileExpressionToBytecode(
+                    const bc = compileExpressionToBytecode(
                         rxn.rateConstant,
                         safeParameters,
                         speciesNames || [],
@@ -1539,7 +1510,7 @@ export class JITCompiler {
                     } else {
                         // Try to evaluate expression
                         const rxnStr = rxn.rateConstant.toString();
-                        const inlinedExpr = this.expandZeroArgFunctions(rxnStr, functions);
+                        const inlinedExpr = expandZeroArgFunctions(rxnStr, functions);
                         const allowedNames = [
                             ...paramKeys,
                             ...(observables || []).map(o => o.name),
@@ -1734,6 +1705,7 @@ export class JITCompiler {
                 currentByteOffset += chunk.length;
             }
 
+            const hasFunctionalRates = exprBytecode.length > 0;
             const newByteCode: NetworkByteCode = {
                 nReactions,
                 nSpecies,
@@ -1747,11 +1719,13 @@ export class JITCompiler {
                 speciesRxnIdx,
                 speciesStoich,
                 speciesVolumes: speciesVolumes || new Float64Array(nSpecies).fill(1.0),
-                jacRowPtr,
-                jacColIdx,
-                jacContribOffsets,
-                jacContribRxnIdx,
-                jacContribCoeffs,
+                ...(hasFunctionalRates ? {} : {
+                    jacRowPtr,
+                    jacColIdx,
+                    jacContribOffsets,
+                    jacContribRxnIdx,
+                    jacContribCoeffs
+                }),
                 nObservables,
                 obsOffsets,
                 obsSpeciesIdx,
@@ -1803,192 +1777,6 @@ export class JITCompiler {
                 this.ssaPropensityCache.size + this.ssaEventUpdaterCache.size,
             maxSize: this.maxCacheSize
         };
-    }
-
-    private compileExpressionToBytecode(
-        expr: string,
-        parameters: Record<string, number>,
-        speciesNames: string[],
-        observableNames: string[],
-        functions?: JITFunctionDefinition[]
-    ): { bytecode: Uint8Array; usesParameters: boolean } | null {
-        try {
-            const expandedExpr = this.normalizeExpressionForValidation(
-                this.expandZeroArgFunctions(expr, functions)
-            );
-            const ast = jsep(expandedExpr) as unknown as JITJsepNode;
-            const bytes: number[] = [];
-            let usesParameters = false;
-            const speciesIndexByName = new Map<string, number>();
-            speciesNames.forEach((name, index) => speciesIndexByName.set(name, index));
-
-            const walk = (node: JITJsepNode) => {
-                if (node.type === 'Literal') {
-                    bytes.push(OP_PUSH_CONST);
-                    const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = typeof node.value === 'number' ? node.value : Number(node.value);
-                    bytes.push(...new Uint8Array(buf));
-                } else if (node.type === 'Identifier') {
-                    if (!node.name) {
-                        throw new Error('Identifier missing name');
-                    }
-                    // Support common global constants used in BNGL expressions
-                    if (node.name === 'NaN') {
-                        bytes.push(OP_PUSH_CONST);
-                        const buf = new ArrayBuffer(8);
-                        new Float64Array(buf)[0] = NaN;
-                        bytes.push(...new Uint8Array(buf));
-                        return;
-                    }
-                    if (node.name === 'Infinity') {
-                        bytes.push(OP_PUSH_CONST);
-                        const buf = new ArrayBuffer(8);
-                        new Float64Array(buf)[0] = Infinity;
-                        bytes.push(...new Uint8Array(buf));
-                        return;
-                    }
-
-                    const speciesIdx = speciesIndexByName.get(node.name);
-                    if (speciesIdx !== undefined) {
-                        bytes.push(OP_PUSH_SPEC);
-                        const buf = new ArrayBuffer(4);
-                        new Int32Array(buf)[0] = speciesIdx;
-                        bytes.push(...new Uint8Array(buf));
-                        return;
-                    }
-                    const obsIdx = observableNames.indexOf(node.name);
-                    if (obsIdx >= 0) {
-                        bytes.push(OP_PUSH_OBS);
-                        const buf = new ArrayBuffer(4);
-                        new Int32Array(buf)[0] = obsIdx;
-                        bytes.push(...new Uint8Array(buf));
-                        return;
-                    }
-                    if (Object.prototype.hasOwnProperty.call(parameters, node.name)) {
-                        bytes.push(OP_PUSH_CONST);
-                        const buf = new ArrayBuffer(8);
-                        new Float64Array(buf)[0] = parameters[node.name];
-                        bytes.push(...new Uint8Array(buf));
-                        usesParameters = true;
-                        return;
-                    }
-                    throw new Error(`Unknown identifier: ${node.name}`);
-                } else if (node.type === 'MemberExpression') {
-                    if (node.object?.type === 'Identifier' && node.object.name === 'y' && node.property?.type === 'Literal') {
-                        bytes.push(OP_PUSH_SPEC);
-                        const buf = new ArrayBuffer(4);
-                        new Int32Array(buf)[0] = Number(node.property.value);
-                        bytes.push(...new Uint8Array(buf));
-                        return;
-                    }
-                    throw new Error(`Unsupported member expression in ${expandedExpr}`);
-                } else if (node.type === 'BinaryExpression' || node.type === 'LogicalExpression') {
-                    if (!node.left || !node.right) {
-                        throw new Error('Malformed binary expression');
-                    }
-                    walk(node.left);
-                    walk(node.right);
-                    if (node.operator === '+') bytes.push(OP_ADD);
-                    else if (node.operator === '-') bytes.push(OP_SUB);
-                    else if (node.operator === '*') bytes.push(OP_MUL);
-                    else if (node.operator === '/') bytes.push(OP_DIV);
-                    else if (node.operator === '^' || node.operator === '**') bytes.push(OP_POW);
-                    else if (node.operator === '<') bytes.push(OP_LT);
-                    else if (node.operator === '>') bytes.push(OP_GT);
-                    else if (node.operator === '<=') bytes.push(OP_LE);
-                    else if (node.operator === '>=') bytes.push(OP_GE);
-                    else if (node.operator === '==') bytes.push(OP_EQ);
-                    else if (node.operator === '!=') bytes.push(OP_NE);
-                    else if (node.operator === '&&') bytes.push(OP_AND);
-                    else if (node.operator === '||') bytes.push(OP_OR);
-                    else throw new Error(`Unsupported binary operator: ${node.operator}`);
-                } else if (node.type === 'UnaryExpression') {
-                    if (!node.argument) {
-                        throw new Error('Malformed unary expression');
-                    }
-                    walk(node.argument);
-                    if (node.operator === '-') bytes.push(OP_NEG);
-                    else if (node.operator === '!') bytes.push(OP_NOT);
-                    else throw new Error(`Unsupported unary operator: ${node.operator}`);
-                } else if (node.type === 'CallExpression') {
-                    const name = node.callee?.name?.toLowerCase();
-                    if (!name) {
-                        throw new Error('Invalid function call');
-                    }
-                    if (name === 'sat') {
-                        if ((node.arguments?.length ?? 0) !== 2) {
-                            throw new Error('sat() expects 2 arguments');
-                        }
-                        // sat(a,b) = a / (a + b)
-                        if (node.arguments) {
-                            walk(node.arguments[0]);
-                            walk(node.arguments[0]);
-                            walk(node.arguments[1]);
-                        }
-                        bytes.push(OP_ADD);
-                        bytes.push(OP_DIV);
-                        return;
-                    }
-                    node.arguments?.forEach((arg: JITJsepNode) => walk(arg));
-                    if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
-                    else if (name === 'exp') bytes.push(OP_EXP);
-                    else if (name === 'log10') bytes.push(OP_LOG10);
-                    else if (name === 'sqrt') bytes.push(OP_SQRT);
-                    else if (name === 'abs') bytes.push(OP_ABS);
-                    else if (name === 'sin') bytes.push(OP_SIN);
-                    else if (name === 'cos') bytes.push(OP_COS);
-                    else if (name === 'ceil') bytes.push(OP_CEIL);
-                    else if (name === 'floor') bytes.push(OP_FLOOR);
-                    else if (name === 'rint' || name === 'round') bytes.push(OP_ROUND);
-                    else if (name === 'tan') bytes.push(OP_TAN);
-                    else if (name === 'asin') bytes.push(OP_ASIN);
-                    else if (name === 'acos') bytes.push(OP_ACOS);
-                    else if (name === 'atan') bytes.push(OP_ATAN);
-                    else if (name === 'max') bytes.push(OP_MAX);
-                    else if (name === 'min') bytes.push(OP_MIN);
-                    else if (name === 'if') bytes.push(OP_IF_ELSE);
-                    else if (name === 'not') bytes.push(OP_NOT);
-                    else if (name === 'pow') bytes.push(OP_POW);
-                    else throw new Error(`Unknown function: ${name}`);
-                } else {
-                    throw new Error(`Unsupported AST node: ${node.type}`);
-                }
-            };
-
-            walk(ast);
-            bytes.push(OP_STOP);
-            return { bytecode: new Uint8Array(bytes), usesParameters };
-        } catch (e) {
-            console.warn('[JITCompiler] Bytecode compilation failed:', e);
-            return null;
-        }
-    }
-
-    private expandZeroArgFunctions(expr: string, functions?: JITFunctionDefinition[]): string {
-        if (!functions || functions.length === 0) return expr;
-
-        let expanded = expr;
-        for (let pass = 0; pass < 10; pass++) {
-            let changed = false;
-            for (const func of functions) {
-                if ((func.args?.length ?? 0) !== 0) continue;
-
-                const withParens = new RegExp(`\\b${func.name}\\s*\\(\\s*\\)`, 'g');
-                if (withParens.test(expanded)) {
-                    expanded = expanded.replace(withParens, `(${func.expression})`);
-                    changed = true;
-                }
-
-                const bareName = new RegExp(`\\b${func.name}\\b(?!\\s*\\()`, 'g');
-                if (bareName.test(expanded)) {
-                    expanded = expanded.replace(bareName, `(${func.expression})`);
-                    changed = true;
-                }
-            }
-            if (!changed) break;
-        }
-
-        return expanded;
     }
 
     /**

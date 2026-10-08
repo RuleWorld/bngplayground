@@ -11,6 +11,7 @@
  */
 
 import { BNGLFunction, BNGLModel, BNGLReaction, BNGLVariableStoichiometry, SimulationOptions, SimulationResults, SimulationPhase, SSAInfluenceData, SSAInfluenceTimeSeries, OdeSystemHandle } from '../../types';
+import type { CVODESolverStats } from '../../types';
 import type { SolverResult } from './ODESolver';
 
 import { BNGLParser } from '../graph/core/BNGLParser';
@@ -45,6 +46,16 @@ interface ConcreteReaction {
   ruleName?: string;
   conversionFactorBySpecies?: Map<number, number>;
   dynamicStoichiometries?: BNGLVariableStoichiometry[];
+}
+
+/** Native bytecode rates include reaction degeneracy for both initial loads and updates. */
+export function nativeRateConstant(reaction: Pick<ConcreteReaction, 'rateConstant' | 'rateExpression' | 'isFunctionalRate' | 'degeneracy'>): number | string {
+  const degeneracy = reaction.degeneracy ?? 1;
+  if (reaction.isFunctionalRate) {
+    const expression = reaction.rateExpression || '0';
+    return degeneracy === 1 ? expression : `(${degeneracy})*(${expression})`;
+  }
+  return reaction.rateConstant * degeneracy;
 }
 
 interface ConcreteObservable {
@@ -1952,6 +1963,7 @@ export async function simulate(
       destroy?: () => void;
       updateRateConstants?: (rates: Float64Array) => boolean;
     } | undefined = undefined;
+    const solverStats: CVODESolverStats[] | undefined = options.collectSolverStats ? [] : undefined;
 
     let persistedSolverKey = '';
 
@@ -2160,6 +2172,7 @@ export async function simulate(
     };
 
 
+
     const applyParameterUpdates = (targetPhaseIdx: number): boolean => {
       let parametersUpdated = false;
 
@@ -2258,7 +2271,7 @@ export async function simulate(
         // rebuild path below.
         const nativeRatesUpdated = massActionRatesChanged
           && concreteReactions.every((reaction) => !reaction.isFunctionalRate)
-          && persistedSolver?.updateRateConstants?.(Float64Array.from(concreteReactions, (reaction) => reaction.rateConstant)) === true;
+          && persistedSolver?.updateRateConstants?.(Float64Array.from(concreteReactions, (reaction) => Number(nativeRateConstant(reaction)))) === true;
         if (!nativeRatesUpdated) rebuildNativeByteCode?.();
 
         // Keep the native network alive only when its complete mass-action rate
@@ -4146,6 +4159,11 @@ export async function simulate(
     const requestedSolverType: string = options.solver ?? 'cvode';
     let solverType: string = requestedSolverType;
     const allMassAction = functionalRateCount === 0 && !hasSpeciesConversionFactors;
+    const hasFunctionalRates = functionalRateCount > 0;
+    if (solverType === 'cvode_sparse' && hasFunctionalRates) {
+      console.warn('[SimulationLoop] solver "cvode_sparse" uses a mass-action analytical Jacobian and cannot handle functional-rate dependencies; falling back to dense "cvode" with a difference-quotient Jacobian.');
+      solverType = 'cvode';
+    }
 
     // Stiffness Analysis
     const methodRates = concreteReactions.map(r => r.rateConstant);
@@ -4204,7 +4222,7 @@ export async function simulate(
 
     if (solverType === 'auto') {
       if (useAdaptiveCvodeTuning) {
-        if (stiffConfig.useSparse) {
+        if (stiffConfig.useSparse && allMassAction) {
           solverType = 'cvode_sparse';
         } else if (stiffConfig.useAnalyticalJacobian || autoJacEligible) {
           solverType = autoJacEligible ? autoSolver : 'cvode_jac';
@@ -4226,7 +4244,7 @@ export async function simulate(
       }
       // Leave solverType as 'auto_detect' — createSolver will handle it
     } else if (solverType === 'cvode') {
-      if (usePresetCvodeTuning && stiffConfig.useSparse) {
+      if (usePresetCvodeTuning && stiffConfig.useSparse && allMassAction) {
         solverType = 'cvode_sparse';
       } else if (usePresetCvodeTuning && stiffConfig.useAnalyticalJacobian && allMassAction) {
         solverType = 'cvode_jac';
@@ -4565,27 +4583,19 @@ export async function simulate(
       }
 
       const byteCodeReactions = concreteReactions.map((r, i) => {
-        const multiplicativeFactor = r.degeneracy ?? 1;
-        const scaledRateConstant = r.isFunctionalRate
-          ? (
-            multiplicativeFactor !== 1
-              ? `(${multiplicativeFactor})*(${r.rateExpression || '0'})`
-              : (r.rateExpression || 0)
-          )
-          : (r.rateConstant * multiplicativeFactor);
-
         return {
           reactantIndices: Array.from(r.reactants),
           reactantStoich: Array.from({ length: r.reactants.length }, () => 1), // Each entry in reactants is 1 stoich
           productIndices: Array.from(r.products),
           productStoich: Array.from({ length: r.products.length }, (_, j) => r.productStoichiometries ? r.productStoichiometries[j] : 1),
-          rateConstant: scaledRateConstant,
+          rateConstant: nativeRateConstant(r),
           // Must match JS/JIT derivative path anchor volume semantics for parity.
           scalingVolume: reactionReactingVolumes[i] || r.scalingVolume || 1,
           // Keep native bytecode equivalent to JS RHS (which applies propensity/degeneracy explicitly).
           statisticalFactor: undefined
         };
       });
+
 
       // In BNG2, a reaction can have multiple Reactants/Products of same species listed separately
       // compileToByteCode handles this via duplication, but we should consolidate stoich for bytecode compactness
@@ -5434,6 +5444,11 @@ export async function simulate(
             callbacks.postMessage({ type: 'progress', message: `Simulating: ${phaseProgress.toFixed(0)}%`, simulationProgress: phaseProgress, simulationTime: t });
           }
         }
+        if (options.collectSolverStats) {
+          const stats = solver.getSolverStats?.();
+          if (stats) solverStats?.push(stats);
+        }
+
       } finally {
         // Determine whether to persist the solver for the next continue phase.
         const nextPhase = phases[phaseIdx + 1];
@@ -5515,7 +5530,8 @@ export async function simulate(
       } : {}),
       denseOutput: denseOutputBuffer && denseOutputBuffer.length > 0 ? denseOutputBuffer : undefined,
       eventDiagnostics: eventRuntime ? Array.from(eventDiagnostics) : undefined,
-      eventFirings: eventRuntime ? eventRuntime.firedEvents : undefined
+      eventFirings: eventRuntime ? eventRuntime.firedEvents : undefined,
+      ...(solverStats ? { solverStats } : {}),
     } satisfies SimulationResults;
   }
 
