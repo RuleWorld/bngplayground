@@ -214,9 +214,11 @@ export class CVODESolver {
   private currentT: number = NaN;
   private yOut: Float64Array | null = null;
 
-  // Cached callback views (avoid allocating TypedArray views on every callback)
-  private cachedYPtr = 0;
-  private cachedYdotPtr = 0;
+  // Cached callback views (avoid allocating TypedArray views on every callback).
+  // Each callback owns its own cache: CVODE interleaves f and g with different
+  // buffers, so a shared y-pointer cache hands one callback a stale view.
+  private cachedDerivYPtr = 0;
+  private cachedDerivYdotPtr = 0;
   private cachedDerivBuffer: ArrayBufferLike | null = null;
   private yView: Float64Array | null = null;
   private dydtView: Float64Array | null = null;
@@ -228,8 +230,9 @@ export class CVODESolver {
   private jacJView: Float64Array | null = null;
 
   private rootsFoundPtr: number = 0;
-  private cachedGOutPtr = 0;
-  private cachedGOutBuffer: ArrayBufferLike | null = null;
+  private cachedRootYPtr = 0;
+  private cachedRootGOutPtr = 0;
+  private cachedRootBuffer: ArrayBufferLike | null = null;
   private gYView: Float64Array | null = null;
   private gOutView: Float64Array | null = null;
 
@@ -666,10 +669,10 @@ export class CVODESolver {
     // This prevents stale callback usage when loader exports differ across builds.
     m.derivativeCallback = (_t: number, yPtr: number, ydotPtr: number) => {
       const buf = m.HEAPF64.buffer;
-      if (!this.yView || !this.dydtView || this.cachedDerivBuffer !== buf || this.cachedYPtr !== yPtr || this.cachedYdotPtr !== ydotPtr) {
+      if (!this.yView || !this.dydtView || this.cachedDerivBuffer !== buf || this.cachedDerivYPtr !== yPtr || this.cachedDerivYdotPtr !== ydotPtr) {
         this.cachedDerivBuffer = buf;
-        this.cachedYPtr = yPtr;
-        this.cachedYdotPtr = ydotPtr;
+        this.cachedDerivYPtr = yPtr;
+        this.cachedDerivYdotPtr = ydotPtr;
         this.yView = new Float64Array(buf, yPtr, neq);
         this.dydtView = new Float64Array(buf, ydotPtr, neq);
       }
@@ -687,10 +690,10 @@ export class CVODESolver {
       const nroots = this.options.numRoots;
       m.rootCallback = (t: number, yPtr: number, goutPtr: number) => {
         const buf = m.HEAPF64.buffer;
-        if (!this.gYView || !this.gOutView || this.cachedGOutBuffer !== buf || this.cachedYPtr !== yPtr || this.cachedGOutPtr !== goutPtr) {
-          this.cachedGOutBuffer = buf;
-          this.cachedYPtr = yPtr;
-          this.cachedGOutPtr = goutPtr;
+        if (!this.gYView || !this.gOutView || this.cachedRootBuffer !== buf || this.cachedRootYPtr !== yPtr || this.cachedRootGOutPtr !== goutPtr) {
+          this.cachedRootBuffer = buf;
+          this.cachedRootYPtr = yPtr;
+          this.cachedRootGOutPtr = goutPtr;
           this.gYView = new Float64Array(buf, yPtr, neq);
           this.gOutView = new Float64Array(buf, goutPtr, nroots);
         }
