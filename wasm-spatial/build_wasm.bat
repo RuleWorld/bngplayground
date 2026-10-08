@@ -19,13 +19,15 @@ if defined EMSDK_ENV_SCRIPT (
     echo EMSDK environment script not found. Assuming Emscripten is already in PATH.
 )
 
-where emcc >nul 2>nul
+where em++ >nul 2>nul
 if errorlevel 1 (
-    echo Error: emcc not found. Please activate the Emscripten environment.
+    echo Error: em++ not found. Please activate the Emscripten environment.
     exit /b 1
 )
 
-call emcc -std=c++17 ^
+REM em++ (not emcc): spatial_engine.cpp uses std::vector, so the link needs the
+REM C++ runtime. Plain emcc fails with undefined operator new / operator delete.
+call em++ -std=c++17 ^
   -O2 ^
   -fno-fast-math ^
   -ffp-contract=off ^

@@ -5,14 +5,16 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-if ! command -v emcc &> /dev/null; then
-    echo "Error: emcc not found. Please activate the Emscripten SDK."
+if ! command -v em++ &> /dev/null; then
+    echo "Error: em++ not found. Please activate the Emscripten SDK."
     exit 1
 fi
 
 echo "Building spatial engine WASM..."
 
-emcc -std=c++17 \
+# em++ (not emcc): spatial_engine.cpp uses std::vector, so the link needs the
+# C++ runtime. Plain emcc fails with undefined `operator new`/`operator delete`.
+em++ -std=c++17 \
   -O2 \
   -fno-fast-math \
   -ffp-contract=off \
