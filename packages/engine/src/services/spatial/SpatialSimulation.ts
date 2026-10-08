@@ -32,6 +32,19 @@ interface SpatialReaction {
   isBidirectional: boolean;
 }
 
+/**
+ * Spatial grid cells are keyed by integer coordinates packed into a single
+ * number, avoiding the per-molecule string concatenation a `"x,y,z"` key would
+ * cost in the collision hot loop. The y/z packing needs 21 bits per axis with a
+ * ±1M-cell bias, so pack them together; x stays the outer (unbiased) key.
+ */
+const CELL_BIAS = 1048576;
+const CELL_SPAN = 2097152;
+
+function packYZ(y: number, z: number): number {
+  return (y + CELL_BIAS) * CELL_SPAN + (z + CELL_BIAS);
+}
+
 export class SpatialSimulation {
   private config: SpatialSimulationConfig;
   private rng: Xoshiro256StarStar;
@@ -57,10 +70,16 @@ export class SpatialSimulation {
   private snapshots: SpatialSnapshot[] = [];
 
   private gridCellSize = 0;
-  private grid: Map<string, number[]> = new Map();
+  /** Outer map: x cell index → (y/z cell key → molecule indices). */
+  private grid: Map<number, Map<number, number[]>> = new Map();
 
   constructor(config?: Partial<SpatialSimulationConfig>) {
     this.config = { ...DEFAULT_SPATIAL_CONFIG, ...config };
+    if (!Number.isFinite(this.config.rxnRadius) || this.config.rxnRadius <= 0) {
+      throw new RangeError(
+        `Spatial reaction radius must be finite and positive; got ${this.config.rxnRadius}`,
+      );
+    }
     this.rng = new Xoshiro256StarStar(this.config.seed);
   }
 
@@ -215,9 +234,15 @@ export class SpatialSimulation {
   }
 
   private setupGrid(): void {
-    this.gridCellSize = this.config.partitionCellSize > 0
+    // The collision search only visits each molecule's own cell plus the 26
+    // neighbours, which is exhaustive only when a cell is at least as wide as
+    // the interaction radius. Clamp up so a too-small partitionCellSize cannot
+    // silently drop pairs that straddle a boundary.
+    const rxnRadius = this.config.rxnRadius;
+    const requested = this.config.partitionCellSize > 0
       ? this.config.partitionCellSize
       : 1.0;
+    this.gridCellSize = Math.max(requested, rxnRadius);
   }
 
   private releaseSeedSpecies(): void {
@@ -359,72 +384,118 @@ export class SpatialSimulation {
     this.grid.clear();
     for (let i = 0; i < this.molecules.length; i++) {
       const mol = this.molecules[i];
-      const key = `${Math.floor(mol.x / this.gridCellSize)},${Math.floor(mol.y / this.gridCellSize)},${Math.floor(mol.z / this.gridCellSize)}`;
-      let cell = this.grid.get(key);
+      const ix = Math.floor(mol.x / this.gridCellSize);
+      const yz = packYZ(
+        Math.floor(mol.y / this.gridCellSize),
+        Math.floor(mol.z / this.gridCellSize),
+      );
+
+      let slice = this.grid.get(ix);
+      if (!slice) {
+        slice = new Map<number, number[]>();
+        this.grid.set(ix, slice);
+      }
+      let cell = slice.get(yz);
       if (!cell) {
         cell = [];
-        this.grid.set(key, cell);
+        slice.set(yz, cell);
       }
       cell.push(i);
     }
   }
 
-  private resolveCollisions(dt: number): void {
-    const rxnRadius = 0.01;
-    const rxnRadiusSq = rxnRadius * rxnRadius;
-    const toRemove = new Set<number>();
-    const toAdd: ActiveMolecule[] = [];
+  /**
+   * Append the molecule indices in the 3×3×3 block of cells centred on the cell
+   * containing (x, y, z) to `out`. With cell size >= the reaction radius this
+   * block provably contains every partner within reaction range.
+   */
+  private collectNeighborhood(x: number, y: number, z: number, out: number[]): void {
+    out.length = 0;
+    const ix = Math.floor(x / this.gridCellSize);
+    const cy = Math.floor(y / this.gridCellSize);
+    const cz = Math.floor(z / this.gridCellSize);
 
-    for (const [_key, indices] of this.grid) {
-      for (let i = 0; i < indices.length; i++) {
-        if (toRemove.has(indices[i])) continue;
-        const molA = this.molecules[indices[i]];
-
-        for (let j = i + 1; j < indices.length; j++) {
-          if (toRemove.has(indices[j])) continue;
-          const molB = this.molecules[indices[j]];
-
-          const dx = molA.x - molB.x;
-          const dy = molA.y - molB.y;
-          const dz = molA.z - molB.z;
-          const distSq = dx * dx + dy * dy + dz * dz;
-
-          if (distSq > rxnRadiusSq) continue;
-
-          const key = molA.speciesId <= molB.speciesId
-            ? `${molA.speciesId}:${molB.speciesId}`
-            : `${molB.speciesId}:${molA.speciesId}`;
-          const reactions = this.bimolReactions.get(key);
-          if (!reactions) continue;
-
-          for (const rxn of reactions) {
-            const k = rxn.rate;
-            const p = 1 - Math.exp(-k * dt);
-            if (this.rng.random() < p) {
-              toRemove.add(indices[i]);
-              toRemove.add(indices[j]);
-
-              const mx = (molA.x + molB.x) / 2;
-              const my = (molA.y + molB.y) / 2;
-              const mz = (molA.z + molB.z) / 2;
-
-              for (const prodPat of rxn.products) {
-                const pid = this.findSpeciesIndex(prodPat);
-                if (pid !== null) {
-                  toAdd.push({
-                    id: this.nextMoleculeId++,
-                    speciesId: pid,
-                    x: mx + this.rng.gaussian() * 0.01,
-                    y: my + this.rng.gaussian() * 0.01,
-                    z: mz + this.rng.gaussian() * 0.01,
-                    compartmentId: molA.compartmentId,
-                  });
-                }
-              }
-              break;
-            }
+    for (let dx = -1; dx <= 1; dx++) {
+      const slice = this.grid.get(ix + dx);
+      if (!slice) continue;
+      for (let dy = -1; dy <= 1; dy++) {
+        const yzBase = cy + dy + CELL_BIAS;
+        for (let dz = -1; dz <= 1; dz++) {
+          const cell = slice.get(yzBase * CELL_SPAN + (cz + dz + CELL_BIAS));
+          if (cell) {
+            for (let k = 0; k < cell.length; k++) out.push(cell[k]);
           }
         }
+      }
+    }
+  }
+
+  private resolveCollisions(dt: number): void {
+    const rxnRadiusSq = this.config.rxnRadius * this.config.rxnRadius;
+    const toRemove = new Set<number>();
+    const toAdd: ActiveMolecule[] = [];
+    const neighbors: number[] = [];
+
+    for (let i = 0; i < this.molecules.length; i++) {
+      if (toRemove.has(i)) continue;
+      const molA = this.molecules[i];
+
+      this.collectNeighborhood(molA.x, molA.y, molA.z, neighbors);
+
+      for (let n = 0; n < neighbors.length; n++) {
+        const j = neighbors[n];
+        // The neighborhood search is symmetric and overlapping, so restrict to
+        // j > i to visit each unordered pair exactly once.
+        if (j <= i) continue;
+        if (toRemove.has(j)) continue;
+        const molB = this.molecules[j];
+
+        const dx = molA.x - molB.x;
+        const dy = molA.y - molB.y;
+        const dz = molA.z - molB.z;
+        const distSq = dx * dx + dy * dy + dz * dz;
+
+        if (distSq > rxnRadiusSq) continue;
+
+        const key = molA.speciesId <= molB.speciesId
+          ? `${molA.speciesId}:${molB.speciesId}`
+          : `${molB.speciesId}:${molA.speciesId}`;
+        const reactions = this.bimolReactions.get(key);
+        if (!reactions) continue;
+
+        for (const rxn of reactions) {
+          const k = rxn.rate;
+          const p = 1 - Math.exp(-k * dt);
+          if (this.rng.random() < p) {
+            toRemove.add(i);
+            toRemove.add(j);
+
+            const mx = (molA.x + molB.x) / 2;
+            const my = (molA.y + molB.y) / 2;
+            const mz = (molA.z + molB.z) / 2;
+
+            for (const prodPat of rxn.products) {
+              const pid = this.findSpeciesIndex(prodPat);
+              if (pid !== null) {
+                toAdd.push({
+                  id: this.nextMoleculeId++,
+                  speciesId: pid,
+                  x: mx + this.rng.gaussian() * 0.01,
+                  y: my + this.rng.gaussian() * 0.01,
+                  z: mz + this.rng.gaussian() * 0.01,
+                  compartmentId: molA.compartmentId,
+                });
+              }
+            }
+            break;
+          }
+        }
+
+        // molA is consumed by the reaction that just fired. Its products are
+        // only appended after this loop, so it must not react again this step —
+        // otherwise one molecule spawns several products and count is not
+        // conserved.
+        if (toRemove.has(i)) break;
       }
     }
 
