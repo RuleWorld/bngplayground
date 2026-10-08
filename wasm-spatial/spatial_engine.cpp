@@ -11,6 +11,30 @@
  * - Xoshiro256** PRNG for reproducibility
  * - Box-Muller transform for Gaussian displacements
  * - Calls back to libBNG via C function pointers for reaction resolution
+ *
+ * Handle contract (molecule indices)
+ * -----------------------------------
+ * `spatial_add_molecule` returns the new molecule's ARRAY INDEX, and every
+ * `spatial_get_molecule_*` / `spatial_remove_molecule` call takes that same
+ * array index. Indices are NOT stable identities:
+ *
+ * - Dead molecules are tombstoned (`alive = 0`) but keep their slot until the
+ *   periodic compaction in `spatial_step`. A dead slot still has a valid index;
+ *   the `spatial_get_molecule_*` accessors report -1 / 0.0f for it, which is how
+ *   callers detect liveness when iterating by index.
+ * - `spatial_step` may compact the pool (every 100 steps), shifting entries down.
+ *   ANY index previously returned by `spatial_add_molecule` is therefore
+ *   invalidated by `spatial_step`. Re-enumerate after every step.
+ * - `spatial_molecule_count` reports the number of ADDRESSABLE SLOTS (the pool
+ *   array size), not the number of alive molecules, so that
+ *   `for (i = 0; i < spatial_molecule_count(); i++)` covers every valid index.
+ *   Use `spatial_count_species` or `spatial_export_positions` to count ALIVE
+ *   molecules.
+ * - `spatial_add_molecule` returns -1 for an invalid (negative) species id.
+ *
+ * Loops inside this file always iterate `g_pool.x.size()`, never `g_pool.count`.
+ * `count` is the alive total only, and trails the array length between
+ * compactions.
  */
 
 #include <cstdint>
@@ -61,7 +85,9 @@ struct Xoshiro256 {
 
     // Standard normal via Box-Muller
     double gaussian() {
-        double u1 = uniform();
+        // u1 in (0, 1]: uniform() can return exactly 0, and log(0) = -inf would
+        // produce an infinite displacement that then poisons reflect_coord.
+        double u1 = 1.0 - uniform();
         double u2 = uniform();
         return sqrt(-2.0 * log(u1)) * cos(2.0 * M_PI * u2);
     }
@@ -75,8 +101,8 @@ struct MoleculePool {
     std::vector<int32_t> species_id;
     std::vector<int32_t> compartment_id;
     std::vector<uint8_t> alive; // 1 = active, 0 = marked for removal
+    // Alive total only. The addressable index range is [0, x.size()).
     int32_t count = 0;
-    int32_t next_id = 0;
 
     void reserve(int n) {
         x.reserve(n); y.reserve(n); z.reserve(n);
@@ -84,7 +110,8 @@ struct MoleculePool {
         compartment_id.reserve(n);
         alive.reserve(n);
     }
-
+    // Returns the new molecule's ARRAY INDEX (see the handle contract in the
+    // file header). Not a stable identity.
     int add(float px, float py, float pz, int sid, int cid) {
         x.push_back(px);
         y.push_back(py);
@@ -93,7 +120,7 @@ struct MoleculePool {
         compartment_id.push_back(cid);
         alive.push_back(1);
         count++;
-        return next_id++;
+        return (int)x.size() - 1;
     }
 
     void compact() {
@@ -181,12 +208,25 @@ struct BoundaryBox {
     float hx, hy, hz; // half-extents
 };
 
+/**
+ * Mirror `v` into [lo, hi], reflecting off both walls (period 2 * (hi - lo)).
+ *
+ * Closed form rather than a fold loop: the loop never terminates for a
+ * zero-width box, alternates forever for +-Infinity, and returns NaN for NaN.
+ * This form is total — it returns a value for every input bit pattern, and
+ * always lands inside [lo, hi] for a well-formed box.
+ *
+ * Kept bit-for-bit in sync with reflectCoord() in
+ * packages/engine/src/services/spatial/SpatialSimulation.ts.
+ */
 static float reflect_coord(float v, float lo, float hi) {
-    while (v < lo || v > hi) {
-        if (v < lo) v = 2.0f * lo - v;
-        if (v > hi) v = 2.0f * hi - v;
-    }
-    return v;
+    const float w = hi - lo;
+    if (!std::isfinite(w) || !(w > 0.0f)) return std::isfinite(lo) ? lo : 0.0f;
+    if (!std::isfinite(v)) return lo;
+    const float p = 2.0f * w;
+    float t = std::fmod(v - lo, p);
+    if (t < 0.0f) t += p;
+    return t <= w ? lo + t : lo + (p - t);
 }
 
 // ============================================================
@@ -261,11 +301,11 @@ void spatial_destroy() {
 // Molecule management
 // ============================================================
 
-// ============================================================
-// Molecule management
-// ============================================================
-
+// Returns the new molecule's array index, or -1 if species_id is negative.
+// (A species with no registered diffusion constant is legal; it simply does
+// not diffuse.)
 int spatial_add_molecule(float x, float y, float z, int species_id, int compartment_id) {
+    if (species_id < 0) return -1;
     return g_pool.add(x, y, z, species_id, compartment_id);
 }
 
@@ -274,16 +314,24 @@ void spatial_clear_molecules() {
     g_pool.reserve(10000);
 }
 
-void spatial_set_diffusion_constant(int species_id, double D_cm2_per_s) {
+// Returns 0 on success, -1 if species_id is negative. The previous guard was
+// `species_id >= size`, which is false for negatives and so wrote
+// g_diffusion_constants[negative] — an out-of-bounds heap write.
+int spatial_set_diffusion_constant(int species_id, double D_cm2_per_s) {
+    if (species_id < 0) return -1;
     if (species_id >= (int)g_diffusion_constants.size()) {
         g_diffusion_constants.resize(species_id + 1, 0.0);
     }
     // Convert cm²/s → µm²/s (* 1e8)
     g_diffusion_constants[species_id] = D_cm2_per_s * 1e8;
+    return 0;
 }
 
+// Number of ADDRESSABLE SLOTS (pool array size), not the alive total, so that
+// `for (i = 0; i < spatial_molecule_count(); i++)` covers every valid index.
+// Use spatial_count_species / spatial_export_positions for the alive census.
 int spatial_molecule_count() {
-    return g_pool.count;
+    return (int)g_pool.x.size();
 }
 
 void spatial_remove_molecule(int index) {
@@ -295,36 +343,39 @@ void spatial_remove_molecule(int index) {
     }
 }
 
+// Accessors below report -1 (ids) / 0.0f (coords) for both out-of-range indices
+// AND live-but-dead (tombstoned) slots. That is what lets a caller enumerate
+// [0, spatial_molecule_count()) and skip tombstones without a separate query.
 int spatial_get_molecule_species_id(int index) {
-    if (index >= 0 && index < (int)g_pool.x.size()) {
+    if (index >= 0 && index < (int)g_pool.x.size() && g_pool.alive[index]) {
         return g_pool.species_id[index];
     }
     return -1;
 }
 
 int spatial_get_molecule_compartment_id(int index) {
-    if (index >= 0 && index < (int)g_pool.x.size()) {
+    if (index >= 0 && index < (int)g_pool.x.size() && g_pool.alive[index]) {
         return g_pool.compartment_id[index];
     }
     return -1;
 }
 
 float spatial_get_molecule_x(int index) {
-    if (index >= 0 && index < (int)g_pool.x.size()) {
+    if (index >= 0 && index < (int)g_pool.x.size() && g_pool.alive[index]) {
         return g_pool.x[index];
     }
     return 0.0f;
 }
 
 float spatial_get_molecule_y(int index) {
-    if (index >= 0 && index < (int)g_pool.x.size()) {
+    if (index >= 0 && index < (int)g_pool.x.size() && g_pool.alive[index]) {
         return g_pool.y[index];
     }
     return 0.0f;
 }
 
 float spatial_get_molecule_z(int index) {
-    if (index >= 0 && index < (int)g_pool.x.size()) {
+    if (index >= 0 && index < (int)g_pool.x.size() && g_pool.alive[index]) {
         return g_pool.z[index];
     }
     return 0.0f;
@@ -353,12 +404,20 @@ void spatial_set_callbacks(
 void spatial_step() {
     double dt = g_dt;
 
-    // 1. Diffuse all molecules
-    for (int i = 0; i < g_pool.count; i++) {
+    // 1. Diffuse all molecules.
+    // Iterate the ARRAY SIZE, not the alive count: tombstones keep their slots
+    // until the periodic compaction, so `count` trails x.size() and would skip
+    // the appended tail entirely.
+    const int n_slots = (int)g_pool.x.size();
+    for (int i = 0; i < n_slots; i++) {
         if (!g_pool.alive[i]) continue;
 
         int sid = g_pool.species_id[i];
-        double D = (sid < (int)g_diffusion_constants.size()) ? g_diffusion_constants[sid] : 0.0;
+        // Guard BOTH ends: a negative sid fails the upper bound and would read
+        // g_diffusion_constants[sid] out of bounds.
+        double D = (sid >= 0 && sid < (int)g_diffusion_constants.size())
+                     ? g_diffusion_constants[sid]
+                     : 0.0;
         if (D <= 0) continue;
 
         double sigma = sqrt(2.0 * D * dt);
@@ -378,9 +437,10 @@ void spatial_step() {
         g_pool.z[i] = reflect_coord(g_pool.z[i], lo_z, hi_z);
     }
 
-    // 2. Rebuild grid
+    // 2. Rebuild grid. Same array-size bound as the diffusion loop: a molecule
+    // omitted here is invisible to collisions and can never react.
     g_grid.clear();
-    for (int i = 0; i < g_pool.count; i++) {
+    for (int i = 0; i < n_slots; i++) {
         if (g_pool.alive[i]) {
             g_grid.insert(i, g_pool.x[i], g_pool.y[i], g_pool.z[i]);
         }
@@ -482,8 +542,10 @@ int spatial_export_positions(float* out_buffer, int max_molecules) {
 }
 
 int spatial_count_species(int* species_ids, int* counts, int max_species) {
+    // Array-size bound, matching spatial_export_positions: otherwise the
+    // species census disagrees with the exported positions.
     std::unordered_map<int, int> counts_map;
-    for (int i = 0; i < g_pool.count; i++) {
+    for (int i = 0; i < (int)g_pool.x.size(); i++) {
         if (g_pool.alive[i]) {
             counts_map[g_pool.species_id[i]]++;
         }
