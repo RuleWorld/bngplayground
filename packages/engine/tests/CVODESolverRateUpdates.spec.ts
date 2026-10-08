@@ -25,6 +25,36 @@ describe('CVODESolver native rate updates', () => {
     expect(freed).toEqual([8]);
   });
 
+  it('bridges native solver statistics and frees temporary WASM memory', () => {
+    const freed: number[] = [];
+    const heap32 = new Int32Array(16);
+    const getStats = vi.fn((_mem: number, nsteps: number, nfevals: number, nlinsetups: number, netfails: number) => {
+      heap32[nsteps >> 2] = 12;
+      heap32[nfevals >> 2] = 34;
+      heap32[nlinsetups >> 2] = 5;
+      heap32[netfails >> 2] = 2;
+    });
+    CVODESolver.module = {
+      _malloc: vi.fn(() => 8),
+      _free: vi.fn((ptr) => freed.push(ptr)),
+      _get_solver_stats: getStats,
+      HEAPF64: new Float64Array(heap32.buffer),
+      HEAP32: heap32,
+    } as unknown as CVodeModule;
+    const solver = new CVODESolver(1, () => {}, {} as never);
+    const internalSolver = solver as unknown as { solverMem: number };
+    internalSolver.solverMem = 71;
+
+    expect(solver.getSolverStats()).toEqual({
+      nsteps: 12,
+      nfevals: 34,
+      nlinsetups: 5,
+      netfails: 2,
+    });
+    expect(getStats).toHaveBeenCalledWith(71, 8, 12, 16, 20);
+    expect(freed).toEqual([8]);
+  });
+
   it('reports when native rate updates are unavailable so callers can rebuild', () => {
     CVODESolver.module = { _malloc: vi.fn(() => 8), _free: vi.fn(), HEAPF64: new Float64Array(8) } as unknown as CVodeModule;
     const solver = new CVODESolver(1, () => {}, {} as never);

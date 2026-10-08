@@ -33,7 +33,8 @@
  * These are fundamental numerical characteristics, not implementation bugs.
  */
 
-import { SolverOptions, SolverResult } from '../../../utils/solverUtils';
+import type { CVODESolverStats } from '../../../types';
+import type { SolverOptions, SolverResult } from '../../../utils/solverUtils';
 import type { NetworkByteCode } from '../../analysis/JITCompiler';
 import { resetCVodeSensModule, setCVodeSensModule } from '../../analysis/DifferentiableSolver';
 
@@ -579,6 +580,28 @@ export class CVODESolver {
       return true;
     } finally {
       m._free(ptr);
+    }
+  }
+
+  getSolverStats(): CVODESolverStats | undefined {
+    const m = CVODESolver.module;
+    const solverMem = this.solverMem;
+    if (!m || !solverMem || !m._get_solver_stats) return undefined;
+
+    const statsPtr = m._malloc(4 * Int32Array.BYTES_PER_ELEMENT);
+    if (!statsPtr) return undefined;
+    try {
+      m._get_solver_stats(solverMem, statsPtr, statsPtr + 4, statsPtr + 8, statsPtr + 12);
+      const heap32 = m.HEAP32 ?? new Int32Array(m.HEAPF64.buffer);
+      const offset = statsPtr >> 2;
+      return {
+        nsteps: heap32[offset],
+        nfevals: heap32[offset + 1],
+        nlinsetups: heap32[offset + 2],
+        netfails: heap32[offset + 3],
+      };
+    } finally {
+      m._free(statsPtr);
     }
   }
 

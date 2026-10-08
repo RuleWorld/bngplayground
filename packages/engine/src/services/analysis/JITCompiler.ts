@@ -38,11 +38,11 @@ export interface NetworkByteCode {
     speciesRxnIdx: Int32Array;
     speciesStoich: Float64Array;
     speciesVolumes: Float64Array;
-    jacRowPtr: Int32Array;
-    jacColIdx: Int32Array;
-    jacContribOffsets: Int32Array;
-    jacContribRxnIdx: Int32Array;
-    jacContribCoeffs: Float64Array;
+    jacRowPtr?: Int32Array;
+    jacColIdx?: Int32Array;
+    jacContribOffsets?: Int32Array;
+    jacContribRxnIdx?: Int32Array;
+    jacContribCoeffs?: Float64Array;
 
     // --- Functional Rate Extensions ---
     nObservables: number;
@@ -1705,6 +1705,7 @@ export class JITCompiler {
                 currentByteOffset += chunk.length;
             }
 
+            const hasFunctionalRates = exprBytecode.length > 0;
             const newByteCode: NetworkByteCode = {
                 nReactions,
                 nSpecies,
@@ -1718,11 +1719,13 @@ export class JITCompiler {
                 speciesRxnIdx,
                 speciesStoich,
                 speciesVolumes: speciesVolumes || new Float64Array(nSpecies).fill(1.0),
-                jacRowPtr,
-                jacColIdx,
-                jacContribOffsets,
-                jacContribRxnIdx,
-                jacContribCoeffs,
+                ...(hasFunctionalRates ? {} : {
+                    jacRowPtr,
+                    jacColIdx,
+                    jacContribOffsets,
+                    jacContribRxnIdx,
+                    jacContribCoeffs
+                }),
                 nObservables,
                 obsOffsets,
                 obsSpeciesIdx,

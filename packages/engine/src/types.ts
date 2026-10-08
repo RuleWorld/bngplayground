@@ -290,6 +290,13 @@ export interface ReactionFiringEvent {
     propensity: number;
 }
 
+export interface CVODESolverStats {
+    nsteps: number;
+    nfevals: number;
+    nlinsetups: number;
+    netfails: number;
+}
+
 export interface SimulationResults {
     headers: string[];
     data: Record<string, number>[];
@@ -308,6 +315,8 @@ export interface SimulationResults {
     eventDiagnostics?: string[];
     /** Event identifiers fired during the simulation, in execution order. */
     eventFirings?: string[];
+    /** CVODE diagnostics (only when collectSolverStats=true). */
+    solverStats?: CVODESolverStats[];
 }
 
 /** Transferable wire representation for ordinary time-course rows. */
@@ -414,6 +423,8 @@ export interface SimulationOptions {
     poplevel?: number;
     /** Optional callback invoked by the solver after each integration step */
     onStep?: (currentStep: number, maxSteps: number) => void;
+    /** Collect native CVODE counters in the result; disabled with no stats-query overhead. */
+    collectSolverStats?: boolean;
     /**
      * Test/introspection hook: when set, the simulator invokes this with the ODE
      * right-hand side it built (before integration). Does not change the normal
