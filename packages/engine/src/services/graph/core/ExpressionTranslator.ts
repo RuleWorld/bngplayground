@@ -18,7 +18,6 @@ const functionMappings: Record<string, string> = {
   'asinh': 'Math.asinh',
   'acosh': 'Math.acosh',
   'atanh': 'Math.atanh',
-  'rint': 'Math.round',
   'atan2': 'Math.atan2',
   'pow': 'Math.pow',
   'min': 'Math.min',
@@ -31,6 +30,29 @@ const FUNCTION_REGEXES = Object.entries(functionMappings).map(([bnglName, jsName
   regex: new RegExp(`(?<!\\.)\\b${bnglName}\\s*\\(`, 'g'),
   jsName: `${jsName}(`
 }));
+
+function translateRoundCalls(expr: string): string {
+  const match = /(?<!\.)\b(?:rint|round)\s*\(/g;
+  let result = '';
+  let cursor = 0;
+  let found: RegExpExecArray | null;
+  while ((found = match.exec(expr)) !== null) {
+    const start = found.index;
+    const open = start + found[0].lastIndexOf('(');
+    let depth = 1;
+    let close = open + 1;
+    for (; close < expr.length && depth > 0; close++) {
+      if (expr[close] === '(') depth++;
+      else if (expr[close] === ')') depth--;
+    }
+    if (depth !== 0) break;
+    const argument = translateRoundCalls(expr.slice(open + 1, close - 1));
+    result += expr.slice(cursor, start) + `Math.floor((${argument}) + 0.5)`;
+    cursor = close;
+    match.lastIndex = close;
+  }
+  return cursor === 0 ? expr : result + expr.slice(cursor);
+}
 
 const POWER_REGEX = /\^/g;
 const PI_REGEX = /\b_pi\b/g;
@@ -45,6 +67,7 @@ export class ExpressionTranslator {
     if (!expr) return expr;
 
     let jsExpr = expr;
+    jsExpr = translateRoundCalls(jsExpr);
 
     // 1. Convert BNGL power operator '^' to JavaScript '**'
     // Note: This needs careful handling for precedence if using Math.pow, 

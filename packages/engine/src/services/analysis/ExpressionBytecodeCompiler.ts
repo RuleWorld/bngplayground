@@ -1,9 +1,10 @@
 /**
  * ExpressionBytecodeCompiler.ts - Compile BNGL rate expressions to bytecode
  *
- * Extracted from JITCompiler.ts.  These two pure functions convert textual
- * rate-law expressions into the compact bytecode format consumed by the
- * bytecode interpreter / WASM runtime.
+ * The single source of truth for turning a textual rate-law expression into
+ * the compact bytecode consumed by the TS bytecode evaluator (see
+ * `buildBytecodeEvaluator`) and by the WASM/CVODE bytecode interpreter. Both
+ * consumers share this module so the two execution paths cannot drift apart.
  */
 
 import { OpCode } from '../simulation/ExpressionCompiler';
@@ -58,6 +59,23 @@ export interface JITFunctionDefinition {
 }
 
 /**
+ * Minimal structural view of the jsep AST.
+ */
+interface JsepNode {
+    type: string;
+    name?: string;
+    value?: number | string | boolean | null;
+    operator?: string;
+    left?: JsepNode;
+    right?: JsepNode;
+    argument?: JsepNode;
+    callee?: JsepNode;
+    arguments?: JsepNode[];
+    object?: JsepNode;
+    property?: JsepNode;
+}
+
+/**
  * Expand zero-argument function references in an expression string.
  *
  * BNGL allows defining named zero-argument functions (e.g. `kf()` or bare
@@ -94,6 +112,41 @@ export function expandZeroArgFunctions(expr: string, functions?: JITFunctionDefi
 }
 
 /**
+ * Number of arguments every compilable BNGL function accepts.
+ *
+ * `max`/`min` are variadic: `max(a, b, c)` is emitted as `a b c MAX MAX`, so
+ * any arity >= 1 is legal and a single argument emits no opcode at all
+ * (`max(x)` is just `x`). Every other function has a fixed arity — without
+ * this table the compiler happily emitted a single unary opcode for a call
+ * with any number of arguments, silently computing the wrong value (or
+ * underflowing the stack) for e.g. `max(9, 5, 3)`.
+ */
+const FUNCTION_ARITY: Record<string, { min: number; max: number }> = {
+    abs: { min: 1, max: 1 },
+    acos: { min: 1, max: 1 },
+    asin: { min: 1, max: 1 },
+    atan: { min: 1, max: 1 },
+    ceil: { min: 1, max: 1 },
+    cos: { min: 1, max: 1 },
+    exp: { min: 1, max: 1 },
+    floor: { min: 1, max: 1 },
+    if: { min: 3, max: 3 },
+    ln: { min: 1, max: 1 },
+    log: { min: 1, max: 1 },
+    log10: { min: 1, max: 1 },
+    max: { min: 1, max: Number.POSITIVE_INFINITY },
+    min: { min: 1, max: Number.POSITIVE_INFINITY },
+    not: { min: 1, max: 1 },
+    pow: { min: 2, max: 2 },
+    rint: { min: 1, max: 1 },
+    round: { min: 1, max: 1 },
+    sat: { min: 2, max: 2 },
+    sin: { min: 1, max: 1 },
+    sqrt: { min: 1, max: 1 },
+    tan: { min: 1, max: 1 },
+};
+
+/**
  * Compile a textual rate-law expression into a bytecode program.
  *
  * The bytecode is a flat `Uint8Array` that can be evaluated by a stack-based
@@ -119,70 +172,82 @@ export function compileExpressionToBytecode(
         const expandedExpr = expandZeroArgFunctions(expr, functions)
             .replace(/\^/g, '**')
             .replace(/\bMath\./g, '');
-        const ast = jsep(expandedExpr);
+        const ast = jsep(expandedExpr) as unknown as JsepNode;
         const bytes: number[] = [];
         let usesParameters = false;
         const speciesIndexByName = new Map<string, number>();
         speciesNames.forEach((name, index) => speciesIndexByName.set(name, index));
 
-        const walk = (node: any) => {
+        const pushConst = (value: number): void => {
+            bytes.push(OP_PUSH_CONST);
+            const buf = new ArrayBuffer(8);
+            new Float64Array(buf)[0] = value;
+            bytes.push(...new Uint8Array(buf));
+        };
+
+        const pushSpec = (index: number): void => {
+            bytes.push(OP_PUSH_SPEC);
+            const buf = new ArrayBuffer(4);
+            new Int32Array(buf)[0] = index;
+            bytes.push(...new Uint8Array(buf));
+        };
+
+        const pushObs = (index: number): void => {
+            bytes.push(OP_PUSH_OBS);
+            const buf = new ArrayBuffer(4);
+            new Int32Array(buf)[0] = index;
+            bytes.push(...new Uint8Array(buf));
+        };
+
+        const walk = (node: JsepNode) => {
             if (node.type === 'Literal') {
-                bytes.push(OP_PUSH_CONST);
-                const buf = new ArrayBuffer(8);
-                new Float64Array(buf)[0] = node.value;
-                bytes.push(...new Uint8Array(buf));
+                pushConst(typeof node.value === 'number' ? node.value : Number(node.value));
             } else if (node.type === 'Identifier') {
+                if (!node.name) {
+                    throw new Error('Identifier missing name');
+                }
                 // Support common global constants used in BNGL expressions
                 if (node.name === 'NaN') {
-                    bytes.push(OP_PUSH_CONST);
-                    const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = NaN;
-                    bytes.push(...new Uint8Array(buf));
+                    pushConst(NaN);
                     return;
                 }
                 if (node.name === 'Infinity') {
-                    bytes.push(OP_PUSH_CONST);
-                    const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = Infinity;
-                    bytes.push(...new Uint8Array(buf));
+                    pushConst(Infinity);
                     return;
                 }
 
                 const speciesIdx = speciesIndexByName.get(node.name);
                 if (speciesIdx !== undefined) {
-                    bytes.push(OP_PUSH_SPEC);
-                    const buf = new ArrayBuffer(4);
-                    new Int32Array(buf)[0] = speciesIdx;
-                    bytes.push(...new Uint8Array(buf));
+                    pushSpec(speciesIdx);
                     return;
                 }
                 const obsIdx = observableNames.indexOf(node.name);
                 if (obsIdx >= 0) {
-                    bytes.push(OP_PUSH_OBS);
-                    const buf = new ArrayBuffer(4);
-                    new Int32Array(buf)[0] = obsIdx;
-                    bytes.push(...new Uint8Array(buf));
+                    pushObs(obsIdx);
                     return;
                 }
                 if (Object.prototype.hasOwnProperty.call(parameters, node.name)) {
-                    bytes.push(OP_PUSH_CONST);
-                    const buf = new ArrayBuffer(8);
-                    new Float64Array(buf)[0] = parameters[node.name];
-                    bytes.push(...new Uint8Array(buf));
+                    pushConst(parameters[node.name]);
                     usesParameters = true;
                     return;
                 }
                 throw new Error(`Unknown identifier: ${node.name}`);
             } else if (node.type === 'MemberExpression') {
                 if (node.object?.type === 'Identifier' && node.object.name === 'y' && node.property?.type === 'Literal') {
-                    bytes.push(OP_PUSH_SPEC);
-                    const buf = new ArrayBuffer(4);
-                    new Int32Array(buf)[0] = Number(node.property.value);
-                    bytes.push(...new Uint8Array(buf));
+                    const index = Number(node.property.value);
+                    if (!Number.isInteger(index) || index < 0 || index >= speciesNames.length) {
+                        throw new Error(
+                            `y[${String(node.property.value)}] is out of range: expected an integer index in [0, ${speciesNames.length})`
+                        );
+                    }
+                    pushSpec(index);
                     return;
                 }
                 throw new Error(`Unsupported member expression in ${expandedExpr}`);
             } else if (node.type === 'BinaryExpression' || node.type === 'LogicalExpression') {
+                if (!node.left || !node.right) {
+                    throw new Error('Malformed binary expression');
+                }
                 walk(node.left);
                 walk(node.right);
                 if (node.operator === '+') bytes.push(OP_ADD);
@@ -200,25 +265,51 @@ export function compileExpressionToBytecode(
                 else if (node.operator === '||') bytes.push(OP_OR);
                 else throw new Error(`Unsupported binary operator: ${node.operator}`);
             } else if (node.type === 'UnaryExpression') {
+                if (!node.argument) {
+                    throw new Error('Malformed unary expression');
+                }
                 walk(node.argument);
                 if (node.operator === '-') bytes.push(OP_NEG);
                 else if (node.operator === '!') bytes.push(OP_NOT);
                 else throw new Error(`Unsupported unary operator: ${node.operator}`);
             } else if (node.type === 'CallExpression') {
-                const name = node.callee.name.toLowerCase();
+                const name = node.callee?.name?.toLowerCase();
+                if (!name) {
+                    throw new Error('Invalid function call');
+                }
+                const arity = FUNCTION_ARITY[name];
+                if (!arity) {
+                    throw new Error(`Unknown function: ${name}`);
+                }
+                const args = node.arguments ?? [];
+                const nArgs = args.length;
+                if (nArgs < arity.min || nArgs > arity.max) {
+                    const expected = arity.max === Number.POSITIVE_INFINITY
+                        ? `at least ${arity.min}`
+                        : (arity.min === arity.max ? String(arity.min) : `${arity.min}-${arity.max}`);
+                    throw new Error(`${name}() expects ${expected} argument(s), got ${nArgs}`);
+                }
+
                 if (name === 'sat') {
-                    if ((node.arguments?.length ?? 0) !== 2) {
-                        throw new Error('sat() expects 2 arguments');
-                    }
                     // sat(a,b) = a / (a + b)
-                    walk(node.arguments[0]);
-                    walk(node.arguments[0]);
-                    walk(node.arguments[1]);
+                    walk(args[0]);
+                    walk(args[0]);
+                    walk(args[1]);
                     bytes.push(OP_ADD);
                     bytes.push(OP_DIV);
                     return;
                 }
-                node.arguments.forEach((arg: any) => walk(arg));
+
+                args.forEach((arg: JsepNode) => walk(arg));
+
+                if (name === 'max' || name === 'min') {
+                    // Variadic fold: n arguments collapse to n - 1 binary ops.
+                    // A single argument is already the result, so it emits nothing.
+                    const op = name === 'max' ? OP_MAX : OP_MIN;
+                    for (let i = 1; i < nArgs; i++) bytes.push(op);
+                    return;
+                }
+
                 if (name === 'log' || name === 'ln') bytes.push(OP_LOG);
                 else if (name === 'exp') bytes.push(OP_EXP);
                 else if (name === 'log10') bytes.push(OP_LOG10);
@@ -233,8 +324,6 @@ export function compileExpressionToBytecode(
                 else if (name === 'asin') bytes.push(OP_ASIN);
                 else if (name === 'acos') bytes.push(OP_ACOS);
                 else if (name === 'atan') bytes.push(OP_ATAN);
-                else if (name === 'max') bytes.push(OP_MAX);
-                else if (name === 'min') bytes.push(OP_MIN);
                 else if (name === 'if') bytes.push(OP_IF_ELSE);
                 else if (name === 'not') bytes.push(OP_NOT);
                 else if (name === 'pow') bytes.push(OP_POW);
@@ -248,7 +337,7 @@ export function compileExpressionToBytecode(
         bytes.push(OP_STOP);
         return { bytecode: new Uint8Array(bytes), usesParameters };
     } catch (e) {
-        console.warn('[JITCompiler] Bytecode compilation failed:', e);
+        console.warn('[ExpressionBytecodeCompiler] Bytecode compilation failed:', e);
         return null;
     }
 }
