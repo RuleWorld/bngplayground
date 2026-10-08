@@ -128,6 +128,10 @@ static void test_c3_config_validation() {
     CHECK(spatial_set_rxn_radius(0.25) == 0, "restoring reaction radius should succeed");
     CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, 0.25) == 0,
           "restore positive box dimensions and cell size");
+    CHECK(spatial_set_grid_size(2e38, 2e38, 2e38, 2e38) == 0,
+          "large finite extents are valid when their grid coordinates fit");
+    CHECK(spatial_set_grid_size(2.0, 4.0, 6.0, 0.25) == 0,
+          "restore the baseline geometry after large-range coverage");
     g_boundary.cx = 7.0f;
     g_boundary.cy = 8.0f;
     g_boundary.cz = 9.0f;
@@ -139,6 +143,9 @@ static void test_c3_config_validation() {
               "invalid grid config must preserve half-extents");
         CHECK(g_grid.cell_size == 0.25f, "invalid grid config must preserve cell size");
     };
+    CHECK(spatial_set_grid_size(1e20, 4.0, 6.0, 0.25) == -1,
+          "grid config must reject dimensions beyond the hash coordinate range");
+    unchanged();
 
     const double invalid[] = {
         0.0,
@@ -441,6 +448,12 @@ static void test_c3_reflect_coord() {
     // which reaches the same value in 3 iterations.
     CHECK(std::fabs(reflect_coord(7.3f, 2.0f, 3.0f) - 2.7f) < 1e-5f,
           "offset interval folding, got %g", reflect_coord(7.3f, 2.0f, 3.0f));
+    // Float arithmetic overflows in width or period for these finite values.
+    // The double-intermediate fold must still return a finite in-range result.
+    CHECK(reflect_coord(0.0f, -2e38f, 2e38f) == 0.0f,
+          "wide finite bounds must not overflow the width calculation");
+    CHECK(std::fabs(reflect_coord(2e38f, -1e38f, 1e38f)) < 1e32f,
+          "wide finite period must still reflect correctly");
 
     arm_timeout(10);
     for (int k = -2000; k <= 2000; k++) {

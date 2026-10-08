@@ -167,15 +167,21 @@ struct GridCell {
 
 struct SpatialGrid {
     float cell_size;
+    // Keep a spare cell at both encoded limits so every 27-cell neighbor probe
+    // remains within the 21-bit coordinate field.
+    static constexpr int kCellCoordinateBias = 1 << 20;
+    static constexpr int kMaxSafeCellCoordinate = kCellCoordinateBias - 2;
+
     // Using hash map for sparse grid
     std::unordered_map<int64_t, GridCell> cells;
 
     int64_t hash_key(int ix, int iy, int iz) {
         // Combine three ints into one 64-bit key
-        // Each coordinate gets 21 bits → ±1M cells per axis
-        return ((int64_t)(ix + 1048576) << 42) |
-               ((int64_t)(iy + 1048576) << 21) |
-               ((int64_t)(iz + 1048576));
+        // Each coordinate gets 21 bits; config validation keeps molecule cells
+        // one position inside the encoded range for neighbor lookups.
+        return ((int64_t)(ix + kCellCoordinateBias) << 42) |
+               ((int64_t)(iy + kCellCoordinateBias) << 21) |
+               ((int64_t)(iz + kCellCoordinateBias));
     }
 
     void clear() { cells.clear(); }
@@ -222,22 +228,25 @@ struct BoundaryBox {
 /**
  * Mirror `v` into [lo, hi], reflecting off both walls (period 2 * (hi - lo)).
  *
- * Closed form rather than a fold loop: the loop never terminates for a
- * zero-width box, alternates forever for +-Infinity, and returns NaN for NaN.
- * This form is total — it returns a value for every input bit pattern, and
- * always lands inside [lo, hi] for a well-formed box.
+ * A fold loop fails to terminate for a zero-width box and alternates forever
+ * for +-Infinity. Here, non-finite coordinates map to the lower bound.
+ * Double intermediates prevent width, period, and offset overflow for finite
+ * float coordinates and bounds.
  *
- * Kept bit-for-bit in sync with reflectCoord() in
+ * Uses the same closed-form reflection as reflectCoord() in
  * packages/engine/src/services/spatial/SpatialSimulation.ts.
  */
 static float reflect_coord(float v, float lo, float hi) {
-    const float w = hi - lo;
-    if (!std::isfinite(w) || !(w > 0.0f)) return std::isfinite(lo) ? lo : 0.0f;
+    const double width = (double)hi - (double)lo;
+    if (!std::isfinite(width) || !(width > 0.0)) return std::isfinite(lo) ? lo : 0.0f;
     if (!std::isfinite(v)) return lo;
-    const float p = 2.0f * w;
-    float t = std::fmod(v - lo, p);
-    if (t < 0.0f) t += p;
-    return t <= w ? lo + t : lo + (p - t);
+    const double period = 2.0 * width;
+    double offset = std::fmod((double)v - (double)lo, period);
+    if (offset < 0.0) offset += period;
+    const double reflected = offset <= width
+        ? (double)lo + offset
+        : (double)hi - (offset - width);
+    return (float)reflected;
 }
 
 // ============================================================
@@ -308,9 +317,9 @@ int spatial_set_rxn_radius(double rxn_radius) {
     return 0;
 }
 
-// Returns 0 on success and -1 if any dimension or cell size is not finite and
-// positive, including half-extents after conversion to the grid's float storage.
-// Validation precedes all writes so a rejected request preserves the old box.
+// Returns 0 on success and -1 if dimensions/cell size are invalid, half-extents
+// cannot be stored as finite floats, or the 21-bit grid hash cannot represent
+// the configured box. Validation precedes all writes.
 int spatial_set_grid_size(double side_x, double side_y, double side_z, double cell_size) {
     if (!std::isfinite(side_x) || !(side_x > 0.0) ||
         !std::isfinite(side_y) || !(side_y > 0.0) ||
@@ -334,6 +343,15 @@ int spatial_set_grid_size(double side_x, double side_y, double side_z, double ce
     const float hz = (float)half_z;
     const float requested_cell_size = (float)cell_size;
     const float candidate_cell_size = std::max(requested_cell_size, g_rxn_radius);
+    // A molecule cell and its +/-1 neighbor cells must fit the 21-bit fields in
+    // hash_key. Positions are reflected into the configured box before gridding.
+    const double max_cell_offset =
+        (double)SpatialGrid::kMaxSafeCellCoordinate;
+    if (half_x / candidate_cell_size > max_cell_offset ||
+        half_y / candidate_cell_size > max_cell_offset ||
+        half_z / candidate_cell_size > max_cell_offset) {
+        return -1;
+    }
     g_boundary.cx = 0;
     g_boundary.cy = 0;
     g_boundary.cz = 0;
