@@ -72,6 +72,19 @@ function expressionDependsOn(
   return false;
 }
 
+/** Find every explicit seed whose expression depends on this parameter.
+ *  Uses the same transitive dependency logic as prepared-model updates.
+ *  Does not assume any naming convention (L0, initial_L, etc.).
+ */
+export function findSeedSpeciesForParameter(model: BNGLModel, parameter: string): string[] {
+  if (!Object.hasOwn(model.parameters ?? {}, parameter)) return [];
+  const affected = affectedParameterClosure(model, { [parameter]: model.parameters[parameter] });
+  return (model.species ?? [])
+    .filter(species => typeof species.initialExpression === 'string'
+      && expressionDependsOn(model, species.initialExpression, affected))
+    .map(species => species.name);
+}
+
 export function analyzePreparedModelUpdate(
   model: BNGLModel,
   overrides: Record<string, number>,
@@ -169,9 +182,14 @@ export function updatePreparedModel(
   let initialStateChanged = false;
   const oldSpeciesValues = new Map((model.species ?? []).map((species) => [species.name, species.initialConcentration]));
   target.species = (model.species ?? []).map((species) => {
-    if (overrides[species.name] !== undefined) {
-      initialStateChanged ||= species.initialConcentration !== overrides[species.name];
-      return { ...species, initialConcentration: overrides[species.name] };
+    if (Object.hasOwn(overrides, species.name)) {
+      const amount = overrides[species.name];
+      initialStateChanged ||= species.initialConcentration !== amount;
+      // SimulationLoop evaluates initialExpression first. A direct species
+      // scan must override that expression, including for literal seeds.
+      // Parameter scans never write species keys, so their original BNGL
+      // expression remains intact and all dependencies get reevaluated.
+      return { ...species, initialConcentration: amount, initialExpression: String(amount) };
     }
     const expression = species.initialExpression ?? seedExpressions.get(species.name);
     if (options.refreshInitialState === false || Object.keys(overrides).length === 0

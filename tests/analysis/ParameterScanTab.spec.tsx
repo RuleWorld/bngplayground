@@ -100,7 +100,7 @@ describe('ParameterScanTab component', () => {
 
     });
 
-    it('scanning a parameter also updates species defined in terms of that parameter', async () => {
+    it('scanning a parameter leaves dependent seed evaluation to the engine', async () => {
         const model = {
             parameters: { A0: 100, other: 2 },
             species: [{ name: 'A(b)', initialConcentration: 100, initialExpression: 'A0' }],
@@ -109,10 +109,7 @@ describe('ParameterScanTab component', () => {
 
         vi.mocked(bnglService.prepareModel).mockResolvedValue(99);
         vi.mocked(bnglService.simulateCached).mockImplementation(async (_id, overrides) => {
-            const ps = overrides && (overrides as any)['A(b)'];
-            // ensure species override equals parameter value, tests use this to
-            // drive the observable output
-            const obsval = ps !== undefined ? ps : 0;
+            const obsval = (overrides as Record<string, number>)?.A0 ?? 0;
             return {
                 data: [{ time: 0, obs: obsval }],
                 headers: ['time', 'obs'],
@@ -132,11 +129,52 @@ describe('ParameterScanTab component', () => {
         fireEvent.change(inputs[1], { target: { value: '150' } });
         fireEvent.change(inputs[2], { target: { value: '2' } });
         fireEvent.click(screen.getByRole('button', { name: /run scan/i }));
-        await waitFor(() => expect(bnglService.simulateCached).toHaveBeenCalled());
+        await waitFor(() => expect(bnglService.simulateCached).toHaveBeenCalledTimes(2));
         const calls = vi.mocked(bnglService.simulateCached).mock.calls;
-        calls.forEach(([, overrides]) => {
-            expect(overrides).toBeDefined();
-            expect((overrides as any).A0).toEqual((overrides as any)['A(b)']);
-        });
+        expect(calls.map(([, overrides]) => overrides)).toEqual([{ A0: 50 }, { A0: 150 }]);
+    });
+
+    it('discovers every seed-linked parameter and literal initial amount without relying on names', async () => {
+        const model = {
+            parameters: { L0: 10, R0: 1, dose: 5, multiplier: 2, kon: 1 },
+            paramExpressions: { seed: 'dose * multiplier' },
+            species: [
+                { name: 'L', initialConcentration: 10, initialExpression: 'L0' },
+                { name: 'R', initialConcentration: 1, initialExpression: 'R0' },
+                { name: 'X', initialConcentration: 20, initialExpression: '2 * seed' },
+                { name: 'C', initialConcentration: 3, initialExpression: '3' },
+                { name: 'Z', initialConcentration: 0, initialExpression: '0' },
+            ],
+            observables: [{ name: 'Lfree', expression: 'L' }],
+        } as any;
+        vi.mocked(bnglService.prepareModel).mockResolvedValue(100);
+        vi.mocked(bnglService.simulateCached).mockImplementation(async (_id, overrides) => ({
+            data: [{ time: 0, Lfree: (overrides as any).L0 ?? 10 }],
+            headers: ['time', 'Lfree'],
+        } as any));
+        vi.mocked(bnglService.releaseModel).mockResolvedValue(undefined);
+
+        render(<ParameterScanTab model={model} />);
+        const section = screen.getByText('Parameter 1').closest('div')!;
+        const select = within(section).getByRole('combobox');
+        const labels = Array.from(select.querySelectorAll('option')).map(option => option.textContent);
+        expect(labels).toContain('L0 (initial: L)');
+        expect(labels).toContain('R0 (initial: R)');
+        expect(labels).toContain('dose (initial: X)');
+        expect(labels).toContain('multiplier (initial: X)');
+        expect(labels).toContain('3 (initial amount for C)');
+        expect(labels).toContain('0 (initial amount for Z)');
+        expect(labels).toContain('kon');
+        expect((select as HTMLSelectElement).value).toBe('L0');
+
+        fireEvent.change(select, { target: { value: 'L0' } });
+        const inputs = within(section).getAllByRole('spinbutton') as HTMLInputElement[];
+        fireEvent.change(inputs[0], { target: { value: '5' } });
+        fireEvent.change(inputs[1], { target: { value: '15' } });
+        fireEvent.change(inputs[2], { target: { value: '2' } });
+        fireEvent.click(screen.getByRole('button', { name: /run scan/i }));
+        await waitFor(() => expect(bnglService.simulateCached).toHaveBeenCalledTimes(2));
+        expect(vi.mocked(bnglService.simulateCached).mock.calls.map(([, overrides]) => overrides))
+            .toEqual([{ L0: 5 }, { L0: 15 }]);
     });
 });

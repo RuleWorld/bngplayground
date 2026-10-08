@@ -124,7 +124,7 @@ export { resolveAutoMethod, getSimulationOptionsFromParsedModel } from './utils/
 export { isMultiPhaseModel, identifyOutputChain, getExpectedRowCount } from './utils/multiPhaseSimulation';
 export { formatBNGL } from './utils/formatBNGL';
 export { parseParametersFromCode, isNumericLiteral, stripParametersBlock, reevaluateSeedSpecies, reevaluateParameterExpressions } from './utils/paramUtils';
-export { analyzePreparedModelUpdate, updatePreparedModel, forkPreparedModel } from './utils/preparedModel';
+export { analyzePreparedModelUpdate, updatePreparedModel, forkPreparedModel, findSeedSpeciesForParameter } from './utils/preparedModel';
 export type { PreparedModelUpdateImpact, PreparedModelUpdateResult } from './utils/preparedModel';
 export { parseObservablePattern, computeObservableValue, computeDynamicObservable, validateObservablePattern } from './utils/dynamicObservable';
 export { splitObservablePatterns } from './utils/observableUtils';
