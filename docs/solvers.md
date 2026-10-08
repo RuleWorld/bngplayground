@@ -15,6 +15,12 @@ BioNetGen Playground uses the **SUNDIALS CVODE** library, compiled to WebAssembl
 - **Precision**: High numerical accuracy for large reaction networks.
 - **WASM Acceleration**: Native-speed ODE integration directly in the browser.
 
+Functional-rate bytecode is validated before the native WASM network is loaded.
+Invalid operands, indices, opcodes, or stack depth reject the native binding,
+log the reason, and leave the JavaScript RHS active. Sparse analytical Jacobians
+are used only for mass-action networks; functional-rate networks use dense
+CVODE's internal difference-quotient Jacobian.
+
 ### 2. **Network-Free Simulator (NFsim)**
 **For Extremely Large or Infinite State Spaces**
 

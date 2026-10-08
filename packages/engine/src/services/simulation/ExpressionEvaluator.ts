@@ -719,6 +719,16 @@ export function preCompileFunctionalRates(
 // JIT compilation via new Function() for maximum hot-loop performance (16.7x)
 // ---------------------------------------------------------------------------
 
+/**
+ * BNG2's muParser implements `rint`/`round` as `floor(v + 0.5)` — round half
+ * UP. This is deliberately NOT `Math.round`: they disagree at
+ * `v = 0.49999999999999994`, where `Math.round(v) === 0` but
+ * `floor(v + 0.5) === 1`. The bytecode VM and the JS function table must both
+ * use this so the two paths (and the native CVODE bytecode interpreter) agree
+ * with BioNetGen.
+ */
+const roundHalfUp = (v: number): number => Math.floor(v + 0.5);
+
 /** Allowlist of math functions that can appear in JIT-compiled expressions. */
 const JIT_ALLOWED_FUNCTIONS: Record<string, string> = {
   abs: 'Math.abs',
@@ -737,7 +747,8 @@ const JIT_ALLOWED_FUNCTIONS: Record<string, string> = {
   max: 'Math.max',
   min: 'Math.min',
   pow: 'Math.pow',
-  round: 'Math.round',
+  rint: 'roundHalfUp',
+  round: 'roundHalfUp',
   sign: 'Math.sign',
   sin: 'Math.sin',
   sqrt: 'Math.sqrt',
@@ -755,7 +766,7 @@ const BYTECODE_ALLOWED_FUNCTIONS = new Set<string>([
 ]);
 
 
-interface BytecodeProgram {
+export interface BytecodeProgram {
   code: Uint8Array;
   view: DataView;
 }
@@ -816,7 +827,7 @@ function collectReferencedSlots(program: BytecodeProgram): Int32Array {
   return new Int32Array(slots);
 }
 
-function buildBytecodeEvaluator(
+export function buildBytecodeEvaluator(
   program: BytecodeProgram,
   varNames: string[]
 ): (ctx: Record<string, number>) => number {
@@ -855,7 +866,12 @@ function buildBytecodeEvaluator(
         case 2: { // PUSH_SPEC / PUSH_OBS
           const idx = view.getInt32(pc, true);
           pc += 4;
-          stack[sp++] = (idx >= 0 && idx < valueSlots.length) ? valueSlots[idx] : 0;
+          if (idx < 0 || idx >= valueSlots.length) {
+            throw new Error(
+              `Bytecode variable index ${idx} out of range (varNames has ${valueSlots.length} entries)`
+            );
+          }
+          stack[sp++] = valueSlots[idx];
           break;
         }
         case 3: { // ADD
@@ -913,8 +929,8 @@ function buildBytecodeEvaluator(
         case 17: // FLOOR
           stack[sp - 1] = Math.floor(stack[sp - 1]);
           break;
-        case 18: // ROUND
-          stack[sp - 1] = Math.round(stack[sp - 1]);
+        case 18: // ROUND — BNG2 parity: round half up, see roundHalfUp()
+          stack[sp - 1] = roundHalfUp(stack[sp - 1]);
           break;
         case 19: // TAN
           stack[sp - 1] = Math.tan(stack[sp - 1]);
@@ -989,11 +1005,15 @@ function buildBytecodeEvaluator(
           stack[sp - 1] = stack[sp - 1] === 0 ? 1 : 0;
           break;
         default:
-          return 0;
+          throw new Error(`Unknown bytecode opcode ${op}`);
       }
     }
 
-    return sp > 0 ? stack[sp - 1] : 0;
+    if (sp === 0) {
+      throw new Error('Bytecode program produced no value');
+    }
+
+    return stack[sp - 1];
   };
 }
 

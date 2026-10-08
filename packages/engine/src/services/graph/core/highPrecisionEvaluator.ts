@@ -266,7 +266,8 @@ class HighPrecisionVisitor extends AbstractParseTreeVisitor<Decimal> implements 
       case 'asinh': return arg.asinh();
       case 'acosh': return arg.acosh();
       case 'atanh': return arg.atanh();
-      case 'rint': return arg.round();
+      case 'rint':
+      case 'round': return new Decimal(Math.floor(arg.toNumber() + 0.5));
       case 'mratio':
         if (args.length !== 3) throw new Error('mratio() requires 3 arguments');
         return this.mratio(args[0], args[1], args[2]);
@@ -361,8 +362,11 @@ export function evaluateExpressionHighPrecision(
         decimalParams.set(key, new Decimal(value));
       }
     }
-
-    const inputStream = CharStreams.fromString(expr);
+    // The grammar exposes BNG2's `rint` function, but not the `round` alias.
+    // Normalize the alias before parsing so both spellings share identical
+    // round-half-up semantics in this evaluator.
+    const normalizedExpr = expr.replace(/\bround(?=\s*\()/gi, 'rint');
+    const inputStream = CharStreams.fromString(normalizedExpr);
     const lexer = new BNGLexer(inputStream);
     
     // Disable default error listeners to avoid console flooding during batch parsing

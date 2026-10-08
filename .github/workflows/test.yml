@@ -115,6 +115,48 @@ jobs:
           echo "Build successful: dist directory exists"
           ls -lah dist/ | head -20
 
+
+  cvode-wasm-sanitizer:
+    name: CVODE WASM sanitizer and solver tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Checkout SUNDIALS v7.4.0
+        uses: actions/checkout@v7
+        with:
+          repository: LLNL/sundials
+          ref: v7.4.0
+          path: wasm-sundials/sundials
+
+
+      - name: Set up Emscripten
+        uses: mymindstorm/setup-emsdk@v14
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+      - name: Run native bytecode verifier under ASan and UBSan
+        run: |
+          ./packages/engine/tests/native/generate_native_harness.sh
+          ./packages/engine/tests/native/verify_bytecode_native
+
+      - name: Build sanitizer-enabled CVODE WASM
+        working-directory: wasm-sundials
+        run: bash ./build_wasm.sh
+        env:
+          CVODE_SANITIZERS: '1'
+
+      - name: Run CVODE solver tests
+        run: node scripts/run_full_tests.mjs --config vitest.config.ts packages/engine/tests/CVODESolver*.spec.ts
   # Tool initialization safety check - verifies ODE, SSA, and NFsim runtimes
   # all load without import or initialization errors in a real browser context.
   tool-init-safety-check:

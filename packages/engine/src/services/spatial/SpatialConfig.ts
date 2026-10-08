@@ -31,6 +31,9 @@ export interface SpatialSimulationConfig {
   /** Spatial partition grid cell size in µm (0 = auto-compute) */
   partitionCellSize: number;
 
+  /** Reaction (interaction) radius in µm — pairs closer than this can react */
+  rxnRadius: number;
+
   /** Enable periodic boundary conditions */
   periodic: boolean;
 
@@ -152,6 +155,7 @@ export const DEFAULT_SPATIAL_CONFIG: SpatialSimulationConfig = {
   nReplicates: 1,
   reactionModel: 'smoluchowski',
   partitionCellSize: 0, // auto
+  rxnRadius: 0.01,     // 10 nm, matches the C engine's spatial_set_rxn_radius default
   periodic: false,
   snapshotInterval: 10,
 };

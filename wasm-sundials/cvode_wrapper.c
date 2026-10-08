@@ -2,6 +2,13 @@
 #include <stdlib.h>
 #include <math.h>
 #include <stdint.h>
+#include <stdarg.h>
+
+// Maximum operand-stack depth of the bytecode interpreter below. The verifier
+// in load_network() proves every reaction program fits within this bound, which
+// is what lets evaluate_expression() run unchecked.
+#define BC_STACK_MAX 64
+
 
 // Ensure realtype is defined
 typedef double realtype;
@@ -118,7 +125,7 @@ static double evaluate_expression(NetworkByteCode* bc, int reactionIdx, double* 
         return 0.0;
     }
 
-    double stack[64];
+    double stack[BC_STACK_MAX];
     int sp = 0;
     uint8_t* pc = bc->exprBytecode + bc->exprBytecodeOffsets[reactionIdx];
     uint8_t* end = bc->exprBytecode + bc->exprBytecodeOffsets[reactionIdx+1];
@@ -164,7 +171,12 @@ static double evaluate_expression(NetworkByteCode* bc, int reactionIdx, double* 
             case 15: { stack[sp-1] = cos(stack[sp-1]); break; } // COS
             case 16: { stack[sp-1] = ceil(stack[sp-1]); break; } // CEIL
             case 17: { stack[sp-1] = floor(stack[sp-1]); break; } // FLOOR
-            case 18: { stack[sp-1] = nearbyint(stack[sp-1]); break; } // ROUND (rint in TS)
+            // ROUND / rint. Must match BNG2's muParser Rint(), which is
+            // floor(v + 0.5) -- round-half-up. NOT nearbyint (ties-to-even) and
+            // NOT Math.round (ties toward +Infinity); they differ from BNG2 at
+            // e.g. 2.5 (nearbyint->2) and 0.49999999999999994 (Math.round->0).
+            // Keep in sync with case 18 of buildBytecodeEvaluator in ExpressionEvaluator.ts.
+            case 18: { stack[sp-1] = floor(stack[sp-1] + 0.5); break; } // ROUND (rint in TS)
             case 19: { stack[sp-1] = tan(stack[sp-1]); break; } // TAN
             case 20: { stack[sp-1] = asin(stack[sp-1]); break; } // ASIN
             case 21: { stack[sp-1] = acos(stack[sp-1]); break; } // ACOS
@@ -187,9 +199,14 @@ static double evaluate_expression(NetworkByteCode* bc, int reactionIdx, double* 
             case 32: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = ((a != 0.0) && (b != 0.0)) ? 1.0 : 0.0; break; } // AND
             case 33: { double b = stack[--sp]; double a = stack[--sp]; stack[sp++] = ((a != 0.0) || (b != 0.0)) ? 1.0 : 0.0; break; } // OR
             case 34: { stack[sp-1] = (stack[sp-1] == 0.0) ? 1.0 : 0.0; break; } // NOT
+            // Unreachable: verify_network() rejects unknown opcodes at load time.
+            // Retained only so a future edit that weakens the verifier degrades to
+            // a zero rate rather than to memory corruption.
             default: return 0.0;
         }
     }
+    // verify_network() guarantees sp == 1 for every non-empty program, so this is a
+    // redundant last-resort guard rather than a normal code path.
     return (sp > 0) ? stack[sp-1] : 0.0;
 }
 
@@ -893,6 +910,283 @@ int get_root_info(void* ptr, int* rootsfound) {
     return CVodeGetRootInfo(mem->cvode_mem, rootsfound);
 }
 
+
+// ---- Load-time bytecode verification ----
+//
+// evaluate_expression() and compute_observables() run unchecked on every RHS
+// evaluation, so every bound those two functions rely on must be proven once, at
+// load time. The WASM build compiles at -O3 with no assertions and the C stack
+// lives in linear memory, so an out-of-range stack or index access corrupts
+// neighbouring locals instead of trapping. Verifying here makes the interpreter
+// loop safe without adding per-call cost to the hot path.
+//
+// A reaction whose expression program is empty (offsets[r] == offsets[r+1]) is
+// legal and means "no expression": the rate falls back to the constant
+// rateConstant. Those programs are accepted and skipped.
+
+static char g_load_error[256];
+
+static void set_load_error(const char* fmt, ...) {
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(g_load_error, sizeof(g_load_error), fmt, ap);
+    va_end(ap);
+}
+
+// Reason the most recent load_network() call rejected a network, or "" if the
+// last load succeeded. Exported to JS so the solver can report why it fell back
+// to the JS RHS instead of failing silently.
+const char* get_last_load_error(void) {
+    return g_load_error;
+}
+
+// Monotonic, non-negative offsets, bounded by `max`. `count` is the number of
+// segments, so offsets has count+1 entries and offsets[count] is the total.
+static int verify_offsets(const char* name, const int* offsets, int count, int max, int* out_total) {
+    for (int i = 0; i < count; i++) {
+        if (offsets[i] < 0 || offsets[i] > max) {
+            set_load_error("%s[%d] = %d out of range [0, %d]", name, i, offsets[i], max);
+            return 0;
+        }
+        if (offsets[i + 1] < offsets[i]) {
+            set_load_error("%s not monotonic: %s[%d] = %d < %s[%d] = %d",
+                           name, name, i + 1, offsets[i + 1], name, i, offsets[i]);
+            return 0;
+        }
+    }
+    if (offsets[count] < 0) {
+        set_load_error("%s[%d] = %d out of range [0, %d]", name, count, offsets[count], max);
+        return 0;
+    }
+    if (offsets[count] > max) {
+        set_load_error("%s[%d] = %d exceeds total %d", name, count, offsets[count], max);
+        return 0;
+    }
+    *out_total = offsets[count];
+    return 1;
+}
+
+static int verify_indices(const char* name, const int* values, int count, int limit) {
+    for (int i = 0; i < count; i++) {
+        if (values[i] < 0 || values[i] >= limit) {
+            set_load_error("%s[%d] = %d out of range [0, %d)", name, i, values[i], limit);
+            return 0;
+        }
+    }
+    return 1;
+}
+
+// Verify one reaction's expression program: byte reads stay inside the program,
+// operand indices are in range, stack depth never underflows or exceeds
+// BC_STACK_MAX, and the program leaves exactly one value on the stack.
+static int verify_expression_program(const uint8_t* code, int start, int end,
+                                     int nSpecies, int nObservables, int reaction) {
+    if (start == end) return 1;  // empty program == no expression, legal
+
+    int pc = start;
+    int depth = 0;
+    int maxDepth = 0;
+
+    while (pc < end) {
+        uint8_t op = code[pc++];
+        if (op == 0xFF) {  // STOP
+            if (depth != 1) {
+                set_load_error("reaction %d: STOP at stack depth %d, expected exactly 1", reaction, depth);
+                return 0;
+            }
+            if (pc != end) {
+                set_load_error("reaction %d: STOP at byte %d is not the final byte of its program", reaction, pc - 1);
+                return 0;
+            }
+            return 1;
+        }
+
+        // Operand immediates must be fully contained in this program before we
+        // read them; otherwise the interpreter would run off the end.
+        int immediate = 0;  // bytes of immediate operand following the opcode
+        int required = 0;   // stack depth the opcode consumes
+        int produced = 0;   // stack depth the opcode leaves behind (after pop)
+
+        switch (op) {
+            case 0:  immediate = 8; required = 0; produced = 1; break;  // PUSH_CONST
+            case 1:  immediate = 4; required = 0; produced = 1; break;  // PUSH_SPEC
+            case 2:  immediate = 4; required = 0; produced = 1; break;  // PUSH_OBS
+            case 3: case 4: case 5: case 6: case 7:                       // ADD SUB MUL DIV POW
+            case 23: case 24:                                             // MAX MIN
+            case 26: case 27: case 28: case 29: case 30: case 31:         // LT GT LE GE EQ NE
+            case 32: case 33:                                             // AND OR
+                required = 2; produced = 1; break;
+            case 25: required = 3; produced = 1; break;                    // IF_ELSE
+            case 8:  case 9:  case 10: case 11: case 12: case 13:          // NEG EXP LOG LOG10 SQRT ABS
+            case 14: case 15: case 16: case 17: case 18: case 19:          // SIN COS CEIL FLOOR ROUND TAN
+            case 20: case 21: case 22:                                    // ASIN ACOS ATAN
+            case 34:                                                      // NOT
+                required = 1; produced = 1; break;
+            default:
+                set_load_error("reaction %d: unknown opcode %d at byte %d", reaction, (int)op, pc - 1);
+                return 0;
+        }
+
+        if (end - pc < immediate) {
+            set_load_error("reaction %d: opcode %d at byte %d truncated, needs %d operand bytes but only %d remain",
+                           reaction, (int)op, pc - 1, immediate, end - pc);
+            return 0;
+        }
+
+        if (op == 1 || op == 2) {
+            // Assemble via uint32_t: shifting a signed int32_t left into the sign
+            // bit is undefined behaviour, and UBSan flags it on any index whose
+            // top byte is >= 0x80.
+            uint32_t raw = (uint32_t)code[pc] | ((uint32_t)code[pc + 1] << 8) |
+                           ((uint32_t)code[pc + 2] << 16) | ((uint32_t)code[pc + 3] << 24);
+            int64_t idx = (int32_t)raw;   // reinterpret: negative indices are rejected below
+            int limit = (op == 1) ? nSpecies : nObservables;
+            if (idx < 0 || idx >= limit) {
+                set_load_error("reaction %d: opcode %d index %lld out of range [0, %d)",
+                               reaction, (int)op, (long long)idx, limit);
+                return 0;
+            }
+        }
+
+        pc += immediate;
+
+        if (depth < required) {
+            set_load_error("reaction %d: opcode %d at byte %d needs stack depth %d but only %d available",
+                           reaction, (int)op, pc - immediate - 1, required, depth);
+            return 0;
+        }
+        depth = depth - required + produced;
+        if (depth > maxDepth) maxDepth = depth;
+        if (maxDepth > BC_STACK_MAX) {
+            set_load_error("reaction %d: stack depth %d exceeds max %d", reaction, maxDepth, BC_STACK_MAX);
+            return 0;
+        }
+    }
+
+    if (depth == 1) return 1;  // the interpreter also accepts an implicit end
+    set_load_error("reaction %d: program ended at stack depth %d, expected exactly 1",
+                   reaction, depth);
+    return 0;
+}
+
+// Verify every array load_network() is about to copy and then index without
+// bounds checks. Runs on the caller's arrays *before* any allocation, because
+// the copy loops derive their lengths from these very offsets.
+static int verify_network(
+    int nReactions, int nSpecies, int nObservables,
+    const double* rateConstants, const int* nReactantsPerRxn,
+    const int* reactantOffsets, const int* reactantIdx, const int* reactantStoich,
+    const double* scalingVolumes,
+    const int* speciesOffsets, const int* speciesRxnIdx, const double* speciesStoich,
+    const double* speciesVolumes,
+    const int* jacRowPtr, const int* jacColIdx,
+    const int* jacContribOffsets, const int* jacContribRxnIdx, const double* jacContribCoeffs,
+    const int* obsOffsets, const int* obsSpeciesIdx, const double* obsCoeffs,
+    const int* exprBytecodeOffsets, const uint8_t* exprBytecode
+) {
+    if (nReactions < 0 || nSpecies < 0 || nObservables < 0) {
+        set_load_error("negative dimensions: %d reactions, %d species, %d observables",
+                       nReactions, nSpecies, nObservables);
+        return 0;
+    }
+
+    if (!reactantOffsets || !speciesOffsets || !exprBytecodeOffsets) {
+        set_load_error("missing required network offsets");
+        return 0;
+    }
+    if (nReactions > 0 && (!rateConstants || !nReactantsPerRxn || !scalingVolumes)) {
+        set_load_error("missing required reaction arrays");
+        return 0;
+    }
+    if (nSpecies > 0 && !speciesVolumes) {
+        set_load_error("missing speciesVolumes for %d species", nSpecies);
+        return 0;
+    }
+    if (nObservables > 0 && !obsOffsets) {
+        set_load_error("missing obsOffsets for %d observables", nObservables);
+        return 0;
+    }
+
+    if ((jacRowPtr || jacColIdx || jacContribOffsets || jacContribRxnIdx || jacContribCoeffs) &&
+        (!jacRowPtr || !jacContribOffsets)) {
+        set_load_error("incomplete Jacobian offsets");
+        return 0;
+    }
+
+
+
+    // Offsets arrays are CSR-style: non-negative, monotonic, and their final
+    // entry is the entry count that bounds the flat index array.
+    const int NO_LIMIT = 0x7fffffff;
+
+    int totalReactants = 0;
+    if (!verify_offsets("reactantOffsets", reactantOffsets, nReactions, NO_LIMIT, &totalReactants)) return 0;
+    if (totalReactants > 0 && (!reactantIdx || !reactantStoich)) {
+        set_load_error("missing reactant indices or stoichiometry for %d entries", totalReactants);
+        return 0;
+    }
+    if (!verify_indices("reactantIdx", reactantIdx, totalReactants, nSpecies)) return 0;
+
+    int totalStoich = 0;
+    if (!verify_offsets("speciesOffsets", speciesOffsets, nSpecies, NO_LIMIT, &totalStoich)) return 0;
+    if (totalStoich > 0 && (!speciesRxnIdx || !speciesStoich)) {
+        set_load_error("missing species reaction indices or stoichiometry for %d entries", totalStoich);
+        return 0;
+    }
+    if (!verify_indices("speciesRxnIdx", speciesRxnIdx, totalStoich, nReactions)) return 0;
+
+    // Observables index the state vector, so obsSpeciesIdx must be a valid species.
+    if (nObservables > 0) {
+        int totalObs = 0;
+        if (!verify_offsets("obsOffsets", obsOffsets, nObservables, NO_LIMIT, &totalObs)) return 0;
+        if (totalObs > 0 && (!obsSpeciesIdx || !obsCoeffs)) {
+            set_load_error("missing observable indices or coefficients for %d entries", totalObs);
+            return 0;
+        }
+        if (!verify_indices("obsSpeciesIdx", obsSpeciesIdx, totalObs, nSpecies)) return 0;
+    } else if (obsOffsets && obsOffsets[0] != 0) {
+        set_load_error("obsOffsets[0] = %d but nObservables is 0", obsOffsets[0]);
+        return 0;
+    }
+
+    // Jacobian sparsity pattern is optional; when present it indexes species
+    // columns and reaction rows, both unchecked in network_jac().
+    if (jacRowPtr) {
+        int totalJacEntries = 0;
+        if (!verify_offsets("jacRowPtr", jacRowPtr, nSpecies, NO_LIMIT, &totalJacEntries)) return 0;
+        if (totalJacEntries > 0 && !jacColIdx) {
+            set_load_error("missing jacColIdx for %d entries", totalJacEntries);
+            return 0;
+        }
+        if (jacColIdx && !verify_indices("jacColIdx", jacColIdx, totalJacEntries, nSpecies)) return 0;
+
+        int totalContribEntries = 0;
+        if (!verify_offsets("jacContribOffsets", jacContribOffsets, totalJacEntries, NO_LIMIT, &totalContribEntries)) return 0;
+        if (totalContribEntries > 0 && (!jacContribRxnIdx || !jacContribCoeffs)) {
+            set_load_error("missing Jacobian contribution indices or coefficients for %d entries", totalContribEntries);
+            return 0;
+        }
+        if (jacContribRxnIdx &&
+            !verify_indices("jacContribRxnIdx", jacContribRxnIdx, totalContribEntries, nReactions)) return 0;
+    }
+
+    int totalBytecode = 0;
+    if (!verify_offsets("exprBytecodeOffsets", exprBytecodeOffsets, nReactions, NO_LIMIT, &totalBytecode)) return 0;
+    if (totalBytecode > 0 && !exprBytecode) {
+        set_load_error("missing exprBytecode for %d bytes", totalBytecode);
+        return 0;
+    }
+    for (int r = 0; r < nReactions; r++) {
+        if (!verify_expression_program(exprBytecode, exprBytecodeOffsets[r], exprBytecodeOffsets[r + 1],
+                                       nSpecies, nObservables, r)) {
+            return 0;
+        }
+    }
+
+    g_load_error[0] = '\0';
+    return 1;
+}
+
 // ---- Network Bytecode API ----
 
 void unload_network(uintptr_t handle) {
@@ -951,6 +1245,22 @@ uintptr_t load_network(
     uint8_t* exprBytecode,     // [totalBytecodeLength]
     double* exprConstants      // [totalConstantsLength]
 ) {
+    // Validate before allocating anything: the copy loops below derive their
+    // lengths from these offsets, and every consumer indexes the copied arrays
+    // without bounds checks. Rejecting here makes the interpreter loop safe
+    // without adding per-call cost.
+    if (!verify_network(
+            nReactions, nSpecies, nObservables,
+            rateConstants, nReactantsPerRxn,
+            reactantOffsets, reactantIdx, reactantStoich,
+            scalingVolumes,
+            speciesOffsets, speciesRxnIdx, speciesStoich, speciesVolumes,
+            jacRowPtr, jacColIdx, jacContribOffsets, jacContribRxnIdx, jacContribCoeffs,
+            obsOffsets, obsSpeciesIdx, obsCoeffs,
+            exprBytecodeOffsets, exprBytecode)) {
+        return 0;
+    }
+
     NetworkByteCode* bc = (NetworkByteCode*)malloc(sizeof(NetworkByteCode));
     if (!bc) return 0;
 
