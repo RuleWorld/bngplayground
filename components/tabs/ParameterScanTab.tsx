@@ -105,9 +105,6 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
   const isMountedRef = useRef(true);
   const cachedModelIdRef = useRef<number | null>(null);
 
-  const previousModelRef = useRef<BNGLModel | null>(null);
-  const previousParameter1 = useRef<string | null>(null);
-  const previousParameter2 = useRef<string | null>(null);
 
   // Each explicit seed species is a potential initial-amount scan, even when
   // its BNGL initial expression is a numeric literal or zero.
@@ -170,87 +167,44 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
 
 
+  const effectiveParameter1 = (parameter1 && parameterNames.includes(parameter1))
+    ? parameter1
+    : (parameterNames[0] ?? '');
+
+  const effectiveParameter2 = (parameter2 && parameterNames.includes(parameter2) && parameter2 !== effectiveParameter1)
+    ? parameter2
+    : (parameterNames.find((name) => name !== effectiveParameter1) ?? parameterNames[0] ?? '');
+
+  // Reset state when model changes
+  const [prevModel, setPrevModel] = useState<BNGLModel | null>(null);
+  if (model !== prevModel) {
+    setPrevModel(model);
+    setParam1Start('');
+    setParam1End('');
+    setParam2Start('');
+    setParam2End('');
+    setParameter1('');
+    setParameter2('');
+    setSelectedObservable('');
+    setOneDResult(null);
+    setTwoDResult(null);
+    setScanModelSource(null);
+  }
+
   // Both 2D axes can target the same seed: one through the parameter that
   // defines it, the other through a direct amount. The direct amount wins, so
   // the combination is legal but the parameter axis would have no effect.
-  const initialAmountConflict = useMemo(() => {
-    if (scanType !== '2d' || !parameter1 || !parameter2 || parameter1 === parameter2) return null;
+  const initialAmountConflict = (() => {
+    if (scanType !== '2d' || !effectiveParameter1 || !effectiveParameter2 || effectiveParameter1 === effectiveParameter2) return null;
     const isDirectScan = (name: string) => parameterTypeMap[name] === 'species';
-    for (const species of [parameter1, parameter2].filter(isDirectScan)) {
-      const driver = [parameter1, parameter2]
+    for (const species of [effectiveParameter1, effectiveParameter2].filter(isDirectScan)) {
+      const driver = [effectiveParameter1, effectiveParameter2]
         .filter(name => !isDirectScan(name))
         .find(parameter => paramToSpecies[parameter]?.includes(species));
       if (driver) return { species, parameter: driver };
     }
     return null;
-  }, [scanType, parameter1, parameter2, parameterTypeMap, paramToSpecies]);
-
-
-
-  useEffect(() => {
-    if (!model) {
-      setParameter1('');
-      setParameter2('');
-      setSelectedObservable('');
-      setOneDResult(null);
-      setTwoDResult(null);
-      setScanModelSource(null);
-      setParam1Start('');
-      setParam1End('');
-      setParam2Start('');
-      setParam2End('');
-      previousModelRef.current = null;
-      previousParameter1.current = null;
-      previousParameter2.current = null;
-      return;
-    }
-
-    if (previousModelRef.current !== model) {
-      setParam1Start('');
-      setParam1End('');
-      setParam2Start('');
-      setParam2End('');
-      previousParameter1.current = null;
-      previousParameter2.current = null;
-      previousModelRef.current = model;
-    }
-
-    if (!parameterNames.includes(parameter1)) {
-      setParameter1(parameterNames[0] ?? '');
-    }
-
-    if (!parameterNames.includes(parameter2) || parameter2 === parameter1) {
-      const secondChoice = parameterNames.find((name) => name !== parameter1);
-      setParameter2(secondChoice ?? parameterNames[0] ?? '');
-    }
-
-    if (!selectedObservable || !observableNames.includes(selectedObservable)) {
-      setSelectedObservable(observableNames[0] ?? '');
-    }
-  }, [model, parameter1, parameter2, parameterNames, observableNames, selectedObservable]);
-
-  useEffect(() => {
-    if (!model) return;
-    if (parameter1 && previousParameter1.current !== parameter1) {
-      previousParameter1.current = parameter1;
-      setParam1Start('');
-      setParam1End('');
-    }
-  }, [model, parameter1]);
-
-  useEffect(() => {
-    if (!model) return;
-    if (parameter2 && previousParameter2.current !== parameter2) {
-      previousParameter2.current = parameter2;
-      setParam2Start('');
-      setParam2End('');
-    }
-  }, [model, parameter2]);
-
-  useEffect(() => {
-    setOneDResult(null);
-    setTwoDResult(null);
-  }, [scanType]);
+  })();
 
   // Cleanup surrogate when model changes
   useEffect(() => {
@@ -569,12 +523,6 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
     }));
   }, [observableNames]);
 
-  // Update visible observables when results arrive
-  useEffect(() => {
-    if (oneDResult && visibleObservables.size === 0) {
-      setVisibleObservables(new Set([selectedObservable]));
-    }
-  }, [oneDResult, selectedObservable]);
 
   const heatmapData = useMemo(() => {
     if (!twoDResult || !selectedObservable) return null;
@@ -651,8 +599,12 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
   const scanAxes = [
     {
       axis: 1 as const,
-      selected: parameter1,
-      onSelect: setParameter1,
+      selected: effectiveParameter1,
+      onSelect: (val: string) => {
+        setParameter1(val);
+        setParam1Start('');
+        setParam1End('');
+      },
       start: param1Start,
       onStart: setParam1Start,
       end: param1End,
@@ -664,8 +616,12 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
     },
     {
       axis: 2 as const,
-      selected: parameter2,
-      onSelect: setParameter2,
+      selected: effectiveParameter2,
+      onSelect: (val: string) => {
+        setParameter2(val);
+        setParam2Start('');
+        setParam2End('');
+      },
       start: param2Start,
       onStart: setParam2Start,
       end: param2End,
@@ -789,6 +745,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         }
         if (isMountedRef.current) {
           setOneDResult(result);
+          setVisibleObservables(new Set([selectedObservable]));
           setScanModelSource(bnglText || null);
         }
       } else {
@@ -1272,7 +1229,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
               surrogateStatus === 'ready' ? 'Retrain Surrogate' : 'Train Surrogate'}
           </Button>
 
-          {surrogateRef.current && (
+          {(surrogateStatus === 'ready' || surrogateStatus === 'error') && (
             <Button
               variant="subtle"
               onClick={() => {
