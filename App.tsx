@@ -32,18 +32,35 @@ const findExampleById = (id?: string | null) => {
   return getModelCatalogSync()?.examples.find((example) => example.id === id);
 };
 
+// Slider-driven parameter edits re-solve on every frame; diagnostics are allowed to lag
+// slightly behind so they never stall the plot update.
+const PARAM_DIAGNOSTICS_SETTLE_MS = 200;
+
 function App() {
   const PANEL_MAX_HEIGHT = 'calc(100vh - 120px)';
 
   const MIN_SPLIT_POSITION = 18; // percentage
   const MAX_SPLIT_POSITION = 82; 
   const [code, setCode] = useState<string>(INITIAL_BNGL_CODE);
-  // Refs for editor/code diffing and debounce timer for parameter-only edits
+  // Refs for editor/code diffing, diagnostics settling, and slider-driven re-solves
   const codeRef = useRef<string>(INITIAL_BNGL_CODE);
   const lastParsedCodeRef = useRef<string>(normalizeCode(INITIAL_BNGL_CODE));
   const paramPatchTimerRef = useRef<number | null>(null);
+  const paramPatchFrameRef = useRef<number | null>(null);
+  const paramSolveRunningRef = useRef(false);
+  const paramSolvePendingRef = useRef(false);
+  const paramSolveAbortRef = useRef<AbortController | null>(null);
+  const pendingSliderChangesRef = useRef<Map<string, string>>(new Map());
   const [model, setModel] = useState<BNGLModel | null>(null);
   const [results, setResults] = useState<SimulationResults | null>(null);
+  const modelRef = useRef<BNGLModel | null>(null);
+  const resultsRef = useRef<SimulationResults | null>(null);
+  useEffect(() => {
+    modelRef.current = model;
+  }, [model]);
+  useEffect(() => {
+    resultsRef.current = results;
+  }, [results]);
   // Keep the exact source used for the completed run; later editor edits must
   // not change model provenance in a result export.
   const [completedModelSource, setCompletedModelSource] = useState<string | null>(null);
@@ -213,6 +230,16 @@ function App() {
     setResults(null);
     setCompletedModelSource(null);
     preparedParameterOverridesRef.current = {};
+    if (paramSolveAbortRef.current) {
+      paramSolveAbortRef.current.abort('Model reparsed.');
+      paramSolveAbortRef.current = null;
+      paramSolvePendingRef.current = false;
+    }
+    if (paramPatchFrameRef.current !== null) {
+      cancelAnimationFrame(paramPatchFrameRef.current);
+      paramPatchFrameRef.current = null;
+      pendingSliderChangesRef.current = new Map();
+    }
     if (parseAbortRef.current) {
       parseAbortRef.current.abort('Parse request replaced.');
     }
@@ -316,6 +343,12 @@ function App() {
     if (simulateAbortRef.current) {
       simulateAbortRef.current.abort('Simulation replaced.');
     }
+    // A full run supersedes any in-flight slider re-solve.
+    if (paramSolveAbortRef.current) {
+      paramSolveAbortRef.current.abort('Simulation replaced.');
+      paramSolveAbortRef.current = null;
+      paramSolvePendingRef.current = false;
+    }
     const controller = new AbortController();
     simulateAbortRef.current = controller;
     simulationWarningRef.current = null;
@@ -379,7 +412,8 @@ function App() {
     }
   };
 
-  // Apply numeric parameter changes in-place without reparsing/simulating. Re-resolves dependent params and species initial concentrations.
+  // Apply numeric parameter changes in-place without reparsing. Re-resolves dependent params and
+  // species initial concentrations, then re-solves so plots track the value being dragged.
   async function applyParameterPatch(changes: Map<string, string>, currentModel: BNGLModel | null) {
     if (!currentModel) return;
     try {
@@ -393,30 +427,25 @@ function App() {
         if (species.initialExpression) originalSeeds.set(species.name, species.initialExpression);
       }
       updatePreparedModel(currentModel, directOverrides, { mutate: true, seedExpressions: originalSeeds });
-      if (results && simOptionsRef.current) {
+      if (resultsRef.current && simOptionsRef.current) {
         Object.assign(preparedParameterOverridesRef.current, directOverrides);
       }
       currentModel.cacheRevision = (currentModel.cacheRevision ?? 0) + 1;
 
-      // Update state to reflect parameter-only changes; do not reparse or simulate
+      // Update state to reflect parameter-only changes; do not reparse or simulate.
       // A new identity prevents the worker cache from reusing the pre-edit model.
       const updatedModel = { ...currentModel };
       setModel(updatedModel);
 
-      // Re-run validation and lint so editor markers update (but do not run network generation/simulation)
-      const warnings = validateBNGLModel(currentModel);
-      setValidationWarnings(warnings);
-      const lintResult = lintBNGL(currentModel);
-      setEditorMarkers([
-        ...validationWarningsToMarkers(codeRef.current, warnings),
-        ...lintDiagnosticsToMarkers(codeRef.current, lintResult.diagnostics),
-      ]);
+      // Validation and linting are editor-diagnostic work that is too slow to repeat on every
+      // animation frame of a drag, so let them settle once the value stops moving.
+      scheduleParameterDiagnostics(updatedModel);
 
       setStatus({ type: 'success', message: `Updated ${changes.size} parameter${changes.size === 1 ? '' : 's'} (no reparse)` });
 
-      // If we already have simulation results and options, re-solve without re-parsing (debounced upstream)
-      if (results && simOptionsRef.current) {
-        void runSimulationForParameterUpdate(updatedModel, simOptionsRef.current, changes);
+      // If we already have simulation results and options, re-solve without re-parsing.
+      if (resultsRef.current && simOptionsRef.current) {
+        void runSimulationForParameterUpdate();
       }
     } catch (e) {
       console.warn('Parameter patch failed:', e);
@@ -424,23 +453,52 @@ function App() {
     }
   }
 
-  const runSimulationForParameterUpdate = async (updatedModel: BNGLModel, options: SimulationOptions, changes: Map<string, string>) => {
-    if (simulateAbortRef.current) {
-      simulateAbortRef.current.abort('Parameter update replaced.');
+  // Re-run validation and lint so editor markers catch up once parameter edits stop streaming.
+  const scheduleParameterDiagnostics = (targetModel: BNGLModel) => {
+    if (paramPatchTimerRef.current) {
+      window.clearTimeout(paramPatchTimerRef.current);
     }
-    const controller = new AbortController();
-    simulateAbortRef.current = controller;
+    paramPatchTimerRef.current = window.setTimeout(() => {
+      paramPatchTimerRef.current = null;
+      const warnings = validateBNGLModel(targetModel);
+      setValidationWarnings(warnings);
+      const lintResult = lintBNGL(targetModel);
+      setEditorMarkers([
+        ...validationWarningsToMarkers(codeRef.current, warnings),
+        ...lintDiagnosticsToMarkers(codeRef.current, lintResult.diagnostics),
+      ]);
+    }, PARAM_DIAGNOSTICS_SETTLE_MS);
+  };
+
+  // Latest-wins re-solve: a drag queues many parameter values, so let the in-flight solve finish
+  // instead of aborting it, then run once more with the newest values.
+  const runSimulationForParameterUpdate = async () => {
+    const options = simOptionsRef.current;
+    if (!options) return;
+
+    if (paramSolveRunningRef.current) {
+      paramSolvePendingRef.current = true;
+      return;
+    }
+
+    paramSolveRunningRef.current = true;
     setIsSimulating(true);
     setStatus({ type: 'info', message: 'Updating simulation for parameter change...' });
+    const controller = new AbortController();
+    paramSolveAbortRef.current = controller;
     try {
-      const overrides = { ...preparedParameterOverridesRef.current };
-      const simResults = await bnglService.simulatePreparedWithOverrides(overrides, options, {
-        signal: controller.signal,
-        description: 'Simulation (parameter update)',
-      });
-      setResults(simResults);
-      setCompletedModelSource(codeRef.current || null);
-      setStatus({ type: 'success', message: 'Simulation updated for parameter change.' });
+      do {
+        paramSolvePendingRef.current = false;
+        const overrides = { ...preparedParameterOverridesRef.current };
+        const simResults = await bnglService.simulatePreparedWithOverrides(
+          overrides,
+          options,
+          { signal: controller.signal, description: 'Simulation (parameter update)' },
+        );
+        setResults(simResults);
+        setCompletedModelSource(codeRef.current || null);
+        setStatus({ type: 'success', message: 'Simulation updated for parameter change.' });
+      } while (paramSolvePendingRef.current && !controller.signal.aborted);
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -448,9 +506,10 @@ function App() {
       const message = error instanceof Error ? error.message : 'An unknown error occurred.';
       setStatus({ type: 'warning', message: `Parameter update simulation failed: ${message}` });
     } finally {
-      if (simulateAbortRef.current === controller) {
-        simulateAbortRef.current = null;
+      if (paramSolveAbortRef.current === controller) {
+        paramSolveAbortRef.current = null;
       }
+      paramSolveRunningRef.current = false;
       setIsSimulating(false);
     }
   };
@@ -497,6 +556,16 @@ function App() {
       simulateAbortRef.current.abort('Simulation cancelled by user.');
       simulateAbortRef.current = null;
     }
+    if (paramPatchFrameRef.current !== null) {
+      cancelAnimationFrame(paramPatchFrameRef.current);
+      paramPatchFrameRef.current = null;
+      pendingSliderChangesRef.current = new Map();
+    }
+    if (paramSolveAbortRef.current) {
+      paramSolveAbortRef.current.abort('Simulation cancelled by user.');
+      paramSolveAbortRef.current = null;
+      paramSolvePendingRef.current = false;
+    }
     // Force reset state immediately when user cancels
     setIsSimulating(false);
     setGenerationProgress('');
@@ -509,8 +578,10 @@ function App() {
   // Remove the parameters block from source for equality checks
 
   // Called by the editor on every change. If the change is strictly numeric parameter edits
-  // (nothing else changed), apply them analytically after a 500ms debounce without reparsing/simulating.
-  const handleEditorCodeChange = useCallback((newCode: string) => {
+  // (nothing else changed), apply them analytically without reparsing.
+  // `immediate` (parameter sliders) applies on the next animation frame so plots track the drag;
+  // typed edits keep a 500ms debounce so each keystroke does not re-solve.
+  const handleEditorCodeChange = useCallback((newCode: string, options?: { immediate?: boolean }) => {
     const prev = codeRef.current || '';
     // Update UI code immediately
     setCode(newCode);
@@ -588,10 +659,28 @@ function App() {
       return;
     }
 
-    // Debounce applyParameterPatch with 500ms
+    // Drop any debounced patch: a direct slider move supersedes it.
     if (paramPatchTimerRef.current) {
       window.clearTimeout(paramPatchTimerRef.current);
+      paramPatchTimerRef.current = null;
     }
+
+    if (options?.immediate) {
+      for (const [name, value] of changes) {
+        pendingSliderChangesRef.current.set(name, value);
+      }
+      if (paramPatchFrameRef.current === null) {
+        paramPatchFrameRef.current = window.requestAnimationFrame(() => {
+          paramPatchFrameRef.current = null;
+          const pending = pendingSliderChangesRef.current;
+          pendingSliderChangesRef.current = new Map();
+          if (pending.size > 0) void applyParameterPatch(pending, modelRef.current);
+        });
+      }
+      return;
+    }
+
+    // Debounce applyParameterPatch with 500ms
     paramPatchTimerRef.current = window.setTimeout(() => {
       paramPatchTimerRef.current = null;
       applyParameterPatch(changes, model);
@@ -611,6 +700,15 @@ function App() {
       if (paramPatchTimerRef.current) {
         window.clearTimeout(paramPatchTimerRef.current);
         paramPatchTimerRef.current = null;
+      }
+      if (paramPatchFrameRef.current !== null) {
+        cancelAnimationFrame(paramPatchFrameRef.current);
+        paramPatchFrameRef.current = null;
+      }
+      pendingSliderChangesRef.current = new Map();
+      if (paramSolveAbortRef.current) {
+        paramSolveAbortRef.current.abort('App unmounted');
+        paramSolveAbortRef.current = null;
       }
     };
   }, []);
