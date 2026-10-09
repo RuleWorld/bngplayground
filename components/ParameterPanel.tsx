@@ -1,10 +1,9 @@
-
-import React, { useMemo, useState, useEffect } from 'react';
+import React, { useMemo, useState, useEffect, useRef } from 'react';
 import { parseParameters, type Parameter } from '../src/utils/bnglManipulation';
 
 interface ParameterPanelProps {
   code: string;
-  onCodeChange: (newCode: string) => void;
+  onCodeChange: (newCode: string, options?: { immediate?: boolean }) => void;
 }
 
 
@@ -26,10 +25,25 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
   // We use a log-scale slider where 0 is the initial value.
   const [localParams, setLocalParams] = useState<LocalParameterState[]>([]);
 
-  const isEditingRef = React.useRef(false);
-  const timeoutRef = React.useRef<NodeJS.Timeout | null>(null);
+  const isEditingRef = useRef(false);
+  // Newest code emitted by a slider, so concurrent slider moves never build on a stale prop.
+  const latestCodeRef = useRef(code);
 
-  // Sync upstream changes to local state
+  useEffect(() => {
+    latestCodeRef.current = code;
+  }, [code]);
+  // A drag can end outside the slider, so clear the editing flag globally.
+  useEffect(() => {
+    const release = () => {
+      isEditingRef.current = false;
+    };
+    window.addEventListener('pointerup', release);
+    window.addEventListener('pointercancel', release);
+    return () => {
+      window.removeEventListener('pointerup', release);
+      window.removeEventListener('pointercancel', release);
+    };
+  }, []);
   useEffect(() => {
     // If we are actively dragging, ignore upstream echoes unless it seems like a new load.
     // However, after the drag finishes (and isEditingRef becomes false), we get a code update.
@@ -87,57 +101,51 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
     }
   }, [parsedParams]);
 
+  const emitParameterValue = (name: string, value: number) => {
+    // Read the newest code we know about rather than the render-time prop, so two
+    // sliders moved in the same frame both land.
+    const baseCode = latestCodeRef.current;
+    const baseParams = parseParameters(baseCode);
+    const target = baseParams.find(p => p.name === name);
+    if (!target) return;
+
+    const lines = baseCode.split(/\r?\n/);
+    const line = lines[target.lineIndex];
+    if (line === undefined) return;
+
+    const nameRegex = new RegExp(`(${target.name}\\s+)([\\d\\.eE\\-\\+]+)(.*)`);
+    if (!nameRegex.test(line)) return;
+
+    lines[target.lineIndex] = line.replace(nameRegex, `$1${value}$3`);
+    const nextCode = lines.join('\n');
+    latestCodeRef.current = nextCode;
+    // `immediate` skips the editor-typing debounce so the plots track the slider.
+    onCodeChange(nextCode, { immediate: true });
+  };
+
   const handleSliderChange = (index: number, newSliderValue: number) => {
+    const param = localParams[index];
+    if (!param) return;
+
     isEditingRef.current = true;
 
-    // Calculate new value immediately
-    let computedValue: number;
+    // Log scale calculation: Value = Initial * 10^(Slider)
+    const raw = param.initialValue === 0
+      ? newSliderValue // Simple linear around 0
+      : param.initialValue * Math.pow(10, newSliderValue);
+    const value = Number(raw.toPrecision(4));
+
     setLocalParams(prev => {
       const next = [...prev];
-      const param = next[index];
-      // Log scale calculation: Value = Initial * 10^(Slider)
-      let val;
-      if (param.initialValue === 0) {
-        val = newSliderValue; // Simple linear around 0
-      } else {
-        val = param.initialValue * Math.pow(10, newSliderValue);
-      }
-      val = Number(val.toPrecision(4));
-      computedValue = val; // Capture for timeout
-
-      next[index] = { ...param, sliderValue: newSliderValue, value: val };
+      next[index] = { ...next[index], sliderValue: newSliderValue, value };
       return next;
     });
 
-    // Debounce the heavy code update
-    if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    emitParameterValue(param.name, value);
+  };
 
-    timeoutRef.current = setTimeout(() => {
-      // We use the computedValue captured from the drag event
-      if (computedValue === undefined) return; // Should not happen
-
-      // Find the parameter by name in the parsed parameters to get the correct line number
-      const paramName = parsedParams[index]?.name;
-      if (!paramName) return;
-
-      const originalParam = parsedParams.find(p => p.name === paramName);
-
-      if (originalParam) {
-        const lines = code.split(/\r?\n/);
-        const line = lines[originalParam.lineIndex];
-        const nameRegex = new RegExp(`(${originalParam.name}\\s+)([\\d\\.eE\\-\\+]+)(.*)`);
-        const match = line.match(nameRegex);
-
-        if (match) {
-          const newCodeLine = line.replace(nameRegex, `$1${computedValue}$3`);
-          lines[originalParam.lineIndex] = newCodeLine;
-          onCodeChange(lines.join('\n'));
-        }
-      }
-
-      isEditingRef.current = false;
-      timeoutRef.current = null;
-    }, 100);
+  const endSliderEdit = () => {
+    isEditingRef.current = false;
   };
 
   if (localParams.length === 0) return null;
@@ -161,6 +169,8 @@ export const ParameterPanel: React.FC<ParameterPanelProps> = ({ code, onCodeChan
               step={0.01}
               value={param.sliderValue}
               onChange={(e) => handleSliderChange(i, parseFloat(e.target.value))}
+              onKeyUp={endSliderEdit}
+              onBlur={endSliderEdit}
               className="w-full h-1.5 bg-slate-200 rounded-lg appearance-none cursor-pointer dark:bg-slate-700 accent-primary-500"
               aria-label={param.name}
             />

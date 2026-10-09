@@ -61,6 +61,41 @@ function buildEquidistantTicks(min: number, max: number, count = 6): number[] {
   return ticks;
 }
 
+// Decade ticks for a log axis, in the log10 space the axis plots in. An
+// equidistant split of a log domain lands on positions like 10^(-1.8), whose
+// labels (0.0158, 3.9811) read as arbitrary instead of as measured values.
+// Spans narrower than four decades fall back to 1-2-5 subdivisions so the axis
+// still carries enough labels.
+function buildLogTicks(minLog: number, maxLog: number, maxTicks = 8): number[] {
+  if (!Number.isFinite(minLog) || !Number.isFinite(maxLog)) return [];
+  const lo = Math.min(minLog, maxLog);
+  const hi = Math.max(minLog, maxLog);
+  if (hi <= lo) return [lo];
+
+  const firstDecade = Math.ceil(lo - 1e-9);
+  const lastDecade = Math.floor(hi + 1e-9);
+  // Domain sits strictly inside one decade (e.g. 0.5 → 0.9): only its ends.
+  if (firstDecade > lastDecade) return [lo, hi];
+
+  const decades: number[] = [];
+  for (let k = firstDecade; k <= lastDecade; k++) decades.push(k);
+
+  if (decades.length >= 4) {
+    const stride = Math.max(1, Math.ceil(decades.length / maxTicks));
+    return decades.filter((_, index) => index % stride === 0);
+  }
+
+  const subdivisions = [0, Math.log10(2), Math.log10(5)];
+  const ticks: number[] = [];
+  for (const k of decades) {
+    for (const offset of subdivisions) {
+      const tick = k + offset;
+      if (tick >= lo - 1e-9 && tick <= hi + 1e-9) ticks.push(tick);
+    }
+  }
+  return ticks.length >= 2 ? ticks : decades;
+}
+
 /**
  * Standard TimeSeriesChart for BioNetGen simulation results.
  * Abstracted for UI consistency across the app.
@@ -161,8 +196,6 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
   }, [data, xAxisKey, xAxisScale, yAxisScale, series]);
 
   const displayXKey = xAxisScale === 'log' ? `__${xAxisKey}` : xAxisKey;
-  const displayXLabel = xAxisScale === 'log' ? `log(${xAxisLabel})` : xAxisLabel;
-  const displayYLabel = yAxisScale === 'log' ? `log(${yAxisLabel})` : yAxisLabel;
 
   const effectiveXAxisDomain = useMemo<[number, number] | undefined>(() => {
     if (currentDomain && typeof currentDomain.x1 === 'number' && typeof currentDomain.x2 === 'number') {
@@ -218,8 +251,39 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
 
   const xTicks = useMemo(() => {
     if (!effectiveXAxisDomain) return undefined;
-    return buildEquidistantTicks(effectiveXAxisDomain[0], effectiveXAxisDomain[1]);
-  }, [effectiveXAxisDomain]);
+    return xAxisScale === 'log'
+      ? buildLogTicks(effectiveXAxisDomain[0], effectiveXAxisDomain[1])
+      : buildEquidistantTicks(effectiveXAxisDomain[0], effectiveXAxisDomain[1]);
+  }, [effectiveXAxisDomain, xAxisScale]);
+
+  const effectiveYAxisDomain = useMemo<[number | string, number | string] | undefined>(() => {
+    if (currentDomain && typeof currentDomain.y1 === 'number' && typeof currentDomain.y2 === 'number') {
+      return [Math.min(currentDomain.y1, currentDomain.y2), Math.max(currentDomain.y1, currentDomain.y2)];
+    }
+    if (yAxisDomain) return yAxisDomain;
+    if (yAxisScale !== 'log') return [0, 'auto'];
+
+    // The domain is expressed in log10 space, so the linear floor of 0 would
+    // mean a raw value of 1 and clip every point below it off the chart.
+    let min = Infinity;
+    let max = -Infinity;
+    for (const s of series) {
+      for (let i = 0; i < plotData.length; i++) {
+        const value = Number(plotData[i]?.[`__${s.name}`]);
+        if (!Number.isFinite(value)) continue;
+        if (value < min) min = value;
+        if (value > max) max = value;
+      }
+    }
+    return Number.isFinite(min) && Number.isFinite(max) ? [min, max] : undefined;
+  }, [currentDomain, yAxisDomain, yAxisScale, series, plotData]);
+
+  const yTicks = useMemo(() => {
+    if (yAxisScale !== 'log' || !effectiveYAxisDomain) return undefined;
+    const [lo, hi] = effectiveYAxisDomain;
+    if (typeof lo !== 'number' || typeof hi !== 'number') return undefined;
+    return buildLogTicks(lo, hi);
+  }, [effectiveYAxisDomain, yAxisScale]);
 
   // Manual legend payload to keep it outside the SVG coordinate space (avoids squishing)
   const legendPayload = useMemo(() => series.map(s => ({
@@ -259,7 +323,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
               domain={effectiveXAxisDomain ?? ['auto', 'auto']}
               allowDataOverflow={true}
               label={{
-                value: displayXLabel,
+                value: xAxisLabel,
                 position: 'insideBottom',
                 offset: -12,
                 fill: '#0f172a',
@@ -273,10 +337,11 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
               axisLine={{ stroke: '#94a3b8', strokeWidth: 1 }}
               tickLine={{ stroke: '#94a3b8' }}
               tick={{ fill: '#334155', fontSize: 12, fontWeight: 500 }}
-              domain={currentDomain ? [currentDomain.y1, currentDomain.y2] : (yAxisDomain ?? [0, 'auto'])}
+              ticks={yTicks}
+              domain={effectiveYAxisDomain ?? ['auto', 'auto']}
               allowDataOverflow={true}
               label={{
-                value: displayYLabel,
+                value: yAxisLabel,
                 angle: -90,
                 position: 'insideLeft',
                 offset: -10,

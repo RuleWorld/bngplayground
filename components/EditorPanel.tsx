@@ -70,7 +70,7 @@ import { getSimulationOptionsFromParsedModel } from '@bngplayground/engine';
 
 interface EditorPanelProps {
   code: string;
-  onCodeChange: (code: string) => void;
+  onCodeChange: (code: string, options?: { immediate?: boolean }) => void;
   onLoadCode?: (code: string) => void;
   editorResetKey?: number;
   onParse: (codeOverride?: string) => Promise<BNGLModel | null>;
