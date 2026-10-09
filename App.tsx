@@ -152,7 +152,7 @@ function App() {
   const preparedParameterOverridesRef = useRef<Record<string, number>>({});
 
   // Editor resizing support
-  const [lastResized, setLastResized] = useState<number>(Date.now());
+  const [lastResized, setLastResized] = useState<number>(() => Date.now());
   const [_editorWidth, setEditorWidth] = useState(0);
   const editorContainerRef = useRef<HTMLDivElement>(null);
 
@@ -361,6 +361,7 @@ function App() {
     }
     const controller = new AbortController();
     simulateAbortRef.current = controller;
+    // eslint-disable-next-line react-hooks/immutability
     simulationWarningRef.current = null;
     const executionModelSource = modelSourceOverride ?? codeRef.current;
 
@@ -868,6 +869,7 @@ function App() {
   useEffect(() => {
     if (loadedModelId) {
       // parse in background, ignore result
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       handleParse();
     }
   }, [loadedModelId, handleParse]);
