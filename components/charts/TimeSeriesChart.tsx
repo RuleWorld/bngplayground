@@ -66,7 +66,7 @@ function buildEquidistantTicks(min: number, max: number, count = 6): number[] {
 // labels (0.0158, 3.9811) read as arbitrary instead of as measured values.
 // Spans narrower than four decades fall back to 1-2-5 subdivisions so the axis
 // still carries enough labels.
-function buildLogTicks(minLog: number, maxLog: number, maxTicks = 8): number[] {
+export function buildLogTicks(minLog: number, maxLog: number, maxTicks = 8): number[] {
   if (!Number.isFinite(minLog) || !Number.isFinite(maxLog)) return [];
   const lo = Math.min(minLog, maxLog);
   const hi = Math.max(minLog, maxLog);
@@ -94,6 +94,31 @@ function buildLogTicks(minLog: number, maxLog: number, maxTicks = 8): number[] {
     }
   }
   return ticks.length >= 2 ? ticks : decades;
+}
+
+/**
+ * Log10 domain of the Y axis, in the log10 space the axis plots in.
+ *
+ * Points that cannot be plotted on a log axis (zero, negative, missing,
+ * non-numeric) are stored as `null` by `plotData`, so they are filtered out
+ * here. `Number(null)` is `0`, which would otherwise read as `log10(1)` and
+ * drag the domain floor up to a raw value of 1, clipping real points.
+ */
+export function computeLogYAxisDomain(
+  plotData: Array<Record<string, any>>,
+  series: Array<{ name: string }>,
+): [number, number] | undefined {
+  let min = Infinity;
+  let max = -Infinity;
+  for (const s of series) {
+    for (const point of plotData) {
+      const raw = point?.[`__${s.name}`];
+      if (typeof raw !== 'number' || !Number.isFinite(raw)) continue;
+      if (raw < min) min = raw;
+      if (raw > max) max = raw;
+    }
+  }
+  return Number.isFinite(min) && Number.isFinite(max) ? [min, max] : undefined;
 }
 
 /**
@@ -265,17 +290,7 @@ export const TimeSeriesChart: React.FC<TimeSeriesChartProps> = React.memo(({
 
     // The domain is expressed in log10 space, so the linear floor of 0 would
     // mean a raw value of 1 and clip every point below it off the chart.
-    let min = Infinity;
-    let max = -Infinity;
-    for (const s of series) {
-      for (let i = 0; i < plotData.length; i++) {
-        const value = Number(plotData[i]?.[`__${s.name}`]);
-        if (!Number.isFinite(value)) continue;
-        if (value < min) min = value;
-        if (value > max) max = value;
-      }
-    }
-    return Number.isFinite(min) && Number.isFinite(max) ? [min, max] : undefined;
+    return computeLogYAxisDomain(plotData, series);
   }, [currentDomain, yAxisDomain, yAxisScale, series, plotData]);
 
   const yTicks = useMemo(() => {
