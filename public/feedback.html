@@ -109,7 +109,7 @@
   .btn:disabled { opacity: 0.5; cursor: not-allowed; }
 
   /* ---------- the draw ---------- */
-  .draw-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-bottom: 1.5rem; }
+  .draw-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-top: 1.5rem; }
   .draw-bar .field { margin: 0; flex: 1 1 14rem; }
 
   .assignment { margin-bottom: 2.5rem; }
@@ -153,6 +153,10 @@
   .report-h { font-family: var(--display); font-weight: 700; font-size: 1.1rem; margin: 0 0 1rem; }
   .remove-row { margin-top: 1rem; text-align: right; }
 
+  .assignment.collapsed { margin-bottom: 1rem; }
+  .assignment.collapsed .task, .assignment.collapsed .report, .assignment.collapsed .redraw { display: none; }
+  .assignment.collapsed .tag { border-radius: 10px; }
+  .tag:focus { outline: none; }
   .empty { border: 2px dashed var(--rule); border-radius: 10px; padding: 2rem 1.5rem; color: var(--muted); }
 
   /* SUS table */
@@ -292,6 +296,9 @@
       <h2 id="s2"><span class="n">2</span>Do the tasks</h2>
       <p class="lede">Draw a task. Open the model with the button on its tag, follow the steps in the Playground, then fill in the report below it. If a model will not load or does not suit the task, use “Draw a different model” and tell us why — that counts as feedback too.</p>
 
+
+      <div id="assignments"></div>
+      <div class="empty" id="empty">No tasks yet. Draw your first one to get started.</div>
       <div class="draw-bar">
         <div class="field">
           <label for="draw-cat">Draw models from</label>
@@ -299,9 +306,6 @@
         </div>
         <button type="button" class="btn" id="draw-btn">Draw a task</button>
       </div>
-
-      <div id="assignments"></div>
-      <div class="empty" id="empty">No tasks yet. Draw your first one to get started.</div>
     </section>
 
     <section class="step" aria-labelledby="s3">
@@ -372,6 +376,7 @@
       <div class="actions">
         <a class="open" target="_blank" rel="noopener">Open this model in the Playground</a>
         <button type="button" class="btn quiet" data-act="toggle-redraw">Draw a different model</button>
+        <button type="button" class="btn quiet" data-act="toggle-collapse" aria-expanded="true">Hide task and report</button>
       </div>
     </div>
     <div class="redraw">
@@ -774,9 +779,11 @@ function addAssignment() {
     redraws: [],
     answers: { problems: [] }
   };
+  state.assignments.forEach(x => { x.collapsed = true; });
   state.assignments.push(a);
   save();
   renderAssignments(a.key);
+  revealAssignment(a.key);
 }
 
 function redraw(a, reason) {
@@ -802,11 +809,26 @@ function renderCategorySelect() {
   sel.addEventListener('change', () => { state.draw_category = sel.value; save(); });
 }
 
+function revealAssignment(key) {
+  const tag = document.querySelector(`.assignment[data-key="${key}"] .tag`);
+  if (!tag) return;
+  tag.setAttribute('tabindex', '-1');
+  tag.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'start' });
+  tag.focus({ preventScroll: true });
+}
+
+function setCollapsed(node, collapsed) {
+  node.classList.toggle('collapsed', collapsed);
+  const b = node.querySelector('[data-act="toggle-collapse"]');
+  b.textContent = collapsed ? 'Show task and report' : 'Hide task and report';
+  b.setAttribute('aria-expanded', String(!collapsed));
+}
+
 function renderAssignments(dealtKey) {
   const box = $('#assignments');
   box.innerHTML = '';
   $('#empty').style.display = state.assignments.length ? 'none' : 'block';
-  $('#draw-btn').textContent = state.assignments.length ? 'Draw another task' : 'Draw a task';
+  $('#draw-btn').textContent = state.assignments.length ? 'Draw the next task' : 'Draw a task';
 
   state.assignments.forEach((a, i) => {
     const task = TASKS.find(t => t.id === a.task_id);
@@ -848,6 +870,7 @@ function renderAssignments(dealtKey) {
     reasonSel.id = `${a.key}-reason`;
     reasonSel.previousElementSibling.htmlFor = reasonSel.id;
 
+    setCollapsed(node, !!a.collapsed);
     box.appendChild(node);
   });
 }
@@ -907,7 +930,11 @@ function onClick(e) {
   if (!btn) return;
   const node = btn.closest('.assignment');
   const a = state.assignments.find(x => x.key === node.dataset.key);
-  if (btn.dataset.act === 'toggle-redraw') {
+  if (btn.dataset.act === 'toggle-collapse') {
+    a.collapsed = !a.collapsed;
+    save();
+    setCollapsed(node, a.collapsed);
+  } else if (btn.dataset.act === 'toggle-redraw') {
     node.querySelector('.redraw').classList.toggle('open');
   } else if (btn.dataset.act === 'redraw') {
     redraw(a, node.querySelector('[data-redraw-reason]').value);
@@ -923,6 +950,11 @@ function onClick(e) {
 // Validation and submission
 // ---------------------------------------------------------------------------
 function validate() {
+  let reopened = false;
+  state.assignments.forEach(a => {
+    if (a.collapsed && (!a.answers.status || !a.answers.ease)) { a.collapsed = false; reopened = true; }
+  });
+  if (reopened) { save(); renderAssignments(); }
   let first = null;
   const mark = (field, ok) => { field.classList.toggle('invalid', !ok); if (!ok && !first) first = field; };
 
