@@ -167,10 +167,6 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
 
 
-  // Selections are stored as the user's pick, which can be empty or stale once
-  // the model changes underneath it. Everything downstream — validation, the
-  // scan itself, bounds, and the rendered results — reads these resolved
-  // values, so the dropdown and the scan can never disagree.
   const effectiveParameter1 = (parameter1 && parameterNames.includes(parameter1))
     ? parameter1
     : (parameterNames[0] ?? '');
@@ -179,33 +175,17 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
     ? parameter2
     : (parameterNames.find((name) => name !== effectiveParameter1) ?? parameterNames[0] ?? '');
 
-  const effectiveObservable = (selectedObservable && observableNames.includes(selectedObservable))
-    ? selectedObservable
-    : (observableNames[0] ?? '');
-
-  // A slider drag re-solves on every frame and hands this tab a fresh model
-  // object each time (App.tsx spreads the model to defeat the worker cache).
-  // Keying the reset on object identity therefore wiped the scan configuration
-  // mid-drag, so key it on the model's structure instead: editing a parameter's
-  // value leaves the scannable names untouched, while loading different code
-  // changes them.
-  const modelSignature = useMemo(() => JSON.stringify({
-    parameters: parameterNames,
-    species: model?.species.map((species) => species.name) ?? [],
-    observables: observableNames,
-  }), [parameterNames, model, observableNames]);
-
-  // Reset when a different model is loaded, and when the scan mode changes:
-  // a 1D result is not a 2D result, and vice versa.
-  const [prevSignature, setPrevSignature] = useState(modelSignature);
-  const [prevScanType, setPrevScanType] = useState(scanType);
-  if (modelSignature !== prevSignature || scanType !== prevScanType) {
-    setPrevSignature(modelSignature);
-    setPrevScanType(scanType);
+  // Reset state when model changes
+  const [prevModel, setPrevModel] = useState<BNGLModel | null>(null);
+  if (model !== prevModel) {
+    setPrevModel(model);
     setParam1Start('');
     setParam1End('');
     setParam2Start('');
     setParam2End('');
+    setParameter1('');
+    setParameter2('');
+    setSelectedObservable('');
     setOneDResult(null);
     setTwoDResult(null);
     setScanModelSource(null);
@@ -246,7 +226,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
   // Train Neural ODE Surrogate
   const handleTrainSurrogate = useCallback(async () => {
-    if (!model || !effectiveParameter1) return;
+    if (!model || !parameter1) return;
 
     const nTrainingSamples = Math.max(5, Math.min(2000, Math.floor(Number(surrogateTrainingSims) || 200)));
     const trainingEpochs = Math.max(1, Math.min(500, Math.floor(Number(surrogateTrainingEpochs) || 100)));
@@ -292,7 +272,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
       };
 
       // Determine parameters to vary
-      const paramsToVary = scanType === '2d' && effectiveParameter2 ? [effectiveParameter1, effectiveParameter2] : [effectiveParameter1];
+      const paramsToVary = scanType === '2d' && parameter2 ? [parameter1, parameter2] : [parameter1];
       const paramRanges: [number, number][] = paramsToVary.map(p => {
         const baseValue = Object.hasOwn(model.parameters, p)
           ? model.parameters[p]
@@ -525,7 +505,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         setError(`Surrogate training failed: ${err instanceof Error ? err.message : String(err)}`);
       }
     }
-  }, [model, effectiveParameter1, effectiveParameter2, scanType, observableNames, surrogateTrainingSims, surrogateTrainingEpochs]);
+  }, [model, parameter1, parameter2, scanType, observableNames, surrogateTrainingSims, surrogateTrainingEpochs]);
 
 
   const oneDChartData = useMemo(() => {
@@ -545,8 +525,8 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
 
   const heatmapData = useMemo(() => {
-    if (!twoDResult || !effectiveObservable) return null;
-    const matrix = twoDResult.grid[effectiveObservable];
+    if (!twoDResult || !selectedObservable) return null;
+    const matrix = twoDResult.grid[selectedObservable];
     if (!matrix) return null;
     let min = Infinity;
     let max = -Infinity;
@@ -561,11 +541,11 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
       max = 0;
     }
     return { matrix, min, max };
-  }, [twoDResult, effectiveObservable]);
+  }, [twoDResult, selectedObservable]);
 
   const heatmapPoints = useMemo(() => {
-    if (!twoDResult || !effectiveObservable) return [] as { x: number; y: number; value: number }[];
-    const grid = twoDResult.grid[effectiveObservable];
+    if (!twoDResult || !selectedObservable) return [] as { x: number; y: number; value: number }[];
+    const grid = twoDResult.grid[selectedObservable];
     const points: { x: number; y: number; value: number }[] = [];
     for (let yi = 0; yi < twoDResult.yValues.length; yi += 1) {
       for (let xi = 0; xi < twoDResult.xValues.length; xi += 1) {
@@ -573,25 +553,25 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
       }
     }
     return points;
-  }, [twoDResult, effectiveObservable]);
+  }, [twoDResult, selectedObservable]);
 
   // Do not early-return here; use `guardMessage` in the JSX so hook order stays stable across renders.
 
   // Bounds must use the quantity being scanned. For a seed amount of 2*L0,
   // scanning L0=10 must center around 10, not the seed concentration 20.
   const baseParam1 = useMemo(() => {
-    if (!effectiveParameter1 || !model) return undefined;
-    return parameterTypeMap[effectiveParameter1] === 'parameter'
-      ? model.parameters[effectiveParameter1]
-      : speciesMap.get(effectiveParameter1)?.initialConcentration;
-  }, [effectiveParameter1, model, parameterTypeMap, speciesMap]);
+    if (!parameter1 || !model) return undefined;
+    return parameterTypeMap[parameter1] === 'parameter'
+      ? model.parameters[parameter1]
+      : speciesMap.get(parameter1)?.initialConcentration;
+  }, [parameter1, model, parameterTypeMap, speciesMap]);
 
   const baseParam2 = useMemo(() => {
-    if (!effectiveParameter2 || !model) return undefined;
-    return parameterTypeMap[effectiveParameter2] === 'parameter'
-      ? model.parameters[effectiveParameter2]
-      : speciesMap.get(effectiveParameter2)?.initialConcentration;
-  }, [effectiveParameter2, model, parameterTypeMap, speciesMap]);
+    if (!parameter2 || !model) return undefined;
+    return parameterTypeMap[parameter2] === 'parameter'
+      ? model.parameters[parameter2]
+      : speciesMap.get(parameter2)?.initialConcentration;
+  }, [parameter2, model, parameterTypeMap, speciesMap]);
 
   const [defaultParam1Lower, defaultParam1Upper] = useMemo(() => {
     if (baseParam1 === undefined) return [0, 0];
@@ -655,9 +635,9 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
 
 
   const canRunScan = () => {
-    if (!effectiveParameter1 || !effectiveParam1Start || !effectiveParam1End || !param1Steps) return false;
+    if (!parameter1 || !effectiveParam1Start || !effectiveParam1End || !param1Steps) return false;
     if (isLogScale && (Number(effectiveParam1Start) <= 0 || Number(effectiveParam1End) <= 0)) return false;
-    if (scanType === '2d' && (!effectiveParameter2 || effectiveParameter2 === effectiveParameter1 || !effectiveParam2Start || !effectiveParam2End || !param2Steps)) {
+    if (scanType === '2d' && (!parameter2 || parameter2 === parameter1 || !effectiveParam2Start || !effectiveParam2End || !param2Steps)) {
       return false;
     }
     if (scanType === '2d' && isLogScale && (Number(effectiveParam2Start) <= 0 || Number(effectiveParam2End) <= 0)) return false;
@@ -700,7 +680,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         setError('Please provide valid numeric settings for the second parameter.');
         return;
       }
-      if (effectiveParameter2 === effectiveParameter1) {
+      if (parameter2 === parameter1) {
         setError('Select two different parameters for a 2D scan.');
         return;
       }
@@ -741,16 +721,16 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
       cachedModelIdRef.current = modelId;
 
       if (scanType === '1d') {
-        const result: OneDResult = { parameterName: effectiveParameter1, values: [] };
+        const result: OneDResult = { parameterName: parameter1, values: [] };
         let completed = 0;
         for (const value of range1) {
           // The engine refreshes all dependent species using their complete
           // initial expressions; copying `value` to seeds breaks 2*L0, etc.
-          const overrides: Record<string, number> = { [effectiveParameter1]: value };
+          const overrides: Record<string, number> = { [parameter1]: value };
 
           const simResults = await bnglService.simulateCached(modelId, overrides, simulationOptions, {
             signal: controller.signal,
-            description: `Parameter scan (${effectiveParameter1}=${value})`,
+            description: `Parameter scan (${parameter1}=${value})`,
           });
           const lastPoint = simResults.data.at(-1) ?? {};
           const observables = observableNames.reduce<Record<string, number>>((acc, name) => {
@@ -765,7 +745,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         }
         if (isMountedRef.current) {
           setOneDResult(result);
-          setVisibleObservables(new Set([effectiveObservable]));
+          setVisibleObservables(new Set([selectedObservable]));
           setScanModelSource(bnglText || null);
         }
       } else {
@@ -777,12 +757,12 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         for (let yi = 0; yi < range2.length; yi += 1) {
           for (let xi = 0; xi < range1.length; xi += 1) {
             const overrides: Record<string, number> = {
-              [effectiveParameter1]: range1[xi],
-              [effectiveParameter2]: range2[yi],
+              [parameter1]: range1[xi],
+              [parameter2]: range2[yi],
             };
             const simResults = await bnglService.simulateCached(modelId, overrides, simulationOptions, {
               signal: controller.signal,
-              description: `2D parameter scan (${effectiveParameter1}, ${effectiveParameter2})`,
+              description: `2D parameter scan (${parameter1}, ${parameter2})`,
             });
             const lastPoint = simResults.data.at(-1) ?? {};
             observableNames.forEach((name) => {
@@ -796,7 +776,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         }
         if (isMountedRef.current) {
           setTwoDResult({
-            parameterNames: [effectiveParameter1, effectiveParameter2],
+            parameterNames: [parameter1, parameter2],
             xValues: range1,
             yValues: range2,
             grid,
@@ -892,14 +872,14 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
           observable,
           value,
         })))
-      : effectiveObservable && twoDResult
+      : selectedObservable && twoDResult
         ? twoDResult.yValues.flatMap((yValue, yIndex) => twoDResult.xValues.map((xValue, xIndex) => ({
           parameter1_name: twoDResult.parameterNames[0],
           parameter1_value: xValue,
           parameter2_name: twoDResult.parameterNames[1],
           parameter2_value: yValue,
-          observable: effectiveObservable,
-          value: twoDResult.grid[effectiveObservable]?.[yIndex]?.[xIndex] ?? 0,
+          observable: selectedObservable,
+          value: twoDResult.grid[selectedObservable]?.[yIndex]?.[xIndex] ?? 0,
         })))
         : [];
 
@@ -917,8 +897,8 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
       modelSource: scanModelSource,
       settings: {
         scanType,
-        parameter1: effectiveParameter1,
-        parameter2: scanType === '2d' ? effectiveParameter2 : undefined,
+        parameter1,
+        parameter2: scanType === '2d' ? parameter2 : undefined,
         parameter1Range: { start: effectiveParam1Start, end: effectiveParam1End, steps: param1Steps },
         parameter2Range: scanType === '2d' ? { start: effectiveParam2Start, end: effectiveParam2End, steps: param2Steps } : undefined,
         method,
@@ -926,7 +906,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         tEnd,
         nSteps,
         logarithmicScale: isLogScale,
-        selectedObservable: effectiveObservable,
+        selectedObservable,
       },
       fullTable: {
         path: 'data/scan-values.csv',
@@ -954,11 +934,11 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
     oneDResult,
     param1Steps,
     param2Steps,
-    effectiveParameter1,
-    effectiveParameter2,
+    parameter1,
+    parameter2,
     scanModelSource,
     scanType,
-    effectiveObservable,
+    selectedObservable,
     solver,
     tEnd,
     twoDResult,
@@ -1109,13 +1089,8 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
             <label htmlFor="ps-observable" className="text-sm font-medium text-slate-600 dark:text-slate-300">Select an observable:</label>
             <Select
               id="ps-observable"
-              value={effectiveObservable}
-              onChange={(event) => {
-                setSelectedObservable(event.target.value);
-                // The chart hides anything outside visibleSeries, so the newly
-                // selected observable has to be revealed or it renders blank.
-                setVisibleObservables(new Set([event.target.value]));
-              }}
+              value={selectedObservable}
+              onChange={(event) => setSelectedObservable(event.target.value)}
               className="w-48"
             >
               {observableNames.map((name) => (
@@ -1248,7 +1223,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
           <Button
             variant="subtle"
             onClick={handleTrainSurrogate}
-            disabled={surrogateStatus === 'training' || !model || !effectiveParameter1}
+            disabled={surrogateStatus === 'training' || !model || !parameter1}
           >
             {surrogateStatus === 'training' ? 'Training...' :
               surrogateStatus === 'ready' ? 'Retrain Surrogate' : 'Train Surrogate'}
@@ -1349,7 +1324,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
       ) : oneDResult && oneDResult.values.length > 0 && (
         <Card className="space-y-6">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">1D Scan Results</h3>
-          {effectiveObservable && oneDChartData.length > 0 ? (
+          {selectedObservable && oneDChartData.length > 0 ? (
             <div className="h-[450px]">
               <TimeSeriesChart
                 data={oneDChartData}
@@ -1390,7 +1365,7 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
             <Button
               variant="subtle"
               onClick={() => {
-                setVisibleObservables(new Set([effectiveObservable]));
+                setVisibleObservables(new Set([selectedObservable]));
               }}
             >
               Reset view
@@ -1403,18 +1378,18 @@ export const ParameterScanTab: React.FC<ParameterScanTabProps> = ({ model, bnglT
         <Card className="space-y-6">
           <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-100">2D Scan Heatmap</h3>
           <div>
-            <div className="mb-3 text-sm text-slate-500 dark:text-slate-300">Heatmap of {effectiveObservable} across {twoDResult.parameterNames[0]} and {twoDResult.parameterNames[1]}</div>
+            <div className="mb-3 text-sm text-slate-500 dark:text-slate-300">Heatmap of {selectedObservable} across {twoDResult.parameterNames[0]} and {twoDResult.parameterNames[1]}</div>
             <div className="w-full h-[520px]">
               <HeatmapChart
                 data={heatmapPoints}
                 xAxisLabel={twoDResult.parameterNames[0]}
                 yAxisLabel={twoDResult.parameterNames[1]}
-                zAxisLabel={effectiveObservable}
+                zAxisLabel={selectedObservable}
               />
             </div>
           </div>
           <div className="text-xs text-slate-500 dark:text-slate-300">
-            Range: {formatNumber(heatmapData.min)} – {formatNumber(heatmapData.max)} ({effectiveObservable})
+            Range: {formatNumber(heatmapData.min)} – {formatNumber(heatmapData.max)} ({selectedObservable})
           </div>
           <div className="flex gap-2 justify-end">
             {scanExportDescriptor && <ResultsExportControl descriptor={scanExportDescriptor} className="px-3 py-1.5 text-xs" />}

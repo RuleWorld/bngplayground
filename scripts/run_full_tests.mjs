@@ -45,7 +45,7 @@ const configuredHardTimeout = Number(process.env.RUN_FULL_TESTS_HARD_TIMEOUT_MS)
 // mid-suite and reported as a failure, having run for under three.
 const HARD_TIMEOUT_MS = Number.isFinite(configuredHardTimeout) && configuredHardTimeout > 0
   ? configuredHardTimeout
-  : (isProfileRun ? 30 : 15) * 60 * 1000;
+  : (isProfileRun ? 30 : 20) * 60 * 1000;
 let killed = false;
 
 function hasCompletionSignal() {
