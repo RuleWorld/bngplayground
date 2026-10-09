@@ -22,6 +22,7 @@ import { getSharedModelFromUrl, clearModelFromUrl } from './src/utils/shareUrl';
 import { resolveAutoMethod, getSimulationOptionsFromParsedModel, updatePreparedModel } from '@bngplayground/engine';
 import { parseParametersFromCode, isNumericLiteral, stripParametersBlock } from '@bngplayground/engine';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
+import { SolveCoordinator } from './src/lib/solveCoordinator';
 
 const normalizeCode = (value: string) => value.replace(/\r\n/g, '\n').trim();
 const SBML_IMPORT_TIMEOUT_MS = 45_000;
@@ -47,9 +48,13 @@ function App() {
   const lastParsedCodeRef = useRef<string>(normalizeCode(INITIAL_BNGL_CODE));
   const paramPatchTimerRef = useRef<number | null>(null);
   const paramPatchFrameRef = useRef<number | null>(null);
-  const paramSolveRunningRef = useRef(false);
-  const paramSolvePendingRef = useRef(false);
   const paramSolveAbortRef = useRef<AbortController | null>(null);
+  // Decides which run (full "Run" vs slider re-solve) owns the results on
+  // screen, so overlapping runs cannot clobber each other's output.
+  const solveCoordinatorRef = useRef(new SolveCoordinator());
+  // Stable handle to the latest slider re-solve, so the memoized full-run
+  // handler can replay a deferred edit without capturing a stale closure.
+  const runParamSolveRef = useRef<() => void>(() => {});
   const pendingSliderChangesRef = useRef<Map<string, string>>(new Map());
   const [model, setModel] = useState<BNGLModel | null>(null);
   const [results, setResults] = useState<SimulationResults | null>(null);
@@ -233,8 +238,10 @@ function App() {
     if (paramSolveAbortRef.current) {
       paramSolveAbortRef.current.abort('Model reparsed.');
       paramSolveAbortRef.current = null;
-      paramSolvePendingRef.current = false;
     }
+    // A reparse discards every result and override, so nothing may publish or
+    // replay afterwards.
+    solveCoordinatorRef.current.cancel();
     if (paramPatchFrameRef.current !== null) {
       cancelAnimationFrame(paramPatchFrameRef.current);
       paramPatchFrameRef.current = null;
@@ -343,11 +350,14 @@ function App() {
     if (simulateAbortRef.current) {
       simulateAbortRef.current.abort('Simulation replaced.');
     }
-    // A full run supersedes any in-flight slider re-solve.
+    // A full run takes exclusive ownership of the screen: it aborts any
+    // in-flight slider re-solve and defers later slider edits until it settles,
+    // so the two cannot race to publish results.
+    const coordinator = solveCoordinatorRef.current;
+    const fullRunToken = coordinator.beginFullRun();
     if (paramSolveAbortRef.current) {
       paramSolveAbortRef.current.abort('Simulation replaced.');
       paramSolveAbortRef.current = null;
-      paramSolvePendingRef.current = false;
     }
     const controller = new AbortController();
     simulateAbortRef.current = controller;
@@ -369,7 +379,14 @@ function App() {
         signal: controller.signal,
         description: `Simulation (${effectiveMethod})`,
       });
-      preparedParameterOverridesRef.current = {};
+      // The overrides describe the model that produced the displayed results.
+      // A slider edit deferred behind this run is not in them yet, so dropping
+      // them here would replay the pre-edit value when it is replayed.
+      if (!coordinator.hasPendingParameterEdit()) {
+        preparedParameterOverridesRef.current = {};
+      }
+      // A newer full run may have taken over while this one awaited.
+      if (!coordinator.owns(fullRunToken)) return;
       setResults(simResults);
       setCompletedModelSource(executionModelSource || null);
       const simulationWarning = simulationWarningRef.current;
@@ -388,12 +405,16 @@ function App() {
       }
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
-        setResults(null);
-        setCompletedModelSource(null);
+        if (coordinator.owns(fullRunToken)) {
+          setResults(null);
+          setCompletedModelSource(null);
+        }
         return;
       }
-      setResults(null);
-      setCompletedModelSource(null);
+      if (coordinator.owns(fullRunToken)) {
+        setResults(null);
+        setCompletedModelSource(null);
+      }
       const message = error instanceof Error ? error.message : 'An unknown error occurred.';
       setStatus({ type: 'error', message: `Simulation failed: ${message}` });
     } finally {
@@ -401,6 +422,11 @@ function App() {
         simulateAbortRef.current = null;
       }
       setIsSimulating(false);
+      const action = coordinator.endFullRun(fullRunToken);
+      // A slider edit deferred behind this run still needs to be applied.
+      if (action === 'restart-parameter') {
+        runParamSolveRef.current();
+      }
     }
   }, [model, handleParse]);
 
@@ -472,33 +498,37 @@ function App() {
 
   // Latest-wins re-solve: a drag queues many parameter values, so let the in-flight solve finish
   // instead of aborting it, then run once more with the newest values.
+  //
+  // The coordinator owns the decision to start: it defers the solve while a
+  // full run owns the screen, and hands back the newest edits when whichever
+  // run was in flight settles, so an edit is never dropped on the floor.
   const runSimulationForParameterUpdate = async () => {
     const options = simOptionsRef.current;
     if (!options) return;
 
-    if (paramSolveRunningRef.current) {
-      paramSolvePendingRef.current = true;
-      return;
-    }
+    const coordinator = solveCoordinatorRef.current;
+    const token = coordinator.requestParameterSolve();
+    // Deferred: a run already owns the screen and will replay this edit.
+    if (!token) return;
 
-    paramSolveRunningRef.current = true;
     setIsSimulating(true);
     setStatus({ type: 'info', message: 'Updating simulation for parameter change...' });
     const controller = new AbortController();
     paramSolveAbortRef.current = controller;
     try {
       do {
-        paramSolvePendingRef.current = false;
         const overrides = { ...preparedParameterOverridesRef.current };
         const simResults = await bnglService.simulatePreparedWithOverrides(
           overrides,
           options,
           { signal: controller.signal, description: 'Simulation (parameter update)' },
         );
+        // A full run may have taken over while this solve was awaiting.
+        if (!coordinator.owns(token)) return;
         setResults(simResults);
         setCompletedModelSource(codeRef.current || null);
         setStatus({ type: 'success', message: 'Simulation updated for parameter change.' });
-      } while (paramSolvePendingRef.current && !controller.signal.aborted);
+      } while (coordinator.consumePending());
     } catch (error) {
       if (error instanceof DOMException && error.name === 'AbortError') {
         return;
@@ -509,10 +539,17 @@ function App() {
       if (paramSolveAbortRef.current === controller) {
         paramSolveAbortRef.current = null;
       }
-      paramSolveRunningRef.current = false;
+      const action = coordinator.finishParameterSolve();
       setIsSimulating(false);
+      // An edit that arrived while this solve was unwinding still needs a run.
+      if (action === 'restart-parameter') {
+        runParamSolveRef.current();
+      }
     }
   };
+  useEffect(() => {
+    runParamSolveRef.current = () => { void runSimulationForParameterUpdate(); };
+  });
 
   const loadPreparedNetwork = useCallback(async () => {
     if (!model) throw new Error('No model is available for network retrieval');
@@ -564,8 +601,10 @@ function App() {
     if (paramSolveAbortRef.current) {
       paramSolveAbortRef.current.abort('Simulation cancelled by user.');
       paramSolveAbortRef.current = null;
-      paramSolvePendingRef.current = false;
     }
+    // Cancelling is final: neither the aborted run nor any queued slider edit
+    // may publish or restart.
+    solveCoordinatorRef.current.cancel();
     // Force reset state immediately when user cancels
     setIsSimulating(false);
     setGenerationProgress('');
@@ -710,6 +749,7 @@ function App() {
         paramSolveAbortRef.current.abort('App unmounted');
         paramSolveAbortRef.current = null;
       }
+      solveCoordinatorRef.current.cancel();
     };
   }, []);
 
