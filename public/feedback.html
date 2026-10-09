@@ -1,0 +1,1045 @@
+<!DOCTYPE html>
+<!--
+  BNG Playground student feedback form.
+  Single static file. Put it in public/ and it is served at
+  https://ruleworld.github.io/bngplayground/feedback.html
+
+  To collect responses, set SUBMIT_URL below to a Google Apps Script web app
+  (see feedback-collector.gs) or any endpoint that accepts a JSON POST.
+  If SUBMIT_URL is empty or the request fails, the student downloads a JSON file instead.
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BNG Playground feedback</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --paper: #EEF1F4;
+    --sheet: #FFFFFF;
+    --ink: #1B2631;
+    --muted: #5A6878;
+    --rule: #C9D2DC;
+    --cobalt: #2347C5;
+    --cobalt-soft: #E3E9FB;
+    --mint: #0E8A6B;
+    --mint-soft: #DDF2EB;
+    --alert: #B4232C;
+    --alert-soft: #FBE6E7;
+    --display: "Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+    --body: "Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html { background: var(--paper); color: var(--ink); }
+  body { margin: 0; font-family: var(--body); font-size: 1.0625rem; line-height: 1.55; }
+  a { color: var(--cobalt); }
+  :focus-visible { outline: 3px solid var(--cobalt); outline-offset: 2px; border-radius: 3px; }
+
+  .wrap { max-width: 46rem; margin: 0 auto; padding: 3rem 1.25rem 6rem; }
+
+  header.intro h1 {
+    font-family: var(--display); font-weight: 800; font-size: clamp(2.2rem, 6vw, 3.4rem);
+    line-height: 1.02; letter-spacing: -0.02em; margin: 0 0 1rem; max-width: 14ch;
+  }
+  header.intro p { margin: 0 0 0.75rem; max-width: 62ch; color: var(--muted); }
+  header.intro p strong { color: var(--ink); }
+
+  section.step { margin-top: 3.5rem; }
+  section.step > h2 {
+    font-family: var(--display); font-weight: 700; font-size: 1.6rem; line-height: 1.15;
+    margin: 0 0 0.35rem; display: flex; gap: 0.75rem; align-items: baseline;
+  }
+  section.step > h2 .n {
+    font-size: 1rem; font-weight: 700; color: var(--cobalt); background: var(--cobalt-soft);
+    min-width: 2rem; height: 2rem; border-radius: 50%; display: inline-grid; place-items: center;
+    transform: translateY(-0.2rem);
+  }
+  section.step > .lede { margin: 0 0 1.5rem; color: var(--muted); max-width: 62ch; }
+
+  .panel { background: var(--sheet); border: 1px solid var(--rule); border-radius: 10px; padding: 1.5rem; }
+
+  .field { margin-bottom: 1.25rem; }
+  .field:last-child { margin-bottom: 0; }
+  .field > label, .field > .q { display: block; font-weight: 700; margin-bottom: 0.35rem; }
+  .hint { display: block; font-weight: 400; color: var(--muted); font-size: 0.92rem; }
+  .req { color: var(--alert); font-weight: 400; }
+  input[type=text], input[type=number], select, textarea {
+    width: 100%; font: inherit; color: inherit; background: #FBFCFD;
+    border: 1px solid var(--rule); border-radius: 6px; padding: 0.55rem 0.7rem;
+  }
+  textarea { min-height: 5.5rem; resize: vertical; }
+  input[type=number] { max-width: 9rem; }
+  .row { display: grid; grid-template-columns: 1fr 1fr; gap: 1rem; align-items: end; }
+  @media (max-width: 560px) { .row { grid-template-columns: 1fr; } }
+
+  /* choice pills (radio / checkbox) */
+  .choices { display: flex; flex-wrap: wrap; gap: 0.5rem; border: 0; padding: 0; margin: 0; }
+  .choices legend { font-weight: 700; margin-bottom: 0.45rem; padding: 0; }
+  .choices label { position: relative; cursor: pointer; }
+  .choices input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+  .choices label > span {
+    display: inline-block; padding: 0.4rem 0.85rem; border: 1px solid var(--rule); border-radius: 999px;
+    background: #FBFCFD; font-size: 0.97rem;
+  }
+  .choices label > input:checked + span { background: var(--ink); border-color: var(--ink); color: #fff; }
+  .choices input:focus-visible + span { outline: 3px solid var(--cobalt); outline-offset: 2px; }
+
+  /* 1–5 scale */
+  .scale { display: grid; grid-template-columns: repeat(5, 1fr); gap: 0.35rem; border: 0; padding: 0; margin: 0; }
+  .scale label { cursor: pointer; position: relative; }
+  .scale input { position: absolute; opacity: 0; }
+  .scale label > span {
+    display: grid; place-items: center; height: 2.6rem; border: 1px solid var(--rule); border-radius: 6px;
+    background: #FBFCFD; font-weight: 700;
+  }
+  .scale input:checked + span { background: var(--cobalt); border-color: var(--cobalt); color: #fff; }
+  .scale input:focus-visible + span { outline: 3px solid var(--cobalt); outline-offset: 2px; }
+  .scale-ends { display: flex; justify-content: space-between; font-size: 0.85rem; color: var(--muted); margin-top: 0.3rem; }
+
+  button { font: inherit; cursor: pointer; }
+  .btn {
+    font-weight: 700; border-radius: 8px; padding: 0.7rem 1.2rem; border: 1px solid var(--ink);
+    background: var(--ink); color: #fff;
+  }
+  .btn.secondary { background: transparent; color: var(--ink); }
+  .btn.quiet { background: transparent; color: var(--cobalt); border-color: transparent; padding-left: 0; padding-right: 0; text-decoration: underline; }
+  .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+  /* ---------- the draw ---------- */
+  .draw-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: end; margin-bottom: 1.5rem; }
+  .draw-bar .field { margin: 0; flex: 1 1 14rem; }
+
+  .assignment { margin-bottom: 2.5rem; }
+  .tag {
+    position: relative; background: var(--sheet); border: 1px solid var(--rule);
+    border-radius: 10px 10px 0 0; padding: 1.25rem 1.5rem 1.25rem 3.25rem; overflow: hidden;
+  }
+  /* punched hole + perforation, like a sample tag */
+  .tag::before {
+    content: ""; position: absolute; left: 1.1rem; top: 1.45rem; width: 0.9rem; height: 0.9rem;
+    border-radius: 50%; background: var(--paper); box-shadow: inset 0 1px 2px rgba(27,38,49,0.25);
+  }
+  .tag::after {
+    content: ""; position: absolute; left: 2.5rem; top: 0; bottom: 0; border-left: 2px dashed var(--rule);
+  }
+  .tag .which { font-size: 0.9rem; color: var(--muted); margin: 0 0 0.4rem; }
+  .tag .model-id {
+    font-family: var(--display); font-weight: 800; font-size: clamp(1.5rem, 4.5vw, 2.1rem);
+    line-height: 1.05; letter-spacing: -0.01em; margin: 0; word-break: break-word;
+  }
+  .tag .model-meta { margin: 0.4rem 0 0.9rem; color: var(--muted); font-size: 0.95rem; }
+  .tag .actions { display: flex; flex-wrap: wrap; gap: 0.75rem 1.25rem; align-items: center; }
+  .tag .open { display: inline-block; font-weight: 700; background: var(--cobalt); color: #fff; text-decoration: none; padding: 0.55rem 1rem; border-radius: 8px; }
+
+  .tag.dealt { animation: deal 420ms cubic-bezier(.2,.8,.2,1); }
+  @keyframes deal { from { transform: translateY(-10px) rotate(-1.2deg); opacity: 0; } to { transform: none; opacity: 1; } }
+  @media (prefers-reduced-motion: reduce) { .tag.dealt { animation: none; } }
+
+  .task { background: var(--sheet); border: 1px solid var(--rule); border-top: 0; padding: 1.25rem 1.5rem; }
+  .task h3 { font-family: var(--display); font-weight: 700; font-size: 1.25rem; margin: 0 0 0.25rem; }
+  .task .goal { margin: 0 0 0.75rem; color: var(--muted); }
+  .task ol { margin: 0; padding-left: 1.3rem; }
+  .task li { margin-bottom: 0.3rem; }
+  .task .where { margin: 0.9rem 0 0; font-size: 0.95rem; background: var(--cobalt-soft); padding: 0.5rem 0.75rem; border-radius: 6px; }
+
+  .redraw { background: var(--sheet); border: 1px solid var(--rule); border-top: 0; padding: 0.9rem 1.5rem; display: none; }
+  .redraw.open { display: block; }
+  .redraw .row { align-items: end; }
+
+  .report { background: var(--sheet); border: 1px solid var(--rule); border-top: 2px solid var(--ink); border-radius: 0 0 10px 10px; padding: 1.5rem; }
+  .report-h { font-family: var(--display); font-weight: 700; font-size: 1.1rem; margin: 0 0 1rem; }
+  .remove-row { margin-top: 1rem; text-align: right; }
+
+  .empty { border: 2px dashed var(--rule); border-radius: 10px; padding: 2rem 1.5rem; color: var(--muted); }
+
+  /* SUS table */
+  .sus-item { padding: 1rem 0; border-bottom: 1px solid var(--rule); }
+  .sus-item:first-child { padding-top: 0; }
+  .sus-item:last-child { border-bottom: 0; padding-bottom: 0; }
+  .sus-item .q { font-weight: 700; margin-bottom: 0.5rem; }
+
+  .error-msg { color: var(--alert); font-size: 0.92rem; margin-top: 0.35rem; display: none; }
+  .invalid .error-msg { display: block; }
+  .invalid input[type=text], .invalid input[type=number], .invalid textarea, .invalid .scale label > span, .invalid .choices label > span { border-color: var(--alert); }
+
+  .submit-area { margin-top: 2.5rem; }
+  .status { margin-top: 1rem; padding: 1rem 1.25rem; border-radius: 8px; display: none; }
+  .status.show { display: block; }
+  .status.ok { background: var(--mint-soft); color: #08513F; }
+  .status.bad { background: var(--alert-soft); color: #7A161C; }
+  .status.info { background: var(--cobalt-soft); color: #15287A; }
+
+  .field > label.check { font-weight: 400; }
+  .check { display: flex; gap: 0.6rem; align-items: flex-start; }
+  .check input { width: 1.15rem; height: 1.15rem; margin-top: 0.2rem; flex: none; accent-color: var(--ink); }
+
+  footer { margin-top: 4rem; font-size: 0.9rem; color: var(--muted); }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="intro">
+    <h1>Try BNG Playground and tell us what happened</h1>
+    <p>You will be given a random model from the built-in library and a specific analysis to run on it. Do the task in the Playground, then report how it went. Repeat for as many tasks as you have time for. <strong>Three tasks take about 30–45 minutes.</strong></p>
+    <p>We are testing the software, not you. A task you could not finish is as useful to us as one that went smoothly, so report it either way.</p>
+  </header>
+
+  <form id="form" novalidate>
+
+    <section class="step" aria-labelledby="s1">
+      <h2 id="s1"><span class="n">1</span>About you</h2>
+      <p class="lede">This helps us interpret your answers. Your name is optional.</p>
+      <div class="panel">
+        <div class="row">
+          <div class="field">
+            <label for="p-name">Name <span class="hint">Optional</span></label>
+            <input type="text" id="p-name" data-scope="profile" data-key="name" autocomplete="name">
+          </div>
+          <div class="field">
+            <label for="p-course">Course or section <span class="hint">Optional</span></label>
+            <input type="text" id="p-course" data-scope="profile" data-key="course">
+          </div>
+        </div>
+        <div class="field" data-required="profile.stage">
+          <fieldset class="choices">
+            <legend>Current stage <span class="req">*</span></legend>
+            <label><input type="radio" name="stage" value="undergraduate" data-scope="profile" data-key="stage"><span>Undergraduate</span></label>
+            <label><input type="radio" name="stage" value="masters" data-scope="profile" data-key="stage"><span>Master's</span></label>
+            <label><input type="radio" name="stage" value="phd" data-scope="profile" data-key="stage"><span>PhD</span></label>
+            <label><input type="radio" name="stage" value="postdoc_or_staff" data-scope="profile" data-key="stage"><span>Postdoc or staff</span></label>
+            <label><input type="radio" name="stage" value="other" data-scope="profile" data-key="stage"><span>Other</span></label>
+          </fieldset>
+          <p class="error-msg">Choose your current stage.</p>
+        </div>
+        <div class="field" data-required="profile.background">
+          <fieldset class="choices">
+            <legend>Main training <span class="req">*</span></legend>
+            <label><input type="radio" name="background" value="experimental_biology" data-scope="profile" data-key="background"><span>Experimental biology</span></label>
+            <label><input type="radio" name="background" value="computational" data-scope="profile" data-key="background"><span>Computational or quantitative</span></label>
+            <label><input type="radio" name="background" value="both" data-scope="profile" data-key="background"><span>Both about equally</span></label>
+            <label><input type="radio" name="background" value="other" data-scope="profile" data-key="background"><span>Other</span></label>
+          </fieldset>
+          <p class="error-msg">Choose your main training.</p>
+        </div>
+        <div class="field" data-required="profile.modeling_experience">
+          <fieldset class="choices">
+            <legend>Experience with mathematical models of biochemical systems (ODEs, stochastic simulation) <span class="req">*</span></legend>
+            <label><input type="radio" name="modexp" value="none" data-scope="profile" data-key="modeling_experience"><span>None</span></label>
+            <label><input type="radio" name="modexp" value="coursework" data-scope="profile" data-key="modeling_experience"><span>Coursework only</span></label>
+            <label><input type="radio" name="modexp" value="research" data-scope="profile" data-key="modeling_experience"><span>Used in research</span></label>
+          </fieldset>
+          <p class="error-msg">Choose your modeling experience.</p>
+        </div>
+        <div class="field" data-required="profile.bngl_experience">
+          <fieldset class="choices">
+            <legend>Experience with BioNetGen or BNGL before today <span class="req">*</span></legend>
+            <label><input type="radio" name="bnglexp" value="never" data-scope="profile" data-key="bngl_experience"><span>Never used it</span></label>
+            <label><input type="radio" name="bnglexp" value="tried" data-scope="profile" data-key="bngl_experience"><span>Tried it once or twice</span></label>
+            <label><input type="radio" name="bnglexp" value="regular" data-scope="profile" data-key="bngl_experience"><span>Use it regularly</span></label>
+          </fieldset>
+          <p class="error-msg">Choose your BioNetGen experience.</p>
+        </div>
+        <p class="hint" style="margin:0 0 1rem">The operating system, browser and device answers are filled in from your browser. Check them and correct anything that is wrong. The version is left blank when your browser does not report it.</p>
+        <div class="row">
+          <div class="field" data-required="profile.os">
+            <label for="p-os">Operating system <span class="req">*</span></label>
+            <select id="p-os" data-scope="profile" data-key="os">
+              <option value="">Choose one</option>
+              <option value="windows">Windows</option>
+              <option value="macos">macOS</option>
+              <option value="linux">Linux</option>
+              <option value="chromeos">ChromeOS (Chromebook)</option>
+              <option value="ios">iOS (iPhone)</option>
+              <option value="ipados">iPadOS (iPad)</option>
+              <option value="android">Android</option>
+              <option value="other">Other</option>
+            </select>
+            <p class="error-msg">Choose your operating system.</p>
+          </div>
+          <div class="field">
+            <label for="p-osver">Operating system version <span class="hint">For example Windows 11, macOS 14 Sonoma, Ubuntu 24.04</span></label>
+            <input type="text" id="p-osver" data-scope="profile" data-key="os_version">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field" data-required="profile.browser">
+            <label for="p-browser">Browser and version <span class="req">*</span> <span class="hint">For example Chrome 141, Safari 18</span></label>
+            <input type="text" id="p-browser" data-scope="profile" data-key="browser">
+            <p class="error-msg">Enter your browser.</p>
+          </div>
+          <div class="field">
+            <label for="p-device">Device type</label>
+            <select id="p-device" data-scope="profile" data-key="device">
+              <option value="laptop">Laptop</option>
+              <option value="desktop">Desktop</option>
+              <option value="tablet">Tablet</option>
+              <option value="phone">Phone</option>
+            </select>
+          </div>
+        </div>
+        <div class="field">
+          <label for="p-chip">Processor <span class="hint">Optional. On a Mac: Apple menu → About This Mac (for example M2, or Intel)</span></label>
+          <input type="text" id="p-chip" data-scope="profile" data-key="processor">
+        </div>
+      </div>
+    </section>
+
+    <section class="step" aria-labelledby="s2">
+      <h2 id="s2"><span class="n">2</span>Do the tasks</h2>
+      <p class="lede">Draw a task. Open the model with the button on its tag, follow the steps in the Playground, then fill in the report below it. If a model will not load or does not suit the task, use “Draw a different model” and tell us why — that counts as feedback too.</p>
+
+      <div class="draw-bar">
+        <div class="field">
+          <label for="draw-cat">Draw models from</label>
+          <select id="draw-cat"></select>
+        </div>
+        <button type="button" class="btn" id="draw-btn">Draw a task</button>
+      </div>
+
+      <div id="assignments"></div>
+      <div class="empty" id="empty">No tasks yet. Draw your first one to get started.</div>
+    </section>
+
+    <section class="step" aria-labelledby="s3">
+      <h2 id="s3"><span class="n">3</span>Overall usability</h2>
+      <p class="lede">The System Usability Scale: ten standard statements, answered for the Playground as a whole. Answer quickly with your first reaction.</p>
+      <div class="panel" id="sus"></div>
+    </section>
+
+    <section class="step" aria-labelledby="s4">
+      <h2 id="s4"><span class="n">4</span>In your own words</h2>
+      <div class="panel">
+        <div class="field">
+          <label for="o-useful">What was most useful?</label>
+          <textarea id="o-useful" data-scope="overall" data-key="most_useful"></textarea>
+        </div>
+        <div class="field">
+          <label for="o-confusing">What was most confusing or frustrating?</label>
+          <textarea id="o-confusing" data-scope="overall" data-key="most_confusing"></textarea>
+        </div>
+        <div class="field">
+          <label for="o-missing">What did you look for and not find?</label>
+          <textarea id="o-missing" data-scope="overall" data-key="missing"></textarea>
+        </div>
+        <div class="field">
+          <fieldset class="choices">
+            <legend>Would you use this for your own coursework or research?</legend>
+            <label><input type="radio" name="wouldUse" value="yes" data-scope="overall" data-key="would_use"><span>Yes</span></label>
+            <label><input type="radio" name="wouldUse" value="maybe" data-scope="overall" data-key="would_use"><span>Maybe</span></label>
+            <label><input type="radio" name="wouldUse" value="no" data-scope="overall" data-key="would_use"><span>No</span></label>
+          </fieldset>
+        </div>
+        <div class="field">
+          <label for="o-other">Anything else</label>
+          <textarea id="o-other" data-scope="overall" data-key="other"></textarea>
+        </div>
+      </div>
+    </section>
+
+    <section class="submit-area" aria-label="Submit">
+      <div class="panel">
+        <div class="field" data-required="overall.consent">
+          <label class="check">
+            <input type="checkbox" id="consent" data-scope="overall" data-key="consent">
+            <span>I agree that my answers can be used to improve BNG Playground and reported in summary form in publications about it. My name, if given, will not be published.</span>
+          </label>
+          <p class="error-msg">Check this box to submit.</p>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:0.75rem; margin-top:1rem;">
+          <button type="submit" class="btn" id="submit-btn">Send feedback</button>
+          <button type="button" class="btn secondary" id="download-btn">Download my answers</button>
+        </div>
+        <div class="status" id="status" role="status" aria-live="polite"></div>
+      </div>
+    </section>
+  </form>
+
+  <footer>
+    Your answers are saved in this browser as you type, so you can close the page and come back. Sending the form clears them.
+  </footer>
+</div>
+
+<template id="assignment-tpl">
+  <article class="assignment">
+    <div class="tag">
+      <p class="which"></p>
+      <p class="model-id"></p>
+      <p class="model-meta"></p>
+      <div class="actions">
+        <a class="open" target="_blank" rel="noopener">Open this model in the Playground</a>
+        <button type="button" class="btn quiet" data-act="toggle-redraw">Draw a different model</button>
+      </div>
+    </div>
+    <div class="redraw">
+      <div class="row">
+        <div class="field">
+          <label>Why are you skipping this model?</label>
+          <select data-redraw-reason>
+            <option value="did_not_load">It did not load</option>
+            <option value="parse_error">It showed a parse or syntax error</option>
+            <option value="simulation_failed">The simulation failed or never finished</option>
+            <option value="task_not_applicable">The task does not apply to this model</option>
+            <option value="other">Other reason</option>
+          </select>
+        </div>
+        <div class="field">
+          <button type="button" class="btn secondary" data-act="redraw">Skip and draw again</button>
+        </div>
+      </div>
+    </div>
+    <div class="task">
+      <h3></h3>
+      <p class="goal"></p>
+      <ol></ol>
+      <p class="where"></p>
+    </div>
+    <div class="report">
+      <p class="report-h">Report</p>
+      <div class="field" data-required="status">
+        <fieldset class="choices">
+          <legend>Did you finish the task? <span class="req">*</span></legend>
+          <label><input type="radio" value="completed" data-key="status"><span>Yes</span></label>
+          <label><input type="radio" value="partial" data-key="status"><span>Partly</span></label>
+          <label><input type="radio" value="failed" data-key="status"><span>No</span></label>
+        </fieldset>
+        <p class="error-msg">Tell us whether you finished.</p>
+      </div>
+      <div class="field" data-required="ease">
+        <fieldset class="scale">
+          <legend class="q" style="grid-column:1/-1; font-weight:700; margin-bottom:0.45rem;">How easy was it? <span class="req">*</span></legend>
+          <label><input type="radio" value="1" data-key="ease"><span>1</span></label>
+          <label><input type="radio" value="2" data-key="ease"><span>2</span></label>
+          <label><input type="radio" value="3" data-key="ease"><span>3</span></label>
+          <label><input type="radio" value="4" data-key="ease"><span>4</span></label>
+          <label><input type="radio" value="5" data-key="ease"><span>5</span></label>
+        </fieldset>
+        <div class="scale-ends"><span>Very hard</span><span>Very easy</span></div>
+        <p class="error-msg">Rate how easy it was.</p>
+      </div>
+      <div class="row">
+        <div class="field">
+          <label>Minutes spent <span class="hint">Rough estimate</span></label>
+          <input type="number" min="0" max="240" step="1" data-key="minutes">
+        </div>
+        <div class="field">
+          <fieldset class="choices">
+            <legend>Did the result make sense?</legend>
+            <label><input type="radio" value="yes" data-key="made_sense"><span>Yes</span></label>
+            <label><input type="radio" value="unsure" data-key="made_sense"><span>Not sure</span></label>
+            <label><input type="radio" value="no" data-key="made_sense"><span>No</span></label>
+          </fieldset>
+        </div>
+      </div>
+      <div class="field">
+        <label class="finding-label"></label>
+        <textarea data-key="finding"></textarea>
+      </div>
+      <div class="field">
+        <fieldset class="choices">
+          <legend>Problems you ran into <span class="hint" style="display:inline">Choose all that apply</span></legend>
+          <label><input type="checkbox" value="model_did_not_load" data-key="problems"><span>Model did not load</span></label>
+          <label><input type="checkbox" value="parse_error" data-key="problems"><span>Parse error</span></label>
+          <label><input type="checkbox" value="slow_or_hung" data-key="problems"><span>Slow or froze</span></label>
+          <label><input type="checkbox" value="crashed_or_error" data-key="problems"><span>Error message or crash</span></label>
+          <label><input type="checkbox" value="results_blank_or_wrong" data-key="problems"><span>Results blank or looked wrong</span></label>
+          <label><input type="checkbox" value="could_not_find_feature" data-key="problems"><span>Could not find the feature</span></label>
+          <label><input type="checkbox" value="unclear_labels" data-key="problems"><span>Unclear labels or controls</span></label>
+          <label><input type="checkbox" value="did_not_understand_output" data-key="problems"><span>Did not understand the output</span></label>
+        </fieldset>
+      </div>
+      <div class="field">
+        <label>Exact error message, if any <span class="hint">Copy and paste it</span></label>
+        <textarea data-key="error_text" style="min-height:3.5rem"></textarea>
+      </div>
+      <div class="field">
+        <label>What happened, and what did you expect to happen?</label>
+        <textarea data-key="notes"></textarea>
+      </div>
+      <div class="remove-row">
+        <button type="button" class="btn quiet" data-act="remove">Remove this task</button>
+      </div>
+    </div>
+  </article>
+</template>
+
+<script>
+// ---------------------------------------------------------------------------
+// Configuration
+// ---------------------------------------------------------------------------
+// Web app URL from deploying feedback-collector.gs. Responses go to the Google Sheet
+// 1DpLN6L1BwZL9_nwvUDRbexvvtjqSmv2gHrFM0WHYsyM (tabs "submissions" and "tasks").
+const SUBMIT_URL = 'https://script.google.com/macros/s/AKfycbzpmWNMiGwGD3_iBZwbeBYCfHewIR2Hk8IoL-dhzhyiUk_7GVJhDalVrn5W6X9GGAqBPw/exec';
+const PLAYGROUND_URL = 'https://ruleworld.github.io/bngplayground/';
+const STORAGE_KEY = 'bngpg-feedback-v1';
+const SCHEMA_VERSION = 1;
+
+// RuleHub gallery models (src/generated/gallery-data.ts), excluding the Test Models category.
+// nf = listed in NFSIM_COMPATIBLE.
+const POOL = {"categories":[{"id":"cancer","name":"Cancer Biology"},{"id":"immunology","name":"Immunology"},{"id":"neuroscience","name":"Neuroscience"},{"id":"cell-cycle","name":"Cell Cycle"},{"id":"metabolism","name":"Metabolism"},{"id":"developmental","name":"Developmental Biology"},{"id":"ecology","name":"Ecology"},{"id":"physics","name":"Physics"},{"id":"cs","name":"Computer Science"},{"id":"ml-signal","name":"ML / Signal Processing"},{"id":"synbio","name":"Synthetic Biology"},{"id":"published-models","name":"Published Models"},{"id":"tutorials","name":"Tutorials"},{"id":"native-tutorials","name":"Native Tutorials"}],"models":[{"id":"Barua_2007","name":"Barua 2007","nf":false,"cats":["cancer","published-models"]},{"id":"Barua_2009","name":"Barua 2009","nf":false,"cats":["cancer","published-models"]},{"id":"Blinov_egfr","name":"Blinov egfr","nf":true,"cats":["cancer","published-models"]},{"id":"Kozer_2013","name":"Kozer 2013","nf":false,"cats":["cancer","published-models"]},{"id":"Kozer_2014","name":"Kozer 2014","nf":false,"cats":["cancer","published-models"]},{"id":"Ligon_2014","name":"Ligon 2014","nf":true,"cats":["cancer","published-models"]},{"id":"Mertins_2023","name":"Mertins 2023","nf":true,"cats":["cancer","published-models"]},{"id":"Nag_2009","name":"Nag 2009","nf":false,"cats":["cancer","published-models"]},{"id":"Nosbisch_2022","name":"Nosbisch 2022","nf":false,"cats":["cancer","published-models"]},{"id":"Rule_based_egfr_tutorial","name":"Faeder 2009","nf":false,"cats":["cancer","published-models"]},{"id":"checkpoint-kinase-signaling","name":"checkpoint kinase signaling","nf":false,"cats":["cancer"]},{"id":"dna-damage-repair","name":"dna damage repair","nf":true,"cats":["cancer"]},{"id":"egfr-signaling-pathway","name":"egfr signaling pathway","nf":true,"cats":["cancer"]},{"id":"egfr_ode","name":"PyBNG: EGFR ODE","nf":false,"cats":["cancer","published-models"]},{"id":"glioblastoma-egfrviii-signaling","name":"glioblastoma egfrviii signaling","nf":false,"cats":["cancer"]},{"id":"hypoxia-response-signaling","name":"hypoxia response signaling","nf":true,"cats":["cancer"]},{"id":"mapk-dimers","name":"MAPK Dimers","nf":false,"cats":["cancer","published-models"]},{"id":"mapk-monomers","name":"MAPK Monomers","nf":false,"cats":["cancer","published-models"]},{"id":"mapk-signaling-cascade","name":"mapk signaling cascade","nf":true,"cats":["cancer"]},{"id":"p38-mapk-signaling","name":"p38 mapk signaling","nf":false,"cats":["cancer"]},{"id":"ras-gef-gap-cycle","name":"ras gef gap cycle","nf":false,"cats":["cancer"]},{"id":"vegf-angiogenesis","name":"vegf angiogenesis","nf":true,"cats":["cancer"]},{"id":"An_2009","name":"An 2009","nf":false,"cats":["immunology","published-models"]},{"id":"BaruaBCR_2012","name":"Barua 2012","nf":false,"cats":["immunology","published-models"]},{"id":"BaruaFceRI_2012","name":"BaruaFceRI 2012","nf":false,"cats":["immunology","published-models"]},{"id":"Cheemalavagu_JAK_STAT","name":"Cheemalavagu 2024","nf":false,"cats":["immunology","published-models"]},{"id":"ChylekFceRI_2014","name":"Chylek 2014 (FceRI)","nf":true,"cats":["immunology","published-models"]},{"id":"ChylekTCR_2014","name":"Chylek 2014 (TCR)","nf":true,"cats":["immunology","published-models"]},{"id":"Dushek_2011","name":"Dushek 2011","nf":false,"cats":["immunology","published-models"]},{"id":"Dushek_2014","name":"Dushek 2014","nf":true,"cats":["immunology","published-models"]},{"id":"Faeder_2003","name":"Faeder 2003","nf":true,"cats":["immunology","published-models"]},{"id":"Harmon_2017","name":"Harmon 2017","nf":false,"cats":["immunology","published-models"]},{"id":"Jaruszewicz-Blonska_2023","name":"Jaruszewicz 2023","nf":false,"cats":["immunology","published-models"]},{"id":"Lin_TCR_2019","name":"Lin 2019","nf":false,"cats":["immunology","published-models"]},{"id":"McMillan_2021","name":"McMillan 2021","nf":true,"cats":["immunology","published-models"]},{"id":"Model_ZAP","name":"Model ZAP","nf":true,"cats":["immunology","published-models"]},{"id":"Mukhopadhyay_2013","name":"Mukhopadhyay 2013","nf":false,"cats":["immunology","published-models"]},{"id":"bcr-signaling","name":"bcr signaling","nf":false,"cats":["immunology"]},{"id":"blood-coagulation-thrombin","name":"blood coagulation thrombin","nf":true,"cats":["immunology"]},{"id":"cd40-signaling","name":"cd40 signaling","nf":false,"cats":["immunology"]},{"id":"complement-activation-cascade","name":"complement activation cascade","nf":true,"cats":["immunology"]},{"id":"degranulation_model","name":"PyBNG: Degranulation model","nf":false,"cats":["immunology","published-models"]},{"id":"fceri_fyn","name":"FceRI Fyn","nf":true,"cats":["immunology","published-models"]},{"id":"immune-synapse-formation","name":"immune synapse formation","nf":true,"cats":["immunology"]},{"id":"inflammasome-activation","name":"inflammasome activation","nf":true,"cats":["immunology"]},{"id":"innate_immunity","name":"Korwek 2023","nf":false,"cats":["immunology","published-models"]},{"id":"interferon-signaling","name":"interferon signaling","nf":true,"cats":["immunology"]},{"id":"jak-stat-cytokine-signaling","name":"jak stat cytokine signaling","nf":true,"cats":["immunology"]},{"id":"platelet-activation","name":"platelet activation","nf":true,"cats":["immunology"]},{"id":"t-cell-activation","name":"t cell activation","nf":true,"cats":["immunology"]},{"id":"tlbr","name":"TLBR Tutorial","nf":true,"cats":["immunology","published-models"]},{"id":"tlr3-dsrna-sensing","name":"tlr3 dsrna sensing","nf":false,"cats":["immunology"]},{"id":"viral-sensing-innate-immunity","name":"viral sensing innate immunity","nf":true,"cats":["immunology"]},{"id":"Chattaraj_2021","name":"Chattaraj 2021","nf":true,"cats":["neuroscience","published-models"]},{"id":"Jung_2017","name":"Jung 2017","nf":false,"cats":["neuroscience","published-models"]},{"id":"Lin_Prion_2019","name":"Lin 2019","nf":false,"cats":["neuroscience","published-models"]},{"id":"Lisman","name":"Lisman","nf":true,"cats":["neuroscience","native-tutorials"]},{"id":"Lisman_bifurcate","name":"Lisman bifurcate","nf":true,"cats":["neuroscience","native-tutorials"]},{"id":"ampk-signaling","name":"ampk signaling","nf":false,"cats":["neuroscience"]},{"id":"beta-adrenergic-response","name":"beta adrenergic response","nf":true,"cats":["neuroscience"]},{"id":"calcineurin-nfat-pathway","name":"calcineurin nfat pathway","nf":false,"cats":["neuroscience"]},{"id":"calcium-spike-signaling","name":"calcium spike signaling","nf":true,"cats":["neuroscience"]},{"id":"inositol-phosphate-metabolism","name":"inositol phosphate metabolism","nf":false,"cats":["neuroscience"]},{"id":"l-type-calcium-channel-dynamics","name":"l type calcium channel dynamics","nf":false,"cats":["neuroscience"]},{"id":"mtor-signaling","name":"mtor signaling","nf":true,"cats":["neuroscience"]},{"id":"neurotransmitter-release","name":"neurotransmitter release","nf":true,"cats":["neuroscience"]},{"id":"synaptic-plasticity-ltp","name":"synaptic plasticity ltp","nf":true,"cats":["neuroscience"]},{"id":"Blinov_2006","name":"Blinov 2006","nf":false,"cats":["cell-cycle","published-models"]},{"id":"Blinov_ran","name":"Blinov ran","nf":true,"cats":["cell-cycle","published-models"]},{"id":"CircadianOscillator","name":"CircadianOscillator","nf":true,"cats":["cell-cycle","published-models","native-tutorials"]},{"id":"Hat_2016","name":"Hat 2016","nf":false,"cats":["cell-cycle","published-models"]},{"id":"Kesseler_2013","name":"Kesseler 2013","nf":true,"cats":["cell-cycle","published-models"]},{"id":"Lang_2024","name":"Lang 2024","nf":false,"cats":["cell-cycle","published-models"]},{"id":"Repressilator","name":"Repressilator","nf":true,"cats":["cell-cycle","synbio","published-models","native-tutorials"]},{"id":"apoptosis-cascade","name":"apoptosis cascade","nf":true,"cats":["cell-cycle"]},{"id":"caspase-activation-loop","name":"caspase activation loop","nf":false,"cats":["cell-cycle"]},{"id":"cell-cycle-checkpoint","name":"cell cycle checkpoint","nf":true,"cats":["cell-cycle"]},{"id":"clock-bmal1-gene-circuit","name":"clock bmal1 gene circuit","nf":false,"cats":["cell-cycle"]},{"id":"dr5-apoptosis-signaling","name":"dr5 apoptosis signaling","nf":false,"cats":["cell-cycle"]},{"id":"e2f-rb-cell-cycle-switch","name":"e2f rb cell cycle switch","nf":false,"cats":["cell-cycle"]},{"id":"p53-mdm2-oscillator","name":"p53 mdm2 oscillator","nf":true,"cats":["cell-cycle"]},{"id":"parp1-mediated-dna-repair","name":"parp1 mediated dna repair","nf":false,"cats":["cell-cycle"]},{"id":"tnf-induced-apoptosis","name":"tnf induced apoptosis","nf":true,"cats":["cell-cycle"]},{"id":"vilar_2002","name":"Vilar 2002","nf":false,"cats":["cell-cycle","published-models"]},{"id":"vilar_2002b","name":"Vilar 2002b","nf":false,"cats":["cell-cycle","published-models"]},{"id":"ABC","name":"ABC","nf":true,"cats":["metabolism","native-tutorials"]},{"id":"ABp","name":"ABp","nf":true,"cats":["metabolism","native-tutorials"]},{"id":"Dolan_2015","name":"Dolan 2015","nf":false,"cats":["metabolism","published-models"]},{"id":"Erdem_2021","name":"Erdem 2021","nf":false,"cats":["metabolism","published-models"]},{"id":"GK","name":"GK","nf":true,"cats":["metabolism","native-tutorials"]},{"id":"allosteric-activation","name":"allosteric activation","nf":true,"cats":["metabolism"]},{"id":"auto-activation-loop","name":"auto activation loop","nf":true,"cats":["metabolism"]},{"id":"autophagy-regulation","name":"autophagy regulation","nf":false,"cats":["metabolism"]},{"id":"competitive-enzyme-inhibition","name":"competitive enzyme inhibition","nf":true,"cats":["metabolism"]},{"id":"glycolysis-branch-point","name":"glycolysis branch point","nf":true,"cats":["metabolism"]},{"id":"insulin-glucose-homeostasis","name":"insulin glucose homeostasis","nf":true,"cats":["metabolism"]},{"id":"lac-operon-regulation","name":"lac operon regulation","nf":true,"cats":["metabolism"]},{"id":"michaelis-menten-kinetics","name":"michaelis menten kinetics","nf":true,"cats":["metabolism"]},{"id":"no-cgmp-signaling","name":"no cgmp signaling","nf":false,"cats":["metabolism"]},{"id":"Lin_ERK_2019","name":"Lin 2019","nf":false,"cats":["developmental","published-models"]},{"id":"Massole_2023","name":"Massole 2023","nf":true,"cats":["developmental","published-models"]},{"id":"Zhang_2021","name":"Zhang 2021","nf":false,"cats":["developmental","published-models"]},{"id":"Zhang_2023","name":"Zhang 2023","nf":false,"cats":["developmental","published-models"]},{"id":"bmp-signaling","name":"bmp signaling","nf":false,"cats":["developmental"]},{"id":"fgf-signaling-pathway","name":"fgf signaling pathway","nf":false,"cats":["developmental"]},{"id":"hedgehog-signaling-pathway","name":"hedgehog signaling pathway","nf":false,"cats":["developmental"]},{"id":"myogenic-differentiation","name":"myogenic differentiation","nf":true,"cats":["developmental"]},{"id":"notch-delta-lateral-inhibition","name":"notch delta lateral inhibition","nf":true,"cats":["developmental"]},{"id":"rankl-rank-signaling","name":"rankl rank signaling","nf":false,"cats":["developmental"]},{"id":"retinoic-acid-signaling","name":"retinoic acid signaling","nf":true,"cats":["developmental"]},{"id":"smad-tgf-beta-signaling","name":"smad tgf beta signaling","nf":true,"cats":["developmental"]},{"id":"sonic-hedgehog-gradient","name":"sonic hedgehog gradient","nf":false,"cats":["developmental"]},{"id":"wnt-beta-catenin-signaling","name":"wnt beta catenin signaling","nf":true,"cats":["developmental"]},{"id":"eco_coevolution_host_parasite","name":"eco coevolution host parasite","nf":false,"cats":["ecology"]},{"id":"eco_food_web_chaos_3sp","name":"eco food web chaos 3sp","nf":false,"cats":["ecology"]},{"id":"eco_lotka_volterra_grid","name":"eco lotka volterra grid","nf":false,"cats":["ecology"]},{"id":"eco_mutualism_obligate","name":"eco mutualism obligate","nf":false,"cats":["ecology"]},{"id":"eco_rock_paper_scissors_spatial","name":"eco rock paper scissors spatial","nf":false,"cats":["ecology"]},{"id":"sir-epidemic-model","name":"sir epidemic model","nf":true,"cats":["ecology","tutorials"]},{"id":"wacky_zombie_infection","name":"wacky zombie infection","nf":false,"cats":["ecology"]},{"id":"Dembo_1978","name":"Dembo 1978","nf":false,"cats":["physics","published-models"]},{"id":"Goldstein_1980","name":"Goldstein 1980","nf":false,"cats":["physics","published-models"]},{"id":"Hlavacek_1999","name":"Hlavacek 1999","nf":false,"cats":["physics","published-models"]},{"id":"Hlavacek_2001","name":"Hlavacek 2001","nf":false,"cats":["physics","published-models"]},{"id":"Macken_1982","name":"Macken 1982","nf":false,"cats":["physics","published-models"]},{"id":"Posner_1995","name":"Posner 1995","nf":false,"cats":["physics","published-models"]},{"id":"Posner_2004","name":"Posner 2004","nf":false,"cats":["physics","published-models"]},{"id":"Yang_2008","name":"Yang 2008","nf":false,"cats":["physics","published-models"]},{"id":"brusselator-oscillator","name":"brusselator oscillator","nf":true,"cats":["physics"]},{"id":"ph_lorenz_attractor","name":"ph lorenz attractor","nf":true,"cats":["physics"]},{"id":"ph_nbody_gravity","name":"ph nbody gravity","nf":false,"cats":["physics"]},{"id":"ph_schrodinger","name":"ph schrodinger","nf":false,"cats":["physics"]},{"id":"ph_wave_equation","name":"ph wave equation","nf":false,"cats":["physics"]},{"id":"wacky_bouncing_ball","name":"wacky bouncing ball","nf":false,"cats":["physics"]},{"id":"wacky_traffic_jam_asep","name":"wacky traffic jam asep","nf":false,"cats":["physics"]},{"id":"cs_diffie_hellman","name":"cs diffie hellman","nf":false,"cats":["cs"]},{"id":"cs_hash_function","name":"cs hash function","nf":true,"cats":["cs"]},{"id":"cs_huffman","name":"cs huffman","nf":false,"cats":["cs"]},{"id":"cs_monte_carlo_pi","name":"cs monte carlo pi","nf":false,"cats":["cs"]},{"id":"cs_pagerank","name":"cs pagerank","nf":false,"cats":["cs"]},{"id":"cs_pid_controller","name":"cs pid controller","nf":true,"cats":["cs"]},{"id":"cs_regex_nfa","name":"cs regex nfa","nf":false,"cats":["cs"]},{"id":"mt_arithmetic_compiler","name":"mt arithmetic compiler","nf":false,"cats":["cs"]},{"id":"mt_bngl_interpreter","name":"mt bngl interpreter","nf":false,"cats":["cs"]},{"id":"mt_music_sequencer","name":"mt music sequencer","nf":true,"cats":["cs"]},{"id":"mt_pascal_triangle","name":"mt pascal triangle","nf":false,"cats":["cs"]},{"id":"mt_quine","name":"mt quine","nf":false,"cats":["cs"]},{"id":"ml_gradient_descent","name":"ml gradient descent","nf":true,"cats":["ml-signal"]},{"id":"ml_hopfield","name":"ml hopfield","nf":false,"cats":["ml-signal"]},{"id":"ml_kmeans","name":"ml kmeans","nf":false,"cats":["ml-signal"]},{"id":"ml_q_learning","name":"ml q learning","nf":true,"cats":["ml-signal"]},{"id":"ml_svm","name":"ml svm","nf":false,"cats":["ml-signal"]},{"id":"nn_xor","name":"nn xor","nf":false,"cats":["ml-signal"]},{"id":"sp_fourier_synthesizer","name":"sp fourier synthesizer","nf":true,"cats":["ml-signal"]},{"id":"sp_image_convolution","name":"sp image convolution","nf":true,"cats":["ml-signal"]},{"id":"sp_kalman_filter","name":"sp kalman filter","nf":true,"cats":["ml-signal"]},{"id":"synbio_band_pass_filter","name":"synbio band pass filter","nf":false,"cats":["synbio"]},{"id":"synbio_counter_molecular","name":"synbio counter molecular","nf":false,"cats":["synbio"]},{"id":"synbio_edge_detector","name":"synbio edge detector","nf":false,"cats":["synbio"]},{"id":"synbio_logic_gates_enzymatic","name":"synbio logic gates enzymatic","nf":false,"cats":["synbio"]},{"id":"synbio_oscillator_synchronization","name":"synbio oscillator synchronization","nf":false,"cats":["synbio"]},{"id":"toggle","name":"Toggle","nf":false,"cats":["synbio","published-models","native-tutorials"]},{"id":"wacky_alchemy_stone","name":"wacky alchemy stone","nf":false,"cats":["synbio"]},{"id":"03_fcerig_fceri_gamma2","name":"03-fcerig","nf":false,"cats":["published-models"]},{"id":"04_egfrnf_egfr_nf","name":"example2_starting_point.bngl","nf":true,"cats":["published-models"]},{"id":"06_degranulation_model_tofit","name":"of IgE receptor signaling","nf":false,"cats":["published-models"]},{"id":"07_egg_egg","name":"07-egg","nf":false,"cats":["published-models"]},{"id":"10_egfr_egfr_ode","name":"example1.bngl","nf":false,"cats":["published-models"]},{"id":"11_TLBR_tlbr","name":"11-TLBR","nf":true,"cats":["published-models"]},{"id":"12_TCR_tcr","name":"of T cell receptor signaling","nf":true,"cats":["published-models"]},{"id":"14_receptor_nf_receptor_nf","name":"of ligand/receptor binding and receptor phosphorylation.","nf":true,"cats":["published-models"]},{"id":"15_igf1r_IGF1R_fit_all","name":"15-igf1r","nf":false,"cats":["published-models"]},{"id":"19_raf_constraint_RAFi","name":"19-raf-constraint","nf":false,"cats":["published-models"]},{"id":"20_raf_constraint4_RAFi","name":"20-raf-constraint4","nf":false,"cats":["published-models"]},{"id":"24_jnk_JNKmodel_180724_bnf","name":"24-jnk","nf":false,"cats":["published-models"]},{"id":"26_tcr_sens_tcr_sens_tofit","name":"for the Manz/Groves 2011 data","nf":true,"cats":["published-models"]},{"id":"31_elephant_elephant","name":"31-elephant","nf":false,"cats":["published-models"]},{"id":"Alabama","name":"Alabama","nf":false,"cats":["published-models"]},{"id":"Barua_2013","name":"Barua 2013","nf":false,"cats":["published-models"]},{"id":"CaMKII_holo","name":"Ordyan 2020: CaMKII holo","nf":true,"cats":["published-models"]},{"id":"ComplexDegradation","name":"ComplexDegradation","nf":false,"cats":["published-models","native-tutorials"]},{"id":"Dallas","name":"Dallas","nf":false,"cats":["published-models"]},{"id":"Dreisigmeyer_2008","name":"Dreisigmeyer 2008","nf":false,"cats":["published-models"]},{"id":"FceRI_viz","name":"FceRI Viz","nf":false,"cats":["published-models","native-tutorials"]},{"id":"Gardner_2000","name":"Gardner 2000","nf":false,"cats":["published-models"]},{"id":"Hlavacek2018Egg_egg","name":"Hlavacek2018Egg","nf":false,"cats":["published-models"]},{"id":"Houston","name":"Houston","nf":false,"cats":["published-models"]},{"id":"IGF1R_Model_receptor_activation_bnf","name":"IGF1R Model receptor activation bnf","nf":false,"cats":["published-models"]},{"id":"Kocieniewski_2012","name":"Kocieniewski 2012","nf":true,"cats":["published-models"]},{"id":"Mallela2021_Cities","name":"Mallela 2021 - COVID-19 City Models","nf":false,"cats":["published-models"]},{"id":"Mallela2021_States","name":"Mallela 2021 - COVID-19 State-Level Models","nf":false,"cats":["published-models"]},{"id":"Mallela2022_MSAs","name":"Mallela 2022 - COVID-19 MSA Models","nf":false,"cats":["published-models"]},{"id":"Miller2022_NavajoNation","name":"Miller 2022 - Navajo Nation Models","nf":false,"cats":["published-models"]},{"id":"Miller2025_MEK","name":"Miller 2025 - MEK Isoform Models","nf":false,"cats":["published-models"]},{"id":"Mitra2019_02_egfr_bnf1_InputFiles_egfr","name":"InputFiles","nf":false,"cats":["published-models"]},{"id":"NYC","name":"NYC","nf":false,"cats":["published-models"]},{"id":"Pekalski_2013","name":"Pekalski 2013","nf":false,"cats":["published-models"]},{"id":"Phoenix","name":"Phoenix","nf":false,"cats":["published-models"]},{"id":"PyBNF_fitting_setup_190127_CHO_EGFR_forBNF","name":"PyBNF-fitting-setup","nf":false,"cats":["published-models"]},{"id":"RAFi","name":"RAFi","nf":false,"cats":["published-models"]},{"id":"RAFi_ground","name":"RAFi ground","nf":false,"cats":["published-models"]},{"id":"Rule_based_Ran_transport","name":"Rule based Ran transport","nf":false,"cats":["published-models"]},{"id":"Rule_based_Ran_transport_draft","name":"Rule based Ran transport draft","nf":false,"cats":["published-models"]},{"id":"Rule_based_egfr_compart","name":"Rule based egfr compart","nf":false,"cats":["published-models"]},{"id":"birth-death","name":"Birth-Death","nf":false,"cats":["published-models","native-tutorials"]},{"id":"chemistry","name":"chemistry","nf":false,"cats":["published-models","tutorials"]},{"id":"egfr","name":"egfr","nf":false,"cats":["published-models"]},{"id":"egfr_ground","name":"egfr ground","nf":false,"cats":["published-models"]},{"id":"egfr_nf","name":"egfr nf","nf":true,"cats":["published-models"]},{"id":"example1","name":"example1","nf":false,"cats":["published-models"]},{"id":"example1_BNFfiles_example1","name":"example1_starting_point.bngl","nf":false,"cats":["published-models"]},{"id":"example2_BNFfiles_example2","name":"example2_starting_point.bngl","nf":true,"cats":["published-models"]},{"id":"example2_starting_point","name":"example2 starting point","nf":true,"cats":["published-models"]},{"id":"example3_BNFfiles_example3","name":"example3 BNFfiles","nf":true,"cats":["published-models"]},{"id":"example4_BNFfiles_example4","name":"in BNGL. For a description of BNGL, see:","nf":true,"cats":["published-models"]},{"id":"example5_BNFfiles_example5","name":"example5 BNFfiles","nf":false,"cats":["published-models"]},{"id":"example6_BNFfiles_example6","name":"example6 BNFfiles","nf":true,"cats":["published-models"]},{"id":"extra_CaMKII_Holo","name":"Ordyan 2020: extra CaMKII holo","nf":true,"cats":["published-models"]},{"id":"fceri_gamma2","name":"fceri gamma2","nf":true,"cats":["published-models"]},{"id":"fceri_gamma2_ground_truth","name":"fceri gamma2 ground truth","nf":false,"cats":["published-models"]},{"id":"mCaMKII_Ca_Spike","name":"Ordyan 2020: mCaMKII Ca Spike","nf":false,"cats":["published-models"]},{"id":"model","name":"model","nf":false,"cats":["published-models"]},{"id":"model_ground","name":"model_ground.bngl","nf":false,"cats":["published-models"]},{"id":"model_tofit","name":"model tofit","nf":false,"cats":["published-models"]},{"id":"notch","name":"Notch","nf":false,"cats":["published-models"]},{"id":"parabola","name":"parabola","nf":false,"cats":["published-models"]},{"id":"parabola_ground","name":"parabola ground","nf":false,"cats":["published-models"]},{"id":"polymer","name":"polymer","nf":true,"cats":["published-models","tutorials"]},{"id":"polymer_draft","name":"polymer draft","nf":true,"cats":["published-models","tutorials"]},{"id":"polynomial","name":"polynomial","nf":false,"cats":["published-models"]},{"id":"polynomial_ground","name":"polynomial ground","nf":false,"cats":["published-models"]},{"id":"problem16_3cat_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem16_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem32_3cat_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem32_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem4_3cat_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem4_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem64_3cat_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem64_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem8_3cat_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem8_model0_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"problem_quant_model_tofit","name":"model.bngl","nf":false,"cats":["published-models"]},{"id":"pt303","name":"pt303","nf":false,"cats":["published-models"]},{"id":"pt403","name":"pt403","nf":false,"cats":["published-models"]},{"id":"pt409","name":"pt409","nf":false,"cats":["published-models"]},{"id":"quasi_equilibrium","name":"quasi equilibrium","nf":false,"cats":["published-models","tutorials","native-tutorials"]},{"id":"rab_mon1ccz1_ox","name":"rab_mon1ccz1_ox.bngl","nf":false,"cats":["published-models"]},{"id":"receptor","name":"receptor","nf":false,"cats":["published-models"]},{"id":"receptor_nf","name":"receptor nf","nf":true,"cats":["published-models"]},{"id":"simple","name":"simple","nf":false,"cats":["published-models","tutorials"]},{"id":"tcr","name":"tcr","nf":true,"cats":["published-models"]},{"id":"toy1","name":"toy1","nf":false,"cats":["published-models","tutorials"]},{"id":"toy2","name":"toy2","nf":false,"cats":["published-models","tutorials"]},{"id":"vilar_2002c","name":"Vilar 2002c","nf":false,"cats":["published-models"]},{"id":"visualize","name":"Visualize","nf":true,"cats":["published-models","native-tutorials"]},{"id":"wnt","name":"Wnt Signaling","nf":false,"cats":["published-models"]},{"id":"AB","name":"AB","nf":true,"cats":["native-tutorials"]},{"id":"ABC_scan","name":"ABC scan","nf":false,"cats":["native-tutorials"]},{"id":"ABC_ssa","name":"ABC ssa","nf":true,"cats":["native-tutorials"]},{"id":"ABp_approx","name":"ABp approx","nf":true,"cats":["native-tutorials"]},{"id":"BAB","name":"BAB","nf":true,"cats":["native-tutorials"]},{"id":"BAB_coop","name":"BAB coop","nf":true,"cats":["native-tutorials"]},{"id":"BAB_scan","name":"BAB scan","nf":false,"cats":["native-tutorials"]},{"id":"Chylek_library","name":"Chylek library","nf":true,"cats":["native-tutorials"]},{"id":"Creamer_2012","name":"Creamer 2012","nf":true,"cats":["native-tutorials"]},{"id":"FceRI_ji","name":"FceRI ji","nf":false,"cats":["native-tutorials"]},{"id":"LR","name":"LR","nf":true,"cats":["native-tutorials"]},{"id":"LRR","name":"LRR","nf":true,"cats":["native-tutorials"]},{"id":"LRR_comp","name":"LRR comp","nf":true,"cats":["native-tutorials"]},{"id":"LR_comp","name":"LR comp","nf":true,"cats":["native-tutorials"]},{"id":"LV","name":"LV","nf":false,"cats":["native-tutorials"]},{"id":"LV_comp","name":"LV comp","nf":false,"cats":["native-tutorials"]},{"id":"SIR","name":"SIR","nf":true,"cats":["native-tutorials"]},{"id":"Suderman_2013","name":"Suderman 2013","nf":true,"cats":["native-tutorials"]},{"id":"cBNGL_simple","name":"cBNGL simple","nf":true,"cats":["native-tutorials"]},{"id":"egfr_simple","name":"egfr simple","nf":true,"cats":["native-tutorials"]},{"id":"organelle_transport","name":"organelle transport","nf":true,"cats":["native-tutorials"]},{"id":"organelle_transport_struct","name":"organelle transport struct","nf":true,"cats":["native-tutorials"]}]};
+
+// ---------------------------------------------------------------------------
+// Tasks. "where" names the exact UI path in the Playground.
+// requires: 'nf' limits the draw to NFsim-compatible models.
+// ---------------------------------------------------------------------------
+const TASKS = [
+  {
+    id: 'ode_time_course',
+    title: 'Run a deterministic time course',
+    goal: 'Simulate the model with the ODE solver and read the result.',
+    steps: [
+      'Open the model. Check that the editor shows BNGL code and no error.',
+      'Click Parse.',
+      'Click the settings button next to Run (it shows the current method, such as Auto), choose ODE, and click Run.',
+      'In Time Courses, hide all but two observables and zoom to the interesting part of the curve.',
+      'Use the Export button above the plot to save the data.'
+    ],
+    where: 'Settings button next to Run → ODE → Run, then the Time Courses tab.',
+    finding: 'Which observable changes the most, and roughly when does it level off?'
+  },
+  {
+    id: 'ssa_vs_ode',
+    title: 'Compare stochastic and deterministic runs',
+    goal: 'See how random fluctuations change the picture compared with the ODE solution.',
+    steps: [
+      'Run the model once with ODE and note the shape of one observable.',
+      'Open the settings button next to Run, switch the method to SSA, and run again.',
+      'Run SSA a second time and compare it with the first SSA run.',
+      'If the run is slow, reduce T End or the number of steps and say so in your notes.'
+    ],
+    where: 'Settings button next to Run → SSA → Run.',
+    finding: 'Did the SSA runs look like the ODE run? Describe the difference in one or two sentences.'
+  },
+  {
+    id: 'nfsim_run',
+    requires: 'nf',
+    title: 'Run network-free simulation',
+    goal: 'Simulate the model by tracking individual molecules with NFsim instead of generating a reaction network.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open the settings button next to Run, choose NFsim, and click Run.',
+      'Compare the result with an ODE or SSA run of the same model, if that works.'
+    ],
+    where: 'Settings button next to Run → NFsim → Run.',
+    finding: 'How long did the NFsim run take, and did its result agree with the other method?'
+  },
+  {
+    id: 'network_views',
+    title: 'Read the model structure',
+    goal: 'Understand what molecules the model contains and how they interact, without running a simulation.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open the Network tab and look at the Contact Map view.',
+      'Switch to the Rules view and find one binding rule and one modification rule (if the model has them).',
+      'Switch to the Regulatory view and find one molecule that regulates another.'
+    ],
+    where: 'Network tab → Contact Map, Rules, and Regulatory views (toggle at the top right).',
+    finding: 'Name two molecule types in the model and describe one interaction between them.'
+  },
+  {
+    id: 'rule_cartoons',
+    title: 'Inspect rules as cartoons',
+    goal: 'Use the rule cartoons to read what each reaction rule does.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open Analysis → Rule Cartoons.',
+      'Pick one rule and compare its cartoon with the BNGL text for that rule in the editor.'
+    ],
+    where: 'Analysis menu → Rule Cartoons.',
+    finding: 'Describe one rule in plain words. Did the cartoon match the BNGL text?'
+  },
+  {
+    id: 'parameter_scan',
+    title: 'Scan one parameter',
+    goal: 'See how an output changes as one parameter is varied over a range.',
+    steps: [
+      'Open the model, click Parse, and run one ODE simulation so you know the baseline.',
+      'Open Analysis → Parameter Scan.',
+      'Choose one rate constant or initial amount and scan it over at least one order of magnitude.',
+      'Look at how one observable responds across the scan.'
+    ],
+    where: 'Analysis menu → Parameter Scan.',
+    finding: 'Which parameter did you scan, over what range, and how did the output respond?'
+  },
+  {
+    id: 'local_sensitivity',
+    title: 'Find the most sensitive parameter',
+    goal: 'Rank parameters by how much a small change in each one affects the model output.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open Analysis → Local Sensitivity and run it with the default settings.',
+      'Read the ranking or heatmap and find the most influential parameter.'
+    ],
+    where: 'Analysis menu → Local Sensitivity.',
+    finding: 'Which parameter had the largest effect, and on which observable?'
+  },
+  {
+    id: 'sobol',
+    title: 'Run a global sensitivity analysis',
+    goal: 'Estimate how much each parameter contributes to output variation when all parameters vary at once.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open Analysis → Global Sensitivity (Sobol).',
+      'Pick a small number of parameters (3–5) and a modest sample size so it finishes in a few minutes.',
+      'Run it and read the first-order and total-order indices.'
+    ],
+    where: 'Analysis menu → Global Sensitivity (Sobol).',
+    finding: 'Which parameters did you include, and which one mattered most? How long did it take?'
+  },
+  {
+    id: 'steady_state',
+    title: 'Find the steady state',
+    goal: 'Compute where the model settles and whether that state is stable.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open Analysis → Steady State and run it.',
+      'Compare the reported steady-state values with the end of an ODE time course, if you ran one.'
+    ],
+    where: 'Analysis menu → Steady State.',
+    finding: 'Did it find a steady state? Was it reported as stable? Did it match the end of the time course?'
+  },
+  {
+    id: 'bifurcation',
+    title: 'Trace a bifurcation diagram',
+    goal: 'Follow how the steady state changes as one parameter is varied, and look for switches or oscillations.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open Analysis → Bifurcation Analysis.',
+      'Choose one parameter and a range, and run.',
+      'Look for points where the number or stability of steady states changes.'
+    ],
+    where: 'Analysis menu → Bifurcation Analysis.',
+    finding: 'Which parameter did you vary? Did you see any change in the number or stability of steady states?'
+  },
+  {
+    id: 'what_if',
+    title: 'Compare a what-if change',
+    goal: 'Change one parameter and compare the modified model with the original side by side.',
+    steps: [
+      'Open the model, click Parse, and run one simulation.',
+      'Open Analysis → What-If Compare.',
+      'Change one parameter (for example, double a binding rate) and compare the two runs.'
+    ],
+    where: 'Analysis menu → What-If Compare.',
+    finding: 'What did you change, and what was the effect on the output?'
+  },
+  {
+    id: 'flux',
+    title: 'Look at reaction fluxes',
+    goal: 'Find which reactions carry the most flux during the simulation.',
+    steps: [
+      'Open the model, click Parse, and run an ODE simulation.',
+      'Open Analysis → Flux Analysis.',
+      'Find the reaction or rule with the largest flux.'
+    ],
+    where: 'Analysis menu → Flux Analysis.',
+    finding: 'Which reaction or rule dominated, and at what time?'
+  },
+  {
+    id: 'jupyter_export',
+    title: 'Export the model to a notebook',
+    goal: 'Take the model out of the browser to keep working in Python.',
+    steps: [
+      'Open the model and click Parse.',
+      'Open Analysis → Jupyter Export and download the notebook.',
+      'If you have Jupyter, open the notebook and check whether it runs.'
+    ],
+    where: 'Analysis menu → Jupyter Export.',
+    finding: 'Did the export download? If you opened it, did it run, and what did you have to change?'
+  }
+];
+
+// The 10 statements of the System Usability Scale (Brooke, 1996), with "the system" replaced by the product name.
+const SUS = [
+  'I think that I would like to use BNG Playground frequently.',
+  'I found BNG Playground unnecessarily complex.',
+  'I thought BNG Playground was easy to use.',
+  'I think that I would need the support of a technical person to be able to use BNG Playground.',
+  'I found the various functions in BNG Playground were well integrated.',
+  'I thought there was too much inconsistency in BNG Playground.',
+  'I would imagine that most people would learn to use BNG Playground very quickly.',
+  'I found BNG Playground very cumbersome to use.',
+  'I felt very confident using BNG Playground.',
+  'I needed to learn a lot of things before I could get going with BNG Playground.'
+];
+
+// ---------------------------------------------------------------------------
+// State
+// ---------------------------------------------------------------------------
+const catName = Object.fromEntries(POOL.categories.map(c => [c.id, c.name]));
+let state = load() || freshState();
+
+function freshState() {
+  return {
+    session_id: (crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + Math.random().toString(16).slice(2)),
+    started_at: new Date().toISOString(),
+    profile: (() => { const os = detectOS(); return { os, os_version: detectOSVersionSync(os), browser: detectBrowser(), device: detectDevice(os), processor: '' }; })(),
+    draw_category: 'any',
+    assignments: [],
+    sus: Array(10).fill(null),
+    overall: {}
+  };
+}
+function load() {
+  try { const raw = localStorage.getItem(STORAGE_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function save() {
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); } catch { /* storage unavailable; form still works */ }
+}
+function detectBrowser() {
+  const ua = navigator.userAgent;
+  // Order matters: Edge and Opera also contain "Chrome/", and Chrome contains "Safari/".
+  const checks = [['Edge', /Edg(?:A|iOS)?\/(\d+)/], ['Opera', /OPR\/(\d+)/], ['Firefox', /(?:Firefox|FxiOS)\/(\d+)/],
+                  ['Chrome', /(?:Chrome|CriOS)\/(\d+)/], ['Safari', /Version\/(\d+(?:\.\d+)?).*Safari/]];
+  for (const [name, re] of checks) { const m = ua.match(re); if (m) return `${name} ${m[1]}`; }
+  return '';
+}
+function detectOS() {
+  const ua = navigator.userAgent;
+  if (/CrOS/.test(ua)) return 'chromeos';
+  if (/Windows/.test(ua)) return 'windows';
+  if (/iPad/.test(ua) || (/Macintosh/.test(ua) && navigator.maxTouchPoints > 1)) return 'ipados';
+  if (/iPhone|iPod/.test(ua)) return 'ios';
+  if (/Android/.test(ua)) return 'android';
+  if (/Macintosh|Mac OS X/.test(ua)) return 'macos';
+  if (/Linux/.test(ua)) return 'linux';
+  return '';
+}
+// Only versions the browser reports reliably. Windows 10/11 and recent macOS versions
+// are hidden in the user-agent string, so those come from userAgentData (Chrome, Edge, Opera only).
+function detectOSVersionSync(os) {
+  const ua = navigator.userAgent;
+  if (os === 'ios' || os === 'ipados') { const m = ua.match(/OS (\d+)_(\d+)/); return m ? `${os === 'ios' ? 'iOS' : 'iPadOS'} ${m[1]}.${m[2]}` : ''; }
+  if (os === 'android') { const m = ua.match(/Android (\d+(?:\.\d+)?)/); return m ? `Android ${m[1]}` : ''; }
+  return '';
+}
+async function detectOSVersionAsync(os) {
+  if (!navigator.userAgentData?.getHighEntropyValues) return '';
+  try {
+    const { platformVersion } = await navigator.userAgentData.getHighEntropyValues(['platformVersion']);
+    const major = parseInt(platformVersion, 10);
+    if (os === 'windows' && !isNaN(major)) return major >= 13 ? 'Windows 11' : major > 0 ? 'Windows 10' : '';
+    if (os === 'macos' && /^\d+\.\d+/.test(platformVersion) && major >= 11) return `macOS ${platformVersion.split('.').slice(0, 2).join('.')}`;
+  } catch { /* not available */ }
+  return '';
+}
+function detectDevice(os) {
+  if (os === 'ipados' || /Tablet/.test(navigator.userAgent) || (os === 'android' && !/Mobile/.test(navigator.userAgent))) return 'tablet';
+  if (os === 'ios' || os === 'android') return 'phone';
+  return 'laptop';
+}
+
+// ---------------------------------------------------------------------------
+// Drawing
+// ---------------------------------------------------------------------------
+const rand = arr => arr[Math.floor(Math.random() * arr.length)];
+
+function modelPool(task, excludeIds) {
+  let pool = POOL.models;
+  if (state.draw_category !== 'any') pool = pool.filter(m => m.cats.includes(state.draw_category));
+  if (task.requires === 'nf') pool = pool.filter(m => m.nf);
+  const fresh = pool.filter(m => !excludeIds.has(m.id));
+  return fresh.length ? fresh : pool;
+}
+
+function drawTask() {
+  const used = new Set(state.assignments.map(a => a.task_id));
+  let candidates = TASKS.filter(t => !used.has(t.id));
+  if (!candidates.length) candidates = TASKS;
+  // Skip tasks with no eligible models in the chosen category.
+  candidates = candidates.filter(t => modelPool(t, new Set()).length);
+  if (!candidates.length) return null;
+  return rand(candidates);
+}
+
+function seenModelIds() {
+  const s = new Set();
+  for (const a of state.assignments) { s.add(a.model_id); for (const r of a.redraws) s.add(r.model_id); }
+  return s;
+}
+
+function addAssignment() {
+  const task = drawTask();
+  if (!task) { flash('No models in that category fit the remaining tasks. Choose “Any category”.', 'bad'); return; }
+  const model = rand(modelPool(task, seenModelIds()));
+  const a = {
+    key: Math.random().toString(36).slice(2, 10),
+    task_id: task.id,
+    model_id: model.id,
+    drawn_from: state.draw_category,
+    drawn_at: new Date().toISOString(),
+    redraws: [],
+    answers: { problems: [] }
+  };
+  state.assignments.push(a);
+  save();
+  renderAssignments(a.key);
+}
+
+function redraw(a, reason) {
+  const task = TASKS.find(t => t.id === a.task_id);
+  a.redraws.push({ model_id: a.model_id, reason, at: new Date().toISOString() });
+  a.model_id = rand(modelPool(task, seenModelIds())).id;
+  a.answers = { problems: [] };
+  save();
+  renderAssignments(a.key);
+}
+
+// ---------------------------------------------------------------------------
+// Rendering
+// ---------------------------------------------------------------------------
+const $ = s => document.querySelector(s);
+const tpl = $('#assignment-tpl');
+
+function renderCategorySelect() {
+  const sel = $('#draw-cat');
+  sel.innerHTML = '<option value="any">Any category</option>' +
+    POOL.categories.map(c => `<option value="${c.id}">${c.name}</option>`).join('');
+  sel.value = state.draw_category;
+  sel.addEventListener('change', () => { state.draw_category = sel.value; save(); });
+}
+
+function renderAssignments(dealtKey) {
+  const box = $('#assignments');
+  box.innerHTML = '';
+  $('#empty').style.display = state.assignments.length ? 'none' : 'block';
+  $('#draw-btn').textContent = state.assignments.length ? 'Draw another task' : 'Draw a task';
+
+  state.assignments.forEach((a, i) => {
+    const task = TASKS.find(t => t.id === a.task_id);
+    const model = POOL.models.find(m => m.id === a.model_id);
+    const node = tpl.content.firstElementChild.cloneNode(true);
+    node.dataset.key = a.key;
+
+    const tag = node.querySelector('.tag');
+    if (a.key === dealtKey) tag.classList.add('dealt');
+    node.querySelector('.which').textContent = `Task ${i + 1}` + (a.redraws.length ? `, model redrawn ${a.redraws.length} ${a.redraws.length === 1 ? 'time' : 'times'}` : '');
+    node.querySelector('.model-id').textContent = model.id;
+    const prettyName = model.name && model.name.toLowerCase().replace(/[\s_-]+/g, '') !== model.id.toLowerCase().replace(/[\s_-]+/g, '') ? `${model.name}. ` : '';
+    node.querySelector('.model-meta').textContent = prettyName + 'Library: ' + model.cats.map(c => catName[c]).join(', ');
+    const link = node.querySelector('.open');
+    link.href = `${PLAYGROUND_URL}?model=${encodeURIComponent(model.id)}`;
+    link.setAttribute('aria-label', `Open model ${model.id} in BNG Playground (new tab)`);
+
+    node.querySelector('.task h3').textContent = task.title;
+    node.querySelector('.goal').textContent = task.goal;
+    node.querySelector('.task ol').innerHTML = task.steps.map(s => `<li>${escapeHtml(s)}</li>`).join('');
+    node.querySelector('.where').textContent = 'Where: ' + task.where;
+    node.querySelector('.finding-label').textContent = task.finding;
+
+    // Unique ids / names per assignment so labels and radio groups work.
+    node.querySelectorAll('[data-key]').forEach((el, j) => {
+      const key = el.dataset.key;
+      if (el.type === 'radio' || el.type === 'checkbox') {
+        el.name = `${a.key}-${key}`;
+        const v = a.answers[key];
+        el.checked = el.type === 'checkbox' ? (v || []).includes(el.value) : v === el.value;
+      } else {
+        el.id = `${a.key}-${key}`;
+        const lab = el.closest('.field').querySelector(':scope > label');
+        if (lab) lab.htmlFor = el.id;
+        el.value = a.answers[key] ?? '';
+      }
+    });
+    const reasonSel = node.querySelector('[data-redraw-reason]');
+    reasonSel.id = `${a.key}-reason`;
+    reasonSel.previousElementSibling.htmlFor = reasonSel.id;
+
+    box.appendChild(node);
+  });
+}
+
+function renderSUS() {
+  const box = $('#sus');
+  box.innerHTML = SUS.map((q, i) => `
+    <div class="sus-item field" data-required="sus.${i}">
+      <fieldset class="scale">
+        <legend class="q" style="grid-column:1/-1">${i + 1}. ${escapeHtml(q)} <span class="req">*</span></legend>
+        ${[1,2,3,4,5].map(v => `<label><input type="radio" name="sus-${i}" value="${v}" data-sus="${i}" ${state.sus[i] === v ? 'checked' : ''}><span>${v}</span></label>`).join('')}
+      </fieldset>
+      <div class="scale-ends"><span>Strongly disagree</span><span>Strongly agree</span></div>
+      <p class="error-msg">Choose a number from 1 to 5.</p>
+    </div>`).join('');
+}
+
+function restoreStatic() {
+  document.querySelectorAll('[data-scope]').forEach(el => {
+    const v = state[el.dataset.scope][el.dataset.key];
+    if (el.type === 'radio') el.checked = v === el.value;
+    else if (el.type === 'checkbox') el.checked = !!v;
+    else if (v !== undefined) el.value = v;
+  });
+}
+
+function escapeHtml(s) { return s.replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])); }
+
+// ---------------------------------------------------------------------------
+// Input handling
+// ---------------------------------------------------------------------------
+function onInput(e) {
+  const el = e.target;
+  if (el.dataset.scope) {
+    state[el.dataset.scope][el.dataset.key] = el.type === 'checkbox' ? el.checked : el.value;
+  } else if (el.dataset.sus !== undefined) {
+    state.sus[+el.dataset.sus] = +el.value;
+  } else if (el.dataset.key) {
+    const a = state.assignments.find(x => x.key === el.closest('.assignment').dataset.key);
+    const k = el.dataset.key;
+    if (el.type === 'checkbox') {
+      const set = new Set(a.answers[k] || []);
+      el.checked ? set.add(el.value) : set.delete(el.value);
+      a.answers[k] = [...set];
+    } else if (k === 'minutes') {
+      a.answers[k] = el.value === '' ? '' : Number(el.value);
+    } else {
+      a.answers[k] = el.value;
+    }
+  } else return;
+  el.closest('.field')?.classList.remove('invalid');
+  save();
+}
+
+function onClick(e) {
+  const btn = e.target.closest('[data-act]');
+  if (!btn) return;
+  const node = btn.closest('.assignment');
+  const a = state.assignments.find(x => x.key === node.dataset.key);
+  if (btn.dataset.act === 'toggle-redraw') {
+    node.querySelector('.redraw').classList.toggle('open');
+  } else if (btn.dataset.act === 'redraw') {
+    redraw(a, node.querySelector('[data-redraw-reason]').value);
+  } else if (btn.dataset.act === 'remove') {
+    if (!confirm('Remove this task and its report?')) return;
+    state.assignments = state.assignments.filter(x => x !== a);
+    save();
+    renderAssignments();
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Validation and submission
+// ---------------------------------------------------------------------------
+function validate() {
+  let first = null;
+  const mark = (field, ok) => { field.classList.toggle('invalid', !ok); if (!ok && !first) first = field; };
+
+  document.querySelectorAll('[data-required]').forEach(field => {
+    const path = field.dataset.required;
+    let ok;
+    if (path.startsWith('sus.')) ok = state.sus[+path.slice(4)] != null;
+    else if (path.includes('.')) { const [scope, key] = path.split('.'); ok = !!state[scope][key]; }
+    else {
+      const a = state.assignments.find(x => x.key === field.closest('.assignment').dataset.key);
+      ok = !!a.answers[path];
+    }
+    mark(field, ok);
+  });
+
+  if (!state.assignments.length) {
+    flash('Draw and report on at least one task before sending.', 'bad');
+    $('#draw-btn').focus();
+    return false;
+  }
+  if (first) {
+    flash('Some required answers are missing. They are marked in red.', 'bad');
+    first.scrollIntoView({ behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth', block: 'center' });
+    first.querySelector('input, textarea, select')?.focus({ preventScroll: true });
+    return false;
+  }
+  return true;
+}
+
+function susScore(r) {
+  if (r.some(v => v == null)) return null;
+  return r.reduce((sum, v, i) => sum + (i % 2 === 0 ? v - 1 : 5 - v), 0) * 2.5;
+}
+
+function payload() {
+  return {
+    schema_version: SCHEMA_VERSION,
+    session_id: state.session_id,
+    started_at: state.started_at,
+    submitted_at: new Date().toISOString(),
+    user_agent: navigator.userAgent,
+    profile: state.profile,
+    assignments: state.assignments.map(a => ({
+      task_id: a.task_id,
+      model_id: a.model_id,
+      drawn_from: a.drawn_from,
+      drawn_at: a.drawn_at,
+      redraws: a.redraws,
+      ...a.answers,
+      ease: a.answers.ease ? Number(a.answers.ease) : null
+    })),
+    sus_responses: state.sus,
+    sus_score: susScore(state.sus),
+    overall: state.overall
+  };
+}
+
+function download(data) {
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+  const url = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href: url, download: `bngplayground-feedback-${state.session_id.slice(0, 8)}.json` });
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+
+function flash(msg, kind) {
+  const s = $('#status');
+  s.className = `status show ${kind}`;
+  s.textContent = msg;
+}
+
+async function onSubmit(e) {
+  e.preventDefault();
+  if (!validate()) return;
+  const data = payload();
+  const btn = $('#submit-btn');
+
+  if (!SUBMIT_URL) {
+    download(data);
+    flash('Your answers were saved as a JSON file. Send that file to your instructor.', 'info');
+    return;
+  }
+
+  btn.disabled = true; btn.textContent = 'Sending…';
+  try {
+    // text/plain avoids a CORS preflight, which Google Apps Script does not answer.
+    const res = await fetch(SUBMIT_URL, { method: 'POST', headers: { 'Content-Type': 'text/plain;charset=utf-8' }, body: JSON.stringify(data) });
+    if (!res.ok) throw new Error(`Server returned ${res.status}`);
+    flash('Feedback sent. Thank you.', 'ok');
+    try { localStorage.removeItem(STORAGE_KEY); } catch {}
+    btn.textContent = 'Sent';
+  } catch (err) {
+    download(data);
+    flash(`Sending failed (${err.message}). Your answers were downloaded as a JSON file instead. Send that file to your instructor.`, 'bad');
+    btn.disabled = false; btn.textContent = 'Send feedback';
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Init
+// ---------------------------------------------------------------------------
+renderCategorySelect();
+renderSUS();
+restoreStatic();
+if (!state.profile.os_version && state.profile.os) {
+  detectOSVersionAsync(state.profile.os).then(v => {
+    if (v && !state.profile.os_version) { state.profile.os_version = v; $('#p-osver').value = v; save(); }
+  });
+}
+renderAssignments();
+const form = $('#form');
+form.addEventListener('input', onInput);
+form.addEventListener('change', onInput);
+form.addEventListener('click', onClick);
+form.addEventListener('submit', onSubmit);
+$('#draw-btn').addEventListener('click', addAssignment);
+$('#download-btn').addEventListener('click', () => { download(payload()); flash('Your answers so far were downloaded as a JSON file.', 'info'); });
+</script>
+</body>
+</html>
